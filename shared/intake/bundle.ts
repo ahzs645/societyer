@@ -6,7 +6,8 @@ import { recordsFromBundle } from "../functions/importSessionHelpers/importSessi
 import type { ClassificationPrior } from "./classify";
 import type { IntakeCluster } from "./cluster";
 import type { Disposition } from "./junk";
-import type { ProcessingLogEntry, Sensitivity } from "./privacy";
+import { redact, type ProcessingLogEntry, type Sensitivity } from "./privacy";
+import { PROVIDER_EXCLUDED_CLASSES } from "./classify";
 import type { ActionChain, RecordGap, ReconcileLink, ReconciledMeeting } from "./reconcile";
 import type { ExtractionEnvelope, FieldValue, Locator, UnsupportedDetail } from "./schemas/common";
 import { isFieldValue, type VerificationSummary } from "./verify";
@@ -247,7 +248,9 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
       notes: [`Original path: ${file.path}`, file.dispositionReason ?? "", file.classification ? `Classified ${docClass} (${file.classification.confidence}) from ${file.classification.rationale.slice(0, 3).join("; ")}` : ""].filter(Boolean).join("\n"),
     };
     sources.push(source);
-    const text = run.texts?.[file.fileKey];
+    const rawText = run.texts?.[file.fileKey];
+    // Personal data (contact rosters, consents, e-mails, invoices): contact details are masked, length-preserving.
+    const text = rawText && (file.sensitivity === "personal" || PROVIDER_EXCLUDED_CLASSES.has(docClass as any)) ? redact(rawText).text : rawText;
     documentMap.push({
       externalId: file.fileKey, externalSystem: source.externalSystem, sourceExternalIds: [file.fileKey], title: file.name, fileName: file.name,
       category: source.category, ...(file.sha256 ? { sha256: file.sha256 } : {}), ...(file.sizeBytes !== undefined ? { fileSizeBytes: file.sizeBytes } : {}),

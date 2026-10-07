@@ -25,6 +25,7 @@ function kindOf(fileName: string, lines: Line[]): { kind: AgmKind; line?: Line }
 }
 
 const NAME_LINE = /^[A-Z][\w'’.\-]+(?:\s+[A-Z][\w'’.\-]+){1,3}$/;
+const NOT_A_NAME = /\b(?:resolution|meeting|report|statements?|minutes|agenda|society|board|committee|business|election|adjourn\w*|notice|bylaws?|directors?|members?|nominations?|other)\b/i;
 
 /** People listed under "appointment of directors" / "nominated" until the list ends. */
 function electionSlate(lines: Line[]): Array<FieldValue<{ nameAsWritten: string; role?: string; affiliation?: string }>> {
@@ -36,13 +37,22 @@ function electionSlate(lines: Line[]): Array<FieldValue<{ nameAsWritten: string;
     if (/appoint(?:ment|ed)? (?:of )?(?:the )?directors|following .*(?:individuals|directors|positions).*(?:appointed|nominated|elected)|nominated for|nominees?\b|slate of directors|elect(?:ion)? of (?:the )?(?:directors|executive)/i.test(line.text) && !/^\s*\d{1,2}[:.]\d{2}/.test(line.text)) {
       open = true;
       misses = 0;
+      // Inline list: "Nominees for election to the Board: Avery Quill, Casey Lark and Sam Reed."
+      const inline = /:\s*(.+)$/.exec(line.text);
+      if (inline) {
+        for (const raw of inline[1].replace(/[.;]\s*$/, "").split(/\s*,\s*|\s+and\s+/)) {
+          const name = raw.trim();
+          if (name && NAME_LINE.test(name) && !NOT_A_NAME.test(name) && looksLikePersonName(name)) out.push(at({ nameAsWritten: name }, line, name, 0.75, "Nominee listed in AGM material: proposed, not an election result."));
+        }
+        if (out.length) open = false;
+      }
       continue;
     }
     if (!open) continue;
     if (/^_{3,}/.test(text)) continue; // blank nomination lines in a script
     const parts = text.split(/\s*[,–—-]\s+|\t+/).map((part) => part.trim()).filter(Boolean);
     const name = parts[0]?.replace(/\s*\((?:for|chair|representing)[^)]*\)\s*/i, "").trim();
-    if (name && NAME_LINE.test(name) && looksLikePersonName(name) && text.length <= 120) {
+    if (name && NAME_LINE.test(name) && !NOT_A_NAME.test(name) && looksLikePersonName(name) && text.length <= 120) {
       const affiliation = parts.slice(1).join(", ");
       const role = /\b(?:president|vice[- ]president|secretary|treasurer|chair|director at large)\b/i.exec(affiliation)?.[0];
       out.push(at({ nameAsWritten: name, ...(role ? { role } : {}), ...(affiliation && !role ? { affiliation } : {}) }, line, undefined, 0.75, "Nominee/appointee listed in AGM material: proposed, not an election result."));
@@ -81,6 +91,11 @@ export function extractAgmMaterial(input: ClassExtractorInput): ExtractionEnvelo
     const issued = labelled(lines.slice(0, 8), /date(?:\s+issued)?/i);
     const issuedDate = issued ? findDates(issued.value)[0] : undefined;
     if (issued && issuedDate) noticeDate = at(dateValue(issuedDate), issued.line, issuedDate.text, 0.85);
+    const dated = noticeDate ? undefined : lines.find((line) => /^\s*dated\b/i.test(line.text) && findDates(line.text)[0]?.precision === "day");
+    if (dated) {
+      const date = findDates(dated.text)[0];
+      noticeDate = at(dateValue(date), dated, date.text, 0.85);
+    }
     const given = lines.findIndex((line) => /notice is hereby given|will be held/i.test(line.text));
     const meetingLabel = labelled(lines, /date/i, { from: given >= 0 ? given : 0 });
     const meetingFound = meetingLabel ? findDates(meetingLabel.value)[0] : undefined;
@@ -92,6 +107,12 @@ export function extractAgmMaterial(input: ClassExtractorInput): ExtractionEnvelo
     const range = time ? findTimeRange(time.value) : undefined;
     const single = time && !range ? parseTime(time.value) : undefined;
     if (time && (range?.start || single)) startTime = at((range?.start ?? single!.time), time.line, range?.text ?? single!.text, 0.85);
+    else if (!startTime?.value && given >= 0) {
+      // "… will be held on Tuesday, November 18, 2025 at 7:00 PM at …"
+      const at_ = /\bat\s+(\d{1,2}(?::\d{2})?\s*[ap]\.?\s*m\.?)/i.exec(lines[given].text);
+      const parsed = at_ ? parseTime(at_[1]) : undefined;
+      if (parsed) startTime = at(parsed.time, lines[given], at_![1], 0.8);
+    }
     const place = labelled(lines, /location|place/i, { from: given >= 0 ? given : 0 });
     if (place) location = at(clean(place.value), place.line, place.value, 0.85);
   }

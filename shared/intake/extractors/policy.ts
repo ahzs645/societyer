@@ -8,7 +8,7 @@ import { bodyFromText } from "../minutes/extractMinutes";
 import { findDates, findMoney } from "../parse";
 import { inferred, notStated, type ExtractionEnvelope, type FieldValue, type Reference, type UnsupportedDetail } from "../schemas/common";
 import type { ClassExtractorInput } from "./agenda";
-import { at, clean, dateValue, fileLoc, fromFile, guessAt, linesOf, loc, stripBullet, titleLine, type Line } from "./toolkit";
+import { at, clean, dateValue, fileLoc, fromFile, guessAt, labelled, linesOf, loc, stripBullet, titleLine, type Line } from "./toolkit";
 
 export const DETERMINISTIC_POLICY_ENGINE = "deterministic-policy/1";
 
@@ -48,7 +48,7 @@ export function extractRules(lines: Line[], context: { governsBody?: string } = 
     if (bodyQuorumRules.some((rule) => rule.body.value === body)) continue;
     const percent = /(\d{1,3})\s*%|\((\d{1,3})%?\)\s*per\s*cent|(\d{1,3})\s*per\s*cent/i.exec(sentence.text);
     const majority = /\bmajority\b/i.test(sentence.text);
-    const fixed = /\b(?:is|of|be)\s+([a-z]+\s*\(\d+\)|\d+)\s+(?:voting\s+)?(?:members|directors|representatives|persons)/i.exec(sentence.text);
+    const fixed = /\b(?:is|of|be)\s+([a-z]+\s*\(\d+\)|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\s+(?:voting\s+)?(?:members|directors|representatives|persons)/i.exec(sentence.text);
     const quorumType: "fixed" | "percentage" | "majority" | "all_members" = percent ? "percentage" : majority ? "majority" : /\ball (?:of the )?(?:members|directors)\b/i.test(sentence.text) ? "all_members" : "fixed";
     const value = percent ? Number(percent[1] ?? percent[2] ?? percent[3]) : fixed ? numberIn(fixed[1])?.value : undefined;
     const minimum = percent && fixed ? numberIn(fixed[1])?.value : undefined;
@@ -98,10 +98,10 @@ export function extractRules(lines: Line[], context: { governsBody?: string } = 
     if (min) rules.directorCountMin = at(numberIn(min[1])!.value, count.line, min[0], 0.75);
     if (max) rules.directorCountMax = at(numberIn(max[1])!.value, count.line, max[0], 0.75);
   }
-  const term = pick(/\bterm (?:for|of) (?:office of )?directors?\b|\bdirectors? (?:shall|will) (?:hold office|serve) for\b|\bdirector\b.*\buntil the next (?:agm|annual general meeting)\b/i);
+  const term = pick(/\bterm (?:for|of) (?:office of )?directors?\b|\bdirectors? (?:shall|will) (?:hold office|serve) for\b|\bdirectors? (?:are|is|shall be|will be) (?:elected|appointed) for a term\b|\bdirector\b.*\buntil the next (?:agm|annual general meeting)\b/i);
   if (term) {
     rules.directorTerm = at(term.text.slice(0, 240), term.line, undefined, 0.75);
-    const years = /\b([a-z]+\s*\(\d+\)|\d+)\s+years?\b/i.exec(term.text);
+    const years = /\b([a-z]+\s*\(\d+\)|\d+|one|two|three|four|five)[\s-]+years?\b/i.exec(term.text);
     if (years && numberIn(years[1])) rules.directorTermYears = at(numberIn(years[1])!.value, term.line, years[0], 0.75);
   }
   const electronic = pick(/\belectronic means\b|\bby (?:telephone|video|electronic)\b.*\bmeeting|meetings? .*\b(?:telephone|electronic|video)/i, (sentence) => /\bmay\b|permitted|deemed to be present/i.test(sentence.text));
@@ -246,6 +246,10 @@ export function extractPolicy(input: ClassExtractorInput): ExtractionEnvelope {
   if (adoptedDate?.value) references.push({ kind: "meeting", text: `Adoption of ${titleText} (${adoptedDate.value.text ?? adoptedDate.value.iso})`, date: adoptedDate.value.iso, locators: adoptedDate.locators });
   const adoptedAtLine = lines.find((line) => /\b(?:these|this|the) (?:bylaws?|constitution|policy|terms of reference)\b.*\b(?:were|was|is|are)\s+(?:passed|adopted|approved|accepted|ratified)\b|\b(?:passed|adopted|approved|accepted)\b.*\b(?:by|as a) special resolution\b.*\b(?:on|dated)\b/i.test(line.text) && line.text.length < 300);
   if (!titleSource) warnings.push("No title line found; using the file name.");
+  const policyNumberHit = labelled(lines.slice(0, 20), /policy\s*(?:no\.?|number|#)|policy\s+id/i);
+  const policyNumberValue = policyNumberHit ? /^[A-Z]{0,6}[-\s]?\d{1,4}(?:[.-]\d{1,3})?[A-Z]?\b/i.exec(policyNumberHit.value)?.[0] : undefined;
+  const reviewHit = labelled(lines.slice(0, 30), /(?:next\s+)?review(?:\s+date)?|to be reviewed(?: by)?|review by/i);
+  const reviewFound = reviewHit ? findDates(reviewHit.value, { allowMonthPrecision: true })[0] : undefined;
   const organization = lines.slice(0, 6).find((line) => /\bsociety\b|\broundtable\b|\bassociation\b/i.test(line.text) && line.text.length < 160);
   const record = {
     title: titleSource ? at(titleText, titleSource, undefined, 0.8) : fromFile(titleText, fileName, 0.5),
@@ -258,6 +262,8 @@ export function extractPolicy(input: ClassExtractorInput): ExtractionEnvelope {
     ...(allRules ? { rules: allRules } : {}),
     ...(organization ? { organizationName: at(clean(organization.text).slice(0, 160), organization, undefined, 0.6) } : {}),
     ...(adoptedDate ? { adoptedDate } : {}),
+    ...(policyNumberHit && policyNumberValue ? { policyNumber: at(policyNumberValue, policyNumberHit.line, policyNumberValue, 0.8) } : {}),
+    ...(reviewHit && reviewFound ? { reviewDate: at(dateValue(reviewFound), reviewHit.line, reviewFound.text, 0.75) } : {}),
     ...(governs ? { governsBody: at(governs.label, titleSource!, undefined, 0.75) } : {}),
     ...(external ? { external: inferred(true, [titleSource ? loc(titleSource) : fileLoc(fileName)], 0.7, "A third party's bylaw kept as reference, not the organization's own rules.") } : {}),
   };

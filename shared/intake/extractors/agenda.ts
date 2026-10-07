@@ -4,6 +4,7 @@
  * agendas yield consent items received (A10) — never adopted. */
 import type { IntakeExtract } from "../blocks";
 import { versionMarker } from "../cluster";
+import { looksLikePersonName } from "../names";
 import { bodyFromText } from "../minutes/extractMinutes";
 import { findDates, findTimeRange, normalizeWhitespace, parseTime } from "../parse";
 import { inferred, notStated, type ExtractionEnvelope, type FieldValue, type Reference, type UnsupportedDetail } from "../schemas/common";
@@ -41,6 +42,7 @@ type ItemDraft = {
   line: Line;
   title: string;
   number?: string;
+  numberLine?: Line;
   time?: string;
   presenter?: string;
   presenterLine?: Line;
@@ -75,6 +77,19 @@ function splitTrailing(rest: string): { title: string; presenter?: string; actio
     if (ROLE_PRESENTER.test(tail) && tail.length <= 40) return { title, presenter: tail };
     return { title };
   }
+  // Dash-separated: "Signing Authority Policy – Jordan Pike – for approval" (a bare "Topic – Two Words"
+  // is too ambiguous to read as a presenter: "Business Arising – Clean Air Forum").
+  const dashed = title.split(/\s+[–—-]\s+/).map((part) => part.trim()).filter(Boolean);
+  if (dashed.length >= 2) {
+    const last = dashed[dashed.length - 1];
+    const actionPart = /^(?:for\s+)?(?:approval|adoption|information|discussion|decision|receipt|ratification)$/i.test(last) || ACTION_WORDS.test(last) ? last : undefined;
+    const personPart = dashed[dashed.length - (actionPart ? 2 : 1)];
+    const isPresenter = personPart && dashed.length - (actionPart ? 2 : 1) >= 1 && personPart.length <= 40 && ((actionPart && looksLikePersonName(personPart.replace(/\s*\([^)]*\)$/, ""))) || ROLE_PRESENTER.test(personPart));
+    if (actionPart || isPresenter) {
+      const titleParts = dashed.slice(0, dashed.length - (actionPart ? 1 : 0) - (isPresenter ? 1 : 0));
+      if (titleParts.length) return { title: titleParts.join(" – "), ...(isPresenter ? { presenter: personPart } : {}), ...(actionPart ? { action: actionPart } : {}) };
+    }
+  }
   // No tab: "4. May Board Minutes Chair Approve".
   const match = /^(.*?\S)\s+((?:Chair|Secretariat|Treasurer|GM|Staff|All|President|Secretary|Manager|Operations Committee)(?:\s*,\s*\w+)*)\s+(Receive|Approve|None|Discussion|Decision|Information|Agree|Discuss)$/.exec(title);
   if (match) return { title: match[1], presenter: match[2], action: match[3] };
@@ -105,7 +120,10 @@ function tableItems(extract: IntakeExtract, lines: Line[], blockStart: number, b
     if (isAgendaTable(block)) {
       const header = (block.rows?.[0]?.cells ?? []).map((cell) => cell.text.trim().toLowerCase());
       const colOf = (re: RegExp) => header.findIndex((text) => re.test(text));
-      const timeCol = colOf(/^time$/), itemCol = colOf(/agenda item|^item$|^topic$/), presenterCol = colOf(/responsib|presenter|^lead$|^who$/), actionCol = colOf(/group action|requested action|^action$|purpose/);
+      const titleCol = colOf(/agenda item|^topic$|^description$|^subject$/);
+      const bareItemCol = colOf(/^item$|^item\s*(?:#|no\.?)$|^#$|^no\.?$/);
+      // "Item | Agenda Item | …": the bare Item column holds the number, the other the title.
+      const timeCol = colOf(/^time$/), itemCol = titleCol >= 0 ? titleCol : bareItemCol, numberCol = titleCol >= 0 && bareItemCol >= 0 && bareItemCol !== titleCol ? bareItemCol : -1, presenterCol = colOf(/responsib|presenter|^lead$|^who$/), actionCol = colOf(/group action|requested action|^action$|purpose/);
       (block.rows ?? []).slice(1).forEach((row, rowOffset) => {
         const rowIndex = rowOffset + 1;
         const cellLines = (col: number) => col < 0 ? [] : blockLines.filter((line) => line.row === rowIndex && line.col === col);
@@ -115,6 +133,8 @@ function tableItems(extract: IntakeExtract, lines: Line[], blockStart: number, b
         const time = cellLines(timeCol)[0];
         const presenter = cellLines(presenterCol)[0];
         const action = cellLines(actionCol)[0];
+        const numberCell = cellLines(numberCol)[0];
+        const cellNumber = numberCell ? /^\s*(\d{1,2}(?:\.\d{1,2})*)[.)]?\s*$/.exec(numberCell.text)?.[1] : undefined;
         titles.forEach((line, index) => {
           const text = stripBullet(line.text);
           if (!text || SKIP_LINE.test(text)) return;
@@ -122,7 +142,7 @@ function tableItems(extract: IntakeExtract, lines: Line[], blockStart: number, b
           items.push({
             line,
             title: numbered ? numbered[2] : text,
-            ...(numbered ? { number: numbered[1] } : {}),
+            ...(numbered ? { number: numbered[1] } : cellNumber && index === 0 ? { number: cellNumber, numberLine: numberCell } : {}),
             ...(time && index === 0 && parseTime(time.text) ? { time: time.text.trim() } : {}),
             ...(presenter ? { presenter: presenter.text.trim(), presenterLine: presenter } : {}),
             ...(action ? { action: action.text.trim(), actionLine: action } : {}),
@@ -239,7 +259,8 @@ export function meetingHeader(lines: Line[], fileName: string, limit = 25) {
     : fileDate ? fromFile(dateValue(fileDate), fileName, 0.5, "Date from the file name; none in the document header.") : notStated("No meeting date found.");
   let startTime: FieldValue<string> | undefined;
   let endTime: FieldValue<string> | undefined;
-  const timeLines = [dateHit?.line, labelled(head, /time/i)?.line, ...head.slice(0, 8)].filter(Boolean) as Line[];
+  const timeLabel = labelled(head, /time/i);
+  const timeLines = [dateHit?.line, timeLabel?.line, ...head.slice(0, 8)].filter(Boolean) as Line[];
   for (const line of timeLines) {
     const range = findTimeRange(line.text);
     if (range?.start) {
@@ -247,6 +268,11 @@ export function meetingHeader(lines: Line[], fileName: string, limit = 25) {
       if (range.end) endTime = at(range.end, line, range.text, range.inferredMeridiem ? 0.6 : 0.9);
       break;
     }
+  }
+  if (!startTime && timeLabel) {
+    // A single start time: "Time: 6:00 PM".
+    const single = parseTime(timeLabel.value);
+    if (single) startTime = at(single.time, timeLabel.line, single.text, single.inferredMeridiem ? 0.6 : 0.85);
   }
   const location = labelled(head, /location|place|venue|where/i);
   const electronic = head.find((line) => /\b(?:zoom|ms teams|microsoft teams|teams|webex|teleconference|dial-in|virtual)\b/i.test(line.text));
@@ -312,7 +338,7 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
     const stated = item.action ? requestedActionFrom(item.action) : undefined;
     const inferredAction = stated ? undefined : actionFromTitle(item.title);
     return {
-      ...(item.number ? { number: at(item.number, item.line, undefined, 0.85) } : {}),
+      ...(item.number ? { number: at(item.number, item.numberLine ?? item.line, item.numberLine ? undefined : item.number, 0.85) } : {}),
       title: item.continuation ? { ...at(`${item.title} ${item.continuation.text.trim()}`, item.line, item.title, 0.85), locators: [loc(item.line, item.title), loc(item.continuation)] } : at(item.title, item.line, item.title, 0.85),
       ...(item.presenter ? { presenter: at(item.presenter, item.presenterLine ?? item.line, item.presenter, 0.75) } : {}),
       ...(item.action ? { groupAction: at(item.action, item.actionLine ?? item.line, item.action, 0.85) } : {}),
@@ -330,7 +356,7 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
     const matched = matchEmbedded(`${item.title} ${item.continuation?.text ?? ""}`, segments.filter((segment) => segment !== agendaSegment));
     return {
       title: item.continuation ? { ...at(`${item.title} ${item.continuation.text.trim()}`, item.line, item.title, 0.85), locators: [loc(item.line, item.title), loc(item.continuation)] } : at(item.title, item.line, item.title, 0.85),
-      ...(item.number ? { itemNumber: at(item.number, item.line, undefined, 0.8) } : {}),
+      ...(item.number ? { itemNumber: at(item.number, item.numberLine ?? item.line, item.numberLine ? undefined : item.number, 0.8) } : {}),
       ...(item.presenter ? { presenter: at(item.presenter, item.presenterLine ?? item.line, item.presenter, 0.75) } : {}),
       outcome: action === "receive" ? at("received" as const, item.actionLine ?? item.line, item.action, 0.75, "Consent agenda group action: Receive. Recorded as received (A10), not adopted.") : inferred("pending" as const, [loc(item.line)], 0.6, "Consent item without a Receive action: outcome pending review."),
       ...(matched >= 0 ? { embeddedIndex: embedded.findIndex((entry) => entry.blockStart === segments.filter((segment) => segment !== agendaSegment)[matched].blockStart) } : {}),
@@ -357,6 +383,11 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
     if (titleLine) references.push({ kind: "prior_minutes", text: segment.title.slice(0, 300), ...(segment.date ? { date: segment.date.iso } : {}), ...(segment.bodyLabel ? { body: segment.bodyLabel } : {}), locators: [loc(titleLine)] });
   }
   for (const line of agendaLines) {
+    // "Adoption of the May 13, 2025 Minutes": the earlier minutes this meeting will adopt.
+    if (/\b(?:adopt(?:ion)?|approv(?:e|al)|review)\b.*\bminutes\b|\bminutes\b.*\b(?:for (?:adoption|approval))\b/i.test(line.text) && !references.some((reference) => reference.kind === "prior_minutes" && reference.locators[0]?.blockIndex === line.blockIndex && reference.locators[0]?.quote === line.text.trim())) {
+      const date = findDates(line.text).find((candidate) => candidate.precision === "day");
+      if (date) references.push({ kind: "prior_minutes", text: clean(line.text).slice(0, 300), date: date.iso, locators: [loc(line)] });
+    }
     const attachment = /\((?:see\s+)?(attachment|item|appendix|schedule)\s+([\w.]+)[^)]*\)/i.exec(line.text);
     if (attachment) references.push({ kind: "attachment", text: attachment[0], locators: [loc(line, attachment[0])] });
   }

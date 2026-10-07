@@ -1,0 +1,645 @@
+{
+  "version": 1,
+  "purpose": "SYNTHETIC per-class golden fixture for scripts/check-intake-class-eval.ts. Every person, organisation, address, policy number and amount is invented. Each document's `content` is rendered to a real DOCX, PDF, XLSX or text file at test time; `expect` lists field checks against the deterministic extraction (paths unwrap FieldValues; [*] means any element).",
+  "asOfISO": "2025-12-01",
+  "organizationName": "Lakeside Clean Air Society",
+  "documents": [
+    {
+      "id": "K01",
+      "docClass": "agenda",
+      "source": { "fileName": "2025-06-10 Board Meeting Agenda.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Board of Directors Meeting Agenda" },
+        { "p": "Date: Tuesday, June 10, 2025" },
+        { "p": "Time: 6:00 PM – 8:00 PM" },
+        { "p": "Location: Committee Room, Northport Civic Centre" },
+        { "table": [
+          ["Agenda Item", "Responsibility", "Group Action"],
+          ["1. Call to Order", "Robin Vale", "None"],
+          ["2. Approval of the Agenda", "Robin Vale", "Approve"],
+          ["3. Adoption of the May 13, 2025 Minutes", "Robin Vale", "Approve"],
+          ["4. Treasurer's Report", "Jordan Pike", "Receive"],
+          ["5. Wood Smoke Program Update", "Morgan Ashby", "Discussion"],
+          ["6. Adjournment", "Robin Vale", "None"]
+        ] },
+        { "p": "Next Board Meeting: September 9, 2025" }
+      ],
+      "expect": [
+        { "path": "body", "equals": "board" },
+        { "path": "date.iso", "equals": "2025-06-10" },
+        { "path": "startTime", "equals": "18:00" },
+        { "path": "endTime", "equals": "20:00" },
+        { "path": "location", "contains": "Northport Civic Centre" },
+        { "path": "items", "minCount": 6, "maxCount": 6 },
+        { "path": "items[*].requestedAction", "includes": "approve" },
+        { "path": "items[*].requestedAction", "includes": "receive" },
+        { "path": "items[*].requestedAction", "includes": "discuss" },
+        { "path": "items[3].presenter", "contains": "Jordan Pike" },
+        { "path": "items[3].title", "contains": "Treasurer" },
+        { "path": "nextMeetings[*].date", "includes": "2025-09-09" },
+        { "path": "references[*].kind", "includes": "prior_minutes" }
+      ]
+    },
+    {
+      "id": "K02",
+      "docClass": "meetingPackage",
+      "source": { "fileName": "2025-06-10 Board Consent Agenda.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Board of Directors – Consent Agenda" },
+        { "p": "Date: June 10, 2025" },
+        { "p": "The following items are received by the Board without discussion unless a director asks for an item to be moved to the business agenda." },
+        { "table": [
+          ["Item", "Agenda Item", "Responsibility", "Requested Action"],
+          ["3.1", "Operations Committee Minutes – April 2025", "Morgan Ashby", "Receive"],
+          ["3.2", "Executive Director Report", "Morgan Ashby", "Receive"],
+          ["3.3", "Monitoring Network Quarterly Summary", "Taylor Brook", "Receive"]
+        ] }
+      ],
+      "expect": [
+        { "path": "date.iso", "equals": "2025-06-10" },
+        { "path": "body", "equals": "board" },
+        { "path": "kind", "equals": "consent_agenda" },
+        { "path": "consentItems", "minCount": 3, "maxCount": 3 },
+        { "path": "consentItems[*].outcome", "includes": "received" },
+        { "path": "consentItems[1].title", "contains": "Executive Director Report" }
+      ]
+    },
+    {
+      "id": "K03",
+      "docClass": "meetingPackage",
+      "source": { "fileName": "2025-09-09 Board Meeting Package.pdf", "format": "pdf" },
+      "content": [
+        "Lakeside Clean Air Society",
+        "Board Meeting Package",
+        "September 9, 2025",
+        "\f",
+        "Board of Directors Meeting Agenda",
+        "Date: September 9, 2025",
+        "Time: 6:00 PM - 8:00 PM",
+        "1. Call to Order",
+        "2. Approval of the Agenda",
+        "3. Adoption of the August 12, 2025 Minutes (Item 3.1)",
+        "4. Treasurer's Report (Item 4.1)",
+        "5. Adjournment",
+        "\f",
+        "Item 3.1",
+        "Board of Directors Meeting Minutes",
+        "Date: August 12, 2025",
+        "Present: Robin Vale (Chair), Jordan Pike, Casey Lark, Avery Quill",
+        "Regrets: Lee Okafor",
+        "1. Call to Order",
+        "The meeting was called to order at 6:02 PM.",
+        "2. Wood Stove Exchange",
+        "MOTION: to extend the wood stove exchange intake to October 31, 2025.",
+        "Moved by Jordan Pike, seconded by Casey Lark. Carried.",
+        "3. Adjournment",
+        "The meeting adjourned at 7:41 PM.",
+        "\f",
+        "Item 4.1",
+        "Treasurer's Report",
+        "Date: September 2, 2025",
+        "Revenue to date is on budget. No unusual expenses were incurred in the quarter."
+      ],
+      "expect": [
+        { "path": "date.iso", "equals": "2025-09-09" },
+        { "path": "items", "minCount": 5 },
+        { "path": "embeddedDocuments[*].docClass", "includes": "meetingMinutes" },
+        { "path": "embeddedDocuments[*].itemRef", "includes": "3.1" },
+        { "path": "references[*].date", "includes": "2025-08-12" }
+      ]
+    },
+    {
+      "id": "K04",
+      "docClass": "agmMaterial",
+      "source": { "fileName": "2025 AGM Notice.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Notice of Annual General Meeting" },
+        { "p": "Notice is hereby given that the Annual General Meeting of Lakeside Clean Air Society will be held on Tuesday, November 18, 2025 at 7:00 PM at the Northport Civic Centre, Committee Room." },
+        { "p": "This notice is sent by email to every member at the address in the register of members." },
+        { "p": "Agenda" },
+        { "li": "Call to order and confirmation of quorum" },
+        { "li": "Adoption of the minutes of the 2024 Annual General Meeting" },
+        { "li": "Presentation of the financial statements for the year ended March 31, 2025" },
+        { "li": "Election of directors" },
+        { "li": "Special resolution to amend the bylaws" },
+        { "p": "Special Resolution" },
+        { "p": "BE IT RESOLVED AS A SPECIAL RESOLUTION THAT the bylaws of the Society be amended to permit electronic general meetings." },
+        { "p": "Nominees for election to the Board: Avery Quill, Casey Lark and Sam Reed." },
+        { "p": "Dated October 20, 2025" },
+        { "p": "By order of the Board" }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "notice" },
+        { "path": "noticeDate.iso", "equals": "2025-10-20" },
+        { "path": "meetingDate.iso", "equals": "2025-11-18" },
+        { "path": "startTime", "equals": "19:00" },
+        { "path": "noticeMethod", "contains": "email" },
+        { "path": "proposedResolutions", "minCount": 1 },
+        { "path": "resolutions[*].kind", "includes": "special" },
+        { "path": "electionSlate", "minCount": 3 },
+        { "path": "electionSlate[*].nameAsWritten", "includes": "Sam Reed" },
+        { "path": "financialStatementsPresented", "contains": "March 31, 2025" }
+      ]
+    },
+    {
+      "id": "K05",
+      "docClass": "agmMaterial",
+      "source": { "fileName": "2024 AGM Script.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "2024 Annual General Meeting – Chair's Script" },
+        { "p": "Date: November 19, 2024" },
+        { "p": "CHAIR: Welcome everyone. I call the meeting to order at 7:00 PM and confirm that we have quorum." },
+        { "p": "CHAIR: May I have a motion to receive the financial statements for the year ended March 31, 2024?" },
+        { "p": "MEMBER: I MOVE that the financial statements for the year ended March 31, 2024 be received as presented." },
+        { "p": "CHAIR: Is there a seconder? All in favour?" },
+        { "p": "CHAIR: I now call for a motion to appoint the directors." },
+        { "p": "MEMBER: I MOVE that Avery Quill and Casey Lark be elected as directors for a two-year term." }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "script" },
+        { "path": "meetingDate.iso", "equals": "2024-11-19" },
+        { "path": "resolutions", "minCount": 2 },
+        { "path": "resolutions[*].text", "contains": "financial statements" }
+      ]
+    },
+    {
+      "id": "K06",
+      "docClass": "bylaws",
+      "source": { "fileName": "Lakeside Clean Air Society Bylaws 2023.docx", "format": "docx" },
+      "content": [
+        { "p": "Bylaws of Lakeside Clean Air Society" },
+        { "p": "Adopted by special resolution on November 21, 2023" },
+        { "p": "Part 1 – Interpretation" },
+        { "p": "1.1 In these Bylaws, \"Act\" means the Societies Act." },
+        { "p": "1.2 The fiscal year of the Society ends on March 31 of each year." },
+        { "p": "Part 2 – General Meetings" },
+        { "p": "2.1 An annual general meeting must be held at least once in every calendar year." },
+        { "p": "2.2 Notice of a general meeting must be sent to every member not less than 14 days and not more than 60 days before the meeting." },
+        { "p": "2.3 The quorum for the transaction of business at a general meeting is 10 voting members." },
+        { "p": "2.4 Voting by proxy is not permitted." },
+        { "p": "2.5 A special resolution requires a 2/3 majority of the votes cast." },
+        { "p": "2.6 General meetings may be held by electronic means." },
+        { "p": "Part 3 – Directors" },
+        { "p": "3.1 The number of directors must be no fewer than 5 and no more than 11." },
+        { "p": "3.2 Directors are elected for a term of two years." },
+        { "p": "3.3 A majority of the directors in office constitutes a quorum at a meeting of the directors." },
+        { "p": "Part 4 – Execution of Documents" },
+        { "p": "4.1 Cheques and contracts over $5,000 must be signed by two directors." }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "bylaws" },
+        { "path": "rules.noticeDays", "equals": 14 },
+        { "path": "rules.noticeMaxDays", "equals": 60 },
+        { "path": "rules.proxiesAllowed", "equals": false },
+        { "path": "rules.directorCountMin", "equals": 5 },
+        { "path": "rules.directorCountMax", "equals": 11 },
+        { "path": "rules.directorTermYears", "equals": 2 },
+        { "path": "rules.electronicMeetings", "equals": true },
+        { "path": "rules.specialResolutionThresholdPct", "equals": 66.67 },
+        { "path": "rules.fiscalYearEnd", "contains": "March 31" },
+        { "path": "rules.bodyQuorumRules[*].body", "includes": "general" },
+        { "path": "rules.bodyQuorumRules[*].quorumValue", "includes": 10 },
+        { "path": "rules.bodyQuorumRules[*].quorumType", "includes": "majority" },
+        { "path": "rules.agmFrequency", "equals": "calendar_year" },
+        { "path": "adoptedDate.iso", "equals": "2023-11-21" },
+        { "path": "clauses", "minCount": 4 }
+      ]
+    },
+    {
+      "id": "K07",
+      "docClass": "policy",
+      "source": { "fileName": "Signing Authority Policy FIN-02.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Financial Signing Authority Policy" },
+        { "p": "Policy No.: FIN-02" },
+        { "p": "Approved by the Board: March 11, 2025" },
+        { "p": "Review Date: March 11, 2027" },
+        { "p": "1. Purpose" },
+        { "p": "This policy sets who may sign cheques, contracts and payment approvals on behalf of the Society." },
+        { "p": "2. Signing Limits" },
+        { "table": [
+          ["Amount", "Signatures Required", "Who May Sign"],
+          ["Up to $2,500", "1", "Executive Director"],
+          ["$2,500 to $10,000", "2", "Executive Director and one director"],
+          ["Over $10,000", "2", "Two directors, one of whom is the Treasurer"]
+        ] }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "policy" },
+        { "path": "title", "contains": "Signing Authority" },
+        { "path": "policyNumber", "equals": "FIN-02" },
+        { "path": "adoptedDate.iso", "equals": "2025-03-11" },
+        { "path": "reviewDate.iso", "equals": "2027-03-11" },
+        { "path": "rules.signingTiersDetail", "minCount": 3 },
+        { "path": "rules.signingTiersDetail[*].signaturesRequired", "includes": 2 },
+        { "path": "rules.signingTiersDetail[0].maxCents", "equals": 250000 }
+      ]
+    },
+    {
+      "id": "K08",
+      "docClass": "policy",
+      "source": { "fileName": "Operations Committee Terms of Reference.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Operations Committee Terms of Reference" },
+        { "p": "Approved: January 14, 2025" },
+        { "p": "1. Mandate" },
+        { "p": "The Operations Committee oversees program delivery and reports to the Board." },
+        { "p": "2. Membership" },
+        { "p": "The committee has up to seven members appointed by the Board." },
+        { "p": "3. Meetings" },
+        { "p": "The committee meets monthly. Quorum is three members of the committee." }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "terms_of_reference" },
+        { "path": "governsBody", "contains": "Operations Committee" },
+        { "path": "rules.bodyQuorumRules[*].body", "includes": "committee" },
+        { "path": "rules.bodyQuorumRules[*].quorumValue", "includes": 3 },
+        { "path": "adoptedDate.iso", "equals": "2025-01-14" }
+      ]
+    },
+    {
+      "id": "K09",
+      "docClass": "directorConsent",
+      "source": { "fileName": "Casey Lark Consent to Act as a Director 2025.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Consent to Act as a Director" },
+        { "p": "I, Casey Lark, consent to act as a director of Lakeside Clean Air Society, effective November 18, 2025." },
+        { "p": "Residential address: 1428 Fernhill Crescent, Northport, BC V2X 9Z9" },
+        { "p": "Email: casey.lark@example.org" },
+        { "p": "DATED this 18th day of November, 2025." },
+        { "p": "Signature: Casey Lark" }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "director_consent" },
+        { "path": "entries", "minCount": 1, "maxCount": 1 },
+        { "path": "entries[0].person.nameAsWritten", "equals": "Casey Lark" },
+        { "path": "entries[0].signedDate.iso", "equals": "2025-11-18" },
+        { "path": "entries[0].consentGiven", "equals": true }
+      ],
+      "forbidText": ["1428 Fernhill", "casey.lark@example.org", "V2X 9Z9"]
+    },
+    {
+      "id": "K10",
+      "docClass": "proxy",
+      "source": { "fileName": "2025 AGM Proxy Form Harbour Health.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Proxy Form – Annual General Meeting" },
+        { "p": "Harbour Health Authority, a member of Lakeside Clean Air Society, hereby appoints Jordan Pike as its proxy to attend and vote on its behalf at the Annual General Meeting to be held on November 18, 2025, and at any adjournment of it." },
+        { "p": "Dated: November 3, 2025" },
+        { "p": "Authorized signatory: Avery Quill" }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "proxy" },
+        { "path": "entries", "minCount": 1 },
+        { "path": "entries[0].proxyHolder.nameAsWritten", "equals": "Jordan Pike" },
+        { "path": "entries[0].organisationRepresented", "contains": "Harbour Health Authority" },
+        { "path": "entries[0].meetingDate.iso", "equals": "2025-11-18" }
+      ]
+    },
+    {
+      "id": "K11",
+      "docClass": "roster",
+      "source": { "fileName": "Board Roster 2025.xlsx", "format": "xlsx" },
+      "content": { "sheets": [
+        { "name": "Directors", "rows": [
+          ["Lakeside Clean Air Society – Board Roster 2025"],
+          ["Name", "Organization", "Office", "Email", "Notes"],
+          ["Robin Vale", "Northport Chamber of Commerce", "Chair", "robin.vale@example.org", "Joined May 2021"],
+          ["Jordan Pike", "City of Northport", "Treasurer", "jordan.pike@example.org", ""],
+          ["Avery Quill", "Harbour Health Authority", "Director", "avery.quill@example.org", ""],
+          ["Casey Lark", "Public Member", "Secretary", "casey.lark@example.org", ""],
+          ["Lee Okafor", "Northport School District", "Director", "lee.okafor@example.org", "Left June 2025"]
+        ] }
+      ] },
+      "expect": [
+        { "path": "kind", "equals": "roster" },
+        { "path": "entries", "minCount": 5, "maxCount": 5 },
+        { "path": "entries[*].person.nameAsWritten", "includes": "Jordan Pike" },
+        { "path": "entries[*].role", "includes": "Treasurer" },
+        { "path": "entries[*].organisationRepresented", "includes": "Harbour Health Authority" }
+      ],
+      "forbidText": ["robin.vale@example.org", "jordan.pike@example.org", "@example.org"]
+    },
+    {
+      "id": "K12",
+      "docClass": "financialStatement",
+      "source": { "fileName": "Statement of Operations FY2025 APPROVED.xlsx", "format": "xlsx" },
+      "content": { "sheets": [
+        { "name": "Operations", "rows": [
+          ["Lakeside Clean Air Society"],
+          ["Statement of Operations"],
+          ["For the year ended March 31, 2025"],
+          ["", "2025", "2024"],
+          ["Revenue"],
+          ["Provincial grants", 85000, 80000],
+          ["Municipal contributions", 30000, 30000],
+          ["Donations", 5250.5, 4100],
+          ["Total revenue", 120250.5, 114100],
+          ["Expenses"],
+          ["Salaries and benefits", 72000, 69000],
+          ["Program delivery", 31000, 28500],
+          ["Office and administration", 9800, 9400],
+          ["Total expenses", 112800, 106900],
+          ["Excess of revenue over expenses", 7450.5, 7200]
+        ] }
+      ] },
+      "expect": [
+        { "path": "statementType", "equals": "income_statement" },
+        { "path": "periodEnd.iso", "equals": "2025-03-31" },
+        { "path": "versionLabel", "equals": "approved" },
+        { "path": "lines", "minCount": 6 },
+        { "path": "lines[*].label", "includes": "Provincial grants" },
+        { "path": "lines[*].amount.amountCents", "includes": 8500000 },
+        { "path": "lines[*].column", "includes": "prior" },
+        { "path": "totals[*].arithmeticCheck", "includes": "ok" },
+        { "path": "totals[*].label", "includes": "Total revenue" },
+        { "path": "fiscalYearEnd", "contains": "Mar 31" }
+      ]
+    },
+    {
+      "id": "K13",
+      "docClass": "budget",
+      "source": { "fileName": "2025-26 Operating Budget DRAFT.xlsx", "format": "xlsx" },
+      "content": { "sheets": [
+        { "name": "Budget", "rows": [
+          ["Lakeside Clean Air Society – Operating Budget 2025-26"],
+          ["", "Budget 2025-26"],
+          ["Revenue"],
+          ["Provincial grants", 90000],
+          ["Municipal contributions", 30000],
+          ["Total revenue", 120000],
+          ["Expenses"],
+          ["Salaries and benefits", 76000],
+          ["Program delivery", 34000],
+          ["Office and administration", 10000],
+          ["Total expenses", 120000]
+        ] }
+      ] },
+      "expect": [
+        { "path": "statementType", "equals": "budget" },
+        { "path": "versionLabel", "equals": "draft" },
+        { "path": "lines", "minCount": 5 },
+        { "path": "lines[*].amount.amountCents", "includes": 7600000 },
+        { "path": "totals[*].arithmeticCheck", "includes": "ok" }
+      ]
+    },
+    {
+      "id": "K14",
+      "docClass": "insurance",
+      "source": { "fileName": "D&O Declarations 2023-2024.pdf", "format": "pdf" },
+      "content": [
+        "Directors and Officers Liability Insurance",
+        "Declarations",
+        "Policy Number: DO-445120",
+        "Insurer: Harbourline Mutual Insurance Company",
+        "Broker: Northshore Risk Partners",
+        "Named Insured: Lakeside Clean Air Society",
+        "Policy Period: April 1, 2023 to April 1, 2024",
+        "Limit of Liability\t$2,000,000",
+        "Premium: $1,450.00"
+      ],
+      "expect": [
+        { "path": "kind", "equals": "directors_officers" },
+        { "path": "policyNumber", "equals": "DO-445120" },
+        { "path": "insurer", "contains": "Harbourline Mutual" },
+        { "path": "broker", "contains": "Northshore Risk Partners" },
+        { "path": "termStart.iso", "equals": "2023-04-01" },
+        { "path": "termEnd.iso", "equals": "2024-04-01" },
+        { "path": "premium.amountCents", "equals": 145000 },
+        { "path": "proposedStatus", "equals": "Lapsed", "why": "an expired term is never imported as Active" }
+      ]
+    },
+    {
+      "id": "K15",
+      "docClass": "insurance",
+      "source": { "fileName": "CGL Renewal 2025-2026.docx", "format": "docx" },
+      "content": [
+        { "p": "Commercial General Liability – Renewal Declarations" },
+        { "p": "Policy Number: CGL-778201" },
+        { "p": "Insurer: Harbourline Mutual Insurance Company" },
+        { "p": "Named Insured: Lakeside Clean Air Society" },
+        { "p": "Policy Period: April 1, 2025 to April 1, 2026" },
+        { "p": "Each Occurrence Limit\t$5,000,000" },
+        { "p": "Premium: $980.00" }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "general_liability" },
+        { "path": "documentType", "equals": "renewal" },
+        { "path": "termEnd.iso", "equals": "2026-04-01" },
+        { "path": "proposedStatus", "equals": "NeedsReview", "why": "a current term still needs a reviewer to confirm it is in force" }
+      ]
+    },
+    {
+      "id": "K16",
+      "docClass": "agreement",
+      "source": { "fileName": "Brightwater Monitoring Service Agreement.docx", "format": "docx" },
+      "content": [
+        { "p": "Service Agreement" },
+        { "p": "This Agreement is made as of April 1, 2025" },
+        { "p": "BETWEEN:" },
+        { "p": "Lakeside Clean Air Society (the \"Society\")" },
+        { "p": "AND:" },
+        { "p": "Brightwater Monitoring Ltd. (the \"Contractor\")" },
+        { "p": "1. Term. This Agreement runs from April 1, 2025 to March 31, 2026." },
+        { "p": "2. Services. The Contractor will maintain two air quality monitoring stations and deliver monthly data summaries." },
+        { "p": "3. Fees. The Society will pay the Contractor $12,000 plus GST, in quarterly instalments of $3,000." },
+        { "p": "4. Reporting. The Contractor will deliver an annual data report by April 30, 2026." },
+        { "p": "Signed for the Society: Robin Vale, Chair" },
+        { "p": "Signed for the Contractor: Drew Hollis, Principal" }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "agreement" },
+        { "path": "parties", "minCount": 2 },
+        { "path": "parties[*]", "contains": "Brightwater Monitoring Ltd" },
+        { "path": "effective.iso", "equals": "2025-04-01" },
+        { "path": "expiry.iso", "equals": "2026-03-31" },
+        { "path": "amount.amountCents", "equals": 1200000 },
+        { "path": "signatories", "minCount": 2 },
+        { "path": "reportingRequirements[*].due.iso", "includes": "2026-04-30" },
+        { "path": "unsupported[*].infoType", "includes": "agreement.contract" }
+      ]
+    },
+    {
+      "id": "K17",
+      "docClass": "grant",
+      "source": { "fileName": "CAFF Funding Agreement CAFF-2025-014.docx", "format": "docx" },
+      "content": [
+        { "p": "Coastal Air Futures Fund" },
+        { "p": "Funding Agreement No. CAFF-2025-014" },
+        { "p": "Program: Community Air Grants" },
+        { "p": "Recipient: Lakeside Clean Air Society" },
+        { "p": "Purpose: Wood stove exchange and public education in the Northport airshed." },
+        { "p": "Term: July 1, 2025 to June 30, 2026" },
+        { "p": "Approved Amount: $45,000" },
+        { "p": "Payment Schedule" },
+        { "li": "First payment of $30,000 on signing" },
+        { "li": "Final payment of $15,000 on acceptance of the final report" },
+        { "p": "Reporting Requirements" },
+        { "li": "Interim report due January 31, 2026" },
+        { "li": "Final report due July 31, 2026" },
+        { "p": "Signed: Robin Vale, Chair, Lakeside Clean Air Society" }
+      ],
+      "expect": [
+        { "path": "funder", "contains": "Coastal Air Futures Fund" },
+        { "path": "agreementNumber", "equals": "CAFF-2025-014" },
+        { "path": "program", "contains": "Community Air Grants" },
+        { "path": "amount.amountCents", "equals": 4500000 },
+        { "path": "effective.iso", "equals": "2025-07-01" },
+        { "path": "expiry.iso", "equals": "2026-06-30" },
+        { "path": "paymentSchedule", "minCount": 2 },
+        { "path": "reportingRequirements", "minCount": 2 },
+        { "path": "reportingRequirements[*].due.iso", "includes": "2026-01-31" },
+        { "path": "grantStage", "equals": "agreement" }
+      ]
+    },
+    {
+      "id": "K18",
+      "docClass": "registryFiling",
+      "source": { "fileName": "2025 Annual Report Filing Confirmation.pdf", "format": "pdf" },
+      "content": [
+        "BC SOCIETY ANNUAL REPORT",
+        "Society Name: LAKESIDE CLEAN AIR SOCIETY",
+        "Incorporation Number: S0071234",
+        "Form Filed: Annual Report",
+        "Filed Date and Time: June 3, 2025 10:14 AM",
+        "Annual General Meeting Date: November 19, 2024",
+        "Fee Paid: $40.00",
+        "Directors",
+        "QUILL, AVERY",
+        "PIKE, JORDAN",
+        "VALE, ROBIN"
+      ],
+      "expect": [
+        { "path": "filingType", "equals": "annual_report" },
+        { "path": "filedDate.iso", "equals": "2025-06-03" },
+        { "path": "incorporationNumber", "equals": "S0071234" },
+        { "path": "agmDate.iso", "equals": "2024-11-19" },
+        { "path": "feePaid.amountCents", "equals": 4000 },
+        { "path": "filingStatus", "equals": "filed" },
+        { "path": "directorsListed", "minCount": 3 },
+        { "path": "directorsListed[*].nameAsWritten", "contains": "QUILL" }
+      ]
+    },
+    {
+      "id": "K19",
+      "docClass": "correspondence",
+      "source": { "fileName": "Funder decision email.eml", "format": "txt" },
+      "content": "From: Morgan Ashby <morgan.ashby@lakeside-air.example>\nTo: Robin Vale <robin.vale@example.org>\nCc: Jordan Pike <jordan.pike@example.org>\nDate: Thu, 14 Aug 2025 09:12:00 -0700\nSubject: Wood stove exchange - funder decision\n\nHi Robin,\n\nThe Coastal Air Futures Fund has approved our request to extend the program to June 30, 2026.\nWe agreed to send them a revised workplan by September 15, 2025.\n\nAttachment: Revised workplan draft.docx\n\nMorgan\n",
+      "expect": [
+        { "path": "kind", "equals": "email" },
+        { "path": "from", "contains": "Morgan Ashby" },
+        { "path": "to[*]", "contains": "Robin Vale" },
+        { "path": "date.iso", "equals": "2025-08-14" },
+        { "path": "subject", "contains": "funder decision" },
+        { "path": "decisionsOrCommitments", "minCount": 1 },
+        { "path": "decisionsOrCommitments[*]", "contains": "approved" },
+        { "path": "attachments[*]", "contains": "Revised workplan" }
+      ],
+      "forbidText": ["morgan.ashby@lakeside-air.example", "robin.vale@example.org"]
+    },
+    {
+      "id": "K20",
+      "docClass": "correspondence",
+      "source": { "fileName": "Letter to Northport Council re airshed plan.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "October 2, 2025" },
+        { "p": "Mayor and Council" },
+        { "p": "City of Northport" },
+        { "p": "Re: Airshed Management Plan renewal" },
+        { "p": "Dear Mayor and Council," },
+        { "p": "At its September 9, 2025 meeting the Board resolved to request that the City co-fund the renewal of the Airshed Management Plan." },
+        { "p": "Sincerely," },
+        { "p": "Robin Vale, Chair" }
+      ],
+      "expect": [
+        { "path": "kind", "equals": "letter" },
+        { "path": "date.iso", "equals": "2025-10-02" },
+        { "path": "subject", "contains": "Airshed Management Plan" },
+        { "path": "from", "contains": "Robin Vale" },
+        { "path": "decisionsOrCommitments[*]", "contains": "resolved" }
+      ]
+    },
+    {
+      "id": "K21",
+      "docClass": "invoice",
+      "source": { "fileName": "Invoice BW-1043 Brightwater.pdf", "format": "pdf" },
+      "content": [
+        "Brightwater Monitoring Ltd.",
+        "INVOICE",
+        "Invoice #: BW-1043",
+        "Invoice Date: May 6, 2025",
+        "Due Date: June 5, 2025",
+        "Bill To: Lakeside Clean Air Society",
+        "Station maintenance - April 2025\t$1,200.00",
+        "Subtotal\t$1,200.00",
+        "GST\t$60.00",
+        "Total\t$1,260.00"
+      ],
+      "expect": [
+        { "path": "vendor", "contains": "Brightwater Monitoring" },
+        { "path": "invoiceNumber", "equals": "BW-1043" },
+        { "path": "date.iso", "equals": "2025-05-06" },
+        { "path": "dueDate.iso", "equals": "2025-06-05" },
+        { "path": "amount.amountCents", "equals": 126000 },
+        { "path": "gst.amountCents", "equals": 6000 },
+        { "path": "subtotal.amountCents", "equals": 120000 },
+        { "path": "direction", "equals": "payable" },
+        { "path": "billTo", "contains": "Lakeside Clean Air Society" }
+      ]
+    },
+    {
+      "id": "K23",
+      "docClass": "agenda",
+      "source": { "fileName": "2025-03-11 Board Agenda.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Board of Directors Meeting Agenda" },
+        { "p": "Date: March 11, 2025" },
+        { "p": "Time: 6:00 PM" },
+        { "li": "Call to Order – Robin Vale" },
+        { "li": "Signing Authority Policy FIN-02 – Jordan Pike – for approval" },
+        { "li": "Adjournment" }
+      ],
+      "expect": [
+        { "path": "date.iso", "equals": "2025-03-11" },
+        { "path": "body", "equals": "board" },
+        { "path": "startTime", "equals": "18:00" },
+        { "path": "items", "minCount": 3, "maxCount": 3 },
+        { "path": "items[1].presenter", "contains": "Jordan Pike" },
+        { "path": "items[1].requestedAction", "equals": "approve" }
+      ]
+    },
+    {
+      "id": "K22",
+      "docClass": "meetingMinutes",
+      "source": { "fileName": "2025-03-11 Board Minutes APPROVED.docx", "format": "docx" },
+      "content": [
+        { "p": "Lakeside Clean Air Society" },
+        { "p": "Board of Directors Meeting Minutes" },
+        { "p": "Date: March 11, 2025" },
+        { "p": "Present: Robin Vale (Chair), Jordan Pike, Casey Lark, Avery Quill" },
+        { "p": "1. Call to Order" },
+        { "p": "The meeting was called to order at 6:01 PM." },
+        { "p": "2. Signing Authority Policy" },
+        { "p": "MOTION: to adopt the Financial Signing Authority Policy FIN-02 as presented." },
+        { "p": "Moved by Jordan Pike, seconded by Casey Lark. Carried." },
+        { "p": "3. Adjournment" },
+        { "p": "The meeting adjourned at 7:30 PM." }
+      ],
+      "expect": [
+        { "path": "date.iso", "equals": "2025-03-11" },
+        { "path": "motions", "minCount": 1 },
+        { "path": "motions[0].outcome", "equals": "carried" }
+      ]
+    }
+  ]
+}

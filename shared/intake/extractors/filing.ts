@@ -4,7 +4,7 @@
 import { findDates } from "../parse";
 import { inferred, notStated, type ExtractionEnvelope, type FieldValue, type Reference, type UnsupportedDetail } from "../schemas/common";
 import type { ClassExtractorInput } from "./agenda";
-import { at, clean, dateValue, fileLoc, fromFile, guessAt, labelled, linesOf, loc, type Line } from "./toolkit";
+import { at, clean, dateValue, fileLoc, fromFile, guessAt, inlineLabelled, labelled, linesOf, loc, type Line } from "./toolkit";
 import { parseAmount } from "./toolkit";
 
 export const DETERMINISTIC_FILING_ENGINE = "deterministic-filing/1";
@@ -45,10 +45,12 @@ export function extractRegistryFiling(input: ClassExtractorInput): ExtractionEnv
   const periodMatch = periodLine ? /\b((?:19|20)\d{2})\s+BC Society Annual Report\b|annual report for\s+((?:19|20)\d{2})/i.exec(periodLine.text) : undefined;
   const incorporation = lines.find((line) => /incorporation number\s*:?\s*S-?\d{5,8}/i.test(line.text));
   const incorporationMatch = incorporation ? /S-?\d{5,8}/.exec(incorporation.text.slice(incorporation.text.search(/incorporation number/i))) : undefined;
-  const agmLabel = labelled(lines, /annual general meeting \(agm\) date|agm date|date of (?:the )?(?:last )?(?:annual general meeting|agm)/i);
+  const AGM_LABEL = /annual general meeting \(agm\) date|annual general meeting date|agm date|date of (?:the )?(?:last )?(?:annual general meeting|agm)/i;
+  const agmLabel = labelled(lines, AGM_LABEL) ?? inlineLabelled(lines, AGM_LABEL);
   const agmDate = agmLabel ? findDates(agmLabel.value)[0] : undefined;
-  const feeLine = lines.find((line) => /^\s*(?:fee|filing fee|total(?: paid)?)\s*:\s*\$/i.test(line.text));
-  const fee = feeLine ? parseAmount(/\$\s?[\d,]+(?:\.\d{2})?/.exec(feeLine.text)?.[0] ?? "") : undefined;
+  const feeLine = lines.find((line) => /^\s*(?:fee|filing fee|fee paid|total(?: paid)?)\s*:\s*\$/i.test(line.text)) ?? lines.find((line) => /\b(?:fee paid|filing fee)\s*:\s*\$/i.test(line.text));
+  const feeText = feeLine ? feeLine.text.slice(Math.max(0, feeLine.text.search(/\b(?:fee paid|filing fee|fee|total(?: paid)?)\s*:\s*\$/i))) : "";
+  const fee = feeLine ? parseAmount(/\$\s?[\d,]+(?:\.\d{2})?/.exec(feeText)?.[0] ?? "") : undefined;
   const confirmation = labelled(lines, /confirmation (?:number|no\.?)|transaction id|payment invoice number|filing id|reference number/i);
   // Directors listed: "Last Name, First Name Middle Name:" followed by "CLAUS, DAVID H".
   const directors: Array<FieldValue<{ nameAsWritten: string; resolvedName?: string }>> = [];
@@ -56,6 +58,15 @@ export function extractRegistryFiling(input: ClassExtractorInput): ExtractionEnv
     if (!/last name,\s*first name/i.test(line.text)) return;
     const next = lines[index + 1];
     if (next && /^[A-Z'’-]+(?: [A-Z'’-]+)*,\s*[A-Z][A-Z'’ .-]+$/.test(next.text.trim())) directors.push(at({ nameAsWritten: next.text.trim(), resolvedName: titleCaseName(next.text.trim()) }, next, undefined, 0.85));
+  });
+  // A "Directors" heading followed by "LAST, FIRST" lines (registry summaries).
+  const LAST_FIRST = /^[A-Z'’-]+(?: [A-Z'’-]+)*,\s*[A-Z][A-Z'’ .-]+$/;
+  lines.forEach((line, index) => {
+    if (!/^\s*(?:directors?|directors of the society|director names?|current directors)\s*:?\s*$/i.test(line.text)) return;
+    for (const next of lines.slice(index + 1, index + 40)) {
+      if (!LAST_FIRST.test(next.text.trim())) break;
+      if (!directors.some((entry) => entry.value!.nameAsWritten === next.text.trim())) directors.push(at({ nameAsWritten: next.text.trim(), resolvedName: titleCaseName(next.text.trim()) }, next, undefined, 0.8));
+    }
   });
   const confirmed = /confirmation of filing|\breceipt\b|certified copy|filed date and time|date and time of filing|filing date and time/i.test(extract.text.slice(0, 4000));
   const filingStatus = confirmed && filedDate ? at("filed" as const, filedLabel!.line, filedDate.text, 0.85, "Registry confirmation, receipt or certified copy with a filing date.") : filedDate ? guessAt("filed" as const, filedLabel!.line, filedDate.text, 0.6) : inferred("draft" as const, [fileLoc(fileName)], 0.4, "No filing date: a draft or unfiled form.");

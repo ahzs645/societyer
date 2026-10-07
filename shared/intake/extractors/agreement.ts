@@ -25,6 +25,8 @@ function partiesIn(lines: Line[]): Array<FieldValue<string>> {
   };
   if (between >= 0) {
     for (const line of lines.slice(between, between + 14)) {
+      // The parties block ends at the first clause, recital or signature line.
+      if (line !== lines[between] && /^\s*(?:\d{1,2}[.)]\s|whereas\b|now therefore\b|recitals?\b|signed\b|in witness\b|this agreement\b)/i.test(line.text)) break;
       const text = line.text.replace(/^\s*(?:between|and)\s*:?\s*/i, "").trim();
       if (!text || /^(?:of the (?:first|second) part|between|and)\s*:?$/i.test(text) || /^\(herein/i.test(text)) continue;
       if (/^[A-Z][A-Za-z&.,'’ -]{3,}/.test(text) && /\b(?:society|council|district|city|ministry|province|roundtable|association|ltd|inc|corporation|company|group|university|authority|foundation|bank|credit union|limited)\b/i.test(text)) push(line, text.split(/\t/)[0]);
@@ -54,7 +56,7 @@ function termIn(lines: Line[]): { effective?: FieldValue<any>; expiry?: FieldVal
     if (date) expiry = at(dateValue(date), endLabel, date.text, 0.85);
   }
   if (!effective || !expiry) {
-    const termLine = lines.find((line) => /\b(?:term of this (?:agreement|contract)|agreement (?:is|shall be) (?:in effect|effective)|from\b.*\bto\b|commenc\w+ on)\b/i.test(line.text) && findDates(line.text).filter((date) => date.precision === "day").length >= 2);
+    const termLine = lines.find((line) => /\b(?:term of this (?:agreement|contract)|agreement (?:is|shall be) (?:in effect|effective)|from\b.*\bto\b|commenc\w+ on|runs from)\b|^\s*(?:\d{1,2}[.)]\s*)?(?:term|project period|funding period|agreement period)\s*[:.]/i.test(line.text) && findDates(line.text).filter((date) => date.precision === "day").length >= 2);
     if (termLine) {
       const dates = findDates(termLine.text).filter((date) => date.precision === "day");
       effective ??= at(dateValue(dates[0]), termLine, dates[0].text, 0.8);
@@ -83,7 +85,7 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   let amount: FieldValue<any> | undefined;
   let amountRequested: FieldValue<any> | undefined;
   for (const line of lines) {
-    const cue = /\b(?:maximum|total|not (?:to )?exceed|amount of|contract (?:price|amount|value)|contribution of|grant of|funding of|in the amount|sum of|fees? (?:payable|of))\b/i.test(line.text);
+    const cue = /\b(?:maximum|total|not (?:to )?exceed|amount of|contract (?:price|amount|value)|contribution of|grant of|funding of|in the amount|sum of|fees? (?:payable|of)|(?:will|shall) pay|(?:approved|awarded|grant|funding|contract) amount)\b|^\s*(?:amount|fees?)\s*[:.]/i.test(line.text);
     const requested = /\b(?:request(?:ed|ing)?|ask)\b/i.test(line.text);
     if (!cue && !requested) continue;
     const money = findMoney(line.text).sort((a, b) => b.amountCents - a.amountCents)[0];
@@ -93,7 +95,7 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
     else if (cue && !amount) amount = at(value, line, money.text, 0.75);
   }
   // Payment schedule: "<period> - $4500" lines.
-  const paymentSchedule = lines.filter((line) => findMoney(line.text)[0] && findDates(line.text).length && line.text.length < 200 && /\b(?:to|payment|instal|invoice|period|due)\b/i.test(line.text)).slice(0, 20).map((line) => {
+  const paymentSchedule = lines.filter((line) => findMoney(line.text)[0] && line.text.length < 200 && ((findDates(line.text).length && /\b(?:to|payment|instal|invoice|period|due)\b/i.test(line.text)) || /^\s*(?:[•●▪◦·\-–*]\s*)?(?:first|second|third|final|initial|interim|holdback|\d+(?:st|nd|rd|th))\s+(?:payment|instal+ment)\b/i.test(line.text))).slice(0, 20).map((line) => {
     const money = findMoney(line.text)[0];
     const dates = findDates(line.text);
     const due = dates[dates.length - 1];
@@ -137,6 +139,12 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
       const titleLineAfter = lines[lines.indexOf(line) + 1];
       const role = titleLineAfter && /^\s*title\s*:\s*(.+)$/i.exec(titleLineAfter.text)?.[1];
       signatories.push(at({ nameAsWritten: clean(match[1]), ...(role ? { role: clean(role) } : {}) }, line, match[1].trim(), 0.7));
+      continue;
+    }
+    // "Signed for the Contractor: Drew Hollis, Principal" / "Signed: Robin Vale, Chair, <org>".
+    const signedFor = /^\s*signed(?:\s+for\s+(?:the\s+)?([^:]{2,60}))?\s*:\s*([A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){1,3})(?:,\s*([A-Za-z][A-Za-z &-]{1,40}))?/i.exec(line.text);
+    if (signedFor && looksLikePersonName(signedFor[2]) && !signatories.some((entry) => entry.value.nameAsWritten === signedFor[2])) {
+      signatories.push(at({ nameAsWritten: signedFor[2], ...(signedFor[3] ? { role: clean(signedFor[3]) } : {}), ...(signedFor[1] ? { affiliation: clean(signedFor[1]) } : {}) }, line, signedFor[2], 0.7));
     }
   }
   const signedLine = lines.find((line) => /\bsigned (?:and delivered|this|on the)\b|\bexecuted\b.*\bday of\b/i.test(line.text));
@@ -152,7 +160,9 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   const funderLabel = labelled(lines.slice(0, 60), /funder|funding (?:agency|organization|source)|granting agency|submitted to/i);
   const fundingFrom = lines.find((line) => /\b(?:funding|grant|contribution)s? (?:from|by)\s+(?:the\s+)?[A-Z]/.test(line.text));
   const funderFrom = fundingFrom ? /\b(?:funding|grant|contribution)s? (?:from|by)\s+(?:the\s+)?([A-Z][\w&.'’ -]{2,80}?)(?:[,.;(]|\s+for\b|\s+to\b|$)/.exec(fundingFrom.text) : undefined;
-  const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : undefined;
+  // A funder's letterhead / first line ("Coastal Air Futures Fund") on a grant document.
+  const letterhead = input.docClass === "grant" ? lines.slice(0, 3).find((line) => /\b(?:fund|foundation|ministry|trust|agency|government of|council|program)\b/i.test(line.text) && line.text.length < 100 && !/\b(?:agreement|application|proposal|report|society)\b/i.test(line.text)) : undefined;
+  const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : letterhead ? guessAt(clean(letterhead.text), letterhead, undefined, 0.55, "Funder named in the letterhead.") : undefined;
   const program = labelled(lines.slice(0, 60), /program(?: name)?|project (?:title|name)|initiative/i);
   const purpose = labelled(lines.slice(0, 80), /purpose|objective|project description/i);
   // An agreement has no native target: record a representation gap (grants are native).

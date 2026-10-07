@@ -110,6 +110,19 @@ export function labelled(lines: Line[], label: RegExp, options: { from?: number;
   return undefined;
 }
 
+const KNOWN_LABELS = "broker|agent(?: or broker)?|insurer|(?:named )?insured|policy (?:number|no\\.?|period)|premium|date|time|location|subject|to|from|cc|re|fee(?: paid)?|total|invoice(?: #| no\\.?| number| date)?|bill to|due date|amount|term|program|recipient|purpose|society name|incorporation (?:number|no\\.?)|form filed|filed date and time|annual general meeting date|agm date";
+/** `Label: value` anywhere in a line, the value ending where the next `Other Label:` starts
+ * (PDF text often runs two labelled fields into one line: "Insurer: X Co. Broker: Y"). */
+export function inlineLabelled(lines: Line[], label: RegExp, options: { from?: number; to?: number } = {}): { line: Line; value: string; index: number } | undefined {
+  const re = new RegExp(`(?:^|[\\s\\t])(?:${label.source})\\s*:\\s*(.+?)(?=\\s+(?:${KNOWN_LABELS})\\s*:|\\t|$)`, label.flags.includes("i") ? "i" : "");
+  const to = Math.min(lines.length, options.to ?? lines.length);
+  for (let index = options.from ?? 0; index < to; index++) {
+    const match = re.exec(lines[index].text);
+    if (match && match[1].trim()) return { line: lines[index], value: match[1].trim(), index };
+  }
+  return undefined;
+}
+
 export type DateHit = { line: Line; date: DateMatch; index: number };
 export function firstDate(lines: Line[], options: { from?: number; to?: number; skip?: RegExp; monthPrecision?: boolean } = {}): DateHit | undefined {
   const to = Math.min(lines.length, options.to ?? lines.length);

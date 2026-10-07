@@ -81,9 +81,12 @@ function proxyEntries(lines: Line[], fileName: string): { entries: Entry[]; blan
   const markerIndex = lines.findIndex((line) => /name of (?:director|member)|^\s*\(?signature/i.test(line.text));
   const grantorLine = markerIndex > 0 ? lines.slice(Math.max(0, markerIndex - 2), markerIndex).reverse().find((line) => looksLikePersonName(clean(line.text.replace(/[\[\]_]/g, " ")))) : undefined;
   const grantor = grantorLine ? clean(grantorLine.text.replace(/[\[\]_]/g, " ")) : undefined;
-  const meetingLine = holderLine && /meeting of the [^.]*? to be held on\s+([A-Z][a-z]+ \d{1,2},? \d{4}|\[[^\]]+\])/i.exec(holderLine.text);
+  const meetingLine = holderLine && /\bmeeting\b[^.]*?\bto be held on\s+(?:[A-Z][a-z]+day,?\s+)?([A-Z][a-z]+ \d{1,2}(?:st|nd|rd|th)?,? \d{4}|\[[^\]]+\])/i.exec(holderLine.text);
   const meetingDate = meetingLine ? signedDateIn(meetingLine[1]) : undefined;
   const org = /^([A-Z][A-Za-z&]+)\s+proxy/i.exec(fileName.replace(/_/g, " "));
+  // "Harbour Health Authority, a member of the Society, hereby appoints …": a member organization grants the proxy.
+  const grantorOrg = holderLine ? /^\s*(?:the\s+)?([A-Z][\w&.'’ -]{2,80}?),\s+a member of\b/.exec(holderLine.text) ?? /^\s*([A-Z][\w&.'’ -]{2,80}?)\s+hereby appoints?\b/.exec(holderLine.text) : undefined;
+  const orgName = grantorOrg && !/^(?:i|we|the undersigned)$/i.test(grantorOrg[1].trim()) ? grantorOrg[1].trim() : undefined;
   const entry: Entry = {
     person: grantorLine && grantor ? at({ nameAsWritten: grantor, role: "Director" }, grantorLine, grantor, 0.75) : { status: "not_stated", confidence: 1, locators: [], note: "Grantor not named on the form." } as any,
     proxyHolder: at({ nameAsWritten: holder! }, holderLine!, holderMatch![1] ?? holderMatch![2], 0.85),
@@ -91,9 +94,9 @@ function proxyEntries(lines: Line[], fileName: string): { entries: Entry[]; blan
     ...(signed && dated ? { signedDate: at(signed, dated, rawSpan(dated, signed.text) ?? undefined, 0.85), termStart: guessAt(signed, dated, rawSpan(dated, signed.text) ?? undefined, 0.6, "Proxy dated") } : {}),
     ...(until && holderLine ? { termEnd: at(until, holderLine, untilMatch![1], 0.8) } : {}),
     ...(meetingDate && holderLine ? { meetingDate: at(meetingDate, holderLine, meetingLine![1], 0.8) } : {}),
-    ...(org ? { organisationRepresented: fromFile(org[1], fileName, 0.55, "Organization named in the file name.") } : {}),
+    ...(orgName && holderLine ? { organisationRepresented: at(orgName, holderLine, orgName, 0.8) } : org ? { organisationRepresented: fromFile(org[1], fileName, 0.55, "Organization named in the file name.") } : {}),
   };
-  return { entries: entry.person.value ? [entry] : [], blank: false };
+  return { entries: entry.person.value || orgName ? [entry] : [], blank: false };
 }
 
 const NAME_HEADER = /^(?:name|director|representative|member|person|full name)$/i;

@@ -5,7 +5,7 @@
 import { findDates, validIsoDay } from "../parse";
 import { inferred, notStated, type ExtractionEnvelope, type FieldValue, type Reference, type UnsupportedDetail } from "../schemas/common";
 import type { ClassExtractorInput } from "./agenda";
-import { at, clean, dateValue, fileLoc, fromFile, guessAt, labelled, linesOf, loc, type Line } from "./toolkit";
+import { at, clean, dateValue, fileLoc, fromFile, guessAt, inlineLabelled, labelled, linesOf, loc, type Line } from "./toolkit";
 
 export const DETERMINISTIC_INSURANCE_ENGINE = "deterministic-insurance/1";
 
@@ -68,12 +68,12 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
           : /renewal/i.test(`${fileName} ${text.slice(0, 1200)}`) ? "renewal" : /declarations? page|policy/i.test(text) ? "policy" : "unknown";
   // Policy number.
   const policyLine = head.find((line) => /policy (?:number|no\.?|#)\s*:?\s*#?[A-Z0-9-]{4,}/i.test(line.text)) ?? head.find((line) => /document no\.?\s*[A-Z]{1,4}\d{3,}[A-Z0-9-]*/i.test(line.text));
-  const policyMatch = policyLine ? /policy (?:number|no\.?|#)\s*:?\s*#?([A-Z]{0,4}\d[A-Z0-9-]{3,})|document no\.?\s*([A-Z]{1,4}\d{3,}[A-Z0-9-]*)/i.exec(policyLine.text) : undefined;
+  const policyMatch = policyLine ? /policy (?:number|no\.?|#)\s*:?\s*#?([A-Z]{0,4}-?\d[A-Z0-9-]{3,})|document no\.?\s*([A-Z]{1,4}\d{3,}[A-Z0-9-]*)/i.exec(policyLine.text) : undefined;
   const policyNumber = policyMatch && policyLine ? at(policyMatch[1] ?? policyMatch[2], policyLine, policyMatch[1] ?? policyMatch[2], 0.85) : undefined;
   // Parties.
   const brokerHeader = head.findIndex((line) => /agent or broker/i.test(line.text));
   let broker: FieldValue<string> | undefined;
-  const brokerLabel = labelled(head, /broker|agent or broker/i);
+  const brokerLabel = labelled(head, /broker|agent or broker/i) ?? inlineLabelled(head, /broker|agent or broker/i);
   const brokerName = head.find((line) => /\b(?:insurance (?:brokers?|group|services|agencies)|brokers? ltd)\b/i.test(line.text));
   if (brokerName) {
     const parts = brokerName.text.split("\t").map((part) => part.trim());
@@ -85,7 +85,7 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
   const insurerLine = (subscribing >= 0 ? lines.slice(lines.indexOf(head[subscribing]) + 1, lines.indexOf(head[subscribing]) + 6).find((line) => /\b(?:insurance|assurance|indemnity|mutual)\b/i.test(line.text) && !/insured|coverage/i.test(line.text) && line.text.trim().length > 8) : undefined)
     ?? head.find((line) => /^\s*(?:insurer|insurance company|underwriter)\s*:/i.test(line.text))
     ?? head.find((line) => /insurance manager\s*:/i.test(line.text));
-  const insurerFromLine = insurerLine ? clean(insurerLine.text.replace(/^\s*(?:insurer|insurance company|underwriter|insurance manager)\s*:\s*/i, "").split(/,\s*\d|\t/)[0]) : undefined;
+  const insurerFromLine = insurerLine ? clean(insurerLine.text.replace(/^\s*(?:insurer|insurance company|underwriter|insurance manager)\s*:\s*/i, "").split(/,\s*\d|\t|\s+(?:broker|agent(?: or broker)?|named insured|policy (?:number|no\.?))\s*:/i)[0]) : undefined;
   const insurerNext = insurerLine && !/\b(?:company|co\.|ltd|limited|inc)\s*$/i.test(insurerLine.text) && /(?:insurance|assurance)\s*$/i.test(insurerLine.text) && /^\s*(?:company|co\.|corporation|limited|ltd)\b/i.test(lines[lines.indexOf(insurerLine) + 1]?.text ?? "") ? lines[lines.indexOf(insurerLine) + 1] : undefined;
   const coiInsurer = isCertificate ? head.map((line) => ({ line, match: /((?:[A-Z][\w&.']*\s?){1,3}),\s*Policy\s*#/.exec(line.text) })).find((hit) => hit.match) : undefined;
   const insurer: FieldValue<string> = insurerLine && insurerFromLine

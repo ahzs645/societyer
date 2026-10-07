@@ -18,7 +18,7 @@ export function displayName(value: string): string {
   return clean(value.replace(/<[^>]*>/g, "").replace(/\S+@\S+/g, "").trim()) || "(address withheld)";
 }
 
-const DECISION = /\b(?:(?:has|have|was|were) (?:been )?(?:approved|appointed|decided|agreed|accepted|elected|ratified|confirmed|resolved)|will be (?:replacing|stepping down|resigning|appointed|representing)|is replacing|replacing me|resign(?:s|ed|ing)?\b(?: from)?|step(?:ping|s|ped)? down|agreed to|decided to|motion (?:was )?(?:carried|passed)|approve[sd]? (?:the|a|our)|we will|I will|please (?:approve|sign|confirm|file)|i accept|accepted the)\b/i;
+const DECISION = /\b(?:(?:has|have|was|were) (?:been )?(?:approved|appointed|decided|agreed|accepted|elected|ratified|confirmed|resolved)|will be (?:replacing|stepping down|resigning|appointed|representing)|is replacing|replacing me|resign(?:s|ed|ing)?\b(?: from)?|step(?:ping|s|ped)? down|agreed to|decided to|motion (?:was )?(?:carried|passed)|resolved (?:to|that)|approve[sd]? (?:the|a|our)|we will|I will|please (?:approve|sign|confirm|file)|i accept|accepted the)\b/i;
 
 export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnvelope {
   const { extract, fileName } = input;
@@ -32,11 +32,20 @@ export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnv
   const to: Array<FieldValue<string>> = [], cc: Array<FieldValue<string>> = [];
   if (isEmail) {
     const fromLine = headerLine("From");
-    if (fromLine) from = at(displayName(fromLine.text.replace(/^from:\s*/i, "")), fromLine, undefined, 0.9);
+    // Quotes cite the display name only, never the address beside it.
+    const nameQuote = (line: Line, name: string) => (line.text.includes(name) ? name : line.text.split(":")[0]);
+    if (fromLine) {
+      const name = displayName(fromLine.text.replace(/^from:\s*/i, ""));
+      from = at(name, fromLine, nameQuote(fromLine, name), 0.9);
+    }
     for (const [name, list] of [["To", to], ["Cc", cc]] as const) {
       const line = headerLine(name);
       if (!line) continue;
-      for (const part of line.text.replace(new RegExp(`^${name}:\\s*`, "i"), "").split(/;\s*/)) if (part.trim()) list.push(at(displayName(part), line, undefined, 0.85));
+      for (const part of line.text.replace(new RegExp(`^${name}:\\s*`, "i"), "").split(/;\s*/)) {
+        if (!part.trim()) continue;
+        const display = displayName(part);
+        list.push(at(display, line, nameQuote(line, display), 0.85));
+      }
     }
     const subjectLine = headerLine("Subject");
     if (subjectLine) subject = at(clean(subjectLine.text.replace(/^subject:\s*/i, "")), subjectLine, undefined, 0.9);
@@ -60,8 +69,10 @@ export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnv
     const dear = head.find((line) => /^\s*dear\s+/i.test(line.text));
     if (dear && !to.length) to.push(at(clean(dear.text.replace(/^\s*dear\s+/i, "").replace(/[,:]\s*$/, "")), dear, undefined, 0.6));
     const signoff = lines.findIndex((line) => /^\s*(?:sincerely|regards|best regards|yours (?:truly|sincerely)|thank you|thanks)\s*,?\s*$/i.test(line.text));
-    const signer = signoff >= 0 ? lines.slice(signoff + 1, signoff + 4).find((line) => looksLikePersonName(clean(line.text)) || /\b(?:society|roundtable|council)\b/i.test(line.text)) : undefined;
-    if (signer) from = at(clean(signer.text), signer, undefined, 0.7);
+    const signer = signoff >= 0 ? lines.slice(signoff + 1, signoff + 4).find((line) => looksLikePersonName(clean(line.text.split(",")[0])) || /\b(?:society|roundtable|council)\b/i.test(line.text)) : undefined;
+    // "Robin Vale, Chair": the name (the title stays in the source).
+    const signerName = signer && looksLikePersonName(clean(signer.text.split(",")[0])) ? clean(signer.text.split(",")[0]) : signer ? clean(signer.text) : undefined;
+    if (signer && signerName) from = at(signerName, signer, signer.text.includes(signerName) ? signerName : undefined, 0.7);
   }
   // Decisions and commitments in the body (sentence quotes; never the whole body).
   const decisions: Array<FieldValue<string>> = [];
@@ -76,6 +87,15 @@ export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnv
     }
   }
   const attachments = (extract.attachments ?? []).filter((attachment) => !/^image\d+\.(?:png|jpg|gif)$/i.test(attachment.name)).map((attachment) => fromFile(attachment.name, attachment.name, 0.9, "Attachment name."));
+  // Attachments named in the text ("Attachment: Revised workplan.docx", "Enclosures: …").
+  for (const line of lines) {
+    const named = /^\s*(?:attachments?|attached|enclosures?|encl\.?)\s*:\s*(.+)$/i.exec(line.text);
+    if (!named) continue;
+    for (const part of named[1].split(/\s*;\s*|\s*,\s*(?=[A-Z])/)) {
+      const name = part.trim();
+      if (name.length >= 3 && name.length <= 160 && !attachments.some((attachment) => attachment.value === name)) attachments.push(at(name, line, name, 0.8, "Attachment named in the message."));
+    }
+  }
   const pii = detectPii(extract.text.slice(0, 100000));
   const personal = pii.some((finding) => ["email", "phone", "postal_code", "sin", "account", "card"].includes(finding.kind));
   if (personal) unsupported.push({ description: "Personal contact details in the message (e-mail addresses, phone numbers or addresses) are withheld; keep them in personContactPoints only after review.", locators: [fileLoc(fileName)], suggestedTarget: "personContactPoints", category: "no_ui_edit", infoType: "person.contact_restricted" });

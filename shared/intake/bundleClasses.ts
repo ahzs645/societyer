@@ -7,6 +7,7 @@
  * Facts without a native home stay in representationGaps (agreements,
  * signing tiers, AGM cadence …). Everything stages as Pending review. */
 import type { IntakeExtractionResult, IntakeRunResult } from "./bundle";
+import { bodyKeyFor } from "./entities";
 import { bodyFromText } from "./minutes/extractMinutes";
 import { normalizePersonKey } from "./names";
 import type { Locator } from "./schemas/common";
@@ -132,7 +133,12 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
     if (body) minutesByKey.set(`${body}@${payload.meetingDate}`, payload);
   }
   const evidenced = new Map((run.reconciliation.evidencedMeetings ?? []).map((meeting) => [meeting.fileId, meeting]));
-  for (const extraction of byClass(["agenda", "meetingPackage", "agmMaterial"])) {
+  // Several files can show the same minutes-less meeting (agenda + consent agenda): they enrich one staged meeting.
+  const evidencedPayloads = new Map<string, Record<string, any>>();
+  // Staged meetings whose agenda items came from a consent agenda: a full agenda replaces them.
+  const consentOnlyAgenda = new WeakSet<object>();
+  const agendaLike = byClass(["agenda", "meetingPackage", "agmMaterial"]).sort((a, b) => Number(!evidenced.has(a.fileKey)) - Number(!evidenced.has(b.fileKey)));
+  for (const extraction of agendaLike) {
     const record: any = extraction.record;
     const date = dayIso(record.date) ?? dayIso(record.meetingDate);
     if (!date) continue;
@@ -143,7 +149,7 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
       // A meeting shown by its agenda/package with no minutes: staged as held, minutes missing.
       const slate = (record.electionSlate ?? []).map((entry: any) => val(entry)).filter(Boolean);
       const fs = val(record.financialStatementsPresented);
-      push(bundle, "meetingMinutes", {
+      const staged: Record<string, any> = {
         meetingDate: date,
         meetingTitle: meetingTitle(evidence.bodyKey, record, date),
         meetingType: MEETING_TYPE[evidence.bodyKey] ?? "Board",
@@ -164,14 +170,21 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
         sourceDocumentTitle: fileName(extraction.fileKey),
         confidence: "Review",
         notes: `Meeting evidenced by an agenda/package (minutes missing). Agenda items and consent items are as circulated, not as decided. Extracted by ${extraction.model}.`,
-      }, [extraction.fileKey]);
+      };
+      push(bundle, "meetingMinutes", staged, [extraction.fileKey]);
+      if (val(record.kind) === "consent_agenda") consentOnlyAgenda.add(staged);
+      evidencedPayloads.set(`${evidence.bodyKey}@${date}`, staged);
       continue;
     }
     // Minutes exist: the agenda/package is a meeting material; consent receipts and agenda items enrich the minutes payload.
     const bodyKey = bodyFromText(String(val(record.bodyLabel) ?? val(record.body) ?? ""))?.body;
-    const minutes = (bodyKey && minutesByKey.get(`${bodyKey}@${date}`)) ?? minutesByKey.get(date);
+    const evidenceKey = bodyKeyFor(String(val(record.bodyLabel) ?? val(record.body) ?? (extraction.docClass === "agmMaterial" ? "Annual General Meeting" : "")));
+    const minutes = (bodyKey && minutesByKey.get(`${bodyKey}@${date}`)) ?? minutesByKey.get(date) ?? evidencedPayloads.get(`${evidenceKey}@${date}`);
     if (minutes) {
-      if (!(minutes.agendaItems as unknown[] | undefined)?.length && items.length) minutes.agendaItems = items;
+      if (items.length && (!(minutes.agendaItems as unknown[] | undefined)?.length || (consentOnlyAgenda.has(minutes) && val(record.kind) !== "consent_agenda"))) {
+        minutes.agendaItems = items;
+        consentOnlyAgenda.delete(minutes);
+      }
       if (consentItems.length) minutes.consentItems = [...(minutes.consentItems ?? []), ...consentItems];
       minutes.sourceExternalIds = [...new Set([...(minutes.sourceExternalIds ?? []), extraction.fileKey])];
       push(bundle, "meetingMaterials", {
@@ -308,8 +321,9 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
         if (org) seat(org, { kind: "vacant", observedAt: asOfDate?.iso, notes: "Seat listed as VACANT." }, extraction.fileKey);
         continue;
       }
-      if (!person) continue;
-      const name = person.resolvedName ?? person.nameAsWritten;
+      // A member organization can itself grant a proxy (no individual grantor named).
+      if (!person && !((kind === "proxy" || type === "proxy") && org)) continue;
+      const name: string = person ? person.resolvedName ?? person.nameAsWritten : org;
       if (kind === "proxy" || type === "proxy") {
         const holder = val(entry.proxyHolder);
         const meetingDate = dayIso(entry.meetingDate);
