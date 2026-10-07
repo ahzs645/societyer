@@ -1,6 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { quorumRuleValidator, signingAuthorityTierValidator } from "../validators/meetingModel";
+import { cadenceRuleValidator, committeeMandateVersionValidator } from "../validators/gaps";
 
 /**
  * People & governance tables (members, directors, board role assignments/changes, signing authorities, committees, committee members, org-chart assignments), extracted from convex/schema.ts. Spread back into defineSchema; byte-identical.
@@ -129,6 +130,12 @@ export const peopleTables = {
     mission: v.optional(v.string()),
     cadence: v.string(),
     cadenceNotes: v.optional(v.string()),
+    // A4: structured body model. `cadence` stays as the display label.
+    kind: v.optional(v.string()), // standing | ad_hoc | working_group | executive | advisory
+    parentBody: v.optional(v.string()), // board | members | committee
+    parentCommitteeId: v.optional(v.id("committees")),
+    cadenceRule: v.optional(cadenceRuleValidator),
+    mandateVersions: v.optional(v.array(committeeMandateVersionValidator)),
     nextMeetingAt: v.optional(v.string()),
     chairDirectorId: v.optional(v.id("directors")),
     // A3: the committee's own quorum rule (e.g. "all 5 members").

@@ -32,6 +32,7 @@ import {
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { Tooltip } from "../components/Tooltip";
+import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -397,6 +398,8 @@ export function Dashboard() {
               </div>
             </div>
           </div>
+
+          <ContinuityChecksCard societyId={society._id} />
 
           {canRead("filings:read") && (
           <div className="card">

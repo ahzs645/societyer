@@ -1,3 +1,4 @@
+import { recordPreflightGapsForBundle } from "./representationGaps";
 import { existingImportTarget, rememberImportTarget } from "./importTargetIdentity";
 /**
  * PORTABLE FUNCTIONS: the import-session review domain.
@@ -110,6 +111,7 @@ const SECTION_MUTATION_DOMAINS = {
   task: "tasks", goal: "goals", commitment: "commitments", fundingSource: "fundingSources",
   grantReport: "grants", meetingMaterial: "meetingMaterials", organizationSeat: "memberGovernance",
   conflict: "conflicts", proxy: "proxies", bylawRuleSet: "bylawRules", operatingBudget: "financialHub",
+  representationGap: "representationGaps",
 } satisfies Record<typeof SECTION_RECORD_KINDS[number], string>;
 
 async function requireSectionPromotionPermissions(ctx: PortableMutationCtx, societyId: string, records: any[]) {
@@ -238,6 +240,8 @@ export async function createFromBundlePortable(
     });
   }
 
+  // Preflight losses become typed representation gaps (finding A14).
+  await recordPreflightGapsForBundle(ctx, societyId, bundle, sessionId);
   return sessionId;
 }
 
@@ -924,7 +928,7 @@ export async function applyApprovedSectionRecordsPortable(
       continue;
     }
     const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds);
-    if (record.recordKind !== "sourceEvidence") {
+    if (record.recordKind !== "sourceEvidence" && record.recordKind !== "representationGap") {
       await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
     }
     await rememberImportTarget(ctx, societyId, record, String(target));

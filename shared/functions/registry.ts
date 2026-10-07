@@ -35,6 +35,8 @@ import * as pipaTrainingFns from "./pipaTraining";
 import * as complianceObligationsFns from "./complianceObligations";
 import * as programStatementsFns from "./programStatements";
 import * as committeesFns from "./committees";
+import * as representationGapsFns from "./representationGaps";
+import * as continuityFns from "./continuity";
 import * as commitmentsFns from "./commitments";
 import * as deadlinesFns from "./deadlines";
 import * as nameHistoryFns from "./nameHistory";
@@ -281,6 +283,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "committees:remove", handler: committeesFns.committeeRemovePortable }),
   definePortableMutation({ name: "committees:addMember", handler: committeesFns.committeeAddMemberPortable }),
   definePortableMutation({ name: "committees:removeMember", handler: committeesFns.committeeRemoveMemberPortable }),
+  definePortableMutation({ name: "committees:updateStructure", handler: committeesFns.committeeUpdateStructurePortable }),
 
   // commitments
   definePortableQuery({ name: "commitments:list", handler: commitmentsFns.listPortable }),
@@ -1307,6 +1310,34 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // exports
   definePortableQuery({ name: "exports:exportAttachmentPage", handler: exportsFns.exportAttachmentPagePortable }),
+
+  // representationGaps (system gaps, finding A14)
+  definePortableQuery({ name: "representationGaps:list", handler: representationGapsFns.listPortable }),
+  definePortableQuery({ name: "representationGaps:get", handler: representationGapsFns.getPortable }),
+  definePortableQuery({ name: "representationGaps:summary", handler: representationGapsFns.summaryPortable }),
+  definePortableQuery({ name: "representationGaps:forRecord", handler: representationGapsFns.forRecordPortable }),
+  definePortableQuery({ name: "representationGaps:countForRecord", handler: representationGapsFns.countForRecordPortable }),
+  definePortableQuery({ name: "representationGaps:coverage", handler: representationGapsFns.coveragePortable }),
+  definePortableMutation({ name: "representationGaps:create", handler: representationGapsFns.createPortable }),
+  definePortableMutation({ name: "representationGaps:setStatus", handler: representationGapsFns.setStatusPortable }),
+  definePortableMutation({ name: "representationGaps:bulkSetStatus", handler: representationGapsFns.bulkSetStatusPortable }),
+  definePortableMutation({ name: "representationGaps:linkAffected", handler: representationGapsFns.linkAffectedPortable }),
+  definePortableMutation({ name: "representationGaps:remove", handler: representationGapsFns.removePortable }),
+  definePortableMutation({ name: "representationGaps:recordPreflight", handler: representationGapsFns.recordPreflightPortable }),
+  definePortableMutation({ name: "representationGaps:backfillFromSourceEvidence", handler: representationGapsFns.backfillFromSourceEvidencePortable }),
+
+  // continuity (record gaps, finding A15)
+  definePortableQuery({ name: "continuity:gaps", handler: continuityFns.gapsPortable }),
+  definePortableQuery({ name: "continuity:dashboardChecks", handler: continuityFns.dashboardChecksPortable }),
+  definePortableQuery({ name: "continuity:listExpectations", handler: continuityFns.listExpectationsPortable }),
+  definePortableQuery({ name: "continuity:evidenceDocuments", handler: continuityFns.evidenceDocumentsPortable }),
+  definePortableMutation({ name: "continuity:createExpectation", handler: continuityFns.createExpectationPortable }),
+  definePortableMutation({ name: "continuity:updateExpectation", handler: continuityFns.updateExpectationPortable }),
+  definePortableMutation({ name: "continuity:removeExpectation", handler: continuityFns.removeExpectationPortable }),
+  definePortableMutation({ name: "continuity:seedRulePack", handler: continuityFns.seedRulePackPortable }),
+  definePortableMutation({ name: "continuity:deriveFromBylawRules", handler: continuityFns.deriveFromBylawRulesPortable }),
+  definePortableMutation({ name: "continuity:markPeriod", handler: continuityFns.markPeriodPortable }),
+  definePortableMutation({ name: "continuity:clearPeriodMark", handler: continuityFns.clearPeriodMarkPortable }),
 
 ].map((definition) => ({ ...definition, applicationPolicy: true }));
 

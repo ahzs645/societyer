@@ -35,6 +35,7 @@ import { storageTables } from "./tables/storage";
 import { pathwayTables } from "./tables/pathways";
 
 import { offlineMeetingTables } from "./tables/offlineMeetings";
+import { gapTables } from "./tables/gaps";
 
 export default defineSchema({
   ...reviewEvidenceTables,
@@ -514,4 +515,6 @@ export default defineSchema({
   // (shared registers + corporation-only registers, spread in below).
   ...ycnRegisterTables,
 
+  // Gap identification (representation gaps, expectations, continuity marks).
+  ...gapTables,
 });

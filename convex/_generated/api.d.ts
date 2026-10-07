@@ -34,6 +34,7 @@ import type * as communications from "../communications.js";
 import type * as complianceObligations from "../complianceObligations.js";
 import type * as conflicts from "../conflicts.js";
 import type * as constating from "../constating.js";
+import type * as continuity from "../continuity.js";
 import type * as corporationSettings from "../corporationSettings.js";
 import type * as courtOrders from "../courtOrders.js";
 import type * as crons from "../crons.js";
@@ -140,6 +141,7 @@ import type * as recordTableMetadataDefinitions from "../recordTableMetadataDefi
 import type * as recordsLocation from "../recordsLocation.js";
 import type * as registerHistory from "../registerHistory.js";
 import type * as remuneration from "../remuneration.js";
+import type * as representationGaps from "../representationGaps.js";
 import type * as retention from "../retention.js";
 import type * as roleHolderHistory from "../roleHolderHistory.js";
 import type * as secrets from "../secrets.js";
@@ -163,6 +165,7 @@ import type * as tables_documents from "../tables/documents.js";
 import type * as tables_electionsMisc from "../tables/electionsMisc.js";
 import type * as tables_filings from "../tables/filings.js";
 import type * as tables_formation from "../tables/formation.js";
+import type * as tables_gaps from "../tables/gaps.js";
 import type * as tables_governance from "../tables/governance.js";
 import type * as tables_grants from "../tables/grants.js";
 import type * as tables_inventory from "../tables/inventory.js";
@@ -227,6 +230,7 @@ declare const fullApi: ApiFromModules<{
   complianceObligations: typeof complianceObligations;
   conflicts: typeof conflicts;
   constating: typeof constating;
+  continuity: typeof continuity;
   corporationSettings: typeof corporationSettings;
   courtOrders: typeof courtOrders;
   crons: typeof crons;
@@ -333,6 +337,7 @@ declare const fullApi: ApiFromModules<{
   recordsLocation: typeof recordsLocation;
   registerHistory: typeof registerHistory;
   remuneration: typeof remuneration;
+  representationGaps: typeof representationGaps;
   retention: typeof retention;
   roleHolderHistory: typeof roleHolderHistory;
   secrets: typeof secrets;
@@ -356,6 +361,7 @@ declare const fullApi: ApiFromModules<{
   "tables/electionsMisc": typeof tables_electionsMisc;
   "tables/filings": typeof tables_filings;
   "tables/formation": typeof tables_formation;
+  "tables/gaps": typeof tables_gaps;
   "tables/governance": typeof tables_governance;
   "tables/grants": typeof tables_grants;
   "tables/inventory": typeof tables_inventory;

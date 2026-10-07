@@ -90,6 +90,7 @@ const SECTION_RECORD_KINDS = [
   "proxy",
   "bylawRuleSet",
   "operatingBudget",
+  "representationGap",
 ] as const;
 
 export {

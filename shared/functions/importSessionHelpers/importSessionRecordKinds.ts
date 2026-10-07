@@ -105,6 +105,7 @@ function recordsFromBundle(bundle: any) {
   // lines (the `budgets` table) use `operatingBudgets`.
   for (const budget of arrayOf(bundle?.operatingBudgets)) records.push(makeRecord("operatingBudget", "budgets", budget));
   for (const doc of arrayOf(bundle?.documentMap)) records.push(makeRecord("documentCandidate", firstSection(doc), doc));
+  for (const gap of arrayOf(bundle?.representationGaps)) records.push(makeRecord("representationGap", "representationGaps", gap));
   return records;
 }
 
@@ -191,6 +192,7 @@ function targetTableForRecordKind(kind: string) {
     proxy: "proxies",
     bylawRuleSet: "bylawRuleSets",
     operatingBudget: "budgets",
+    representationGap: "representationGaps",
   } as Record<string, string>)[kind] ?? kind;
 }
 

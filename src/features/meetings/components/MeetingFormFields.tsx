@@ -4,6 +4,7 @@
  * reused by the page Drawer and the global "Create meeting" popup
  * (MeetingCreateModal).
  */
+import { MEETING_STATUS_OPTIONS } from "../../../../shared/meetingStatus";
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -345,7 +346,7 @@ export function MeetingFormFields({
           <Select
             value={value.status}
             onChange={(v) => onChange({ status: v })}
-            options={["Scheduled", "Held", "Cancelled"].map((s) => ({ value: s, label: s }))}
+            options={MEETING_STATUS_OPTIONS}
           />
         </Field>
       )}
