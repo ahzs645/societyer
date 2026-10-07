@@ -17,6 +17,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { bylawRuleContextFor, bylawRuleEffectiveDateProblem, bylawRuleProblems } from "../../shared/bylawGovernance";
 import { formatDate } from "../lib/format";
+import { calendarDateKey } from "../lib/calendarDates";
 import { LegalGuideTrackList } from "../components/LegalGuide";
 import {
   getJurisdictionGuidePack,
@@ -45,7 +46,7 @@ export function BylawRulesPage() {
       setForm({
         ...rules,
         baseEffectiveFromISO: rules.effectiveFromISO,
-        effectiveFromISO: `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
+        effectiveFromISO: `${calendarDateKey(new Date())}T00:00:00.000Z`,
       });
     }
   }, [form, rules]);
@@ -269,7 +270,7 @@ export function BylawRulesPage() {
           <h2 className="card__title">Rule source timeline</h2>
           <span className="card__subtitle">
             {form.isFallback ? corporate ? "Unreviewed operational defaults" : "Default assumptions" : `Editing from v${form.version}`}
-            {form.baseEffectiveFromISO ? ` · current version effective ${formatDate(form.baseEffectiveFromISO)}` : ""}
+            {form.baseEffectiveFromISO ? ` · current version effective ${formatDate(String(form.baseEffectiveFromISO).slice(0, 10))}` : ""}
           </span>
         </div>
         <div className="card__body bylaw-rules__body">
@@ -318,7 +319,7 @@ export function BylawRulesPage() {
                   <span>{row.quorumType === "percentage" ? `${row.quorumValue}%` : `${row.quorumValue} present`}</span>
                 </div>
                 <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  Effective {row.effectiveFromISO ? formatDate(row.effectiveFromISO) : "from first use"}
+                  Effective {row.effectiveFromISO ? formatDate(String(row.effectiveFromISO).slice(0, 10)) : "from first use"}
                 </span>
               </div>
             ))}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { calendarDateKey } from "../lib/calendarDates";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { CalendarClock } from "lucide-react";
@@ -47,7 +48,7 @@ export function ComplianceSettingsPage() {
     api.meetings.list,
     society ? { societyId: society._id } : "skip",
   ) as Array<{ type?: string; status?: string; scheduledAt?: string }> | undefined;
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = calendarDateKey(new Date());
   // Only held AGMs are evidence (a scheduled or draft AGM is not).
   const agmFacts = deriveAgmFacts(society ?? null, meetings ?? [], todayISO);
   const lastAgmDay = agmFacts.annualMeetingDate

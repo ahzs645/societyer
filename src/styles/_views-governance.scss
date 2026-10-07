@@ -282,13 +282,21 @@
     padding: token('s-2') 0;
     border-bottom: 1px solid token('border');
   }
-  .table--stack-mobile td {
+  .table.table--stack-mobile tbody td {
+    position: static;
+    left: auto;
+    height: auto;
     max-width: none;
     min-width: 0;
     padding: 4px token('s-3');
     border: 0;
+    box-shadow: none;
+    line-height: 1.4;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  .table-wrap:has(> .table--stack-mobile) {
+    overflow-x: visible;
   }
   .table--stack-mobile td[data-label]::before {
     content: attr(data-label);
@@ -302,5 +310,18 @@
   .table--stack-mobile .table__actions-inner {
     justify-content: flex-start;
     flex-wrap: wrap;
+    width: auto;
+  }
+  .table.table--stack-mobile tbody td.table__actions {
+    width: auto;
+    right: auto;
+  }
+  .table--stack-mobile td .row {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .table--stack-mobile td .badge {
+    max-width: 100%;
+    white-space: normal;
   }
 }

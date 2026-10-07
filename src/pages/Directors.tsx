@@ -1,4 +1,5 @@
 import { sourceRoleLabel } from "../../shared/personHistory";
+import { calendarDateKey } from "../lib/calendarDates";
 import {SourceRoleObservations} from "../components/SourceRoleObservations";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useEffect, useMemo, useState } from "react";
@@ -106,7 +107,7 @@ export function DirectorsPage() {
     setSelected({
       firstName: "", lastName: "", email: "",
       position: "Director", isBCResident: directorProfile.showBcResidentField,
-      termStart: new Date().toISOString().slice(0, 10),
+      termStart: calendarDateKey(new Date()),
       consentOnFile: false, status: "Active", aliases: [],
     });
     setOpen(true);
@@ -206,7 +207,7 @@ export function DirectorsPage() {
             email: "",
             position: /president|chair|treasurer|secretary|vice/i.test(role) ? sourceRoleLabel(role) : "Director",
             isBCResident: directorProfile.showBcResidentField,
-            termStart: observation.startDate ?? observation.observedDate ?? new Date().toISOString().slice(0, 10),
+            termStart: observation.startDate ?? observation.observedDate ?? calendarDateKey(new Date()),
             consentOnFile: false,
             status: "Active",
             aliases: [],
@@ -286,7 +287,7 @@ export function DirectorsPage() {
               renderCell={({ field, record }) => field.name === "firstName" ? (
                 <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setOpen(true); }}>
                   {`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed director"}
-                  {directorTermLapsed(record, new Date().toISOString().slice(0, 10)) ? (
+                  {directorTermLapsed(record, calendarDateKey(new Date())) ? (
                     <span className="badge badge--warn" style={{ marginLeft: 6 }} title={`Term ended ${record.termEnd}; record a re-election or resignation.`}>Term ended</span>
                   ) : null}
                 </button>
@@ -354,7 +355,7 @@ export function DirectorsPage() {
                 {selectedProblems.join(" ")}
               </InspectorNote>
             )}
-            {directorTermLapsed(selected, new Date().toISOString().slice(0, 10)) && (
+            {directorTermLapsed(selected, calendarDateKey(new Date())) && (
               <InspectorNote tone="warn" title="Term has ended">
                 This director's term ended {selected.termEnd} but the record is still Active. Record the re-election (new term end) or the date they left office.
               </InspectorNote>

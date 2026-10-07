@@ -217,12 +217,12 @@ export function AgmWorkflowPage() {
             tone={noticeWithinWindow ? "success" : "warn"}
           />
           <Item label="Notice coverage"
-            value={
-              votingMemberCount === 0
-                ? `${noticeCoverage} recipient(s) recorded · no voting member register`
-                : `${noticeCoverage} of ${votingMemberCount} voting members have a notice record`
-            }
-            tone={votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? "success" : "warn"}
+            value={[
+              `${deliveredCount} delivery record${deliveredCount === 1 ? "" : "s"} logged`,
+              votingMemberCount ? `${votingMemberCount} voting member${votingMemberCount === 1 ? "" : "s"}` : "no voting member register",
+              recordedRecipientCount ? `workflow records ${recordedRecipientCount} recipient${recordedRecipientCount === 1 ? "" : "s"}` : "",
+            ].filter(Boolean).join(" · ")}
+            tone={votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? (deliveredCount >= votingMemberCount ? "success" : "info") : "warn"}
           />
           <Item label="Annual report"
             value={

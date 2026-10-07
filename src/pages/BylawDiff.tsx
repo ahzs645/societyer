@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { calendarDateKey } from "../lib/calendarDates";
 import { useQuery } from "convex/react";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
@@ -27,7 +28,7 @@ import {
 } from "lucide-react";
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
-import { formatDateTime, relative } from "../lib/format";
+import { formatDate, formatDateTime, relative } from "../lib/format";
 import { evaluateSpecialResolution, SPECIAL_RESOLUTION_CITATION, voteCountProblems } from "../../shared/bylawGovernance";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { Select } from "../components/Select";
@@ -212,7 +213,7 @@ export function BylawDiffPage() {
   const voteProblems = voteModal
     ? [
         ...voteCountProblems({ votesFor: toCount(voteModal.f), votesAgainst: toCount(voteModal.a || "0"), abstentions: toCount(voteModal.x || "0") }, { requireVotesFor: true }),
-        ...(voteModal.date && voteModal.date > new Date().toISOString().slice(0, 10) ? ["The resolution date cannot be in the future."] : []),
+        ...(voteModal.date && voteModal.date > calendarDateKey(new Date()) ? ["The resolution date cannot be in the future."] : []),
       ]
     : [];
   const votePreview = voteModal && voteModal.f !== ""
@@ -341,7 +342,7 @@ export function BylawDiffPage() {
                     <button
                       className="btn-action btn-action--primary"
                       disabled={!canWrite}
-                      onClick={() => { if (canWrite) setVoteModal({ f: "", a: "0", x: "0", date: new Date().toISOString().slice(0, 10), meetingId: "" }); }}
+                      onClick={() => { if (canWrite) setVoteModal({ f: "", a: "0", x: "0", date: calendarDateKey(new Date()), meetingId: "" }); }}
                     >
                       <ClipboardCheck size={12} /> Record resolution
                     </button>
@@ -446,7 +447,7 @@ export function BylawDiffPage() {
                 {selected.votesFor != null && (
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
                     Resolution vote: <strong>{selected.votesFor}</strong> for · <strong>{selected.votesAgainst ?? 0}</strong> against · <strong>{selected.abstentions ?? 0}</strong> abstain
-                    {selected.resolutionPassedAtISO ? <> · passed {formatDateTime(selected.resolutionPassedAtISO).split(",").slice(0, 2).join(",")}</> : null}
+                    {selected.resolutionPassedAtISO ? <> · passed {formatDate(String(selected.resolutionPassedAtISO).slice(0, 10))}</> : null}
                   </div>
                 )}
                 {!isDraft && (
@@ -612,7 +613,7 @@ export function BylawDiffPage() {
               <input
                 className="input"
                 type="date"
-                max={new Date().toISOString().slice(0, 10)}
+                max={calendarDateKey(new Date())}
                 value={voteModal.date}
                 onChange={(e) => setVoteModal({ ...voteModal, date: e.target.value })}
               />

@@ -1,4 +1,5 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { calendarDateKey } from "../lib/calendarDates";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -151,7 +152,7 @@ export function CorporateHistoryPage() {
     setNameForm({
       name: "",
       shortName: "",
-      startISO: new Date().toISOString().slice(0, 10),
+      startISO: calendarDateKey(new Date()),
       regPosn: "",
     });
     setNameOpen(true);
@@ -187,7 +188,7 @@ export function CorporateHistoryPage() {
       jurisdiction: "",
       legislation: "",
       regNumber: "",
-      startISO: new Date().toISOString().slice(0, 10),
+      startISO: calendarDateKey(new Date()),
     });
     setEventOpen(true);
   };

@@ -173,7 +173,10 @@ export async function markResolutionPassedPortable(
   if (problems.length) throw new Error(`Resolution vote not recorded: ${problems.join(" ")}`);
   const now = new Date().toISOString();
   const resolutionDate = String(resolutionDateISO ?? meeting?.scheduledAt ?? "").slice(0, 10);
-  if (resolutionDate && (!/^\d{4}-\d{2}-\d{2}$/.test(resolutionDate) || resolutionDate > now.slice(0, 10))) {
+  // Allow one day of clock skew: a user ahead of UTC may legitimately be on
+  // "tomorrow" relative to the server's UTC date.
+  const latestAllowed = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  if (resolutionDate && (!/^\d{4}-\d{2}-\d{2}$/.test(resolutionDate) || resolutionDate > latestAllowed)) {
     throw new Error("The resolution date must be a valid date that is not in the future.");
   }
   const rules = await getActiveBylawRuleSet(ctx, String(row.societyId));

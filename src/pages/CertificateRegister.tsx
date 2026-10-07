@@ -1,4 +1,5 @@
 import { useConfirm } from "../components/Modal";
+import { calendarDateKey } from "../lib/calendarDates";
 import { isCorporation } from "../../shared/organizationDomain";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
@@ -33,7 +34,7 @@ export function CertificateRegisterPage() {
   const society = useSociety();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
-  const [asOf, setAsOf] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState<string>(() => calendarDateKey(new Date()));
   const register = useQuery(
     api.shareCertificates.register,
     society ? { societyId: society._id, asOf } : "skip",
@@ -65,7 +66,7 @@ export function CertificateRegisterPage() {
       holderName: "",
       shareClass: "",
       shares: "",
-      issuedOn: new Date().toISOString().slice(0, 10),
+      issuedOn: calendarDateKey(new Date()),
       replacesCertificateNumber: "",
     });
     setOpen(true);
@@ -112,7 +113,7 @@ export function CertificateRegisterPage() {
     if (!id || !canEdit) return;
     await update({
       id,
-      patch: { cancelledOn: new Date().toISOString().slice(0, 10) },
+      patch: { cancelledOn: calendarDateKey(new Date()) },
     });
   };
 

@@ -247,7 +247,15 @@ export function deriveComplianceDeadlines(
   }
 
   {
-    const annualReport = nextAnnualReportDueDate(settings, fromISO);
+    let annualReport = nextAnnualReportDueDate(settings, fromISO);
+    let reportBasis = "Registry annual report due date.";
+    // A past due date (the report for an AGM already held) is not the NEXT
+    // deadline: the next report is due 30 days after the next AGM (BC Societies
+    // Act s.73). Only applied when AGM history is known (cycle-aware mode).
+    if (annualReport && settings.heldAgmYears && annualReport < fromISO.slice(0, 10) && agmDate && settings.entityType !== "corporation__business_") {
+      annualReport = offsetDate(agmDate, 0, 30);
+      reportBasis = "Due 30 days after the next AGM.";
+    }
     if (annualReport) {
       deadlines.push({
         key: "annual-report",
@@ -255,7 +263,7 @@ export function deriveComplianceDeadlines(
         dueDate: annualReport,
         category: "annual-report",
         deadlineCategory: "Governance",
-        basis: "Registry annual report due date.",
+        basis: reportBasis,
       });
     }
   }

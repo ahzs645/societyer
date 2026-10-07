@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { calendarDateKey } from "../lib/calendarDates";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -21,7 +22,7 @@ export function SignificantIndividualsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("deadlines:write");
-  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(calendarDateKey(new Date()));
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const toast = useToast();
@@ -68,7 +69,7 @@ export function SignificantIndividualsPage() {
     if (!canWrite) return;
     setForm({
       individualName: "",
-      stepDate: new Date().toISOString().slice(0, 10),
+      stepDate: calendarDateKey(new Date()),
       stepsNarrative: "",
       nextReviewDate: "",
     });
