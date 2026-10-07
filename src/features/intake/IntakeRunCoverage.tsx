@@ -25,14 +25,15 @@ export function IntakeRunCoverage({ societyId }: { societyId: string }) {
       {runs && runs.length > 0 && (
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Run</th><th>Documents promoted</th><th>Fields with provenance</th><th>Run coverage</th><th>System gaps</th><th>Record gaps</th></tr></thead>
+            <thead><tr><th>Run</th><th>Documents promoted</th><th>Fields with provenance</th><th>Native coverage (reviewed)</th><th>Extractable coverage</th><th>System gaps</th><th>Record gaps</th></tr></thead>
             <tbody>
               {runs.map((run) => (
                 <tr key={run.runId}>
                   <td><Link to={`/app/intake/${run.runId}/review`}>{run.name}</Link><div className="muted" style={{ fontSize: 11 }}>{relative(run.createdAtISO)} · {run.status}</div></td>
                   <td className="mono">{run.promoted}/{run.extractions}{run.rejected ? ` (${run.rejected} rejected)` : ""}</td>
                   <td className="mono">{run.promotedFields}</td>
-                  <td className="mono" title="Native facts ÷ (native + system-gap + unresolved facts) at extraction time">{typeof run.coverage?.coverage === "number" ? `${Math.round(run.coverage.coverage * 100)}%` : "—"}</td>
+                  <td className="mono" title="Promoted fields ÷ extracted facts: what is native after review">{typeof run.promotedCoverage === "number" ? `${Math.round(run.promotedCoverage * 100)}%` : "—"}<div className="muted" style={{ fontSize: 11 }}>{run.promotedFields}/{run.extractedFields} facts</div></td>
+                  <td className="mono" title="At extraction: native-mappable facts ÷ (native + system-gap + unresolved facts), before review">{typeof run.coverage?.coverage === "number" ? `${Math.round(run.coverage.coverage * 100)}%` : "—"}</td>
                   <td className="mono">{run.systemGaps === null ? "—" : <Link to="/app/coverage?tab=system">{run.systemGaps}</Link>}</td>
                   <td className="mono">{run.recordGaps ? <Link to={`/app/intake?run=${run.runId}`}>{run.recordGaps}</Link> : 0}</td>
                 </tr>

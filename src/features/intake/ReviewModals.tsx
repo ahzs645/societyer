@@ -19,7 +19,7 @@ export function BulkAcceptModal({ open, onClose, onConfirm, candidates, docClass
     return [...map.entries()].slice(0, 8);
   }, [candidates, docClass]);
   return (
-    <Modal open={open} onClose={onClose} title={`Bulk accept ${scopeLabel}`} size="md"
+    <Modal open={open} onClose={onClose} title={`Bulk accept ${scopeLabel}`} size="md" resizable={false}
       footer={<>
         <button type="button" className="btn" onClick={onClose}>Cancel</button>
         <button type="button" className="btn btn--accent" onClick={onConfirm} disabled={!candidates.length || busy} data-testid="intake-bulk-confirm">Accept {pluralize(candidates.length, "field")}</button>
@@ -65,7 +65,7 @@ export function CantRepresentModal({ field, onClose, onConfirm }: { field: Revie
     return [...byArea.entries()];
   }, []);
   return (
-    <Modal open={Boolean(field)} onClose={onClose} title="The app can't represent this" size="md"
+    <Modal open={Boolean(field)} onClose={onClose} title="The app can't represent this" size="md" resizable={false}
       footer={<>
         <button type="button" className="btn" onClick={onClose}>Cancel</button>
         <button type="button" className="btn btn--accent" disabled={!draft.description.trim()} onClick={() => onConfirm(draft)}>Record system gap</button>
@@ -114,7 +114,7 @@ export function PromoteModal({ open, onClose, onConfirm, societyId, extractionId
     else onConfirm({ mode: choice === "new" ? "new" : "auto" });
   };
   return (
-    <Modal open={open} onClose={onClose} title="Promote to native records" size="md"
+    <Modal open={open} onClose={onClose} title="Promote to native records" size="lg" resizable={false}
       footer={<>
         <button type="button" className="btn" onClick={onClose}>Cancel</button>
         <button type="button" className="btn btn--accent" onClick={confirm} disabled={!readiness.ready || busy} data-testid="intake-promote-confirm">{busy ? "Promoting…" : "Promote"}</button>

@@ -147,7 +147,8 @@ function findQuoteInDom(root: HTMLElement | null, quote: string) {
 
 type PdfDoc = { numPages: number; getPage(n: number): Promise<any>; destroy(): Promise<void> };
 async function loadPdfJs() {
-  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")]);
+  // The legacy build: the modern one relies on very recent built-ins (Map.getOrInsertComputed).
+  const [pdfjs, worker] = await Promise.all([import("pdfjs-dist/legacy/build/pdf.mjs"), import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")]);
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
   return pdfjs;
 }
@@ -155,6 +156,7 @@ async function loadPdfJs() {
 function PdfView({ blob, locator, context }: { blob: Blob; locator?: ViewerLocator; context?: string }) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [page, setPage] = useState(1);
+  const [zoom, setZoom] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -186,7 +188,7 @@ function PdfView({ blob, locator, context }: { blob: Blob; locator?: ViewerLocat
       const pdfPage = await doc.getPage(Math.min(Math.max(1, page), doc.numPages));
       if (!alive) return;
       const base = pdfPage.getViewport({ scale: 1 });
-      const width = Math.max(320, Math.min(target.clientWidth - 24, 900));
+      const width = Math.max(320, Math.min(target.clientWidth - 24, 900)) * zoom;
       const viewport = pdfPage.getViewport({ scale: width / base.width });
       const ratio = window.devicePixelRatio || 1;
       const wrapper = document.createElement("div");
@@ -213,7 +215,7 @@ function PdfView({ blob, locator, context }: { blob: Blob; locator?: ViewerLocat
       first?.scrollIntoView({ block: "center", behavior: "smooth" });
     })().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
     return () => { alive = false; };
-  }, [doc, page, locator?.quote, context]);
+  }, [doc, page, zoom, locator?.quote, context]);
   return (
     <div className="intake-pdf">
       {doc && (
@@ -221,10 +223,14 @@ function PdfView({ blob, locator, context }: { blob: Blob; locator?: ViewerLocat
           <button type="button" className="btn btn--sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} aria-label="Previous page"><ChevronLeft size={12} /></button>
           <span>Page {page} of {doc.numPages}</span>
           <button type="button" className="btn btn--sm" disabled={page >= doc.numPages} onClick={() => setPage((value) => value + 1)} aria-label="Next page"><ChevronRight size={12} /></button>
+          <span aria-hidden>·</span>
+          <button type="button" className="btn btn--sm" disabled={zoom <= 1} onClick={() => setZoom((value) => Math.max(1, value - 0.5))} aria-label="Zoom out">−</button>
+          <span>{zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}</span>
+          <button type="button" className="btn btn--sm" disabled={zoom >= 3} onClick={() => setZoom((value) => Math.min(3, value + 0.5))} aria-label="Zoom in">+</button>
         </div>
       )}
       {error && <p className="muted">Could not render the PDF ({error}). Use the Text view.</p>}
-      <div ref={host} data-testid="intake-pdf" style={{ width: "100%", display: "flex", justifyContent: "center" }} />
+      <div ref={host} data-testid="intake-pdf" style={{ width: "100%", display: "flex", justifyContent: zoom > 1 ? "flex-start" : "center", overflowX: "auto" }} />
     </div>
   );
 }
@@ -339,12 +345,15 @@ function VersionDiff({ societyId, extract, versions, compareFileId, onCompare }:
 }
 
 /** Word diff for short documents, line diff when the LCS table would be too large; adjacent chunks merged. */
-function versionDiff(before: string, after: string): Chunk[] {
+function versionDiff(rawBefore: string, rawAfter: string): Chunk[] {
+  // Copies extracted by different engines (DOCX vs PDF) differ in line breaks and tabs; compare words only.
+  const before = rawBefore.replace(/\s+/g, " ").trim();
+  const after = rawAfter.replace(/\s+/g, " ").trim();
   let a = tokenize(before);
   let b = tokenize(after);
   if (a.length * b.length > 3_000_000) {
-    a = before.split(/(?<=\n)/);
-    b = after.split(/(?<=\n)/);
+    a = before.split(/(?<=[.;:!?] )/);
+    b = after.split(/(?<=[.;:!?] )/);
   }
   if (a.length * b.length > 12_000_000) return [{ kind: "del", text: before }, { kind: "add", text: after }];
   const merged: Chunk[] = [];

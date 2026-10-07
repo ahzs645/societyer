@@ -23,6 +23,7 @@ import {
   reviewFieldsForRecord, riskTier, samplePreview, thresholdFor, validateEditedValue, type ReviewRow,
 } from "../shared/intake/review";
 import { buildPromotionBundle, defaultInfoTypeForPath, sourceDocumentPayload } from "../shared/intake/promotion";
+import { landedValue } from "../shared/functions/intakeReview";
 import { writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
 
 // ------------------------------------------------------------ policy
@@ -110,6 +111,11 @@ assert.deepEqual(nativeTargetForPath("date"), { table: "meetings", field: "sched
 assert.deepEqual(nativeTargetForPath("quorum.stated"), { table: "minutes", field: "quorumStatus" });
 assert.equal(defaultInfoTypeForPath("motions[1].secondedBy"), "motion.person_link");
 assert.equal(defaultInfoTypeForPath("quorum.count"), "quorum.mid_meeting");
+assert.equal(landedValue("location", "Room A", "Zoom", true), false, "a merge never attributes a value the record already held differently");
+assert.equal(landedValue("location", "Zoom", "Zoom", true), true);
+assert.equal(landedValue("scheduledAt", "2025-05-13T12:00:00.000Z", { iso: "2025-05-13", precision: "day" }, true), true);
+assert.equal(landedValue("type", "Committee", "operations", true), false);
+assert.equal(landedValue("type", "Board", "board", false), true);
 // applyReviews keeps only accepted/edited values and drops list items whose key was not promoted.
 const decisionsFor = (rows: Array<[string, string, unknown?]>): Map<string, ReviewRow> => latestDecisions(rows.map(([fieldPath, decision, editedValue], index) => ({ fieldPath, decision, editedValue, reviewedAtISO: `2026-01-01T00:00:0${index}.000Z` })));
 const appliedSample = applyReviews(board.extraction.record, decisionsFor([["date", "accept"], ["body", "accept"], ["motions[2].text", "accept"], ["motions[2].movedBy", "edit", { nameAsWritten: "A. Quill", resolvedName: "Avery Quill" }], ["attendance[0].nameAsWritten", "accept"], ["motions[0].text", "reject"]]));
@@ -250,6 +256,8 @@ assert.ok(reconciled.recordGaps >= 1);
 const summaries = await query("intake:runSummaries", { societyId: society });
 assert.equal(summaries[0].promoted, 3);
 assert.ok(summaries[0].promotedFields >= promoted.provenance);
+assert.ok(summaries[0].promotedCoverage > 0 && summaries[0].promotedCoverage <= 1, "reviewed native coverage = promoted fields ÷ extracted facts");
+assert.ok(summaries[0].systemGaps >= 2, "run summaries count the system gaps the run produced");
 as("user_member");
 await assert.rejects(() => query("intake:runSummaries", { societyId: society }), /settings:read/);
 fs.rmSync(dir, { recursive: true, force: true });

@@ -50,7 +50,6 @@ export default defineConfig({
       "@milkdown/kit/prose/state",
       // AI intake worker and review viewer: a late re-optimization reloads the
       // page in the middle of an extraction run.
-      "pdfjs-dist",
       "pdfjs-dist/legacy/build/pdf.mjs",
       "pdfjs-dist/legacy/build/pdf.worker.mjs",
       "@kenjiuno/msgreader",

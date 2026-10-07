@@ -119,19 +119,25 @@ export function highlightQuote(root: HTMLElement, quote: string | undefined, con
 export function highlightSpans(spans: HTMLElement[], texts: string[], quote: string | undefined, context?: string): HTMLElement | null {
   for (const span of spans) span.classList.remove(MARK_CLASS);
   if (!quote?.trim()) return null;
-  const starts: number[] = [];
-  let full = "";
-  for (const text of texts) {
-    starts.push(full.length);
-    full += `${text} `;
+  // pdf.js splits words into items (superscripts, kerning runs): try items joined directly, then with spaces.
+  let starts: number[] = [];
+  let match: [number, number] | null = null;
+  for (const separator of ["", " "]) {
+    starts = [];
+    let full = "";
+    for (const text of texts) {
+      starts.push(full.length);
+      full += `${text}${separator}`;
+    }
+    match = findQuote(full, quote, context);
+    if (match) break;
   }
-  const match = findQuote(full, quote, context);
   if (!match) return null;
   let first: HTMLElement | null = null;
   texts.forEach((text, index) => {
     const from = starts[index];
     const to = from + text.length;
-    if (to > match[0] && from < match[1] && spans[index]) {
+    if (to > match![0] && from < match![1] && spans[index]) {
       spans[index].classList.add(MARK_CLASS);
       first ??= spans[index];
     }

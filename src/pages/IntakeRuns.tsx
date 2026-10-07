@@ -340,7 +340,7 @@ export function IntakeRunsPage() {
         </div>
         <div className="table-wrap">
           <table className="table intake-runs-table">
-            <thead><tr><th>Run</th><th>Status</th><th>Files</th><th>Reviewed</th><th>Native coverage</th><th>Record gaps</th><th /></tr></thead>
+            <thead><tr><th>Run</th><th>Status</th><th>Files</th><th>Reviewed</th><th>Native coverage</th><th>Record gaps</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {runs === undefined && <tr><td colSpan={7} className="muted">Loading…</td></tr>}
               {runs && allRuns.length === 0 && <tr><td colSpan={7} className="muted" style={{ textAlign: "center", padding: 24 }}>No intake runs yet.</td></tr>}
@@ -356,7 +356,7 @@ export function IntakeRunsPage() {
                     <td><Badge tone={STATUS_TONE[run.status] ?? "neutral"}>{STATUS_LABEL[run.status] ?? run.status}</Badge></td>
                     <td className="mono">{run.stats?.files ?? "—"}</td>
                     <td className="mono">{summaryRow ? `${summaryRow.promoted}/${summaryRow.extractions} promoted` : "—"}</td>
-                    <td className="mono">{typeof coverage === "number" ? `${Math.round(coverage * 100)}%` : "—"}</td>
+                    <td className="mono" title="Reviewed: promoted fields ÷ extracted facts. Extractable: native-mappable share at extraction time.">{typeof summaryRow?.promotedCoverage === "number" ? `${Math.round(summaryRow.promotedCoverage * 100)}%` : "—"}<div className="muted" style={{ fontSize: 11 }}>{typeof coverage === "number" ? `${Math.round(coverage * 100)}% extractable` : ""}</div></td>
                     <td className="mono">{run.recordGaps || 0}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <Link className="btn btn--sm btn--accent" to={`/app/intake/${run._id}/review`}>Review</Link>{" "}
@@ -431,12 +431,12 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
             <>
               <Select aria-label="Filter by disposition" value={filter} onChange={setFilter} options={[{ value: "all", label: "All dispositions" }, ...Object.keys(run.counts.byDisposition ?? {}).map((key) => ({ value: key, label: key }))]} />
               <div className="table-wrap">
-                <table className="table">
+                <table className="table intake-detail-table">
                   <thead><tr><th>File</th><th>Disposition</th><th>Class</th><th>Reason</th></tr></thead>
                   <tbody>
                     {shown.slice(0, 400).map((file) => (
                       <tr key={file._id}>
-                        <td><span className="mono" style={{ wordBreak: "break-all" }}>{file.path}</span>{file.sensitivity === "restricted" && <> <Badge tone="danger"><Lock size={10} /> restricted</Badge></>}</td>
+                        <td className="intake-path-cell"><span className="mono">{file.path}</span>{file.sensitivity === "restricted" && <> <Badge tone="danger"><Lock size={10} /> restricted</Badge></>}</td>
                         <td><Badge tone={DISPOSITION_TONE[file.disposition] ?? "neutral"}>{file.disposition}</Badge></td>
                         <td>{file.docClass ?? "—"}{file.classification?.bodyLabel ? <div className="muted">{file.classification.bodyLabel}</div> : null}</td>
                         <td className="muted">{file.dispositionReason ?? file.classification?.restrictedReason ?? ""}</td>
@@ -449,14 +449,14 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
           )}
           {tab === "log" && (
             <div className="table-wrap">
-              <table className="table">
+              <table className="table intake-detail-table">
                 <thead><tr><th>When</th><th>Stage</th><th>File</th><th>Provider</th><th>Note</th></tr></thead>
                 <tbody>
                   {(log ?? []).map((entry) => (
                     <tr key={entry._id}>
                       <td className="mono">{entry.atISO.slice(11, 19)}</td>
                       <td>{entry.stage}{entry.sentToProvider && <> <Badge tone="warn">sent</Badge></>}</td>
-                      <td className="mono" style={{ wordBreak: "break-all" }}>{entry.fileKey?.replace(/^local:/, "") ?? "—"}</td>
+                      <td className="mono intake-path-cell">{entry.fileKey?.replace(/^local:/, "") ?? "—"}</td>
                       <td>{entry.provider ? `${entry.provider} ${entry.model ?? ""}` : "—"}{entry.redactions && Object.keys(entry.redactions).length ? <div className="muted">masked: {Object.entries(entry.redactions).map(([kind, count]) => `${kind} ${count}`).join(", ")}</div> : null}</td>
                       <td className="muted">{entry.note}</td>
                     </tr>

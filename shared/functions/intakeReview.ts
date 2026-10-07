@@ -277,7 +277,9 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     await ctx.db.patch(minutesId, { actionItems: build.payload.actionItems.map((item: any) => compact({ text: String(item.text), assignee: clean(item.assignee, 200), dueDate: clean(item.dueDate, 40), done: false, status: "unknown" })) });
   }
 
-  // Field provenance: one row per promoted field that landed natively.
+  // Field provenance: one row per promoted field that landed natively. A merge fills
+  // only blank fields, so a value the existing record already held differently is not attributed.
+  const merged = Number(applied?.existing ?? 0) > 0;
   const meeting = await ctx.db.get<any>(meetingId, "meetings");
   const minutes = await ctx.db.get<any>(minutesId, "minutes");
   const motions = (await Promise.all(((minutes?.motionIds ?? []) as string[]).map((id) => ctx.db.get<any>(id, "motions")))).filter(Boolean) as any[];
@@ -299,7 +301,8 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     }
     const item = nativeTarget.item;
     if (nativeTarget.table === "meetings") {
-      provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      if (landedValue(nativeTarget.field, (meeting as any)?.[nativeTarget.field], value, merged)) provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      else notLandedPaths.push(path);
     } else if (nativeTarget.table === "agendaItems" && item) {
       const titleReview = decisions.get(`sections[${item.index}].title`);
       const title = titleReview?.decision === "edit" ? titleReview.editedValue : record.sections?.[item.index]?.title?.value;
@@ -325,7 +328,8 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
       else if (item.group === "attendance") provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: "draftTranscript.nonPersonAttendance", locator, value, decision: review.decision, sourceFieldPath: path });
       else notLandedPaths.push(path);
     } else {
-      provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      if (landedValue(nativeTarget.field, (minutes as any)?.[nativeTarget.field], value, merged)) provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      else notLandedPaths.push(path);
     }
   }
   const at = now();
@@ -391,11 +395,13 @@ export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { socie
     const ids = new Set(extractions.map((row) => String(row._id)));
     const systemGaps = gapKeys ? gapKeys.filter((key) => ids.has(key.split(":")[1])).length : null;
     const promoted = extractions.filter((row) => row.status === "promoted");
+    // Facts extracted (fields with a value) across the run; promotedFields ÷ extractedFields is the reviewed native coverage.
+    const extractedFields = extractions.reduce((sum, row) => sum + reviewFieldsForRecord(row.record ?? {}).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length, 0);
     let promotedFields = 0;
     for (const extraction of promoted) promotedFields += ((await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[]).length;
     out.push({
       runId: run._id, name: run.name, status: run.status, createdAtISO: run.createdAtISO, extractions: extractions.length, promoted: promoted.length,
-      rejected: extractions.filter((row) => row.status === "rejected").length, promotedFields, coverage: run.coverage?.headline ?? null, recordGaps: run.recordGaps?.length ?? 0, systemGaps,
+      rejected: extractions.filter((row) => row.status === "rejected").length, promotedFields, coverage: run.coverage?.headline ?? null, recordGaps: run.recordGaps?.length ?? 0, systemGaps, extractedFields, promotedCoverage: extractedFields ? Number((promotedFields / extractedFields).toFixed(3)) : null,
     });
   }
   return out.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
@@ -546,4 +552,24 @@ export async function provenanceForRecords(ctx: PortableQueryCtx, { societyId, t
     const hide = !seesContent || (restricted && !seesRestricted);
     return { ...row, ...(hide ? { value: undefined, locator: { ...row.locator, quote: undefined } } : {}), fileName: meta?.name, runName: meta?.runName, restricted };
   });
+}
+
+/** Whether a promoted value is what the native field now holds (scalar header fields). */
+export function landedValue(field: string, native: unknown, value: unknown, merged: boolean): boolean {
+  if (native === undefined || native === null || native === "") return false;
+  const v: any = value;
+  switch (field) {
+    case "scheduledAt": return String(native).slice(0, 10) === String(v?.iso ?? v ?? "").slice(0, 10);
+    case "electronic": return Boolean(native) === Boolean(v);
+    case "type": return !merged; // body → meeting type/committee is a mapping, attributed only when this import set it
+    case "chairName": case "recorderName": return matchKey(native) === matchKey(v?.resolvedName ?? v?.nameAsWritten ?? v) || matchKey(native) === matchKey(v?.nameAsWritten ?? v);
+    case "quorumStatus": return !merged || String(native) !== "not_recorded";
+    case "nextMeetingAt": return !merged || (typeof v?.date === "string" ? String(native).startsWith(v.date) : true);
+    case "importedSourceVersions": case "sourceExternalIds": case "sessionSegments": case "appendices": return true;
+    default: {
+      const a = matchKey(native);
+      const b = matchKey(v?.text ?? v?.resolvedName ?? v?.nameAsWritten ?? v);
+      return Boolean(b) && (a === b || a.includes(b) || (!merged && b.includes(a)));
+    }
+  }
 }

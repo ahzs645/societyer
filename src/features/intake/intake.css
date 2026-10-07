@@ -251,3 +251,5 @@ mark.intake-hl, .intake-hl {
 
 .intake-check { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-sm); }
 .intake-check input { margin-top: 3px; flex: none; }
+.intake-path-cell { white-space: normal !important; word-break: break-all; min-width: 140px; max-width: 280px; font-size: var(--fs-xs); }
+.intake-detail-table td { white-space: normal; vertical-align: top; }
