@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { LocalQueryError, PortableQueryCache } from "../src/lib/portableQueryCache";
+import { isRolePermissionDenial, LocalQueryError, PortableQueryCache } from "../src/lib/portableQueryCache";
 import type { PortableRuntime } from "../shared/portable/define";
 import type { StaticDemoDexieStore } from "../src/lib/staticDemoStore";
 
@@ -172,5 +172,15 @@ stopCreated();
   const again = errorCache.watchQuery("people:forRecord", { recordId: "transient" });
   assert.equal(again.localQueryResult(), undefined, "an unmounted watcher's not-found is never surfaced");
   assert.ok(runs >= 4);
+  // A role without the permission keeps the stable "unavailable" value (optional panels; the route gate explains denials).
+  assert.equal(isRolePermissionDenial(new Error("Permission users:read required.")), true);
+  assert.equal(isRolePermissionDenial(new Error("Society membership not found.")), false, "a wrong organization is surfaced");
+  const permissionCache = new PortableQueryCache({ async runQuery() { throw new Error("Permission users:read required."); } } as unknown as PortableRuntime,
+    { onUpdate() { return () => undefined; } } as unknown as StaticDemoDexieStore, () => undefined);
+  const denied = permissionCache.watchQuery("users:list", { societyId: "x" });
+  const stopDenied = denied.onUpdate(() => undefined);
+  await settle();
+  assert.equal(denied.localQueryResult(), undefined, "a permission denial is not thrown");
+  stopDenied();
 }
 console.log("Portable cache checks passed: shared pagination, loaded pages, unsubscribe, principal/denied guards, and inactive miss→create→resubscribe lookup.");

@@ -74,6 +74,12 @@ export class LocalQueryError extends Error {
   }
 }
 
+/** "Permission x:read required", "Role Owner required", "Access denied" … (not a wrong organization). */
+export function isRolePermissionDenial(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /\bpermission\b[^.]*\brequired\b|\brole\b[^.]*\brequired\b|access denied|forbidden|not permitted/i.test(message);
+}
+
 /** Tables a result depends on; null means "unknown — refresh on every change". */
 type ReadSet = ReadonlySet<string> | null;
 
@@ -273,6 +279,13 @@ export class PortableQueryCache {
     // Paginated queries keep the undefined loading value.
     this.portableCache.set(cacheKey, undefined);
     if (paginated) {
+      if (hadResult) this.emit();
+      return;
+    }
+    // A role that lacks a permission gets a stable "unavailable" value, as
+    // before: optional panels query what the role may not read, and the route
+    // gate already explains denied pages. Re-rendering must not loop on it.
+    if (isRolePermissionDenial(error)) {
       if (hadResult) this.emit();
       return;
     }
