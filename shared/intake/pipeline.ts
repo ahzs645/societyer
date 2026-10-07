@@ -71,6 +71,27 @@ export function guardFutureMinutesDate(envelope: { record: unknown; warnings?: s
   envelope.warnings = [...(envelope.warnings ?? []), `Stated meeting date ${iso} is in the future.`];
 }
 
+/** Adopts-minutes links checked against the run: a dated link that names minutes the archive holds
+ * (reconciliation linked them) is corroborated; an undated "adopt the previous minutes" motion gets
+ * the date of the meeting reconciliation linked it to, as an inferred value a person confirms. */
+export function resolveAdoptedMinutes(extractions: IntakeExtractionResult[], meetings: Array<{ date: string; bodyKey: string; approvedBy?: { fileId: string; motionIndex: number } }>): void {
+  for (const meeting of meetings) {
+    const by = meeting.approvedBy;
+    if (!by || by.motionIndex < 0) continue;
+    const adopting = extractions.find((extraction) => extraction.fileKey === by.fileId);
+    const link = (adopting?.record as { motions?: Array<{ adoptsMinutesOf?: { value?: { date?: string; precision?: string; body?: string; text: string }; status: string; confidence: number; note?: string } }> } | undefined)?.motions?.[by.motionIndex]?.adoptsMinutesOf;
+    if (!link?.value) continue;
+    if (!link.value.date) {
+      link.value = { ...link.value, date: meeting.date, precision: "day", body: link.value.body ?? meeting.bodyKey };
+      link.confidence = Math.max(link.confidence, 0.6);
+      link.note = `Adopts the previous minutes (no date stated); this run's previous ${meeting.bodyKey} meeting is ${meeting.date}. Confirm.`;
+    } else if (link.value.date === meeting.date && link.status === "stated" && link.confidence < 0.95) {
+      link.confidence = 0.95;
+      link.note = `${link.note ? `${link.note} ` : ""}The archive holds the minutes of that meeting.`;
+    }
+  }
+}
+
 export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], options: PipelineOptions): Promise<PipelineOutput> {
   const now = () => new Date().toISOString();
   const runId = options.runId ?? `intake-${now().replace(/[:.]/g, "-")}`;
@@ -238,6 +259,7 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
   }
   // 8. Reconcile.
   const { reconciled, carry, gaps, evidencedMeetings, policyAdoptions } = reconcileExtractions(files, extractions, { fiscalChanges, asOfISO });
+  resolveAdoptedMinutes(extractions, reconciled.meetings);
   log.push({ atISO: now(), stage: "bundle", sentToProvider: false, note: `${reconciled.meetings.length} meetings reconciled; ${evidencedMeetings.length} meetings evidenced without minutes; ${gaps.length} record gaps` });
   return {
     runId,
