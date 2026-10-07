@@ -91,6 +91,8 @@ const SECTION_RECORD_KINDS = [
   "bylawRuleSet",
   "operatingBudget",
   "representationGap",
+  // Agreements register (A5).
+  "agreement",
 ] as const;
 
 export {

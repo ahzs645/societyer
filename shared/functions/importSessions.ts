@@ -116,6 +116,7 @@ const SECTION_MUTATION_DOMAINS = {
   grantReport: "grants", meetingMaterial: "meetingMaterials", organizationSeat: "memberGovernance",
   conflict: "conflicts", proxy: "proxies", bylawRuleSet: "bylawRules", operatingBudget: "financialHub",
   representationGap: "representationGaps",
+  agreement: "agreements",
 } satisfies Record<typeof SECTION_RECORD_KINDS[number], string>;
 
 async function requireSectionPromotionPermissions(ctx: PortableMutationCtx, societyId: string, records: any[]) {
