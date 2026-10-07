@@ -22,7 +22,7 @@ export const documentTables = {
     createdAtISO: v.string(),
     lastOpenedAtISO: v.optional(v.string()),
     lastOpenedByUserId: v.optional(v.id("users")),
-    reviewStatus: v.optional(v.string()), // none | in_review | needs_signature | approved | blocked
+    reviewStatus: v.optional(v.string()), // none | needs_review | in_review | needs_signature | transposed | approved | blocked
     librarySection: v.optional(v.string()), // governance | policy | meeting_material | finance | other
     flaggedForDeletion: v.boolean(),
     archivedAtISO: v.optional(v.string()),

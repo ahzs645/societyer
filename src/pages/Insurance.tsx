@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -419,6 +420,7 @@ export function InsurancePolicyDetailPage() {
             <button className="btn-action" disabled={!canWrite} onClick={() => { setRenewalError(""); setRenewal({ policyNumber: "", startDate: dateInput(policy.endDate || policy.renewalDate), endDate: "", premiumDollars: "", policyFeeDollars: "", totalCostDollars: "" }); }}><Plus size={12} /> Record renewal</button>
             <Badge tone={statusTone(policy.status)}>{policy.status}</Badge>
             {policy.sensitivity === "restricted" && <Badge tone="danger">restricted</Badge>}
+            <SourceProvenanceButton table="insurancePolicies" id={policy._id} />
           </>
         }
       />

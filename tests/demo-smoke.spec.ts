@@ -112,14 +112,14 @@ test.describe("Meeting agenda minutes workflow", () => {
     // Wait for demo data to hydrate from IndexedDB before editing — starting
     // the edit against a not-yet-loaded agenda record makes the save create a
     // duplicate agenda instead of updating the fixture one.
-    await expect(page.getByRole("button", { name: "Privacy program review" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Privacy program review", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Edit agenda", exact: true }).click();
     await page.getByRole("button", { name: "Add item" }).click();
     await page.locator(".meeting-minutes-agenda-editor input.input").last().fill("Volunteer program update");
     await page.getByRole("button", { name: "Save agenda", exact: true }).click();
 
     await expect(page.getByText("Agenda saved")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Volunteer program update" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Volunteer program update", exact: true })).toBeVisible();
     await expect(page.locator("#meeting-minutes-section-3")).toContainText("Volunteer program update");
 
     // Give IndexedDB persistence a beat before the HARD navigation below —

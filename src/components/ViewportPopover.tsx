@@ -21,10 +21,25 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
       if (!anchor || !panel) return;
       const margin = 8;
       const left = Math.max(margin, Math.min(anchor.right - panel.width, window.innerWidth - panel.width - margin));
+      // The fixed phone bottom navigation covers the end of the viewport and sits
+      // above page popovers, so it is the effective bottom edge when shown.
+      const bottomNav = document.querySelector<HTMLElement>(".bottom-nav");
+      // (offsetParent is always null for position: fixed, so test for a rendered box instead.)
+      const navTop = bottomNav && bottomNav.getClientRects().length > 0 ? bottomNav.getBoundingClientRect().top : window.innerHeight;
+      const limit = Math.min(window.innerHeight, navTop) - margin;
+      // Decide on the natural height, not the capped one, so capping cannot flip the placement back and forth.
+      const natural = Math.max(panel.height, ref.current?.scrollHeight ?? 0);
       const below = anchor.bottom + 4;
-      const top = below + panel.height <= window.innerHeight - margin ? below : Math.max(margin, anchor.top - panel.height - 4);
-      const next = { left, top, visibility: "visible" as const };
-      setPlacement((current) => current.left === left && current.top === top && current.visibility === "visible" ? current : next);
+      const spaceBelow = limit - below;
+      const spaceAbove = anchor.top - 4 - margin;
+      let top: number;
+      let maxHeight: number;
+      if (natural <= spaceBelow) { top = below; maxHeight = spaceBelow; }
+      else if (natural <= spaceAbove) { top = anchor.top - 4 - natural; maxHeight = spaceAbove; }
+      else if (spaceBelow >= spaceAbove) { top = below; maxHeight = Math.max(120, spaceBelow); }
+      else { top = margin; maxHeight = Math.max(120, spaceAbove); }
+      const next = { left, top, maxHeight, visibility: "visible" as const };
+      setPlacement((current) => current.left === left && current.top === top && current.maxHeight === maxHeight && current.visibility === "visible" ? current : next);
     };
     place();
     const observer = new ResizeObserver(place);
@@ -46,5 +61,5 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
   }, [open, anchorRef, onClose, ref]);
   if (!open) return null;
   return <div ref={ref} className={className} role="dialog" aria-label={label} tabIndex={-1}
-    style={{ ...placement, position: "fixed", right: "auto", maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100dvh - 16px)", minWidth: "min(240px, calc(100vw - 16px))", overflowY: "auto" }}>{children}</div>;
+    style={{ maxHeight: "calc(100dvh - 16px)", ...placement, position: "fixed", right: "auto", maxWidth: "calc(100vw - 16px)", minWidth: "min(240px, calc(100vw - 16px))", overflowY: "auto" }}>{children}</div>;
 }

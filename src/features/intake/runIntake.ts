@@ -116,11 +116,23 @@ export async function runIntake(selection: IntakeSelection, options: RunIntakeOp
     await options.mutation("intake:updateRun", { societyId: options.societyId, runId, patch: { stats } });
 
     if (options.hosted && options.extractRun) {
-      emit({ stage: "server", done: 0, total: run.files.filter((file) => file.disposition === "extract" && file.classification?.docClass === "meetingMinutes").length, message: "Extracting fields on the server (workspace AI settings, deterministic fallback)…" });
-      const outcome = await options.extractRun({ societyId: options.societyId, runId });
+      const serverTotal = run.files.filter((file) => file.disposition === "extract").length;
+      emit({ stage: "server", done: 0, total: serverTotal, message: "Extracting fields on the server (workspace AI settings, deterministic fallback)…" });
+      // The server extracts in batches (each call skips files already extracted); call until none remain.
+      let extracted = 0, tokensUsed = 0;
+      const serverStats: Record<string, number> = {};
+      for (let round = 0; round < 200; round++) {
+        if (options.signal?.aborted) throw new DOMException("The intake run was cancelled.", "AbortError");
+        const outcome = await options.extractRun({ societyId: options.societyId, runId });
+        extracted += Number(outcome?.files ?? 0);
+        tokensUsed += Number(outcome?.tokensUsed ?? 0);
+        for (const [key, value] of Object.entries((outcome?.stats ?? {}) as Record<string, number>)) serverStats[key] = (serverStats[key] ?? 0) + value;
+        emit({ stage: "server", done: extracted, total: serverTotal, message: "Extracting fields on the server (workspace AI settings, deterministic fallback)…" });
+        if (!outcome?.files || !outcome?.remaining) break;
+      }
       const reconciled = await options.mutation("intake:reconcileRun", { societyId: options.societyId, runId });
-      counts.extractions = (outcome?.files as number | undefined) ?? counts.extractions;
-      await options.mutation("intake:updateRun", { societyId: options.societyId, runId, patch: { stats: { ...stats, phase: "done", server: outcome?.stats, tokensUsed: outcome?.tokensUsed, recordGaps: reconciled?.recordGaps } } });
+      counts.extractions = extracted || counts.extractions;
+      await options.mutation("intake:updateRun", { societyId: options.societyId, runId, patch: { stats: { ...stats, phase: "done", server: serverStats, tokensUsed, recordGaps: reconciled?.recordGaps } } });
       emit({ stage: "server", done: progress.total, total: progress.total, message: undefined });
     }
     emit({ stage: "done", done: 1, total: 1 });

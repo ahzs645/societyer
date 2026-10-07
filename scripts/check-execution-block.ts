@@ -77,7 +77,9 @@ assert.ok(corp.lines.some((l) => l.trim() === "Jordan Vane, President"), "author
 assert.ok(corp.adoptionClause.includes("the sole voting shareholder"));
 
 // --- DOCX integration: execution prose appears in the generated document -----
-const packet = CORPORATION_DOCUMENT_PACKETS[0];
+// Preparation-only worksheets never get an execution page, so use an executable packet.
+const packet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === "organize-corporation")!;
+assert.ok(packet && !packet.preparationOnly, "organize-corporation packet is executable");
 const withExec = Buffer.from(
   corporationPacketDocxBytes(packet, { execution: board } as unknown as Record<string, unknown>),
 ).toString("latin1");
@@ -90,6 +92,13 @@ assert.ok(
 // --- no execution field → unchanged (back-compat) ----------------------------
 const plain = Buffer.from(corporationPacketDocxBytes(packet)).toString("latin1");
 assert.ok(!plain.includes("hereby adopt"), "no execution block when none supplied");
+
+// --- preparation-only worksheets never carry an execution page -----------------
+const worksheet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.preparationOnly)!;
+const worksheetWithExec = Buffer.from(
+  corporationPacketDocxBytes(worksheet, { execution: board } as unknown as Record<string, unknown>),
+).toString("latin1");
+assert.ok(!worksheetWithExec.includes("being all the directors of Acme"), "preparation-only packet omits the execution page");
 
 // --- French locale: sole + plural adoption clause + Daté le ------------------
 const frSole = buildExecutionBlock({

@@ -100,6 +100,7 @@ function proxyEntries(lines: Line[], fileName: string): { entries: Entry[]; blan
 }
 
 const NAME_HEADER = /^(?:name|director|representative|member|person|full name)$/i;
+const OFFICER = /\b(?:president|vice[- ]?president|chair|vice[- ]?chair|treasurer|secretary)\b/i;
 /** Spreadsheet / table rosters: Name | Organization | Office | … | (update notes). */
 function tableEntries(extract: ClassExtractorInput["extract"], lines: Line[]): Entry[] {
   const out: Entry[] = [];
@@ -117,6 +118,8 @@ function tableEntries(extract: ClassExtractorInput["extract"], lines: Line[]): E
     const endCol = col(/end|term expir|left|to$/);
     const noteCol = header.findIndex((text, index) => /update|note|comment|status|change/.test(text) && index !== nameCol);
     const group = block.sheet && !/^sheet\d*$/i.test(block.sheet) ? block.sheet : undefined;
+    // Officers listed on a board or executive sheet are directors; on a committee or working-group sheet they are members.
+    const boardGroup = !group || /board|director|executive|officer/i.test(group);
     rows.slice(headerIndex + 1).forEach((row, offset) => {
       const rowIndex = headerIndex + 1 + offset;
       const cellLine = (column: number) => column < 0 ? undefined : lines.find((line) => line.blockIndex === block.index && line.row === rowIndex && line.col === column);
@@ -146,7 +149,7 @@ function tableEntries(extract: ClassExtractorInput["extract"], lines: Line[]): E
         person: at({ nameAsWritten: name, ...(role ? { role } : {}), ...(orgLine ? { affiliation: clean(orgLine.text) } : {}) }, nameLine, raw, 0.85),
         ...(orgLine ? { organisationRepresented: at(clean(orgLine.text), orgLine, undefined, 0.8), seat: at(clean(orgLine.text), orgLine, undefined, 0.7) } : {}),
         ...(role ? { role: at(role, roleLine!, undefined, 0.85) } : group ? { role: inferred(group, [loc(nameLine)], 0.5, `Sheet "${group}".`) } : {}),
-        representativeType: role ? at(isProxy ? "proxy" : /staff|manager|coordinator|secretariat/i.test(role) ? "staff" : /director/i.test(role) ? "director" : "member", roleLine!, role, 0.75) : inferred(group && /staff/i.test(group) ? "staff" : "director", [loc(nameLine)], 0.5),
+        representativeType: role ? at(isProxy ? "proxy" : /staff|manager|coordinator|secretariat|executive director/i.test(role) ? "staff" : /director/i.test(role) || (boardGroup && OFFICER.test(role)) ? "director" : "member", roleLine!, role, 0.75) : inferred(group && /staff/i.test(group) ? "staff" : group && !boardGroup ? "member" : "director", [loc(nameLine)], 0.5),
         ...(startDate && startLine ? { termStart: at(dateValue(startDate), startLine, startDate.text, 0.8) } : joined && noteDate && noteLine ? { termStart: at(dateValue(noteDate), noteLine, noteDate.text, 0.7) } : {}),
         ...(endDate && endLine ? { termEnd: at(dateValue(endDate), endLine, endDate.text, 0.8) } : left && noteDate && noteLine ? { termEnd: at(dateValue(noteDate), noteLine, noteDate.text, 0.7) } : {}),
         ...(noteLine && /replaced by/i.test(noteLine.text) ? { meetingRef: at(clean(noteLine.text).slice(0, 200), noteLine, undefined, 0.6) } : {}),

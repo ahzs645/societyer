@@ -29,9 +29,11 @@ async function downloadBackup(page: Page) {
   await expect(page.getByRole("heading", { name: "Workspace storage" })).toBeVisible({ timeout: 15_000 });
 
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download backup/i }).click();
-  const path = join(mkdtempSync(join(tmpdir(), "societyer-backup-")), "backup.json");
-  await (await download).saveAs(path);
+  await page.getByRole("button", { name: "Download ZIP backup", exact: true }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/\.zip$/);
+  const path = join(mkdtempSync(join(tmpdir(), "societyer-backup-")), file.suggestedFilename());
+  await file.saveAs(path);
   return path;
 }
 

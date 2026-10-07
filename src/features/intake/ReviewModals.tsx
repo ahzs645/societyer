@@ -7,10 +7,11 @@ import { Badge, Banner, Field } from "../../components/ui";
 import { formatDate, pluralize } from "../../lib/format";
 import { GAP_REASONS, GAP_REASON_LABELS, INFO_TYPES } from "../../../shared/gapCatalog";
 import { defaultInfoTypeForPath } from "../../../shared/intake/promotion";
+import { CLASS_PROMOTION } from "../../../shared/intake/promotionClasses";
 import { formatFieldValue, nativeTargetForPath, samplePreview, thresholdFor, type Readiness, type ReviewField } from "../../../shared/intake/review";
 import { locatorLabel } from "./FieldPanel";
 
-export type RunBulkScope = { id: string; label: string; scope: { extractionId?: string; clusterKey?: string; body?: string; year?: string; docClass?: string } };
+export type RunBulkScope = { id: string; label: string; scope: { extractionId?: string; clusterKey?: string; body?: string; year?: string; docClass?: string; all?: boolean } };
 
 /** Bulk accept: verified, stated, non-conflicting fields at or above τ, with a sampled preview of five.
  * Scopes: this document (or one group/item of it), its version cluster, its body and year, or its class across the run. */
@@ -120,10 +121,12 @@ export function CantRepresentModal({ field, onClose, onConfirm }: { field: Revie
 export type PromoteChoice = { mode: "auto" | "new" | "merge"; targetMeetingId?: string };
 
 /** Promote: readiness, what happens to unreviewed fields and gaps, and where the record goes (new or merged). */
-export function PromoteModal({ open, onClose, onConfirm, societyId, extractionId, readiness, unsupported, gapsRecorded, busy, storeNote }: {
-  open: boolean; onClose: () => void; onConfirm: (choice: PromoteChoice) => void; societyId: string; extractionId: string; readiness: Readiness; unsupported: number; gapsRecorded: number; busy: boolean; storeNote: string;
+export function PromoteModal({ open, onClose, onConfirm, societyId, extractionId, docClass = "meetingMinutes", readiness, unsupported, gapsRecorded, busy, storeNote }: {
+  open: boolean; onClose: () => void; onConfirm: (choice: PromoteChoice) => void; societyId: string; extractionId: string; docClass?: string; readiness: Readiness; unsupported: number; gapsRecorded: number; busy: boolean; storeNote: string;
 }) {
-  const merge = useQuery(api.intake.mergeCandidates, open ? { societyId, extractionId } : "skip") as { date?: string; candidates: any[] } | undefined;
+  const minutes = docClass === "meetingMinutes";
+  const agendaLike = ["agenda", "meetingPackage", "agmMaterial"].includes(docClass);
+  const merge = useQuery(api.intake.mergeCandidates, open && (minutes || agendaLike) ? { societyId, extractionId } : "skip") as { date?: string; candidates: any[] } | undefined;
   const [choice, setChoice] = useState<string>("auto");
   useEffect(() => {
     if (!merge) return;
@@ -145,9 +148,18 @@ export function PromoteModal({ open, onClose, onConfirm, societyId, extractionId
         <p style={{ margin: 0 }}>
           {pluralize(readiness.promoted, "accepted field")} will be written through the import path, each with a source locator (shown as <em>View source</em> on the record).
           {readiness.unreviewed > 0 && <> <strong>{pluralize(readiness.unreviewed, "unreviewed field")}</strong> and {pluralize(readiness.rejected, "rejected field")} will not be promoted.</>}
-          {(unsupported + gapsRecorded) > 0 && <> {pluralize(unsupported + gapsRecorded, "system gap")} will be linked to the meeting.</>}
+          {(unsupported + gapsRecorded) > 0 && <> {pluralize(unsupported + gapsRecorded, "system gap")} will be linked to the {minutes ? "meeting" : "record"}.</>}
         </p>
-        <fieldset className="intake-llm" style={{ gap: 6 }}>
+        {!minutes && CLASS_PROMOTION[docClass] && (
+          <p style={{ margin: 0 }} data-testid="intake-promote-creates">
+            <strong>Creates:</strong> {CLASS_PROMOTION[docClass].creates}.{" "}
+            {agendaLike && merge && (merge.candidates.some((candidate) => candidate.sameBody)
+              ? <>A meeting of the same body is already on record for {merge.date}; the {CLASS_PROMOTION[docClass].noun} is attached to it as a meeting material.</>
+              : <>No meeting of this body is on record for {merge.date ?? "this date"}, so the meeting is created as held with its minutes missing (a record gap until the minutes are found).</>)}
+            {" "}Records are created for review: nothing is marked approved, active or filed beyond what the source shows.
+          </p>
+        )}
+        {minutes && <fieldset className="intake-llm" style={{ gap: 6 }}>
           <legend>Meeting record</legend>
           {!merge && <span className="muted">Looking for existing meetings on this date…</span>}
           {merge && (
@@ -169,7 +181,7 @@ export function PromoteModal({ open, onClose, onConfirm, societyId, extractionId
               <label className="intake-check"><input type="radio" name="promote-mode" checked={choice === "new"} onChange={() => setChoice("new")} /> Create a separate meeting even if one exists</label>
             </>
           )}
-        </fieldset>
+        </fieldset>}
         <p className="muted" style={{ margin: 0, fontSize: 12 }}>{storeNote}</p>
       </div>
     </Modal>
