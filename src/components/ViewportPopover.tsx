@@ -24,7 +24,8 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
       // The fixed phone bottom navigation covers the end of the viewport and sits
       // above page popovers, so it is the effective bottom edge when shown.
       const bottomNav = document.querySelector<HTMLElement>(".bottom-nav");
-      const navTop = bottomNav && bottomNav.offsetParent !== null ? bottomNav.getBoundingClientRect().top : window.innerHeight;
+      // (offsetParent is always null for position: fixed, so test for a rendered box instead.)
+      const navTop = bottomNav && bottomNav.getClientRects().length > 0 ? bottomNav.getBoundingClientRect().top : window.innerHeight;
       const limit = Math.min(window.innerHeight, navTop) - margin;
       // Decide on the natural height, not the capped one, so capping cannot flip the placement back and forth.
       const natural = Math.max(panel.height, ref.current?.scrollHeight ?? 0);
