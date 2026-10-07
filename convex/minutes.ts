@@ -3,6 +3,7 @@ import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/aut
 import { meetingHistoryFields } from "./validators/meetingHistory";
 import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { detailedAttendanceValidator, minutesActionItemValidator, motionExtensionFields, nextMeetingValidator } from "./validators/meetingModel";
 import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";
 import {
@@ -52,14 +53,11 @@ const motion = v.object({
   // Which minutes record this motion adopts; carrying the motion auto-stamps
   // the referenced minutes' approval (see shared/functions/minutes.ts).
   adoptsMinutesId: v.optional(v.id("minutes")),
+  // A1/A11/C1/C13/G-04 extensions, mirrored onto the first-class motion row.
+  ...motionExtensionFields,
 });
 
-const actionItem = v.object({
-  text: v.string(),
-  assignee: v.optional(v.string()),
-  dueDate: v.optional(v.string()),
-  done: v.boolean(),
-});
+const actionItem = minutesActionItemValidator;
 
 const remoteParticipation = v.object({
   url: v.optional(v.string()),
@@ -68,16 +66,7 @@ const remoteParticipation = v.object({
   instructions: v.optional(v.string()),
 });
 
-const detailedAttendance = v.object({
-  name: v.string(),
-  status: v.string(),
-  roleTitle: v.optional(v.string()),
-  affiliation: v.optional(v.string()),
-  memberIdentifier: v.optional(v.string()),
-  proxyFor: v.optional(v.string()),
-  quorumCounted: v.optional(v.boolean()),
-  notes: v.optional(v.string()),
-});
+const detailedAttendance = detailedAttendanceValidator;
 
 const minuteSection = v.object({
   title: v.string(),
@@ -100,6 +89,7 @@ const minuteSection = v.object({
   sourceReviewStatus: v.optional(v.string()),
   sourceKind: v.optional(v.string()),
   sourceEvidence: v.optional(v.any()),
+  sourceTitle: v.optional(v.string()),
 });
 
 const sessionSegment = v.object({
@@ -164,6 +154,7 @@ const structuredMinutesFields = {
   nextMeetingAt: v.optional(v.string()),
   nextMeetingLocation: v.optional(v.string()),
   nextMeetingNotes: v.optional(v.string()),
+  nextMeetings: v.optional(v.array(nextMeetingValidator)),
   sessionSegments: v.optional(v.array(sessionSegment)),
   appendices: v.optional(v.array(appendix)),
   agmDetails: v.optional(agmDetails),
