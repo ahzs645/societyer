@@ -50,6 +50,7 @@
 @use "views-grant"; // grant edit/dossier, requirements, formats, sources
 @use "views-insurance"; // insurance brief/insights/full layout
 @use "views-meeting-templates"; // meeting template picker/builder/library/editor
+@use "views-meeting-review"; // meetings review: edit drawer, attendance grid, merge, gaps
 
 // Component library (split from the former monolithic _components.scss — original order).
 @use "components-overlays"; // empty state, select trigger, menu, calendar, modals, quick-action picker

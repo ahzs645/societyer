@@ -284,17 +284,25 @@ export function Tabs<T extends string>({
   onChange,
   items,
   trailing,
+  tabRoles = false,
+  ariaLabel,
 }: {
   value: T;
   onChange: (v: T) => void;
   items: { id: T; label: string; count?: number | null; icon?: ReactNode }[];
   trailing?: ReactNode;
+  /** Expose ARIA tablist/tab roles and selection state (opt-in per page). */
+  tabRoles?: boolean;
+  ariaLabel?: string;
 }) {
   return (
-    <div className="tabs">
+    <div className="tabs" role={tabRoles ? "tablist" : undefined} aria-label={ariaLabel}>
       {items.map((it) => (
         <button
           key={it.id}
+          type="button"
+          role={tabRoles ? "tab" : undefined}
+          aria-selected={tabRoles ? value === it.id : undefined}
           className={`tab${value === it.id ? " is-active" : ""}`}
           onClick={() => onChange(it.id)}
         >

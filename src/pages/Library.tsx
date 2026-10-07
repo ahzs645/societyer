@@ -6,6 +6,7 @@ import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_he
 import { Badge, EmptyState } from "../components/ui";
 import { BookOpen, Calendar, FileText, FolderOpen } from "lucide-react";
 import { formatDate, formatDateTime } from "../lib/format";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 const SECTION_LABELS: Record<string, string> = {
   governance: "Governance",
@@ -90,7 +91,7 @@ export function LibraryPage() {
                     <div>
                       <Link to={`/app/meetings/${packet.meeting._id}`}><strong>{packet.meeting.title}</strong></Link>
                       <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                        <Calendar size={12} style={{ verticalAlign: -2 }} /> {formatDateTime(packet.meeting.scheduledAt)}
+                        <Calendar size={12} style={{ verticalAlign: -2 }} /> {formatMeetingDate(packet.meeting)}
                       </div>
                     </div>
                     <Badge tone="info">{packet.materials.length} docs</Badge>

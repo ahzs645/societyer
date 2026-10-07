@@ -20,6 +20,8 @@ import {
   backfillQuorumSnapshotPortable,
 } from "../shared/functions/minutes";
 import { repairImportedPortable } from "../shared/functions/minutesRepair";
+import { listSummariesPortable } from "../shared/functions/minutesSummaries";
+import { saveAttendanceGridPortable } from "../shared/functions/minutesAttendance";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const motion = v.object({
@@ -165,6 +167,40 @@ export const list = authorizedQuery("minutes:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Light per-meeting summaries (counts and review state) for list pages, so
+// they do not load every minutes row with its full source record.
+export const listSummaries = authorizedQuery("minutes:listSummaries", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => listSummariesPortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Attendance grid save: detailed rows, derived name lists, meeting attendee ids
+// and the meeting's attendance register in one transaction.
+export const saveAttendanceGrid = authorizedMutation("minutes:saveAttendanceGrid", mutation)({
+  args: {
+    minutesId: v.id("minutes"),
+    rows: v.array(v.object({
+      key: v.optional(v.string()),
+      name: v.string(),
+      status: v.string(),
+      roleTitle: v.optional(v.string()),
+      affiliation: v.optional(v.string()),
+      representedOrganization: v.optional(v.string()),
+      personId: v.optional(v.id("peopleDirectory")),
+      proxyFor: v.optional(v.string()),
+      memberIdentifier: v.optional(v.string()),
+      quorumCounted: v.optional(v.boolean()),
+      notes: v.optional(v.string()),
+      recordId: v.optional(v.id("meetingAttendanceRecords")),
+    })),
+    nonPersons: v.optional(v.array(v.object({ name: v.string(), kind: v.optional(v.string()) }))),
+    quorumStatusIfUnset: v.optional(v.union(v.literal("confirmed"), v.literal("not_met"), v.literal("not_recorded"))),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveAttendanceGridPortable(await toPortableMutationCtx(ctx), args as any),
 });
 
 export const getByMeeting = authorizedQuery("minutes:getByMeeting", query)({

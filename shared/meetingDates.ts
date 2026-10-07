@@ -21,6 +21,20 @@ export type MeetingDateLike = {
 
 export const DATE_ONLY_PLACEHOLDER_SUFFIX = "T12:00:00.000Z";
 
+// Intl.DateTimeFormat construction dominates formatting cost when a page
+// labels every meeting (pickers over 100+ meetings); reuse formatters.
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+function cachedFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = locale + JSON.stringify(options);
+  let formatter = formatterCache.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    if (formatterCache.size > 200) formatterCache.clear();
+    formatterCache.set(key, formatter);
+  }
+  return formatter;
+}
+
 /** True when the stored instant is the noon-UTC date-only placeholder. */
 export function isDateOnlyPlaceholder(scheduledAt: unknown): boolean {
   return typeof scheduledAt === "string" && /^\d{4}-\d{2}-\d{2}T12:00:00(?:\.000)?Z$/.test(scheduledAt);
@@ -75,16 +89,16 @@ export function formatMeetingDate(meeting: MeetingDateLike | null | undefined, o
     const day = value.slice(0, 10);
     const date = new Date(`${day}T12:00:00.000Z`);
     if (!Number.isFinite(date.getTime())) return value;
-    const text = new Intl.DateTimeFormat(locale, { dateStyle, timeZone: "UTC" }).format(date);
+    const text = cachedFormatter(locale, { dateStyle, timeZone: "UTC" }).format(date);
     return withTime && localTime ? `${text} · ${localTime}` : text;
   }
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
   const timeZone = meeting?.timeZone || options.timeZone;
   try {
-    if (!withTime) return new Intl.DateTimeFormat(locale, { dateStyle, timeZone }).format(date);
-    if (localTime) return `${new Intl.DateTimeFormat(locale, { dateStyle, timeZone }).format(date)} · ${localTime}`;
-    return new Intl.DateTimeFormat(locale, { dateStyle, timeStyle: "short", timeZone }).format(date);
+    if (!withTime) return cachedFormatter(locale, { dateStyle, timeZone }).format(date);
+    if (localTime) return `${cachedFormatter(locale, { dateStyle, timeZone }).format(date)} · ${localTime}`;
+    return cachedFormatter(locale, { dateStyle, timeStyle: "short", timeZone }).format(date);
   } catch {
     return value;
   }

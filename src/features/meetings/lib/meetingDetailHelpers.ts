@@ -3,6 +3,7 @@ import { formatDateTime } from "../../../lib/format";
 import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 import { motionCompletionGaps } from "../../../lib/motionGovernance";
 import { recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
+import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { todayDateOnly } from "../../../../shared/dateOnly";
 
 export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1; _id?: string };
@@ -161,7 +162,7 @@ export function buildMeetingOutboxEmail({
     `Please find the meeting package for ${meeting.title}.`,
     ``,
     `Society: ${societyName}`,
-    `When: ${formatDateTime(meeting.scheduledAt)}`,
+    `When: ${formatMeetingDate(meeting)}`,
     `Location: ${meeting.location ?? "Not recorded"}`,
     joinDetails.url ? `Join link: ${joinDetails.url}` : "",
     joinDetails.meetingId ? `Meeting ID: ${joinDetails.meetingId}` : "",

@@ -108,7 +108,7 @@ test.describe("Meeting agenda minutes workflow", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await page.goto("/demo/app/meetings/static_meeting_board_q2", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Agenda & minutes" }).click();
+    await page.getByRole("tab", { name: "Agenda & minutes" }).click();
     // Wait for demo data to hydrate from IndexedDB before editing — starting
     // the edit against a not-yet-loaded agenda record makes the save create a
     // duplicate agenda instead of updating the fixture one.

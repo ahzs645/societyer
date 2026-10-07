@@ -440,6 +440,7 @@ export async function createPortable(
     hostBody?: string;
     externalOrganization?: string;
     sourceTitle?: string;
+    special?: boolean;
   },
 ) {
   assertMeetingExtension(args);
@@ -850,6 +851,7 @@ export async function updatePortable(
       hostBody?: string;
       externalOrganization?: string;
       sourceTitle?: string;
+      special?: boolean;
     };
   },
 ) {

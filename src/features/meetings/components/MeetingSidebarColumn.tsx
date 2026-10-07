@@ -11,7 +11,7 @@ import {
   MINUTES_EXPORT_STYLES,
   type MinutesExportStyleId,
 } from "../lib/minutesExportStyles";
-import { formatDate, formatDateTime } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import { resolveJurisdictionCode } from "../../../lib/jurisdictionGuideTracks";
 import {
   Check,
@@ -24,6 +24,8 @@ import {
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
 import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
+import { formatMeetingDate, meetingDatePrecision } from "../../../../shared/meetingDates";
+import { meetingBodyLabel } from "../../../../shared/meetingBodyPicker";
 import { SourceOriginalDownload } from "./SourceOriginalDownload";
 
 export function MeetingSidebarColumn({
@@ -151,6 +153,10 @@ export function MeetingSidebarColumn({
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
   const minutesExportBlocked = formalExportBlockers.length > 0;
   const sourceDocumentsAccessible = can("documents:read") && (minutes?.sourceDocumentIds ?? []).every((id: string) => (sourceDocuments ?? []).some((document: any) => document._id === id));
+  const committeesForLabel = useQuery(
+    api.committees.list,
+    can("committees:read") && meeting?.committeeId && show("details") ? { societyId: meeting.societyId } : "skip",
+  ) as any[] | undefined;
   const agmRun = useQuery(
     api.agm.runForMeeting,
     can("meetings:read") && meeting?.type === "AGM" && show("agm") ? { meetingId: meeting._id } : "skip",
@@ -161,12 +167,22 @@ export function MeetingSidebarColumn({
           <div className="card">
             <div className="card__head"><h2 className="card__title">Meeting details</h2></div>
             <div className="card__body col">
-              <Detail label="Type"><Badge tone={meeting.type === "AGM" ? "accent" : "info"}>{meeting.type}</Badge></Detail>
-              <Detail label={minutes?.sourceMeetingRecord?.header?.dateText ? "Source date" : "Scheduled"}>{minutes?.sourceMeetingRecord ? (minutes.sourceMeetingRecord.header?.dateText || formatDate(meeting.scheduledAt)) : formatDateTime(meeting.scheduledAt)}</Detail>
-              {minutes?.sourceMeetingRecord?.header?.timeText && <Detail label="Source time">{minutes.sourceMeetingRecord.header.timeText}</Detail>}
-              <Detail label="Location">
-                <span className="meeting-detail-location-value">{minutes?.sourceMeetingRecord?.header?.locationText || meeting.location || "—"}</span>
+              <Detail label="Body"><Badge tone={meeting.type === "AGM" ? "accent" : "info"}>{meetingBodyLabel(meeting, committeesForLabel)}</Badge></Detail>
+              <Detail label="Date">
+                <span data-testid="meeting-details-date">{formatMeetingDate(meeting, { dateStyle: "long" })}</span>
+                {meetingDatePrecision(meeting) === "date" && <span className="muted"> · date only</span>}
               </Detail>
+              {meeting.timeZone && <Detail label="Time zone">{meeting.timeZone}</Detail>}
+              <Detail label="Location">
+                <span className="meeting-detail-location-value">{meeting.location || "—"}</span>
+              </Detail>
+              {minutes?.sourceMeetingRecord?.header && (minutes.sourceMeetingRecord.header.dateText || minutes.sourceMeetingRecord.header.locationText) && (
+                <Detail label="As written in source">
+                  <span className="muted meeting-detail-source-header">
+                    {[minutes.sourceMeetingRecord.header.dateText, minutes.sourceMeetingRecord.header.locationText].filter(Boolean).join(" · ")}
+                  </span>
+                </Detail>
+              )}
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ? formatDate(meeting.noticeSentAt) : "—"}</Detail>
               <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>

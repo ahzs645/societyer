@@ -116,6 +116,8 @@ export const meetingExtensionFields = {
   externalOrganization: v.optional(v.string()),
   // The title exactly as imported (filename or header line) before cleanup.
   sourceTitle: v.optional(v.string()),
+  // B8: a special (not regular) meeting of the board or a committee.
+  special: v.optional(v.boolean()),
 };
 
 /** A3: one quorum rule. */

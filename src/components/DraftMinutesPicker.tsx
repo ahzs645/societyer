@@ -20,6 +20,7 @@ import { Tooltip } from "./Tooltip";
 import { Badge } from "./ui";
 import { formatDateTime } from "../lib/format";
 import { hasStartedMinutesDraft } from "../features/meetings/lib/meetingDetailHelpers";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 /**
  * Title for a picker row. Renders the meeting name with ellipsis truncation
@@ -134,7 +135,7 @@ export function DraftMinutesPicker() {
                 <span className="quick-action-picker__item-main">
                   <PickerItemTitle text={meeting.title || "Untitled meeting"} />
                   <span className="quick-action-picker__item-meta">
-                    {formatDateTime(meeting.scheduledAt)}
+                    {formatMeetingDate(meeting)}
                     {meeting.location ? ` · ${meeting.location}` : ""}
                   </span>
                 </span>

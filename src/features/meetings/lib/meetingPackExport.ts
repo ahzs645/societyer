@@ -5,6 +5,7 @@ import {
   availabilityLabel,
   materialEffectiveStatus,
 } from "./meetingMaterialAccess";
+import { formatMeetingDate } from "../../../../shared/meetingDates";
 
 export function renderMeetingPackHtml({
   society,
@@ -63,7 +64,7 @@ export function renderMeetingPackHtml({
   <body>
     ${headerHtml}
     <h1>${escapeHtml(meeting.title)}</h1>
-    <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatDateTime(meeting.scheduledAt))} - ${escapeHtml(meeting.location ?? "")}</div>
+    <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatMeetingDate(meeting))} - ${escapeHtml(meeting.location ?? "")}</div>
     <section>
       <h2>Join Details</h2>
       ${joinDetails.url ? (isSafeLinkUrl(joinDetails.url) ? `<p><a href="${escapeHtml(joinDetails.url)}">${escapeHtml(joinDetails.url)}</a></p>` : `<p>${escapeHtml(joinDetails.url)}</p>`) : "<p>No remote meeting link saved.</p>"}

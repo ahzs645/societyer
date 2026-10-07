@@ -63,6 +63,8 @@ import type {
   AttendancePerson,
 } from "./MeetingMinutesColumn.internal";
 
+import { minutesPresentCount } from "../../../../shared/meetingAttendanceGrid";
+
 export type MeetingMinutesColumnProps = {
   minutes: any;
   agenda: string[];
@@ -97,7 +99,19 @@ export type MeetingMinutesColumnProps = {
   /** Prior meetings' minutes offered by the "Adopts minutes of" picker on the
    *  section editor's embedded motion editor. */
   adoptionTargets?: MotionAdoptionTarget[];
-};
+  /** The meeting row (attendance grid, agenda item details). */
+  meeting?: any;
+  /** People-directory rows for person pickers. */
+  directoryPeople?: Array<{ _id: string; fullName: string; aliases?: string[] | null }>;
+  /** Names offered by "Add current directors / committee members". */
+  expectedAttendees?: string[];
+  /** Save the minutes' top-level action items (status, assignee, task link). */
+  saveTopLevelActionItems?: (items: any[]) => Promise<void>;
+  /** Create a task from an action item; returns the new task id. */
+  createTaskFromAction?: (draft: any) => Promise<string | undefined>;
+  /** Agenda item rows (with ids and A9 fields) for the details editor. */
+  agendaItemRecords?: any[];
+}; 
 
 export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -223,9 +237,8 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const sectionContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
   const confirm = useConfirm();
-  const attendancePresentCount = attendanceEdit
-    ? attendanceEdit.people.filter((person: AttendancePerson) => person.status === "present").length
-    : minutes?.attendees.length;
+  // The attendance grid owns its edit rows; the column reports what is saved.
+  const attendancePresentCount = minutesPresentCount(minutes);
   const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
   const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocusIndex = useRef<number | null>(null);
@@ -688,7 +701,16 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     setAgendaItemMenu({ index, top: rect.bottom + gap, left });
   };
 
-  const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
+  // F22: open the sections that carry substance (discussion, decisions,
+  // actions), not just the first two (usually 'Call to order' boilerplate).
+  const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => {
+    const substantive = ((minutes?.sections ?? []) as any[])
+      .map((section, index) => ({ index, weight: String(section?.discussion ?? '').trim().length + 80 * ((section?.decisions ?? []).length + (section?.actionItems ?? []).length) }))
+      .filter((row) => row.weight > 120)
+      .slice(0, 4)
+      .map((row) => row.index);
+    return new Set(substantive.length ? substantive : [0, 1]);
+  });
   const sourceDumpSectionIndexes = useMemo(() => new Set<number>(sections.flatMap((section: any, index: number) =>
     sectionEditIndex !== index && unchangedSourceDumpSection(section, minutes?.sourceMeetingRecord) ? [index] : [])), [sections, minutes?.sourceMeetingRecord, sectionEditIndex]);
   const visibleAgendaTree = useMemo(() => agendaTree.filter(entry => {
@@ -934,7 +956,16 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       void removeSection(index);
       return;
     }
-    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty;
+    // Compare against what is stored: an unchanged open editor is not "unsaved".
+    const liveDiscussion = isEditingThis ? (sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft?.discussion ?? "") : "";
+    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty && (
+      String(sectionDraft?.title ?? "").trim() !== String(section.title ?? "").trim()
+      || String(sectionDraft?.presenter ?? "").trim() !== String(section.presenter ?? "").trim()
+      || String(liveDiscussion).trim() !== String(section.discussion ?? "").trim()
+      || JSON.stringify((sectionDraft?.decisions ?? []).map((line) => line.trim()).filter(Boolean)) !== JSON.stringify(section.decisions ?? [])
+      || JSON.stringify(sectionDraft?.linkedTaskIds ?? []) !== JSON.stringify(section.linkedTaskIds ?? [])
+      || Object.keys(sectionDraft?.taskUpdates ?? {}).length > 0
+    );
     const titleForPrompt = (isEditingThis ? sectionDraft?.title : section.title) || "Untitled section";
     const childWarning = childIndexes.length
       ? ` Its ${childIndexes.length} sub-item${childIndexes.length === 1 ? "" : "s"} will be removed too${childrenWithContent.length ? ", including recorded content" : ""}.`
@@ -1071,14 +1102,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       sourceEvidence: existing.sourceEvidence,
       agendaItemId: existing.agendaItemId,
       decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
-      actionItems: sectionDraft.actionItems
-        .map((item) => ({
-          text: item.text.trim(),
-          assignee: cleanOptional(item.assignee),
-          dueDate: cleanOptional(item.dueDate),
-          done: !!item.done,
-        }))
-        .filter((item) => item.text),
+      // Action items are edited in the Action items card (status, assignee,
+      // task link); the section editor keeps them exactly as stored so A12
+      // status, person links and task ids are never stripped.
+      actionItems: Array.isArray(existing.actionItems) ? existing.actionItems : [],
+      sourceTitle: existing.sourceTitle,
       linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
       publicVisible: sectionDraft.publicVisible ? undefined : false,
     };
@@ -1345,6 +1373,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               directorNames={assigneeOptions}
               people={motionPeople}
               adoptionTargets={adoptionTargets}
+              directoryPeople={props.directoryPeople as any}
               agendaSections={sections.map((section: any) => ({
                 title: section.title || "Untitled section",
                 discussion: section.discussion ?? "",

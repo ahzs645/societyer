@@ -15,7 +15,6 @@ import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import {
-  AttendanceDetails,
   formatSourceReferences,
   personLinkCandidates,
   type AgendaItemEntry,
@@ -30,7 +29,6 @@ import {
   agendaAlphaLabel,
   agendaNumberingLabel,
   agendaEntryLabel,
-  AttendanceRoster,
   cleanOptional,
   normalizeActionDrafts,
   emptyActionDraft,
@@ -46,7 +44,6 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import { agendaSequenceLabel } from "../lib/agendaNumbering";
-import { computedQuorumMet } from "../lib/meetingDetailHelpers";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 import type {
   AgendaNumberingMode,
@@ -57,6 +54,9 @@ import type {
 } from "./MeetingMinutesColumn.internal";
 import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMeetingMinutesColumn";
 import { SourceMinutesContext, sourceIsProposal } from "./SourceMinutesContext";
+import { MeetingAttendanceGrid } from "./MeetingAttendanceGrid";
+import { MeetingActionItemsCard } from "./MeetingActionItemsCard";
+import { AgendaItemDetailsModal, requestedActionLabel } from "./AgendaItemDetailsModal";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -70,9 +70,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     attendanceEdit,
     setAttendanceEdit,
     startAttendanceEdit,
-    autofillCurrentDirectors,
     attendanceAutofillLabel,
-    saveAttendance,
     quorumSnapshot,
     activeProxyCount,
     quorumLegalGuides,
@@ -147,8 +145,6 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     confirmAndRemoveSection,
     closeSectionContextMenu,
     agendaPreviewRemovals,
-    agendaActionItems,
-    toggleActionItemDone,
     startSectionEdit,
     saveSectionEdit,
     meetingTaskById,
@@ -157,6 +153,33 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     openAgendaSection,
     sectionIndexForAgendaEntry,
   } = useMeetingMinutesColumn(props);
+  // A9: agenda item details editor (item number, requested action, time, consent, presenter).
+  const [agendaDetailsItem, setAgendaDetailsItem] = useState<any | null>(null);
+  const agendaRecordById = useMemo(
+    () => new Map(((props.agendaItemRecords ?? []) as any[]).map((record) => [String(record._id), record])),
+    [props.agendaItemRecords],
+  );
+  const agendaMeta = (entry: AgendaItemEntry) => {
+    const record = entry._id ? agendaRecordById.get(String(entry._id)) : undefined;
+    if (!record) return null;
+    const parts = [
+      record.itemNumber ? `#${record.itemNumber}` : "",
+      record.requestedAction ? requestedActionLabel(record.requestedAction) ?? record.requestedAction : "",
+      record.scheduledTimeText ?? "",
+      record.consent ? "Consent" : "",
+      record.presenter ? `Presenter: ${record.presenter}` : "",
+    ].filter(Boolean);
+    return (
+      <span className="agenda-item-meta">
+        {parts.map((part) => <span key={part}>{part}</span>)}
+        {canEditAgenda && (
+          <button type="button" className="btn-action btn-action--icon agenda-item-meta__edit" onClick={() => setAgendaDetailsItem(record)} title="Agenda item details (number, requested action, time, consent, presenter)" aria-label={`Details for ${entry.title}`}>
+            <Pencil size={10} />
+          </button>
+        )}
+      </span>
+    );
+  };
   if (transcriptEdit !== null && canEditTranscript) {
     return (
       <div className="meeting-minutes-layout meeting-minutes-layout--transcript-focus">
@@ -193,6 +216,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               value={transcriptEdit}
               onChange={(event) => setTranscriptEdit(event.target.value)}
               placeholder="Paste or type the meeting transcript here."
+              aria-label="Meeting transcript"
               autoFocus
             />
           </div>
@@ -305,6 +329,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                       <input
                         ref={(el) => { agendaInputRefs.current[index] = el; }}
                         className="input"
+                        aria-label={`Agenda item ${itemLabel} title`}
                         value={item.title}
                         onChange={(event) => updateAgendaItem(index, event.target.value)}
                         onKeyDown={(event) => {
@@ -414,7 +439,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                             className="btn-action btn-action--icon"
                             onClick={() => removeAgendaItem(index)}
                             disabled={!canRemove}
-                            title="Remove item"
+                            title={canRemove ? "Remove item" : "Its minutes section has recorded content — delete the section from the Agenda record to remove both"}
                             aria-label="Remove item"
                           >
                             <Trash2 size={12} />
@@ -481,6 +506,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                               >
                                 {formatSourceReferences(entry.title)}
                               </button>
+                              {agendaMeta(entry)}
                               {children.length > 0 && (
                                 <ol className="meeting-minutes-agenda-list__children">
                                   {children.map((child) => {
@@ -499,6 +525,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                         </span>
                                         {" "}{formatSourceReferences(child.entry.title)}
                                       </button>
+                                      {agendaMeta(child.entry)}
                                     </li>
                                   );})}
                                 </ol>
@@ -530,79 +557,38 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
 
         {minutes && (
           <>
-            <div className="card">
+            <div className="card" id="meeting-attendance-card">
               <div className="card__head">
                 <h2 className="card__title">
                   <FileText size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
                   Attendance
                 </h2>
                 <span className="card__subtitle">
-                  {attendancePresentCount} present
-                  {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
+                  <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
+                    Quorum: {minutesQuorumLabel(minutes)}
+                  </Badge>
                 </span>
               </div>
               <div className="card__body">
-                {attendanceEdit && canEditAttendance ? (
-                  <div className="col" style={{ gap: 12 }}>
-                    <AttendanceRoster
-                      people={attendanceEdit.people}
-                      peopleNames={personLinkCandidates(members, directors).map((p) => p.name)}
-                      onChange={(next) => setAttendanceEdit({ ...attendanceEdit, people: next })}
-                    />
-                    <button className="btn-action" type="button" onClick={autofillCurrentDirectors}>
-                      {attendanceAutofillLabel}
-                    </button>
-                    {(() => {
-                      const preview = computedQuorumMet({
-                        presentCount: attendancePresentCount,
-                        activeProxyCount,
-                        required: quorumSnapshot.required,
-                      });
-                      return (
-                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                          <Badge tone={preview ? "success" : "warn"}>
-                            {preview == null ? "Quorum requirement unavailable" : preview ? "Quorum will be met" : "Quorum will not be met"}
-                          </Badge>
-                          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                            {attendancePresentCount} present
-                            {activeProxyCount ? ` + ${activeProxyCount} active ${activeProxyCount === 1 ? "proxy" : "proxies"}` : ""}
-                            {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                      <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
-                      <button className="btn-action btn-action--primary" disabled={!canEditAttendance} onClick={saveAttendance}>
-                        <Save size={12} /> Save attendance
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="col" style={{ gap: 8 }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
-                        Quorum: {minutesQuorumLabel(minutes)}
-                      </Badge>
-                      {quorumSnapshot.label && (
-                        <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
-                          Rule: {quorumSnapshot.label}
-                        </span>
-                      )}
-                      <div style={{ flexBasis: "100%" }}>
-                        <LegalGuideInline rules={quorumLegalGuides} />
-                      </div>
-                      <button className="btn-action" disabled={!canEditAttendance} onClick={startAttendanceEdit}>
-                        Edit attendance
-                      </button>
-                    </div>
-                    <AttendanceDetails
-                      present={minutes.attendees}
-                      absent={minutes.absent}
-                      people={personLinkCandidates(members, directors)}
-                    />
-                  </div>
-                )}
+                <div className="col" style={{ gap: 8 }}>
+                  {quorumSnapshot.label && (
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      Rule: {quorumSnapshot.label}
+                    </span>
+                  )}
+                  <LegalGuideInline rules={quorumLegalGuides} />
+                  <MeetingAttendanceGrid
+                    meeting={props.meeting ?? { _id: minutes.meetingId }}
+                    minutes={minutes}
+                    people={props.directoryPeople}
+                    editing={!!attendanceEdit && canEditAttendance}
+                    onEditingChange={(next) => (next ? startAttendanceEdit() : setAttendanceEdit(null))}
+                    quorumRequired={quorumSnapshot.required ?? null}
+                    activeProxyCount={activeProxyCount}
+                    expectedPeople={props.expectedAttendees}
+                    expectedPeopleLabel={attendanceAutofillLabel}
+                  />
+                </div>
               </div>
             </div>
 
@@ -620,34 +606,18 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               </div>
             )}
 
-            {agendaActionItems.length > 0 && (
-              <div className="card" id="meeting-minutes-action-items">
-                <div className="card__head">
-                  <h2 className="card__title">Action items</h2>
-                  <span className="card__subtitle">{agendaActionItems.length}</span>
-                </div>
-                <div className="card__body">
-                  <div className="action-list action-list--compact">
-                    {agendaActionItems.map((a) => (
-                      <div className="action-item" key={`${a.sectionIndex}-${a.actionIndex}`}>
-                        <Checkbox
-                          checked={!!a.done}
-                          disabled={!canEditSections}
-                          onChange={() => toggleActionItemDone(a.sectionIndex, a.actionIndex)}
-                          bare
-                        />
-                        <span className={`action-item__text${a.done ? " done" : ""}`}>
-                          <span>{a.text}</span>
-                          <span className="action-item__context">{a.sectionIndex + 1}. {a.sectionTitle}</span>
-                        </span>
-                        {a.assignee && <Badge>{a.assignee}</Badge>}
-                        {a.dueDate && <span className="action-item__due">{a.dueDate}</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            <MeetingActionItemsCard
+              sections={sections}
+              topLevelItems={(minutes.actionItems ?? []) as any[]}
+              people={props.directoryPeople}
+              meetingTasks={props.meetingTasks ?? []}
+              canEdit={canEditSections}
+              canCreateTasks={!!props.createTaskFromAction}
+              meetingTitle={props.meeting?.title}
+              saveSections={async (next) => { await props.saveMinuteSections(next); }}
+              saveTopLevel={props.saveTopLevelActionItems}
+              createTask={props.createTaskFromAction}
+            />
 
             <SignaturePanel
               societyId={minutes.societyId}
@@ -1228,6 +1198,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 role="menuitem"
                 icon={<Trash2 size={14} />}
                 label="Remove item"
+                hint={!canRemove ? "Its minutes section has notes, decisions or actions — delete the section from the Agenda record to remove both." : undefined}
                 destructive
                 disabled={!canRemove}
                 onClick={() => {
@@ -1240,6 +1211,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           document.body,
         );
       })()}
+      <AgendaItemDetailsModal
+        item={agendaDetailsItem}
+        peopleNames={(props.directoryPeople ?? []).map((person) => person.fullName)}
+        onClose={() => setAgendaDetailsItem(null)}
+      />
       {canEditSections && sectionContextMenu && (() => {
         const i = sectionContextMenu.sectionIndex;
         const section = sections[i];
