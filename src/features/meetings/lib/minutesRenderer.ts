@@ -12,6 +12,7 @@ import type { ActionObservation, ImportedSourceVersion } from "../../../../share
 // docx or PDF — it only emits HTML.
 
 import { escapeHtml } from "../../../lib/html";
+import { formatDueDate } from "../../../lib/format";
 import { renderMarkdownInline } from "../../../lib/markdown";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExportStyles";
 import { agendaSequenceLabel } from "./agendaNumbering";
@@ -924,7 +925,7 @@ function renderBoardPublicSection(
     decisions.length ? `<ul>${decisions.map((decision) => `<li>${eh(decision)}</li>`).join("")}</ul>` : "",
     matchingMotions.map(renderBoardMotion).join(""),
     options.includeActionItems && actionItems.length
-      ? `<p><strong>Action Items:</strong></p><ul>${actionItems.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>`
+      ? `<p><strong>Action Items:</strong></p><ul>${actionItems.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(exportDue(item.dueDate))})` : ""}</li>`).join("")}</ul>`
       : "",
   ].filter(Boolean).join("");
   return `
@@ -977,7 +978,7 @@ function renderExecutiveSection(
     ...decisions.map((decision) => `Decision: ${decision}`),
     ...matchingMotions.map(executiveMotionBullet),
     ...(options.includeActionItems
-      ? sectionActions.map((item) => `Action Item: ${item.assignee ? `${item.assignee} to ` : ""}${item.text}${item.dueDate ? ` by ${item.dueDate}` : ""}.`)
+      ? sectionActions.map((item) => `Action Item: ${item.assignee ? `${item.assignee} to ` : ""}${item.text}${item.dueDate ? ` by ${exportDue(item.dueDate)}` : ""}.`)
       : []),
   ];
   return `
@@ -1009,7 +1010,7 @@ function renderNumberedAgendaSection(
     discussion ? renderMinutesMarkdownHtml(discussion) : "",
     decisions.length ? `<ul>${decisions.map((decision) => `<li>${eh(decision)}</li>`).join("")}</ul>` : "",
     matchingMotions.map(renderSampleMotion).join(""),
-    options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>` : "",
+    options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(exportDue(item.dueDate))})` : ""}</li>`).join("")}</ul>` : "",
   ].filter(Boolean).join("");
 
   // Sub-sections drop down to <h3> so screen readers and Word's outline view
@@ -1045,7 +1046,7 @@ function renderSampleActionItems(actionItems: MinutesActionItem[], options: Requ
     <h2>Action Items</h2>
     ${Array.from(grouped.entries()).map(([assignee, items]) => `
       <p><strong>${escapeHtml(assignee)}:</strong></p>
-      <ul>${items.map((item) => `<li>${escapeHtml(item.text)}${item.dueDate ? ` (${escapeHtml(item.dueDate)})` : ""}${item.done ? " - Done" : ""}</li>`).join("")}</ul>
+      <ul>${items.map((item) => `<li>${escapeHtml(item.text)}${item.dueDate ? ` (${escapeHtml(exportDue(item.dueDate))})` : ""}${item.done ? " - Done" : ""}</li>`).join("")}</ul>
     `).join("")}
   `;
 }
@@ -1549,7 +1550,7 @@ function renderActionItemsTable(
           <tr>
             <td>${eh(a.text)}</td>
             <td>${eh(a.assignee ?? "—")}</td>
-            <td>${eh(a.dueDate ?? "—")}</td>
+            <td>${eh(a.dueDate ? exportDue(a.dueDate) : "—")}</td>
             <td>${a.done ? "Done" : "Open"}</td>
           </tr>
         `).join("")}
@@ -1890,6 +1891,11 @@ function isDateOnlyValue(value: string | null | undefined) {
   return isDateOnlyPlaceholder(value) || /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? "").trim());
 }
 
+/** Due dates in exports: ISO days read as "October 20, 2026"; text stays as written. */
+function exportDue(value: string) {
+  return formatDueDate(value, "MMMM d, yyyy");
+}
+
 function formatLongDateTime(value: string) {
   if (isDateOnlyValue(value)) return formatLongDate(value);
   return new Date(value).toLocaleString("en-CA", {
@@ -2058,7 +2064,7 @@ function renderUnrepresentedSectionDetails(minutes:MinutesRenderArgs['minutes'],
   if(section.motionText&&!wordingShown)parts.push(`<p><strong>${section.sourceKind&&section.sourceKind!=='recorded_minutes'?'Proposed motion wording':'Motion wording'}:</strong> ${escapeHtml(section.motionText)}</p>`);
   const tasks=(section.linkedTaskIds??[]).map(id=>{
    const task=minutes.linkedTasks?.find(row=>row._id===id||row.id===id);
-   return `<li>${escapeHtml(task?.title??id)}${task?.description?` — ${escapeHtml(task.description)}`:''}${task?.dueDate?` · Due ${escapeHtml(task.dueDate)}`:''}${task?.status?` · ${escapeHtml(task.status)}`:''}</li>`;
+   return `<li>${escapeHtml(task?.title??id)}${task?.description?` — ${escapeHtml(task.description)}`:''}${task?.dueDate?` · Due ${escapeHtml(exportDue(task.dueDate))}`:''}${task?.status?` · ${escapeHtml(task.status)}`:''}</li>`;
   });
   if(tasks.length)parts.push(`<h3>Linked actions</h3><ul>${tasks.join('')}</ul>`);
   if(!parts.length)return '';
@@ -2156,7 +2162,7 @@ function renderMeetingHistory(minutes: MinutesRenderArgs["minutes"], options: Re
     ${minutes.actionObservations.map((row) => `<div class="historical-action">
       <h3>${eh(row.text)}</h3>
       <p><strong>Status:</strong> ${eh(actionLabels[row.status] ?? "Unknown")} · <strong>As of:</strong> ${unknown(row.statusAsOf)}</p>
-      <p><strong>Assignee:</strong> ${unknown(row.assignee)} · <strong>Assigned:</strong> ${unknown(row.dateAssigned)} · <strong>Due:</strong> ${unknown(row.dueDate)}</p>
+      <p><strong>Assignee:</strong> ${unknown(row.assignee)} · <strong>Assigned:</strong> ${unknown(row.dateAssigned)} · <strong>Due:</strong> ${unknown(row.dueDate ? exportDue(row.dueDate) : row.dueDate)}</p>
       ${paragraph("Source action reference", row.sourceActionId)}
       <p class="meta"><strong>Action identity:</strong> ${eh(row.actionKey)} · <strong>Observation:</strong> ${eh(row.entryId)}</p>
       ${paragraph("Source status wording", row.sourceStatus)}

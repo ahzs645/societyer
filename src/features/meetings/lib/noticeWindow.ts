@@ -95,6 +95,23 @@ export function meetingCreateLabels(scheduledAt: string, now: string | Date = ne
 }
 
 /** True when the meeting's calendar day is before today: the form records a meeting already held. */
+/**
+ * A scheduled meeting on a later calendar day has not happened yet: its
+ * attendance list is who is *expected* (often pre-filled from a template) and
+ * quorum cannot be determined (MA-8). A meeting dated today may be running
+ * now, so attendance recorded on the day counts as present.
+ */
+export function meetingNotYetHeld(
+  meeting: { status?: string | null; scheduledAt?: string | null } | null | undefined,
+  now: string | Date = new Date(),
+) {
+  if (!meeting?.scheduledAt) return false;
+  const status = String(meeting.status ?? "").trim().toLowerCase();
+  if (status && status !== "scheduled" && status !== "draft" && status !== "planned") return false;
+  const days = daysUntil(meeting.scheduledAt, now);
+  return days != null && days > 0;
+}
+
 export function isPastMeeting(value: string, now: string | Date = new Date()) {
   const days = daysUntil(value, now);
   return days != null && days < 0;

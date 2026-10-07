@@ -1154,6 +1154,41 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     setSectionDraft(null);
   };
 
+  // Escape in the inline title editor used to drop every unsaved change in the
+  // section without a word (MA-4). Close straight away only when nothing
+  // changed; otherwise ask first, naming the section.
+  const sectionDraftIsDirty = () => {
+    if (sectionEditIndex == null || !sectionDraft) return false;
+    const section = sections[sectionEditIndex] ?? {};
+    const discussion = sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
+    const same = (a: unknown, b: unknown) => String(a ?? "").trim() === String(b ?? "").trim();
+    return !same(sectionDraft.title, section.title)
+      || !same(sectionDraft.type, section.type ?? "discussion")
+      || !same(sectionDraft.presenter, section.presenter)
+      || !same(discussion, section.discussion)
+      || JSON.stringify(sectionDraft.decisions.map((d) => d.trim()).filter(Boolean)) !== JSON.stringify((Array.isArray(section.decisions) ? section.decisions : []).map((d: string) => String(d).trim()).filter(Boolean))
+      || JSON.stringify(sectionDraft.linkedTaskIds) !== JSON.stringify(Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [])
+      || Object.keys(sectionDraft.taskUpdates).length > 0
+      || sectionDraft.publicVisible !== (section.publicVisible !== false)
+      || hasPendingSectionMotion;
+  };
+  const requestCancelSectionEdit = async () => {
+    if (!sectionDraftIsDirty()) {
+      cancelSectionEdit();
+      return;
+    }
+    const title = (sections[sectionEditIndex ?? -1]?.title || sectionDraft?.title || "this section").trim();
+    const ok = await confirm({
+      title: "Discard changes to this section?",
+      message: `Your unsaved edits to “${title}” will be lost.`,
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      tone: "danger",
+    });
+    if (ok) cancelSectionEdit();
+    else sectionTitleRef.current?.focus();
+  };
+
   // Belt-and-suspenders: even though MotionEditor fires onPendingDraftChange
   // on unmount, clear the flag here too so the button label resets the moment
   // the section editor closes for any reason.
@@ -1596,6 +1631,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     detailedSectionTitles,
     sectionEditIndex,
     setSectionEditIndex,
+    requestCancelSectionEdit,
     sectionDraft,
     setSectionDraft,
     agendaNumberingMode,

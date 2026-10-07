@@ -55,6 +55,7 @@ import type {
 import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMeetingMinutesColumn";
 import { SourceMinutesContext, sourceIsProposal } from "./SourceMinutesContext";
 import { MeetingAttendanceGrid } from "./MeetingAttendanceGrid";
+import { meetingNotYetHeld } from "../lib/noticeWindow";
 import { MeetingActionItemsCard } from "./MeetingActionItemsCard";
 import { AgendaItemDetailsModal, requestedActionLabel } from "./AgendaItemDetailsModal";
 
@@ -90,6 +91,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     detailedSectionTitles,
     sectionEditIndex,
     setSectionEditIndex,
+    requestCancelSectionEdit,
     sectionDraft,
     setSectionDraft,
     agendaNumberingMode,
@@ -565,9 +567,13 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                   Attendance
                 </h2>
                 <span className="card__subtitle">
-                  <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
-                    Quorum: {minutesQuorumLabel(minutes)}
-                  </Badge>
+                  {meetingNotYetHeld(props.meeting) ? (
+                    <Badge tone="neutral">Quorum: not yet determined</Badge>
+                  ) : (
+                    <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
+                      Quorum: {minutesQuorumLabel(minutes)}
+                    </Badge>
+                  )}
                 </span>
               </div>
               <div className="card__body">
@@ -588,6 +594,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                     activeProxyCount={activeProxyCount}
                     expectedPeople={props.expectedAttendees}
                     expectedPeopleLabel={attendanceAutofillLabel}
+                    notYetHeld={meetingNotYetHeld(props.meeting)}
                   />
                 </div>
               </div>
@@ -812,8 +819,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                           }
                                         } else if (event.key === "Escape") {
                                           event.preventDefault();
-                                          setSectionEditIndex(null);
-                                          setSectionDraft(null);
+                                          void requestCancelSectionEdit();
                                         }
                                       }}
                                       placeholder="Section title"
@@ -991,11 +997,20 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                       <div className="meeting-minutes-section-motions">
                                         {motionMatchesBySection[index].map(({ motion, index: motionIndex }) => (
                                           <div className="meeting-minutes-section-motion" key={`${motion.text}-${motionIndex}`}>
-                                            <span>{motion.text}</span>
+                                            {motion.name?.trim() ? (
+                                              <>
+                                                <span className="meeting-minutes-section-motion__name">{motion.name}</span>
+                                                {motion.text?.trim() && <span className="meeting-minutes-section-motion__wording">{motion.text}</span>}
+                                              </>
+                                            ) : (
+                                              <span>{motion.text}</span>
+                                            )}
                                             <span className="meeting-minutes-section-motion__meta">
-                                              {motion.movedBy && <>Moved by {motionPersonDisplayName(motion.movedBy, motionPeople, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}</>}
-                                              {motion.secondedBy && <> · Seconded by {motionPersonDisplayName(motion.secondedBy, motionPeople, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}</>}
-                                              {motion.outcome && <> · {motion.outcome}</>}
+                                              {[
+                                                motion.movedBy ? `Moved by ${motionPersonDisplayName(motion.movedBy, motionPeople, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}` : "",
+                                                motion.secondedBy ? `Seconded by ${motionPersonDisplayName(motion.secondedBy, motionPeople, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}` : "",
+                                                motion.outcome ?? "",
+                                              ].filter(Boolean).join(" · ")}
                                             </span>
                                           </div>
                                         ))}

@@ -74,7 +74,7 @@ import { minutesEvidenceOptions } from "../features/meetings/lib/minutesEvidence
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
-import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../features/meetings/lib/sourceAgendaNavigation";
+import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection, visibleAgendaEntries } from "../features/meetings/lib/sourceAgendaNavigation";
 import { alignSectionsToAgenda } from "../features/meetings/lib/agendaSectionAlign";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
@@ -90,7 +90,7 @@ import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
 import { Modal, useConfirm, usePrompt } from "../components/Modal";
-import { isPastMeeting, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
+import { isPastMeeting, meetingNotYetHeld, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -2288,10 +2288,10 @@ export function MeetingDetailPage() {
       <div className="meeting-detail-summary">
         <div>
           <span>Agenda topics</span>
-          <strong>{agenda.length}</strong>
+          <strong>{visibleAgendaEntries(agendaTree, (minutes?.sections ?? []) as any[], minutes?.sourceMeetingRecord).length}</strong>
         </div>
         <div>
-          <span>Present</span>
+          <span>{meetingNotYetHeld(meeting) ? "Expected" : "Present"}</span>
           <strong>{minutesLoading ? "…" : minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
         </div>
         <div>
@@ -2417,6 +2417,7 @@ export function MeetingDetailPage() {
                     presentCount={
                       presentCountForQuorum
                     }
+                    notYetHeld={meetingNotYetHeld(meeting)}
                     quorumRequired={
                       quorumSnapshot.required ??
                       meeting.quorumRequired ??
