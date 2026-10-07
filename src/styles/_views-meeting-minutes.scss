@@ -875,6 +875,12 @@
 .meeting-minutes-section-motion__meta {
   color: token('text-tertiary');
 }
+.meeting-minutes-section-motion__name {
+  font-weight: 600;
+}
+.meeting-minutes-section-motion__wording {
+  color: token('text-secondary');
+}
 .meeting-minutes-section-editor {
   display: grid;
   gap: token('s-3');

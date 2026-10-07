@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
@@ -22,7 +23,7 @@ export function GoalDetailPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("commitments:write");
   const canCreateTask = loaded && can("tasks:write");
-  const goal = useQuery(api.goals.get, id ? { id: id as Id<"goals"> } : "skip");
+  const goal = useRecordQuery<any>(api.goals.get, id ? { id: id as Id<"goals"> } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const allTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const toggleMilestone = useMutation(api.goals.toggleMilestone);

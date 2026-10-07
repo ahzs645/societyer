@@ -2,6 +2,7 @@ import { calendarDateKey } from "../lib/calendarDates";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { usePermissions } from "../hooks/usePermissions";
@@ -39,7 +40,7 @@ export function CommitteeDetailPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("committees:write");
   const canWriteTasks = loaded && can("tasks:write");
-  const detail = useQuery(api.committees.detail, id ? { id: id as Id<"committees"> } : "skip");
+  const detail = useRecordQuery<any>(api.committees.detail, id ? { id: id as Id<"committees"> } : "skip");
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const addMember = usePermissionedMutation(api.committees.addMember, canWrite);
   const removeMember = usePermissionedMutation(api.committees.removeMember, canWrite);

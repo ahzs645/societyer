@@ -322,6 +322,15 @@
   gap: token('s-2');
   align-items: end;
 }
+// The outcome picker (and the vote rows/issues below it) span the whole draft
+// grid. In a single grid column the picker was ~260px wide, under the
+// container-query threshold, so all five outcomes collapsed to icon-only
+// tiles even on a desktop (MA-2).
+.motion-draft__grid > .motion-outcome-picker,
+.motion-draft__grid > .motion-draft__votes,
+.motion-draft__grid > [role="alert"] {
+  grid-column: 1 / -1;
+}
 .motion-draft__votes {
   @include flex-column;
   gap: 6px;
@@ -548,4 +557,25 @@
   100% {
     box-shadow: 0 0 0 0 transparent;
   }
+}
+
+// Collapsed motion summary (MA-3): a named motion keeps its wording visible
+// as a clamped secondary line, plus who moved and seconded it.
+.motion__summary {
+  margin-top: 4px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.motion__summary p {
+  margin: 0;
+  font-size: token('fs-sm');
+  overflow-wrap: anywhere;
+}
+.motion__summary-wording {
+  color: token('text-secondary');
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

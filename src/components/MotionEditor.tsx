@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
 import {
   MOTION_OUTCOMES,
@@ -262,6 +262,15 @@ function NameInput({
   );
 }
 
+/** Pause after the last keystroke before a motion text edit is saved (MA-10). */
+const MOTION_TEXT_SAVE_DELAY_MS = 600;
+/** Motion fields edited by typing; a patch touching only these is debounced. */
+const MOTION_TEXT_KEYS = new Set([
+  "name", "text", "movedBy", "secondedBy", "outcomeOverrideNote",
+  "movedByMemberId", "movedByDirectorId", "movedByPersonId",
+  "secondedByMemberId", "secondedByDirectorId", "secondedByPersonId",
+]);
+
 function OutcomePicker({
   value,
   onChange,
@@ -499,13 +508,45 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     return () => window.clearTimeout(timer);
   }, [pendingMotions]);
   const motions = pendingMotions ?? motionsProp;
+  // MA-10: typing in a motion's text fields used to save the whole motions
+  // list on every keystroke. Free-text edits now wait for a pause in typing
+  // (or for focus to leave the editor, or for the editor to unmount) and go
+  // out as one save; structural changes (add, remove, outcome, tallies) save
+  // at once and carry any typed text with them. The local echo above keeps
+  // what is on screen correct in the meantime.
+  const onChangePropRef = useRef(onChangeProp);
+  onChangePropRef.current = onChangeProp;
+  const queuedSave = useRef<{ next: Motion[]; timer: number } | null>(null);
+  const flushQueuedSave = useCallback(() => {
+    const queued = queuedSave.current;
+    if (!queued) return;
+    window.clearTimeout(queued.timer);
+    queuedSave.current = null;
+    // Restart the echo window from the moment the save actually goes out.
+    setPendingMotions(queued.next);
+    onChangePropRef.current(queued.next);
+  }, []);
+  useEffect(() => {
+    window.addEventListener("pagehide", flushQueuedSave);
+    return () => {
+      window.removeEventListener("pagehide", flushQueuedSave);
+      flushQueuedSave();
+    };
+  }, [flushQueuedSave]);
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
   authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
-  const onChange = (next: Motion[]) => {
+  const onChange = (next: Motion[], options: { debounce?: boolean } = {}) => {
     if (authority.current.readOnly) return false;
     const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
     if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
     setPendingMotions(next);
+    if (queuedSave.current) window.clearTimeout(queuedSave.current.timer);
+    if (options.debounce) {
+      queuedSave.current = { next, timer: window.setTimeout(flushQueuedSave, MOTION_TEXT_SAVE_DELAY_MS) };
+      return true;
+    }
+    // This save carries every queued text edit, so the queue is spent.
+    queuedSave.current = null;
     onChangeProp(next);
     return true;
   };
@@ -519,7 +560,9 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const isAdjournmentScope = sectionScope != null && isAdjournmentSectionTitle(scopedSectionTitle);
   const sectionPatchForScope = (): Partial<Motion> =>
     sectionScope != null ? motionSectionPatch(String(sectionScope), agendaSections) : {};
-  const makeDraft = (): Motion => ({ text: "", outcome: "Pending", ...sectionPatchForScope() });
+  // The resolution type select shows "Ordinary" by default; store it so the
+  // saved motion says what the form showed (MA-5).
+  const makeDraft = (): Motion => ({ text: "", outcome: "Pending", resolutionType: "Ordinary", ...sectionPatchForScope() });
   const [adding, setAdding] = useState(false);
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Motion>(makeDraft);
@@ -535,29 +578,19 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     if (sectionScope != null) setDraft((current) => ({ ...current, ...sectionPatchForScope() }));
     setAdding(true);
   };
-  // While true, votesFor auto-tracks (movedBy ? 1 : 0) + (secondedBy ? 1 : 0).
-  // The user breaks this binding the moment they edit votesFor manually.
-  const [votesAutoFill, setVotesAutoFill] = useState(true);
-
+  // Tallies start empty ("no votes recorded"). Filling in a mover and
+  // seconder says nothing about how anyone voted, so it must not count as
+  // two votes For (MA-1).
   const updateDraftPerson = (
     key: "movedBy" | "secondedBy",
     value: string,
     extra: Partial<Motion> = {},
   ) => {
-    setDraft((current) => {
-      const next = { ...current, [key]: value, ...extra };
-      if (votesAutoFill) {
-        const moved = (key === "movedBy" ? value : current.movedBy ?? "").trim();
-        const seconded = (key === "secondedBy" ? value : current.secondedBy ?? "").trim();
-        next.votesFor = (moved ? 1 : 0) + (seconded ? 1 : 0);
-      }
-      return next;
-    });
+    setDraft((current) => ({ ...current, [key]: value, ...extra }));
   };
 
   const resetDraft = () => {
     setDraft(makeDraft());
-    setVotesAutoFill(true);
   };
 
   const nameOptions = useMemo(
@@ -627,7 +660,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     if (authority.current.readOnly) return;
     if ("outcome" in diff) setVoteNotice((notice) => (notice?.index === idx ? null : notice));
     const next = motions.map((m, i) => (i === idx ? { ...m, ...diff } : m));
-    onChange(next);
+    onChange(next, { debounce: Object.keys(diff).every((key) => MOTION_TEXT_KEYS.has(key)) });
   };
 
   // When a tally change contradicts the recorded outcome, the outcome goes
@@ -684,7 +717,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const extras = useMemo(() => ({ directoryPeople, documentOptions }), [directoryPeople, documentOptions]);
   return (
     <MotionEditorExtrasContext.Provider value={extras}>
-    <div>
+    <div onBlur={flushQueuedSave}>
       {businessMotionRows.length === 0 && !adding && (
         <div className="muted">
           {isAdjournmentScope
@@ -843,10 +876,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                 <VoteStepper
                   label="For"
                   value={draft.votesFor ?? 0}
-                  onChange={(n) => {
-                    setVotesAutoFill(false);
-                    setDraft((current) => ({ ...current, votesFor: n }));
-                  }}
+                  onChange={(n) => setDraft((current) => ({ ...current, votesFor: n }))}
                   tone="success"
                 />
                 <VoteStepper
@@ -923,6 +953,40 @@ function DissentDocumentField({ value, onChange }: { value?: string; onChange: (
   );
 }
 
+/**
+ * One- or two-line summary under a collapsed motion (MA-3): a named motion
+ * still shows its wording, and every motion shows who moved and seconded it,
+ * so the collapsed card says what was decided without opening it.
+ */
+function motionMoverSummary(motion: Pick<Motion, "movedBy" | "secondedBy" | "movedByMemberId" | "movedByDirectorId" | "secondedByMemberId" | "secondedByDirectorId">, people: MotionPerson[] = []): string {
+  const parts: string[] = [];
+  if (motion.movedBy?.trim()) parts.push(`Moved by ${motionPersonDisplayName(motion.movedBy, people, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}`);
+  if (motion.secondedBy?.trim()) parts.push(`seconded by ${motionPersonDisplayName(motion.secondedBy, people, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}`);
+  if (!parts.length) return "";
+  const joined = parts.join(", ");
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+function MotionCollapsedSummary({ motion, people, showWording }: { motion: Motion; people: MotionPerson[]; showWording: boolean }) {
+  const wording = showWording ? plainMotionWording(motion.text) : "";
+  const movers = motionMoverSummary(motion, people);
+  if (!wording && !movers) return null;
+  return (
+    <div className="motion__summary" data-testid="motion-collapsed-summary">
+      {wording && <p className="motion__summary-wording">{wording}</p>}
+      {movers && <p className="motion__summary-movers muted">{movers}</p>}
+    </div>
+  );
+}
+
+function plainMotionWording(text: string | undefined) {
+  return String(text ?? "")
+    .replace(/[*_`#>]+/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function MotionRow({
   motion,
   readOnly = false,
@@ -991,7 +1055,10 @@ function MotionRow({
   // long, the fallback renders as a wrapping, tap-to-edit heading rather than
   // the single-line name input (which would clip on narrow screens).
   const hasName = !!motion.name?.trim();
-  const showTextHeadline = !expanded && !hasName && !!motion.text?.trim();
+  // Keep the name input while it has focus: clearing the name to retype it
+  // used to swap the input for the wording headline mid-edit.
+  const [nameFocused, setNameFocused] = useState(false);
+  const showTextHeadline = !expanded && !hasName && !nameFocused && !!motion.text?.trim();
   const titleText = hasName ? motion.name! : (motion.text ?? "");
   const isLongTitle =
     titleText.length > 80 ||
@@ -1072,6 +1139,7 @@ function MotionRow({
             {(motion.tags ?? []).length > 0 && <p>Tags: {motion.tags!.join(", ")}</p>}
           </div>
         </details>
+        {!expanded && <MotionCollapsedSummary motion={motion} people={people} showWording={hasName} />}
         <VoteProgress motion={motion} />
       </div>
     );
@@ -1106,6 +1174,8 @@ function MotionRow({
               className="motion__name-input"
               value={motion.name ?? ""}
               onChange={(event) => onPatch({ name: event.target.value })}
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
               placeholder="Motion name"
               aria-label={`Motion name for ${titleText.trim() || "untitled motion"}`}
             />
@@ -1183,6 +1253,8 @@ function MotionRow({
           )}
         </div>
       </div>
+
+      {!expanded && <MotionCollapsedSummary motion={motion} people={people} showWording={hasName} />}
 
       <VoteProgress motion={motion} />
 

@@ -13,6 +13,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui";
+import { formatDueDate } from "@/lib/format";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/Modal";
 import { ACTION_ITEM_STATUSES, ACTION_ITEM_STATUS_LABELS, actionItemStatus, type ActionItemStatus } from "../../../../shared/actionItemStatus";
@@ -387,7 +388,7 @@ export function MeetingActionItemsCard({
                       {row.item.assignee ? <>{row.item.assignee}{row.item.assigneePersonId ? " ✓" : ""}</> : "Assign…"}
                     </button>
                   )}
-                  {row.item.dueDate && <span className="action-item__due">{row.item.dueDate}</span>}
+                  {row.item.dueDate && <span className="action-item__due" title={String(row.item.dueDate)}>{formatDueDate(row.item.dueDate)}</span>}
                   {task ? (
                     <Link className="btn-action" to="/app/tasks" title={`Task: ${task.title}`}>
                       <ClipboardList size={12} /> {task.status}

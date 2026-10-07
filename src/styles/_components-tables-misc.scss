@@ -39,6 +39,7 @@
 }
 .calendar-view__title { font-weight: 600; font-size: token('fs-md'); }
 .calendar-view__nav { display: inline-flex; gap: 4px; }
+.calendar-view__jump { display: inline-flex; gap: 4px; }
 .calendar-view__weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -488,6 +489,13 @@ select.editable-cell__input {
 
 /* Calendar periods share the record-view controls and keep overflow inside the view. */
 .calendar-view__head { flex-wrap: wrap; }
+/* Controls keep their size and wrap to the next line as a whole, rather than
+   squeezing the layout toggle into a column of letters. */
+.calendar-view__head > .calendar-view__nav,
+.calendar-view__head > .calendar-view__jump,
+.calendar-view__head > .record-table__segmented { flex-shrink: 0; white-space: nowrap; }
+/* The shared segmented control sizes icon buttons (24px); these are words. */
+.calendar-view__head > .record-table__segmented button { width: auto; padding: 0 8px; font-size: token('fs-sm'); }
 .calendar-view__title { min-width: 0; overflow-wrap: anywhere; }
 .calendar-view__scroll { min-width: 0; max-width: 100%; overflow-x: auto; }
 .calendar-view--month .calendar-view__weekdays,

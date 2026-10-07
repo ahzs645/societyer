@@ -43,7 +43,12 @@ export class PageErrorBoundary extends Component<Props, State> {
     if (this.state.error && prevProps.resetKey !== this.props.resetKey) this.setState({ error: null });
   }
 
-  private retry = () => this.setState((state) => ({ error: null, attempt: state.attempt + 1 }));
+  private retry = () => {
+    // Local failed queries stay failed until data changes or Retry: ask the
+    // local query cache (if any) to re-run them, then mount the content again.
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("societyer:retry-failed-queries"));
+    this.setState((state) => ({ error: null, attempt: state.attempt + 1 }));
+  };
 
   render() {
     const { error, attempt } = this.state;

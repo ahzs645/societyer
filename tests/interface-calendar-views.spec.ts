@@ -143,33 +143,40 @@ test("Viewer can change the presentation and inspect a deadline while save and e
   expect(errors).toEqual([]);
 });
 
-test("timestamp events use the viewer's day across DST and open only their owned meeting", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.clock.setFixedTime(new Date("2026-03-09T04:00:00Z"));
-  await page.goto("/demo/app/meetings");
-  await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
-  // Set an incoming offset-bearing timestamp through the ordinary authorized
-  // local mutation, rather than mocking the calendar's query or bypassing ACLs.
-  const title = await page.evaluate(async () => {
-    const fixture = await window.__societyerE2E!.inspect();
-    const modulePath = "/src/lib/localDataClient.ts";
-    const { localDataClient } = await import(modulePath);
-    const meetings = await localDataClient.query("meetings:list", { societyId: fixture.selectedSocietyId });
-    const meeting = meetings.find((row: { type: string }) => row.type === "Board");
-    await localDataClient.mutation("meetings:update", { id: meeting._id, patch: { scheduledAt: "2026-03-09T04:30:00Z" } });
-    return meeting.title as string;
+// 2026-03-09T04:30Z is the evening of March 8 in Vancouver (UTC-7 after the
+// DST change) but March 9 in UTC; pin the viewer's zone so the assertion
+// holds on any machine (FF-3).
+test.describe("viewer time zone", () => {
+  test.use({ timezoneId: "America/Vancouver" });
+
+  test("timestamp events use the viewer's day across DST and open only their owned meeting", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.clock.setFixedTime(new Date("2026-03-09T04:00:00Z"));
+    await page.goto("/demo/app/meetings");
+    await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
+    // Set an incoming offset-bearing timestamp through the ordinary authorized
+    // local mutation, rather than mocking the calendar's query or bypassing ACLs.
+    const title = await page.evaluate(async () => {
+      const fixture = await window.__societyerE2E!.inspect();
+      const modulePath = "/src/lib/localDataClient.ts";
+      const { localDataClient } = await import(modulePath);
+      const meetings = await localDataClient.query("meetings:list", { societyId: fixture.selectedSocietyId });
+      const meeting = meetings.find((row: { type: string }) => row.type === "Board");
+      await localDataClient.mutation("meetings:update", { id: meeting._id, patch: { scheduledAt: "2026-03-09T04:30:00Z" } });
+      return meeting.title as string;
+    });
+    await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+    const calendar = page.locator(".calendar-view");
+    await calendar.getByRole("button", { name: "Week", exact: true }).click();
+    await expect(calendar.locator('[data-calendar-date="2026-03-08"]').getByRole("button", { name: title, exact: true })).toBeVisible();
+    await expect(calendar.locator('[data-calendar-date="2026-03-09"]')).toHaveCount(0);
+    await fits(page);
+    await calendar.getByRole("button", { name: title, exact: true }).click();
+    await page.locator(".record-side-panel__open").click();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
   });
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
-  const calendar = page.locator(".calendar-view");
-  await calendar.getByRole("button", { name: "Week", exact: true }).click();
-  await expect(calendar.locator('[data-calendar-date="2026-03-08"]').getByRole("button", { name: title, exact: true })).toBeVisible();
-  await expect(calendar.locator('[data-calendar-date="2026-03-09"]')).toHaveCount(0);
-  await fits(page);
-  await calendar.getByRole("button", { name: title, exact: true }).click();
-  await page.locator(".record-side-panel__open").click();
-  await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-  expect(errors).toEqual([]);
 });
 
 

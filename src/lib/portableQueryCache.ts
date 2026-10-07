@@ -61,6 +61,9 @@ export function sameQueryResult(a: unknown, b: unknown): boolean {
  * Convex query, so the nearest error boundary can show a readable message and a
  * retry. Re-mounting the subscriber (the boundary's Retry) runs the query again.
  */
+/** Window event the page error boundary dispatches on Retry; caches re-run their failed queries. */
+export const RETRY_FAILED_QUERIES_EVENT = "societyer:retry-failed-queries";
+
 export class LocalQueryError extends Error {
   /** How long a "record not found" failure must persist before it is surfaced. */
   static NOT_FOUND_GRACE_MS = 1500;
@@ -152,6 +155,7 @@ export class PortableQueryCache {
     private readonly store: StaticDemoDexieStore,
     _syncFallback: (name: string, args?: StaticArgs) => unknown,
   ) {
+    if (typeof window !== "undefined") window.addEventListener(RETRY_FAILED_QUERIES_EVENT, () => this.retryFailed());
     // Client-level refresh: whenever the underlying store changes (a mutation
     // committed, or the async Dexie hydration finished), re-run every watched
     // portable query. Watch-level subscriptions alone race React's effect
@@ -202,6 +206,12 @@ export class PortableQueryCache {
    */
   private isFresh(cacheKey: string) {
     if (this.portablePending.has(cacheKey)) return true;
+    // A recorded failure stays until data changes (store onUpdate re-runs it)
+    // or the user retries (retryFailed). convex/react's useQueries builds a new
+    // Watch and subscription on every render; re-running a failed query on each
+    // of those kept it pending forever, so the page never saw the error and
+    // stayed on "Loading…" instead of reaching its error boundary.
+    if (this.portableFailures.has(cacheKey)) return true;
     return this.portableCache.get(cacheKey) !== undefined && Boolean(this.portableReadSets.get(cacheKey));
   }
 
@@ -231,6 +241,19 @@ export class PortableQueryCache {
     // A callback can commit a React subscription change. Iterating the live
     // Set would visit newly inserted listeners again during the same emission.
     for (const listener of [...this.portableListeners]) listener();
+  }
+
+  /** Re-run every watched query that failed (the error boundary's Retry). */
+  retryFailed() {
+    const failed = [...this.portableFailures.keys()];
+    if (!failed.length) return;
+    for (const cacheKey of failed) {
+      this.portableFailures.delete(cacheKey);
+      this.portableErrors.delete(cacheKey);
+      const spec = this.portableWatchSpecs.get(cacheKey);
+      if (spec && !spec.pagination) this.recomputePortable(cacheKey, spec.name, spec.args);
+    }
+    this.emit();
   }
 
   /** Drop results authorized for the previous selected local actor. */
@@ -268,7 +291,14 @@ export class PortableQueryCache {
       return;
     }
     const isNewFailure = this.portableErrors.get(cacheKey) !== message;
-    if (isNewFailure) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
+    // "Record not found" is usually transient (the organization switched, or a
+    // record was deleted or merged, and the component unmounts next render);
+    // a lasting one still reaches the page after the grace period below. Keep
+    // it out of the warning log (P-O4); other failures still warn.
+    if (isNewFailure) {
+      if (isRecordNotFoundError(error)) console.debug(`[societyer-local] portable query ${cacheKey}: record not found`, error);
+      else console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
+    }
     this.portableErrors.set(cacheKey, message);
     this.portableReadSets.delete(cacheKey);
     const hadResult = this.portableCache.get(cacheKey) !== undefined;

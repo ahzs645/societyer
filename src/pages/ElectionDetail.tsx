@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
+import { RecordNotFound } from "../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -25,27 +27,22 @@ export function ElectionDetailPage() {
   const canManage = loaded && can("elections:write");
   const canPublishResults = canManage && can("elections:tally");
   const actingUserId = useCurrentUserId() ?? undefined;
-  const electionBundle = useQuery(
+  // A missing or foreign id reads as null and shows the not-found state; the
+  // tally and nominations wait until the election exists (FF-2).
+  const electionBundle = useRecordQuery<any>(
     api.elections.get,
     id
       ? { id: id as Id<"elections"> }
       : "skip",
   );
+  const electionId = electionBundle?.election?._id as Id<"elections"> | undefined;
   const tally = useQuery(
     api.elections.tally,
-    id
-      ? {
-          electionId: id as Id<"elections">,
-      }
-      : "skip",
+    electionId ? { electionId } : "skip",
   );
   const nominations = useQuery(
     api.elections.listNominations,
-    id
-      ? {
-          electionId: id as Id<"elections">,
-        }
-      : "skip",
+    electionId ? { electionId } : "skip",
   );
   const users = useQuery(
     api.users.list,
@@ -116,7 +113,7 @@ export function ElectionDetailPage() {
   }, [election]);
 
   if (electionBundle === undefined) return <PageLoading />;
-  if (electionBundle === null || !election) return <SeedPrompt />;
+  if (electionBundle === null || !election) return <RecordNotFound recordLabel="Election" backTo="/app/elections" backLabel="All elections" />;
 
   const canVote =
     isAuthenticatedAuthMode() &&
