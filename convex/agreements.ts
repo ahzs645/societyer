@@ -166,7 +166,7 @@ export const setRenewalDecision = authorizedMutation("agreements:setRenewalDecis
 });
 
 export const setObligationStatus = authorizedMutation("agreements:setObligationStatus", mutation)({
-  args: { id: v.id("agreements"), list: v.union(v.literal("deliverables"), v.literal("reportingObligations")), rowId: v.string(), status: v.string(), dateISO: v.optional(v.string()) },
+  args: { id: v.id("agreements"), list: v.union(v.literal("deliverables"), v.literal("reportingObligations")), rowKey: v.string(), status: v.string(), dateISO: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => setObligationStatusPortable(await toPortableMutationCtx(ctx), args),
 });

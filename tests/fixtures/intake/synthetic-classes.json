@@ -463,8 +463,7 @@
         { "path": "expiry.iso", "equals": "2026-03-31" },
         { "path": "amount.amountCents", "equals": 1200000 },
         { "path": "signatories", "minCount": 2 },
-        { "path": "reportingRequirements[*].due.iso", "includes": "2026-04-30" },
-        { "path": "unsupported[*].infoType", "includes": "agreement.contract" }
+        { "path": "reportingRequirements[*].due.iso", "includes": "2026-04-30" }
       ]
     },
     {

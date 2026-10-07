@@ -308,7 +308,7 @@ export function AgreementDetailPage() {
                       </div>
                       <Select
                         value={row.status ?? "not_started"}
-                        onChange={(value) => run("Status saved", () => setObligation({ id: agreement._id, list, rowId: row.id, status: value }))}
+                        onChange={(value) => run("Status saved", () => setObligation({ id: agreement._id, list, rowKey: row.id, status: value }))}
                         options={DELIVERABLE_STATUSES.map((value) => ({ value, label: DELIVERABLE_STATUS_LABELS[value] }))}
                         disabled={!canWrite}
                         size="sm"

@@ -488,7 +488,7 @@ export async function terminatePortable(ctx: PortableMutationCtx, { id, terminat
   const existing = await ownedAgreement(ctx, id);
   if (!isIsoDay(terminatedAtISO)) throw new Error("Agreement: give the termination date (YYYY-MM-DD).");
   if (!clean(reason)) throw new Error("Agreement: give the reason for termination.");
-  if (isIsoDay(existing.effectiveDate) && terminatedAtISO < existing.effectiveDate) throw new Error("Agreement: the termination date is before the agreement took effect.");
+  if (existing.status === "active" && isIsoDay(existing.effectiveDate) && terminatedAtISO < existing.effectiveDate) throw new Error("Agreement: the termination date is before the agreement took effect.");
   await ctx.db.patch(existing._id, {
     status: "terminated",
     terminatedAtISO,
@@ -582,18 +582,18 @@ export async function setRenewalDecisionPortable(ctx: PortableMutationCtx, { id,
 
 export async function setObligationStatusPortable(
   ctx: PortableMutationCtx,
-  { id, list, rowId, status, dateISO }: { id: string; list: "deliverables" | "reportingObligations"; rowId: string; status: string; dateISO?: string },
+  { id, list, rowKey, status, dateISO }: { id: string; list: "deliverables" | "reportingObligations"; rowKey: string; status: string; dateISO?: string },
 ) {
   const existing = await ownedAgreement(ctx, id);
   if (list !== "deliverables" && list !== "reportingObligations") throw new Error("Agreement: unknown obligation list.");
   if (!(DELIVERABLE_STATUSES as readonly string[]).includes(status)) throw new Error("Agreement: choose a status from the list.");
   if (dateISO && !isIsoDay(dateISO)) throw new Error("Agreement: use a date (YYYY-MM-DD).");
   const rows: any[] = Array.isArray(existing[list]) ? existing[list] : [];
-  if (!rows.some((row) => row.id === rowId)) throw new Error("Agreement: that obligation is not on this agreement.");
+  if (!rows.some((row) => row.id === rowKey)) throw new Error("Agreement: that obligation is not on this agreement.");
   const doneKey = list === "deliverables" ? "completedAtISO" : "submittedAtISO";
   const done = ["submitted", "accepted", "waived"].includes(status);
   await ctx.db.patch(existing._id, {
-    [list]: rows.map((row) => (row.id === rowId ? compact({ ...row, status, [doneKey]: done ? dateISO ?? row[doneKey] ?? today() : undefined }) : row)),
+    [list]: rows.map((row) => (row.id === rowKey ? compact({ ...row, status, [doneKey]: done ? dateISO ?? row[doneKey] ?? today() : undefined }) : row)),
     updatedAtISO: nowISO(),
   });
   const sync = await syncAgreementDeadlines(ctx, (await ctx.db.get<Row>(existing._id, "agreements"))!);
