@@ -156,7 +156,7 @@ export function compareNames(a: string[], b: string[]): { score: number; reasons
     return { score: 0, reasons: [] };
   }
   const reasons: string[] = [];
-  // Token-subset: "Gina Layte" vs "Gina Layte Liston".
+  // Token-subset: "Ana Ruiz" vs "Ana Ruiz Moreno".
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (short.length >= 2 && short.every((t) => long.includes(t))) {
     return { score: 70, reasons: ["One name contains the other (middle or married name)"] };
@@ -252,8 +252,8 @@ export function stripRoleAffixes(fragment: string): string {
 
 /**
  * People whose full name (or alias) appears inside a source fragment, as
- * whole words. "Kim Menounos Northern Health Wayne Rommerdahl" → both people;
- * "Secretary Ministry of Transportation Barb Oke" → Barb Oke.
+ * whole words. "Lee Park Coastal Health Ravi Shah" → both people;
+ * "Secretary Ministry of Transportation Jo Kim" → Jo Kim.
  */
 export function peopleNamedInFragment<T extends { _id: string; fullName: string; aliases?: string[] }>(people: T[], fragment: string): T[] {
   const text = ` ${nameTokens(fragment).join(" ")} `;

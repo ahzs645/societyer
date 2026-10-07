@@ -108,7 +108,7 @@ export function blankAttendanceRow(patch: Partial<AttendanceGridRow> = {}): Atte
  * Add incoming rows (from the source, a paste or the directors list) to the
  * grid. A name already in the grid is not duplicated; instead its blank role,
  * affiliation and represented organization are filled from the incoming row,
- * so "Use names from source" also brings in "Terry Robert, President" roles
+ * so "Use names from source" also brings in "Sam Ortiz, President" roles
  * for attendees that were imported as bare names. Values a reviewer already
  * typed are never overwritten.
  */

@@ -76,7 +76,7 @@ export type ClassPromotionBuild = {
 
 const AGENDA_LIKE = new Set(["agenda", "meetingPackage", "agmMaterial"]);
 
-/** First and last name only ("David H Claus" = "David Claus", "Patience Isabelle Rakochy" = "Patience Rakochy"):
+/** First and last name only ("Jordan M Avery" = "Jordan Avery", "Maria Elena Santos" = "Maria Santos"):
  * registry filings print middle names that rosters and minutes leave out. */
 export function directorMatchKey(name: string): string {
   const tokens = normalizePersonKey(name).split(" ").filter(Boolean);
