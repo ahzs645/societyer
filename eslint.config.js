@@ -6,6 +6,7 @@ export default [
   {
     ignores: [
       "dist/**",
+      ".claude/**",
       "node_modules/**",
       "convex/_generated/**",
     ],
@@ -46,12 +47,13 @@ export default [
     },
     plugins: {
       // The repo already had `// eslint-disable react-hooks/*` directives but never
-      // wired up the plugin. Registered here (warn) so those resolve and real hook
-      // bugs surface. Flip to "error" in a follow-up once the current warnings clear.
+      // wired up the plugin. rules-of-hooks is an error: a hook after an early
+      // return crashes when the page re-renders across that branch.
+      // exhaustive-deps stays a warning until its backlog clears.
       "react-hooks": reactHooks,
     },
     rules: {
-      "react-hooks/rules-of-hooks": "warn",
+      "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       // God-file guardrail: keep a unit small enough to hold in your head.
       // Data/definition files (fixtures, metadata catalogs) are expected exceptions.

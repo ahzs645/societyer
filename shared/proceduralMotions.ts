@@ -35,15 +35,18 @@
  *  - vote      : a counted ballot; the tally is judged against the threshold.
  *  - consent   : adopted by unanimous/general consent ("no objection"); no tally.
  *  - automatic : the meeting closed without a motion — agenda exhausted, the
- *                scheduled end-time was reached, or an emergency. Adjournment only. */
-export type DecidedBy = "vote" | "consent" | "automatic";
+ *                scheduled end-time was reached, or an emergency. Adjournment only.
+ *  - chair_ruling : the chair ruled the question decided (point of order,
+ *                consensus declared by the chair); no tally. */
+export type DecidedBy = "vote" | "consent" | "automatic" | "chair_ruling";
 
-export const DECIDED_BY_VALUES: DecidedBy[] = ["vote", "consent", "automatic"];
+export const DECIDED_BY_VALUES: DecidedBy[] = ["vote", "consent", "automatic", "chair_ruling"];
 
 export const DECIDED_BY_LABELS: Record<DecidedBy, string> = {
   vote: "Recorded vote",
-  consent: "General consent",
+  consent: "General consent / consensus",
   automatic: "Automatic",
+  chair_ruling: "Chair's ruling",
 };
 
 export type ParliamentaryClass = "main" | "subsidiary" | "incidental" | "privileged";
@@ -214,5 +217,5 @@ export function isRoutineMotion(motion: ClassifiableMotion): boolean {
  *  as carried without a tally. A motion adopted by general consent carries by
  *  definition (anyone who objected would have forced a vote). */
 export function isDecidedWithoutVote(decidedBy?: string): boolean {
-  return decidedBy === "consent" || decidedBy === "automatic";
+  return decidedBy === "consent" || decidedBy === "automatic" || decidedBy === "chair_ruling";
 }

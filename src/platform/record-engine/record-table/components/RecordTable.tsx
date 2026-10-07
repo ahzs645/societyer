@@ -25,6 +25,7 @@ import { ContextMenu } from "../../../../components/ContextMenu";
 import type { MenuSection } from "../../../../components/Menu";
 import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 import { isEmptyValue } from "../utils/filterRecords";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 
 const INTERACTIVE_BOARD_FIELD_TYPES: ReadonlySet<FieldMetadata["fieldType"]> = new Set([
   FIELD_TYPES.EMAIL,
@@ -305,6 +306,15 @@ export function RecordTable({
       // pass steal focus back from that input: doing so fires the editor's blur
       // commit and closes it immediately after it opens.
       if (getTableState().editingCell) return;
+      // Only follow the focused cell while the user is working in the grid.
+      // A focused-cell update must never pull focus out of a control elsewhere
+      // (command palette trigger, dialogs, toolbar buttons).
+      const active = document.activeElement;
+      const root = tableRootRef.current;
+      const focusIsFree = !active || active === document.body || active === document.documentElement;
+      if (!focusIsFree && !root?.contains(active)) return;
+      if (active instanceof HTMLElement && root?.contains(active) && active.closest("button, a[href], input, textarea, select, [contenteditable='true']")
+        && !active.closest(".record-table__cell")) return;
       const focusedElement = tableRootRef.current
         ?.querySelector<HTMLElement>(
           `[data-row-index="${focusedCell.rowIndex}"][data-column-index="${focusedCell.columnIndex}"]`,
@@ -318,11 +328,9 @@ export function RecordTable({
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       const root = tableRootRef.current;
-      const target = event.target as HTMLElement | null;
-      if (!root || root.contains(event.target as Node)) return;
       // Inline editors portal their popovers (select menus, calendars) to
       // <body>; interacting with them must not tear the editor down.
-      if (target?.closest(".record-table__cell-editor-popover, .menu, .calendar")) return;
+      if (!root || !isOutsidePointerEvent(event, root)) return;
       handle.get().setFocusedCell(null);
       handle.get().setEditingInitialValue(undefined);
       handle.get().setEditingCell(null);

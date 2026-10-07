@@ -13,12 +13,18 @@ export function getDialogFocusables(root: HTMLElement | null) {
 /** Keep dialog keyboard handling with the nearest overlay, including portals. */
 export function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: () => void, initialFocus?: string) {
   const ref = useRef<T | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useLayoutEffect(() => {
     if (!open) return;
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Layout effects re-run while the dialog stays open (StrictMode, or a
+    // Suspense boundary inside it re-revealing). Focus is already inside the
+    // dialog then; keep returning to the control that opened it.
+    const previous = active && ref.current?.contains(active) ? returnFocusRef.current : active;
+    returnFocusRef.current = previous;
     const timer = window.setTimeout(() => {
       const initial = initialFocus ? ref.current?.querySelector<HTMLElement>(initialFocus) : null;
       (initial ?? ref.current?.querySelector<HTMLElement>("[autofocus]") ?? getDialogFocusables(ref.current)[0] ?? ref.current)?.focus({ preventScroll: true });

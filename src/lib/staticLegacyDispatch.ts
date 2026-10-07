@@ -1,3 +1,5 @@
+import { assertValid, validateAccessCustodyInput } from "../../shared/recordValidation";
+import { todayDateOnly } from "../../shared/dateOnly";
 import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../../shared/onboarding";
 import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
 import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
@@ -611,7 +613,7 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
   if (moduleName === "firm" && exportName === "overview") {
-    const today = (args?.todayISO ?? new Date().toISOString()).slice(0, 10);
+    const today = args?.todayISO ? String(args.todayISO).slice(0, 10) : todayDateOnly();
     const societies = store?.listRows("societies", {}) ?? [];
     const entities = societies.map((society: any) => {
       const deadlines = store?.listRows("deadlines", { societyId: society._id }) ?? [];
@@ -1061,7 +1063,10 @@ function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticD
       ok: Boolean(args?.apiKey),
       provider,
       baseUrl: args?.baseUrl ?? (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1"),
-      message: args?.apiKey ? "Static provider key validated." : "API key is required.",
+      // Nothing is contacted in the local/demo runtime: say so instead of
+      // claiming the key was validated.
+      simulated: true,
+      message: args?.apiKey ? "Simulated validation: the key was not checked with the provider in this local workspace." : "API key is required.",
       modelIds: modelCatalog.models.map((model: any) => model.id),
       modelCatalog,
     };
@@ -1069,8 +1074,32 @@ function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticD
   if (name === "aiSettingsActions:listProviderModels") {
     return staticModelCatalog(args?.provider ?? "openai");
   }
-  if (name === "secrets:create") {
-    return `static_secret_${Date.now()}`;
+  if (name === "secrets:create" || name === "secrets:update") {
+    // Access-custody records persist locally so a save is visible after it
+    // succeeds. Secret values need server-side encryption, so the local
+    // runtime refuses them instead of storing plaintext or dropping them.
+    const fields = name === "secrets:update" ? { ...(args?.patch ?? {}) } : { ...(args ?? {}) };
+    if (fields.secretValue) {
+      throw new Error("Stored secret values need the hosted server's encryption. Record where the credential is kept (external reference) instead.");
+    }
+    delete fields.secretValue;
+    delete fields.actingUserId;
+    const existing = name === "secrets:update" ? store?.getRow("secretVaultItems", args?.id) : null;
+    if (name === "secrets:update" && !existing) throw new Error("Record not found.");
+    assertValid(validateAccessCustodyInput(name === "secrets:update" ? { ...existing, ...fields } : fields));
+    const now = new Date().toISOString();
+    const id = existing?._id ?? `static_secret_${Date.now()}`;
+    store?.upsertRow("secretVaultItems", {
+      ...(existing ?? {}),
+      ...fields,
+      _id: id,
+      societyId: existing?.societyId ?? args?.societyId ?? SOCIETY_ID,
+      storageMode: fields.storageMode ?? existing?.storageMode ?? "external_reference",
+      status: fields.status ?? existing?.status ?? "NeedsReview",
+      createdAtISO: existing?.createdAtISO ?? now,
+      updatedAtISO: now,
+    });
+    return id;
   }
   return MUT_NOT_HANDLED;
 }

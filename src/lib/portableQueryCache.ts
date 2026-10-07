@@ -1,6 +1,7 @@
 import type { PortableRuntime } from "../../shared/portable/define";
 import type { StaticArgs } from "./staticConvexFixtures";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
+import { DETAIL_RECORD_QUERIES, isRecordNotFoundError } from "./detailRecordQueries";
 
 function isPortablePageResult(value: unknown): value is {
   page: unknown[];
@@ -225,6 +226,19 @@ export class PortableQueryCache {
     const tokens = paginated ? this.portablePaginatedRunTokens : this.portableRunTokens;
     if (tokens.get(cacheKey) !== runId) return;
     const message = String(error);
+    const queryName = cacheKey.slice(0, cacheKey.indexOf("|"));
+    if (!paginated && DETAIL_RECORD_QUERIES.has(queryName) && isRecordNotFoundError(error)) {
+      // A detail route asked for a record that does not exist (or is not
+      // visible to this actor). Resolve to null, the same value the handlers
+      // return for a missing row, so the page can show its not-found state
+      // instead of loading forever. Emit only on the transition to null.
+      this.portableErrors.set(cacheKey, message);
+      if (this.portableCache.get(cacheKey) !== null) {
+        this.portableCache.set(cacheKey, null);
+        this.emit();
+      }
+      return;
+    }
     if (this.portableErrors.get(cacheKey) !== message) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
     this.portableErrors.set(cacheKey, message);
     this.portableReadSets.delete(cacheKey);

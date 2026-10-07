@@ -1,3 +1,7 @@
+import { recordPreflightGapsForBundle } from "./representationGaps";
+import { sessionReferences } from "./importReviewQueue";
+import { normalizeDocumentCategory } from "../documentCategories";
+import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../documentVersioning";
 import { existingImportTarget, rememberImportTarget } from "./importTargetIdentity";
 /**
  * PORTABLE FUNCTIONS: the import-session review domain.
@@ -71,6 +75,20 @@ import {
   titleForRecord,
   summarizeFromSessionMetadata,
 } from "./importSessionHelpers";
+import {
+  findMeetingByIdentity,
+  importedMeetingStatus,
+  importedMeetingTime,
+  importedMotionFromPayload,
+  importedSectionsWithLinks,
+  importedSourceVersionFor,
+  linkActionItem,
+  loadDirectoryIndex,
+  prepareImportedMeeting,
+  resolveImportCommittee,
+  screenImportedAttendance,
+  sourceVersionsCover,
+} from "./importSessionHelpers/importMeetingApply";
 
 // Import payloads and targetModule labels are untrusted. Destination authority
 // comes from the accepted kind and the same domains used by normal mutations.
@@ -92,6 +110,11 @@ const SECTION_MUTATION_DOMAINS = {
   entityAmendment: "legalOperations", annualMaintenanceRecord: "legalOperations", jurisdictionMetadata: "legalOperations",
   supportLog: "legalOperations", sourceEvidence: "evidenceRegisters", secretVaultItem: "secrets",
   pipaTraining: "pipaTraining", employee: "employees", volunteer: "volunteers",
+  committee: "committees", committeeMember: "committees", member: "members", director: "directors",
+  task: "tasks", goal: "goals", commitment: "commitments", fundingSource: "fundingSources",
+  grantReport: "grants", meetingMaterial: "meetingMaterials", organizationSeat: "memberGovernance",
+  conflict: "conflicts", proxy: "proxies", bylawRuleSet: "bylawRules", operatingBudget: "financialHub",
+  representationGap: "representationGaps",
 } satisfies Record<typeof SECTION_RECORD_KINDS[number], string>;
 
 async function requireSectionPromotionPermissions(ctx: PortableMutationCtx, societyId: string, records: any[]) {
@@ -220,6 +243,8 @@ export async function createFromBundlePortable(
     });
   }
 
+  // Preflight losses become typed representation gaps (finding A14).
+  await recordPreflightGapsForBundle(ctx, societyId, bundle, sessionId);
   return sessionId;
 }
 
@@ -368,14 +393,29 @@ export async function removeSessionPortable(ctx: PortableMutationCtx, { sessionI
   const session = await ctx.db.get(sessionId);
   if (!isImportSession(session)) return;
   const docs = await recordsForSession(ctx, sessionId);
-  await Promise.all(
-    docs
-      .filter(isImportRecord)
-      .map(hydrateRecord)
-      .filter((record: any) => record.sessionId === sessionId)
-      .map((record: any) => ctx.db.delete(record._id)),
-  );
+  const records = docs
+    .filter(isImportRecord)
+    .map(hydrateRecord)
+    .filter((record: any) => record.sessionId === sessionId);
+  // Documents and gaps created from this session keep their provenance as a
+  // note instead of a dangling session id (finding D-06).
+  const { linkedDocuments, gaps } = await sessionReferences(ctx, String(session.societyId), sessionId);
+  const sessionName = cleanText(hydrateSession(session).name) || cleanText(session.title) || "import session";
+  const removedAtISO = new Date().toISOString();
+  for (const doc of linkedDocuments) {
+    const patch: Record<string, any> = { tags: compactStrings([...(doc.tags ?? []), "import-session-removed"]) };
+    if (String(doc.importSessionId ?? "") === sessionId) patch.importSessionId = undefined;
+    const content = parseJson(doc.content);
+    if (content && typeof content === "object" && !Array.isArray(content) && String(content.importSessionId ?? "") === sessionId) {
+      const { importSessionId: _removed, ...rest } = content;
+      patch.content = JSON.stringify({ ...rest, importSessionRemoved: { id: sessionId, name: sessionName, removedAtISO } });
+    }
+    await ctx.db.patch(doc._id, patch);
+  }
+  for (const gap of gaps) await ctx.db.patch(gap._id, { importSessionId: undefined, importRecordId: undefined });
+  for (const record of records) await ctx.db.delete(record._id);
   await ctx.db.delete(sessionId);
+  return { records: records.length, linkedDocuments: linkedDocuments.length, gaps: gaps.length };
 }
 
 export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx, { sessionId, recordIds }: { sessionId: string; recordIds?: string[] }) {
@@ -434,8 +474,9 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   const session = await ctx.db.get<any>(sessionId);
   if (!isImportSession(session)) return { meetings: 0, minutes: 0, motions: 0 };
   for (const permission of ["meetings:write", "minutes:write", "motions:write", "documents:write"] as const) await requirePermissionPortable(ctx, String(session.societyId), permission);
+  const societyId = String(session.societyId);
   const records = await sessionRecords(ctx, session.societyId, sessionId);
-  const selected = await selectedImportRecords(ctx, String(session.societyId), sessionId, records, recordIds);
+  const selected = await selectedImportRecords(ctx, societyId, sessionId, records, recordIds);
   const sourceCatalog = sourceCatalogForRecords(records);
   const motions = records.filter(
     (record: any) =>
@@ -452,10 +493,15 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   // Validate the entire selection before creating source placeholders or any
   // meeting. Portable callers can catch failures without transaction rollback.
   for (const record of [...motions, ...minuteRecords]) toMeetingDateTime(record.payload?.meetingDate);
+  const directory = await loadDirectoryIndex(ctx, societyId);
+  // Meeting identity for import is calendar date + body (not title), so a
+  // draft, its approved copy and a .doc/.pdf twin fold into one meeting while
+  // an AGM and a Board meeting held the same evening stay separate.
   const groups = new Map<string, any[]>();
   for (const record of motions) {
     const payload = normalizeMotionPayload(record.payload);
-    const key = `${payload.meetingDate || "undated"}::${payload.meetingTitle || "Imported meeting minutes"}`;
+    const prepared = prepareImportedMeeting(payload, toMeetingDateTime(payload.meetingDate));
+    const key = `${prepared.dateKey}::${prepared.body.bodyKey}::${prepared.body.special ? "special" : ""}`;
     groups.set(key, [...(groups.get(key) ?? []), { record, payload }]);
   }
 
@@ -463,24 +509,32 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   let minutes = 0;
   let motionCount = 0;
   let existing = 0;
+  let committeesCreated = 0;
+  let nonPersonAttendance = 0;
   for (const group of groups.values()) {
     const first = group[0].payload;
-    const scheduledAt = toMeetingDateTime(first.meetingDate);
-    const title = cleanText(first.meetingTitle) || `Imported meeting minutes ${first.meetingDate || ""}`.trim();
+    const placeholder = toMeetingDateTime(first.meetingDate);
+    const prepared = prepareImportedMeeting(first, placeholder);
     const sourceExternalIds = unique(group.flatMap(({ record }) => record.sourceExternalIds ?? []));
     const sourceDocumentIds = await ensureMeetingSourceDocuments(ctx, session.societyId, sourceExternalIds, sourceCatalog);
-    const existingTarget = await findExistingMeetingImport(ctx, session.societyId, scheduledAt, title, sourceExternalIds);
+    const existingTarget = await findMeetingByIdentity(ctx, societyId, { dateKey: prepared.dateKey, bodyKey: prepared.body.bodyKey, special: prepared.body.special, sourceExternalIds, title: cleanText(first.meetingTitle), bodyBasis: prepared.body.basis });
     if (existingTarget) {
-      await mergeExistingMeetingImport(ctx, session, existingTarget, first, sourceExternalIds, sourceDocumentIds, sessionId);
+      await mergeExistingMeetingImport(ctx, session, existingTarget, { ...first, motions: group.map(({ payload }) => payload) }, sourceExternalIds, sourceDocumentIds, sessionId, { directory, bodyKey: prepared.body.bodyKey });
       for (const { record } of group) await patchRecordImportTarget(ctx, record, "meetings", existingTarget);
       existing += 1;
       continue;
     }
+    const committee = await resolveImportCommittee(ctx, societyId, prepared.body, { create: true });
+    if (committee.created) committeesCreated += 1;
+    const time = importedMeetingTime(first, placeholder);
     const meetingId = await ctx.db.insert("meetings", {
       societyId: session.societyId,
-      type: inferMeetingType(title),
-      title,
-      scheduledAt,
+      type: prepared.body.type,
+      ...(committee.committeeId ? { committeeId: committee.committeeId } : {}),
+      title: prepared.title,
+      ...(prepared.sourceTitle ? { sourceTitle: prepared.sourceTitle } : {}),
+      scheduledAt: time.scheduledAt,
+      scheduledAtPrecision: time.scheduledAtPrecision,
       electronic: false,
       status: "Held",
       attendeeIds: [],
@@ -492,22 +546,18 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     });
     await setMeetingAgendaItems(
       ctx,
-      { _id: meetingId, societyId: session.societyId, title },
-      importedMeetingAgenda(title, group.map(({ payload }) => payload), sourceExternalIds),
+      { _id: meetingId, societyId: session.societyId, title: prepared.title },
+      importedMeetingAgenda(prepared.title, group.map(({ payload }) => payload), sourceExternalIds),
     );
-    const importedMotions = group.map(({ payload }) => ({
-      text: cleanText(payload.motionText) || "Imported motion",
-      movedBy: cleanText(payload.movedByName),
-      secondedBy: cleanText(payload.secondedByName),
-      outcome: cleanText(payload.outcome) || "Unknown",
-      votesFor: numberOrUndefined(payload.votesFor),
-      votesAgainst: numberOrUndefined(payload.votesAgainst),
-      abstentions: numberOrUndefined(payload.abstentions),
-    }));
+    const importedMotions: any[] = [];
+    for (const { payload } of group) {
+      importedMotions.push(await importedMotionFromPayload(ctx, societyId, payload, { dateKey: prepared.dateKey, bodyKey: prepared.body.bodyKey, directory, sourceExternalIds }));
+    }
+    const version = importedSourceVersionFor(first, sourceExternalIds);
     const minutesId = await ctx.db.insert("minutes", {
       societyId: session.societyId,
       meetingId,
-      heldAt: scheduledAt,
+      heldAt: time.scheduledAt,
       attendees: [],
       absent: [],
       quorumMet: false,
@@ -515,6 +565,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       discussion: "Imported from converted Paperless meeting-minute motions. Review the source document before approving these minutes.",
       decisions: [],
       actionItems: [],
+      ...(version ? { importedSourceVersions: [version] } : {}),
       sourceDocumentIds,
       sourceExternalIds,
       sourceReviewStatus: "imported_needs_review",
@@ -543,32 +594,49 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
 
   for (const record of minuteRecords) {
     const payload = normalizeMeetingMinutesPayload(record.payload);
-    const scheduledAt = toMeetingDateTime(payload.meetingDate);
-    const title = cleanText(payload.meetingTitle) || `Imported meeting minutes ${payload.meetingDate || ""}`.trim();
+    const placeholder = toMeetingDateTime(payload.meetingDate);
+    const prepared = prepareImportedMeeting(payload, placeholder);
     const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
     const sourceDocumentIds = await ensureMeetingSourceDocuments(ctx, session.societyId, sourceExternalIds, sourceCatalog);
-    const existingTarget = await findExistingMeetingImport(ctx, session.societyId, scheduledAt, title, sourceExternalIds);
+    const sourceDocumentIdsByExternal = new Map(sourceExternalIds.map((externalId, index) => [externalId, String(sourceDocumentIds[index])]));
+    const existingTarget = await findMeetingByIdentity(ctx, societyId, {
+      dateKey: prepared.dateKey, bodyKey: prepared.body.bodyKey, special: prepared.body.special,
+      identityKey: payload.meetingIdentityKey, sourceExternalIds, title: cleanText(payload.meetingTitle), bodyBasis: prepared.body.basis,
+    });
     if (existingTarget) {
-      await mergeExistingMeetingImport(ctx, session, existingTarget, payload, sourceExternalIds, sourceDocumentIds, sessionId);
+      await mergeExistingMeetingImport(ctx, session, existingTarget, payload, sourceExternalIds, sourceDocumentIds, sessionId, { directory, bodyKey: prepared.body.bodyKey, identityKey: payload.meetingIdentityKey });
       await patchRecordImportTarget(ctx, record, "meetings", existingTarget);
       existing += 1;
       continue;
     }
-    await assertMeetingHistoryReferences(ctx, String(session.societyId), payload, undefined, payload.meetingDate);
+    await assertMeetingHistoryReferences(ctx, societyId, payload, undefined, payload.meetingDate);
+    const committee = await resolveImportCommittee(ctx, societyId, prepared.body, { create: !prepared.body.external });
+    if (committee.created) committeesCreated += 1;
+    const time = importedMeetingTime(payload, placeholder);
+    const screened = screenImportedAttendance(payload, directory);
+    nonPersonAttendance += screened.rejected.length;
+    const status = importedMeetingStatus(payload);
 
     const meetingId = await ctx.db.insert("meetings", {
       societyId: session.societyId,
-      type: payload.meetingType || inferMeetingType(title),
-      title,
-      scheduledAt,
+      type: prepared.body.type,
+      ...(committee.committeeId ? { committeeId: committee.committeeId } : {}),
+      title: prepared.title,
+      ...(prepared.sourceTitle ? { sourceTitle: prepared.sourceTitle } : {}),
+      scheduledAt: time.scheduledAt,
+      scheduledAtPrecision: time.scheduledAtPrecision,
+      ...(time.localStartText ? { localStartText: time.localStartText } : {}),
+      ...(time.localEndText ? { localEndText: time.localEndText } : {}),
+      ...(time.timeZone ? { timeZone: time.timeZone } : {}),
+      ...(prepared.body.external ? { hostBody: "external", externalOrganization: prepared.body.external } : {}),
       location: payload.location,
       electronic: payload.electronic ?? false,
       remoteUrl: payload.remoteParticipation?.url,
       remoteMeetingId: payload.remoteParticipation?.meetingId,
       remotePasscode: payload.remoteParticipation?.passcode,
       remoteInstructions: payload.remoteParticipation?.instructions,
-      status: "Held",
-      attendeeIds: payload.attendees,
+      status,
+      attendeeIds: screened.attendees,
       sourceReviewStatus: "imported_needs_review",
       sourceReviewNotes: "Created from approved import-session meeting minutes. Verify against source minutes before relying on it as an official meeting record.",
       packageReviewStatus: "needs_review",
@@ -577,28 +645,42 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     });
     await setMeetingAgendaItems(
       ctx,
-      { _id: meetingId, societyId: session.societyId, title },
+      { _id: meetingId, societyId: session.societyId, title: prepared.title },
       payload.agendaItems.length
         ? payload.agendaItems
-        : importedMeetingAgenda(title, payload.motions, sourceExternalIds),
+        : importedMeetingAgenda(prepared.title, payload.motions, sourceExternalIds),
     );
-    const importedMotions = payload.motions.map(minutesMotionFromPayload);
+    const importedMotions: any[] = [];
+    for (const motion of payload.motions) {
+      importedMotions.push(await importedMotionFromPayload(ctx, societyId, motion, { dateKey: prepared.dateKey, bodyKey: prepared.body.bodyKey, directory, sourceExternalIds, sourceDocumentIdsByExternal }));
+    }
+    const structured: Record<string, any> = structuredMinutesPatchFromPayload(payload);
+    const version = importedSourceVersionFor(payload, sourceExternalIds, payload.meetingIdentityKey);
+    if (version && !sourceVersionsCover(structured.importedSourceVersions, version.sourceExternalIds)) {
+      structured.importedSourceVersions = [...(structured.importedSourceVersions ?? []), version];
+    }
+    if (structured.sections) structured.sections = importedSectionsWithLinks(structured.sections, [], directory);
+    if (screened.detailedAttendance) structured.detailedAttendance = screened.detailedAttendance;
+    if (structured.nextMeetings?.length && !structured.nextMeetingAt) structured.nextMeetingAt = structured.nextMeetings.find((row: any) => row.at)?.at;
+    const nonPersonNote = screened.rejected.length
+      ? ` ${screened.rejected.length} attendance entr${screened.rejected.length === 1 ? "y was" : "ies were"} a role, organization or heading rather than a person and ${screened.rejected.length === 1 ? "is" : "are"} kept as source evidence only.`
+      : "";
     const minutesId = await ctx.db.insert("minutes", {
       societyId: session.societyId,
       meetingId,
-      heldAt: scheduledAt,
-      attendees: payload.attendees,
-      absent: payload.absent,
+      heldAt: time.scheduledAt,
+      attendees: screened.attendees,
+      absent: screened.absent,
       quorumMet: payload.quorumMet,
       quorumStatus: payload.quorumStatus,
       discussion: payload.discussion || "Imported from Paperless meeting minutes. Review the source document before approving these minutes.",
-      ...structuredMinutesPatchFromPayload(payload),
+      ...structured,
       decisions: payload.decisions,
-      actionItems: payload.actionItems,
+      actionItems: payload.actionItems.map((item: any) => linkActionItem(item, directory)),
       sourceDocumentIds,
       sourceExternalIds,
       sourceReviewStatus: "imported_needs_review",
-      sourceReviewNotes: "Created from approved import-session meeting minutes. Verify against source minutes before relying on it as official minutes.",
+      sourceReviewNotes: `Created from approved import-session meeting minutes. Verify against source minutes before relying on it as official minutes.${nonPersonNote}`,
       draftTranscript: JSON.stringify({
         importSessionId: sessionId,
         sourceExternalIds,
@@ -606,6 +688,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
         sourceDocumentTitle: payload.sourceDocumentTitle,
         sourceDocumentId: payload.sourceDocumentId,
         sectionIndex: payload.sectionIndex,
+        nonPersonAttendance: screened.rejected.map((row) => ({ name: row.original, kind: row.kind, list: row.list })),
         importedMotions: payload.motions.map((motion: any) => ({
           motionText: cleanText(motion.motionText),
           outcome: cleanText(motion.outcome),
@@ -624,6 +707,12 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     // the minutes row); reads resolve from motionIds.
     if (importedMotions.length) {
       await syncMotionsForMinutes(ctx, { societyId: session.societyId, minutesId, meetingId, motions: importedMotions });
+      // C7: link sections that named a payload motion by index.
+      if ((payload.sections ?? []).some((section: any) => typeof section.motionIndex === "number")) {
+        const row: any = await ctx.db.get(minutesId);
+        const linked = importedSectionsWithLinks((structuredMinutesPatchFromPayload(payload) as any).sections, row?.motionIds ?? [], directory);
+        if (linked) await ctx.db.patch(minutesId, { sections: linked });
+      }
     }
     await transposeFreshImportedSourcePortable(ctx,{id:minutesId});
     await patchRecordImportTarget(ctx, record, "meetings", { meetingId, minutesId });
@@ -633,7 +722,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   }
 
   await patchSessionUpdatedAt(ctx, sessionId);
-  return { meetings, minutes, motions: motionCount, existing };
+  return { meetings, minutes, motions: motionCount, existing, committeesCreated, nonPersonAttendance };
 }
 
 export async function backfillApprovedMeetingReferencesPortable(ctx: PortableMutationCtx, { sessionId }: { sessionId: string }) {
@@ -707,10 +796,12 @@ export async function applyApprovedDocumentsPortable(
   );
 
   let documents = 0;
+  const resolveExternalDocument = externalDocumentResolver(ctx, societyId);
   for (const record of candidates) {
     const existingTarget = await existingImportTarget(ctx, societyId, record);
     if (existingTarget) { await patchRecordImportTarget(ctx, record, "documents", existingTarget); continue; }
     const payload = record.payload ?? {};
+    const versionFields = await importedVersionFields(payload, resolveExternalDocument);
     const sourceExternalIds = unique([
       ...(record.sourceExternalIds ?? []),
       ...(payload.sourceExternalIds ?? []),
@@ -725,7 +816,8 @@ export async function applyApprovedDocumentsPortable(
     const docId = await ctx.db.insert("documents", {
       societyId,
       title: cleanText(payload.title) || record.title || externalId || "Imported document candidate",
-      category: cleanText(payload.category) || cleanText(record.targetModule) || cleanText(sections[0]) || "Imported Document",
+      category: normalizeDocumentCategory(cleanText(payload.category) || cleanText(record.targetModule) || cleanText(sections[0]) || "Other"),
+      ...versionFields,
       fileName: cleanText(payload.fileName),
       mimeType: cleanText(payload.mimeType),
       fileSizeBytes: numberOrUndefined(payload.fileSizeBytes),
@@ -792,12 +884,16 @@ export async function applyApprovedSectionRecordsPortable(
     }
   }
   const sourceCatalog = sourceCatalogForRecords(records);
+  // Registers other kinds refer to by name are created first (a committee
+  // before its members and quorum rules, a grant before its reports, people
+  // before the conflicts and proxies that name them).
+  const KIND_PRIORITY: Record<string, number> = { committee: 0, member: 1, director: 1, grant: 1, committeeMember: 2, organizationSeat: 2 };
   const sectionRecords = records.filter(
     (record: any) =>
       SECTION_RECORD_KINDS.includes(record.recordKind) &&
       selected.has(String(record._id)) && record.status === "Approved" &&
       !record.importedTargets?.sections,
-  );
+  ).sort((a: any, b: any) => (KIND_PRIORITY[a.recordKind] ?? 3) - (KIND_PRIORITY[b.recordKind] ?? 3));
 
   await requireSectionPromotionPermissions(ctx, societyId, sectionRecords);
 
@@ -853,7 +949,7 @@ export async function applyApprovedSectionRecordsPortable(
       continue;
     }
     const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds);
-    if (record.recordKind !== "sourceEvidence") {
+    if (record.recordKind !== "sourceEvidence" && record.recordKind !== "representationGap") {
       await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
     }
     await rememberImportTarget(ctx, societyId, record, String(target));
@@ -864,4 +960,51 @@ export async function applyApprovedSectionRecordsPortable(
 
   await patchSessionUpdatedAt(ctx, sessionId);
   return { total, byKind };
+}
+
+/* --------------------- document versions from imports (A8) --------------------- */
+
+/**
+ * Lazily indexes the society's documents by external id (sourceExternalIds,
+ * external-id tags and the externalId kept in content), case-insensitively, so
+ * an import can name the document it supersedes or duplicates by source id.
+ */
+function externalDocumentResolver(ctx: PortableMutationCtx, societyId: string) {
+  let index: Map<string, string> | null = null;
+  return async (externalId: unknown) => {
+    const key = cleanText(externalId)?.toLowerCase();
+    if (!key) return undefined;
+    if (!index) {
+      const built = new Map<string, string>();
+      const docs = await ctx.db.query("documents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+      for (const doc of docs as any[]) {
+        if (isImportRecord(doc) || isImportSession(doc)) continue;
+        const ids: unknown[] = [...(doc.sourceExternalIds ?? []), ...(doc.tags ?? [])];
+        if (typeof doc.content === "string" && doc.content.includes("externalId")) {
+          const content = parseJson(doc.content);
+          if (content && typeof content === "object") ids.push(content.externalId, ...(Array.isArray(content.sourceExternalIds) ? content.sourceExternalIds : []));
+        }
+        for (const id of ids) {
+          const idKey = cleanText(id)?.toLowerCase();
+          if (idKey && idKey.includes(":") && !built.has(idKey)) built.set(idKey, String(doc._id));
+        }
+      }
+      index = built;
+    }
+    return index.get(key);
+  };
+}
+
+/** Optional version fields a document candidate may carry (all additive). */
+async function importedVersionFields(payload: any, resolve: (externalId: unknown) => Promise<string | undefined>) {
+  const fields: Record<string, any> = {};
+  const groupKey = cleanText(payload.versionGroupKey);
+  if (groupKey) fields.versionGroupKey = groupKey.slice(0, 160);
+  const status = normalizeSourceVersionStatus(payload.sourceVersionStatus) ?? detectSourceVersionStatus(payload.fileName, payload.title);
+  if (status) fields.sourceVersionStatus = status;
+  const supersedes = await resolve(payload.supersedesExternalId ?? payload.supersedesSourceExternalId);
+  if (supersedes) fields.supersedesDocumentId = supersedes;
+  const duplicateOf = await resolve(payload.duplicateOfExternalId ?? payload.duplicateOfSourceExternalId);
+  if (duplicateOf) fields.duplicateOfDocumentId = duplicateOf;
+  return fields;
 }

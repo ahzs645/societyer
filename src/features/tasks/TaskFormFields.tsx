@@ -19,8 +19,11 @@ import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
 import { formatDate } from "../../lib/format";
+import { PersonPicker, useDirectoryPeople, type DirectoryPersonOption } from "../../components/PersonPicker";
+import { TASK_CREATE_STATUSES, TASK_STATUSES as ALL_TASK_STATUSES, taskStatusLabel } from "../../../shared/taskStatus";
 
-export const TASK_STATUSES = ["Todo", "InProgress", "Blocked", "Done"] as const;
+/** Every status a task can hold (B6: Unknown and Cancelled come from imported history). */
+export const TASK_STATUSES = ALL_TASK_STATUSES;
 export const TASK_PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
 
 export type TaskFormValue = {
@@ -34,6 +37,10 @@ export type TaskFormValue = {
   committeeId: string;
   goalId: string;
   meetingId: string;
+  agendaItemId: string;
+  assigneePersonId: string;
+  /** Read-only: the owner exactly as the source wrote it. */
+  sourceAssignee: string;
   filingId: string;
   workflowId: string;
   documentId: string;
@@ -56,6 +63,9 @@ export function makeTaskFormDefaults(initial?: TaskFormInitialValues): TaskFormV
     committeeId: initial?.committeeId ?? "",
     goalId: initial?.goalId ?? "",
     meetingId: initial?.meetingId ?? "",
+    agendaItemId: initial?.agendaItemId ?? "",
+    assigneePersonId: initial?.assigneePersonId ?? "",
+    sourceAssignee: initial?.sourceAssignee ?? "",
     filingId: initial?.filingId ?? "",
     workflowId: initial?.workflowId ?? "",
     documentId: initial?.documentId ?? "",
@@ -73,6 +83,8 @@ export type TaskFormData = {
   workflows: any[] | undefined;
   documents: any[] | undefined;
   commitments: any[] | undefined;
+  meetings: any[] | undefined;
+  people: DirectoryPersonOption[] | undefined;
 };
 
 /** Load every dropdown source the task form needs. Centralized so callers
@@ -89,7 +101,9 @@ export function useTaskFormData(societyId: Id<"societies"> | null | undefined): 
   const workflows = useQuery(api.workflows.list, args("tasks:read"));
   const documents = useQuery(api.documents.listSummaries, args("documents:read"));
   const commitments = useQuery(api.commitments.list, args("commitments:read"));
-  return { committees, goals, users, filings, workflows, documents, commitments };
+  const meetings = useQuery(api.meetings.list, args("meetings:read"));
+  const people = useDirectoryPeople(societyId && can("members:read") ? societyId : undefined);
+  return { committees, goals, users, filings, workflows, documents, commitments, meetings, people };
 }
 
 export function TaskFormFields({
@@ -109,7 +123,11 @@ export function TaskFormFields({
   autoFocusTitle?: boolean;
   readOnly?: boolean;
 }) {
-  const { committees, goals, users, filings, workflows, documents, commitments } = data;
+  const { committees, goals, users, filings, workflows, documents, commitments, meetings, people } = data;
+  const { can } = usePermissions();
+  const agenda = useQuery(api.agendas.getForMeeting, value.meetingId && can("agendas:read") ? { meetingId: value.meetingId as Id<"meetings"> } : "skip") as { items: any[] } | null | undefined;
+  // New tasks start in a working status; an existing Unknown/Cancelled task keeps its value selectable.
+  const statusOptions = (mode === "create" ? TASK_CREATE_STATUSES : ALL_TASK_STATUSES).map((s) => ({ value: s, label: taskStatusLabel(s) }));
   return (
     <div className="task-form">
       <Field label="Title">
@@ -133,7 +151,7 @@ export function TaskFormFields({
           <Select
             value={value.status}
             onChange={(v) => onChange({ status: v })}
-            options={TASK_STATUSES.map((s) => ({ value: s, label: s }))}
+            options={statusOptions}
           />
         </Field>
         <Field label="Priority">
@@ -150,7 +168,23 @@ export function TaskFormFields({
           />
         </Field>
       </div>
-      <Field label="Assignee">
+      <Field label="Assignee (person)">
+        <PersonPicker
+          people={people}
+          value={value.assigneePersonId}
+          onChange={(v) => onChange({ assigneePersonId: v, ...(v && !value.assignee ? { assignee: people?.find((p) => p._id === v)?.fullName ?? "" } : {}) })}
+          sourceName={value.sourceAssignee || value.assignee || undefined}
+          clearLabel="No person linked"
+          ariaLabel="Assignee person"
+          disabled={readOnly}
+        />
+      </Field>
+      {value.sourceAssignee && (
+        <p className="muted" style={{ margin: "-4px 0 8px", fontSize: "var(--fs-sm)" }}>
+          The source names “{value.sourceAssignee}”. People with that name are listed first; choose one only when the source makes the identity clear.
+        </p>
+      )}
+      <Field label="Assignee as written (optional)">
         <input
           className="input"
           value={value.assignee}
@@ -175,6 +209,31 @@ export function TaskFormFields({
           options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
         />
       </Field>
+      <Field label="Meeting (optional)">
+        <Select
+          value={value.meetingId}
+          onChange={(v) => onChange({ meetingId: v, agendaItemId: "" })}
+          clearable
+          searchable
+          options={(meetings ?? [])
+            .slice()
+            .sort((a: any, b: any) => String(b.scheduledAt ?? "").localeCompare(String(a.scheduledAt ?? "")))
+            .map((m: any) => ({ value: m._id, label: m.title, hint: m.scheduledAt ? formatDate(m.scheduledAt) : undefined }))}
+        />
+      </Field>
+      {value.meetingId && (
+        <Field label="Agenda item (optional)">
+          <Select
+            value={value.agendaItemId}
+            onChange={(v) => onChange({ agendaItemId: v })}
+            clearable
+            searchable
+            placeholder={agenda === undefined ? "Loading agenda…" : agenda === null || !agenda.items.length ? "This meeting has no agenda items" : "Choose an agenda item"}
+            disabled={!agenda?.items.length}
+            options={(agenda?.items ?? []).map((item: any) => ({ value: item._id, label: `${item.itemNumber ? `${item.itemNumber} ` : ""}${item.title}`, hint: item.type }))}
+          />
+        </Field>
+      )}
       <Field label="Goal (optional)">
         <Select
           value={value.goalId}

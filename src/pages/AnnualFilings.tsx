@@ -9,7 +9,11 @@ import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Plus, CalendarCheck, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
-import { annualFilingKind } from "../../shared/annualFilings";
+import { annualFilingKind, annualFilingYear } from "../../shared/annualFilings";
+import { useConfirm } from "../components/Modal";
+import { Select } from "../components/Select";
+import { formatDate } from "../lib/format";
+import { kindLabel } from "./Dashboard";
 
 /**
  * Annual Filings — per-year, per-jurisdiction annual-filing ledger. Lists each
@@ -49,6 +53,7 @@ export function AnnualFilingsPage() {
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -204,15 +209,28 @@ export function AnnualFilingsPage() {
                       >
                         <td>{r.year}</td>
                         <td>{r.filed ? "✓" : "✗"}{r.sourceFilingId && <div className="muted">{r.sourceMissing ? "Linked record unavailable" : "Linked record"}</div>}</td>
-                        <td>{r.filedOn ?? "—"}</td>
+                        <td>{r.filedOn ? formatDate(r.filedOn) : "—"}</td>
                         <td>
                           <button
                             className="btn btn--ghost btn--sm btn--icon"
                             aria-label={`Delete ${r.jurisdiction} ${r.year} filing`}
                             disabled={!canEdit}
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (canEdit && r._id) remove({ id: r._id }).catch((error: any) => toast.error("Could not delete annual filing", error?.message ?? String(error)));
+                              if (!canEdit || !r._id) return;
+                              const ok = await confirm({
+                                title: `Delete the ${r.jurisdiction} ${r.year} ledger entry?`,
+                                message: `The ${r.year} row will be removed from this ledger and the year will show as outstanding again.${r.sourceFilingId ? " The linked filing in Filings is not changed." : ""}`,
+                                confirmLabel: "Delete entry",
+                                tone: "danger",
+                              });
+                              if (!ok) return;
+                              try {
+                                await remove({ id: r._id });
+                                toast.success("Ledger entry deleted");
+                              } catch (error: any) {
+                                toast.error("Could not delete annual filing", error?.message ?? String(error));
+                              }
                             }}
                           >
                             <Trash2 size={12} />
@@ -246,18 +264,23 @@ export function AnnualFilingsPage() {
       >
         {form && (
           <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            <Field label="Detailed annual filing" hint="Select an annual record whose period is a four-digit year. Its status and date remain controlled in Filings.">
-              <select className="input" value={form.sourceFilingId ?? ""} onChange={e => {
-                const source = detailed?.find(row => row._id === e.target.value);
-                setForm({ ...form, sourceFilingId: e.target.value,
-                  ...(source ? { jurisdiction: source.jurisdictionCode ?? society.jurisdictionCode ?? "", year: source.periodLabel ?? "",
-                    filed: source.status === "Filed", filedOn: source.status === "Filed" ? source.filedAt ?? "" : "" } : {}) });
-              }}>
-                <option value="">Manual ledger entry</option>
-                {form.sourceMissing && <option value={form.sourceFilingId}>Linked record unavailable</option>}
-                {(detailed ?? []).filter(row => annualFilingKind(row.kind) && /^[1-9]\d{3}$/.test(row.periodLabel ?? "") && row.jurisdictionCode).map(row =>
-                  <option key={row._id} value={row._id}>{row.kind} · {row.jurisdictionCode} · {row.periodLabel} · {row.status}</option>)}
-              </select>
+            <Field label="Detailed annual filing" hint="Link an annual filing whose period names a year (2025, 2025 AGM, FY2024-25). Its status and date stay controlled in Filings.">
+              <Select
+                value={form.sourceFilingId ?? ""}
+                onChange={(value) => {
+                  const source = detailed?.find(row => row._id === value);
+                  setForm({ ...form, sourceFilingId: value,
+                    ...(source ? { jurisdiction: source.jurisdictionCode ?? society.jurisdictionCode ?? "", year: annualFilingYear(source.periodLabel) ?? "",
+                      filed: source.status === "Filed", filedOn: source.status === "Filed" ? source.filedAt ?? "" : "" } : {}) });
+                }}
+                options={[
+                  { value: "", label: "Manual ledger entry" },
+                  ...(form.sourceMissing ? [{ value: form.sourceFilingId, label: "Linked record unavailable" }] : []),
+                  ...(detailed ?? [])
+                    .filter(row => annualFilingKind(row.kind) && annualFilingYear(row.periodLabel) && row.jurisdictionCode)
+                    .map(row => ({ value: String(row._id), label: `${kindLabel(row.kind)} · ${row.jurisdictionCode} · ${row.periodLabel === annualFilingYear(row.periodLabel) ? row.periodLabel : `${row.periodLabel} (${annualFilingYear(row.periodLabel)})`} · ${row.status}` })),
+                ]}
+              />
             </Field>
             <Field label="Jurisdiction">
               <input

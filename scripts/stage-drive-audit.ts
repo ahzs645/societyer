@@ -7,6 +7,8 @@ import path from 'node:path';
 import { isLikelyMeetingMinutesDocument, meetingMinutesFromPaperlessDocument, splitMeetingSections } from '../convex/paperlessHelpers';
 import { sourceMeetingDateEvidence } from '../shared/driveStaging';
 import { recordsFromBundle } from '../shared/functions/importSessionHelpers/importSessionRecordKinds';
+import { quorumStatementFromText } from '../shared/quorumStatement';
+import { dedupeKeyForDriveItem } from '../shared/driveDedupe';
 
 const corpus = path.resolve(process.argv[2] ?? '/workspace/work/source-audit');
 const destination = path.resolve(process.argv[3] ?? 'work/source-audit/staging');
@@ -17,7 +19,9 @@ if (!manifest.finished || !extraction.finished) throw new Error('Wait for comple
 const items = extraction.items as any[];
 const shaGroups = new Map<string, any[]>();
 for (const item of items) {
-  const key = item.sha256 || `id:${item.id}`;
+  // ID-03: empty or failed downloads share the empty-content SHA-256; they are
+  // not duplicates of each other, so they keep their own identity.
+  const key = dedupeKeyForDriveItem(item);
   shaGroups.set(key, [...(shaGroups.get(key) ?? []), item]);
 }
 const index: any[] = [];
@@ -83,13 +87,20 @@ for (const aliases of shaGroups.values()) {
     dateReview.push({sectionIndex:entry.sectionIndex,...dateEvidence});
     if (!dateEvidence.date) return [];
     const noQuorum = noQuorumPattern.test(entry.discussion ?? '') || (parsedMinutes.length === 1 && noQuorumPattern.test(raw));
+    // Quorum as the source states it (achieved / reached / not met); never
+    // forced to not_recorded when the minutes say so explicitly.
+    const sectionText = parsedSections[entry.sectionIndex - 1]?.text ?? (parsedMinutes.length === 1 ? raw : entry.discussion ?? '');
+    const stated = quorumStatementFromText(sectionText);
+    const quorum = stated.quorumStatus === 'not_recorded' && noQuorum ? { quorumStatus: 'not_met' as const, quorumMet: false } : stated;
     const notes = [...flags, 'Candidate date, attendance, motions and meeting boundaries must be compared with the original. Filename approval is not relied on.',
       noQuorum ? 'Source contains no-quorum language; deferred and future approval requests must not become adopted decisions.' : '',
       /\bDRAFT\b/i.test(raw) && /approv/i.test(item.name) ? 'Filename/content conflict: source text contains DRAFT while filename indicates approval.' : '',
       ...aliases.map(alias => `Source: ${alias.url} (${alias.path})`)].filter(Boolean).join('\n');
     return [{ ...entry, meetingDate:dateEvidence.date, meetingTitle:String(entry.meetingTitle).replace(/^\d{4}-\d{2}-\d{2}\s+/,`${dateEvidence.date} `), confidence:'Review', status:'NeedsReview', sourceExternalIds:aliases.map(alias=>`google-drive:${alias.id}`),
       sourceDocumentId: undefined, sourceDocumentTitle:item.name, notes,
-      quorumMet:false, quorumStatus:noQuorum ? 'not_met' : 'not_recorded',
+      quorumMet:quorum.quorumMet, quorumStatus:quorum.quorumStatus,
+      ...('quote' in quorum && quorum.quote && quorum.quorumStatus === 'confirmed' ? { quorumCheckpoints:[{ id:'source-quorum-statement', scope:'meeting', boundary:'Meeting', assertion:'confirmed',
+        ...(quorum.presentCount != null ? { eligibleCount:quorum.presentCount } : {}), sourceReference:quorum.quote, sourceExternalIds:aliases.map(alias=>`google-drive:${alias.id}`) }] } : {}),
       motions:(entry.motions ?? []).map((motion:any)=>({...motion,meetingDate:dateEvidence.date,sourceExternalIds:[externalId],confidence:'Review',notes:'Outcome extracted by heuristic; verify adopted wording, vote and quorum against original.'})),
     }];
   });

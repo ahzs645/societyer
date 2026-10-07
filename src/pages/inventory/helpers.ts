@@ -2,6 +2,7 @@
 // Kept dependency-free so the page, tab views, and drawers can share them
 // without pulling in React state.
 import type { ImageValue } from "../../components/ImageUploadField";
+import { todayDateOnly } from "../../../shared/dateOnly";
 
 export type TabKey = "stock" | "locations" | "lots" | "counts";
 
@@ -59,7 +60,7 @@ export function movementTone(type: string) {
 }
 
 export function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 export function dollarsToCents(value: string): number | undefined {

@@ -17,6 +17,20 @@ test.describe("record table controls", () => {
     await expect(page.locator(".record-table__filter-popover")).toBeVisible();
   });
 
+  test("toolbar filter popover stays open while its portaled field menu is used", async ({ page }) => {
+    const members = new MembersPage(page);
+    await members.gotoDemo();
+
+    const table = new RecordTablePage(page);
+    await table.openFilterPopover();
+    const popover = page.locator(".record-table__filter-popover");
+    await popover.getByRole("button", { name: /Choose field/ }).click();
+    await page.locator("[data-floating-layer]").getByRole("option", { name: "Status", exact: true }).click();
+    // Picking a field in the <body>-portaled menu is not an outside click.
+    await expect(popover).toBeVisible();
+    await expect(popover.getByRole("button", { name: /Choose field/ })).toHaveCount(0);
+  });
+
   test("members table supports keyboard focus movement and edit cancellation", async ({ page }) => {
     const members = new MembersPage(page);
     await members.gotoDemo();

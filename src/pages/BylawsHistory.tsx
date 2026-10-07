@@ -1,3 +1,4 @@
+import { serverActionErrorMessage, serverActionsUnavailable, serverConnectionMessage } from "../lib/serverConnection";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -6,6 +7,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Banner, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import {
@@ -134,8 +136,13 @@ export function BylawsHistoryPage() {
     });
   };
 
+  const needsServer = serverActionsUnavailable();
   const runPaperlessBot = async () => {
     if (!canScanPaperless || paperlessBusy) return;
+    if (needsServer) {
+      toast.info("Paperless scan unavailable here", serverConnectionMessage("Scanning Paperless"));
+      return;
+    }
     setPaperlessBusy(true);
     try {
       const result = await scanPaperlessBylaws({
@@ -143,13 +150,14 @@ export function BylawsHistoryPage() {
         query: paperlessQuery.trim() || undefined,
         maxDocuments: paperlessLimit,
       });
+      if (!result?.sessionId) throw new Error("No offline handler returned a review session.");
       setLastBotSessionId(result.sessionId);
       toast.success(
         "Paperless bylaws review staged",
         `${result.bylawAmendments ?? 0} candidate version(s), ${result.visionQueue ?? 0} needing page review`,
       );
     } catch (error: any) {
-      toast.error("Could not scan Paperless bylaws", error?.message ?? "Check the Paperless connection and try again.");
+      toast.error("Could not scan Paperless bylaws", serverActionErrorMessage("Scanning Paperless", error, "Check the Paperless connection and try again."));
     } finally {
       setPaperlessBusy(false);
     }
@@ -157,6 +165,10 @@ export function BylawsHistoryPage() {
 
   const runRegistryBot = async () => {
     if (!canStageRegistry || registryBusy) return;
+    if (needsServer) {
+      toast.info("BC Registry staging unavailable here", serverConnectionMessage("Staging BC Registry bylaws"));
+      return;
+    }
     setRegistryBusy(true);
     try {
       const response = await authenticatedFetch("/api/v1/browser-connectors/bylaws-history/import", {
@@ -185,7 +197,7 @@ export function BylawsHistoryPage() {
         );
       }
     } catch (error: any) {
-      toast.error("Could not stage BC Registry bylaws", error?.message ?? "Open a BC Registry browser session and try again.");
+      toast.error("Could not stage BC Registry bylaws", serverActionErrorMessage("Staging BC Registry bylaws", error, "Open a BC Registry browser session and try again."));
     } finally {
       setRegistryBusy(false);
     }
@@ -210,6 +222,7 @@ export function BylawsHistoryPage() {
         }
       />
 
+      <ImportCandidatesNotice noun="bylaw amendment" targets={["bylawAmendments"]} kinds={["bylawAmendment", "bylawRuleSet"]} documentCategory="Bylaws" emptyRegister={filed.length === 0} />
       <div className="stat-grid">
         <Stat label="Filed amendments" value={String(filed.length)} />
         <Stat label="In flight" value={String(inFlight.length)} sub="Drafts + active consultations" />
@@ -263,13 +276,19 @@ export function BylawsHistoryPage() {
                 onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)}
               />
             </Field>
-            <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy} onClick={runPaperlessBot}>
+            <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy || needsServer} title={needsServer ? serverConnectionMessage("Scanning Paperless") : undefined} onClick={runPaperlessBot}>
               <Database size={12} /> {paperlessBusy ? "Scanning..." : "Scan Paperless"}
             </button>
-            <button className="btn-action" disabled={!canStageRegistry || registryBusy} onClick={runRegistryBot}>
+            <button className="btn-action" disabled={!canStageRegistry || registryBusy || needsServer} title={needsServer ? serverConnectionMessage("Staging BC Registry bylaws") : undefined} onClick={runRegistryBot}>
               <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
             </button>
           </div>
+          {needsServer && (
+            <p className="muted" role="status" style={{ fontSize: "var(--fs-sm)", margin: "8px 0 0" }}>
+              Paperless scanning and BC Registry staging need a server connection. This workspace runs locally, so add bylaw
+              versions by uploading the filed bylaws to Documents or drafting them in Bylaw amendments.
+            </p>
+          )}
         </div>
       </div>
 

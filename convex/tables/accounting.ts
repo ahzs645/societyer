@@ -117,6 +117,10 @@ export const accountingTables = {
     voidedAtISO: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     rawJson: v.optional(v.string()),
+    // Review markers set by imports, e.g. "before_opening_balance" (posted
+    // although dated on or before the opening-balance entry) or
+    // "unmapped_suspense" (offset posted to the suspense account).
+    reviewFlags: v.optional(v.array(v.string())),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

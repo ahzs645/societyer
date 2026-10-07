@@ -661,3 +661,16 @@ body.modal-resizing {
   gap: 12px;
   align-items: flex-start;
 }
+
+/* Touch: the 16px clear-date "x" grows to a 32px hit area (ui-operations L10). */
+@media (pointer: coarse) {
+  .date-trigger-wrap.has-clear .date-trigger {
+    padding-right: 40px;
+  }
+  .date-trigger__clear,
+  .select-trigger--sm + .date-trigger__clear {
+    width: 32px;
+    height: 32px;
+    right: 2px;
+  }
+}

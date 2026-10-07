@@ -12,6 +12,12 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { claimStorageId, getOwned, principalUserId, requireSocietyMembership } from "./access";
+import {
+  assertValid,
+  validateAssetDisposalInput,
+  validateAssetEventInput,
+  validateAssetMaintenanceInput,
+} from "../recordValidation";
 
 /* ----------------------------- Helpers ----------------------------- */
 
@@ -588,6 +594,10 @@ export async function recordEventPortable(
   if (!candidate) return null;
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const asset = await getOwned(ctx, "assets", assetId, String(candidate.societyId));
+  assertValid(validateAssetEventInput(event));
+  if (asset.status === "Disposed" && ["checkout", "checkin", "transfer"].includes(event.eventType)) {
+    throw new Error("This asset has been disposed of; custody can no longer change.");
+  }
   for (const documentId of event.documentIds ?? []) {
     await getOwned(ctx, "documents", documentId, String(asset.societyId));
   }
@@ -663,6 +673,7 @@ export async function scheduleMaintenancePortable(
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const asset = await getOwned(ctx, "assets", args.assetId, String(candidate.societyId));
   if (!asset) return null;
+  assertValid(validateAssetMaintenanceInput(args));
   const now = new Date().toISOString();
   let taskId;
   if (args.createTask) {
@@ -938,6 +949,8 @@ export async function disposePortable(
   if (!candidate) return null;
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const asset = await getOwned(ctx, "assets", args.assetId, String(candidate.societyId));
+  assertValid(validateAssetDisposalInput(args));
+  if (asset.status === "Disposed") throw new Error("This asset is already disposed of.");
   if (args.disposalApprovedMeetingId) {
     await getOwned(ctx, "meetings", args.disposalApprovedMeetingId, String(asset.societyId));
   }

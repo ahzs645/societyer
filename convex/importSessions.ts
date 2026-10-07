@@ -19,6 +19,12 @@ import {
   applyApprovedSectionRecordsPortable,
 } from "../shared/functions/importSessions";
 import {
+  reviewQueuePortable,
+  getRecordPortable,
+  removalImpactPortable,
+  pendingByTargetPortable,
+} from "../shared/functions/importReviewQueue";
+import {
   SECTION_RECORD_KINDS,
   ensureImportSourceDocuments,
   insertSectionRecord,
@@ -151,4 +157,42 @@ export const applyApprovedSectionRecords = authorizedMutation("importSessions:ap
   args: { sessionId: v.id("documents"), recordIds: v.optional(v.array(v.id("documents"))) },
   returns: v.any(),
   handler: async (ctx, args) => applyApprovedSectionRecordsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/* ------------------------- cross-session review queue ------------------------- */
+
+export const reviewQueue = authorizedQuery("importSessions:reviewQueue", query)({
+  args: {
+    societyId: v.id("societies"),
+    status: v.optional(v.string()),
+    recordKind: v.optional(v.string()),
+    targetModule: v.optional(v.string()),
+    sessionId: v.optional(v.id("documents")),
+    risk: v.optional(v.string()),
+    source: v.optional(v.string()),
+    search: v.optional(v.string()),
+    sort: v.optional(v.string()),
+    offset: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => reviewQueuePortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const getRecord = authorizedQuery("importSessions:getRecord", query)({
+  args: { recordId: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => getRecordPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const removalImpact = authorizedQuery("importSessions:removalImpact", query)({
+  args: { sessionId: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => removalImpactPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const pendingByTarget = authorizedQuery("importSessions:pendingByTarget", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => pendingByTargetPortable(await toPortableQueryCtx(ctx), args),
 });

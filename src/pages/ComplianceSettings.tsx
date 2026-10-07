@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { calendarDateKey } from "../lib/calendarDates";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { CalendarClock } from "lucide-react";
@@ -13,6 +14,9 @@ import {
   type ComplianceSettings,
   type DerivedDeadline,
 } from "../../shared/corporationSettings";
+import { deriveAgmFacts } from "../../shared/agmEvidence";
+import { formatDate } from "../lib/format";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -44,11 +48,13 @@ export function ComplianceSettingsPage() {
   const meetings = useQuery(
     api.meetings.list,
     society ? { societyId: society._id } : "skip",
-  ) as Array<{ type?: string; scheduledAt?: string }> | undefined;
-  const lastAgm = (meetings ?? [])
-    .filter((m) => m.type === "AGM" && m.scheduledAt)
-    .sort((a, b) => String(b.scheduledAt).localeCompare(String(a.scheduledAt)))[0];
-  const lastAgmDate = lastAgm?.scheduledAt ? new Date(lastAgm.scheduledAt) : null;
+  ) as Array<{ type?: string; status?: string; scheduledAt?: string }> | undefined;
+  const todayISO = calendarDateKey(new Date());
+  // Only held AGMs are evidence (a scheduled or draft AGM is not).
+  const agmFacts = deriveAgmFacts(society ?? null, meetings ?? [], todayISO);
+  const lastAgmDay = agmFacts.annualMeetingDate
+    ? { month: Number(agmFacts.annualMeetingDate.slice(5, 7)), day: Number(agmFacts.annualMeetingDate.slice(8, 10)) }
+    : null;
 
   const [agmMonth, setAgmMonth] = useState<number | "">(society?.agmMonth ?? "");
   const [agmDay, setAgmDay] = useState<number | "">(society?.agmDay ?? "");
@@ -94,9 +100,10 @@ export function ComplianceSettingsPage() {
     waivePrepFinancials: waive,
     jurisdictionCode: society.jurisdictionCode,
     entityType: society.entityType,
-    annualMeetingDate: society.annualMeetingDate,
+    annualMeetingDate: agmFacts.annualMeetingDate,
+    heldAgmYears: agmFacts.agmYears,
   };
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
 
   const onSave = async () => {
@@ -133,7 +140,7 @@ export function ComplianceSettingsPage() {
       let added = 0;
       for (const d of derived) {
         if (existingKeys.has(deadlineKey(d))) continue;
-        await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.category });
+        await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.deadlineCategory, description: d.basis });
         added += 1;
       }
       toast.success("Deadlines generated", `${added} new dates added.`);
@@ -166,16 +173,16 @@ export function ComplianceSettingsPage() {
               onChange={(e) => setAgmDay(e.target.value === "" ? "" : Number(e.target.value))} />
           </Field>
         </div>
-        {lastAgmDate && (agmMonth === "" || agmDay === "") && (
+        {lastAgmDay && (agmMonth === "" || agmDay === "") && (
           <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8 }}>
-            Last AGM was held {MONTHS[lastAgmDate.getMonth()]} {lastAgmDate.getDate()}.{" "}
+            Last AGM was held {formatDate(agmFacts.annualMeetingDate!)}.{" "}
             <button
               type="button"
               className="btn btn--ghost btn--sm"
               style={{ display: "inline", padding: 0, height: "auto" }}
               onClick={() => {
-                setAgmMonth(lastAgmDate.getMonth() + 1);
-                setAgmDay(lastAgmDate.getDate());
+                setAgmMonth(lastAgmDay.month);
+                setAgmDay(lastAgmDay.day);
               }}
             >
               Use this date
@@ -273,8 +280,9 @@ export function ComplianceSettingsPage() {
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {derived.map((d) => (
               <li key={d.key}>
-                <strong>{d.dueDate}</strong> — {d.title}{" "}
-                <span style={{ color: "var(--text-tertiary)" }}>({d.category})</span>
+                <strong>{formatDate(d.dueDate)}</strong> — {d.title}{" "}
+                <span style={{ color: "var(--text-tertiary)" }}>({d.deadlineCategory})</span>
+                {d.basis ? <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>{d.basis}</div> : null}
                 {existingKeys.has(deadlineKey(d)) ? <span style={{ color: "var(--text-tertiary)" }}> · already added</span> : null}
               </li>
             ))}

@@ -8,6 +8,7 @@ import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X, Clock } from "luci
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
+import { useDialogFocus } from "../lib/useDialogFocus";
 import { useSociety } from "../hooks/useSociety";
 
 export function NotificationBell() {
@@ -32,7 +33,8 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Dialog semantics: focus moves in, Escape closes, focus returns to the bell.
+  const panelRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +114,9 @@ export function NotificationBell() {
         createPortal(
           <div
             ref={panelRef}
+            role="dialog"
+            aria-label="Notifications"
+            tabIndex={-1}
             style={{
               position: "fixed",
               top: anchor.top,

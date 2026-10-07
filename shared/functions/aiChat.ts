@@ -24,7 +24,10 @@ export async function simulateDemoChatPortable(ctx: PortableMutationCtx, args: {
   const now = new Date().toISOString();
   await ctx.db.insert("aiMessages", { societyId: args.societyId, threadId, role: "user", content, status: "complete", createdByUserId, createdAtISO: now });
   const reply = "Simulated demo reply. No AI provider was contacted. This demonstration saves your text in a private conversation; it does not analyze attached files.";
-  const messageId = await ctx.db.insert("aiMessages", { societyId: args.societyId, threadId, role: "assistant", content: reply, status: "complete", parts: { provider: "demo_simulation" }, createdByUserId, createdAtISO: now });
+  // The reply is stamped one millisecond after the question so the pair can
+  // never tie and render in the wrong order.
+  const replyAt = new Date(Date.parse(now) + 1).toISOString();
+  const messageId = await ctx.db.insert("aiMessages", { societyId: args.societyId, threadId, role: "assistant", content: reply, status: "complete", parts: { provider: "demo_simulation" }, createdByUserId, createdAtISO: replyAt });
   await ctx.db.patch(threadId, { updatedAtISO: now, lastMessageAtISO: now });
   return { threadId, messageId, content: reply, provider: "demo_simulation" };
 }
@@ -58,11 +61,21 @@ export async function messagesForThreadPortable(
   { threadId }: { threadId: string },
 ) {
   await requireAiThreadAccess(ctx, threadId);
-  return ctx.db
+  const rows = await ctx.db
     .query("aiMessages")
     .withIndex("by_thread", (q: any) => q.eq("threadId", threadId))
     .order("asc")
     .collect();
+  // Order by message time; within the same instant a question precedes its
+  // answer. The index order alone is ambiguous when two rows share a commit.
+  const roleRank = (role: unknown) => (role === "user" ? 0 : role === "assistant" ? 1 : 2);
+  return rows
+    .map((row: any, index: number) => ({ row, index }))
+    .sort((a, b) =>
+      String(a.row.createdAtISO ?? "").localeCompare(String(b.row.createdAtISO ?? "")) ||
+      roleRank(a.row.role) - roleRank(b.row.role) ||
+      a.index - b.index)
+    .map(({ row }) => row);
 }
 
 export async function getThreadPortable(

@@ -90,9 +90,19 @@ export function WebhooksPage() {
         subtitle="Send signed event notifications to external systems (n8n, Zapier, your own service). Each delivery is signed with the endpoint's secret and retried on failure."
         actions={
           <>
-            <a className="btn-action" href="/api/docs" target="_blank" rel="noreferrer">
-              API docs
-            </a>
+            {isLocalDataRuntime() ? (
+              <button
+                className="btn-action"
+                disabled
+                title="The API reference is served by the Societyer API server, which is not running in this local workspace."
+              >
+                API docs
+              </button>
+            ) : (
+              <a className="btn-action" href="/api/docs" target="_blank" rel="noreferrer">
+                API docs
+              </a>
+            )}
             {canConfigure && (
               <button className="btn-action btn-action--primary" onClick={() => setDraft({ ...EMPTY_DRAFT })}>
                 <Plus size={12} /> Add endpoint

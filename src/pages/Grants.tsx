@@ -40,6 +40,16 @@ import { buildCsjOrientationEmailBody } from "../features/grants/lib/csjOrientat
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { useConfirm, usePrompt } from "../components/Modal";
+import { GrantRemoveDialog } from "../features/grants/components/GrantRemoveDialog";
+import {
+  hasErrors,
+  validateGrantInput,
+  validateGrantReportInput,
+  validateGrantTransactionInput,
+  type FieldErrors,
+} from "../../shared/recordValidation";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function GrantsPage() {
   const { loaded, can } = usePermissions();
@@ -49,7 +59,14 @@ export function GrantsPage() {
   const gcosInputRef = useRef<HTMLInputElement>(null);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [selectedGrant, setSelectedGrant] = useState<any | null>(null);
+  const [removingGrant, setRemovingGrant] = useState<any | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [grantErrors, setGrantErrors] = useState<FieldErrors>({});
+  const [txnErrors, setTxnErrors] = useState<FieldErrors>({});
+  const [reportErrors, setReportErrors] = useState<FieldErrors>({});
   const [grantDraft, setGrantDraft] = useState<any | null>(null);
   const [reportDraft, setReportDraft] = useState<any | null>(null);
   const [txnDraft, setTxnDraft] = useState<any | null>(null);
@@ -130,7 +147,6 @@ export function GrantsPage() {
     society && loaded && can("settings:read") && grantDetailDataNeeded ? { societyId: society._id } : "skip",
   );
   const upsertGrant = useMutation(api.grants.upsertGrant);
-  const removeGrant = useMutation(api.grants.removeGrant);
   const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
   const createEmployee = useMutation(api.employees.create);
@@ -176,6 +192,11 @@ export function GrantsPage() {
         grantTitle: grantById.get(String(row.grantId))?.title ?? "Unknown grant",
       })),
     [ledger, grantById],
+  );
+  const archivedGrantCount = useMemo(() => (grants ?? []).filter((row: any) => row.archivedAtISO).length, [grants]);
+  const pipelineRows = useMemo(
+    () => (grants ?? []).filter((row: any) => showArchived || !row.archivedAtISO),
+    [grants, showArchived],
   );
   const applicationRows = useMemo(
     () =>
@@ -266,7 +287,7 @@ export function GrantsPage() {
                     setTxnDraft({
                       societyId: society._id,
                       grantId: grants?.[0]?._id ?? "",
-                      date: new Date().toISOString().slice(0, 10),
+                      date: todayDateOnly(),
                       direction: "outflow",
                       amountDollars: "",
                       description: "",
@@ -281,7 +302,7 @@ export function GrantsPage() {
                       societyId: society._id,
                       grantId: grants?.[0]?._id ?? "",
                       title: "",
-                      dueAtISO: new Date().toISOString().slice(0, 10),
+                      dueAtISO: todayDateOnly(),
                       status: "Upcoming",
                     }),
                 },
@@ -363,11 +384,24 @@ export function GrantsPage() {
                     Convert
                   </button>
                 )}
-                {row.status !== "Declined" && (
+                {!["Declined", "Converted"].includes(row.status) && (
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={async () => {
-                      await reviewApplication({ id: row._id, status: "Declined" });
+                      const reason = await prompt({
+                        title: `Decline "${row.projectTitle || "application"}"?`,
+                        message: `${row.applicantName || "The applicant"}'s application will be marked Declined. Record the reason for the file.`,
+                        placeholder: "Reason, e.g. outside the funding criteria",
+                        required: true,
+                        multiline: true,
+                        confirmLabel: "Decline application",
+                      });
+                      if (reason === null) return;
+                      if (!reason.trim()) {
+                        toast.error("A decline reason is required");
+                        return;
+                      }
+                      await reviewApplication({ id: row._id, status: "Declined", notes: [row.notes, `Declined: ${reason.trim()}`].filter(Boolean).join("\n") });
                       toast.success("Application declined");
                     }} disabled={!canWrite}
                   >
@@ -389,7 +423,7 @@ export function GrantsPage() {
           tableId="grants"
           objectMetadata={pipelineTable.objectMetadata}
           hydratedView={pipelineTable.hydratedView}
-          records={(grants ?? []) as any[]}
+          records={pipelineRows as any[]}
           onRecordClick={(_recordId, record) => setSelectedGrant(record)}
         >
           <RecordTableViewToolbar
@@ -402,6 +436,12 @@ export function GrantsPage() {
             onChangeView={(viewId) => setPipelineViewId(viewId as Id<"views">)}
             onOpenFilter={() => setPipelineFilterOpen((v) => !v)}
           />
+          {archivedGrantCount > 0 && (
+            <label className="checkbox muted" style={{ display: "inline-flex", gap: 6, alignItems: "center", margin: "4px 0 8px", fontSize: 13 }}>
+              <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
+              Show {archivedGrantCount} archived grant{archivedGrantCount === 1 ? "" : "s"}
+            </label>
+          )}
           <RecordTableFilterPopover open={pipelineFilterOpen} onClose={() => setPipelineFilterOpen(false)} />
           <RecordTableFilterChips />
           <RecordTable
@@ -409,7 +449,7 @@ export function GrantsPage() {
             renderCell={({ record: row, field }) => {
               if (field.name === "title") return (
                 <div className="record-table__identifier-lines">
-                  <strong className="record-table__identifier-primary">{row.title}</strong>
+                  <strong className="record-table__identifier-primary">{row.title}{row.archivedAtISO ? <> <Badge tone="neutral">Archived</Badge></> : null}</strong>
                   <div className="record-table__identifier-secondary muted">{row.funder}{row.program ? ` · ${row.program}` : ""}</div>
                 </div>
               );
@@ -463,11 +503,11 @@ export function GrantsPage() {
                 </Link>}
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Delete grant ${row.title}`}
-                  onClick={async (e) => {
+                  aria-label={`${row.archivedAtISO ? "Restore or delete" : "Archive or delete"} grant ${row.title}`}
+                  title={row.archivedAtISO ? "Restore or delete" : "Archive or delete"}
+                  onClick={(e) => {
                     e.stopPropagation();
-                    await removeGrant({ id: row._id });
-                    toast.success("Grant removed");
+                    setRemovingGrant(row);
                   }} disabled={!canWrite}
                 >
                   <Trash2 size={12} />
@@ -519,8 +559,19 @@ export function GrantsPage() {
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete ledger entry for ${row.description}`}
                   onClick={async () => {
-                    await removeTransaction({ id: row._id });
-                    toast.success("Ledger entry removed");
+                    const approved = await confirm({
+                      title: "Delete ledger entry?",
+                      message: `"${row.description || "Untitled entry"}" (${money(row.amountCents)} ${row.direction}, ${formatDate(row.date)}) will be permanently removed from the ${row.grantTitle} restricted-fund ledger.`,
+                      confirmLabel: "Delete entry",
+                      tone: "danger",
+                    });
+                    if (!approved) return;
+                    try {
+                      await removeTransaction({ id: row._id });
+                      toast.success("Ledger entry removed");
+                    } catch (error: any) {
+                      toast.error("Could not delete ledger entry", error?.message);
+                    }
                   }} disabled={!canWrite}
                 >
                   <Trash2 size={12} />
@@ -573,8 +624,19 @@ export function GrantsPage() {
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete report ${row.title}`}
                   onClick={async () => {
-                    await removeReport({ id: row._id });
-                    toast.success("Report removed");
+                    const approved = await confirm({
+                      title: "Delete grant report?",
+                      message: `"${row.title || "Untitled report"}" for ${row.grantTitle} (due ${formatDate(row.dueAtISO)}) will be permanently removed.`,
+                      confirmLabel: "Delete report",
+                      tone: "danger",
+                    });
+                    if (!approved) return;
+                    try {
+                      await removeReport({ id: row._id });
+                      toast.success("Report removed");
+                    } catch (error: any) {
+                      toast.error("Could not delete report", error?.message);
+                    }
                   }} disabled={!canWrite}
                 >
                   <Trash2 size={12} />
@@ -584,6 +646,14 @@ export function GrantsPage() {
           />
         </RecordTableScope>
       ) : null}
+
+      <GrantRemoveDialog
+        grant={removingGrant}
+        onClose={() => setRemovingGrant(null)}
+        onRemoved={(outcome) => {
+          if (outcome === "deleted" && selectedGrant && String(selectedGrant._id) === String(removingGrant?._id)) setSelectedGrant(null);
+        }}
+      />
 
       <Drawer
         open={!!selectedGrant}
@@ -701,7 +771,7 @@ export function GrantsPage() {
 
       <Drawer
         open={!!grantDraft}
-        onClose={() => setGrantDraft(null)}
+        onClose={() => { setGrantDraft(null); setGrantErrors({}); }}
         title="New grant"
         footer={
           <>
@@ -709,9 +779,20 @@ export function GrantsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                await upsertGrant(buildGrantPayload(grantDraft, society._id, actingUserId));
-                toast.success("Grant saved");
-                setGrantDraft(null);
+                const payload = buildGrantPayload(grantDraft, society._id, actingUserId);
+                const errors = validateGrantInput(payload);
+                setGrantErrors(errors);
+                if (hasErrors(errors)) {
+                  toast.error("Check the highlighted fields", Object.values(errors)[0]);
+                  return;
+                }
+                try {
+                  await upsertGrant(payload);
+                  toast.success("Grant saved");
+                  setGrantDraft(null);
+                } catch (error: any) {
+                  toast.error("Could not save grant", error?.data?.message ?? error?.message);
+                }
               }}
             >
               Save
@@ -723,6 +804,7 @@ export function GrantsPage() {
           <GrantEditorForm
             grantDraft={grantDraft}
             setGrantDraft={setGrantDraft}
+            errors={grantErrors}
             committees={committees ?? []}
             users={users ?? []}
             accounts={accounts ?? []}
@@ -735,7 +817,7 @@ export function GrantsPage() {
 
       <Drawer
         open={!!txnDraft}
-        onClose={() => setTxnDraft(null)}
+        onClose={() => { setTxnDraft(null); setTxnErrors({}); }}
         title={txnDraft?.id ? "Edit ledger entry" : "New ledger entry"}
         footer={
           <>
@@ -743,9 +825,17 @@ export function GrantsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                await upsertTransaction(buildTransactionPayload(txnDraft, society._id, actingUserId));
-                toast.success("Ledger entry saved");
-                setTxnDraft(null);
+                const payload = buildTransactionPayload(txnDraft, society._id, actingUserId);
+                const errors = validateGrantTransactionInput(payload);
+                setTxnErrors(errors);
+                if (hasErrors(errors)) return;
+                try {
+                  await upsertTransaction(payload);
+                  toast.success("Ledger entry saved");
+                  setTxnDraft(null);
+                } catch (error: any) {
+                  toast.error("Could not save ledger entry", error?.data?.message ?? error?.message);
+                }
               }}
             >
               Save
@@ -755,12 +845,12 @@ export function GrantsPage() {
       >
         {txnDraft && (
           <div>
-            <Field label="Grant">
+            <Field label="Grant" required error={txnErrors.grantId}>
               <Select value={txnDraft.grantId ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, grantId: value })}
                 options={(grants ?? []).map((grant) => ({ value: grant._id, label: grant.title }))} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Date"><DatePicker value={txnDraft.date ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, date: value })} /></Field>
+              <Field label="Date" required error={txnErrors.date}><DatePicker value={txnDraft.date ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, date: value })} /></Field>
               <Field label="Direction">
                 <Select value={txnDraft.direction} onChange={(value) => setTxnDraft({ ...txnDraft, direction: value })}
                   options={[
@@ -771,8 +861,8 @@ export function GrantsPage() {
                   ]} />
               </Field>
             </div>
-            <Field label="Amount" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={txnDraft.amountDollars ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, amountDollars: e.target.value })} /></Field>
-            <Field label="Description"><input className="input" value={txnDraft.description ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, description: e.target.value })} /></Field>
+            <Field label="Amount" hint="Dollars" required error={txnErrors.amountCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={txnDraft.amountDollars ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, amountDollars: e.target.value })} /></Field>
+            <Field label="Description" required error={txnErrors.description}><input className="input" value={txnDraft.description ?? ""} onChange={(e) => setTxnDraft({ ...txnDraft, description: e.target.value })} /></Field>
             <Field label="Evidence document">
               <Select value={txnDraft.documentId ?? ""} onChange={(value) => setTxnDraft({ ...txnDraft, documentId: value })}
                 options={[{ value: "", label: "None" }, ...(documents ?? []).map((document) => ({ value: document._id, label: document.title }))]} />
@@ -784,7 +874,7 @@ export function GrantsPage() {
 
       <Drawer
         open={!!reportDraft}
-        onClose={() => setReportDraft(null)}
+        onClose={() => { setReportDraft(null); setReportErrors({}); }}
         title={reportDraft?.id ? "Edit report" : "New report"}
         footer={
           <>
@@ -792,9 +882,17 @@ export function GrantsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                await upsertReport(buildReportPayload(reportDraft, society._id, actingUserId));
-                toast.success("Grant report saved");
-                setReportDraft(null);
+                const payload = buildReportPayload(reportDraft, society._id, actingUserId);
+                const errors = validateGrantReportInput(payload);
+                setReportErrors(errors);
+                if (hasErrors(errors)) return;
+                try {
+                  await upsertReport(payload);
+                  toast.success("Grant report saved");
+                  setReportDraft(null);
+                } catch (error: any) {
+                  toast.error("Could not save report", error?.data?.message ?? error?.message);
+                }
               }}
             >
               Save
@@ -804,11 +902,11 @@ export function GrantsPage() {
       >
         {reportDraft && (
           <div>
-            <Field label="Grant">
+            <Field label="Grant" required error={reportErrors.grantId}>
               <Select value={reportDraft.grantId ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, grantId: value })}
                 options={(grants ?? []).map((grant) => ({ value: grant._id, label: grant.title }))} />
             </Field>
-            <Field label="Title"><input className="input" value={reportDraft.title} onChange={(e) => setReportDraft({ ...reportDraft, title: e.target.value })} /></Field>
+            <Field label="Title" required error={reportErrors.title}><input className="input" value={reportDraft.title} onChange={(e) => setReportDraft({ ...reportDraft, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
                 <Select value={reportDraft.status} onChange={(value) => setReportDraft({ ...reportDraft, status: value })}
@@ -819,10 +917,10 @@ export function GrantsPage() {
                     { value: "Overdue", label: "Overdue" },
                   ]} />
               </Field>
-              <Field label="Due"><DatePicker value={reportDraft.dueAtISO ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, dueAtISO: value })} /></Field>
+              <Field label="Due" required error={reportErrors.dueAtISO}><DatePicker value={reportDraft.dueAtISO ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, dueAtISO: value })} /></Field>
             </div>
             <Field label="Submitted"><DatePicker value={reportDraft.submittedAtISO ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, submittedAtISO: value })} /></Field>
-            <Field label="Spending to date" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={reportDraft.spendingToDateDollars ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateDollars: e.target.value })} /></Field>
+            <Field label="Spending to date" hint="Dollars" error={reportErrors.spendingToDateCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={reportDraft.spendingToDateDollars ?? ""} onChange={(e) => setReportDraft({ ...reportDraft, spendingToDateDollars: e.target.value })} /></Field>
             <Field label="Outcome summary"><MarkdownEditor rows={4} value={reportDraft.outcomeSummary ?? ""} onChange={(markdown) => setReportDraft({ ...reportDraft, outcomeSummary: markdown })} /></Field>
             <Field label="Report document">
               <Select value={reportDraft.documentId ?? ""} onChange={(value) => setReportDraft({ ...reportDraft, documentId: value })}

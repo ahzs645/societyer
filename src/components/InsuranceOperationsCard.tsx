@@ -1,6 +1,7 @@
 import {useState} from 'react';import {useMutation} from 'convex/react';import {api} from '@/lib/convexApi';
 import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {money} from '@/lib/format';
 import {EvidenceRowsEditor,type EvidenceColumn} from './EvidenceRowsEditor';import {insuranceBalances,requirementResult} from '../../shared/insuranceOperations';
+import { todayDateOnly } from "../../shared/dateOnly";
 const evidence:EvidenceColumn[]=[{key:'observedDate',label:'Evidence day',type:'date'},{key:'sourceUrl',label:'Source URL'},{key:'sourceReference',label:'Page / row citation'},{key:'reviewStatus',label:'Review',options:['pending','verified','rejected']}];
 export function InsuranceOperationsCard({policy}:{policy:any}){
  const {can}=usePermissions();const toast=useToast();const save=useMutation(api.insurance.appendOperations);const scan=useMutation(api.insurance.ensureRenewalTasks);
@@ -13,6 +14,6 @@ export function InsuranceOperationsCard({policy}:{policy:any}){
  <EvidenceRowsEditor title="Append dated policy amendments" rows={amendments} onChange={setAmendments} disabled={!can('financials:write')||busy} columns={[{key:'kind',label:'Amendment kind',options:['cancellation','endorsement','reinstatement']},{key:'notes',label:'Amended terms / reason'},...evidence]}/>
  <EvidenceRowsEditor title="Append evidence-backed requirement checks" rows={checks} onChange={setChecks} disabled={!can('financials:write')||busy} columns={[{key:'context',label:'Requirement context'},{key:'requiredLimitCents',label:'Required limit, cents',type:'number'},{key:'confirmedLimitCents',label:'Confirmed limit, cents',type:'number'},{key:'coverageSource',label:'Policy / endorsement clause'},...evidence]}/>
  <button className="btn-action" disabled={!can('financials:write')||busy||!(entries.length+amendments.length+checks.length)} onClick={async()=>{setBusy(true);try{await save({id:policy._id,moneyEntries:entries,amendments,requirementChecks:checks});setEntries([]);setAmendments([]);setChecks([]);toast.success('Insurance evidence appended');}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}}>Append policy evidence</button>
- <button className="btn-action" disabled={!can('tasks:write')||busy} onClick={async()=>{setBusy(true);try{const result=await scan({societyId:policy.societyId,asOf:new Date().toISOString().slice(0,10)});toast.success(`${result.created} renewal review tasks created`,`${result.overdue} current terms overdue`);}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}}>Create dated renewal review tasks</button>
+ <button className="btn-action" disabled={!can('tasks:write')||busy} onClick={async()=>{setBusy(true);try{const result=await scan({societyId:policy.societyId,asOf:todayDateOnly()});toast.success(`${result.created} renewal review tasks created`,`${result.overdue} current terms overdue`);}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}}>Create dated renewal review tasks</button>
  </div></details>;
 }

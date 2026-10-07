@@ -167,8 +167,58 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   }
 }
 
+/**
+ * Detach a row from the store with the exact semantics of
+ * `JSON.parse(JSON.stringify(value))` for JSON data (undefined object keys
+ * dropped, undefined/functions in arrays become null, non-finite numbers become
+ * null, `toJSON` honoured), without re-serialising strings. Strings are
+ * immutable, so sharing them is safe; the JSON round trip used to re-scan every
+ * string, which dominated large workspaces (a 10k-document table with long OCR
+ * text took seconds per query).
+ */
+export function jsonClone<T>(value: T): T {
+  return cloneJsonValue(value, true) as T;
+}
+
+function cloneJsonValue(value: any, topLevel = false): any {
+  if (value === null) return null;
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return value;
+    case "number":
+      return Number.isFinite(value) ? (Object.is(value, -0) ? 0 : value) : null;
+    case "bigint":
+      throw new TypeError("Do not know how to serialize a BigInt");
+    case "undefined":
+    case "function":
+    case "symbol":
+      return topLevel ? undefined : SKIP;
+    default:
+      break;
+  }
+  if (typeof value.toJSON === "function") return cloneJsonValue(value.toJSON(), topLevel);
+  if (Array.isArray(value)) {
+    const out = new Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      const item = cloneJsonValue(value[i]);
+      out[i] = item === SKIP ? null : item;
+    }
+    return out;
+  }
+  if (value instanceof Number || value instanceof String || value instanceof Boolean) return cloneJsonValue(value.valueOf(), topLevel);
+  const out: Record<string, any> = {};
+  for (const key of Object.keys(value)) {
+    const item = cloneJsonValue(value[key]);
+    if (item !== SKIP) out[key] = item;
+  }
+  return out;
+}
+
+const SKIP = Symbol("skip");
+
 function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
+  return jsonClone(value);
 }
 
 export interface LocalStoreDbOptions {
@@ -361,8 +411,14 @@ export class LocalStoreDb implements PortableDbWriter {
       for (const [table, over] of overlay) if (over.has(id)) return over.get(id) === null ? undefined : table;
     }
     if (this.store.tableOf) return this.store.tableOf(id);
-    for (const table of this.store.tableNames()) {
-      if (this.store.rows(table).some((row) => row._id === id)) return table;
+    // Stores without an id map: minted ids carry their table as a prefix
+    // ("documents_01M…"), so try that table before scanning the others.
+    const tables = this.store.tableNames();
+    const separator = typeof id === "string" ? id.indexOf("_") : -1;
+    const guess = separator > 0 ? id.slice(0, separator) : undefined;
+    if (guess && tables.includes(guess) && this.store.rows(guess).some((row) => row._id === id)) return guess;
+    for (const table of tables) {
+      if (table !== guess && this.store.rows(table).some((row) => row._id === id)) return table;
     }
     return undefined;
   }

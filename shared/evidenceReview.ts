@@ -57,6 +57,9 @@ export type MeetingEvidence = Partial<Record<EvidenceField, EvidenceRow[]>>;
 const rowObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const nonempty = (value: unknown): value is string => typeof value === 'string' && !!value.trim();
 const oneOf = (value: unknown, choices: readonly string[]): boolean => typeof value === 'string' && choices.includes(value);
+/** Consent-agenda outcomes. A10: `received` records a report or another body's
+ * minutes taken as read ("Group action: Receive") without adopting it. */
+export const CONSENT_ITEM_OUTCOMES = ['pending', 'adopted', 'received', 'deferred', 'excluded'] as const;
 export function validateMeetingEvidence(value: Record<string, unknown>): MeetingEvidence {
   const out: MeetingEvidence = {};
   for (const field of EVIDENCE_FIELDS) {
@@ -81,7 +84,7 @@ export function validateMeetingEvidence(value: Record<string, unknown>): Meeting
         if (!oneOf(row.kind, ['arrived', 'departed', 'present', 'absent', 'proxy'])) throw new Error('Invalid attendance event.');
         if (!nonempty(row.personName) || !nonempty(row.boundary)) throw new Error('Attendance needs a person and a source time or agenda boundary.');
       }
-      if (field === 'consentItems' && !oneOf(row.outcome, ['adopted', 'deferred', 'excluded', 'pending'])) throw new Error('Invalid consent item outcome.');
+      if (field === 'consentItems' && !oneOf(row.outcome, CONSENT_ITEM_OUTCOMES)) throw new Error('Invalid consent item outcome.');
       if (field === 'decisionRequirements') {
         if (!oneOf(row.kind, ['condition', 'ratification']) || !oneOf(row.state, ['met', 'not_met', 'unknown'])) throw new Error('Invalid condition or ratification.');
         if (!Array.isArray(value.conditionalDecisions) || !value.conditionalDecisions.some(decision => rowObject(decision) && decision.id === row.decisionId)) throw new Error('A requirement must link to a recorded decision.');

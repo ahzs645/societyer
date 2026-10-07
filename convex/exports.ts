@@ -226,6 +226,18 @@ export const EXPORTABLE_TABLES = [
   "personHistoryEvents",
   "personOccurrences",
   "seatProxyAuthorizations",
+  "intakeRuns",
+  "intakeFiles",
+  "intakeExtracts",
+  "intakeClusters",
+  "intakeExtractions",
+  "intakeFieldReviews",
+  "fieldProvenance",
+  "intakeProcessingLog",
+  "personMerges",
+  "representationGaps",
+  "governanceExpectations",
+  "continuityPeriodMarks",
 ] as const;
 
 export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({

@@ -1,4 +1,6 @@
 import * as personHistoryFns from './personHistory';
+import * as personMergeFns from './personMerge';
+import * as rosterPromotionFns from './rosterPromotion';
 import * as financialReviewFns from "./financialReview";
 import * as memberGovernanceFns from "./memberGovernance";
 import * as minutesReviewFns from "./minutesReview";
@@ -35,6 +37,8 @@ import * as pipaTrainingFns from "./pipaTraining";
 import * as complianceObligationsFns from "./complianceObligations";
 import * as programStatementsFns from "./programStatements";
 import * as committeesFns from "./committees";
+import * as representationGapsFns from "./representationGaps";
+import * as continuityFns from "./continuity";
 import * as commitmentsFns from "./commitments";
 import * as deadlinesFns from "./deadlines";
 import * as nameHistoryFns from "./nameHistory";
@@ -88,6 +92,7 @@ import * as bylawAmendmentsFns from "./bylawAmendments";
 import * as filingsFns from "./filings";
 import * as organizationDetailsFns from "./organizationDetails";
 import * as documentsFns from "./documents";
+import * as documentCatalogFns from "./documentCatalog";
 import * as organizationHistoryFns from "./organizationHistory";
 import * as meetingsFns from "./meetings";
 import * as agendasFns from "./agendas";
@@ -111,6 +116,7 @@ import * as grantsFns from "./grants";
 import * as inventoryHubFns from "./inventoryHub";
 import * as meetingMaterialsFns from "./meetingMaterials";
 import * as minutesFns from "./minutes";
+import { repairImportedPortable as minutesRepairImportedPortable } from "./minutesRepair";
 import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
 import * as societyFns from "./society";
@@ -128,6 +134,7 @@ import * as communicationsFns from "./communications";
 import * as documentVersionsFns from "./documentVersions";
 import * as financialHubFns from "./financialHub";
 import * as importSessionsFns from "./importSessions";
+import * as importReviewQueueFns from "./importReviewQueue";
 import * as membersFns from "./members";
 import * as paperlessFns from "./paperless";
 import * as permissionsFns from "./permissions";
@@ -145,6 +152,7 @@ import * as legalDocumentsFns from "./legalDocuments";
 import * as seedRecordTableMetadataFns from "./seedRecordTableMetadata";
 
 import * as filesFns from "./files";
+import * as intakeFns from "./intake";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
@@ -160,6 +168,14 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "personHistory:stageRecord", handler: personHistoryFns.stageRecord }),
   definePortableMutation({ name: "personHistory:reviewEvent", handler: personHistoryFns.reviewEvent }),
   definePortableMutation({ name: "personHistory:addEvent", handler: personHistoryFns.addEvent }),
+  definePortableQuery({ name: "personHistory:duplicateSuggestions", handler: personMergeFns.duplicateSuggestions }),
+  definePortableQuery({ name: "personHistory:mergeHistory", handler: personMergeFns.mergeHistory }),
+  definePortableMutation({ name: "personHistory:dismissDuplicate", handler: personMergeFns.dismissDuplicate }),
+  definePortableMutation({ name: "personHistory:mergePeople", handler: personMergeFns.mergePeople }),
+  definePortableMutation({ name: "personHistory:unmergePeople", handler: personMergeFns.unmergePeople }),
+  definePortableMutation({ name: "personHistory:repairOrphanedEvents", handler: personMergeFns.repairOrphanedEvents }),
+  definePortableMutation({ name: "personHistory:splitOccurrence", handler: personMergeFns.splitOccurrence }),
+  definePortableMutation({ name: "personHistory:createPersonFromOccurrence", handler: personMergeFns.createPersonFromOccurrence }),
 
   definePortableMutation({ name: "financialReview:reviewVersion", handler: financialReviewFns.reviewVersion }),
   definePortableMutation({ name: "financialReview:selectVersion", handler: financialReviewFns.selectVersion }),
@@ -172,6 +188,13 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "memberGovernance:assess", handler: memberGovernanceFns.assess }),
   definePortableMutation({ name: "memberGovernance:transition", handler: memberGovernanceFns.transition }),
   definePortableQuery({ name: "memberGovernance:list", handler: memberGovernanceFns.list }),
+  definePortableQuery({ name: "memberGovernance:organizationMembers", handler: memberGovernanceFns.organizationMembers }),
+  definePortableQuery({ name: "memberGovernance:seatDetail", handler: memberGovernanceFns.seatDetail }),
+  definePortableMutation({ name: "memberGovernance:saveOrganizationMember", handler: memberGovernanceFns.saveOrganizationMember }),
+  definePortableMutation({ name: "memberGovernance:updateSeat", handler: memberGovernanceFns.updateSeat }),
+  definePortableMutation({ name: "memberGovernance:addSeat", handler: memberGovernanceFns.addSeat }),
+  definePortableMutation({ name: "memberGovernance:recordRepresentative", handler: memberGovernanceFns.recordRepresentative }),
+  definePortableMutation({ name: "memberGovernance:supersedeSeatObservation", handler: memberGovernanceFns.supersedeSeatObservation }),
   definePortableMutation({ name: "minutesReview:saveEvidence", handler: minutesReviewFns.saveEvidence }),
   definePortableMutation({ name: "minutesReview:scheduleSuggestions", handler: minutesReviewFns.scheduleSuggestions }),
   definePortableQuery({ name: "memberHistory:list", handler: memberHistoryFns.list }),
@@ -196,6 +219,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "directors:create", handler: directorsFns.directorCreate }),
   definePortableMutation({ name: "directors:update", handler: directorsFns.directorUpdate }),
   definePortableMutation({ name: "directors:remove", handler: directorsFns.directorRemove }),
+  definePortableQuery({ name: "directors:rosterSuggestions", handler: rosterPromotionFns.rosterSuggestions }),
+  definePortableMutation({ name: "directors:promoteRosterObservation", handler: rosterPromotionFns.promoteRosterObservation }),
 
   // employees
   definePortableQuery({ name: "employees:list", handler: employeesFns.employeesList }),
@@ -280,6 +305,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "committees:remove", handler: committeesFns.committeeRemovePortable }),
   definePortableMutation({ name: "committees:addMember", handler: committeesFns.committeeAddMemberPortable }),
   definePortableMutation({ name: "committees:removeMember", handler: committeesFns.committeeRemoveMemberPortable }),
+  definePortableMutation({ name: "committees:updateStructure", handler: committeesFns.committeeUpdateStructurePortable }),
+  definePortableMutation({ name: "committees:updateMember", handler: committeesFns.committeeUpdateMemberPortable }),
+  definePortableMutation({ name: "committees:buildRostersFromSeats", handler: rosterPromotionFns.buildRostersFromSeats }),
 
   // commitments
   definePortableQuery({ name: "commitments:list", handler: commitmentsFns.listPortable }),
@@ -326,6 +354,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "constating:narrative", handler: constatingFns.narrativePortable }),
   definePortableMutation({ name: "constating:create", handler: constatingFns.createPortable }),
   definePortableMutation({ name: "constating:remove", handler: constatingFns.removePortable }),
+  definePortableMutation({ name: "constating:update", handler: constatingFns.updatePortable }),
 
   // corporationSettings
   definePortableQuery({ name: "corporationSettings:complianceDeadlines", handler: corporationSettingsFns.complianceDeadlinesPortable }),
@@ -402,6 +431,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "tasks:byGoal", handler: tasksFns.tasksByGoal }),
   definePortableQuery({ name: "tasks:byMeeting", handler: tasksFns.tasksByMeeting }),
   definePortableMutation({ name: "tasks:observeAction", handler: tasksFns.observeAction }),
+  definePortableMutation({ name: "tasks:consolidateHistoricalActions", handler: tasksFns.consolidateHistoricalActions }),
+  definePortableMutation({ name: "tasks:promoteHistoricalAction", handler: tasksFns.promoteHistoricalAction }),
   definePortableMutation({ name: "tasks:create", handler: tasksFns.taskCreate }),
   definePortableMutation({ name: "tasks:update", handler: tasksFns.taskUpdate }),
   definePortableMutation({ name: "tasks:remove", handler: tasksFns.taskRemove }),
@@ -662,6 +693,14 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "documents:flagForDeletion", handler: documentsFns.flagForDeletionPortable }),
   definePortableMutation({ name: "documents:archive", handler: documentsFns.archivePortable }),
   definePortableMutation({ name: "documents:remove", handler: documentsFns.removePortable }),
+  definePortableQuery({ name: "documents:browse", handler: documentCatalogFns.browsePortable }),
+  definePortableQuery({ name: "documents:versionsFor", handler: documentCatalogFns.versionsForPortable }),
+  definePortableQuery({ name: "documents:evidenceFor", handler: documentCatalogFns.evidenceForPortable }),
+  definePortableQuery({ name: "documents:categoryCounts", handler: documentCatalogFns.categoryCountsPortable }),
+  definePortableMutation({ name: "documents:markDuplicate", handler: documentCatalogFns.markDuplicatePortable }),
+  definePortableMutation({ name: "documents:clearDuplicate", handler: documentCatalogFns.clearDuplicatePortable }),
+  definePortableMutation({ name: "documents:setVersionInfo", handler: documentCatalogFns.setVersionInfoPortable }),
+  definePortableMutation({ name: "documents:mergeDuplicates", handler: documentCatalogFns.mergeDuplicatesPortable }),
 
   // organizationHistory
   definePortableQuery({ name: "organizationHistory:list", handler: organizationHistoryFns.listPortable }),
@@ -780,6 +819,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "accounting:journalEntries", handler: accountingFns.journalEntriesPortable }),
   definePortableQuery({ name: "accounting:journalEntry", handler: accountingFns.journalEntryPortable }),
   definePortableQuery({ name: "accounting:trialBalance", handler: accountingFns.trialBalancePortable }),
+  definePortableQuery({ name: "accounting:backfillPreview", handler: accountingFns.backfillPreviewPortable }),
   definePortableQuery({ name: "accounting:generalLedger", handler: accountingFns.generalLedgerPortable }),
   definePortableQuery({ name: "accounting:exportCsv", handler: accountingFns.exportCsvPortable }),
   definePortableQuery({ name: "accounting:boardAuditorPackage", handler: accountingFns.boardAuditorPackagePortable }),
@@ -862,6 +902,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "grants:reports", handler: grantsFns.reportsPortable }),
   definePortableQuery({ name: "grants:employeeLinks", handler: grantsFns.employeeLinksPortable }),
   definePortableQuery({ name: "grants:summary", handler: grantsFns.summaryPortable }),
+  definePortableQuery({ name: "grants:deletionImpact", handler: grantsFns.deletionImpactPortable }),
 
   // grantSources
   definePortableQuery({ name: "grantSources:library", handler: grantSourcesFns.libraryPortable }),
@@ -965,6 +1006,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "minutes:carryForwardAction", handler: minutesFns.carryForwardActionPortable }),
   definePortableMutation({ name: "minutes:upsertFromDraft", handler: minutesFns.upsertFromDraftPortable }),
   definePortableMutation({ name: "minutes:backfillMotionPersonLinks", handler: minutesFns.backfillMotionPersonLinksPortable }),
+  definePortableMutation({ name: "minutes:repairImported", handler: minutesRepairImportedPortable }),
 
   // meetingMaterials
   definePortableQuery({ name: "meetingMaterials:listForMeeting", handler: meetingMaterialsFns.listForMeetingPortable }),
@@ -1093,6 +1135,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // importSessions
   definePortableQuery({ name: "importSessions:list", handler: importSessionsFns.listPortable }),
   definePortableQuery({ name: "importSessions:get", handler: importSessionsFns.getPortable }),
+  definePortableQuery({ name: "importSessions:reviewQueue", handler: importReviewQueueFns.reviewQueuePortable }),
+  definePortableQuery({ name: "importSessions:getRecord", handler: importReviewQueueFns.getRecordPortable }),
+  definePortableQuery({ name: "importSessions:removalImpact", handler: importReviewQueueFns.removalImpactPortable }),
+  definePortableQuery({ name: "importSessions:pendingByTarget", handler: importReviewQueueFns.pendingByTargetPortable }),
   definePortableMutation({ name: "importSessions:createFromBundle", handler: importSessionsFns.createFromBundlePortable }),
   definePortableMutation({ name: "importSessions:updateRecord", handler: importSessionsFns.updateRecordPortable }),
   definePortableMutation({ name: "importSessions:bulkSetStatus", handler: importSessionsFns.bulkSetStatusPortable }),
@@ -1122,6 +1168,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "grants:upsertGrant", handler: grantsFns.upsertGrantPortable }),
   definePortableMutation({ name: "grants:importGcosProjectSnapshot", handler: grantsFns.importGcosProjectSnapshotPortable }),
   definePortableMutation({ name: "grants:removeGrant", handler: grantsFns.removeGrantPortable }),
+  definePortableMutation({ name: "grants:setArchived", handler: grantsFns.setArchivedPortable }),
   definePortableMutation({ name: "grants:upsertReport", handler: grantsFns.upsertReportPortable }),
   definePortableMutation({ name: "grants:removeReport", handler: grantsFns.removeReportPortable }),
   definePortableMutation({ name: "grants:upsertTransaction", handler: grantsFns.upsertTransactionPortable }),
@@ -1144,6 +1191,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "elections:create", handler: electionsFns.createPortable }),
   definePortableMutation({ name: "elections:updateSettings", handler: electionsFns.updateSettingsPortable }),
   definePortableMutation({ name: "elections:addQuestion", handler: electionsFns.addQuestionPortable }),
+  definePortableMutation({ name: "elections:removeQuestion", handler: electionsFns.removeQuestionPortable }),
   definePortableMutation({ name: "elections:reviewNomination", handler: electionsFns.reviewNominationPortable }),
   definePortableMutation({ name: "elections:publishNominationToBallot", handler: electionsFns.publishNominationToBallotPortable }),
   definePortableMutation({ name: "elections:snapshotEligibleVoters", handler: electionsFns.snapshotEligibleVotersPortable }),
@@ -1304,6 +1352,54 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // exports
   definePortableQuery({ name: "exports:exportAttachmentPage", handler: exportsFns.exportAttachmentPagePortable }),
+
+  // representationGaps (system gaps, finding A14)
+  definePortableQuery({ name: "representationGaps:list", handler: representationGapsFns.listPortable }),
+  definePortableQuery({ name: "representationGaps:get", handler: representationGapsFns.getPortable }),
+  definePortableQuery({ name: "representationGaps:summary", handler: representationGapsFns.summaryPortable }),
+  definePortableQuery({ name: "representationGaps:forRecord", handler: representationGapsFns.forRecordPortable }),
+  definePortableQuery({ name: "representationGaps:countForRecord", handler: representationGapsFns.countForRecordPortable }),
+  definePortableQuery({ name: "representationGaps:coverage", handler: representationGapsFns.coveragePortable }),
+  definePortableMutation({ name: "representationGaps:create", handler: representationGapsFns.createPortable }),
+  definePortableMutation({ name: "representationGaps:setStatus", handler: representationGapsFns.setStatusPortable }),
+  definePortableMutation({ name: "representationGaps:bulkSetStatus", handler: representationGapsFns.bulkSetStatusPortable }),
+  definePortableMutation({ name: "representationGaps:linkAffected", handler: representationGapsFns.linkAffectedPortable }),
+  definePortableMutation({ name: "representationGaps:remove", handler: representationGapsFns.removePortable }),
+  definePortableMutation({ name: "representationGaps:recordPreflight", handler: representationGapsFns.recordPreflightPortable }),
+  definePortableMutation({ name: "representationGaps:backfillFromSourceEvidence", handler: representationGapsFns.backfillFromSourceEvidencePortable }),
+
+  // continuity (record gaps, finding A15)
+  definePortableQuery({ name: "continuity:gaps", handler: continuityFns.gapsPortable }),
+  definePortableQuery({ name: "continuity:dashboardChecks", handler: continuityFns.dashboardChecksPortable }),
+  definePortableQuery({ name: "continuity:listExpectations", handler: continuityFns.listExpectationsPortable }),
+  definePortableQuery({ name: "continuity:evidenceDocuments", handler: continuityFns.evidenceDocumentsPortable }),
+  definePortableMutation({ name: "continuity:createExpectation", handler: continuityFns.createExpectationPortable }),
+  definePortableMutation({ name: "continuity:updateExpectation", handler: continuityFns.updateExpectationPortable }),
+  definePortableMutation({ name: "continuity:removeExpectation", handler: continuityFns.removeExpectationPortable }),
+  definePortableMutation({ name: "continuity:seedRulePack", handler: continuityFns.seedRulePackPortable }),
+  definePortableMutation({ name: "continuity:deriveFromBylawRules", handler: continuityFns.deriveFromBylawRulesPortable }),
+  definePortableMutation({ name: "continuity:markPeriod", handler: continuityFns.markPeriodPortable }),
+  definePortableMutation({ name: "continuity:clearPeriodMark", handler: continuityFns.clearPeriodMarkPortable }),
+  // intake
+  definePortableQuery({ name: "intake:listRuns", handler: intakeFns.listRuns }),
+  definePortableQuery({ name: "intake:getRun", handler: intakeFns.getRun }),
+  definePortableQuery({ name: "intake:listFiles", handler: intakeFns.listFiles }),
+  definePortableQuery({ name: "intake:listClusters", handler: intakeFns.listClusters }),
+  definePortableQuery({ name: "intake:listExtractions", handler: intakeFns.listExtractions }),
+  definePortableQuery({ name: "intake:getExtraction", handler: intakeFns.getExtraction }),
+  definePortableQuery({ name: "intake:getExtractionInput", handler: intakeFns.getExtractionInput }),
+  definePortableQuery({ name: "intake:processingLog", handler: intakeFns.processingLog }),
+  definePortableQuery({ name: "intake:provenanceForRecord", handler: intakeFns.provenanceForRecord }),
+  definePortableMutation({ name: "intake:createRun", handler: intakeFns.createRun }),
+  definePortableMutation({ name: "intake:updateRun", handler: intakeFns.updateRun }),
+  definePortableMutation({ name: "intake:recordFiles", handler: intakeFns.recordFiles }),
+  definePortableMutation({ name: "intake:saveExtract", handler: intakeFns.saveExtract }),
+  definePortableMutation({ name: "intake:saveClusters", handler: intakeFns.saveClusters }),
+  definePortableMutation({ name: "intake:saveExtraction", handler: intakeFns.saveExtraction }),
+  definePortableMutation({ name: "intake:setExtractionStatus", handler: intakeFns.setExtractionStatus }),
+  definePortableMutation({ name: "intake:appendProcessingLog", handler: intakeFns.appendProcessingLog }),
+  definePortableMutation({ name: "intake:reviewField", handler: intakeFns.reviewField }),
+  definePortableMutation({ name: "intake:recordProvenance", handler: intakeFns.recordProvenance }),
 
 ].map((definition) => ({ ...definition, applicationPolicy: true }));
 

@@ -7,6 +7,7 @@ import {
   narrativePortable,
   createPortable,
   removePortable,
+  updatePortable,
 } from "../shared/functions/constating";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -53,6 +54,19 @@ export const create = authorizedMutation("constating:create", mutation)({
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const update = authorizedMutation("constating:update", mutation)({
+  args: {
+    id: v.id("constatingEvents"),
+    action: v.string(),
+    jurisdiction: v.string(),
+    legislation: v.string(),
+    regNumber: v.optional(v.string()),
+    startISO: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = authorizedMutation("constating:remove", mutation)({

@@ -1,4 +1,5 @@
 import { evidenceUrl, normalizeImportedEvidence } from "../../evidenceReview";
+import { inferMeetingBody } from "../../meetingBody";
 // Import-session record-kind semantics: risk flags, inference, and record construction.
 
 import {
@@ -85,7 +86,26 @@ function recordsFromBundle(bundle: any) {
   for (const training of arrayOf(bundle?.pipaTrainings)) records.push(makeRecord("pipaTraining", "pipaTraining", training));
   for (const employee of arrayOf(bundle?.employees)) records.push(makeRecord("employee", "employees", employee));
   for (const volunteer of arrayOf(bundle?.volunteers)) records.push(makeRecord("volunteer", "volunteers", volunteer));
+  // C11: governance spine registers (committees, people, terms, actions, plans).
+  for (const committee of arrayOf(bundle?.committees)) records.push(makeRecord("committee", "committees", committee));
+  for (const member of arrayOf(bundle?.committeeMembers)) records.push(makeRecord("committeeMember", "committeeMembers", member));
+  for (const member of arrayOf(bundle?.members)) records.push(makeRecord("member", "members", member));
+  for (const director of arrayOf(bundle?.directors)) records.push(makeRecord("director", "directors", director));
+  for (const task of arrayOf(bundle?.tasks)) records.push(makeRecord("task", "tasks", task));
+  for (const goal of arrayOf(bundle?.goals)) records.push(makeRecord("goal", "goals", goal));
+  for (const commitment of arrayOf(bundle?.commitments)) records.push(makeRecord("commitment", "commitments", commitment));
+  for (const source of arrayOf(bundle?.fundingSources)) records.push(makeRecord("fundingSource", "fundingSources", source));
+  for (const report of arrayOf(bundle?.grantReports)) records.push(makeRecord("grantReport", "grantReports", report));
+  for (const material of arrayOf(bundle?.meetingMaterials)) records.push(makeRecord("meetingMaterial", "meetingMaterials", material));
+  for (const seat of arrayOf(bundle?.organizationSeats)) records.push(makeRecord("organizationSeat", "organizationSeats", seat));
+  for (const conflict of arrayOf(bundle?.conflicts)) records.push(makeRecord("conflict", "conflicts", conflict));
+  for (const proxy of arrayOf(bundle?.proxies)) records.push(makeRecord("proxy", "proxies", proxy));
+  for (const ruleSet of arrayOf(bundle?.bylawRuleSets)) records.push(makeRecord("bylawRuleSet", "bylawRuleSets", ruleSet));
+  // `budgets` already names the org-history budget kind; native budget plan
+  // lines (the `budgets` table) use `operatingBudgets`.
+  for (const budget of arrayOf(bundle?.operatingBudgets)) records.push(makeRecord("operatingBudget", "budgets", budget));
   for (const doc of arrayOf(bundle?.documentMap)) records.push(makeRecord("documentCandidate", firstSection(doc), doc));
+  for (const gap of arrayOf(bundle?.representationGaps)) records.push(makeRecord("representationGap", "representationGaps", gap));
   return records;
 }
 
@@ -157,6 +177,22 @@ function targetTableForRecordKind(kind: string) {
     pipaTraining: "pipaTrainings",
     employee: "employees",
     volunteer: "volunteers",
+    committee: "committees",
+    committeeMember: "committeeMembers",
+    member: "members",
+    director: "directors",
+    task: "tasks",
+    goal: "goals",
+    commitment: "commitments",
+    fundingSource: "fundingSources",
+    grantReport: "grantReports",
+    meetingMaterial: "meetingMaterials",
+    organizationSeat: "organizationSeats",
+    conflict: "conflicts",
+    proxy: "proxies",
+    bylawRuleSet: "bylawRuleSets",
+    operatingBudget: "budgets",
+    representationGap: "representationGaps",
   } as Record<string, string>)[kind] ?? kind;
 }
 
@@ -259,12 +295,10 @@ function importedLibrarySection(targetModule: unknown, sections: string[] = []) 
   return "reference";
 }
 
+/** C5: executive / operations / strategic planning / secretariat / working
+ *  group / AQMP and any named committee are Committee meetings, not Board. */
 function inferMeetingType(title: string) {
-  const lower = title.toLowerCase();
-  if (lower.includes("annual general") || lower.includes("agm")) return "AGM";
-  if (lower.includes("committee")) return "Committee";
-  if (lower.includes("special general") || lower.includes("sgm")) return "SGM";
-  return "Board";
+  return inferMeetingBody(title).type;
 }
 
 function toMeetingDateTime(date: unknown) {

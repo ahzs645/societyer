@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { COMMITTEE_KIND_OPTIONS } from "../features/committees/CommitteeStructureCard";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { Plus, Users, UsersRound as UsersIcon } from "lucide-react";
@@ -22,6 +23,8 @@ import { ColorPicker } from "../components/ColorPicker";
 import { formatDateTime } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { isOpenOperationalTask } from "../../shared/taskStatus";
+import { BuildRostersButton } from "../features/committees/BuildRostersButton";
 
 const CADENCES = ["Weekly", "Biweekly", "Monthly", "Quarterly", "Ad-hoc"];
 const COLORS = ["#3b5bdb", "#0a8f4e", "#a86400", "#c9264a", "#6f42c1", "#0e7490"];
@@ -33,6 +36,7 @@ type CommitteeForm = {
   cadence: string;
   cadenceNotes?: string;
   color: string;
+  kind?: string;
 };
 
 type CommitteeRecord = Doc<"committees"> & {
@@ -80,7 +84,7 @@ export function CommitteesPage() {
       goalCount: (allGoals ?? []).filter((goal) => goal.committeeId === committee._id).length,
       memberCount: committee.memberCount,
       openTaskCount: (allTasks ?? []).filter(
-        (task) => task.committeeId === committee._id && task.status !== "Done",
+        (task) => task.committeeId === committee._id && isOpenOperationalTask(task),
       ).length,
     }));
   }, [allGoals, allTasks, committees]);
@@ -108,9 +112,12 @@ export function CommitteesPage() {
         iconColor="pink"
         subtitle="Standing and ad-hoc committees — each with its own cadence, roster, tasks, and goals."
         actions={
-          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
-            <Plus size={12} /> New committee
-          </button>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <BuildRostersButton societyId={society._id} disabled={!canWrite} />
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
+              <Plus size={12} /> New committee
+            </button>
+          </div>
         }
       />
 
@@ -224,6 +231,16 @@ export function CommitteesPage() {
                 rows={4}
                 value={form.description}
                 onChange={(markdown) => setForm({ ...form, description: markdown })}
+              />
+            </Field>
+            <Field label="Kind">
+              <Select
+                disabled={!canWrite}
+                value={form.kind ?? ""}
+                onChange={(value) => setForm({ ...form, kind: value || undefined })}
+                options={COMMITTEE_KIND_OPTIONS}
+                placeholder="Not set"
+                clearable
               />
             </Field>
             <Field label="Cadence">

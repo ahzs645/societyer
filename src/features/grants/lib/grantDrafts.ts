@@ -1,4 +1,5 @@
 import { centsToDollarInput, dollarInputToCents } from "../../../lib/format";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
 export type GrantRequirementStatus = "Needed" | "Requested" | "Ready" | "Attached" | "Waived";
 
@@ -408,7 +409,7 @@ export function newGrantDraft(societyId: any) {
     fitScore: "",
     nextAction: "",
     opportunityUrl: "",
-    applicationDueDate: new Date().toISOString().slice(0, 10),
+    applicationDueDate: todayDateOnly(),
     allowPublicApplications: false,
     sourceDocumentIds: [],
     sourceExternalIdsInput: "",

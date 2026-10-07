@@ -24,6 +24,7 @@ import { normalizeMeetingQuorum } from "../minutesQuorum";
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import {
@@ -32,6 +33,9 @@ import {
   defaultDecidedByFor,
 } from "../proceduralMotions";
 import { motionRowToEmbedded } from "../minutesMotions";
+import { classifyMotionOutcome } from "../motionOutcome";
+import { assertMotionVotes } from "../motionValidation";
+import { normalizeActionItemStatusFields } from "../actionItemStatus";
 
 // ----- portable quorum-snapshot helpers (copied from convex/lib/bylawRules) --
 
@@ -76,6 +80,7 @@ async function buildQuorumSnapshot(
     societyId: string;
     meetingDateISO: string;
     meetingType?: string;
+    committeeId?: string;
     quorumRequiredOverride?: number;
   },
 ): Promise<QuorumSnapshot> {
@@ -111,24 +116,12 @@ async function computeRequiredQuorum(
   args: {
     societyId: string;
     meetingType?: string;
+    committeeId?: string;
   },
 ) {
-  if ((rules as any).quorumRequiresLegalRegister || (rules as any).governanceAutomationBlocked) return undefined;
-  if (rules.quorumType === "fixed") {
-    return rules.quorumValue;
-  }
-  if (rules.quorumType === "percentage" && isGeneralMeeting(args.meetingType)) {
-    const members = await ctx.db
-      .query("members")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const eligible = members.filter(
-      (member) => member.status === "Active" && member.votingRights,
-    ).length;
-    const percentageQuorum = Math.ceil(eligible * (rules.quorumValue / 100));
-    return Math.max(rules.quorumMinimumCount ?? 1, percentageQuorum);
-  }
-  return undefined;
+  // A3: per-body rules (general / board / each committee) with the legacy
+  // society rule as the fallback. See shared/bodyQuorum.ts.
+  return (await requiredQuorumForMeeting(ctx, rules, args)).required;
 }
 
 function quorumSourceLabel(
@@ -169,9 +162,6 @@ function timestampOrNegativeInfinity(value?: string) {
   return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
 }
 
-function isGeneralMeeting(type?: string) {
-  return type === "AGM" || type === "SGM";
-}
 
 // ----- portable motions dual-write helper (copied from convex/motions.ts) ----
 
@@ -181,27 +171,14 @@ function stripUndefined(obj: Record<string, any>) {
   return out;
 }
 
-const KNOWN_EMBEDDED_OUTCOMES = new Set([
-  "",
-  "pending",
-  "carried",
-  "defeated",
-  "tabled",
-  "deferred",
-  "withdrawn",
-]);
-
-/** Map a legacy embedded `outcome` string to the explicit (status, outcome)
- *  split. See the backfill map in docs/motions-first-class-object-design.md. */
-function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: string } {
-  const value = String(raw ?? "").trim().toLowerCase();
-  if (!value || value === "pending") return { status: "Moved" };
-  if (value === "carried") return { status: "Voted", outcome: "Carried" };
-  if (value === "defeated") return { status: "Voted", outcome: "Defeated" };
-  if (value === "tabled") return { status: "Tabled" };
-  if (value === "deferred") return { status: "Deferred" };
-  if (value === "withdrawn") return { status: "Withdrawn" };
-  return { status: "Moved" }; // unknown → caller preserves the raw value in `note`
+/** Map an embedded `outcome` string to the explicit (status, outcome) split.
+ *  C1: synonyms ("Passed", "Approved", "Adopted", "Carried unanimously",
+ *  "no objection(s)" ⇒ Voted/Carried; "Not carried", "Failed", "Lost" ⇒
+ *  Voted/Defeated) are recognised by shared/motionOutcome.ts; unknown wording
+ *  stays undecided and the raw text is preserved by the caller. */
+export function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: string; decidedBy?: string; canonical: boolean; needsReview: boolean } {
+  const result = classifyMotionOutcome(raw);
+  return { status: result.status, outcome: result.outcome, decidedBy: result.decidedBy, canonical: result.canonical, needsReview: result.needsReview };
 }
 
 /** Mirror one minutes doc's embedded `motions[]` into the motions table by
@@ -213,7 +190,7 @@ function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: st
  *  save. Reads come from the table via resolveMinutesMotions. */
 export async function syncMotionsForMinutes(
   ctx: PortableMutationCtx,
-  args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
+  args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[]; mode?: "replace" | "append" },
 ) {
   await requireSocietyMembership(ctx, String(args.societyId));
   await getOwned(ctx, "minutes", String(args.minutesId), String(args.societyId));
@@ -235,11 +212,25 @@ export async function syncMotionsForMinutes(
 
     const now = new Date().toISOString();
     const motionIds: any[] = [];
+    // "append" (import merge): keep every existing row untouched and add the
+    // submitted motions after them, preserving the stored order.
+    if (args.mode === "append") {
+      const minutesRow: any = await ctx.db.get(args.minutesId);
+      const ordered = Array.isArray(minutesRow?.motionIds) ? minutesRow.motionIds.filter((id: any) => existingById.has(String(id))) : [];
+      for (const row of existing) if (!ordered.some((id: any) => String(id) === String(row._id))) ordered.push(row._id);
+      for (const id of ordered) { keptIds.add(String(id)); motionIds.push(id); }
+    }
     for (const m of args.motions ?? []) {
-      const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
-      const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
+      const classified = statusFromEmbeddedOutcome(m.outcome);
+      const { status, outcome } = classified;
+      // Keep the source wording verbatim whenever it is not a canonical label.
+      const rawOutcome = typeof m.outcome === "string" ? m.outcome.trim() : "";
+      const sourceOutcomeText = m.sourceOutcomeText ?? (!classified.canonical && rawOutcome ? rawOutcome : undefined);
+      const note = classified.canonical
         ? undefined
-        : `legacy outcome: ${m.outcome}`;
+        : classified.needsReview
+          ? `legacy outcome: ${m.outcome} (not recognised; review the source)`
+          : `legacy outcome: ${m.outcome}`;
       // Classify recurring procedural motions (adjournment, approve-minutes,
       // approve-agenda, recess, receive-reports) from their wording and stamp
       // the first-class record with an explicit kind + label, so the master
@@ -257,6 +248,7 @@ export async function syncMotionsForMinutes(
       });
       const decidedBy =
         m.decidedBy ??
+        classified.decidedBy ??
         defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
       const historyEntry = stripUndefined({
         at: now,
@@ -294,12 +286,21 @@ export async function syncMotionsForMinutes(
         sectionTitle: m.sectionTitle,
         motionTemplateId: m.motionTemplateId,
         adoptsMinutesId: m.adoptsMinutesId,
+        movedByPersonId: m.movedByPersonId,
+        secondedByPersonId: m.secondedByPersonId,
+        abstainedBy: Array.isArray(m.abstainedBy) && m.abstainedBy.length ? m.abstainedBy : undefined,
+        opposedBy: Array.isArray(m.opposedBy) && m.opposedBy.length ? m.opposedBy : undefined,
+        dissentDocumentId: m.dissentDocumentId,
+        sourceLocator: m.sourceLocator,
+        sourceOutcomeText,
+        outcomeOverrideNote: m.outcomeOverrideNote,
+        sourceExternalIds: Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.length ? m.sourceExternalIds : undefined,
         source: "minutes",
       });
       // Reconcile by identity: an embedded motion that already links a row of
       // this minutes updates it in place (replace() overwrites the whole row so
       // fields cleared in the editor don't linger); otherwise insert a fresh row.
-      const linkId = m.motionId != null && existingById.has(String(m.motionId)) ? m.motionId : null;
+      const linkId = args.mode !== "append" && m.motionId != null && existingById.has(String(m.motionId)) ? m.motionId : null;
       let rowId: any;
       if (linkId) {
         const prev: any = existingById.get(String(linkId));
@@ -636,7 +637,8 @@ export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sour
 
 export async function createPortable(ctx: PortableMutationCtx, args: any) {
   validateGenericEvidence(args);
-  args = { ...args, ...normalizeMeetingHistory(args) };
+  args = normalizeActionItemFields({ ...args, ...normalizeMeetingHistory(args) });
+  await assertSubmittedMotionVotes(ctx, String(args.societyId), args.motions);
   for (const key of [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS]) if (args[key] === undefined) delete args[key];
   await assertMeetingHistoryReferences(ctx, args.societyId, args, undefined, args.heldAt);
   await requireSocietyMembership(ctx, args.societyId);
@@ -763,9 +765,10 @@ export async function updatePortable(
   const historyPatch = normalizeMeetingHistory(rawPatch);
   assertMeetingHistoryMutable(minutes, historyPatch, rawPatch.clearApproval === true);
   await assertMeetingHistoryReferences(ctx, societyId, rawPatch.heldAt !== undefined ? { ...normalizeMeetingHistory(minutes), ...historyPatch } : historyPatch, id, rawPatch.heldAt);
-  rawPatch = { ...rawPatch, ...historyPatch };
+  rawPatch = normalizeActionItemFields({ ...rawPatch, ...historyPatch });
   for (const key of [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS]) if (rawPatch[key] === undefined) delete rawPatch[key];
   await assertMinutesForeignKeys(ctx, societyId, rawPatch);
+  if (Array.isArray(rawPatch.motions)) await assertSubmittedMotionVotes(ctx, societyId, rawPatch.motions);
   const adoptionTargets = Array.isArray(rawPatch.motions)
     ? await adoptionApprovalTargets(ctx, minutes, rawPatch.motions) : [];
   // Approval authority is separate from drafting. Check every approval change
@@ -848,7 +851,7 @@ export async function updatePortable(
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).
 export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: any) {
-  args = { ...args, ...normalizeMeetingHistory(args) };
+  args = normalizeActionItemFields({ ...args, ...normalizeMeetingHistory(args) });
   for (const key of [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS]) if (args[key] === undefined) delete args[key];
   await requireSocietyMembership(ctx, args.societyId);
   if (args.sourceReviewedByUserId) {
@@ -931,7 +934,7 @@ export async function backfillMotionPersonLinksPortable(
 
   for (const row of rows) {
     let changed = false;
-    const motions = row.motions.map((motion: any) => {
+    const motions = (row.motions ?? []).map((motion: any) => {
       const movedBy = resolveMotionPersonLink(motion.movedBy, members, directors);
       const secondedBy = resolveMotionPersonLink(motion.secondedBy, members, directors);
       const next = { ...motion };
@@ -1011,6 +1014,36 @@ export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, {
 
 // ----- helpers --------------------------------------------------------------
 
+/** A12: keep `status` and derive `done` on every action item a caller writes. */
+function normalizeActionItemFields<T extends Record<string, any>>(fields: T): T {
+  const out: Record<string, any> = { ...fields };
+  if (Array.isArray(fields.actionItems)) out.actionItems = fields.actionItems.map((item: any) => normalizeActionItemStatusFields(item));
+  if (Array.isArray(fields.sections)) {
+    out.sections = fields.sections.map((section: any) => Array.isArray(section?.actionItems)
+      ? { ...section, actionItems: section.actionItems.map((item: any) => normalizeActionItemStatusFields(item)) }
+      : section);
+  }
+  return out as T;
+}
+
+const VOTE_FIELDS = ["outcome", "votesFor", "votesAgainst", "abstentions", "resolutionType", "decidedBy", "outcomeOverrideNote"] as const;
+
+/** G-04: reject impossible tallies and outcomes that contradict them on a
+ *  user save. A motion whose vote fields are unchanged from its stored row is
+ *  not re-judged, so legacy data never blocks unrelated edits. */
+async function assertSubmittedMotionVotes(ctx: PortableMutationCtx, societyId: string, motions: any[] | undefined) {
+  for (const [index, motion] of (motions ?? []).entries()) {
+    if (motion?.motionId) {
+      const row = await ctx.db.get(motion.motionId).catch(() => null);
+      if (row && String(row.societyId) === societyId) {
+        const stored = motionRowToEmbedded(row);
+        if (VOTE_FIELDS.every((key) => (stored?.[key] ?? undefined) === (motion[key] ?? undefined))) continue;
+      }
+    }
+    assertMotionVotes(motion, `Motion ${index + 1}${motion?.name ? ` (${motion.name})` : ""}`);
+  }
+}
+
 async function quorumSnapshotForMeeting(
   ctx: PortableMutationCtx,
   meeting: Record<string, any>,
@@ -1020,6 +1053,7 @@ async function quorumSnapshotForMeeting(
     societyId: meeting.societyId,
     meetingDateISO: meeting.scheduledAt,
     meetingType: meeting.type,
+    committeeId: meeting.committeeId,
     quorumRequiredOverride,
   });
 }
@@ -1048,7 +1082,11 @@ function minutesSnapshotFields(
 }
 
 async function assertMotionPersonLinksBelongToSociety(ctx: PortableMutationCtx, societyId: string, motions: any[]) {
-  for (const motion of motions) {
+  for (const motion of motions ?? []) {
+    for (const personId of [motion.movedByPersonId, motion.secondedByPersonId, ...[...(motion.abstainedBy ?? []), ...(motion.opposedBy ?? [])].map((row: any) => row?.personId)]) {
+      if (personId) await getOwned(ctx, "peopleDirectory", personId, societyId);
+    }
+    if (motion.dissentDocumentId) await getOwned(ctx, "documents", motion.dissentDocumentId, societyId);
     await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.movedByMemberId, "movedByMemberId");
     await assertPersonLinkBelongsToSociety(ctx, societyId, "directors", motion.movedByDirectorId, "movedByDirectorId");
     await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.secondedByMemberId, "secondedByMemberId");

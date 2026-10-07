@@ -19,6 +19,7 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
 import { getOwned } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
+import { isHistoricalSourceAction } from "../taskStatus";
 
 /* ----------------------- compliance rules (inlined) ---------------------- */
 
@@ -245,8 +246,8 @@ const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack = {
       citation: "Societies Act s.42 director consent requirements",
       evidenceRequired: ["Active director register", "Written consent or meeting-attendance/non-refusal evidence"],
       remediationActions: [
-        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors" },
-        { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents" },
+        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors?intent=consent" },
+        { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents?intent=new&category=Governance&title=Director%20consent" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
       passFail(context) {
@@ -784,7 +785,7 @@ export async function navCountsPortable(
     openConflicts: openConflicts.length,
     committees: activeCommittees.length,
     openGoals: goals.length,
-    openTasks: tasks.length,
+    openTasks: tasks.filter((task) => !isHistoricalSourceAction(task as any)).length,
   };
 }
 
@@ -864,7 +865,7 @@ export async function summaryPortable(
   const goalPreview = goals
     .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
     .slice(0, 4);
-  const openTaskPreview = tasks
+  const openTaskPreview = tasks.filter((task) => !isHistoricalSourceAction(task as any))
     .sort((a, b) => compareOptionalDates(a.dueDate, b.dueDate))
     .slice(0, 6);
   const canReadEvidence = ["filings:read", "documents:read", "users:read", "audit:read"].every(permission => readAccess.has(permission as Permission));
@@ -921,7 +922,7 @@ export async function summaryPortable(
       openConflicts: openConflicts.length,
       committees: activeCommittees.length,
       openGoals: goals.length,
-      openTasks: tasks.length,
+      openTasks: tasks.filter((task) => !isHistoricalSourceAction(task as any)).length,
     },
     board,
     upcomingMeetings: upcomingMeetings.slice(0, 3).map(toDashboardMeeting),

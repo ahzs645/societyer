@@ -1052,16 +1052,18 @@ const filings = [
     _id: "static_filing_ar",
     societyId: SOCIETY_ID,
     kind: "AnnualReport",
-    title: "2026 BC annual report",
+    // Synthetic and internally consistent: the report for the June 19, 2025
+    // AGM, due 30 days later (BC Societies Act s.73) and filed on time.
+    title: "2025 BC annual report",
     jurisdictionCode: "CA-BC",
     contextKind: "home",
-    periodLabel: "FY2025-2026",
-    dueDate: "2026-04-01",
-    filedAt: "2026-04-14",
+    periodLabel: "2025 AGM",
+    dueDate: "2025-07-19",
+    filedAt: "2025-07-08",
     status: "Filed",
     submissionMethod: "Societies Online",
     submittedByUserId: USER_OWNER_ID,
-    confirmationNumber: "BC-AR-2026-0414",
+    confirmationNumber: "BC-AR-2025-0708",
     receiptDocumentId: DOCUMENT_ANNUAL_REPORT_CONFIRMATION_ID,
     evidenceNotes: "Societies Online confirmation receipt retained in the document library.",
     feePaidCents: 4000,
@@ -1419,6 +1421,13 @@ const documents = [
 const SAMPLE_BYLAWS_PDF_DATA_URL =
   "data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvTWVkaWFCb3ggWzAgMCAzOTYgMjE2XSAvQ29udGVudHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggODEgPj4Kc3RyZWFtCkJUIC9GMSAxNCBUZiAzNiAxNjAgVGQgKFNvY2lldHllciBzYW1wbGUgZG9jdW1lbnQgcHJldmlldyAtIEN1cnJlbnQgYnlsYXdzKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0MSAwMDAwMCBuIAowMDAwMDAwMzExIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNDQyCiUlRU9G";
 
+/** Decoded byte length of a base64 data URL (not the URL string length). */
+function dataUrlDecodedBytes(dataUrl: string): number {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
+}
+
 const documentVersions = [
   {
     _id: "static_document_version_bylaws_v1",
@@ -1429,7 +1438,7 @@ const documentVersions = [
     storageKey: SAMPLE_BYLAWS_PDF_DATA_URL,
     fileName: "current-bylaws.pdf",
     mimeType: "application/pdf",
-    fileSizeBytes: SAMPLE_BYLAWS_PDF_DATA_URL.length,
+    fileSizeBytes: dataUrlDecodedBytes(SAMPLE_BYLAWS_PDF_DATA_URL),
     uploadedByName: "Societyer",
     uploadedAtISO: "2025-06-25T17:00:00.000Z",
     changeNote: "Initial version.",
@@ -1555,7 +1564,7 @@ const electionQuestions = [
     societyId: SOCIETY_ID,
     electionId: ELECTION_ID,
     title: "Approve the nominated director slate",
-    description: "One anonymous vote is recorded. Eligibility is kept separate from the ballot.",
+    description: "Two anonymous ballots were recorded. Eligibility is kept separate from the ballot.",
     kind: "single_choice",
     maxSelections: 1,
     seatsAvailable: 1,
@@ -1577,9 +1586,11 @@ const electionEligibleVoters = [
     userId: USER_OWNER_ID,
     email: "mina@riverside.example",
     fullName: "Mina Patel",
-    status: "Eligible",
+    status: "Voted",
     eligibilityReason: "Active voting member at the eligibility cutoff.",
-    createdAtISO: "2026-04-16T16:00:00.000Z",
+    confirmedAtISO: "2025-06-19T18:31:00.000Z",
+    votedAtISO: "2025-06-19T18:41:00.000Z",
+    createdAtISO: "2025-06-19T18:30:00.000Z",
   },
   {
     _id: "static_election_eligible_jordan",
@@ -1589,10 +1600,11 @@ const electionEligibleVoters = [
     userId: USER_TREASURER_ID,
     email: "jordan@riverside.example",
     fullName: "Jordan Lee",
-    status: "Confirmed",
+    status: "Voted",
     eligibilityReason: "Active voting member at the eligibility cutoff.",
-    confirmedAtISO: "2026-04-16T16:10:00.000Z",
-    createdAtISO: "2026-04-16T16:00:00.000Z",
+    confirmedAtISO: "2025-06-19T18:32:00.000Z",
+    votedAtISO: "2025-06-19T18:47:00.000Z",
+    createdAtISO: "2025-06-19T18:30:00.000Z",
   },
 ];
 
@@ -1604,7 +1616,35 @@ const electionAuditEvents = [
     actorName: "Avery Santos",
     action: "opened",
     detail: "Eligible voting members were snapshotted and voting opened.",
-    createdAtISO: "2026-04-16T16:00:00.000Z",
+    createdAtISO: "2025-06-19T18:30:00.000Z",
+  },
+  {
+    _id: "static_election_audit_tallied",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    actorName: "Avery Santos",
+    action: "tallied",
+    detail: "Voting closed and 2 anonymous ballots were tallied.",
+    createdAtISO: "2025-06-19T19:40:00.000Z",
+  },
+];
+
+const electionBallots = [
+  {
+    _id: "static_election_ballot_1",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    receiptCode: "DEMO-7K2Q",
+    submittedAtISO: "2025-06-19T18:41:00.000Z",
+    choices: [{ questionId: ELECTION_QUESTION_ID, optionIds: ["approve"] }],
+  },
+  {
+    _id: "static_election_ballot_2",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    receiptCode: "DEMO-9M4T",
+    submittedAtISO: "2025-06-19T18:47:00.000Z",
+    choices: [{ questionId: ELECTION_QUESTION_ID, optionIds: ["approve"] }],
   },
 ];
 
@@ -2634,7 +2674,7 @@ const tables: Record<string, any[]> = {
       actor: "Avery Santos",
       entityType: "document",
       action: "published",
-      summary: "Published the PIPA privacy policy to the transparency centre.",
+      summary: "Prepared the PIPA privacy policy as a transparency centre draft.",
       createdAtISO: "2026-04-13T19:45:00.000Z",
     },
   ],
@@ -2702,7 +2742,7 @@ const tables: Record<string, any[]> = {
       firstName: "Devon",
       lastName: "Clarke",
       email: "devon@riverside.example",
-      officerTitle: "President",
+      officerTitle: "president",
       directorTerm: "2022-06-18",
       startDate: "2022-06-18",
     },
@@ -2715,7 +2755,7 @@ const tables: Record<string, any[]> = {
       firstName: "Jordan",
       lastName: "Lee",
       email: "jordan@riverside.example",
-      officerTitle: "Treasurer",
+      officerTitle: "treasurer",
       directorTerm: "2023-06-22",
       startDate: "2023-06-22",
     },
@@ -2728,7 +2768,7 @@ const tables: Record<string, any[]> = {
       firstName: "Mina",
       lastName: "Patel",
       email: "mina@riverside.example",
-      officerTitle: "Secretary",
+      officerTitle: "secretary",
       directorTerm: "2024-06-20",
       startDate: "2024-06-20",
     },
@@ -2753,7 +2793,7 @@ const tables: Record<string, any[]> = {
       firstName: "Priya",
       lastName: "Sharma",
       email: "priya@riverside.example",
-      officerTitle: "Vice President",
+      officerTitle: "vice_president",
       directorTerm: "2023-06-22",
       startDate: "2023-06-22",
     },
@@ -2790,7 +2830,7 @@ const tables: Record<string, any[]> = {
       firstName: "Avery",
       lastName: "Santos",
       email: "avery@riverside.example",
-      officerTitle: "Privacy Officer",
+      officerTitle: "privacy_officer",
       startDate: "2025-01-06",
     },
   ],
@@ -2960,7 +3000,7 @@ const tables: Record<string, any[]> = {
   paperlessConnections,
   paperlessDocumentSyncs,
   electionAuditEvents,
-  electionBallots: [],
+  electionBallots,
   electionEligibleVoters,
   electionNominations: [],
   electionQuestions,

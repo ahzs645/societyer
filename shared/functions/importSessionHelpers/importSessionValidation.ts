@@ -1,3 +1,4 @@
+import { extraPromotionIssues } from "./importSectionHandlersExtra";
 import { exactDay } from "../../evidenceReview";
 // Import-session pre-promotion validation and issue collection.
 
@@ -28,6 +29,7 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   if (kind === "financialStatement") for (const key of ["revenueCents", "expensesCents", "netAssetsCents"]) if (!Number.isSafeInteger(raw[key])) safeIssues.push(`${key} is unknown. Do not post a financial statement with invented zero totals.`);
   if (kind === "rightsholdingTransfer" && (!Number.isFinite(raw.quantity ?? raw.shares) || (raw.quantity ?? raw.shares) <= 0)) safeIssues.push("A source-supported positive transfer quantity is required.");
   if (kind === "insurancePolicy") for (const key of ["startDate", "renewalDate"]) if (raw[key] != null && !exactDay(raw[key])) safeIssues.push(`${key} requires an exact day or must remain in review.`);
+  safeIssues.push(...await extraPromotionIssues(ctx, societyId, record));
 
   if (![
     "organizationAddress",

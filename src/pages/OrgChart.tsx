@@ -23,6 +23,7 @@ import { Link } from "react-router-dom";
 import { Network, UsersRound, X } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type OrgPerson = {
   type: "director" | "employee" | "volunteer";
@@ -105,7 +106,7 @@ function volunteerActiveOn(v: any, dateISO: string): boolean {
 function isCurrentDirector(d: any): boolean {
   const status = String(d?.status ?? "").toLowerCase();
   if (status && !["active", "current", "verified"].includes(status)) return false;
-  return directorActiveOn(d, new Date().toISOString().slice(0, 10));
+  return directorActiveOn(d, todayDateOnly());
 }
 
 export function OrgChartPage() {
@@ -128,7 +129,7 @@ export function OrgChartPage() {
   const upsertAssignment = useMutation(api.orgChartAssignments.upsert);
   const removeAssignment = useMutation(api.orgChartAssignments.remove);
 
-  const dateForFilter = asOf || new Date().toISOString().slice(0, 10);
+  const dateForFilter = asOf || todayDateOnly();
 
   const allPeople = useMemo<OrgPerson[]>(() => {
     const directorPeople: OrgPerson[] = ((directors ?? []) as any[])

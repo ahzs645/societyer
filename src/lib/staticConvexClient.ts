@@ -143,9 +143,17 @@ export class StaticConvexClient {
   /** Fire-and-forget metadata seed for every society in the demo store. */
   private async ensureRecordTableMetadata() {
     try {
+      // Wait for persisted rows: a restored or existing workspace is not in the
+      // store until hydration, and its field options (new status values, labels)
+      // would otherwise never be reconciled.
+      await this.store.whenHydrated();
       const societies = this.store.listRows("societies") ?? [];
       for (const society of societies as any[]) {
-        await this.seedRecordTableMetadataFor(society._id);
+        try {
+          await this.seedRecordTableMetadataFor(society._id);
+        } catch (error) {
+          console.warn("[societyer-local] metadata auto-seed skipped a workspace", society._id, error);
+        }
       }
       this.portableQueries.emit();
     } catch (error) {

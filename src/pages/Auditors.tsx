@@ -21,6 +21,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Auditor appointments. Metadata-driven table — the page still owns the
@@ -57,7 +58,7 @@ export function AuditorsPage() {
       engagementType: "ReviewEngagement",
       fiscalYear: new Date().getFullYear().toString(),
       appointedBy: "Directors",
-      appointedAtISO: new Date().toISOString().slice(0, 10),
+      appointedAtISO: todayDateOnly(),
       independenceAttested: true,
       status: "Active",
     });

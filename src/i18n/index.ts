@@ -33,6 +33,15 @@ i18n
     returnNull: false,
   });
 
+/** Screen readers, hyphenation and spell-check follow <html lang>; keep it in step with the UI language. */
+function syncDocumentLanguage(language: string) {
+  if (typeof document === "undefined") return;
+  const locale = (SUPPORTED_LOCALES as readonly string[]).includes(language.slice(0, 2)) ? language.slice(0, 2) : "en";
+  document.documentElement.lang = locale;
+}
+syncDocumentLanguage(i18n.language ?? "en");
+i18n.on("languageChanged", syncDocumentLanguage);
+
 export function setLocale(locale: Locale) {
   if (!isStaticDemoRuntime()) {
     localStorage.setItem(LOCALE_KEY, locale);

@@ -1,3 +1,4 @@
+import { hasErrors, validateOutboxEmailInput, type FieldErrors } from "../../shared/recordValidation";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -87,6 +88,7 @@ export function OutboxPage() {
   const remove = useMutation(api.pendingEmails.remove);
 
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<PendingEmail | null>(null);
   const [attachPickerOpen, setAttachPickerOpen] = useState(false);
@@ -143,6 +145,9 @@ export function OutboxPage() {
 
   const save = async () => {
     if (!selected || saving || !canWrite) return;
+    const validation = validateOutboxEmailInput(selected);
+    setFormErrors(validation);
+    if (hasErrors(validation)) return;
     setSaving(true);
     try {
     const { _id, societyId: _s, createdAtISO: _c, sentAtISO: _sa, ...rest } = selected;
@@ -163,7 +168,7 @@ export function OutboxPage() {
           notes: rest.notes,
         },
       });
-      toast.success("Saved");
+      toast.success(rest.status === "draft" ? "Draft saved" : "Email saved");
     } else {
       const id = await create({
         societyId: society._id,
@@ -179,7 +184,7 @@ export function OutboxPage() {
         status: rest.status ?? "ready",
         notes: rest.notes,
       });
-      toast.success("Email queued");
+      toast.success((rest.status ?? "ready") === "draft" ? "Draft saved" : "Email queued");
       setSelected({ ...selected, _id: id as unknown as string });
     }
     } catch (error) { toast.error("Could not save email draft", error instanceof Error ? error.message : "Please try again."); }
@@ -187,7 +192,17 @@ export function OutboxPage() {
   };
 
   const doMarkSent = async (row: PendingEmail, channel: string = "personal_email") => {
-    await markSent({ id: row._id as any, sentChannel: channel });
+    const incomplete = validateOutboxEmailInput({ ...row, status: "ready" });
+    if (hasErrors(incomplete)) {
+      toast.error("Complete the email before marking it sent", Object.values(incomplete)[0]);
+      return;
+    }
+    try {
+      await markSent({ id: row._id as any, sentChannel: channel });
+    } catch (error) {
+      toast.error("Could not mark as sent", error instanceof Error ? error.message : undefined);
+      return;
+    }
     toast.success("Marked as sent");
     if (selected?._id === row._id) {
       setSelected({ ...row, status: "sent", sentAtISO: new Date().toISOString(), sentChannel: channel });
@@ -335,7 +350,8 @@ export function OutboxPage() {
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={() => doMarkSent(row)}
-                    title="Mark this email as sent"
+                    disabled={!String(row.to ?? "").trim()}
+                    title={String(row.to ?? "").trim() ? "Mark this email as sent" : "Add a recipient before marking it sent"}
                   >
                     <CheckCircle2 size={12} /> Mark sent
                   </button>
@@ -411,7 +427,7 @@ export function OutboxPage() {
                   disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
-              <Field label="From email">
+              <Field label="From email" error={formErrors.fromEmail}>
                 <input
                   className="input"
                   value={selected.fromEmail ?? ""}
@@ -420,7 +436,7 @@ export function OutboxPage() {
                 />
               </Field>
             </div>
-            <Field label="To">
+            <Field label="To" required error={formErrors.to}>
               <input
                 className="input"
                 value={selected.to}
@@ -429,7 +445,7 @@ export function OutboxPage() {
               />
             </Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Reply-To">
+              <Field label="Reply-To" error={formErrors.replyTo}>
                 <input
                   className="input"
                   value={selected.replyTo ?? ""}
@@ -437,7 +453,7 @@ export function OutboxPage() {
                   disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
-              <Field label="CC">
+              <Field label="CC" error={formErrors.cc}>
                 <input
                   className="input"
                   value={selected.cc ?? ""}
@@ -445,7 +461,7 @@ export function OutboxPage() {
                   disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
-              <Field label="BCC">
+              <Field label="BCC" error={formErrors.bcc}>
                 <input
                   className="input"
                   value={selected.bcc ?? ""}
@@ -454,7 +470,7 @@ export function OutboxPage() {
                 />
               </Field>
             </div>
-            <Field label="Subject">
+            <Field label="Subject" required error={formErrors.subject}>
               <input
                 className="input"
                 value={selected.subject}
@@ -462,7 +478,7 @@ export function OutboxPage() {
                 disabled={!canWrite || selected.status === "sent"}
               />
             </Field>
-            <Field label="Body">
+            <Field label="Body" required error={formErrors.body}>
               <MarkdownEditor
                 rows={10}
                 value={selected.body}

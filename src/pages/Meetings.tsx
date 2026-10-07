@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { MEETING_STATUS_LABELS } from "../../shared/meetingStatus";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -339,12 +340,12 @@ export function MeetingsPage() {
                     </span>
                   );
                 }
-                if (field.name === "status") return <Badge tone={meetingStatusTone(record.status)}>{record.status}</Badge>;
+                if (field.name === "status") return <Badge tone={meetingStatusTone(record.status)}>{meetingStatusLabel(record.status)}</Badge>;
                 if (field.name === "minutes") {
                   const minutesRecord = minutesByMeeting.get(String(record._id));
                   if (minutesRecord?.approvedAt) return <Badge tone="success">Approved</Badge>;
                   if (hasStartedMinutesDraft(minutesRecord)) return <Badge tone="info">Draft</Badge>;
-                  if (record.status === "Held") return <Badge tone="warn">Needs minutes</Badge>;
+                  if (record.status === "Held" || record.status === "HeldMinutesMissing") return <Badge tone="warn">{record.status === "HeldMinutesMissing" ? "Minutes missing" : "Needs minutes"}</Badge>;
                   return <span className="muted">—</span>;
                 }
                 return undefined;
@@ -375,4 +376,8 @@ function meetingStatusTone(status: string): ToneVariant {
   if (status === "Held") return "success";
   if (status === "Cancelled") return "danger";
   return "warn";
+}
+
+function meetingStatusLabel(status: string) {
+  return MEETING_STATUS_LABELS[status] ?? status;
 }

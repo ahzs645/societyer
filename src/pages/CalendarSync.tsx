@@ -47,6 +47,20 @@ function parseIcs(text: string): ParsedEvent[] {
   return events;
 }
 
+/** Explain why pasted text produced no events (L19), or null when it did. */
+function icsProblem(text: string, parsedCount: number): string | null {
+  if (!text.trim() || parsedCount > 0) return null;
+  const upper = text.toUpperCase();
+  if (!upper.includes("BEGIN:VCALENDAR")) {
+    return "This doesn't look like an iCalendar (.ics) file: it has no BEGIN:VCALENDAR line. Export the calendar as .ics and paste or upload that file.";
+  }
+  const begins = (upper.match(/BEGIN:VEVENT/g) ?? []).length;
+  const ends = (upper.match(/END:VEVENT/g) ?? []).length;
+  if (begins === 0) return "The calendar has no events (no BEGIN:VEVENT blocks).";
+  if (ends < begins) return `${begins - ends} event block${begins - ends === 1 ? " is" : "s are"} missing END:VEVENT, so the file looks truncated.`;
+  return `${begins} event block${begins === 1 ? "" : "s"} found, but none has a SUMMARY or DTSTART line, so nothing can be staged.`;
+}
+
 export function CalendarSyncPage() {
   const society = useSociety();
   const { can } = usePermissions();
@@ -65,6 +79,7 @@ export function CalendarSyncPage() {
   const [feedBusy, setFeedBusy] = useState(false);
 
   const parsed = useMemo(() => (icsText.trim() ? parseIcs(icsText) : []), [icsText]);
+  const parseProblem = useMemo(() => icsProblem(icsText, parsed.length), [icsText, parsed.length]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -119,7 +134,7 @@ export function CalendarSyncPage() {
   const submit = async () => {
     if (!canStage) return;
     if (parsed.length === 0) {
-      toast.warn("No calendar events found. Paste an .ics feed or upload a file.");
+      toast.warn("No calendar events found", parseProblem ?? "Paste an .ics feed or upload a file.");
       return;
     }
     setBusy(true);
@@ -139,7 +154,9 @@ export function CalendarSyncPage() {
         events,
         name: calendarName.trim() ? `${calendarName.trim()} calendar sync` : undefined,
       } as any);
-      toast.success(`Staged ${events.length} event${events.length === 1 ? "" : "s"} for review`);
+      // The import session also lists the calendar itself as a source record,
+      // so its candidate count is one more than the number of events.
+      toast.success(`Staged ${events.length} event${events.length === 1 ? "" : "s"} for review`, "The import session also includes 1 calendar source record.");
       navigate(`/app/imports?sessionId=${encodeURIComponent(String(sessionId))}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Could not stage calendar events");
@@ -274,7 +291,11 @@ export function CalendarSyncPage() {
               </tr>
             ))}
             {parsed.length === 0 && (
-              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>No events parsed yet. Paste or upload an .ics calendar above.</td></tr>
+              <tr>
+                <td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>
+                  {parseProblem ? <span role="alert" style={{ color: "var(--danger)" }}>{parseProblem}</span> : "No events parsed yet. Paste or upload an .ics calendar above."}
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

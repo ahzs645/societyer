@@ -137,6 +137,22 @@ export async function removePortable(ctx: PortableMutationCtx, { agendaId }: { a
   return agendaId;
 }
 
+/** A9: agenda item number, requested action, clock-time text and consent flag. */
+export type AgendaItemExtension = {
+  itemNumber?: string;
+  requestedAction?: string;
+  scheduledTimeText?: string;
+  consent?: boolean;
+};
+
+export const AGENDA_REQUESTED_ACTIONS = ["approve", "receive", "discuss", "decide", "information", "none"] as const;
+
+function assertAgendaItemExtension(item: AgendaItemExtension) {
+  if (item.requestedAction !== undefined && !(AGENDA_REQUESTED_ACTIONS as readonly string[]).includes(item.requestedAction)) {
+    throw new Error(`Requested action must be one of ${AGENDA_REQUESTED_ACTIONS.join(", ")}.`);
+  }
+}
+
 export async function addItemPortable(
   ctx: PortableMutationCtx,
   args: {
@@ -150,8 +166,9 @@ export async function addItemPortable(
     motionTemplateId?: string;
     motionId?: string;
     motionText?: string;
-  },
+  } & AgendaItemExtension,
 ) {
+  assertAgendaItemExtension(args);
   const candidate = await ctx.db.get(args.agendaId, "agendas");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
@@ -190,6 +207,10 @@ export async function addItemPortable(
     motionTemplateId: args.motionTemplateId,
     motionId: args.motionId,
     motionText,
+    itemNumber: args.itemNumber,
+    requestedAction: args.requestedAction,
+    scheduledTimeText: args.scheduledTimeText,
+    consent: args.consent,
     createdAtISO: now,
   });
 }
@@ -205,8 +226,9 @@ export async function updateItemPortable(
     timeAllottedMinutes?: number;
     motionText?: string;
     outcome?: string;
-  },
+  } & AgendaItemExtension,
 ) {
+  assertAgendaItemExtension(patch);
   const candidate = await ctx.db.get(itemId, "agendaItems");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendaItems not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
@@ -234,9 +256,10 @@ export async function syncForMeetingPortable(
       motionTemplateId?: string;
       motionId?: string;
       motionText?: string;
-    }>;
+    } & AgendaItemExtension>;
   },
 ) {
+  for (const item of args.items) assertAgendaItemExtension(item);
   await requireSocietyMembership(ctx, args.societyId);
   const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   for (const item of args.items) {
@@ -312,6 +335,9 @@ export async function syncForMeetingPortable(
     if (item.motionTemplateId !== undefined) payload.motionTemplateId = item.motionTemplateId;
     if (item.motionId !== undefined) payload.motionId = item.motionId;
     if (motionText !== undefined) payload.motionText = motionText;
+    for (const key of ["itemNumber", "requestedAction", "scheduledTimeText", "consent"] as const) {
+      if (item[key] !== undefined) payload[key] = item[key];
+    }
 
     if (match) {
       usedIds.add(String(match._id));

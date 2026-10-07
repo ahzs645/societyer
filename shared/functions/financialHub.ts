@@ -13,6 +13,7 @@
  * `monthlyEquivalentCents` are pure helpers shared by the ported handlers.
  */
 
+import { assertValid, validateBudgetLineInput } from "../recordValidation";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
@@ -341,6 +342,12 @@ export async function upsertBudgetPortable(
     required: "Director",
   });
   if (!Number.isSafeInteger(args.plannedCents)) throw new Error("Budget amount must be integer cents.");
+  const existingBudgets = await ctx.db
+    .query("budgets")
+    .withIndex("by_society_fy", (q) => q.eq("societyId", args.societyId).eq("fiscalYear", args.fiscalYear))
+    .collect();
+  assertValid(validateBudgetLineInput(args, existingBudgets as any, args.id));
+  args = { ...args, category: args.category.trim() };
   if (args.programCode && !args.accountId) throw new Error("A program budget needs a ledger account.");
   if (args.accountId) {
     const account = await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);

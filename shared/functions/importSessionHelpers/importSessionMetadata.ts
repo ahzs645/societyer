@@ -86,7 +86,15 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "pipaTraining") return cleanText(payload?.participantName) || cleanText(payload?.title) || "PIPA training";
   if (recordKind === "employee") return cleanText(payload?.name) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Employee";
   if (recordKind === "volunteer") return cleanText(payload?.name) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Volunteer";
-  return cleanText(payload?.title) || cleanText(payload?.id) || "Document candidate";
+  if (recordKind === "committee") return cleanText(payload?.name) || cleanText(payload?.committeeName) || "Committee";
+  if (["committeeMember", "member", "director", "conflict"].includes(recordKind)) return cleanText(payload?.fullName) || cleanText(payload?.name) || cleanText(payload?.personName) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Person";
+  if (recordKind === "fundingSource") return cleanText(payload?.name) || "Funding source";
+  if (recordKind === "organizationSeat") return cleanText(payload?.organizationName) || cleanText(payload?.seatKey) || "Organization seat";
+  if (recordKind === "proxy") return [cleanText(payload?.grantorName), cleanText(payload?.proxyHolderName)].filter(Boolean).join(" → ") || "Proxy";
+  if (recordKind === "bylawRuleSet") return cleanText(payload?.title) || `Bylaw rules${cleanText(payload?.effectiveFrom) ? ` from ${cleanText(payload?.effectiveFrom)}` : ""}`;
+  if (recordKind === "operatingBudget") return cleanText(payload?.title) || [cleanText(payload?.fiscalYear), cleanText(payload?.category)].filter(Boolean).join(" ") || "Budget";
+  if (recordKind === "meetingMaterial") return cleanText(payload?.label) || cleanText(payload?.title) || "Meeting material";
+  return cleanText(payload?.title) || cleanText(payload?.text) || cleanText(payload?.id) || "Document candidate";
 }
 
 function descriptionForRecord(recordKind: string, payload: any) {

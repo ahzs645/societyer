@@ -23,6 +23,8 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import {
   ArrowLeft,
   Bot,
@@ -100,8 +102,8 @@ export function WorkflowDetailPage() {
   const { id } = useParams();
   const society = useSociety();
   const canManage = usePermissions().can("tasks:write");
-  const workflow = useQuery(api.workflows.get, id ? { id: id as any } : "skip");
-  const runs = useQuery(api.workflows.runsForWorkflow, id ? { workflowId: id as any } : "skip");
+  const workflow = useRecordQuery<any>(api.workflows.get, id ? { id: id as any } : "skip");
+  const runs = useQuery(api.workflows.runsForWorkflow, id && workflow ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
   const nodeTypeCatalog = useQuery(api.workflows.listNodeTypes, {});
   const documents = useQuery(
@@ -135,14 +137,7 @@ export function WorkflowDetailPage() {
   if (society === undefined || workflow === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!workflow) {
-    return (
-      <div className="page workflow-detail">
-        <Link className="btn btn--ghost" to="/app/workflows">
-          <ArrowLeft size={12} /> Back to workflows
-        </Link>
-        <div className="empty-state">Workflow not found.</div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Workflow" backTo="/app/workflows" backLabel="All workflows" />;
   }
 
   const providerConfig = workflow.providerConfig ?? {};

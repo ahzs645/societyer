@@ -1,3 +1,4 @@
+import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, HardDrive, Server, Upload } from "lucide-react";
@@ -52,6 +53,13 @@ export function WorkspaceStorageCard() {
 
   const importBackup = async (file: File | null | undefined, input: HTMLInputElement) => {
     if (!file) return;
+    try {
+      await preflightWorkspaceBackupFile(file);
+    } catch (error: any) {
+      input.value = "";
+      toast.error("This file can't be restored", error?.message ?? "Choose a Societyer ZIP or JSON backup.");
+      return;
+    }
     const ok = await confirm({
       title: "Restore this backup?",
       message: `Everything currently in this workspace is replaced by the contents of "${file.name}". This cannot be undone — export a backup first if you need one.`,

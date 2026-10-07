@@ -1,3 +1,13 @@
+import {
+  BEFORE_OPENING_FLAG,
+  SUSPENSE_ACCOUNT_TEMPLATE,
+  SUSPENSE_FLAG,
+  findSuspenseAccount,
+  normalizeCategory,
+  openingBalanceDate,
+  planTransactionBackfill,
+} from "../accountingBackfill";
+import { assertValid, validateCounterpartyInput, validateFiscalPeriodInput } from "../recordValidation";
 import { getPortable as getAccessibleDocument } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the accounting domain (chart of accounts, fiscal periods,
@@ -523,6 +533,12 @@ export async function upsertFiscalPeriodPortable(
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
   if (args.id) await getOwned(ctx, "accountingFiscalPeriods", args.id, args.societyId);
   requireOption(args.status, FISCAL_PERIOD_STATUSES, "Fiscal period status");
+  const existingPeriods = await ctx.db
+    .query("accountingFiscalPeriods")
+    .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+    .collect();
+  assertValid(validateFiscalPeriodInput(args, existingPeriods as any, args.id));
+  args = { ...args, fiscalYear: args.fiscalYear.trim(), periodLabel: args.periodLabel.trim() };
   const { id, actingUserId, ...payload } = args;
   const now = new Date().toISOString();
   if (id) {
@@ -583,6 +599,8 @@ export async function upsertCounterpartyPortable(
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
   if (args.id) await getOwned(ctx, "accountingCounterparties", args.id, args.societyId);
   requireOption(args.kind, COUNTERPARTY_KINDS, "Counterparty kind");
+  assertValid(validateCounterpartyInput(args));
+  args = { ...args, name: args.name.trim(), email: args.email?.trim() || undefined };
   const { id, actingUserId, ...payload } = args;
   const now = new Date().toISOString();
   if (id) {
@@ -981,72 +999,163 @@ export async function postTransactionCandidateAllocationPortable(
   return entryId;
 }
 
-export async function backfillFinancialTransactionsToJournalPortable(
-  ctx: PortableMutationCtx,
-  { societyId, fiscalYear, limit, actingUserId }: { societyId: string; fiscalYear?: string; limit?: number; actingUserId?: string },
-) {
-  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
-  const createdByUserId = await principalUserId(ctx, societyId);
-  const [transactions, existingLines, accounts, mappings] = await Promise.all([
+type BackfillOptions = {
+  categoryChoices?: Array<{ category: string; accountId: string }>;
+  includeBeforeOpening?: boolean;
+  useSuspense?: boolean;
+  transactionIds?: string[];
+};
+
+async function loadBackfillPlan(ctx: PortableQueryCtx, societyId: string, options: BackfillOptions) {
+  const [transactions, existingLines, accounts, mappings, openingEntries] = await Promise.all([
     ctx.db.query("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("journalEntries").withIndex("by_society_source", (q) => q.eq("societyId", societyId).eq("source", "opening_balance")).collect(),
   ]);
-  const alreadyBackfilled = new Set(existingLines.map((line: any) => String(line.financialTransactionId ?? "")));
+  const accountIds = new Set(accounts.map((account: any) => String(account._id)));
+  for (const choice of options.categoryChoices ?? []) {
+    if (!accountIds.has(String(choice.accountId))) throw new Error("Record not found.");
+  }
+  const plan = planTransactionBackfill({
+    transactions: transactions as any,
+    accounts: accounts as any,
+    mappings: mappings as any,
+    postedTransactionIds: existingLines.map((line: any) => String(line.financialTransactionId ?? "")).filter(Boolean),
+    openingBalanceDate: openingBalanceDate(openingEntries as any),
+    categoryChoices: options.categoryChoices,
+    includeBeforeOpening: options.includeBeforeOpening,
+    useSuspense: options.useSuspense,
+    transactionIds: options.transactionIds,
+  });
+  return { plan, transactions, accounts };
+}
+
+/**
+ * Review step for "Backfill imports": what would be posted, to which account,
+ * and what is held back (already posted, dated before opening balances, or
+ * unmapped). Nothing is written.
+ */
+export async function backfillPreviewPortable(
+  ctx: PortableQueryCtx,
+  { societyId, ...options }: { societyId: string } & BackfillOptions,
+) {
+  await requireSocietyMembership(ctx, societyId);
+  const { plan, accounts } = await loadBackfillPlan(ctx, societyId, options);
   const accountsById = new Map(accounts.map((account: any) => [String(account._id), account]));
-  const fallbackIncome = accounts.find((account: any) => account.accountType === "Income");
-  const fallbackExpense = accounts.find((account: any) => account.accountType === "Expense");
+  const suspenseTemplateLabel = `${SUSPENSE_ACCOUNT_TEMPLATE.code} ${SUSPENSE_ACCOUNT_TEMPLATE.name}`;
+  const label = (id?: string) => {
+    const account: any = id ? accountsById.get(String(id)) : undefined;
+    return account ? `${account.code ? `${account.code} ` : ""}${account.name}` : undefined;
+  };
+  return {
+    ...plan,
+    suspenseAccountLabel: label(plan.suspenseAccountId ?? undefined) ?? `${suspenseTemplateLabel} (created on first use)`,
+    rows: plan.rows.map((row) => ({
+      ...row,
+      cashAccountLabel: label(row.cashAccountId),
+      offsetAccountLabel: row.offsetSource === "suspense" && !row.offsetAccountId ? suspenseTemplateLabel : label(row.offsetAccountId),
+    })),
+    categories: plan.categories.map((category) => ({
+      ...category,
+      offsetAccountLabel: category.offsetSource === "suspense" && !category.offsetAccountId ? suspenseTemplateLabel : label(category.offsetAccountId),
+    })),
+  };
+}
+
+async function ensureSuspenseAccount(ctx: PortableMutationCtx, societyId: string, accounts: any[]): Promise<string> {
+  const existing = findSuspenseAccount(accounts as any);
+  if (existing) return String(existing._id);
+  const connections = await ctx.db
+    .query("financialConnections")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const connectionId =
+    connections.find((row: any) => row.provider === SOCIETYER_CONNECTION_PROVIDER)?._id ??
+    (await ctx.db.insert("financialConnections", {
+      societyId,
+      provider: SOCIETYER_CONNECTION_PROVIDER,
+      status: "connected",
+      accountLabel: "Societyer internal ledger",
+      syncMode: "internal",
+      connectedAtISO: new Date().toISOString(),
+      demo: false,
+    }));
+  const currency = accounts.find((account: any) => account.currency)?.currency ?? "CAD";
+  return await ctx.db.insert("financialAccounts", {
+    societyId,
+    connectionId,
+    externalId: `societyer:${SUSPENSE_ACCOUNT_TEMPLATE.code}`,
+    code: SUSPENSE_ACCOUNT_TEMPLATE.code,
+    name: SUSPENSE_ACCOUNT_TEMPLATE.name,
+    currency,
+    accountType: SUSPENSE_ACCOUNT_TEMPLATE.accountType,
+    subtype: SUSPENSE_ACCOUNT_TEMPLATE.subtype,
+    balanceCents: 0,
+    isRestricted: false,
+    sourceSystem: SOCIETYER_CONNECTION_PROVIDER,
+    normalBalance: SUSPENSE_ACCOUNT_TEMPLATE.normalBalance,
+  });
+}
+
+/**
+ * Post imported transactions to the journal after the review step. Defaults
+ * are the safe ones: unmapped rows go to the suspense account (never to an
+ * arbitrary income/expense account), and transactions dated on or before the
+ * opening-balance entry are skipped unless `includeBeforeOpening` is set, in
+ * which case each such entry is flagged.
+ */
+export async function backfillFinancialTransactionsToJournalPortable(
+  ctx: PortableMutationCtx,
+  { societyId, fiscalYear, limit, actingUserId, rememberMappings, ...options }: {
+    societyId: string;
+    fiscalYear?: string;
+    limit?: number;
+    actingUserId?: string;
+    /** Save the review step's category choices as active account mappings. */
+    rememberMappings?: boolean;
+  } & BackfillOptions,
+) {
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  const createdByUserId = await principalUserId(ctx, societyId);
+  const { plan, transactions, accounts } = await loadBackfillPlan(ctx, societyId, options);
+  const transactionsById = new Map(transactions.map((row: any) => [String(row._id), row]));
+  const toPost = plan.rows.filter((row) => row.status === "post").slice(0, limit ?? 200);
+  let suspenseAccountId = plan.suspenseAccountId;
+  if (!suspenseAccountId && toPost.some((row) => row.offsetSource === "suspense")) {
+    suspenseAccountId = await ensureSuspenseAccount(ctx, societyId, accounts);
+  }
   const now = new Date().toISOString();
-  let scanned = 0;
   let posted = 0;
-  let skipped = 0;
-  let needsMapping = 0;
-  for (const transaction of transactions.sort((a: any, b: any) => a.date.localeCompare(b.date))) {
-    if (posted >= (limit ?? 200)) break;
-    scanned += 1;
-    if (alreadyBackfilled.has(String(transaction._id))) {
-      skipped += 1;
-      continue;
-    }
-    const cashAccount = accountsById.get(String(transaction.accountId));
-    if (!cashAccount) {
-      needsMapping += 1;
-      continue;
-    }
-    const { cashSide, offsetSide, absoluteAmountCents, offsetKind } = transactionBackfillSides(transaction.amountCents);
-    const mapped = mappings.find((mapping: any) =>
-      mapping.status === "active" &&
-      (
-        (transaction.categoryAccountExternalId && mapping.externalAccountId === transaction.categoryAccountExternalId) ||
-        (transaction.categoryAccountExternalId && mapping.externalAccountCode === transaction.categoryAccountExternalId) ||
-        (transaction.category && mapping.externalCategory?.toLowerCase?.() === transaction.category.toLowerCase()) ||
-        (transaction.category && mapping.externalAccountName?.toLowerCase?.() === transaction.category.toLowerCase())
-      ),
-    );
-    const offsetAccount = mapped
-      ? accountsById.get(String(mapped.financialAccountId))
-      : offsetKind === "income"
-        ? fallbackIncome
-        : fallbackExpense;
-    if (!offsetAccount) {
-      needsMapping += 1;
-      continue;
-    }
+  let postedToSuspense = 0;
+  let flaggedBeforeOpening = 0;
+  for (const row of toPost) {
+    const transaction: any = transactionsById.get(row.transactionId);
+    const offsetAccountId = row.offsetSource === "suspense" ? suspenseAccountId : row.offsetAccountId;
+    if (!transaction || !offsetAccountId) continue;
+    const { cashSide, offsetSide, absoluteAmountCents } = transactionBackfillSides(transaction.amountCents);
     const period = await assertPeriodOpen(ctx, { societyId, date: transaction.date });
+    const flags = [
+      ...(row.beforeOpening ? [BEFORE_OPENING_FLAG] : []),
+      ...(row.offsetSource === "suspense" ? [SUSPENSE_FLAG] : []),
+    ];
     const entryId = await ctx.db.insert("journalEntries", {
       societyId,
       connectionId: transaction.connectionId,
       fiscalPeriodId: period?._id,
       date: transaction.date,
-      memo: transaction.description,
+      memo: row.beforeOpening
+        ? `[Before opening balances ${plan.openingBalanceDate}] ${transaction.description}`
+        : transaction.description,
       source: "financialTransactionBackfill",
       sourceExternalId: transaction.externalId,
       status: "posted",
       fiscalYear: fiscalYear ?? period?.fiscalYear,
       createdByUserId,
       postedAtISO: now,
-      rawJson: JSON.stringify(transaction),
+      reviewFlags: flags.length ? flags : undefined,
+      rawJson: JSON.stringify({ ...transaction, backfillFlags: flags }),
       createdAtISO: now,
       updatedAtISO: now,
     });
@@ -1067,20 +1176,61 @@ export async function backfillFinancialTransactionsToJournalPortable(
     await ctx.db.insert("journalLines", {
       societyId,
       journalEntryId: entryId,
-      accountId: offsetAccount._id,
+      accountId: offsetAccountId,
       lineOrder: 1,
       amountCents: absoluteAmountCents,
       side: offsetSide,
-      description: transaction.category ?? transaction.description,
+      description: row.offsetSource === "suspense"
+        ? `Unmapped: ${transaction.category ?? transaction.description}`
+        : transaction.category ?? transaction.description,
       financialTransactionId: transaction._id,
       sourceExternalId: transaction.categoryAccountExternalId ?? transaction.externalId,
-      rawJson: JSON.stringify({ backfillRole: "offset", mappingId: mapped?._id }),
+      rawJson: JSON.stringify({ backfillRole: "offset", mappingId: row.mappingId, offsetSource: row.offsetSource }),
       createdAtISO: now,
       updatedAtISO: now,
     });
     posted += 1;
+    if (row.offsetSource === "suspense") postedToSuspense += 1;
+    if (row.beforeOpening) flaggedBeforeOpening += 1;
   }
-  return { scanned, posted, skipped, needsMapping };
+  let mappingsSaved = 0;
+  if (rememberMappings) {
+    const existing = await ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+    for (const choice of options.categoryChoices ?? []) {
+      const category = choice.category.trim();
+      if (!category || !choice.accountId) continue;
+      const duplicate = existing.some((mapping: any) =>
+        mapping.status === "active" &&
+        normalizeCategory(mapping.externalCategory) === normalizeCategory(category) &&
+        String(mapping.financialAccountId) === String(choice.accountId));
+      if (duplicate) continue;
+      await ctx.db.insert("accountingAccountMappings", {
+        societyId,
+        provider: "societyer",
+        externalAccountName: category,
+        externalCategory: category,
+        financialAccountId: choice.accountId,
+        confidence: "manual",
+        status: "active",
+        notes: "Saved from the Backfill imports review.",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      mappingsSaved += 1;
+    }
+  }
+  return {
+    scanned: plan.summary.scanned,
+    posted,
+    postedToSuspense,
+    flaggedBeforeOpening,
+    skipped: plan.summary.alreadyPosted,
+    skippedBeforeOpening: plan.rows.filter((row) => row.status === "before_opening").length,
+    needsMapping: plan.summary.needsMapping + plan.summary.noCashAccount,
+    suspenseAccountId,
+    openingBalanceDate: plan.openingBalanceDate,
+    mappingsSaved,
+  };
 }
 
 export async function postOpeningBalancesPortable(

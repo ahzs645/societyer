@@ -23,6 +23,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FullTime: "Full-time",
@@ -69,7 +70,7 @@ export function EmployeesPage() {
       firstName: "",
       lastName: "",
       role: "",
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: todayDateOnly(),
       employmentType: "FullTime",
       cppExempt: false,
       eiExempt: false,

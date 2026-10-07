@@ -153,6 +153,7 @@ import type {
   FavoriteRef,
   SidebarContextMenu,
 } from "./Layout.internal";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -285,7 +286,7 @@ export function Layout() {
       } else if (action === "export-workspace") {
         import("../lib/localWorkspaceExport")
           .then(async ({ downloadLocalWorkspaceSnapshot }) => {
-            await downloadLocalWorkspaceSnapshot(`societyer-workspace-${new Date().toISOString().slice(0, 10)}.json`);
+            await downloadLocalWorkspaceSnapshot(`societyer-workspace-${todayDateOnly()}.json`);
             toast.success("Workspace export started");
           })
           .catch((error) => {
@@ -1140,7 +1141,7 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.openTasks")}</span>
-                    <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
+                    <Pill size="sm">{counts ? counts.openTasks : <span aria-label="Loading" className="muted">…</span>}</Pill>
                   </NavLink>
                   <NavLink
                     to="/app/deadlines"
@@ -1149,7 +1150,17 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.upcomingDeadlines")}</span>
-                    <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
+                    {/* P20: "0" looked healthy for an unconfigured workspace;
+                        say that deadlines are not computed yet instead. */}
+                    {!counts ? (
+                      <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>
+                    ) : counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
+                      <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end (Society profile) and record held AGMs to compute statutory deadlines.">
+                        <Pill size="sm" tone="warn">Set up</Pill>
+                      </span>
+                    ) : (
+                      <Pill size="sm">{counts.openDeadlines}</Pill>
+                    )}
                   </NavLink>
                 </>
               )}

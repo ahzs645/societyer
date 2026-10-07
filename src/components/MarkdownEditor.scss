@@ -148,6 +148,20 @@
     resize: vertical;
   }
 
+  // One wrapper per Crepe instance (see MarkdownEditorImpl); layout-neutral.
+  &__instance {
+    display: contents;
+  }
+
+  &__body[data-loading-preview]::before {
+    content: attr(data-loading-preview);
+    display: block;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-secondary);
+  }
+
   // Style the resize handle in webkit browsers so it stays visible against
   // the app's dark theme. Firefox doesn't expose the resizer pseudo, but it
   // also doesn't draw a dedicated handle.

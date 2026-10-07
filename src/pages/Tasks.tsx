@@ -2,7 +2,9 @@ import { ActionRegisterCard } from "../components/ActionRegisterCard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ListTodo, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowUpRight, Check, History, ListTodo, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { isHistoricalSourceAction, taskStatusLabel as sharedTaskStatusLabel } from "../../shared/taskStatus";
+import { HistoricalActionSource } from "../features/tasks/HistoricalActionSource";
 import { api } from "@/lib/convexApi";
 import {
   RecordTable,
@@ -31,7 +33,7 @@ import {
 } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { formatDate } from "../lib/format";
+import { formatDate, isPastDue } from "../lib/format";
 import { useIsMobile } from "../lib/useIsMobile";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 
@@ -53,18 +55,11 @@ type TaskRecord = Doc<"tasks"> & {
   completedByUserIdLabel?: string;
 };
 
-const TASK_STATUS_LABELS: Record<(typeof TASK_STATUSES)[number], string> = {
-  Todo: "To do",
-  InProgress: "In progress",
-  Blocked: "Blocked",
-  Done: "Done",
-};
-
 export function taskStatusLabel(status: string) {
-  return status in TASK_STATUS_LABELS
-    ? TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]
-    : status;
+  return sharedTaskStatusLabel(status);
 }
+
+type TaskRegister = "current" | "historical";
 
 export function TasksPage() {
   const society = useSociety();
@@ -77,6 +72,8 @@ export function TasksPage() {
   const create = useMutation(api.tasks.create);
   const update = useMutation(api.tasks.update);
   const remove = useMutation(api.tasks.remove);
+  const consolidate = useMutation(api.tasks.consolidateHistoricalActions);
+  const promote = useMutation(api.tasks.promoteHistoricalAction);
   const currentUserId = useCurrentUserId();
   const confirm = useConfirm();
   const toast = useToast();
@@ -85,6 +82,8 @@ export function TasksPage() {
   const requestedGoalId = searchParams.get("goalId") ?? "";
   const requestedCommitteeId = searchParams.get("committeeId") ?? "";
   const openNewFromUrl = searchParams.get("new") === "1";
+  // P2/P4: historical source actions are a separate register, never open work.
+  const register: TaskRegister = searchParams.get("register") === "historical" ? "historical" : "current";
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -213,10 +212,15 @@ export function TasksPage() {
       records.filter((task) => {
         if (filterCommittee && String(task.committeeId ?? "") !== filterCommittee) return false;
         if (filterGoal && String(task.goalId ?? "") !== filterGoal) return false;
+        if ((register === "historical") !== isHistoricalSourceAction(task)) return false;
         return !filterLink || matchesLinkFilter(task, filterLink);
       }),
-    [records, filterCommittee, filterGoal, filterLink],
+    [records, filterCommittee, filterGoal, filterLink, register],
   );
+  const registerCounts = useMemo(() => {
+    const historical = records.filter(isHistoricalSourceAction).length;
+    return { historical, current: records.length - historical };
+  }, [records]);
 
   const openNew = useCallback(() => {
     if (!canManage) return;
@@ -254,6 +258,19 @@ export function TasksPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  const changeRegister = (next: TaskRegister) => {
+    setSearchParams(
+      (previous) => {
+        const params = new URLSearchParams(previous);
+        if (next === "historical") params.set("register", "historical");
+        else params.delete("register");
+        params.delete("new");
+        return params;
+      },
+      { replace: true },
+    );
+  };
+
   const changeGoalFilter = (goalId: string) => {
     setFilterGoal(goalId);
     setSearchParams(
@@ -281,6 +298,9 @@ export function TasksPage() {
         committeeId: task.committeeId,
         goalId: task.goalId,
         meetingId: task.meetingId,
+        agendaItemId: task.agendaItemId,
+        assigneePersonId: task.assigneePersonId,
+        sourceAssignee: task.sourceAssignee,
         filingId: task.filingId,
         workflowId: task.workflowId,
         documentId: task.documentId,
@@ -308,6 +328,15 @@ export function TasksPage() {
             status: form.status,
             priority: form.priority,
             assignee: form.assignee || undefined,
+            ...(form.assigneePersonId
+              ? { assigneePersonId: form.assigneePersonId as Id<"peopleDirectory"> }
+              : { clearAssigneePersonId: true }),
+            ...(form.meetingId
+              ? { meetingId: form.meetingId as Id<"meetings"> }
+              : { clearMeetingId: true }),
+            ...(form.meetingId && form.agendaItemId
+              ? { agendaItemId: form.agendaItemId as Id<"agendaItems"> }
+              : { clearAgendaItemId: true }),
             responsibleUserIds: form.responsibleUserId
               ? [form.responsibleUserId as Id<"users">]
               : [],
@@ -344,6 +373,9 @@ export function TasksPage() {
         status: form.status,
         priority: form.priority,
         assignee: form.assignee || undefined,
+        assigneePersonId: form.assigneePersonId ? (form.assigneePersonId as Id<"peopleDirectory">) : undefined,
+        meetingId: form.meetingId ? (form.meetingId as Id<"meetings">) : undefined,
+        agendaItemId: form.meetingId && form.agendaItemId ? (form.agendaItemId as Id<"agendaItems">) : undefined,
         responsibleUserIds: form.responsibleUserId
           ? [form.responsibleUserId as Id<"users">]
           : undefined,
@@ -385,8 +417,73 @@ export function TasksPage() {
     }
   };
 
+  /** P3: completing a historical source action records a present-day judgement; ask first. */
+  const confirmHistoricalCompletion = async (task: TaskRecord) => {
+    if (!isHistoricalSourceAction(task)) return true;
+    return confirm({
+      title: "Mark this historical action done?",
+      message: (
+        <>
+          <p style={{ margin: "0 0 8px" }}>
+            “{task.title}” comes from old minutes. The source does not say whether it was completed or is still owed.
+          </p>
+          <p style={{ margin: 0 }}>
+            Marking it done records that <strong>you, today</strong>, confirmed completion. Add the evidence in the completion
+            note afterwards. If the action no longer applies, set its status to Cancelled instead.
+          </p>
+        </>
+      ),
+      confirmLabel: "Mark done",
+      tone: "warn",
+    });
+  };
+
+  const promoteToCurrent = async (task: TaskRecord) => {
+    if (!canManage) return;
+    const approved = await confirm({
+      title: "Convert to a current task?",
+      message: `“${task.title}” will move to Current tasks with status To do and count as open work. Its source meeting and observations stay attached.`,
+      confirmLabel: "Convert",
+    });
+    if (!approved) return;
+    try {
+      await promote({ id: task._id, title: task.title.replace(/^Review historical action:\s*/i, "") });
+      toast.success("Converted to a current task", task.title);
+    } catch (error) {
+      toast.error("Could not convert the action", error instanceof Error ? error.message : "Please try again.");
+    }
+  };
+
+  const tidyHistorical = async () => {
+    if (!canManage) return;
+    try {
+      const preview: any = await consolidate({ societyId: society._id, dryRun: true });
+      const approved = await confirm({
+        title: "Tidy historical source actions?",
+        message: (
+          <>
+            <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+              <li>{preview.folded} carried-forward duplicate{preview.folded === 1 ? "" : "s"} folded into {preview.duplicateGroups} action{preview.duplicateGroups === 1 ? "" : "s"} (every source observation is kept on the remaining action)</li>
+              <li>{preview.statusUnknown} action{preview.statusUnknown === 1 ? "" : "s"} set to “Unknown (from source)” and no longer assigned to the importing user</li>
+              <li>{preview.sourceAssignees} owner{preview.sourceAssignees === 1 ? "" : "s"} recorded as written in the source (for example “Kim”)</li>
+              <li>{preview.committeesLinked} linked to the committee of their source meeting</li>
+            </ul>
+            <p className="muted" style={{ margin: 0 }}>Actions someone has already changed are left as they are. Folded duplicates are deleted after their observations are copied.</p>
+          </>
+        ),
+        confirmLabel: "Apply",
+      });
+      if (!approved) return;
+      const result: any = await consolidate({ societyId: society._id, dryRun: false });
+      toast.success("Historical actions tidied", `${result.folded} duplicates folded, ${result.statusUnknown} marked Unknown`);
+    } catch (error) {
+      toast.error("Could not tidy historical actions", error instanceof Error ? error.message : "Please try again.");
+    }
+  };
+
   const markComplete = async (task: TaskRecord) => {
     if (!canManage) return;
+    if (!(await confirmHistoricalCompletion(task))) return;
     try {
       await update({
         id: task._id,
@@ -409,6 +506,8 @@ export function TasksPage() {
     if (!canManage) return;
     const id = recordId as Id<"tasks">;
     if (fieldName === "status" && typeof value === "string") {
+      const task = records.find((record) => record._id === id);
+      if (value === "Done" && task && !(await confirmHistoricalCompletion(task))) return;
       await update({
         id,
         patch: {
@@ -500,7 +599,30 @@ export function TasksPage() {
         }
       />
 
-      <ActionRegisterCard societyId={society._id} tasks={records} />
+      <div className="segmented" role="tablist" aria-label="Task register" style={{ marginBottom: 12, maxWidth: "100%", flexWrap: "wrap" }}>
+        <button type="button" role="tab" aria-selected={register === "current"} className={`segmented__btn${register === "current" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("current")}>
+          <ListTodo size={12} /> Current tasks ({registerCounts.current})
+        </button>
+        <button type="button" role="tab" aria-selected={register === "historical"} className={`segmented__btn${register === "historical" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("historical")}>
+          <History size={12} /> Historical source actions ({registerCounts.historical})
+        </button>
+      </div>
+      {register === "historical" && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="card__body col" style={{ gap: 8 }}>
+            <p style={{ margin: 0 }}>
+              Action lines copied from past minutes. They show what a meeting asked for; whether each was done, and whether it is still owed, is unknown.
+              They are not counted as open tasks. Convert one to a current task when it is still relevant.
+            </p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button type="button" className="btn btn--sm" disabled={!canManage || registerCounts.historical === 0} onClick={tidyHistorical}>
+                <Wand2 size={12} /> Tidy duplicates and statuses…
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {register === "historical" && <ActionRegisterCard societyId={society._id} tasks={pageFilteredRecords} />}
       <div className="row" style={{ marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
         {isMobile && (
           <button
@@ -547,6 +669,7 @@ export function TasksPage() {
               style={{ width: isMobile ? "100%" : 180, maxWidth: "100%" }}
               options={[
                 { value: "linked", label: "Any linked record" },
+                { value: "meeting", label: "Meeting linked" },
                 { value: "goal", label: "Goal linked" },
                 { value: "filing", label: "Filing linked" },
                 { value: "workflow", label: "Workflow linked" },
@@ -565,7 +688,7 @@ export function TasksPage() {
             flexShrink: 0,
           }}
         >
-          {pageFilteredRecords.length} of {records.length}
+          {pageFilteredRecords.length} of {register === "historical" ? registerCounts.historical : registerCounts.current}
         </div>
       </div>
 
@@ -617,6 +740,7 @@ export function TasksPage() {
                 onStatusChange={(task, status) =>
                   updateInlineField(task._id, "status", status)
                 }
+                onPromote={canManage ? promoteToCurrent : undefined}
               />
             )
           ) : (
@@ -625,7 +749,18 @@ export function TasksPage() {
               loading={tableData.loading || tasks === undefined}
               renderRowActions={(record: TaskRecord) => (
                 <>
-                  {record.status !== "Done" && (
+                  {isHistoricalSourceAction(record) && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!canManage}
+                      title="Convert to a current task"
+                      onClick={() => promoteToCurrent(record)}
+                    >
+                      <ArrowUpRight size={12} /> Make current
+                    </button>
+                  )}
+                  {!["Done", "Cancelled"].includes(record.status) && (
                     <button
                       type="button"
                       className="btn btn--sm"
@@ -638,8 +773,8 @@ export function TasksPage() {
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={`Edit task ${record.title}`}
-                    title="Edit task"
+                    aria-label={`${canManage ? "Edit" : "View"} task ${record.title}`}
+                    title={canManage ? "Edit task" : "View task"}
                     onClick={() => openEdit(record)}
                   >
                     <Pencil size={12} />
@@ -733,6 +868,16 @@ export function TasksPage() {
                 belong in Commitments.
               </p>
             )}
+            {form._id && (() => {
+              const task = records.find((record) => record._id === form._id);
+              return task && (isHistoricalSourceAction(task) || task.sourceObservations?.length || task.meetingId) ? (
+                <HistoricalActionSource
+                  task={task}
+                  meetingTitle={task.meetingIdLabel}
+                  onPromote={canManage && isHistoricalSourceAction(task) ? async () => { await promoteToCurrent(task); setOpen(false); } : undefined}
+                />
+              ) : null;
+            })()}
             <fieldset disabled={!canManage || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <TaskFormFields
               readOnly={!canManage}
@@ -762,6 +907,7 @@ function TaskPhoneList({
   onEdit,
   onDelete,
   onStatusChange,
+  onPromote,
 }: {
   canManage: boolean;
   hasTasks: boolean;
@@ -771,6 +917,7 @@ function TaskPhoneList({
   onEdit: (task: TaskRecord) => void;
   onDelete: (id: Id<"tasks">, title: string) => Promise<void>;
   onStatusChange: (task: TaskRecord, status: string) => Promise<void>;
+  onPromote?: (task: TaskRecord) => Promise<void>;
 }) {
   const records = useFilteredRecords() as TaskRecord[];
   const viewType = useRecordTableState((state) => state.type);
@@ -802,8 +949,8 @@ function TaskPhoneList({
           userNames(task.responsibleUserIds, userById) || task.assignee;
         const overdue =
           Boolean(task.dueDate) &&
-          new Date(task.dueDate ?? "").getTime() < Date.now() &&
-          task.status !== "Done";
+          isPastDue(task.dueDate) &&
+          !["Done", "Cancelled", "Unknown"].includes(task.status);
 
         return (
           <div
@@ -879,11 +1026,16 @@ function TaskPhoneList({
                   label: taskStatusLabel(status),
                 }))}
               />
+              {onPromote && isHistoricalSourceAction(task) && (
+                <button type="button" className="btn btn--sm" onClick={() => void onPromote(task)}>
+                  <ArrowUpRight size={12} /> Make current
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon"
                 style={{ marginLeft: "auto" }}
-                aria-label={`Edit task ${task.title}`}
+                aria-label={`${canManage ? "Edit" : "View"} task ${task.title}`}
                 onClick={() => onEdit(task)}
               >
                 <Pencil size={12} />
@@ -923,6 +1075,7 @@ function matchesLinkFilter(task: TaskRecord, filter: string) {
   if (filter === "linked") {
     return Boolean(
       task.goalId ||
+        task.meetingId ||
         task.filingId ||
         task.workflowId ||
         task.documentId ||
@@ -930,6 +1083,7 @@ function matchesLinkFilter(task: TaskRecord, filter: string) {
         task.eventId,
     );
   }
+  if (filter === "meeting") return Boolean(task.meetingId);
   if (filter === "goal") return Boolean(task.goalId);
   if (filter === "filing") return Boolean(task.filingId);
   if (filter === "workflow") return Boolean(task.workflowId);
