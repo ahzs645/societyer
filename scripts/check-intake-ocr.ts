@@ -7,6 +7,7 @@
  *    scripts/generate-intake-ocr-fixtures.ts; no real records) are read with tesseract.js and the
  *    bundled English model: an image-only two-page minutes PDF whose second sheet was scanned
  *    sideways, and a consent form saved as a PNG. They then run through the whole pipeline.
+ *    The per-file extract deadline restarts on each OCR page (long scans finish; a stuck parser does not hold the run).
  * 3. Native legacy readers on synthetic files: Excel 97-2003, PowerPoint 97-2003, PPTX, XPS,
  *    HTML saved as .xls and files without an extension.
  * 4. Optional private OCR golden set (real scans, outside git):
@@ -23,7 +24,7 @@ import path from "node:path";
 import { finalizeBlocks, type IntakeExtract } from "../shared/intake/blocks";
 import { classifyPrior } from "../shared/intake/classify";
 import { extractBytes, sniffExtension } from "../shared/intake/extract";
-import { applyOcrConfidence, cleanRecognition, compactOcrSummary, isDocumentImage, itemsFromRecognition, OcrPageBudget, recognitionQuality, type OcrEngine, type OcrHost, type OcrRecognition } from "../shared/intake/extract/ocr";
+import { applyOcrConfidence, cleanRecognition, compactOcrSummary, isDocumentImage, itemsFromRecognition, OcrPageBudget, recognitionQuality, withOcrActivity, type OcrEngine, type OcrHost, type OcrRecognition } from "../shared/intake/extract/ocr";
 import { recognitionFromTesseractBlocks } from "../shared/intake/extract/ocrTesseract";
 import { linesFromItems } from "../shared/intake/extract/pdf";
 import { extractForClass } from "../shared/intake/extractors";
@@ -168,6 +169,28 @@ try {
   assert.match((await extractBytes("scan.pdf", read("2025-03-18 Board Minutes (scan).pdf"))).warnings.join(" "), /No text layer on page\(s\) 1, 2; OCR required/);
   assert.match((await extractBytes("form.png", read("2025 Consent to Act - Robin Vale (scan).png"))).warnings[0], /OCR is not enabled/);
 
+  // The extract deadline counts time without progress: a long scan whose pages keep arriving is
+  // not cut off, while a parser that never settles still is.
+  {
+    const slowEngine: OcrEngine = { name: "slow fake", recognize: async () => { await new Promise((resolve) => setTimeout(resolve, 80)); return { words: [], width: 100, height: 100 }; } };
+    const slowHost: OcrHost = { engine: slowEngine, renderPdfPage: async () => ({ bytes: new Uint8Array(0), width: 1, height: 1 }) };
+    const text = new TextEncoder().encode("Minutes of the board meeting.");
+    const files: PipelineSourceFile[] = ["long scan.txt", "stuck parser.txt"].map((name) => ({ fileKey: `local:${name}`, name, path: name, acquisitionStatus: "local", read: async () => text }));
+    const timed = await runIntakePipeline(files, {
+      name: "deadline", sourceKind: "local_folder", sourceRoot: "/", fieldExtraction: false, extractTimeoutMs: 200,
+      extract: async (file, bytes, { keepAlive }) => {
+        if (file.name.startsWith("stuck")) return new Promise<never>(() => {});
+        const pages = withOcrActivity(slowHost, keepAlive);
+        for (let page = 0; page < 6; page++) await pages.engine.recognize({ bytes: new Uint8Array(0), width: 1, height: 1 });
+        return extractBytes(file.name, bytes);
+      },
+    });
+    const byName = new Map(timed.files.map((file) => [file.name, file]));
+    assert.equal(byName.get("long scan.txt")?.disposition, "extract", "six 80 ms pages (480 ms) outlast a 200 ms idle deadline because each page restarts it");
+    assert.equal(byName.get("stuck parser.txt")?.disposition, "catalogue");
+    assert.match(byName.get("stuck parser.txt")?.dispositionReason ?? "", /timed out after 0 s without progress/);
+  }
+
   // End to end: the pipeline extracts the scan and the image, classifies the image by its name and text, and stages records.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "societyer-ocr-gate-"));
   try {
@@ -226,7 +249,7 @@ assert.equal(xpsMinutes.date.value.iso, "2025-02-11");
 assert.equal(xpsMinutes.motions[0].secondedBy.value.nameAsWritten, "Robin Vale");
 const htmlXls = await extractBytes("PM2.5 2013.xls", new TextEncoder().encode("Report Type : StationReport  <table><tr><td>Date</td><td>PM25</td></tr><tr><td>2013-01-01</td><td>12.4</td></tr></table>"));
 assert.ok(htmlXls.blocks.some((block) => block.kind === "table" && block.text === "Date\tPM25\n2013-01-01\t12.4"), "an HTML table saved as .xls stays a table");
-console.log(`PASS intake OCR: synthetic scans read offline (rotation, page budget, confidence caps, ${ocrSeconds} s), images classified as documents or photos, legacy .xls/.ppt/.pptx/.xps and extensionless files read natively`);
+console.log(`PASS intake OCR: synthetic scans read offline (rotation, page budget, confidence caps, idle deadline, ${ocrSeconds} s), images classified as documents or photos, legacy .xls/.ppt/.pptx/.xps and extensionless files read natively`);
 
 // ---------------------------------------------------------------- 4. private OCR golden set
 const goldenPath = process.env.SOCIETYER_GOLDEN_SET_OCR;

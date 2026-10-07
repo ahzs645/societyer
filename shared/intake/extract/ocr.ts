@@ -59,6 +59,19 @@ export type OcrHost = {
   keepLineBoxes?: boolean;
 };
 
+/** The same host, calling `onActivity` as each page is rendered or recognised (a per-file
+ * progress signal: the pipeline's extract deadline restarts on it). Budget and engine stay shared. */
+export function withOcrActivity(host: OcrHost, onActivity: () => void): OcrHost {
+  const engine = host.engine;
+  const touch = <T>(value: T): T => { onActivity(); return value; };
+  return {
+    ...host,
+    engine: { name: engine.name, recognize: async (image) => { onActivity(); return touch(await engine.recognize(image)); } },
+    renderPdfPage: async (page, options) => { onActivity(); return touch(await host.renderPdfPage(page, options)); },
+    ...(host.decodeImage ? { decodeImage: async (bytes: Uint8Array, fileName: string, options: { rotation: number; maxPixels: number }) => touch(await host.decodeImage!(bytes, fileName, options)) } : {}),
+  };
+}
+
 export const OCR_LOW_WORD_CONFIDENCE = 60;
 const MIN_PROBE_WORDS = 8;
 

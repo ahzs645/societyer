@@ -36,6 +36,7 @@ import path from "node:path";
 import { buildImportBundle, coverageReport } from "../shared/intake/bundle";
 import { libreOfficeConverter, md5Hex, sha256Hex } from "../shared/intake/node/extractFile";
 import { createNodeOcrHost, type NodeOcrHost } from "../shared/intake/node/ocr";
+import { withOcrActivity } from "../shared/intake/extract/ocr";
 import type { IntakeExtract } from "../shared/intake/blocks";
 import { extractBytes } from "../shared/intake/extract";
 import { INTAKE_EXTRACT_VERSION } from "../shared/intake/blocks";
@@ -170,7 +171,7 @@ const result = await runIntakePipeline(sourceFiles, {
   name: flag("--name") ?? path.basename(sourceRoot),
   sourceKind,
   sourceRoot,
-  extract: async (file, bytes) => {
+  extract: async (file, bytes, { keepAlive }) => {
     // --extract-cache <dir>: text/layout extracts keyed by content hash and extractor version,
     // so re-running a large archive after an extractor fix skips PDF parsing and LibreOffice.
     const cacheDir = flag("--extract-cache");
@@ -179,7 +180,7 @@ const result = await runIntakePipeline(sourceFiles, {
       const cached = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as IntakeExtract;
       if (!staleForThisRun(cached)) return cached;
     }
-    const extract = await extractBytes(file.name, bytes, { convertLegacy: libreOfficeConverter, ocr });
+    const extract = await extractBytes(file.name, bytes, { convertLegacy: libreOfficeConverter, ocr: ocr && withOcrActivity(ocr, keepAlive) });
     if (cacheFile) {
       fs.mkdirSync(cacheDir!, { recursive: true });
       fs.writeFileSync(cacheFile, JSON.stringify(extract));

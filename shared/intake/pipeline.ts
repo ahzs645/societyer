@@ -27,11 +27,13 @@ export type PipelineOptions = {
   name: string;
   sourceKind: IntakeRunResult["sourceKind"];
   sourceRoot: string;
-  extract: (file: PipelineSourceFile, bytes: Uint8Array) => Promise<IntakeExtract>;
+  /** `keepAlive` restarts the file's deadline; long OCR calls it after each page. */
+  extract: (file: PipelineSourceFile, bytes: Uint8Array, context: { keepAlive: () => void }) => Promise<IntakeExtract>;
   hash?: (bytes: Uint8Array) => string | Promise<string>;
   llm?: { generate: GenerateObjectFn; provider: string; model: string; budgetTokens: number; concurrency: number };
   concurrency?: number;
-  /** Per-file text extraction deadline (default 180 s); a file that exceeds it is catalogued. */
+  /** Per-file extraction deadline without progress (default 180 s); a file that exceeds it is catalogued.
+   * Progress (an OCR'd page) restarts it, so a long scan is not cut off while it is being read. */
   extractTimeoutMs?: number;
   onProgress?: (stage: string, done: number, total: number) => void;
   keepExtracts?: boolean;
@@ -132,9 +134,14 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
       }
       // A malformed file can leave a parser promise that never settles (no pending I/O), which
       // would end the run silently; each file gets a deadline instead and is catalogued on expiry.
+      // The deadline counts time without progress: OCR reports each page through keepAlive.
+      const timeoutMs = options.extractTimeoutMs ?? 180000;
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out after ${Math.round((options.extractTimeoutMs ?? 180000) / 1000)} s`)), options.extractTimeoutMs ?? 180000); });
-      const extract = await Promise.race([options.extract(file, bytes), deadline]).finally(() => clearTimeout(timer));
+      let expire: (() => void) | undefined;
+      const arm = () => { clearTimeout(timer); timer = setTimeout(() => expire?.(), timeoutMs); };
+      const deadline = new Promise<never>((_, reject) => { expire = () => reject(new Error(`timed out after ${Math.round(timeoutMs / 1000)} s without progress`)); });
+      arm();
+      const extract = await Promise.race([options.extract(file, bytes, { keepAlive: arm }), deadline]).finally(() => { clearTimeout(timer); expire = undefined; });
       file.extractMethod = extract.method;
       file.textLength = extract.text.length;
       if (extract.method === "unsupported" || !extract.text.trim()) {

@@ -12,7 +12,7 @@ import { extractBytes } from "../../../shared/intake/extract";
 import type { PdfJsModule } from "../../../shared/intake/extract/pdf";
 import { buildImportBundle, coverageReport } from "../../../shared/intake/bundle";
 import type { GenerateObjectFn } from "../../../shared/intake/llm";
-import type { OcrHost } from "../../../shared/intake/extract/ocr";
+import { withOcrActivity, type OcrHost } from "../../../shared/intake/extract/ocr";
 import type { IntakeWorkerRequest, IntakeWorkerResponse, WorkerLlmConfig, WorkerOcrConfig } from "./workerProtocol";
 
 type WorkerScope = { postMessage: (message: IntakeWorkerResponse, transfer?: Transferable[]) => void; onmessage: ((event: MessageEvent<IntakeWorkerRequest>) => void) | null };
@@ -93,7 +93,7 @@ scope.onmessage = (event) => {
         hash: sha256,
         llm,
         ocrImages: Boolean(ocr),
-        extract: async (file, bytes) => extractBytes(file.name, bytes, { pdfjs: /\.pdf$/i.test(file.name) || !/\.[a-z0-9]{1,6}$/i.test(file.name) ? await loadPdfJs() : undefined, convertLegacy: canConvert ? convertLegacy : undefined, ocr }),
+        extract: async (file, bytes, { keepAlive }) => extractBytes(file.name, bytes, { pdfjs: /\.pdf$/i.test(file.name) || !/\.[a-z0-9]{1,6}$/i.test(file.name) ? await loadPdfJs() : undefined, convertLegacy: canConvert ? convertLegacy : undefined, ocr: ocr && withOcrActivity(ocr, keepAlive) }),
         onProgress: (stage, done, total) => post({ type: "progress", stage, done, total }),
       }).finally(() => ocr?.terminate());
       const { extracts, texts: _texts, ...run } = result;
