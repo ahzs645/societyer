@@ -244,6 +244,17 @@ export function attendanceRowsFromPaste(text: string, status: AttendanceGridStat
     .map((line) => line.replace(/^[\s\-–—•*·]+/, "").trim())
     .filter(Boolean)
     .map((line) => {
+      // "Blair Sample (Chair), Ministry of Examples": role in brackets, then affiliation.
+      const both = /^([^(),]+?)\s*\(([^)]+)\)\s*,\s*(.+)$/.exec(line);
+      if (both) {
+        return blankAttendanceRow({
+          name: both[1].trim(),
+          status,
+          roleTitle: both[2].trim(),
+          affiliation: both[3].trim(),
+          quorumCounted: defaultQuorumCounted(status),
+        });
+      }
       const screened = screenAttendanceName(line);
       return blankAttendanceRow({
         name: screened.kind === "person" ? screened.name : line,

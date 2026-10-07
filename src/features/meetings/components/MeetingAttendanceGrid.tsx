@@ -293,6 +293,21 @@ export function MeetingAttendanceGrid({
             <Users size={12} /> {expectedPeopleLabel ?? "Add expected people"}
           </button>
         )}
+        {rows.length > 1 && (
+          <span className="attendance-grid__bulk-status">
+            <Select
+              value=""
+              placeholder="Set every status…"
+              onChange={(status) => {
+                if (!status) return;
+                setRows((current) => current.map((row) => ({ ...row, status: status as AttendanceGridStatus, quorumCounted: defaultQuorumCounted(status as AttendanceGridStatus) })));
+              }}
+              options={STATUS_OPTIONS}
+              size="sm"
+              aria-label="Set the status of every row"
+            />
+          </span>
+        )}
         {linkSuggestions.length > 0 && (
           <button type="button" className="btn-action" onClick={linkAll} data-testid="attendance-link-all">
             <Wand2 size={12} /> Link {linkSuggestions.length} to the people directory

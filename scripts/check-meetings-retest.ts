@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { minutesTextForDisplay } from "../shared/minutesMarkdownText";
 import { clockTextTo24h } from "../shared/meetingDateEdit";
-import { blankAttendanceRow, mergeAttendanceRows } from "../shared/meetingAttendanceGrid";
+import { cleanSourceLocation } from "../shared/meetingSourceHeader";
+import { attendanceRowsFromPaste, blankAttendanceRow, mergeAttendanceRows } from "../shared/meetingAttendanceGrid";
 import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
 import { effectiveSourceFidelity } from "../src/features/meetings/lib/minutesExportPrefs";
 
@@ -32,6 +33,11 @@ assert.equal(clockTextTo24h("TBD"), undefined);
 assert.equal(clockTextTo24h("13:00 PM"), undefined);
 console.log("✓ source time: clock text → 24h start time");
 
+assert.equal(cleanSourceLocation("ZoomSubject: \tMeeting MinutesZoom: Link"), "Zoom");
+assert.equal(cleanSourceLocation("Room 207 – 155 George Street, Prince George, BC"), "Room 207 – 155 George Street, Prince George, BC");
+assert.equal(cleanSourceLocation("Zoom: https://example.org/j/1"), "Zoom: https://example.org/j/1");
+console.log("✓ source location: run-on header lines trimmed");
+
 // ---------- attendance: source roles fill existing rows -----------------------
 const current = [blankAttendanceRow({ name: "Alex Example" }), blankAttendanceRow({ name: "Blair Sample", roleTitle: "Chair" })];
 const merged = mergeAttendanceRows(current, [
@@ -45,6 +51,13 @@ assert.equal(merged.rows.find((row) => row.name === "Alex Example")?.roleTitle, 
 assert.equal(merged.rows.find((row) => row.name === "Blair Sample")?.roleTitle, "Chair", "typed role kept");
 assert.equal(merged.rows.length, 3);
 console.log("✓ attendance merge: no duplicates, blank roles filled, typed values kept");
+
+const pasted = attendanceRowsFromPaste("Casey Demo (Note-taker), Example Society\nDrew Sample, Example Council", "staff");
+assert.deepEqual(pasted.map((row) => [row.name, row.roleTitle ?? "", row.affiliation ?? "", row.status]), [
+  ["Casey Demo", "Note-taker", "Example Society", "staff"],
+  ["Drew Sample", "", "Example Council", "staff"],
+]);
+console.log("✓ attendance paste: “Name (Role), Affiliation” splits into its parts");
 
 // ---------- section save + agenda re-sync keeps actions and motion links -------
 const societyId = "retest_society";

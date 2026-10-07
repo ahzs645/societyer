@@ -24,6 +24,7 @@ import { bodyChoiceIssue, bodyPatchForValue, bodyValueForMeeting, meetingBodyOpt
 import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { clockTextTo24h, meetingDateDraftFrom, meetingDateDraftIssue, meetingDatePatchFromDraft, type MeetingDateDraft } from "../../../../shared/meetingDateEdit";
 import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
+import { cleanSourceLocation } from "../../../../shared/meetingSourceHeader";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 
 export const COMMON_TIME_ZONES = [
@@ -234,7 +235,7 @@ export function EditMeetingDrawer({
                   </button>
                 )}
                 {header.locationText && (
-                  <button type="button" className="btn-action" onClick={() => patchDraft({ location: String(header.locationText).trim() })}>
+                  <button type="button" className="btn-action" onClick={() => patchDraft({ location: cleanSourceLocation(header.locationText) })}>
                     Use source location
                   </button>
                 )}
