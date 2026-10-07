@@ -649,7 +649,7 @@ function renderNavItem(
           <Icon size={14} />
         </TintedIconTile>
         <span className="sidebar__label">{label}</span>
-        {count != null && <NavCountPill to={item.to} count={count} />}
+        {count != null ? <NavCountPill to={item.to} count={count} /> : counts === undefined ? <NavCountLoadingPill to={item.to} /> : null}
       </NavLink>
       {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
        * without needing right-click (desktop) or the command palette. A real
@@ -697,6 +697,26 @@ function NavCountPill({ to, count }: { to: string; count: number }) {
   );
 }
 
+/** Routes whose sidebar entry carries a count badge. */
+const COUNTED_NAV_ROUTES = new Set([
+  "/app/members", "/app/directors", "/app/meetings", "/app/filings", "/app/deadlines",
+  "/app/conflicts", "/app/committees", "/app/goals", "/app/tasks",
+]);
+
+/**
+ * Placeholder while the counts load (A5): "0" before the workspace is read
+ * back looked like an empty register.
+ */
+function NavCountLoadingPill({ to }: { to: string }) {
+  if (!COUNTED_NAV_ROUTES.has(to)) return null;
+  return (
+    <Pill size="sm" className="sidebar__count sidebar__count--loading" title="Loading count">
+      <span aria-hidden="true">…</span>
+      <span className="sr-only">, loading count</span>
+    </Pill>
+  );
+}
+
 function getCount(to: string, counts: any): number | null {
   if (!counts) return null;
   switch (to) {
@@ -717,6 +737,7 @@ function getCount(to: string, counts: any): number | null {
 
 
 export {
+  NavCountLoadingPill,
   NotificationBellSafe,
   UserPickerSafe,
   THEME_OPTIONS,

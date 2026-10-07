@@ -19,6 +19,19 @@ export function formatDate(value?: DateInput, pattern = "MMM d, yyyy") {
   return format(d, pattern);
 }
 
+/**
+ * Action/task due dates are free text: an ISO calendar day ("2026-10-20") is
+ * shown with the app's date format, anything else ("next meeting", "ASAP",
+ * "end of June") is kept exactly as written (MA-7).
+ */
+export function formatDueDate(value?: string | null, pattern = "MMM d, yyyy") {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const d = parseISO(text);
+  return isValid(d) ? format(d, pattern) : text;
+}
+
 export function formatDateTime(value?: DateInput) {
   return formatDate(value, "MMM d, yyyy · h:mma");
 }

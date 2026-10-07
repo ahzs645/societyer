@@ -64,7 +64,9 @@ export function PersonProfilePage(){
  const {id}=useParams();const society=useSociety();const {can}=usePermissions();const toast=useToast();const confirm=useConfirm();const [asOf,setAsOf]=useState('');
  // P12: a profile from another workspace (or a missing id) resolves to null and shows a not-found state.
  const data=useRecordQuery<any>(api.personHistory.profile,society&&id&&can('members:read')?{societyId:society._id,personId:id,...(asOf?{asOf}:{})}:'skip');
- const merges=useQuery(api.personHistory.mergeHistory,society&&id&&can('members:read')?{societyId:society._id,personId:id}:'skip') as any[]|undefined;
+ // Merge history waits for the profile: a missing id must show the not-found state, not fail this panel (FF-2).
+ const profileId=data&&!data.notFound?data.person?._id:undefined;
+ const merges=useQuery(api.personHistory.mergeHistory,society&&profileId&&can('members:read')?{societyId:society._id,personId:profileId}:'skip') as any[]|undefined;
  const unmerge=useMutation(api.personHistory.unmergePeople);
  const addContact=useMutation(api.personHistory.addContactPoint);const [contact,setContact]=useState({kind:'email',value:'',observedDate:'',reviewStatus:'pending',sourceUrl:'',sourceReference:''});
  const add=useMutation(api.personHistory.addEvent);const aliases=useMutation(api.personHistory.setAliases);const [alias,setAlias]=useState('');const [aliasSource,setAliasSource]=useState('');const [aliasCitation,setAliasCitation]=useState('');

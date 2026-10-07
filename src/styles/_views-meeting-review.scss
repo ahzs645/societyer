@@ -436,13 +436,20 @@
   }
   .meeting-detail-page .meeting-detail-summary > div {
     padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
+  /* MA-9: labels wrap onto a second line instead of truncating to
+     "AGENDA T…"; the tiles keep equal height and the numbers align. */
   .meeting-detail-page .meeting-detail-summary span {
     font-size: 10px;
     margin-bottom: 2px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    letter-spacing: 0;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    hyphens: auto;
   }
   .meeting-detail-page .meeting-detail-summary strong {
     font-size: var(--fs-md);

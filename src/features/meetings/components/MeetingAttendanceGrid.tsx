@@ -58,6 +58,7 @@ export function MeetingAttendanceGrid({
   activeProxyCount = 0,
   expectedPeople,
   expectedPeopleLabel,
+  notYetHeld = false,
 }: {
   meeting: any;
   minutes: any;
@@ -69,6 +70,8 @@ export function MeetingAttendanceGrid({
   /** Names to add with one click (current directors / committee members). */
   expectedPeople?: string[];
   expectedPeopleLabel?: string;
+  /** A future scheduled meeting: "present" rows are who is expected (MA-8). */
+  notYetHeld?: boolean;
 }) {
   const { can } = usePermissions();
   const canEdit = can("minutes:write") && can("meetings:write") && !minutes?.approvedAt;
@@ -176,7 +179,8 @@ export function MeetingAttendanceGrid({
           recordId: row.recordId as any,
         })),
         nonPersons,
-        quorumStatusIfUnset: quorumMet == null ? undefined : quorumMet ? "confirmed" : "not_met",
+        // Quorum is a fact of the meeting itself; don't stamp it beforehand.
+        quorumStatusIfUnset: quorumMet == null || notYetHeld ? undefined : quorumMet ? "confirmed" : "not_met",
       });
       toast.success("Attendance saved", `${result?.attendees ?? counts.inAttendance} attending · ${result?.absent ?? counts.notAttending} regrets/absent${nonPersons.length ? ` · ${nonPersons.length} kept as evidence` : ""}`);
       setInitial(rowsSignature(rows, nonPersons));
@@ -190,14 +194,18 @@ export function MeetingAttendanceGrid({
 
   const summary = (
     <div className="attendance-grid__counts" data-testid="attendance-counts">
-      <Badge tone="success">{counts.present} present</Badge>
+      <Badge tone={notYetHeld ? "info" : "success"}>{counts.present} {notYetHeld ? "expected" : "present"}</Badge>
       {counts.inAttendance - counts.present > 0 && <Badge tone="info">{counts.inAttendance - counts.present} staff/guests/proxies</Badge>}
       <Badge tone="neutral">{counts.notAttending} regrets/absent</Badge>
-      {quorumRequired != null && (
+      {quorumRequired != null && (notYetHeld ? (
+        <Badge tone="neutral">
+          {quorumRequired} needed for quorum · determined at the meeting
+        </Badge>
+      ) : (
         <Badge tone={quorumMet ? "success" : "warn"}>
           {counts.quorumCounted}{activeProxyCount ? ` + ${activeProxyCount} proxies` : ""} of {quorumRequired} needed for quorum
         </Badge>
-      )}
+      ))}
       {minutes?.quorumStatus === "confirmed" && quorumRequired != null && counts.quorumCounted + activeProxyCount < quorumRequired && (
         <Badge tone="warn">Quorum is recorded as met, but only {counts.quorumCounted + activeProxyCount} of {quorumRequired} are counted present — check the attendance</Badge>
       )}

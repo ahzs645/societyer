@@ -3,6 +3,8 @@ import { usePermissions } from "../../../hooks/usePermissions";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
+import { useRecordQuery } from "../../../hooks/useRecordQuery";
+import { RecordNotFound } from "../../../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ArrowLeft, FileDown, FileText, Printer } from "lucide-react";
@@ -32,8 +34,10 @@ export function MeetingMinutesPreviewPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const { loaded, can } = usePermissions();
-  const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
-  const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  // Missing ids read as null; the meeting's panels wait until it exists (FF-2).
+  const meeting = useRecordQuery<any>(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
+  const meetingId = meeting?._id as Id<"meetings"> | undefined;
+  const minutes = useQuery(api.minutes.getByMeeting, meetingId ? { meetingId } : "skip");
   const liveMotionRows = useQuery(api.motions.listForMinutes, minutes ? { minutesId: minutes._id } : "skip");
   const displayMotions = useMemo(() => {
     if (!minutes) return [] as any[];
@@ -42,15 +46,15 @@ export function MeetingMinutesPreviewPage() {
       ? minutesMotionsForDisplay(minutes) as any[]
       : (liveMotionRows as any[]).map(motionRowToEmbedded);
   }, [minutes, liveMotionRows]);
-  const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const agendaRecord = useQuery(api.agendas.getForMeeting, meetingId ? { meetingId } : "skip");
   // Needed to resolve ID-linked movers/seconders to display names, so this
   // page's exports match the meeting-detail Export tab output.
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const directors = useQuery(api.directors.list, society && loaded && can("directors:read") ? { societyId: society._id } : "skip");
   const minutesSignatures = useQuery(api.signatures.listForEntity, loaded && can("documents:read") && minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip");
-  const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && meetingId ? { meetingId } : "skip");
+  const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && meetingId ? { meetingId } : "skip");
+  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && meetingId ? { meetingId } : "skip");
   const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip") as any[] | undefined;
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
@@ -90,16 +94,10 @@ export function MeetingMinutesPreviewPage() {
     includeTranscriptInExport,
   ]);
 
-  if (society === undefined || meeting === undefined || minutes === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined || meeting === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
-  if (meeting === null) {
-    return (
-      <div className="page">
-        Meeting not found — it may have been deleted.{" "}
-        <Link to="/app/meetings">Back to meetings</Link>
-      </div>
-    );
-  }
+  if (meeting === null) return <RecordNotFound recordLabel="Meeting" backTo="/app/meetings" backLabel="All meetings" />;
+  if (minutes === undefined) return <div className="page">Loading…</div>;
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
   const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];

@@ -268,7 +268,14 @@ export class PortableQueryCache {
       return;
     }
     const isNewFailure = this.portableErrors.get(cacheKey) !== message;
-    if (isNewFailure) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
+    // "Record not found" is usually transient (the organization switched, or a
+    // record was deleted or merged, and the component unmounts next render);
+    // a lasting one still reaches the page after the grace period below. Keep
+    // it out of the warning log (P-O4); other failures still warn.
+    if (isNewFailure) {
+      if (isRecordNotFoundError(error)) console.debug(`[societyer-local] portable query ${cacheKey}: record not found`, error);
+      else console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
+    }
     this.portableErrors.set(cacheKey, message);
     this.portableReadSets.delete(cacheKey);
     const hadResult = this.portableCache.get(cacheKey) !== undefined;

@@ -250,3 +250,146 @@ test("record a new board meeting from scratch through approved minutes", async (
 
   expect(errors.filter((message) => !/ResizeObserver/.test(message))).toEqual([]);
 });
+
+// Polish retest (MA-1…MA-10) on a future scheduled meeting. Synthetic data only.
+async function seedScheduled(page: Page) {
+  await page.goto("/app", { waitUntil: "networkidle" });
+  return page.evaluate(async () => {
+    const clientModule = "/src/lib/localDataClient.ts";
+    const selectionModule = "/src/hooks/useSociety.ts";
+    const { localDataClient: client } = await import(clientModule);
+    const { setStoredSocietyId } = await import(selectionModule);
+    const { societyId } = await client.mutation("society:createWorkspace", { name: "Meetings polish review", jurisdictionCode: "CA-BC", entityType: "society" });
+    setStoredSocietyId(societyId);
+    const nowISO = new Date().toISOString();
+    for (const fullName of ["Alex Example", "Blair Sample", "Casey Demo"]) await client.mutation("peopleDirectory:upsert", { societyId, fullName, nowISO });
+    const scheduledAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    const meetingId = await client.mutation("meetings:create", {
+      societyId, type: "Board", title: "Synthetic scheduled board meeting", scheduledAt, electronic: false, status: "Scheduled", attendeeIds: [], quorumRequired: 2,
+    });
+    let minutes = await client.query("minutes:getByMeeting", { meetingId });
+    if (!minutes) {
+      await client.mutation("minutes:create", {
+        societyId, meetingId, heldAt: scheduledAt, attendees: [], absent: [], quorumMet: false,
+        quorumStatus: "not_recorded", discussion: "", decisions: [], actionItems: [], motions: [],
+      });
+      minutes = await client.query("minutes:getByMeeting", { meetingId });
+    }
+    await client.mutation("minutes:update", {
+      id: minutes._id,
+      patch: {
+        attendees: ["Alex Example", "Blair Sample", "Casey Demo"],
+        sections: [{ title: "Finance report", type: "report", discussion: "", decisions: [], actionItems: [] }],
+        actionItems: [
+          { text: "Circulate the synthetic budget", assignee: "Casey Demo", dueDate: "2026-10-20", done: false },
+          { text: "Book the synthetic hall", dueDate: "before the AGM", done: false },
+        ],
+      },
+    });
+    return { meetingId, minutesId: minutes._id as string };
+  });
+}
+
+test("motion and meeting polish: no default votes, labels, summary, debounced saves, escape guard, expected attendance", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const fixture = await seedScheduled(page);
+  await page.goto(`/app/meetings/${fixture.meetingId}`);
+  const summary = page.locator(".meeting-detail-summary");
+  await expect(summary).toBeVisible({ timeout: 60_000 });
+
+  // MA-8: a scheduled meeting next month lists who is expected; quorum is not decided yet.
+  await expect(summary).toContainText("Expected");
+  await expect(summary).not.toContainText("Present");
+  await page.getByRole("tab", { name: /Agenda & minutes/ }).click();
+  await expect(page.locator("#meeting-attendance-card")).toContainText("Quorum: not yet determined");
+  await expect(page.getByTestId("attendance-counts")).toContainText("3 expected");
+  await expect(page.getByTestId("attendance-counts")).toContainText("determined at the meeting");
+
+  // MA-7: ISO due dates use the app's date format; free text stays as written.
+  const actions = page.getByTestId("action-items-card");
+  await expect(actions).toContainText("Oct 20, 2026");
+  await expect(actions).not.toContainText("2026-10-20");
+  await expect(actions).toContainText("before the AGM");
+
+  // MA-4: Escape in the section title asks before discarding the edit.
+  await page.getByRole("button", { name: "Edit agenda item" }).first().click();
+  const title = page.locator(".meeting-minutes-section-item__title-input");
+  await title.fill("Finance report (revised)");
+  await title.press("Escape");
+  const discard = page.getByRole("dialog", { name: "Discard changes to this section?" });
+  await expect(discard).toBeVisible();
+  await discard.getByRole("button", { name: "Keep editing" }).click();
+  await expect(title).toHaveValue("Finance report (revised)");
+  await title.press("Escape");
+  await page.getByRole("dialog", { name: "Discard changes to this section?" }).getByRole("button", { name: "Discard changes" }).click();
+  await expect(title).toBeHidden();
+
+  // MA-1/MA-2: mover and seconder are not votes; outcome labels stay visible.
+  await page.getByRole("tab", { name: /^Motions/ }).click();
+  await page.getByRole("button", { name: "Add motion" }).first().click();
+  await page.getByLabel("New motion name").fill("Approve the synthetic budget");
+  await page.getByLabel("Details", { exact: true }).first().fill("That the board approve the synthetic budget as presented.");
+  const draft = page.locator(".motion-draft");
+  await draft.locator(".motion-draft__details-summary").click();
+  await page.getByLabel("New motion mover").pressSequentially("Alex Example", { delay: 10 });
+  await page.keyboard.press("Escape");
+  await page.getByLabel("New motion seconder").pressSequentially("Blair Sample", { delay: 10 });
+  await page.keyboard.press("Escape");
+  await expect(draft.getByLabel("For", { exact: true })).toHaveValue("0");
+  const carriedLabel = draft.locator(".motion-outcome-picker .btn-action__label").filter({ hasText: "Carried" });
+  expect((await carriedLabel.boundingBox())?.width ?? 0).toBeGreaterThan(20);
+  await draft.getByRole("button", { name: "Add", exact: true }).click();
+
+  // MA-3: the collapsed motion shows its wording and who moved and seconded it.
+  const collapsed = page.getByTestId("motion-collapsed-summary").first();
+  await expect(collapsed).toContainText("That the board approve the synthetic budget as presented.");
+  await expect(collapsed).toContainText(/Moved by Alex Example, seconded by Blair Sample/);
+
+  // MA-5: the resolution type the form showed is stored.
+  await expect.poll(async () => page.evaluate(async (minutesId) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const rows = await client.query("motions:listForMinutes", { minutesId });
+    const row = rows.find((motion: any) => (motion.title ?? motion.name) === "Approve the synthetic budget");
+    return row ? `${row.resolutionTypeLabel ?? row.resolutionType}|${row.votesFor ?? 0}` : null;
+  }, fixture.minutesId), { timeout: 15_000 }).toBe("Ordinary|0");
+
+  // MA-10: typing a motion name is one save after a pause, not one per key.
+  await page.evaluate(async () => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const w = window as any;
+    w.__motionWrites = 0;
+    if (!w.__countingWrites) {
+      w.__countingWrites = true;
+      const original = client.mutation.bind(client);
+      client.mutation = (fn: any, args: any) => {
+        if (args?.patch && "motions" in args.patch) w.__motionWrites += 1;
+        return original(fn, args);
+      };
+    }
+  });
+  // The input is labelled by the motion name, which changes as it is typed.
+  const nameInput = page.locator("input.motion__name-input").first();
+  await expect(nameInput).toHaveValue("Approve the synthetic budget");
+  await nameInput.fill("");
+  await nameInput.pressSequentially("Adopt the synthetic budget", { delay: 25 });
+  await expect(nameInput).toHaveValue("Adopt the synthetic budget");
+  await page.waitForTimeout(1500);
+  const writes = await page.evaluate(() => (window as any).__motionWrites as number);
+  expect(writes).toBeGreaterThan(0);
+  expect(writes).toBeLessThanOrEqual(3);
+  await expect.poll(async () => page.evaluate(async (minutesId) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const rows = await client.query("motions:listForMinutes", { minutesId });
+    return rows.some((motion: any) => (motion.title ?? motion.name) === "Adopt the synthetic budget");
+  }, fixture.minutesId), { timeout: 15_000 }).toBe(true);
+
+  // MA-9: phone summary labels wrap instead of truncating.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("tab", { name: /Overview/ }).click();
+  const clipped = await page.locator(".meeting-detail-summary span").evaluateAll((spans) =>
+    spans.filter((span) => span.scrollWidth > span.clientWidth + 1).map((span) => span.textContent));
+  expect(clipped).toEqual([]);
+
+  expect(errors.filter((message) => !/ResizeObserver/.test(message))).toEqual([]);
+});

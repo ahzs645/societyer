@@ -129,7 +129,8 @@ test.describe("Meeting agenda minutes workflow", () => {
     // NOT networkidle: demo mode keeps a background request retry loop alive
     // that can make networkidle hang until the test times out.
     await page.goto("/demo/app/agendas", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Q2 board meeting agenda.*Apr 23, 2026.*Draft/ }).click();
+    // The demo's upcoming board meeting is dated relative to today (A3).
+    await page.getByRole("button", { name: /Quarterly board meeting agenda.*Draft/ }).click();
     // Load once and POLL the same expansion: the builder first seeds its
     // editable rows from the pre-hydration fixture cache, then re-seeds when
     // the IndexedDB-hydrated query result arrives. Reloading between reads

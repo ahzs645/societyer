@@ -32,6 +32,25 @@ const USER_TREASURER_ID = "static_user_treasurer";
 const USER_SECRETARY_ID = "static_user_secretary";
 const MEETING_BOARD_ID = "static_meeting_board_q2";
 const MEETING_AGM_ID = "static_meeting_agm_2025";
+
+/**
+ * The demo story is written as of Tuesday 2026-04-21. Its forward-looking
+ * records (the upcoming board meeting and its packet, committees' next
+ * meetings, scheduled maintenance) move forward in whole weeks so they are
+ * never in the past: a "Scheduled" meeting dated months ago read as a meeting
+ * nobody held (A3). Before or on the story date nothing moves, so tests that
+ * fix the clock there see the original dates. Historical records (the 2025
+ * AGM, approved minutes, filings, audit stamps) keep their real dates.
+ */
+const DEMO_STORY_DATE_MS = Date.parse("2026-04-21T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEMO_UPCOMING_SHIFT_DAYS = Math.max(0, Math.ceil((Date.now() - DEMO_STORY_DATE_MS) / (7 * DAY_MS))) * 7;
+export function demoUpcoming(iso: string): string {
+  if (!DEMO_UPCOMING_SHIFT_DAYS) return iso;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const shifted = new Date(Date.parse(dateOnly ? `${iso}T00:00:00.000Z` : iso) + DEMO_UPCOMING_SHIFT_DAYS * DAY_MS).toISOString();
+  return dateOnly ? shifted.slice(0, 10) : shifted;
+}
 const DOCUMENT_BYLAWS_ID = "static_document_bylaws";
 const DOCUMENT_POLICY_ID = "static_document_privacy";
 const DOCUMENT_TENANCY_ID = "static_document_tenancy";
@@ -637,7 +656,7 @@ const committees = [
     cadence: "Monthly",
     color: "green",
     status: "Active",
-    nextMeetingAt: "2026-04-18T18:00:00.000Z",
+    nextMeetingAt: demoUpcoming("2026-04-18T18:00:00.000Z"),
   },
   {
     _id: "static_committee_governance",
@@ -648,7 +667,7 @@ const committees = [
     cadence: "Monthly",
     color: "purple",
     status: "Active",
-    nextMeetingAt: "2026-04-21T19:00:00.000Z",
+    nextMeetingAt: demoUpcoming("2026-04-21T19:00:00.000Z"),
   },
 ];
 
@@ -666,12 +685,12 @@ const meetings = [
     _id: MEETING_BOARD_ID,
     societyId: SOCIETY_ID,
     type: "Board",
-    title: "Q2 board meeting",
-    scheduledAt: "2026-04-23T19:00:00.000Z",
+    title: "Quarterly board meeting",
+    scheduledAt: demoUpcoming("2026-04-23T19:00:00.000Z"),
     location: "Riverside Community Hall",
     electronic: true,
     remoteUrl: "https://teams.microsoft.com/l/meetup-join/static-demo",
-    remoteMeetingId: "RCS-Q2-BOARD",
+    remoteMeetingId: "RCS-BOARD",
     remotePasscode: "demo",
     quorumRequired: 4,
     bylawRuleSetId: "static_bylaw_rules",
@@ -721,7 +740,7 @@ const agendas = [
     _id: AGENDA_BOARD_ID,
     societyId: SOCIETY_ID,
     meetingId: MEETING_BOARD_ID,
-    title: "Q2 board meeting agenda",
+    title: "Quarterly board meeting agenda",
     status: "Draft",
     createdAtISO: "2026-04-16T16:00:00.000Z",
     updatedAtISO: "2026-04-16T16:00:00.000Z",
@@ -774,7 +793,7 @@ const minutes = [
     societyId: SOCIETY_ID,
     meetingId: MEETING_BOARD_ID,
     status: "Draft",
-    heldAt: "2026-04-23T19:00:00.000Z",
+    heldAt: demoUpcoming("2026-04-23T19:00:00.000Z"),
     chairName: "Devon Clarke",
     secretaryName: "Mina Patel",
     recorderName: "Avery Santos",
@@ -1699,10 +1718,10 @@ const tasks = [
   {
     _id: "static_task_board_packet",
     societyId: SOCIETY_ID,
-    title: "Lock Q2 board packet",
+    title: "Lock board packet",
     status: "InProgress",
     priority: "Medium",
-    dueDate: "2026-04-21",
+    dueDate: demoUpcoming("2026-04-21"),
     ownerUserId: USER_OWNER_ID,
     goalId: "static_goal_agm",
     meetingId: MEETING_BOARD_ID,
@@ -3531,7 +3550,7 @@ const tables: Record<string, any[]> = {
       assetId: "static_asset_projector",
       title: "Projector lamp and cable check",
       kind: "maintenance",
-      dueDate: "2026-06-15",
+      dueDate: demoUpcoming("2026-06-15"),
       status: "Scheduled",
       notes: "Check before summer workshop series.",
       createdAtISO: "2026-05-01T18:00:00.000Z",

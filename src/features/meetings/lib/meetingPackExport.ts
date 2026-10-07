@@ -1,4 +1,4 @@
-import { formatDate, formatDateTime } from "../../../lib/format";
+import { formatDate, formatDateTime, formatDueDate } from "../../../lib/format";
 import { renderDocumentHeader } from "./minutesRenderer";
 import {
   accessLevelLabel,
@@ -45,7 +45,7 @@ export function renderMeetingPackHtml({
     })
     .join("");
   const taskHtml = tasks.length
-    ? `<ul>${tasks.map((task) => `<li>${escapeHtml(task.title)} - ${escapeHtml(task.status)}${task.dueDate ? `, due ${escapeHtml(task.dueDate)}` : ""}</li>`).join("")}</ul>`
+    ? `<ul>${tasks.map((task) => `<li>${escapeHtml(task.title)} - ${escapeHtml(task.status)}${task.dueDate ? `, due ${escapeHtml(formatDueDate(task.dueDate))}` : ""}</li>`).join("")}</ul>`
     : "<p>No linked tasks.</p>";
   const headerHtml = society ? renderDocumentHeader(society) : "";
   return `<!doctype html>

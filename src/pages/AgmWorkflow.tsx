@@ -6,6 +6,7 @@ import { noticeWindowSatisfied } from "../features/meetings/lib/noticeWindow";
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
@@ -57,10 +58,12 @@ export function AgmWorkflowPage() {
   const toast = useToast();
   const canSendNotice = !isLocalDataRuntime() && can("communications:write");
   const [sendingNotice, setSendingNotice] = useState(false);
-  const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
-  const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const run = useQuery(api.agm.runForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const deliveries = useQuery(api.agm.noticeDeliveries, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  // Missing ids read as null; the meeting's panels wait until it exists (FF-2).
+  const meeting = useRecordQuery<any>(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
+  const meetingId = meeting?._id as Id<"meetings"> | undefined;
+  const minutes = useQuery(api.minutes.getByMeeting, meetingId ? { meetingId } : "skip");
+  const run = useQuery(api.agm.runForMeeting, meetingId ? { meetingId } : "skip");
+  const deliveries = useQuery(api.agm.noticeDeliveries, meetingId ? { meetingId } : "skip");
   const allElections = useQuery(api.elections.list, society ? { societyId: society._id } : "skip");
   const meetingElections = useMemo(
     () => (allElections ?? []).filter((e: any) => String(e.meetingId) === String(id)),
