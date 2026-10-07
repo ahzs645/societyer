@@ -346,7 +346,7 @@ export function CorporateHistoryPage() {
       >
         {nameForm && (
           <div>
-            <Field label="Name" required error={nameProblems.find((p) => /name/.test(p))}>
+            <Field label="Name" error={nameProblems.find((p) => /name/.test(p))}>
               <input
                 className="input"
                 value={nameForm.name}
@@ -404,7 +404,7 @@ export function CorporateHistoryPage() {
                 options={Object.entries(CONSTATING_ACTION_LABELS).map(([value, label]) => ({ value, label }))}
               />
             </Field>
-            <Field label="Jurisdiction" required error={eventProblems.find((p) => /jurisdiction/.test(p))}>
+            <Field label="Jurisdiction" error={eventProblems.find((p) => /jurisdiction/.test(p))}>
               <input
                 className="input"
                 placeholder="e.g. British Columbia"
@@ -412,7 +412,7 @@ export function CorporateHistoryPage() {
                 onChange={(e) => setEventForm({ ...eventForm, jurisdiction: e.target.value })}
               />
             </Field>
-            <Field label="Legislation" required error={eventProblems.find((p) => /legislation/.test(p))}>
+            <Field label="Legislation" error={eventProblems.find((p) => /legislation/.test(p))}>
               <input
                 className="input"
                 placeholder="e.g. Societies Act"

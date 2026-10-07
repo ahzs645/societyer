@@ -85,7 +85,7 @@ export function CertificateRegisterPage() {
       !(Number.isInteger(shares) && shares > 0) ? "a whole, positive number of shares" : "",
     ].filter(Boolean);
     if (problems.length) {
-      toast.error("Certificate not recorded", `Enter ${problems.join(", ")}.`);
+      toast.error("Could not record certificate", `Enter ${problems.join(", ")}.`);
       return;
     }
     setSaving(true);
