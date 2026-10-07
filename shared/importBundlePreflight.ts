@@ -24,7 +24,7 @@ export const IMPORT_BUNDLE_COLLECTION_GROUPS: readonly (readonly string[])[] = [
   ["committees"], ["committeeMembers"], ["members"], ["directors"], ["tasks"], ["goals"],
   ["commitments"], ["fundingSources"], ["grantReports"], ["meetingMaterials"],
   ["organizationSeats"], ["conflicts"], ["proxies"], ["bylawRuleSets"], ["operatingBudgets"],
-  ["documentMap"], ["representationGaps"],
+  ["documentMap"], ["representationGaps"], ["agreements"],
 ];
 
 const metadataKeys = new Set(["metadata", "name", "sourceExport", "specialistReports"]);

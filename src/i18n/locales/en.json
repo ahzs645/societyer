@@ -93,6 +93,7 @@
     "yearEndReports": "Year-end reports",
     "assets": "Assets",
     "grants": "Grants",
+    "agreements": "Agreements",
     "reconciliation": "Reconciliation",
     "donationReceipts": "Donation receipts",
     "membership": "Membership & billing",
@@ -302,6 +303,10 @@
     "insurance": {
       "label": "Insurance register",
       "description": "Insurance policy records and renewal tracking."
+    },
+    "agreements": {
+      "label": "Agreements register",
+      "description": "Contracts, funding agreements, leases and MOUs with their term, renewal, deliverables, reports and signing authority."
     },
     "secrets": {
       "label": "Access custody",

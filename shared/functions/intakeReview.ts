@@ -534,12 +534,12 @@ async function markClusterCopiesCovered(ctx: PortableMutationCtx, extraction: an
 const RECORD_KIND_FOR_COLLECTION: Record<string, string> = {
   policies: "policy", bylawRuleSets: "bylawRuleSet", committees: "committee", directors: "director", organizationSeats: "organizationSeat", proxies: "proxy",
   financialStatementImports: "financialStatementImport", budgetSnapshots: "budgetSnapshot", insurancePolicies: "insurancePolicy", grants: "grant", deadlines: "deadline",
-  filings: "filing", sourceEvidence: "sourceEvidence", transactionCandidates: "transactionCandidate", meetingMaterials: "meetingMaterial",
+  filings: "filing", sourceEvidence: "sourceEvidence", transactionCandidates: "transactionCandidate", meetingMaterials: "meetingMaterial", agreements: "agreement",
 };
 const TABLE_NOUN: Record<string, string> = {
   policies: "Policy", bylawRuleSets: "Bylaw rule set", committees: "Committee", directors: "Director", organizationSeats: "Seat", proxies: "Proxy", financialStatementImports: "Financial statement",
   budgetSnapshots: "Budget", insurancePolicies: "Insurance policy", grants: "Grant", deadlines: "Deadline", filings: "Filing", sourceEvidence: "Source evidence", transactionCandidates: "Transaction candidate",
-  meetingMaterials: "Meeting material", meetingMinutes: "Meeting",
+  meetingMaterials: "Meeting material", meetingMinutes: "Meeting", agreements: "Agreement",
 };
 const IDENTIFYING_FIELDS: Record<string, string> = { insurancePolicies: "the insurer or the policy number", directors: "the person's name", policies: "the title", filings: "the filing type and date", financialStatementImports: "the period end", budgetSnapshots: "the title or fiscal year", grants: "the title and funder", transactionCandidates: "the date and amount", meetingMinutes: "the meeting date and body" };
 

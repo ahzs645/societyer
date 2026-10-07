@@ -37,6 +37,7 @@ import { pathwayTables } from "./tables/pathways";
 import { offlineMeetingTables } from "./tables/offlineMeetings";
 import { gapTables } from "./tables/gaps";
 import { intakeTables } from "./tables/intake";
+import { agreementTables } from "./tables/agreements";
 
 export default defineSchema({
   ...reviewEvidenceTables,
@@ -519,4 +520,7 @@ export default defineSchema({
 
   // Gap identification (representation gaps, expectations, continuity marks).
   ...gapTables,
+
+  // Agreements register (schema finding A5).
+  ...agreementTables,
 });

@@ -17,6 +17,7 @@ export default defineConfig({
     "meeting-history.spec.ts",
     "meetings-editing.spec.ts",
     "people-identity.spec.ts",
+    "agreements.spec.ts",
   ],
   timeout: 30_000,
   retries: 0,

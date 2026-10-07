@@ -93,6 +93,7 @@
     "yearEndReports": "Rapports de fin d'exercice",
     "assets": "Actifs",
     "grants": "Subventions",
+    "agreements": "Ententes",
     "reconciliation": "Rapprochement",
     "donationReceipts": "Reçus de don",
     "membership": "Adhésion et facturation",
@@ -302,6 +303,10 @@
     "insurance": {
       "label": "Registre des assurances",
       "description": "Polices d'assurance et suivi des renouvellements."
+    },
+    "agreements": {
+      "label": "Registre des ententes",
+      "description": "Contrats, ententes de financement, baux et protocoles d'entente avec leur durée, renouvellement, livrables, rapports et pouvoirs de signature."
     },
     "secrets": {
       "label": "Garde des accès",

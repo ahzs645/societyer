@@ -34,6 +34,7 @@ import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
+import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
@@ -402,6 +403,8 @@ export function Dashboard() {
           </div>
 
           <ContinuityChecksCard societyId={society._id} />
+
+          <AgreementsExpiringCard societyId={society._id} />
 
           {canRead("filings:read") && (
           <div className="card">

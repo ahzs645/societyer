@@ -1,0 +1,126 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// Agreements register (A5): create/edit drawer rows and the detail page grid.
+
+.agreement-form__heading {
+  margin: 4px 0 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: token('text-secondary');
+}
+
+.agreement-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 8px 12px;
+}
+
+.agreement-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.agreement-form__row--3 {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+}
+
+.agreement-form__row--4 {
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.agreement-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.agreement-detail__rows {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: var(--fs-sm);
+
+  dt {
+    color: token('text-tertiary');
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.agreement-obligation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid token('border-color-light');
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.agreement-versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+    padding: 6px 0;
+    border-bottom: 1px solid token('border-color-light');
+  }
+
+  li:last-child {
+    border-bottom: 0;
+  }
+}
+
+.agreement-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+@media (max-width: 760px) {
+  .agreement-form__row,
+  .agreement-form__row--3,
+  .agreement-form__row--4 {
+    grid-template-columns: minmax(0, 1fr) auto;
+
+    > :not(:first-child):not(:last-child) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .agreement-detail__rows {
+    grid-template-columns: minmax(0, 1fr);
+
+    dt {
+      margin-top: 4px;
+    }
+  }
+}
+
+// Quick filters wrap instead of squeezing their labels on narrow screens.
+.agreement-quick-filters .segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+  height: auto;
+}
+
+.agreement-quick-filters .segmented__btn {
+  white-space: nowrap;
+}

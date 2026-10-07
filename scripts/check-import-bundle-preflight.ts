@@ -16,7 +16,9 @@ assertImportBundlePreflight({ metadata: { createdFrom: "Google Drive" }, sources
 assertImportBundlePreflight({ representatives: [{ fullName: "Example Person" }] });
 assertImportBundlePreflight({ meetingMinutes: [{ actionItems: [" Follow up "] }] });
 assertImportBundlePreflight({ organizationIdentifiers: [{ number: "123" }], taxRegistrations: [{ number: "456" }] });
-assert.throws(() => assertImportBundlePreflight({ sources: [], agreements: [{ title: "Example" }] }), /agreements: unsupported/);
+assert.throws(() => assertImportBundlePreflight({ sources: [], contracts: [{ title: "Example" }] }), /contracts: unsupported/);
+// Agreements register (A5): the agreements key is supported and lossless.
+assert.equal(importBundlePreflightIssues({ agreements: [{ title: "Example lease", kind: "lease", parties: [{ name: "Example Landlord", role: "counterparty" }], effectiveDate: "2024-01-01", endDate: "2025-12-31", valueCents: 120000, reportingObligations: [{ text: "Annual report", dueDate: "2025-06-30" }], sourceExternalIds: ["gdrive:lease"] }] }).length, 0);
 assert.throws(() => assertImportBundlePreflight({ sources: {} }), /expected an array/);
 assert.throws(() => assertImportBundlePreflight({ sources: [null] }), /expected a record object/);
 assert.throws(() => assertImportBundlePreflight({ sources: [] }), /no supported records/);

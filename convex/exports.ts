@@ -238,6 +238,7 @@ export const EXPORTABLE_TABLES = [
   "representationGaps",
   "governanceExpectations",
   "continuityPeriodMarks",
+  "agreements",
 ] as const;
 
 export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({

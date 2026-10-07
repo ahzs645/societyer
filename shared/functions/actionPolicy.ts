@@ -16,6 +16,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   filings: ["filings", "annualFilings", "filingExports", "filingBot"],
   deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", "continuity"],
   commitments: ["commitments", "goals"],
+  agreements: ["agreements"],
   financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps"],

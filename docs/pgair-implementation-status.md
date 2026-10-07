@@ -15,6 +15,7 @@ Status as of 2026-10-07, branch `claude/clever-babbage-mu46rq`. This document fo
 | Governance and compliance | All 30 governance findings. Includes bylaw amendment creation, special-resolution threshold checks, AGM-evidence-aware obligations, consistent annual cycle, and validated registers. | [wp-e](implementation-notes/wp-e-governance.md) |
 | Finance and operations | Grant archive instead of a cascading delete. Accounting backfill review with a suspense account. Not-found pages. Validation on every create form. Financial statements "presented at" meeting. | [wp-f](implementation-notes/wp-f-operations.md) |
 | Platform | Rich-text editor that mounts reliably, with a fallback. Record-table filter. Local-calendar date handling. Global search across records. French shell. Phone tables. Page error boundaries. Typed dates in date pickers. | [wp-a](implementation-notes/wp-a-platform.md) |
+| Agreements register | Agreements with parties, signatories, term and renewal, money, deliverables and reporting, documents and version chain, links to grants, providers, committees and the approving motion. Signing-authority tier check. Generated deadlines. Renewal/report checks on Coverage & gaps. Dashboard card for agreements expiring in 90 days. Import key `agreements`, and intake now promotes native draft agreements. On the PGAIR backup, one conversion turned the 104 contracts (plus 5 signed funding agreements) into 78 draft agreements with sources. | [agreements](implementation-notes/agreements-register.md) |
 | Performance | Heavy fields stored lazily. Indexed local row store. Table-scoped query refresh. Memoized projections. Lazily loaded handler domains. On the PGAIR workspace in a production build, every main page loads in under 3 s, down from 7–16 s or a crash. | [wp-k](implementation-notes/wp-k-performance.md) |
 | Re-test fixes | Five area re-tests, plus final fixes and polish: about 130 further fixes. Examples: motion typing, section saves that dropped links, and the merge default. | [retest notes](implementation-notes/) |
 
@@ -73,7 +74,6 @@ Each gap appears on the Coverage & gaps page with its evidence.
 
 - **OCR:** 605 scanned PDFs need OCR before they can be extracted.
 - **Legacy Office files:** 147 could not be converted, and about 180 files have no extractor (`.xps`, `.nib` and others).
-- **Agreements:** there is no native register yet, so 104 contracts are recorded as system gaps.
 - **Workspace size:** a fully reviewed archive exceeds the backup limits (256 MB / 200,000 rows). Field reviews and copied values per row need compacting first.
 - **Section apply is all-or-nothing:** one blocked record holds back a whole session section.
 - **Low-confidence fields:** chair, meeting type and adopts-minutes links fall below the bulk-accept threshold. An LLM pass or calibrated thresholds would lift them.

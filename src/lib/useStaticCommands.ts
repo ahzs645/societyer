@@ -11,7 +11,7 @@
 import { useMemo } from "react";
 import { useMutation } from "convex/react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, ClipboardList, Download, Eye, FileCheck2, FileCog, FilePlus, Gavel, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { Calendar, ClipboardList, Download, Eye, FileCheck2, FileCog, FilePlus, FileSignature, Gavel, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import type { ComponentType } from "react";
 import { api } from "./convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -93,6 +93,14 @@ export function useStaticCommands(): StaticCommand[] {
         // The GlobalCommitmentCreate popup (mounted in Layout) listens for this
         // event and pops the commitment-creation form from anywhere.
         run: () => { window.dispatchEvent(new Event("quickaction:add-commitment")); },
+      },
+      {
+        id: "action-add-agreement",
+        label: "Add agreement",
+        icon: FileSignature,
+        // Hidden with the Agreements register; the register opens its create drawer on ?intent=add.
+        module: "agreements",
+        run: () => navigate("/app/agreements?intent=add"),
       },
       {
         id: "action-add-asset",

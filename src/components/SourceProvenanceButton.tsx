@@ -17,7 +17,7 @@ type ProvenanceRow = {
 const TABLE_LABEL: Record<string, string> = {
   meetings: "Meeting", minutes: "Minutes", motions: "Motion", agendaItems: "Agenda item", meetingMaterials: "Meeting material", policies: "Policy", bylawRuleSets: "Bylaw rule set",
   committees: "Committee", directors: "Director", organizationSeats: "Seat", proxies: "Proxy", financialStatementImports: "Financial statement", budgetSnapshots: "Budget",
-  insurancePolicies: "Insurance policy", grants: "Grant", deadlines: "Deadline", filings: "Filing", sourceEvidence: "Source evidence", transactionCandidates: "Transaction candidate",
+  insurancePolicies: "Insurance policy", grants: "Grant", deadlines: "Deadline", filings: "Filing", sourceEvidence: "Source evidence", transactionCandidates: "Transaction candidate", agreements: "Agreement",
 };
 
 function valueText(value: unknown): string {

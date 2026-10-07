@@ -41,6 +41,7 @@ import * as programStatementsFns from "./programStatements";
 import * as committeesFns from "./committees";
 const representationGapsFns = lazyHandlers(() => import("./representationGaps"), "representationGaps");
 const continuityFns = lazyHandlers(() => import("./continuity"), "continuity");
+const agreementsFns = lazyHandlers(() => import("./agreements"), "agreements");
 import * as commitmentsFns from "./commitments";
 import * as deadlinesFns from "./deadlines";
 import * as nameHistoryFns from "./nameHistory";
@@ -1398,6 +1399,21 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "continuity:deriveFromBylawRules", handler: continuityFns.deriveFromBylawRulesPortable }),
   definePortableMutation({ name: "continuity:markPeriod", handler: continuityFns.markPeriodPortable }),
   definePortableMutation({ name: "continuity:clearPeriodMark", handler: continuityFns.clearPeriodMarkPortable }),
+  // agreements register (schema finding A5)
+  definePortableQuery({ name: "agreements:list", handler: agreementsFns.listPortable }),
+  definePortableQuery({ name: "agreements:get", handler: agreementsFns.getPortable }),
+  definePortableQuery({ name: "agreements:forRecord", handler: agreementsFns.forRecordPortable }),
+  definePortableQuery({ name: "agreements:summary", handler: agreementsFns.summaryPortable }),
+  definePortableQuery({ name: "agreements:conversionPreview", handler: agreementsFns.conversionPreviewPortable }),
+  definePortableMutation({ name: "agreements:create", handler: agreementsFns.createPortable }),
+  definePortableMutation({ name: "agreements:update", handler: agreementsFns.updatePortable }),
+  definePortableMutation({ name: "agreements:terminate", handler: agreementsFns.terminatePortable }),
+  definePortableMutation({ name: "agreements:renew", handler: agreementsFns.renewPortable }),
+  definePortableMutation({ name: "agreements:setRenewalDecision", handler: agreementsFns.setRenewalDecisionPortable }),
+  definePortableMutation({ name: "agreements:setObligationStatus", handler: agreementsFns.setObligationStatusPortable }),
+  definePortableMutation({ name: "agreements:remove", handler: agreementsFns.removePortable }),
+  definePortableMutation({ name: "agreements:syncObligations", handler: agreementsFns.syncObligationsPortable }),
+  definePortableMutation({ name: "agreements:convertGaps", handler: agreementsFns.convertGapsPortable }),
   // intake
   definePortableQuery({ name: "intake:listRuns", handler: intakeFns.listRuns }),
   definePortableQuery({ name: "intake:getRun", handler: intakeFns.getRun }),
