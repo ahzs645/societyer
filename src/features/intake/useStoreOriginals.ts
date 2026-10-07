@@ -1,12 +1,12 @@
 /** After promotion, save the original source files as versions of the source
  * documents the import created, where this runtime stores files: the desktop
  * workspace folder (Electron), the hosted storage provider, or the demo
- * (metadata-only) store. The browser-only local runtime has no file store, so
- * originals stay in this device's intake cache and in workspace backups' text. */
+ * (metadata-only) store. The browser local runtime saves them in the
+ * workspace's IndexedDB file store, so they open offline and travel in ZIP backups. */
 import { useAction } from "convex/react";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
-import { uploadDocumentVersion } from "../../lib/documentVersionUpload";
+import { uploadDocumentVersion, usesBrowserWorkspaceFileStore } from "../../lib/documentVersionUpload";
 import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "../../lib/runtimeMode";
 import { isLocalDataRuntime } from "../../lib/staticRuntime";
 import { isDemoMode } from "../../lib/demoMode";
@@ -18,6 +18,8 @@ export function canStoreOriginals(): boolean {
   if (!isNativeFileStorageEnabled()) return false;
   if (isDemoMode()) return true;
   if (getDocumentStorageProvider() === "local-filesystem") return true;
+  // The browser local workspace keeps originals in IndexedDB (exported in ZIP backups).
+  if (usesBrowserWorkspaceFileStore()) return true;
   return !isLocalDataRuntime();
 }
 

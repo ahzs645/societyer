@@ -346,6 +346,9 @@ export class StaticConvexClient {
 
   getLocalWorkspaceAttachmentReferences() { return this.store.exportAttachmentReferences(); }
 
+  /** Browser workspace file store (local-indexeddb runtime): bytes saved on this device and exported in ZIP backups. */
+  saveLocalWorkspaceFile(blob: Blob, sha256: string, references: string[] = []) { return this.store.saveFile(blob, sha256, references); }
+
   /** In-place record migrations retain already saved binary files. */
   replaceLocalWorkspaceRecords(snapshot: LocalWorkspaceSnapshot) { return this.store.importSnapshot(snapshot, undefined, true); }
 }
