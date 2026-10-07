@@ -73,6 +73,12 @@ const run = await runIntakePipeline(fs.readdirSync(dir).map((name) => ({ fileKey
   name: "Synthetic class run", sourceKind: "upload", sourceRoot: "browser upload", extract: (file, bytes) => extractBytes(file.name, bytes), hash: sha256Hex,
 });
 const staged = await stageRunInWorkspace(mutate, society, run, run.extracts, coverageReport(run, buildImportBundle(run)));
+// Server-side reconciliation (hosted runs) derives package-embedded minutes again and reaches the pipeline's record gaps.
+const embedded = run.extractions.filter((extraction) => extraction.parentFileKey).length;
+assert.ok(embedded > 0, "the fixture has minutes embedded in a package");
+const reconciledAgain = await mutate("intake:reconcileRun", { societyId: society, runId: staged.runId });
+assert.equal(reconciledAgain.recordGaps, run.reconciliation.gaps.length, `reconcileRun reproduces the pipeline's record gaps (${embedded} embedded minutes)`);
+assert.equal(reconciledAgain.meetings, run.reconciliation.meetings.length);
 const queue = await query("intake:listExtractions", { societyId: society, runId: staged.runId }) as any[];
 const classRows = queue.filter((row) => row.docClass !== "meetingMinutes");
 assert.ok(classRows.length >= 15, `the fixture yields extractions of every class (${classRows.length})`);

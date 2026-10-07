@@ -32,7 +32,7 @@ import {
 import { bodyKeyForMeeting } from "../meetingBody";
 import { buildPromotionBundle, defaultInfoTypeForPath, gapLocatorFrom, matchKey, type MergeTarget, type PromotionFile, type PromotionMode } from "../intake/promotion";
 import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, directorMatchKey, RECORD_KIND_TABLE } from "../intake/promotionClasses";
-import { linkPolicyAdoptions } from "../intake/classStages";
+import { annotateFiscalYearEndChanges, deriveEmbeddedMinutes, linkPolicyAdoptions } from "../intake/classStages";
 import { bodyKeyFor } from "../intake/entities";
 import { normalizePersonKey } from "../intake/names";
 import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecision, samplePreview, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, requiredFieldsFor, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
@@ -716,8 +716,21 @@ export async function reconcileRun(ctx: PortableMutationCtx, { societyId, runId 
     const current = byFile.get(row.fileKey);
     if (!current || (current.engine === "deterministic" && row.engine !== "deterministic")) byFile.set(row.fileKey, row);
   }
-  const extractions = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
-  const { reconciled, carry, gaps } = reconcileExtractions(files, extractions);
+  const extractions: any[] = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
+  // Minutes embedded in packages are derived records (never stored): derive them again from the stored
+  // extracts, as the in-browser pipeline does, so hosted runs see the same meetings and record gaps.
+  for (const row of [...byFile.values()].filter((candidate) => ["agenda", "meetingPackage", "agmMaterial"].includes(candidate.docClass))) {
+    const extract = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", row.fileId)).first() as any;
+    const file = files.find((candidate) => String(candidate._id) === String(row.fileId));
+    if (!extract?.text || !file) continue;
+    try {
+      extractions.push(...deriveEmbeddedMinutes(extractions.find((candidate) => candidate.fileKey === row.fileKey), { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, warnings: extract.warnings ?? [] } as any, file));
+    } catch {
+      // A truncated extract (very large package) cannot be split; its embedded minutes are skipped.
+    }
+  }
+  const fiscalChanges = annotateFiscalYearEndChanges(extractions);
+  const { reconciled, carry, gaps } = reconcileExtractions(files, extractions, { fiscalChanges });
   const clusters = (await ctx.db.query("intakeClusters").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[];
   const result: IntakeRunResult = {
     runId, name: run.name, sourceKind: run.sourceKind, sourceRoot: run.sourceRoot ?? "", startedAtISO: run.createdAtISO, engine: run.engine ?? { minutes: "deterministic" },
