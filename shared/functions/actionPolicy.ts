@@ -21,7 +21,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],
   exports: ["exports"], audit: ["activity"], volunteers: ["volunteers"], communications: ["communications", "pendingEmails", "partyPortals", "publicPortal"],
-  settings: ["apiPlatform", "aiSettings", "aiSettingsActions", "corporationSettings", "serviceProviders", "subscriptions", "programStatements", "secrets", "nameHistory", "recordLayouts", "objectMetadata", "customFields", "fieldMetadata", "views", "commandMenuItems", "importSessions", "waveCache", "permissions", "transparency", "calendarFeed"],
+  settings: ["apiPlatform", "aiSettings", "aiSettingsActions", "corporationSettings", "serviceProviders", "subscriptions", "programStatements", "secrets", "nameHistory", "recordLayouts", "objectMetadata", "customFields", "fieldMetadata", "views", "commandMenuItems", "importSessions", "intake", "intakeActions", "waveCache", "permissions", "transparency", "calendarFeed"],
 };
 
 const RESOURCES = Object.fromEntries(Object.entries(RESOURCE_GROUPS).flatMap(([resource, domains]) => domains.map((domain) => [domain, resource])));
@@ -81,6 +81,8 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "aiSettings:upsert": ["modelId"],
   "aiChat:createThread": ["modelId"],
   "aiChatActions:sendChatMessage": ["modelId"],
+  "intakeActions:extractFile": ["modelId"],
+  "intakeActions:extractRun": ["modelId"],
   "calendarSync:stageCalendarEvents": ["calendarId"],
   "calendarSync:upsertExternalCalendarEventMapping": ["calendarId"],
   "calendarSync:recordCalendarIncrementalCursor": ["calendarId"],
