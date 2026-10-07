@@ -278,7 +278,7 @@ export function AnnualFilingsPage() {
                   ...(form.sourceMissing ? [{ value: form.sourceFilingId, label: "Linked record unavailable" }] : []),
                   ...(detailed ?? [])
                     .filter(row => annualFilingKind(row.kind) && annualFilingYear(row.periodLabel) && row.jurisdictionCode)
-                    .map(row => ({ value: String(row._id), label: `${kindLabel(row.kind)} · ${row.jurisdictionCode} · ${row.periodLabel} (${annualFilingYear(row.periodLabel)}) · ${row.status}` })),
+                    .map(row => ({ value: String(row._id), label: `${kindLabel(row.kind)} · ${row.jurisdictionCode} · ${row.periodLabel === annualFilingYear(row.periodLabel) ? row.periodLabel : `${row.periodLabel} (${annualFilingYear(row.periodLabel)})`} · ${row.status}` })),
                 ]}
               />
             </Field>

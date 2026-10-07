@@ -15,9 +15,11 @@ test('detailed annual filing links into the annual ledger, records manual eviden
   await expect(page.getByRole('button', { name: 'Mark filed', exact: true })).toBeVisible();
   await page.goto('/app/annual-filings');
   await page.getByRole('button', { name: 'Add filing', exact: true }).click();
-  const select = page.getByLabel('Detailed annual filing', { exact: true });
-  await expect(select.locator('option')).toHaveCount(2);
-  await select.selectOption({ label: 'BCSocietyAnnualReport · CA-BC · 2026 · Upcoming' });
+  // The source picker is the app's Select (G-27 replaced the native select).
+  const sourcePicker = page.locator('.field').filter({ has: page.getByText('Detailed annual filing', { exact: true }) }).locator('[aria-haspopup=listbox]');
+  await sourcePicker.click();
+  await expect(page.getByRole('option')).toHaveCount(2);
+  await page.getByRole('option', { name: 'BC society annual report · CA-BC · 2026 · Upcoming', exact: true }).click();
   await expect(page.getByLabel('Jurisdiction', { exact: true })).toHaveValue('CA-BC');
   await expect(page.getByLabel('Year', { exact: true })).toHaveValue('2026');
   await expect(page.getByLabel('Year', { exact: true })).toBeDisabled();
@@ -44,7 +46,8 @@ test('detailed annual filing links into the annual ledger, records manual eviden
   await expect(region.locator('tbody tr')).toHaveCount(1);
   await expect(region).toContainText('✓');
   await page.getByRole('button', { name: 'Add filing', exact: true }).click();
-  await page.getByLabel('Detailed annual filing', { exact: true }).selectOption({ label: 'BCSocietyAnnualReport · CA-BC · 2026 · Filed' });
+  await sourcePicker.click();
+  await page.getByRole('option', { name: 'BC society annual report · CA-BC · 2026 · Filed', exact: true }).click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(region.locator('tbody tr')).toHaveCount(1);

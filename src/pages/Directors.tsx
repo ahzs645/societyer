@@ -286,7 +286,7 @@ export function DirectorsPage() {
               loading={tableData.loading || directors === undefined}
               renderCell={({ field, record }) => field.name === "firstName" ? (
                 <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setOpen(true); }}>
-                  {`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed director"}
+                  {record.firstName || record.lastName || "Unnamed director"}
                   {directorTermLapsed(record, calendarDateKey(new Date())) ? (
                     <span className="badge badge--warn" style={{ marginLeft: 6 }} title={`Term ended ${record.termEnd}; record a re-election or resignation.`}>Term ended</span>
                   ) : null}

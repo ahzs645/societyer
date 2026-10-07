@@ -439,7 +439,7 @@ export function FilingsPage() {
                 <input className="input" value={form.sourceRegistrationId ?? ""} onChange={(e) => setForm({ ...form, sourceRegistrationId: e.target.value })} />
               </Field>
             )}
-            <Field label="Period / label" required hint="For example 2026, FY2025-26 or 2026 AGM"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>
+            <Field label="Period / label" hint="Required. For example 2026, FY2025-26 or 2026 AGM"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>
             <Field label="Due date">
               <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
             </Field>

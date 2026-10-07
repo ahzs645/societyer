@@ -159,6 +159,7 @@
     "test:bylaw-sections": "tsx scripts/check-bylaw-sections.ts",
     "test:bylaw-governance": "tsx scripts/check-bylaw-governance.ts",
     "test:compliance-agm-evidence": "tsx scripts/check-compliance-agm-evidence.ts",
+    "test:governance-forms": "tsx scripts/check-governance-forms.ts",
     "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts",
     "test:authorization-policy": "tsx scripts/check-authorization-policy.ts",
     "test:hosted-identity": "tsx scripts/check-hosted-identity.ts",

@@ -228,7 +228,7 @@ export function MembersPage() {
           <RecordTable
             renderCell={({ field, record }) => field.name === "firstName" ? (
               <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setDrawerOpen(true); }}>
-                {`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed member"}
+                {record.firstName || record.lastName || "Unnamed member"}
               </button>
             ) : undefined}
             selectable={canManage}
