@@ -53,7 +53,17 @@ function normalizeSourcePayload(source: any) {
     extractionMethod: cleanText(source?.extractionMethod),
     sensitivity: cleanText(source?.sensitivity),
     tags: arrayOf(source?.tags).map(String),
+    // Optional version/duplicate hints (schema A8); omitted when absent.
+    ...optionalText("versionGroupKey", source?.versionGroupKey),
+    ...optionalText("sourceVersionStatus", source?.sourceVersionStatus),
+    ...optionalText("supersedesExternalId", source?.supersedesExternalId),
+    ...optionalText("duplicateOfExternalId", source?.duplicateOfExternalId),
   };
+}
+
+function optionalText(key: string, value: unknown): Record<string, string> {
+  const text = cleanText(value);
+  return text ? { [key]: text } : {};
 }
 
 /** A person reference in an import: a plain name or { name, notes }. Person

@@ -3,6 +3,8 @@ import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHisto
 import { assertMeetingHistoryReferences, syncMotionsForMinutes, resolveMinutesMotions } from "../minutes";
 import { directoryPersonId, sourceVersionsCover, importedAgendaRows, importedMotionFromPayload, importedSectionsWithLinks, importedSourceVersionFor, linkActionItem, loadDirectoryIndex, screenImportedAttendance, type DirectoryIndex } from "./importMeetingApply";
 import { normalizeSigningAuthorityTiers } from "../../signingAuthorityTiers";
+import { normalizeDocumentCategory } from "../../documentCategories";
+import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../../documentVersioning";
 import { EXTRA_SECTION_RECORD_HANDLERS, resolveMeetingReference } from "./importSectionHandlersExtra";
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
@@ -320,10 +322,13 @@ async function ensureImportSourceDocuments(
     const externalSystem = cleanText(source?.externalSystem) || sourceSystemFromExternalId(externalId);
     const title = cleanText(source?.title) || fallbackSourceTitle(externalId);
     const sourceCategory = cleanText(source?.category) || category;
+    const sourceVersionStatus = normalizeSourceVersionStatus(source?.sourceVersionStatus) ?? detectSourceVersionStatus(source?.fileName, title);
     const id = await ctx.db.insert("documents", {
       societyId,
       title,
-      category: sourceCategory,
+      category: normalizeDocumentCategory(sourceCategory),
+      ...(cleanText(source?.versionGroupKey) ? { versionGroupKey: cleanText(source?.versionGroupKey)!.slice(0, 160) } : {}),
+      ...(sourceVersionStatus ? { sourceVersionStatus } : {}),
       fileName: cleanText(source?.fileName),
       mimeType: cleanText(source?.mimeType),
       fileSizeBytes: numberOrUndefined(source?.fileSizeBytes),

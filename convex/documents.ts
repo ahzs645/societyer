@@ -21,6 +21,14 @@ import {
   archivePortable,
   removePortable,
 } from "../shared/functions/documents";
+import {
+  browsePortable,
+  versionsForPortable,
+  markDuplicatePortable,
+  clearDuplicatePortable,
+  setVersionInfoPortable,
+  mergeDuplicatesPortable,
+} from "../shared/functions/documentCatalog";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("documents:list", query)({
@@ -209,4 +217,47 @@ export const remove = authorizedMutation("documents:remove", mutation)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
+});
+
+/* ---------------- document catalog: browse, duplicates, versions ---------------- */
+
+export const browse = authorizedQuery("documents:browse", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => browsePortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const versionsFor = authorizedQuery("documents:versionsFor", query)({
+  args: { id: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => versionsForPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const markDuplicate = authorizedMutation("documents:markDuplicate", mutation)({
+  args: { id: v.id("documents"), duplicateOfDocumentId: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => markDuplicatePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const clearDuplicate = authorizedMutation("documents:clearDuplicate", mutation)({
+  args: { id: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => clearDuplicatePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const setVersionInfo = authorizedMutation("documents:setVersionInfo", mutation)({
+  args: {
+    id: v.id("documents"),
+    versionGroupKey: v.optional(v.union(v.string(), v.null())),
+    supersedesDocumentId: v.optional(v.union(v.id("documents"), v.null())),
+    sourceVersionStatus: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => setVersionInfoPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const mergeDuplicates = authorizedMutation("documents:mergeDuplicates", mutation)({
+  args: { keepId: v.id("documents"), duplicateIds: v.array(v.id("documents")) },
+  returns: v.any(),
+  handler: async (ctx, args) => mergeDuplicatesPortable(await toPortableMutationCtx(ctx), args),
 });
