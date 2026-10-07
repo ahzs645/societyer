@@ -109,6 +109,28 @@ assert.equal(motion.outcomeOverrideNote, "Consensus recorded by the chair", "ove
 assert.equal(motion.sourceOutcomeText, "approved", "source outcome wording survives");
 console.log("✓ agenda re-sync keeps action status/owner links and motion person links, dissent and notes");
 
+// Backup round trip of corrected, approved minutes: the adopted copy, action
+// owners and motion person links come back intact.
+{
+  await client.mutation("minutes:update", { id: "min1", patch: { approvedAt: "2021-03-30T07:00:00.000Z", clearApprovedInMeeting: true } });
+  const backup = JSON.parse(JSON.stringify(client.exportLocalWorkspaceSnapshot()));
+  const restoredClient = new StaticConvexClient({ seed: { societies: [] } });
+  await restoredClient.importLocalWorkspaceSnapshot(backup);
+  const back = restoredClient.exportLocalWorkspaceSnapshot().tables as Record<string, any[]>;
+  const before = tables();
+  const restoredMinutes = back.minutes.find((row) => row._id === "min1");
+  assert.ok(restoredMinutes.approvedAt && restoredMinutes.adoptedSnapshot, "approval and the adopted copy survive a backup restore");
+  assert.deepEqual(restoredMinutes.adoptedSnapshot, before.minutes.find((row) => row._id === "min1").adoptedSnapshot);
+  assert.equal(restoredMinutes.sections.find((section: any) => section.title === "Work plan").actionItems[0].assigneePersonId, "p_alex");
+  const restoredMotion = back.motions.find((row) => row.minutesId === "min1");
+  assert.equal(restoredMotion.movedByPersonId, "p_alex");
+  assert.equal(restoredMotion.secondedByPersonId, "p_blair");
+  await assert.rejects(() => restoredClient.mutation("minutes:update", { id: "min1", patch: { discussion: "Edited after restore" } }), /frozen|adopted|approved/i, "restored adopted minutes stay frozen");
+  await client.mutation("minutes:update", { id: "min1", patch: { clearApproval: true } });
+  assert.equal(tables().minutes.find((row) => row._id === "min1").approvedAt, undefined, "reopening clears the approval");
+}
+console.log("✓ backup restore keeps approved minutes, the adopted copy, action owners and motion person links");
+
 // Reordering the agenda moves each motion with its section; a motion whose
 // section disappears stays in the minutes, unassigned.
 await client.mutation("minutes:update", { id: "min1", patch: { sections: [
