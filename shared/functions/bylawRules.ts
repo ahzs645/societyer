@@ -17,6 +17,7 @@ import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules
 import { isCorporation } from "../organizationDomain";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { bylawRuleContextFor, bylawRuleEffectiveDateProblem, bylawRuleProblems } from "../bylawGovernance";
 
 
 export function getDefaultBylawRules(societyId: string, organization?: any) {
@@ -124,8 +125,14 @@ export async function upsertActivePortable(ctx: PortableMutationCtx, args: Recor
   const {
     id: _previousId,
     effectiveFromISO,
+    allowBackdated,
     ...ruleValues
   } = args;
+  // G-06: impossible or unlawful rule values are rejected here, not only in
+  // the editor, so every runtime (hosted, local, import) enforces them.
+  const organization = await ctx.db.get(args.societyId, "societies");
+  const problems = bylawRuleProblems(ruleValues, bylawRuleContextFor(organization));
+  if (problems.length) throw new Error(`Bylaw rule set not saved: ${problems.join(" ")}`);
   const payload = {
     ...ruleValues,
     status: "Active",
@@ -137,6 +144,10 @@ export async function upsertActivePortable(ctx: PortableMutationCtx, args: Recor
     .query("bylawRuleSets")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
     .collect();
+  // A new version applies prospectively: it may not silently take effect on
+  // or before the version it replaces (which would re-grade held meetings).
+  const effectiveProblem = bylawRuleEffectiveDateProblem(payload.effectiveFromISO, rows as any[], { allowBackdated: Boolean(allowBackdated) });
+  if (effectiveProblem) throw new Error(effectiveProblem);
   for (const row of rows) {
     if (row.status === "Active") {
       await ctx.db.patch(row._id, { status: "Archived" });

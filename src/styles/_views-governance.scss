@@ -20,6 +20,14 @@
   margin-top: 2px;
   color: token('accent');
 }
+.bylaw-rules__notice--error {
+  border-color: token('danger');
+  background: token('danger-soft');
+  color: token('text-primary');
+}
+.bylaw-rules__notice--error svg {
+  color: token('danger');
+}
 .bylaw-rules__layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

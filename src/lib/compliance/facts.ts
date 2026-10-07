@@ -4,6 +4,7 @@ import {
   organizationEntityType,
   organizationLabel,
 } from "../../../shared/organizationDomain";
+import { deriveAgmFacts, type AgmMeetingLike } from "../../../shared/agmEvidence";
 import type { ComplianceFacts } from "./engine";
 
 export type RegistrationComplianceSource = {
@@ -27,11 +28,21 @@ export function complianceFactsForOrganization(
   options: {
     asOfDate?: string;
     registrations?: RegistrationComplianceSource[];
+    /** Meeting records. Held AGMs are AGM evidence (G-02): the latest held AGM
+     *  feeds `annualMeetingDate`, and every held AGM year feeds `agmYears`. */
+    meetings?: readonly AgmMeetingLike[];
   } = {},
 ): ComplianceFacts[] {
-  // A preparation workspace has no confirmed legal entity or registry obligations yet.
-  if (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated") return [];
   const asOfDate = options.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const agm = deriveAgmFacts(organization, options.meetings, asOfDate);
+  // Held AGMs prove an existing, operating organization. A profile that still
+  // says "preparing"/"pre-incorporation" (common for imported workspaces) is
+  // then treated as an unverified existing entity rather than computing nothing.
+  const preFormation = (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated") ||
+    ["preparing", "submitted", "unverified_existing"].includes(organization.formationStatus ?? "");
+  const formationInferredFromRecords = preFormation && agm.agmDates.length > 0;
+  // A preparation workspace has no confirmed legal entity or registry obligations yet.
+  if (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated" && !formationInferredFromRecords) return [];
   const entityType = organizationEntityType(organization);
   const homeJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const homeFacts: ComplianceFacts = {
@@ -40,7 +51,8 @@ export function complianceFactsForOrganization(
     entitySubtype: cleanText(organization.entitySubtype) || cleanText(organization.subtype) || undefined,
     homeJurisdictionCode: homeJurisdiction,
     legalSubtype: organization.legalSubtype,
-    formationStatus: organization.formationStatus ?? "unverified",
+    formationStatus: formationInferredFromRecords ? "unverified" : organization.formationStatus ?? "unverified",
+    formationInferredFromRecords: formationInferredFromRecords || undefined,
     contextKind: "home",
     registrationType: "home",
     status: cleanText(organization.status) || undefined,
@@ -48,9 +60,11 @@ export function complianceFactsForOrganization(
     incorporationDate: organization.incorporationDate,
     anniversaryDate: organization.anniversaryDate ?? organization.incorporationDate,
     fiscalYearEnd: fiscalYearEndDateForCurrentCycle(organization.fiscalYearEnd, asOfDate),
-    annualMeetingDate: cleanText(organization.annualMeetingDate) || undefined,
-    annualMeetingYear: organization.annualMeetingYear,
-    annualReferenceDate: cleanText(organization.annualReferenceDate) || cleanText(organization.annualMeetingDate) || undefined,
+    annualMeetingDate: agm.annualMeetingDate,
+    annualMeetingYear: agm.annualMeetingYear,
+    agmYears: agm.agmYears,
+    operatingSinceDate: agm.operatingSinceDate,
+    annualReferenceDate: cleanText(organization.annualReferenceDate) || agm.annualMeetingDate || undefined,
     agmExtensionDate: cleanText(organization.agmExtensionDate) || undefined,
     agmExtensionEvidence: cleanText(organization.agmExtensionEvidence) || undefined,
     eventDates: organizationEventDates(organization),

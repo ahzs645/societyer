@@ -28,6 +28,9 @@ import {
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
 import { formatDateTime, relative } from "../lib/format";
+import { evaluateSpecialResolution, SPECIAL_RESOLUTION_CITATION, voteCountProblems } from "../../shared/bylawGovernance";
+import { useBylawRules } from "../hooks/useBylawRules";
+import { Select } from "../components/Select";
 
 // ============================================================================
 // Page
@@ -60,7 +63,9 @@ export function BylawDiffPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const prompt = usePrompt();
-  const [voteModal, setVoteModal] = useState<{ f: string; a: string; x: string } | null>(null);
+  const [voteModal, setVoteModal] = useState<{ f: string; a: string; x: string; date: string; meetingId: string } | null>(null);
+  const { rules } = useBylawRules();
+  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const amendments = useQuery(
     api.bylawAmendments.list,
     society ? { societyId: society._id } : "skip",
@@ -142,26 +147,38 @@ export function BylawDiffPage() {
       toast.warn("Add a title for this amendment first.");
       return;
     }
-    const id = await createDraft({
-      societyId: society._id,
-      title: title.trim(),
-      baseText: oldText,
-      proposedText: newText,
-    });
-    setSelectedId(id as Id<"bylawAmendments">);
-    setDirty(false);
-    toast.success("Draft amendment saved");
+    try {
+      const id = await createDraft({
+        societyId: society._id,
+        title: title.trim(),
+        baseText: oldText,
+        proposedText: newText,
+      });
+      setSelectedId(id as Id<"bylawAmendments">);
+      setDirty(false);
+      toast.success("Draft amendment saved");
+    } catch (error) {
+      toast.error("Could not save the draft", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const saveEdits = async () => {
     if (!canWrite) return;
     if (!selected) return;
-    await updateDraft({
-      id: selected._id,
-      patch: { title, baseText: oldText, proposedText: newText },
-    });
-    setDirty(false);
-    toast.success("Draft updated");
+    if (!title.trim()) {
+      toast.warn("The amendment needs a title.");
+      return;
+    }
+    try {
+      await updateDraft({
+        id: selected._id,
+        patch: { title: title.trim(), baseText: oldText, proposedText: newText },
+      });
+      setDirty(false);
+      toast.success("Draft updated");
+    } catch (error) {
+      toast.error("Could not update the draft", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const exportRedline = () => {
@@ -190,6 +207,17 @@ export function BylawDiffPage() {
     void exportWordDocx({ filename: `bylaw-amendments${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: "Bylaw amendments", bodyHtml });
   };
 
+  const generalMeetings = (meetings ?? []).filter((m: any) => m.type === "AGM" || m.type === "SGM" || m.type === "General" || /general meeting/i.test(String(m.title ?? "")));
+  const toCount = (value: string) => (value === "" ? undefined : Number(value));
+  const voteProblems = voteModal
+    ? [
+        ...voteCountProblems({ votesFor: toCount(voteModal.f), votesAgainst: toCount(voteModal.a || "0"), abstentions: toCount(voteModal.x || "0") }, { requireVotesFor: true }),
+        ...(voteModal.date && voteModal.date > new Date().toISOString().slice(0, 10) ? ["The resolution date cannot be in the future."] : []),
+      ]
+    : [];
+  const votePreview = voteModal && voteModal.f !== ""
+    ? evaluateSpecialResolution({ votesFor: Number(voteModal.f), votesAgainst: Number(voteModal.a || 0) }, rules?.specialResolutionThresholdPct)
+    : null;
   const status = (selected?.status ?? "Draft") as Status;
   const isDraft = status === "Draft";
 
@@ -211,8 +239,13 @@ export function BylawDiffPage() {
                 <Save size={12} /> {dirty ? "Save changes" : "Saved"}
               </button>
             )}
-            {!selected && (oldText || newText) && (
-              <button className="btn-action btn-action--primary" onClick={saveAsNewDraft} disabled={!canWrite}>
+            {!selected && (
+              <button
+                className="btn-action btn-action--primary"
+                onClick={saveAsNewDraft}
+                disabled={!canWrite || !title.trim() || (!oldText && !newText)}
+                title={!title.trim() ? "Add a title first" : !oldText && !newText ? "Paste the current or proposed bylaw text first" : undefined}
+              >
                 <Save size={12} /> Save as draft
               </button>
             )}
@@ -257,6 +290,30 @@ export function BylawDiffPage() {
 
         {/* Editor + diff */}
         <div className="col" style={{ gap: 16 }}>
+          {!selected && (
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">New amendment draft</h2>
+                <Badge tone="accent">Draft</Badge>
+              </div>
+              <div className="card__body">
+                <Field label="Title" hint="Required. For example: 2026 quorum and electronic meeting amendments">
+                  <input
+                    className="input"
+                    value={title}
+                    disabled={!canWrite}
+                    placeholder="Name this amendment"
+                    aria-required="true"
+                    onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
+                  />
+                </Field>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  Paste the current and proposed text below, then save. The amendment then moves through
+                  consultation, a special resolution (at least two-thirds of votes cast) and filing.
+                </div>
+              </div>
+            </div>
+          )}
           {selected && (
             <div className="card">
               <div className="card__head">
@@ -269,6 +326,10 @@ export function BylawDiffPage() {
                       disabled={!canWrite}
                       onClick={async () => {
                         if (!canWrite) return;
+                        if (dirty) {
+                          toast.warn("Save your changes before starting consultation.");
+                          return;
+                        }
                         await startConsultation({ id: selected._id });
                         toast.success("Consultation started");
                       }}
@@ -280,7 +341,7 @@ export function BylawDiffPage() {
                     <button
                       className="btn-action btn-action--primary"
                       disabled={!canWrite}
-                      onClick={() => { if (canWrite) setVoteModal({ f: "", a: "0", x: "0" }); }}
+                      onClick={() => { if (canWrite) setVoteModal({ f: "", a: "0", x: "0", date: new Date().toISOString().slice(0, 10), meetingId: "" }); }}
                     >
                       <ClipboardCheck size={12} /> Record resolution
                     </button>
@@ -298,8 +359,12 @@ export function BylawDiffPage() {
                           tone: "warn",
                         });
                         if (!ok) return;
-                        await markFiled({ id: selected._id });
-                        toast.success("Marked as filed");
+                        try {
+                          await markFiled({ id: selected._id });
+                          toast.success("Marked as filed", "Record a new bylaw rule version effective on the filing date (Bylaw rules) if the amendment changes meeting rules.");
+                        } catch (error) {
+                          toast.error("Could not mark filed", error instanceof Error ? error.message : String(error));
+                        }
                       }}
                     >
                       <Flag size={12} /> Mark filed
@@ -381,6 +446,7 @@ export function BylawDiffPage() {
                 {selected.votesFor != null && (
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
                     Resolution vote: <strong>{selected.votesFor}</strong> for · <strong>{selected.votesAgainst ?? 0}</strong> against · <strong>{selected.abstentions ?? 0}</strong> abstain
+                    {selected.resolutionPassedAtISO ? <> · passed {formatDateTime(selected.resolutionPassedAtISO).split(",").slice(0, 2).join(",")}</> : null}
                   </div>
                 )}
                 {!isDraft && (
@@ -510,30 +576,58 @@ export function BylawDiffPage() {
             <button className="btn" onClick={() => setVoteModal(null)}>Cancel</button>
             <button
               className="btn btn--accent"
-              disabled={!canWrite || !voteModal || !Number.isFinite(Number(voteModal.f)) || voteModal.f === ""}
+              disabled={!canWrite || !voteModal || voteProblems.length > 0}
               onClick={async () => {
                 if (!canWrite) return;
-                if (!voteModal || !selected) return;
-                const f = Number(voteModal.f);
-                const a = Number(voteModal.a) || 0;
-                const x = Number(voteModal.x) || 0;
-                if (!Number.isFinite(f)) return;
-                await markResolutionPassed({
-                  id: selected._id,
-                  votesFor: f,
-                  votesAgainst: a,
-                  abstentions: x,
-                });
-                setVoteModal(null);
-                toast.success(`Resolution passed — ${f}-${a}`);
+                if (!voteModal || !selected || voteProblems.length) return;
+                try {
+                  const result = await markResolutionPassed({
+                    id: selected._id,
+                    votesFor: Number(voteModal.f),
+                    votesAgainst: Number(voteModal.a || 0),
+                    abstentions: Number(voteModal.x || 0),
+                    resolutionDateISO: voteModal.date || undefined,
+                    meetingId: (voteModal.meetingId || undefined) as any,
+                  }) as any;
+                  setVoteModal(null);
+                  if (result && result.passed === false) {
+                    toast.warn("Special resolution not passed", result.summary);
+                  } else {
+                    toast.success("Special resolution passed", result?.summary);
+                  }
+                } catch (error) {
+                  toast.error("Could not record the vote", error instanceof Error ? error.message : String(error));
+                }
               }}
             >
-              Record
+              {votePreview && !votePreview.passed && voteProblems.length === 0 ? "Record failed vote" : "Record"}
             </button>
           </>
         }
       >
         {voteModal && (
+          <div className="col" style={{ gap: 10 }}>
+          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+            <Field label="Resolution date">
+              <input
+                className="input"
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                value={voteModal.date}
+                onChange={(e) => setVoteModal({ ...voteModal, date: e.target.value })}
+              />
+            </Field>
+            <Field label="General meeting (optional)">
+              <Select
+                value={voteModal.meetingId}
+                onChange={(value) => {
+                  const meeting = generalMeetings.find((m: any) => String(m._id) === value);
+                  setVoteModal({ ...voteModal, meetingId: value, date: meeting ? String(meeting.scheduledAt).slice(0, 10) : voteModal.date });
+                }}
+                options={[{ value: "", label: "Not linked" }, ...generalMeetings.map((m: any) => ({ value: String(m._id), label: `${m.title} · ${String(m.scheduledAt).slice(0, 10)}` }))]}
+              />
+            </Field>
+          </div>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Votes for">
               <input
@@ -564,6 +658,16 @@ export function BylawDiffPage() {
               />
             </Field>
           </div>
+          {voteProblems.length > 0 ? (
+            <div className="muted" role="alert" style={{ color: "var(--danger)", fontSize: "var(--fs-sm)" }}>{voteProblems.join(" ")}</div>
+          ) : votePreview ? (
+            <div role="status" style={{ fontSize: "var(--fs-sm)" }}>
+              <Badge tone={votePreview.passed ? "success" : "danger"}>{votePreview.passed ? "Passes" : "Does not pass"}</Badge>{" "}
+              {votePreview.summary}
+            </div>
+          ) : null}
+          <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>{SPECIAL_RESOLUTION_CITATION}. Abstentions are not votes cast.</div>
+          </div>
         )}
       </Modal>
     </div>
@@ -576,8 +680,10 @@ function eventLabel(action: string): string {
     case "edited": return "Edited";
     case "consultation_started": return "Consultation started";
     case "resolution_passed": return "Resolution passed";
+    case "resolution_failed": return "Resolution not passed";
     case "filed": return "Filed";
     case "withdrawn": return "Withdrawn";
+    case "superseded": return "Superseded";
     default: return action;
   }
 }
@@ -589,7 +695,9 @@ function eventTone(action: string): any {
     case "resolution_passed":
     case "filed":
       return "success";
-    case "withdrawn": return "danger";
+    case "withdrawn":
+    case "resolution_failed":
+      return "danger";
     default: return "neutral";
   }
 }
