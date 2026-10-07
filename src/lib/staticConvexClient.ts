@@ -190,7 +190,14 @@ export class StaticConvexClient {
         try {
           await this.seedRecordTableMetadataFor(society._id);
         } catch (error) {
-          console.warn("[societyer-local] metadata auto-seed skipped a workspace", society._id, error);
+          // Previewing a role without settings:write (or a workspace the acting
+          // user is not in) is expected to skip; the next Owner/Admin load seeds it.
+          const message = error instanceof Error ? error.message : String(error);
+          if (/Permission [\w:]+ required|not a member|FORBIDDEN|Not authorized/i.test(message)) {
+            console.debug("[societyer-local] metadata auto-seed deferred for", society._id, "-", message);
+          } else {
+            console.warn("[societyer-local] metadata auto-seed skipped a workspace", society._id, error);
+          }
         }
       }
       this.portableQueries.emit();
