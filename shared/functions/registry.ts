@@ -148,6 +148,7 @@ import * as legalDocumentsFns from "./legalDocuments";
 import * as seedRecordTableMetadataFns from "./seedRecordTableMetadata";
 
 import * as filesFns from "./files";
+import * as intakeFns from "./intake";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
@@ -1340,6 +1341,26 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "continuity:deriveFromBylawRules", handler: continuityFns.deriveFromBylawRulesPortable }),
   definePortableMutation({ name: "continuity:markPeriod", handler: continuityFns.markPeriodPortable }),
   definePortableMutation({ name: "continuity:clearPeriodMark", handler: continuityFns.clearPeriodMarkPortable }),
+  // intake
+  definePortableQuery({ name: "intake:listRuns", handler: intakeFns.listRuns }),
+  definePortableQuery({ name: "intake:getRun", handler: intakeFns.getRun }),
+  definePortableQuery({ name: "intake:listFiles", handler: intakeFns.listFiles }),
+  definePortableQuery({ name: "intake:listClusters", handler: intakeFns.listClusters }),
+  definePortableQuery({ name: "intake:listExtractions", handler: intakeFns.listExtractions }),
+  definePortableQuery({ name: "intake:getExtraction", handler: intakeFns.getExtraction }),
+  definePortableQuery({ name: "intake:getExtractionInput", handler: intakeFns.getExtractionInput }),
+  definePortableQuery({ name: "intake:processingLog", handler: intakeFns.processingLog }),
+  definePortableQuery({ name: "intake:provenanceForRecord", handler: intakeFns.provenanceForRecord }),
+  definePortableMutation({ name: "intake:createRun", handler: intakeFns.createRun }),
+  definePortableMutation({ name: "intake:updateRun", handler: intakeFns.updateRun }),
+  definePortableMutation({ name: "intake:recordFiles", handler: intakeFns.recordFiles }),
+  definePortableMutation({ name: "intake:saveExtract", handler: intakeFns.saveExtract }),
+  definePortableMutation({ name: "intake:saveClusters", handler: intakeFns.saveClusters }),
+  definePortableMutation({ name: "intake:saveExtraction", handler: intakeFns.saveExtraction }),
+  definePortableMutation({ name: "intake:setExtractionStatus", handler: intakeFns.setExtractionStatus }),
+  definePortableMutation({ name: "intake:appendProcessingLog", handler: intakeFns.appendProcessingLog }),
+  definePortableMutation({ name: "intake:reviewField", handler: intakeFns.reviewField }),
+  definePortableMutation({ name: "intake:recordProvenance", handler: intakeFns.recordProvenance }),
 
 ].map((definition) => ({ ...definition, applicationPolicy: true }));
 

@@ -9715,6 +9715,242 @@
     ]
   },
   {
+    "key": "convex:intake:appendProcessingLog",
+    "surface": "convex",
+    "name": "intake:appendProcessingLog",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:createRun",
+    "surface": "convex",
+    "name": "intake:createRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:getExtraction",
+    "surface": "convex",
+    "name": "intake:getExtraction",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": [
+      {
+        "path": "extractionId",
+        "table": "intakeExtractions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:intake:getExtractionInput",
+    "surface": "convex",
+    "name": "intake:getExtractionInput",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:getRun",
+    "surface": "convex",
+    "name": "intake:getRun",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:listClusters",
+    "surface": "convex",
+    "name": "intake:listClusters",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:listExtractions",
+    "surface": "convex",
+    "name": "intake:listExtractions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:listFiles",
+    "surface": "convex",
+    "name": "intake:listFiles",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:listRuns",
+    "surface": "convex",
+    "name": "intake:listRuns",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:processingLog",
+    "surface": "convex",
+    "name": "intake:processingLog",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:provenanceForRecord",
+    "surface": "convex",
+    "name": "intake:provenanceForRecord",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:recordFiles",
+    "surface": "convex",
+    "name": "intake:recordFiles",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:recordProvenance",
+    "surface": "convex",
+    "name": "intake:recordProvenance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:reviewField",
+    "surface": "convex",
+    "name": "intake:reviewField",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": [
+      {
+        "path": "extractionId",
+        "table": "intakeExtractions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:intake:saveClusters",
+    "surface": "convex",
+    "name": "intake:saveClusters",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:saveExtract",
+    "surface": "convex",
+    "name": "intake:saveExtract",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:saveExtraction",
+    "surface": "convex",
+    "name": "intake:saveExtraction",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:setExtractionStatus",
+    "surface": "convex",
+    "name": "intake:setExtractionStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": [
+      {
+        "path": "extractionId",
+        "table": "intakeExtractions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:intake:updateRun",
+    "surface": "convex",
+    "name": "intake:updateRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intakeActions:extractFile",
+    "surface": "convex",
+    "name": "intakeActions:extractFile",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/intakeActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "runId",
+        "table": "intakeRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:intakeActions:extractRun",
+    "surface": "convex",
+    "name": "intakeActions:extractRun",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/intakeActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "runId",
+        "table": "intakeRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:inventoryHub:addCountLine",
     "surface": "convex",
     "name": "inventoryHub:addCountLine",
@@ -28963,6 +29199,198 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "portable:intake:appendProcessingLog",
+    "surface": "portable",
+    "name": "intake:appendProcessingLog",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:createRun",
+    "surface": "portable",
+    "name": "intake:createRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:getExtraction",
+    "surface": "portable",
+    "name": "intake:getExtraction",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "extractionId",
+        "table": "intakeExtractions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:intake:getExtractionInput",
+    "surface": "portable",
+    "name": "intake:getExtractionInput",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:getRun",
+    "surface": "portable",
+    "name": "intake:getRun",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:listClusters",
+    "surface": "portable",
+    "name": "intake:listClusters",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:listExtractions",
+    "surface": "portable",
+    "name": "intake:listExtractions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:listFiles",
+    "surface": "portable",
+    "name": "intake:listFiles",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:listRuns",
+    "surface": "portable",
+    "name": "intake:listRuns",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:processingLog",
+    "surface": "portable",
+    "name": "intake:processingLog",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:provenanceForRecord",
+    "surface": "portable",
+    "name": "intake:provenanceForRecord",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:recordFiles",
+    "surface": "portable",
+    "name": "intake:recordFiles",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:recordProvenance",
+    "surface": "portable",
+    "name": "intake:recordProvenance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:reviewField",
+    "surface": "portable",
+    "name": "intake:reviewField",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "extractionId",
+        "table": "intakeExtractions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:intake:saveClusters",
+    "surface": "portable",
+    "name": "intake:saveClusters",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:saveExtract",
+    "surface": "portable",
+    "name": "intake:saveExtract",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:saveExtraction",
+    "surface": "portable",
+    "name": "intake:saveExtraction",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:setExtractionStatus",
+    "surface": "portable",
+    "name": "intake:setExtractionStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "extractionId",
+        "table": "intakeExtractions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:intake:updateRun",
+    "surface": "portable",
+    "name": "intake:updateRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
   },
   {
     "key": "portable:inventoryHub:addCountLine",

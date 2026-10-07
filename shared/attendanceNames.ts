@@ -44,7 +44,7 @@ const ORG_MARKERS = /\b(?:ministry|minister|city|district|regional|region|counci
 function isAcronymToken(token: string) {
   const bare = token.replace(/[.,()]/g, "");
   if (/^[A-Z]{2,}$/.test(bare)) return true;
-  // Mixed-case acronyms ("CoPG", "MoE") — but not "MacIntyre" or "McDonald".
+  // Mixed-case acronyms ("CoPG", "MoE") — but not Mac/Mc surnames.
   const upper = (bare.match(/[A-Z]/g) ?? []).length;
   const lower = (bare.match(/[a-z]/g) ?? []).length;
   return upper >= 2 && lower <= 2 && /^[A-Za-z]+$/.test(bare);
