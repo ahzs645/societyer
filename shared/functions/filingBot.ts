@@ -11,6 +11,7 @@
  * notification fan-out, and the step catalog.
  */
 
+import { isMeetingHeld } from "../meetingStatus";
 import { bcSocietyBotKind } from "../filingPreparation";
 import { minutesMotionsForDisplay } from "../minutesMotions";
 import { resolveMinutesMotions } from "./minutes";
@@ -59,7 +60,7 @@ export async function buildFilingPacketPortable(ctx: PortableQueryCtx, { society
   ]);
   const activeDirectors = directors.filter((d) => d.status === "Active");
   const lastAgm = meetings
-    .filter((m) => m.type === "AGM" && m.status === "Held")
+    .filter((m) => m.type === "AGM" && isMeetingHeld(m.status))
     .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
   const lastAgmMinutesRaw = lastAgm
     ? minutes.find((mn) => mn.meetingId === lastAgm._id)

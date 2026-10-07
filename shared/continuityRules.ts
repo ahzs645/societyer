@@ -255,7 +255,10 @@ export function describeCadenceRule(rule: CadenceRule | undefined | null): strin
     case "monthly": return `Monthly${months}`;
     case "quarterly": return "Quarterly";
     case "per_year_count": return `${rule.count ?? "?"} per year${months}`;
-    case "after_event": return `Within ${rule.offsetDays ?? 0} days after the ${rule.anchor === "agm" || !rule.anchor ? "AGM" : rule.anchor}`;
+    case "after_event": {
+      const anchor = rule.anchor === "agm" || !rule.anchor ? "AGM" : rule.anchor;
+      return rule.offsetDays ? `Within ${rule.offsetDays} days after the ${anchor}` : `At each ${anchor}`;
+    }
     case "continuous": return rule.minimumCount !== undefined ? `At least ${rule.minimumCount} at all times` : "Continuously";
     case "ad_hoc": return "As needed";
     default: return String(rule.frequency);

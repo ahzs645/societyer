@@ -45,6 +45,8 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/deadlines": "deadlines:read",
   "/app/compliance-obligations": "deadlines:read",
   "/app/annual-cycle": "deadlines:read",
+  "/app/coverage": "deadlines:read",
+  "/app/source-model-coverage": "deadlines:read",
   "/app/post-incorporation": "deadlines:read",
   "/app/commitments": "commitments:read",
   "/app/goals": "commitments:read",

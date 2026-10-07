@@ -5,6 +5,7 @@ import {
   backfillFromSourceEvidencePortable,
   bulkSetStatusPortable,
   countForRecordPortable,
+  coveragePortable,
   createPortable,
   forRecordPortable,
   getPortable,
@@ -40,6 +41,12 @@ export const forRecord = authorizedQuery("representationGaps:forRecord", query)(
   args: { societyId: v.id("societies"), affectedTable: v.string(), affectedId: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => forRecordPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const coverage = authorizedQuery("representationGaps:coverage", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => coveragePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const countForRecord = authorizedQuery("representationGaps:countForRecord", query)({

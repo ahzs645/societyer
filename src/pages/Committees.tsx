@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { COMMITTEE_KIND_OPTIONS } from "../features/committees/CommitteeStructureCard";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { Plus, Users, UsersRound as UsersIcon } from "lucide-react";
@@ -33,6 +34,7 @@ type CommitteeForm = {
   cadence: string;
   cadenceNotes?: string;
   color: string;
+  kind?: string;
 };
 
 type CommitteeRecord = Doc<"committees"> & {
@@ -224,6 +226,16 @@ export function CommitteesPage() {
                 rows={4}
                 value={form.description}
                 onChange={(markdown) => setForm({ ...form, description: markdown })}
+              />
+            </Field>
+            <Field label="Kind">
+              <Select
+                disabled={!canWrite}
+                value={form.kind ?? ""}
+                onChange={(value) => setForm({ ...form, kind: value || undefined })}
+                options={COMMITTEE_KIND_OPTIONS}
+                placeholder="Not set"
+                clearable
               />
             </Field>
             <Field label="Cadence">

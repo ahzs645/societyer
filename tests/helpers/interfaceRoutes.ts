@@ -324,6 +324,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/coverage",
+    "path": "/demo/app/coverage",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/source-model-coverage",
+    "path": "/demo/app/source-model-coverage",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/documents",
     "path": "/demo/app/documents",
     "kind": "app",

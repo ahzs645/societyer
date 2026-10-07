@@ -20,6 +20,8 @@ import { useToast } from "../components/Toast";
 import { ArrowLeft, Users, ListTodo, Target, Calendar, Plus, FileText, Trash2, Activity, MessageSquare } from "lucide-react";
 import { formatDateTime, formatDate, initials } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { CommitteeStructureCard } from "../features/committees/CommitteeStructureCard";
+import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 
 export function CommitteeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -108,18 +110,7 @@ export function CommitteeDetailPage() {
               <div className="card__head"><h2 className="card__title">Mission</h2></div>
               <div className="card__body">{committee.mission || <span className="muted">No mission set.</span>}</div>
             </div>
-            <div className="card">
-              <div className="card__head"><h2 className="card__title">Cadence</h2></div>
-              <div className="card__body col">
-                <div className="row" style={{ gap: 10 }}>
-                  <Badge tone="accent">{committee.cadence}</Badge>
-                  {committee.nextMeetingAt && (
-                    <span className="muted">Next: {formatDateTime(committee.nextMeetingAt)}</span>
-                  )}
-                </div>
-                {committee.cadenceNotes && <div className="muted">{committee.cadenceNotes}</div>}
-              </div>
-            </div>
+            <CommitteeStructureCard committee={committee} canWrite={canWrite} societyId={society._id} />
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">Goals</h2>
@@ -352,6 +343,7 @@ export function CommitteeDetailPage() {
           <>
             <Badge>{committee.cadence}</Badge>
             <Badge tone={committee.status === "Active" ? "success" : "warn"}>{committee.status}</Badge>
+            <UnsupportedDetailsBadge table="committees" id={committee._id} />
           </>
         }
         summary={[

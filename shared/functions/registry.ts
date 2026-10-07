@@ -1312,6 +1312,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "representationGaps:summary", handler: representationGapsFns.summaryPortable }),
   definePortableQuery({ name: "representationGaps:forRecord", handler: representationGapsFns.forRecordPortable }),
   definePortableQuery({ name: "representationGaps:countForRecord", handler: representationGapsFns.countForRecordPortable }),
+  definePortableQuery({ name: "representationGaps:coverage", handler: representationGapsFns.coveragePortable }),
   definePortableMutation({ name: "representationGaps:create", handler: representationGapsFns.createPortable }),
   definePortableMutation({ name: "representationGaps:setStatus", handler: representationGapsFns.setStatusPortable }),
   definePortableMutation({ name: "representationGaps:bulkSetStatus", handler: representationGapsFns.bulkSetStatusPortable }),

@@ -15,7 +15,8 @@
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
 import {
   classifyLegacySourceEvidence,
   GAP_STATUSES,
@@ -514,5 +515,109 @@ export async function backfillFromSourceEvidencePortable(
     byInfoType[draft.infoType] = (byInfoType[draft.infoType] ?? 0) + 1;
   }
   return { created: batch.length, remaining: candidates.length - batch.length, byInfoType };
+}
+
+/* ---------------------------- native coverage ---------------------------- */
+
+type CoverageSource = { table: string; label: string; permission: string; count?: (rows: any[]) => number };
+
+/** Native record families per gap area, each read only with its own read permission. */
+const COVERAGE_AREAS: Record<string, CoverageSource[]> = {
+  meetings: [
+    { table: "meetings", label: "Meetings", permission: "meetings:read" },
+    { table: "minutes", label: "Minutes", permission: "minutes:read" },
+  ],
+  motions: [{ table: "motions", label: "Motions", permission: "motions:read" }],
+  people: [
+    { table: "peopleDirectory", label: "People", permission: "members:read" },
+    { table: "meetingAttendanceRecords", label: "Person-linked attendance", permission: "members:read", count: (rows) => rows.filter((row) => row.directoryPersonId || row.memberId || row.directorId).length },
+    { table: "directors", label: "Directors", permission: "directors:read" },
+    { table: "members", label: "Members", permission: "members:read" },
+  ],
+  committees: [
+    { table: "committees", label: "Committees", permission: "committees:read" },
+    { table: "committeeMembers", label: "Committee members", permission: "committees:read" },
+  ],
+  governance: [
+    { table: "policies", label: "Policies", permission: "documents:read" },
+    { table: "bylawAmendments", label: "Bylaw amendments", permission: "documents:read" },
+    { table: "filings", label: "Filings", permission: "filings:read" },
+  ],
+  finance: [
+    { table: "financials", label: "Official financial statements", permission: "financials:read" },
+    { table: "financialStatementImports", label: "Imported statements", permission: "financials:read" },
+    { table: "budgetSnapshots", label: "Budget snapshots", permission: "financials:read" },
+    { table: "transactionCandidates", label: "Transaction candidates", permission: "financials:read" },
+  ],
+  insurance: [{ table: "insurancePolicies", label: "Insurance policies", permission: "financials:read" }],
+  grants: [{ table: "grants", label: "Grants", permission: "grants:read" }],
+  communications: [{ table: "communicationCampaigns", label: "Campaigns", permission: "communications:read" }],
+  programs: [
+    { table: "goals", label: "Goals", permission: "commitments:read" },
+    { table: "commitments", label: "Commitments", permission: "commitments:read" },
+  ],
+  assets: [{ table: "assets", label: "Assets", permission: "financials:read" }],
+  agreements: [],
+  documents: [],
+  other: [],
+};
+
+/**
+ * Native coverage per area: native records ÷ (native + open + kept-as-text
+ * gaps). Families the caller cannot read are reported as `null`, not zero.
+ */
+export async function coveragePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const allowed = new Map<string, boolean>();
+  const can = async (permission: string) => {
+    if (!allowed.has(permission)) {
+      try {
+        await requirePermissionPortable(ctx, societyId, permission as any);
+        allowed.set(permission, true);
+      } catch (error) {
+        if (error instanceof Error && /^(?:Permission|Service scope) [a-zA-Z]+:read required\.$/.test(error.message)) allowed.set(permission, false);
+        else throw error;
+      }
+    }
+    return allowed.get(permission)!;
+  };
+  const gaps = await ctx.db.query<GapRow>("representationGaps").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  const gapCounts = new Map<string, { open: number; keptAsText: number; resolved: number; total: number }>();
+  for (const row of gaps) {
+    const area = infoTypeDefinition(row.infoType).area;
+    const entry = gapCounts.get(area) ?? { open: 0, keptAsText: 0, resolved: 0, total: 0 };
+    entry.total += 1;
+    if (row.status === "open" || row.status === "schema_change_requested") entry.open += 1;
+    else if (row.status === "kept_as_text") entry.keptAsText += 1;
+    else if (row.status === "resolved_native") entry.resolved += 1;
+    gapCounts.set(area, entry);
+  }
+  const areas: { area: string; native: { table: string; label: string; count: number | null }[]; nativeTotal: number; gaps: { open: number; keptAsText: number; resolved: number; total: number }; coverage: number | null; partial: boolean }[] = [];
+  for (const [area, sources] of Object.entries(COVERAGE_AREAS)) {
+    const native: { table: string; label: string; count: number | null }[] = [];
+    for (const source of sources) {
+      if (!(await can(source.permission))) {
+        native.push({ table: source.table, label: source.label, count: null });
+        continue;
+      }
+      const rows = await ctx.db.query(source.table).withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+      native.push({ table: source.table, label: source.label, count: source.count ? source.count(rows) : rows.length });
+    }
+    const gapsForArea = gapCounts.get(area) ?? { open: 0, keptAsText: 0, resolved: 0, total: 0 };
+    if (!native.length && !gapsForArea.total) continue;
+    const nativeTotal = native.reduce((sum, item) => sum + (item.count ?? 0), 0);
+    const denominator = nativeTotal + gapsForArea.open + gapsForArea.keptAsText;
+    areas.push({
+      area,
+      native,
+      nativeTotal,
+      gaps: gapsForArea,
+      coverage: denominator ? Math.round((nativeTotal / denominator) * 1000) / 10 : null,
+      partial: native.some((item) => item.count === null),
+    });
+  }
+  const nativeAll = areas.reduce((sum, area) => sum + area.nativeTotal, 0);
+  const unresolvedAll = areas.reduce((sum, area) => sum + area.gaps.open + area.gaps.keptAsText, 0);
+  return { areas, overall: nativeAll + unresolvedAll ? Math.round((nativeAll / (nativeAll + unresolvedAll)) * 1000) / 10 : null };
 }
 

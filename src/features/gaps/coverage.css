@@ -1,0 +1,234 @@
+/* Coverage & gaps (record continuity heat-map, gap lists). Uses palette steps
+   that the theme redefines for dark mode, so both modes stay legible. */
+
+.coverage-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 16px;
+}
+
+.coverage-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.coverage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 8px 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary, inherit);
+}
+
+.coverage-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.continuity-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface, var(--bg-primary, transparent));
+}
+
+.continuity-grid {
+  display: grid;
+  min-width: max-content;
+  font-size: 12px;
+}
+
+.continuity-grid__head,
+.continuity-grid__label {
+  position: sticky;
+  background: var(--bg-surface, var(--bg-primary, #fff));
+  z-index: 1;
+}
+
+.continuity-grid__head {
+  top: 0;
+  padding: 6px 2px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-secondary, inherit);
+  border-bottom: 1px solid var(--border);
+}
+
+.continuity-grid__label {
+  left: 0;
+  z-index: 2;
+  padding: 6px 10px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-color-light, var(--border));
+  max-width: 260px;
+  min-width: 200px;
+}
+
+.continuity-grid__label small {
+  display: block;
+  color: var(--text-tertiary, var(--text-secondary, inherit));
+  font-size: 11px;
+}
+
+.continuity-grid__corner {
+  left: 0;
+  z-index: 3;
+  text-align: left;
+  padding-left: 10px;
+}
+
+.continuity-cell {
+  margin: 2px 1px;
+  min-width: 34px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+.continuity-cell:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.continuity-cell--empty {
+  background: transparent;
+  cursor: default;
+}
+
+.continuity-cell--satisfied { background: var(--green-9); color: #fff; }
+.continuity-cell--draft_only { background: var(--green-4); color: var(--green-11); box-shadow: inset 0 0 0 1px var(--green-7); }
+.continuity-cell--record_missing { background: var(--red-9); color: #fff; }
+.continuity-cell--source_only { background: var(--orange-5); color: var(--orange-11); box-shadow: inset 0 0 0 1px var(--orange-8); }
+.continuity-cell--upcoming { background: var(--blue-3); color: var(--blue-11); box-shadow: inset 0 0 0 1px var(--blue-6); }
+.continuity-cell--cancelled {
+  background: repeating-linear-gradient(135deg, var(--slate-4), var(--slate-4) 4px, var(--slate-6) 4px, var(--slate-6) 6px);
+  color: var(--slate-12);
+}
+.continuity-cell--never_held { background: var(--purple-4); color: var(--purple-11); box-shadow: inset 0 0 0 1px var(--purple-7); }
+.continuity-cell--waived { background: var(--blue-5); color: var(--blue-12); }
+.continuity-cell--not_applicable { background: transparent; color: var(--slate-9); box-shadow: inset 0 0 0 1px var(--slate-5); }
+
+.continuity-swatch {
+  width: 18px;
+  height: 14px;
+  min-width: 18px;
+  min-height: 14px;
+  margin: 0;
+  font-size: 9px;
+  cursor: default;
+}
+
+.coverage-period {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.coverage-period__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.coverage-evidence {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.coverage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.coverage-gap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color-light, var(--border));
+}
+
+.coverage-gap-row:last-child { border-bottom: 0; }
+
+.coverage-gap-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.coverage-excerpt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 6px 0 0;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.coverage-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--slate-4);
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.coverage-bar__fill {
+  height: 100%;
+  background: var(--green-9);
+  border-radius: 4px 0 0 4px;
+}
+
+.coverage-table-scroll { overflow-x: auto; }
+
+.coverage-months {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.coverage-months label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+@media (max-width: 640px) {
+  .continuity-grid__label { min-width: 140px; max-width: 160px; }
+  .coverage-gap-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+.coverage-root .card__head { flex-wrap: wrap; row-gap: 4px; }
+.coverage-root .card__title { flex-shrink: 0; }
