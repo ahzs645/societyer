@@ -1,4 +1,5 @@
 import { recordPreflightGapsForBundle } from "./representationGaps";
+import { organizationTimeZone } from "../organizationDomain";
 import { sessionReferences } from "./importReviewQueue";
 import { normalizeDocumentCategory } from "../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../documentVersioning";
@@ -494,6 +495,8 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   // meeting. Portable callers can catch failures without transaction rollback.
   for (const record of [...motions, ...minuteRecords]) toMeetingDateTime(record.payload?.meetingDate);
   const directory = await loadDirectoryIndex(ctx, societyId);
+  // X-04: a stated local start time is placed in the organization's zone when the source has none.
+  const defaultTimeZone = organizationTimeZone(await ctx.db.get(societyId, "societies"));
   // Meeting identity for import is calendar date + body (not title), so a
   // draft, its approved copy and a .doc/.pdf twin fold into one meeting while
   // an AGM and a Board meeting held the same evening stay separate.
@@ -526,7 +529,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     }
     const committee = await resolveImportCommittee(ctx, societyId, prepared.body, { create: true });
     if (committee.created) committeesCreated += 1;
-    const time = importedMeetingTime(first, placeholder);
+    const time = importedMeetingTime(first, placeholder, { defaultTimeZone });
     const meetingId = await ctx.db.insert("meetings", {
       societyId: session.societyId,
       type: prepared.body.type,
@@ -535,6 +538,9 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       ...(prepared.sourceTitle ? { sourceTitle: prepared.sourceTitle } : {}),
       scheduledAt: time.scheduledAt,
       scheduledAtPrecision: time.scheduledAtPrecision,
+      ...(time.localStartText ? { localStartText: time.localStartText } : {}),
+      ...(time.localEndText ? { localEndText: time.localEndText } : {}),
+      ...(time.timeZone ? { timeZone: time.timeZone } : {}),
       electronic: false,
       status: "Held",
       attendeeIds: [],
@@ -612,7 +618,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     await assertMeetingHistoryReferences(ctx, societyId, payload, undefined, payload.meetingDate);
     const committee = await resolveImportCommittee(ctx, societyId, prepared.body, { create: !prepared.body.external });
     if (committee.created) committeesCreated += 1;
-    const time = importedMeetingTime(payload, placeholder);
+    const time = importedMeetingTime(payload, placeholder, { defaultTimeZone });
     const screened = screenImportedAttendance(payload, directory);
     nonPersonAttendance += screened.rejected.length;
     const status = importedMeetingStatus(payload);

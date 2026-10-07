@@ -15,6 +15,7 @@ import { requirePermissionPortable } from "../permissions";
 import { insertRepresentationGapFromImport } from "../representationGaps";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
 import { reconcileDividend } from "../../dividends";
+import { meetingCalendarDate } from "../../meetingDates";
 import {
   HISTORY_ITEM_CATEGORY,
   HISTORY_ITEM_TAG,
@@ -1746,7 +1747,7 @@ async function findExistingMeetingImport(
     .collect();
   const existing = meetings.find(
     (meeting: any) =>
-      String(meeting.scheduledAt ?? "").slice(0, 10) === dateKey &&
+      (meetingCalendarDate(meeting) ?? "") === dateKey &&
       cleanText(meeting.title)?.toLowerCase() === normalizedTitle &&
       meeting.minutesId,
   );
@@ -1775,7 +1776,7 @@ async function resolveMeetingTargetForEvidence(ctx: any, societyId: string, payl
     .collect();
   const matches = meetings.filter(
     (meeting: any) =>
-      String(meeting.scheduledAt ?? "").slice(0, 10) === meetingDate &&
+      (meetingCalendarDate(meeting) ?? "") === meetingDate &&
       normalizeLookupText(meeting.title) === titleKey &&
       meeting.minutesId,
   );
