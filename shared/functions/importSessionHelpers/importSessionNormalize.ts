@@ -2,6 +2,7 @@ import { normalizeImportedEvidence } from "../../evidenceReview";
 import { normalizeMeetingHistory } from "../../meetingHistory";
 // Import-session payload normalization, including insurance-policy dedupe/merge.
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
+import { actionStatusFromSource, isActionItemStatus } from "../../actionItemStatus";
 
 import {
   SECTION_RECORD_KINDS,
@@ -55,10 +56,39 @@ function normalizeSourcePayload(source: any) {
   };
 }
 
+/** A person reference in an import: a plain name or { name, notes }. Person
+ *  IDs are never trusted from a payload; names are resolved at apply time. */
+function normalizeNamedPeoplePayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => typeof row === "string"
+      ? cleanText(row) && { name: cleanText(row) }
+      : compactRecord({ name: cleanText(row?.name), notes: cleanText(row?.notes) }))
+    .filter((row: any) => row?.name);
+  return rows.length ? rows : undefined;
+}
+
+/** C3: which minutes a motion adopts — "adopt the minutes of 28 November 2018". */
+function normalizeMinutesReferencePayload(value: any) {
+  if (!value) return undefined;
+  if (typeof value === "string") return compactRecord({ meetingDate: cleanDate(value) || undefined, text: cleanDate(value) ? undefined : cleanText(value) });
+  if (typeof value !== "object") return undefined;
+  return compactRecord({
+    meetingDate: cleanDate(value.meetingDate) || cleanText(value.meetingDate),
+    meetingTitle: cleanText(value.meetingTitle),
+    bodyKey: cleanText(value.bodyKey) || cleanText(value.body),
+    committeeName: cleanText(value.committeeName),
+    sourceExternalId: cleanText(value.sourceExternalId),
+    text: cleanText(value.text),
+  });
+}
+
 function normalizeMotionPayload(motion: any) {
   return {
     meetingDate: cleanText(motion?.meetingDate),
     meetingTitle: cleanText(motion?.meetingTitle),
+    meetingType: cleanText(motion?.meetingType),
+    body: cleanText(motion?.body) || cleanText(motion?.bodyKey),
+    committeeName: cleanText(motion?.committeeName),
     motionText: cleanText(motion?.motionText),
     outcome: cleanText(motion?.outcome),
     movedByName: cleanText(motion?.movedByName),
@@ -67,6 +97,17 @@ function normalizeMotionPayload(motion: any) {
     votesAgainst: numberOrUndefined(motion?.votesAgainst),
     abstentions: numberOrUndefined(motion?.abstentions),
     resolutionType: cleanText(motion?.resolutionType),
+    // C4: how it was decided and where it sits in the minutes.
+    decidedBy: cleanText(motion?.decidedBy),
+    sectionIndex: numberOrUndefined(motion?.sectionIndex),
+    sectionTitle: cleanText(motion?.sectionTitle),
+    // C3: the minutes this motion adopts.
+    adoptsMinutes: normalizeMinutesReferencePayload(motion?.adoptsMinutes ?? motion?.adoptsMinutesDate),
+    // A11: named abstainers / dissenters and a dissent report source.
+    abstainedBy: normalizeNamedPeoplePayload(motion?.abstainedBy),
+    opposedBy: normalizeNamedPeoplePayload(motion?.opposedBy ?? motion?.dissentBy),
+    dissentSourceExternalId: cleanText(motion?.dissentSourceExternalId),
+    outcomeOverrideNote: cleanText(motion?.outcomeOverrideNote),
     voteSummary: cleanText(motion?.voteSummary),
     pageRef: cleanText(motion?.pageRef),
     evidenceText: cleanText(motion?.evidenceText),
@@ -84,6 +125,24 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     meetingDate: cleanText(minutes?.meetingDate),
     meetingTitle: cleanText(minutes?.meetingTitle),
     meetingType: cleanText(minutes?.meetingType),
+    // C5: governing body / committee (resolved or created at apply time).
+    body: cleanText(minutes?.body) || cleanText(minutes?.bodyKey),
+    committeeName: cleanText(minutes?.committeeName),
+    // C14: native meeting status (Held | Scheduled | Draft | Cancelled | Postponed).
+    meetingStatus: cleanText(minutes?.meetingStatus),
+    status: cleanText(minutes?.status),
+    // A13: date precision and the source's own local time text.
+    scheduledAtPrecision: cleanText(minutes?.scheduledAtPrecision),
+    localStartText: cleanText(minutes?.localStartText) || cleanText(minutes?.startTime),
+    localEndText: cleanText(minutes?.localEndText) || cleanText(minutes?.endTime),
+    timeZone: cleanText(minutes?.timeZone),
+    // A18: a meeting of an external body attended by the organization.
+    hostBody: cleanText(minutes?.hostBody),
+    externalOrganization: cleanText(minutes?.externalOrganization),
+    // Draft / approved / copy variants fold into one meeting by date + body;
+    // an explicit identity key separates two meetings of one body on one day.
+    meetingIdentityKey: cleanText(minutes?.meetingIdentityKey),
+    sourceVersionStatus: cleanText(minutes?.sourceVersionStatus),
     location: cleanText(minutes?.location),
     electronic: optionalBoolean(minutes?.electronic),
     chairName: cleanText(minutes?.chairName),
@@ -96,7 +155,7 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     attendees: compactStrings(arrayOf(minutes?.attendees)),
     absent: compactStrings(arrayOf(minutes?.absent)),
     ...normalizeMeetingQuorum(minutes),
-    agendaItems: compactStrings(arrayOf(minutes?.agendaItems)),
+    agendaItems: normalizeAgendaItemsPayload(minutes?.agendaItems),
     discussion: cleanText(minutes?.discussion),
     sections: normalizeMinuteSectionsPayload(minutes?.sections),
     motions: arrayOf(minutes?.motions).map(normalizeMotionPayload),
@@ -105,6 +164,7 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     nextMeetingAt: cleanText(minutes?.nextMeetingAt),
     nextMeetingLocation: cleanText(minutes?.nextMeetingLocation),
     nextMeetingNotes: cleanText(minutes?.nextMeetingNotes),
+    nextMeetings: normalizeNextMeetingsPayload(minutes?.nextMeetings),
     sessionSegments: normalizeSessionSegmentsPayload(minutes?.sessionSegments),
     appendices: normalizeAppendicesPayload(minutes?.appendices),
     agmDetails: normalizeAgmDetailsPayload(minutes?.agmDetails),
@@ -132,6 +192,7 @@ function structuredMinutesPatchFromPayload(payload: any) {
     nextMeetingAt: cleanText(payload?.nextMeetingAt),
     nextMeetingLocation: cleanText(payload?.nextMeetingLocation),
     nextMeetingNotes: cleanText(payload?.nextMeetingNotes),
+    nextMeetings: normalizeNextMeetingsPayload(payload?.nextMeetings),
     sessionSegments: normalizeSessionSegmentsPayload(payload?.sessionSegments),
     appendices: normalizeAppendicesPayload(payload?.appendices),
     agmDetails: normalizeAgmDetailsPayload(payload?.agmDetails),
@@ -155,9 +216,11 @@ function normalizeDetailedAttendancePayload(value: any) {
   const rows = arrayOf(value)
     .map((row: any) => compactRecord({
       name: cleanText(row?.name),
-      status: cleanText(row?.status) || "present",
+      // C8: a source that does not state attendance status stays unknown.
+      status: cleanText(row?.status) || "unknown",
       roleTitle: cleanText(row?.roleTitle),
       affiliation: cleanText(row?.affiliation),
+      representedOrganization: cleanText(row?.representedOrganization),
       memberIdentifier: cleanText(row?.memberIdentifier),
       proxyFor: cleanText(row?.proxyFor),
       quorumCounted: optionalBoolean(row?.quorumCounted),
@@ -173,6 +236,11 @@ function normalizeMinuteSectionsPayload(value: any) {
       title: cleanText(row?.title),
       type: cleanText(row?.type),
       presenter: cleanText(row?.presenter),
+      // C7: nesting, public-copy visibility and links to the payload's motions.
+      depth: row?.depth === 1 || row?.depth === "1" ? 1 : row?.depth === 0 || row?.depth === "0" ? 0 : undefined,
+      publicVisible: optionalBoolean(row?.publicVisible),
+      motionIndex: numberOrUndefined(row?.motionIndex),
+      sourceReference: cleanText(row?.sourceReference),
       motionText: cleanText(row?.motionText),
       discussion: cleanText(row?.discussion),
       reportSubmitted: optionalBoolean(row?.reportSubmitted),
@@ -193,12 +261,64 @@ function normalizeActionItemsPayload(value: any) {
 function normalizeMinutesActionItem(row: any) {
   const text = typeof row === "string" ? cleanText(row) : cleanText(row?.text);
   if (!text) return null;
+  // C8/A12: an unstated status stays "unknown"; `done` is derived from status.
+  const explicit = typeof row === "object" && row ? (row.status ?? row.sourceStatus) : undefined;
+  const status = isActionItemStatus(explicit)
+    ? explicit
+    : explicit != null && explicit !== ""
+      ? actionStatusFromSource(explicit)
+      : typeof row?.done === "boolean"
+        ? (row.done ? "completed" : "open")
+        : "unknown";
   return compactRecord({
     text,
     assignee: cleanText(row?.assignee),
     dueDate: cleanText(row?.dueDate),
-    done: Boolean(row?.done),
+    done: status === "completed",
+    status,
+    sourceStatus: typeof row === "object" && row && row.status != null && !isActionItemStatus(row.status) ? cleanText(row.status) : cleanText(row?.sourceStatus),
   });
+}
+
+/** C6/A9: agenda items as plain titles or { title, number, startTime,
+ *  presenter, requestedAction, consent, depth, timeAllottedMinutes, details }.
+ *  Plain strings stay strings so string-only bundles are unchanged. */
+function normalizeAgendaItemsPayload(value: any): Array<string | Record<string, any>> {
+  return arrayOf(value)
+    .map((row: any) => {
+      if (typeof row === "string" || typeof row === "number") return cleanText(row);
+      if (!row || typeof row !== "object") return undefined;
+      return compactRecord({
+        title: cleanText(row.title),
+        itemNumber: cleanText(row.itemNumber ?? row.number),
+        scheduledTimeText: cleanText(row.scheduledTimeText ?? row.startTime ?? row.time),
+        presenter: cleanText(row.presenter ?? row.responsibility),
+        requestedAction: cleanText(row.requestedAction ?? row.action)?.toLowerCase(),
+        consent: optionalBoolean(row.consent),
+        depth: row.depth === 1 || row.depth === "1" ? 1 : row.depth === 0 || row.depth === "0" ? 0 : undefined,
+        timeAllottedMinutes: numberOrUndefined(row.timeAllottedMinutes),
+        details: cleanText(row.details),
+        type: cleanText(row.type),
+      });
+    })
+    .filter((row: any) => typeof row === "string" ? Boolean(row) : Boolean(row?.title)) as Array<string | Record<string, any>>;
+}
+
+/** A16: several scheduled next meetings. */
+function normalizeNextMeetingsPayload(value: any) {
+  const rows = arrayOf(value)
+    .map((row: any) => typeof row === "string"
+      ? compactRecord({ at: cleanDate(row) || undefined, dateText: cleanDate(row) ? undefined : cleanText(row) })
+      : compactRecord({
+          at: cleanText(row?.at) || cleanText(row?.date),
+          dateText: cleanText(row?.dateText),
+          precision: cleanText(row?.precision),
+          bodyKey: cleanText(row?.bodyKey) || cleanText(row?.body),
+          location: cleanText(row?.location),
+          notes: cleanText(row?.notes),
+        }))
+    .filter((row: any) => row?.at || row?.dateText);
+  return rows.length ? rows : undefined;
 }
 
 function normalizeSessionSegmentsPayload(value: any) {
@@ -634,6 +754,10 @@ export {
   normalizeMinuteSectionsPayload,
   normalizeActionItemsPayload,
   normalizeMinutesActionItem,
+  normalizeAgendaItemsPayload,
+  normalizeNextMeetingsPayload,
+  normalizeNamedPeoplePayload,
+  normalizeMinutesReferencePayload,
   normalizeSessionSegmentsPayload,
   normalizeAppendicesPayload,
   normalizeAgmDetailsPayload,

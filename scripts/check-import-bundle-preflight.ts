@@ -16,7 +16,7 @@ assertImportBundlePreflight({ metadata: { createdFrom: "Google Drive" }, sources
 assertImportBundlePreflight({ representatives: [{ fullName: "Example Person" }] });
 assertImportBundlePreflight({ meetingMinutes: [{ actionItems: [" Follow up "] }] });
 assertImportBundlePreflight({ organizationIdentifiers: [{ number: "123" }], taxRegistrations: [{ number: "456" }] });
-assert.throws(() => assertImportBundlePreflight({ sources: [], members: [{ firstName: "Example" }] }), /members: unsupported/);
+assert.throws(() => assertImportBundlePreflight({ sources: [], agreements: [{ title: "Example" }] }), /agreements: unsupported/);
 assert.throws(() => assertImportBundlePreflight({ sources: {} }), /expected an array/);
 assert.throws(() => assertImportBundlePreflight({ sources: [null] }), /expected a record object/);
 assert.throws(() => assertImportBundlePreflight({ sources: [] }), /no supported records/);

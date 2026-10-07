@@ -74,6 +74,22 @@ const SECTION_RECORD_KINDS = [
   "pipaTraining",
   "employee",
   "volunteer",
+  // C11: registers that previously had no bundle key.
+  "committee",
+  "committeeMember",
+  "member",
+  "director",
+  "task",
+  "goal",
+  "commitment",
+  "fundingSource",
+  "grantReport",
+  "meetingMaterial",
+  "organizationSeat",
+  "conflict",
+  "proxy",
+  "bylawRuleSet",
+  "operatingBudget",
 ] as const;
 
 export {

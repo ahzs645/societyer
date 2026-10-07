@@ -19,7 +19,11 @@ export const IMPORT_BUNDLE_COLLECTION_GROUPS: readonly (readonly string[])[] = [
   ["formationRecords", "incorporations"], ["nameSearchItems", "nameSearches"],
   ["entityAmendments", "amendments"], ["annualMaintenanceRecords", "annualGeneralMeetings"],
   ["jurisdictionMetadata"], ["supportLogs", "logs"], ["sourceEvidence"], ["secretVaultItems"],
-  ["pipaTrainings"], ["employees"], ["volunteers"], ["documentMap"],
+  ["pipaTrainings"], ["employees"], ["volunteers"],
+  ["committees"], ["committeeMembers"], ["members"], ["directors"], ["tasks"], ["goals"],
+  ["commitments"], ["fundingSources"], ["grantReports"], ["meetingMaterials"],
+  ["organizationSeats"], ["conflicts"], ["proxies"], ["bylawRuleSets"], ["operatingBudgets"],
+  ["documentMap"],
 ];
 
 const metadataKeys = new Set(["metadata", "name", "sourceExport", "specialistReports"]);
