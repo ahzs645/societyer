@@ -17,6 +17,11 @@ export const DETAIL_RECORD_QUERIES: ReadonlySet<string> = new Set([
   "workflows:get",
   "waveCache:resource",
   "personHistory:profile",
+  // FF-2: meeting, committee, goal and election detail routes.
+  "meetings:get",
+  "committees:detail",
+  "goals:get",
+  "elections:get",
 ]);
 
 export function isRecordNotFoundError(error: unknown): boolean {

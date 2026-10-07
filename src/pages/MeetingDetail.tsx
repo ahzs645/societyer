@@ -18,6 +18,8 @@ import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
+import { RecordNotFound } from "../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
@@ -128,11 +130,14 @@ export function MeetingDetailPage() {
   const canTasksWrite = can("tasks:write");
   const canDownload = can("exports:download");
   const canApproveMinutes = permissionsLoaded && can("minutes:approve");
-  const meeting = useQuery(api.meetings.get, can("meetings:read") && id ? { id: id as Id<"meetings"> } : "skip");
+  // A missing, deleted or foreign id reads as null (RecordNotFound below), and
+  // the meeting's own panels wait until it exists instead of failing (FF-2).
+  const meeting = useRecordQuery<any>(api.meetings.get, can("meetings:read") && id ? { id: id as Id<"meetings"> } : "skip");
+  const meetingId = meeting?._id as Id<"meetings"> | undefined;
   // Lists on this page belong to the meeting's own society (the workspace
   // selector can point elsewhere, e.g. right after opening a deep link).
   const meetingSocietyId = (meeting?.societyId ?? society?._id) as string | undefined;
-  const minutes = useQuery(api.minutes.getByMeeting, can("minutes:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const minutes = useQuery(api.minutes.getByMeeting, can("minutes:read") && meetingId ? { meetingId } : "skip");
   const liveMotionRows = useQuery(
     api.motions.listForMinutes,
     can("motions:read") && minutes ? { minutesId: minutes._id } : "skip",
@@ -145,10 +150,10 @@ export function MeetingDetailPage() {
     if (liveMotionRows !== undefined) return (liveMotionRows as any[]).map(motionRowToEmbedded) as Motion[];
     return minutesMotionsForDisplay(minutes) as Motion[];
   }, [minutes, liveMotionRows]);
-  const agendaRecord = useQuery(api.agendas.getForMeeting, can("agendas:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const agendaRecord = useQuery(api.agendas.getForMeeting, can("agendas:read") && meetingId ? { meetingId } : "skip");
   const meetingPackage = useQuery(
     api.meetingMaterials.packageForMeeting,
-    can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("meetings:read") && meetingId ? { meetingId } : "skip",
   );
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
@@ -157,7 +162,7 @@ export function MeetingDetailPage() {
   );
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
-    can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("meetings:read") && meetingId ? { meetingId } : "skip",
   );
   const directors = useQuery(
     api.directors.list,
@@ -203,13 +208,13 @@ export function MeetingDetailPage() {
   // Conflict-of-interest / recusal declarations for this meeting.
   const meetingConflicts = useQuery(
     api.conflicts.forMeeting,
-    can("conflicts:read") && id && permissionsLoaded && can("conflicts:read") ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("conflicts:read") && meetingId && permissionsLoaded && can("conflicts:read") ? { meetingId } : "skip",
   );
   // Proxies appointed for this meeting (rendered into the export and used for
   // proxy-inclusive quorum math).
   const meetingProxies = useQuery(
     api.proxies.forMeeting,
-    can("proxies:read") && id && permissionsLoaded && can("proxies:read") ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("proxies:read") && meetingId && permissionsLoaded && can("proxies:read") ? { meetingId } : "skip",
   );
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
@@ -239,7 +244,7 @@ export function MeetingDetailPage() {
   const runPipeline = useAction(api.transcripts.runPipeline);
   const transcriptionJob = useQuery(
     api.transcripts.jobForMeeting,
-    can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("meetings:read") && meetingId ? { meetingId } : "skip",
   );
   const toast = useToast();
   const confirm = useConfirm();
@@ -321,7 +326,7 @@ export function MeetingDetailPage() {
   const isSyntheticFocus = !!focusMotionParam?.startsWith("from-minutes:");
   const focusMotions = useQuery(
     api.motions.listForMeeting,
-    can("motions:read") && id && focusMotionParam && !isSyntheticFocus ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("motions:read") && meetingId && focusMotionParam && !isSyntheticFocus ? { meetingId } : "skip",
   );
   const scrolledMotionParamRef = useRef<string | null>(null);
   useEffect(() => {
@@ -516,20 +521,7 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (meeting === undefined) return <PageLoading />;
   if (meeting === null) {
-    return (
-      <div className="page">
-        <EmptyState
-          icon={<Calendar size={18} />}
-          title="Meeting not found"
-          description="This meeting may have been deleted, or the link is out of date."
-          action={
-            <Link className="btn btn--accent" to="/app/meetings">
-              Back to meetings
-            </Link>
-          }
-        />
-      </div>
-    );
+    return <RecordNotFound recordLabel="Meeting" backTo="/app/meetings" backLabel="All meetings" icon={<Calendar size={18} />} />;
   }
 
   // Adopted minutes show the agenda frozen at adoption; snapshots taken before
