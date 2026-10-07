@@ -11,6 +11,9 @@ import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { describeCadenceRule, type CadenceRule } from "../../../shared/continuityRules";
 import { CadenceRuleFields, cleanCadenceRule } from "../gaps/CadenceRuleFields";
 import { formatDateTime } from "../../lib/format";
+import { calendarDateKey } from "../../lib/calendarDates";
+import { cleanQuorumRule, describeQuorumRule, quorumRuleProblems } from "../../../shared/bodyQuorum";
+import { QuorumRuleFields, quorumRuleDraft, quorumRuleFromDraft, type QuorumRuleDraft } from "./QuorumRuleFields";
 
 export const COMMITTEE_KIND_OPTIONS = [
   { value: "standing", label: "Standing committee" },
@@ -36,6 +39,7 @@ type StructureForm = {
   rule: CadenceRule;
   cadenceLabel: string;
   mandateVersions: MandateVersion[];
+  quorum: QuorumRuleDraft;
 };
 
 /**
@@ -46,6 +50,7 @@ type StructureForm = {
 export function CommitteeStructureCard({ committee, canWrite, societyId }: { committee: any; canWrite: boolean; societyId: string }) {
   const committees = useQuery(api.committees.list, { societyId }) as any[] | undefined;
   const updateStructure = usePermissionedMutation(api.committees.updateStructure, canWrite);
+  const updateCommittee = usePermissionedMutation(api.committees.update, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
   const [form, setForm] = useState<StructureForm | null>(null);
@@ -55,7 +60,8 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
     ? committees?.find((row) => row._id === committee.parentCommitteeId)?.name ?? "Another committee"
     : PARENT_OPTIONS.find((option) => option.value === committee.parentBody)?.label;
   const versions: MandateVersion[] = committee.mandateVersions ?? [];
-  const today = new Date().toISOString().slice(0, 10);
+  // Local calendar date: a UTC date flips to tomorrow on a late evening in Vancouver.
+  const today = calendarDateKey(new Date());
   const current = [...versions].reverse().find((version) => version.effectiveFrom <= today && (!version.effectiveTo || version.effectiveTo >= today));
 
   const openEditor = () => {
@@ -68,20 +74,37 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
       rule: committee.cadenceRule ?? { frequency: "monthly" },
       cadenceLabel: committee.cadenceRule ? "" : committee.cadence ?? "",
       mandateVersions: versions.map((version) => ({ ...version })),
+      quorum: quorumRuleDraft(committee.quorumRule),
     });
   };
 
   const save = async () => {
     if (!form) return;
     setError(null);
+    const quorumRule = quorumRuleFromDraft(form.quorum);
+    const quorumProblems = quorumRuleProblems(quorumRule);
+    if (quorumProblems.length) {
+      setError(`Quorum: ${quorumProblems.join(" ")}`);
+      return;
+    }
+    const missingStart = form.mandateVersions.findIndex((version) => !version.effectiveFrom);
+    if (missingStart >= 0) {
+      setError(`Mandate version ${missingStart + 1} needs an effective-from date.`);
+      return;
+    }
     try {
+      const nextQuorum = quorumRule ? cleanQuorumRule(quorumRule) : null;
+      if (JSON.stringify(nextQuorum) !== JSON.stringify(committee.quorumRule ? cleanQuorumRule(committee.quorumRule) : null)) {
+        await updateCommittee({ id: committee._id, patch: nextQuorum ? { quorumRule: nextQuorum } : { clearQuorumRule: true } });
+      }
       await updateStructure({
         id: committee._id,
         kind: form.kind || null,
         parentBody: form.parentBody || null,
         parentCommitteeId: form.parentBody === "committee" && form.parentCommitteeId ? form.parentCommitteeId : null,
         cadenceRule: form.hasRule ? cleanCadenceRule(form.rule) : null,
-        ...(form.cadenceLabel.trim() ? { cadenceLabel: form.cadenceLabel.trim() } : {}),
+        // With a structured rule the label follows the rule; a stale label ("Unknown") must not be sent back.
+        ...(!form.hasRule && form.cadenceLabel.trim() ? { cadenceLabel: form.cadenceLabel.trim() } : {}),
         mandateVersions: form.mandateVersions.map((version) => {
           const out: MandateVersion = { id: version.id, effectiveFrom: version.effectiveFrom };
           if (version.effectiveTo) out.effectiveTo = version.effectiveTo;
@@ -119,16 +142,23 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
       </div>
       <div className="card__body col" style={{ gap: 8 }}>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-          <Badge tone="accent">{committee.cadence}</Badge>
+          <Badge tone="accent">{!committee.cadence || committee.cadence === "Unknown" ? "Cadence not set" : committee.cadence}</Badge>
           {kindLabel ? <Badge tone="neutral">{kindLabel}</Badge> : <Badge tone="gray">Kind not set</Badge>}
           {parentLabel && <Badge tone="neutral">Reports to {parentLabel}</Badge>}
           {committee.nextMeetingAt && <span className="muted">Next: {formatDateTime(committee.nextMeetingAt)}</span>}
         </div>
         <div className="muted" style={{ fontSize: 13 }}>
-          {committee.cadenceRule ? `Structured cadence: ${describeCadenceRule(committee.cadenceRule)}.` : "No structured cadence; continuity is tracked only once an expectation exists."}{" "}
-          <Link to="/app/coverage?tab=expectations">Track record gaps</Link>
+          {committee.cadenceRule
+            ? <>Structured cadence: {describeCadenceRule(committee.cadenceRule)}. {["monthly", "quarterly", "per_year_count", "calendar_year", "annual"].includes(String(committee.cadenceRule.frequency)) ? <>Missing meetings show on <Link to="/app/coverage?tab=continuity">Coverage &amp; gaps</Link>.</> : <Link to="/app/coverage?tab=expectations">Track record gaps</Link>}</>
+            : <>No structured cadence, so missing meetings are not tracked. <Link to="/app/coverage?tab=expectations">Track record gaps</Link></>}
         </div>
         {committee.cadenceNotes && <div className="muted">{committee.cadenceNotes}</div>}
+        <div style={{ fontSize: 13 }} data-testid="committee-quorum-rule">
+          <strong>Quorum:</strong>{" "}
+          {committee.quorumRule?.quorumType
+            ? <>{describeQuorumRule(committee.quorumRule, "committee")}{committee.quorumRule.notes ? <span className="muted"> · {committee.quorumRule.notes}</span> : null}</>
+            : <span className="muted">No committee rule recorded; meetings fall back to the committee rule in the bylaw rules, if any.</span>}
+        </div>
         <div>
           <strong style={{ fontSize: 13 }}>Mandate / terms of reference</strong>
           {!versions.length && <div className="muted" style={{ fontSize: 13 }}>No mandate versions recorded.</div>}
@@ -180,6 +210,13 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
                 <input className="input" value={form.cadenceLabel} onChange={(event) => setForm({ ...form, cadenceLabel: event.target.value })} placeholder="e.g. Ad-hoc" />
               </Field>
             )}
+            <fieldset className="coverage-period" style={{ margin: 0 }}>
+              <legend style={{ fontSize: 13, fontWeight: 600 }}>Quorum</legend>
+              <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
+                The quorum this committee's meetings are checked against, as its terms of reference state it. Leave it unset to use the committee rule in the bylaw rules.
+              </p>
+              <QuorumRuleFields value={form.quorum} onChange={(quorum) => setForm({ ...form, quorum })} idPrefix="committee-quorum" defaultBasis="committee_members" disabled={!canWrite} />
+            </fieldset>
             <div className="col" style={{ gap: 8 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <strong>Mandate / terms-of-reference versions</strong>
@@ -198,7 +235,7 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
                     <Field label="Title"><input className="input" value={version.title ?? ""} onChange={(event) => patchVersion(index, { title: event.target.value })} placeholder="Terms of reference (2022)" /></Field>
                     <Field label="Effective from" required><input className="input" type="date" value={version.effectiveFrom} onChange={(event) => patchVersion(index, { effectiveFrom: event.target.value })} /></Field>
                     <Field label="Effective to"><input className="input" type="date" value={version.effectiveTo ?? ""} onChange={(event) => patchVersion(index, { effectiveTo: event.target.value || undefined })} /></Field>
-                    <Field label="Quorum"><input className="input" value={version.quorumText ?? ""} onChange={(event) => patchVersion(index, { quorumText: event.target.value })} placeholder="All five members" /></Field>
+                    <Field label="Quorum as written"><input className="input" value={version.quorumText ?? ""} onChange={(event) => patchVersion(index, { quorumText: event.target.value })} placeholder="All five members" /></Field>
                   </div>
                   <Field label="Mandate">
                     <textarea className="input" rows={3} value={version.mandate ?? ""} onChange={(event) => patchVersion(index, { mandate: event.target.value })} />
