@@ -63,6 +63,24 @@ workspace's AI provider (AI settings → secret vault → environment keys), and
 `intake:*` mutations (runs, files, extracts, clusters, extractions that are
 re-verified server-side, field reviews, provenance, processing log).
 
+### In-app intake and review (`/app/intake`)
+
+Administration → **AI intake** runs the same pipeline from the app: choose
+files or a folder (or, on the desktop, a native folder pick that also converts
+legacy `.doc`/`.xls` with LibreOffice), and a web worker extracts text, clusters,
+classifies and — in the local/desktop runtime — extracts fields
+(deterministically, or with an AI provider whose key stays on the device).
+Hosted workspaces extract fields on the server with `intakeActions:extractRun`.
+`/app/intake/:runId/review` is the three-pane review: a risk-ordered queue by
+version cluster, the source with the selected value's span highlighted
+(DOCX, PDF page and text layer, XLSX grid, text blocks, version diff), and the
+native form where each field is accepted, edited, rejected or marked "can't
+represent" (a system gap). Bulk accept takes only stated, span-verified,
+non-conflicting values at or above the per-field threshold, with a preview and
+an undo window. Promotion writes the meeting, minutes, motions and agenda
+through the import-session apply path, links the source documents and leaves a
+`fieldProvenance` row per field, shown as **View source** on the meeting.
+
 Evaluation: `npm run test:intake-eval` grades the extractor against the
 committed synthetic golden fixture and, with `SOCIETYER_GOLDEN_SET` (and
 `SOCIETYER_GOLDEN_FILES`, `SOCIETYER_GOLDEN_HOLDOUT`), a private golden set kept
