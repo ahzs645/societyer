@@ -496,6 +496,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
 
   const patch = (idx: number, diff: Partial<Motion>) => {
     if (authority.current.readOnly) return;
+    if ("outcome" in diff) setVoteNotice((notice) => (notice?.index === idx ? null : notice));
     const next = motions.map((m, i) => (i === idx ? { ...m, ...diff } : m));
     onChange(next);
   };
@@ -509,13 +510,11 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     if (!current) return;
     const diff: Partial<Motion> = { [key]: Math.max(0, Math.round(next)) } as Partial<Motion>;
     const candidate = { ...current, ...diff };
-    if (motionOutcomeConsistencyIssues(candidate).length && !hasOutcomeOverride(candidate)) {
-      diff.outcome = "Pending";
-      setVoteNotice({ index: idx, text: `Outcome reset to Pending: ${candidate.votesFor ?? 0} for and ${candidate.votesAgainst ?? 0} against no longer support “${current.outcome}”. Record the outcome again.` });
-    } else if (voteNotice?.index === idx) {
-      setVoteNotice(null);
-    }
+    const reset = motionOutcomeConsistencyIssues(candidate).length > 0 && !hasOutcomeOverride(candidate);
+    if (reset) diff.outcome = "Pending";
     patch(idx, diff);
+    // Set after patch(): patch() clears a notice whenever the outcome changes.
+    if (reset) setVoteNotice({ index: idx, text: `Outcome reset to Pending: the recorded votes no longer support “${current.outcome}”. Record the outcome again.` });
   };
 
   // Remove the motion at index `i`. editingIndex is an index into `motions`, so

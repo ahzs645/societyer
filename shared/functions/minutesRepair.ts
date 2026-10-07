@@ -222,6 +222,7 @@ export async function repairImportedPortable(
   const committees = new Map<string, any>();
   for (const row of await ctx.db.query("committees").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) committees.set(String(row._id), row);
   const byDayBody = new Map<string, number>();
+  const plannedCommittees = new Set<string>();
   for (const meeting of meetings as any[]) {
     const patch: Record<string, unknown> = {};
     let committee = meeting.committeeId ? committees.get(String(meeting.committeeId)) : null;
@@ -235,7 +236,8 @@ export async function repairImportedPortable(
           ? await resolveImportCommittee(ctx, societyId, inferred, { create: true })
           : await resolveImportCommittee(ctx, societyId, inferred, { create: false });
         if (resolved.created) report.committeesCreated += 1;
-        if (!write && !resolved.committeeId) report.committeesCreated += 1;
+        if (!write && !resolved.committeeId && !plannedCommittees.has(inferred.committeeKey)) report.committeesCreated += 1;
+        plannedCommittees.add(inferred.committeeKey);
         type = "Committee";
         committeeId = resolved.committeeId;
         committee = committeeId ? (committees.get(String(committeeId)) ?? await ctx.db.get(committeeId)) : { name: inferred.committeeName, bodyKey: inferred.committeeKey };
