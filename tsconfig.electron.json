@@ -15,8 +15,7 @@
     "rootDir": ".",
     "types": ["node", "electron"],
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "paths": { "@/*": ["./src/*"] }
+    "noUnusedParameters": false
   },
   "include": ["electron/**/*.ts", "src/vite-env.d.ts", "src/lib/desktopBridge.ts", "src/lib/documentStorage.ts", "src/lib/runtimeMode.ts"]
 }
