@@ -762,7 +762,7 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
         chairFromText = true;
       }
     } else if (/call(?:ed|s)?\s+(?:the\s+)?(?:meeting\s+)?to\s+order/i.test(text) && !/\bby (?:the )?chair\b/i.test(text)) {
-      // Who called the meeting to order: "… called to order at 5:30 PM by Terry Robert", "… at 5:32 PM (T. Robert)",
+      // Who called the meeting to order: "… called to order at 5:30 PM by Sam Ortiz", "… at 5:32 PM (S. Ortiz)",
       // "Avery Quill called the meeting to order". Usually the chair; corroborates (or contradicts) other evidence.
       const caller = new RegExp(String.raw`to\s+order\b[^.•(]{0,40}?\bby\s+(${NAME})`).exec(text) ?? new RegExp(String.raw`to\s+order\b[^.•]{0,40}?\((${NAME})\)`).exec(text) ?? new RegExp(String.raw`(?:^|[.•]\s*)(${NAME})\s+call(?:ed|s)\s+(?:the\s+)?meeting\s+to\s+order`).exec(text);
       const name = caller ? cleanName(caller[1]) : undefined;

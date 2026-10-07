@@ -95,7 +95,7 @@ built assets, not `node_modules/tesseract.js-core` (44 MB).
 - **Chair.** "(chair)" marks in any cell of an attendance row, ", chair" tails and
   "(chair & notes)" (also the recorder); "Meeting Chair:" and tab-separated role
   rows; a "Chair: Name" header line; "presided over by". Who called the meeting
-  to order ("… at 5:30 PM by X", "… (T. Robert)", "X called the meeting to order")
+  to order ("… at 5:30 PM by X", "… (S. Ortiz)", "X called the meeting to order")
   corroborates another source (confidence 0.92, second locator), contradicts it
   (capped at 0.84 with a note naming both) or, alone, is an inferred chair (0.7).
   Attendance marks are 0.88 (was 0.75). Text evidence still wins.
