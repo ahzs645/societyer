@@ -29,7 +29,7 @@ export type PromotionMode = "auto" | "new" | "merge";
 export type MergeTarget = { dateKey: string; meetingType: string; committeeName?: string };
 
 export type PromotionInput = {
-  extraction: { _id: string; fileKey: string; docClass: string; engine: string; model?: string; record: Record<string, any>; unsupported: any[]; references: any[]; warnings?: string[]; verification?: any; schemaVersion?: string };
+  extraction: { _id: string; fileKey: string; /** Minutes embedded in a package: the package's fileKey (its source document). */ parentFileKey?: string; docClass: string; engine: string; model?: string; record: Record<string, any>; unsupported: any[]; references: any[]; warnings?: string[]; verification?: any; schemaVersion?: string };
   reviews: ReviewRow[];
   /** The extraction's own file first, then the other members of its version cluster. */
   files: PromotionFile[];
@@ -101,8 +101,10 @@ export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
   const fields = reviewFieldsForRecord(extraction.record, "meetingMinutes");
   const unreviewed = fields.filter((field) => !decisions.has(field.path)).length;
   if (unreviewed) warnings.push(`${unreviewed} unreviewed field${unreviewed === 1 ? " is" : "s are"} not promoted.`);
-  const ownFile = input.files.find((file) => file.fileKey === extraction.fileKey);
-  const sourceExternalIds = [...new Set([extraction.fileKey, ...input.files.map((file) => file.fileKey)])];
+  // Minutes embedded in a package are sourced to the package file itself (`<package>#part-N` is not a file).
+  const sourceKey = extraction.parentFileKey ?? extraction.fileKey;
+  const ownFile = input.files.find((file) => file.fileKey === sourceKey);
+  const sourceExternalIds = [...new Set([sourceKey, ...input.files.map((file) => file.fileKey)])];
   const versions = input.files.length > 1 ? orderedVersionFiles(input.files).map((file) => ({ fileKey: file.fileKey, name: file.name, recordStatus: file.recordStatus ?? "unknown" })) : undefined;
   const reviewed: IntakeExtractionResult = {
     fileId: extraction.fileKey,
@@ -157,7 +159,8 @@ export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
     if (input.mergeTarget.committeeName) payload.committeeName = input.mergeTarget.committeeName;
     else if (/^board$/i.test(input.mergeTarget.meetingType)) payload.body = "board";
   }
-  payload.sourceDocumentTitle = ownFile?.name ?? extraction.fileKey;
+  payload.sourceDocumentTitle = ownFile?.name ?? sourceKey;
+  if (extraction.parentFileKey) warnings.push(`Minutes embedded in ${ownFile?.name ?? sourceKey}; the package is their source document.`);
   const promoted = applied.promotedPaths.length;
   const edited = [...decisions.values()].filter((review) => review.decision === "edit" && applied.promotedPaths.includes(review.fieldPath)).length;
   payload.notes = [
@@ -168,14 +171,15 @@ export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
 
   const bundle: Record<string, unknown> = {
     metadata: {
-      name: `Intake review: ${ownFile?.name ?? extraction.fileKey}`,
+      name: `Intake review: ${ownFile?.name ?? sourceKey}${extraction.parentFileKey ? " (embedded minutes)" : ""}`,
       createdFrom: "intake-review",
       intakeExtractionId: extraction._id,
       sourceSystem: "local-folder",
       reviewOnly: false,
       note: "Created by promoting a reviewed intake extraction. Only reviewer-accepted fields are included.",
     },
-    documentMap: input.files.map((file) => sourceDocumentPayload(file)),
+    // The package keeps its own class, so promoting its agenda and its embedded minutes cite one document.
+    documentMap: input.files.map((file) => sourceDocumentPayload(file, extraction.parentFileKey && file.fileKey === sourceKey ? file.docClass : undefined)),
     meetingMinutes: [payload],
   };
   return { bundle, payload, applied, sourceExternalIds, warnings };

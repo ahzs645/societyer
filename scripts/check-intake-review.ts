@@ -158,9 +158,15 @@ assert.equal(db.dump("intakeFieldReviews").length, 0);
 // ------------------------------------------------------------ batched reviews + undo
 const accept = (paths: string[]) => paths.map((fieldPath) => ({ extractionId: boardRow._id, fieldPath, decision: "accept" }));
 const bulk = await mutate("intake:reviewFields", { societyId: society, items: accept(candidates.map((field) => field.path)) });
-assert.equal(bulk.reviewIds.length, candidates.length);
+// One decision over many fields of a document is one batch row (field paths with index ranges), not one row per field.
+assert.equal(bulk.reviewIds.length, 1, "a batch of plain accepts is one review row");
+const batchRow = db.dump("intakeFieldReviews")[0] as any;
+assert.equal(batchRow.fieldPath, "@batch");
+assert.equal(batchRow.originalValue, undefined, "a batch row does not copy values the extraction holds");
+assert.ok(batchRow.fieldPaths.length < candidates.length, "index ranges fold list fields");
+assert.equal(latestDecisions(db.dump("intakeFieldReviews") as any).size, candidates.length, "every field keeps its own decision");
 const undone = await mutate("intake:undoReviews", { societyId: society, reviewIds: bulk.reviewIds });
-assert.equal(undone.removed, candidates.length, "the undo window removes the whole batch");
+assert.equal(undone.removed, 1, "the undo window removes the whole batch");
 assert.equal(db.dump("intakeFieldReviews").length, 0);
 await mutate("intake:reviewFields", { societyId: society, items: accept(candidates.map((field) => field.path)) });
 await assert.rejects(() => mutate("intake:promoteExtraction", { societyId: society, extractionId: execRow._id }), /Accept or edit the/);
@@ -261,7 +267,8 @@ await assert.rejects(() => query("intake:bulkAcceptPreview", { societyId: societ
 const reviewsBefore = db.dump("intakeFieldReviews").length;
 const bulkRun = await mutate("intake:bulkAccept", { societyId: society, runId: staged.runId, scope: { docClass: "meetingMinutes" } });
 assert.equal(bulkRun.fields, preview.count);
-assert.equal(db.dump("intakeFieldReviews").length, reviewsBefore + preview.count);
+assert.equal(db.dump("intakeFieldReviews").length, reviewsBefore + bulkRun.extractions, "one batch row per document");
+assert.equal(latestDecisions(db.dump("intakeFieldReviews").filter((row: any) => bulkRun.reviewIds.includes(row._id)) as any).size >= 1, true);
 await mutate("intake:undoReviews", { societyId: society, reviewIds: bulkRun.reviewIds });
 assert.equal(db.dump("intakeFieldReviews").length, reviewsBefore, "the whole run-wide batch can be undone");
 

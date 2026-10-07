@@ -9893,6 +9893,22 @@
     ]
   },
   {
+    "key": "convex:importSessions:compactAppliedRecords",
+    "surface": "convex",
+    "name": "importSessions:compactAppliedRecords",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/importSessions.ts",
+    "idArguments": [
+      {
+        "path": "sessionId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:importSessions:createFromBundle",
     "surface": "convex",
     "name": "importSessions:createFromBundle",
@@ -10022,6 +10038,28 @@
         "path": "sessionId",
         "table": "documents",
         "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:importSessions:resolveBlockedRecords",
+    "surface": "convex",
+    "name": "importSessions:resolveBlockedRecords",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/importSessions.ts",
+    "idArguments": [
+      {
+        "path": "sessionId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "recordIds",
+        "table": "documents",
+        "array": true,
         "optional": false
       }
     ]
@@ -10287,6 +10325,24 @@
     "surface": "convex",
     "name": "intake:bulkAcceptPreview",
     "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:compactionPlan",
+    "surface": "convex",
+    "name": "intake:compactionPlan",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/intake.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:intake:compactRun",
+    "surface": "convex",
+    "name": "intake:compactRun",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "convex/intake.ts",
     "idArguments": []
@@ -30512,6 +30568,22 @@
     ]
   },
   {
+    "key": "portable:importSessions:compactAppliedRecords",
+    "surface": "portable",
+    "name": "importSessions:compactAppliedRecords",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "sessionId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:importSessions:createFromBundle",
     "surface": "portable",
     "name": "importSessions:createFromBundle",
@@ -30641,6 +30713,28 @@
         "path": "sessionId",
         "table": "documents",
         "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:importSessions:resolveBlockedRecords",
+    "surface": "portable",
+    "name": "importSessions:resolveBlockedRecords",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "sessionId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "recordIds",
+        "table": "documents",
+        "array": true,
         "optional": false
       }
     ]
@@ -30906,6 +31000,24 @@
     "surface": "portable",
     "name": "intake:bulkAcceptPreview",
     "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:compactionPlan",
+    "surface": "portable",
+    "name": "intake:compactionPlan",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:intake:compactRun",
+    "surface": "portable",
+    "name": "intake:compactRun",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": []

@@ -270,7 +270,7 @@ export function BlockView({ extract, locator }: { extract: any; locator?: Viewer
     const mark = highlightQuote(scope, locator?.quote) ?? scope;
     mark.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeBlock, locator?.quote, locator?.cell]);
-  if (!extract) return <p className="muted" style={{ padding: 12 }}>No stored text for this file.</p>;
+  if (!extract) return <p className="muted" style={{ padding: 12 }}>No stored text for this file. When a run is compacted, a promoted file keeps its text on the promoted document and its original under Original.</p>;
   if (!blocks.length) return <p className="muted" style={{ padding: 12 }}>{extract.warnings?.[0] ?? "No text could be extracted (a scan without a text layer?)."}</p>;
   let lastSheet: string | undefined;
   return (

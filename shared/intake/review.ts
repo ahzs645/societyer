@@ -21,7 +21,10 @@ export const REVIEW_DECISIONS: readonly ReviewDecision[] = ["accept", "edit", "r
 
 export type ReviewRow = {
   _id?: string;
+  /** The reviewed field, or BATCH_FIELD_PATH for a batch row (see `fieldPaths`). */
   fieldPath: string;
+  /** Batch rows only: every field the one decision applies to, encoded with index ranges (`encodeFieldPaths`). */
+  fieldPaths?: string[];
   decision: ReviewDecision | string;
   editedValue?: unknown;
   originalValue?: unknown;
@@ -195,11 +198,97 @@ export function reviewFieldsForRecord(record: unknown, docClass?: string): Revie
   });
 }
 
-/** Latest review per field path (reviews are append-only; undo deletes rows). */
+/** Latest review per field path (reviews are append-only; undo deletes rows).
+ * A batch row (one bulk decision over many fields) counts as one review of each of its fields:
+ * the map holds a per-field view of it (`fieldPath` = that field, same decision, note, reviewer, time). */
 export function latestDecisions(reviews: readonly ReviewRow[]): Map<string, ReviewRow> {
   const sorted = [...reviews].sort((a, b) => a.reviewedAtISO.localeCompare(b.reviewedAtISO) || (a._creationTime ?? 0) - (b._creationTime ?? 0));
   const out = new Map<string, ReviewRow>();
-  for (const review of sorted) out.set(review.fieldPath, review);
+  for (const review of sorted) {
+    if (review.fieldPath === BATCH_FIELD_PATH || Array.isArray(review.fieldPaths)) {
+      const { fieldPaths, ...rest } = review;
+      for (const path of decodeFieldPaths(fieldPaths ?? [])) out.set(path, { ...rest, fieldPath: path });
+      continue;
+    }
+    out.set(review.fieldPath, review);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- compact (batch) reviews
+
+/** `fieldPath` of a batch review row: the decision applies to every path in `fieldPaths`. */
+export const BATCH_FIELD_PATH = "@batch";
+
+const INDEXED_PATH = /^([^[\]]*)\[(\d+)\](.*)$/;
+const RANGED_PATH = /^([^[\]]*)\[([\d,-]+)\](.*)$/;
+
+/** Encodes field paths compactly: paths that differ only in their first list index collapse into one
+ * entry with index ranges (`attendance[0-41].nameAsWritten`, `motions[0-3,5].text`). Order-insensitive;
+ * `decodeFieldPaths` restores the exact set. */
+export function encodeFieldPaths(paths: readonly string[]): string[] {
+  const plain: string[] = [];
+  const groups = new Map<string, { prefix: string; suffix: string; indices: number[] }>();
+  for (const path of new Set(paths)) {
+    const match = INDEXED_PATH.exec(path);
+    if (!match) { plain.push(path); continue; }
+    const key = `${match[1]}\u0000${match[3]}`;
+    const group = groups.get(key) ?? { prefix: match[1], suffix: match[3], indices: [] };
+    group.indices.push(Number(match[2]));
+    groups.set(key, group);
+  }
+  const out = [...plain];
+  for (const { prefix, suffix, indices } of groups.values()) {
+    const sorted = [...new Set(indices)].sort((a, b) => a - b);
+    const parts: string[] = [];
+    for (let start = 0; start < sorted.length;) {
+      let end = start;
+      while (end + 1 < sorted.length && sorted[end + 1] === sorted[end] + 1) end++;
+      parts.push(end > start ? `${sorted[start]}-${sorted[end]}` : String(sorted[start]));
+      start = end + 1;
+    }
+    out.push(`${prefix}[${parts.join(",")}]${suffix}`);
+  }
+  return out;
+}
+
+/** Expands `encodeFieldPaths` output back to one path per field. */
+export function decodeFieldPaths(encoded: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const entry of encoded) {
+    const match = RANGED_PATH.exec(String(entry));
+    if (!match || !/[,-]/.test(match[2])) { out.push(String(entry)); continue; }
+    for (const part of match[2].split(",")) {
+      const [from, to] = part.split("-").map(Number);
+      if (!Number.isInteger(from)) continue;
+      const last = Number.isInteger(to) ? Math.min(to, from + 100_000) : from;
+      for (let index = from; index <= last; index++) out.push(`${match[1]}[${index}]${match[3]}`);
+    }
+  }
+  return out;
+}
+
+/** A plain accept that can share one batch row with others (no edit, no gap). */
+export function isBatchableAccept(row: { decision?: string; editedValue?: unknown; gap?: unknown; fieldPath?: string; fieldPaths?: unknown }): boolean {
+  return row.decision === "accept" && row.editedValue === undefined && !row.gap && row.fieldPath !== BATCH_FIELD_PATH && !Array.isArray(row.fieldPaths);
+}
+
+/** Groups legacy one-row-per-field accepts made by the same decision (same extraction, reviewer, time and
+ * note — what a bulk accept or "accept as written everywhere" wrote) into batch rows. Returns the batch rows
+ * to insert and the ids they replace; decisions per field are unchanged (`latestDecisions` gives the same map). */
+export function planReviewCompaction<T extends ReviewRow & { _id: string; extractionId?: string; reviewerUserId?: string }>(rows: readonly T[]): Array<{ replaces: string[]; row: Omit<T, "_id" | "_creationTime" | "fieldPath" | "originalValue" | "locators"> & { fieldPath: string; fieldPaths: string[] } }> {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    if (!isBatchableAccept(row)) continue;
+    const key = JSON.stringify([row.extractionId ?? "", row.reviewerUserId ?? "", row.reviewedAtISO, row.note ?? ""]);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const out: Array<{ replaces: string[]; row: any }> = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const { _id: _ignoredId, _creationTime: _ignoredTime, fieldPath: _ignoredPath, originalValue: _value, locators: _locators, ...rest } = group[0] as any;
+    out.push({ replaces: group.map((row) => row._id), row: { ...rest, fieldPath: BATCH_FIELD_PATH, fieldPaths: encodeFieldPaths(group.map((row) => row.fieldPath)) } });
+  }
   return out;
 }
 
@@ -389,7 +478,7 @@ export function samplePreview<T>(items: readonly T[], size = 5): T[] {
 
 // ------------------------------------------------------------ queue
 
-export type QueueRow = { _id: string; fileId: string; fileKey: string; docClass: string; status: string; risk: number; motions: number; unsupported: number; lowConfidenceFields: number; verification?: { mismatched?: number }; date?: string; body?: string; summary?: string; promotion?: { targets?: Array<{ table: string; id: string; label: string }>; coveredByExtractionId?: string; coveredByFileKey?: string } };
+export type QueueRow = { _id: string; fileId: string; fileKey: string; /** Minutes embedded in a package: the package file. */ parentFileKey?: string; docClass: string; status: string; risk: number; motions: number; unsupported: number; lowConfidenceFields: number; verification?: { mismatched?: number }; date?: string; body?: string; summary?: string; promotion?: { targets?: Array<{ table: string; id: string; label: string }>; coveredByExtractionId?: string; coveredByFileKey?: string } };
 export type RiskTier = "high" | "medium" | "low";
 const LEGAL_CLASSES = new Set(["bylaws", "policy", "registryFiling", "directorConsent", "proxy", "financialStatement", "agreement"]);
 

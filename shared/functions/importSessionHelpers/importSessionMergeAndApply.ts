@@ -1,7 +1,7 @@
 import { EVIDENCE_FIELDS, mergeImportedEvidence, normalizeImportedEvidence } from "../../evidenceReview";
 import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHistory";
 import { assertMeetingHistoryReferences, syncMotionsForMinutes, resolveMinutesMotions } from "../minutes";
-import { directoryPersonId, sourceVersionsCover, importedAgendaRows, importedMotionFromPayload, importedSectionsWithLinks, importedSourceVersionFor, linkActionItem, loadDirectoryIndex, screenImportedAttendance, type DirectoryIndex } from "./importMeetingApply";
+import { directoryPersonId, importedMeetingStatus, sourceVersionsCover, importedAgendaRows, importedMotionFromPayload, importedSectionsWithLinks, importedSourceVersionFor, linkActionItem, loadDirectoryIndex, screenImportedAttendance, type DirectoryIndex } from "./importMeetingApply";
 import { normalizeSigningAuthorityTiers } from "../../signingAuthorityTiers";
 import { normalizeDocumentCategory } from "../../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../../documentVersioning";
@@ -73,6 +73,7 @@ import {
   parseJson,
   sourceNoteFor,
   summarizeRecords,
+  withCompactedRecords,
   titleForHistoryItem,
 } from "./importSessionMetadata";
 import {
@@ -122,6 +123,8 @@ async function mergeExistingMeetingImport(
   if (!meeting.electronic && payload.electronic === true) meetingPatch.electronic = true;
   if (!meeting.localStartText && cleanText(payload.localStartText)) meetingPatch.localStartText = cleanText(payload.localStartText);
   if (!meeting.localEndText && cleanText(payload.localEndText)) meetingPatch.localEndText = cleanText(payload.localEndText);
+  // Minutes merged into a meeting only an agenda or package evidenced ("Held — minutes missing"): it has minutes now.
+  if (meeting.status === "HeldMinutesMissing" && !cleanText(payload.meetingStatus) && importedMeetingStatus(payload) === "Held") meetingPatch.status = "Held";
   // Agenda lives in the relational agendas/agendaItems store. Only overwrite the
   // existing items when the current agenda is just the generic imported
   // scaffold (so we don't clobber a reviewed agenda).
@@ -2036,12 +2039,16 @@ async function insertHistoryItem(ctx: any, societyId: string, kind: string, payl
 }
 
 async function patchRecordImportTarget(ctx: any, record: any, target: string, value: any) {
+  // An applied record is no longer blocked (see BlockedImportRecord in importSessions.ts).
+  const { blocked, ...rest } = record;
+  const tags = blocked ? ((await ctx.db.get(record._id))?.tags ?? []).filter((tag: string) => tag !== "promotion-blocked" && tag !== "promotion-waiting") : undefined;
   await ctx.db.patch(record._id, {
     content: JSON.stringify({
-      ...record,
+      ...rest,
       importedTargets: { ...(record.importedTargets ?? {}), [target]: value },
       updatedAtISO: new Date().toISOString(),
     }),
+    ...(tags ? { tags } : {}),
   });
 }
 
@@ -2075,7 +2082,7 @@ async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
     .filter(isImportRecord)
     .map(hydrateRecord)
     .filter((record: any) => record.sessionId === sessionId);
-  const summary = summarizeRecords(records);
+  const summary = withCompactedRecords(summarizeRecords(records), payload);
   await ctx.db.patch(sessionId, {
     content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),
   });

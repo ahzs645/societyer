@@ -22,6 +22,11 @@ export const HEAVY_FIELD_POLICY: Readonly<Record<string, readonly string[]>> = O
   documents: Object.freeze(["content"]),
   minutes: Object.freeze(["sourceMeetingRecord", "sourceTransposition", "draftTranscript"]),
   transcripts: Object.freeze(["text", "segments"]),
+  // AI intake staging: the text and layout of each source file (the review viewer opens one at a time) and
+  // each extraction's field tree (the review queue reads memoized summaries of it). About 110 MB on a fully
+  // reviewed real archive, which no list page outside the intake screens reads.
+  intakeExtracts: Object.freeze(["blocks", "text"]),
+  intakeExtractions: Object.freeze(["record"]),
 });
 
 /** Values at or below this serialized length stay inline. */

@@ -276,7 +276,77 @@ test("a layout-1 vault is migrated in place to lazy heavy fields without losing 
   expect(result.storedExternal).toEqual(["sourceMeetingRecord"]);
   expect(result.fieldKeys).toEqual(["sourceMeetingRecord"]);
   expect(result.legacyMirror).toBe(0);
-  expect(result.layout).toBe(2);
+  expect(result.layout).toBe(3);
   expect(result.backupMinutes.sourceMeetingRecord.text.length).toBe(result.sourceLength);
   expect(result.backupMinutes.discussion).toBe("Kept inline");
+});
+
+test("intake staging tables load on first use, and a layout-2 vault moves intake heavy fields out (layout 3)", async ({ page }) => {
+  await page.goto("/login");
+  const result = await page.evaluate(async () => {
+    const { LocalDexieRowStore } = await import("/src/lib/localDexieRowStore.ts" as string);
+    const { LocalDexieDatabase } = await import("/src/lib/localDexieDatabase.ts" as string);
+    const { LocalStoreDb } = await import("/shared/portable/localRowStore.ts" as string);
+    const name = `deferred-tables-${crypto.randomUUID()}`;
+    const quote = "Synthetic quoted span. ".repeat(120);
+    const record = { date: { value: { iso: "2024-01-02", precision: "day" }, status: "stated", confidence: 0.9, locators: [{ kind: "block", blockIndex: 0, quote }] } };
+    try {
+      // A layout-2 vault: intake values inline in `records`.
+      const legacy = new LocalDexieDatabase(name);
+      await legacy.open();
+      await legacy.records.bulkPut([
+        { key: "societies:s1", table: "societies", id: "s1", value: { _id: "s1", name: "Deferred society" } },
+        { key: "intakeExtractions:e1", table: "intakeExtractions", id: "e1", value: { _id: "e1", societyId: "s1", runId: "r1", fileId: "f1", fileKey: "local:a.pdf", docClass: "meetingMinutes", status: "pending_review", record } },
+        { key: "fieldProvenance:p1", table: "fieldProvenance", id: "p1", value: { _id: "p1", societyId: "s1", targetTable: "meetings", targetId: "m1", fieldPath: "scheduledAt", locator: { kind: "block" } } },
+      ]);
+      await legacy.meta.bulkPut([
+        { key: "schemaVersion", value: 3 },
+        { key: "storageLayout", value: 2 },
+        { key: "workspace", value: { id: name, name: "Layout 2", schemaVersion: 3, createdAtISO: "2026-01-01T00:00:00Z", updatedAtISO: "2026-01-01T00:00:00Z" } },
+      ]);
+      legacy.close();
+
+      const store = new LocalDexieRowStore({}, { databaseName: name });
+      await store.whenHydrated();
+      const layout = (await store.db.meta.get("storageLayout"))?.value;
+      const stored = await store.db.records.get("intakeExtractions:e1");
+      const fields = await store.db.recordFields.get("intakeExtractions:e1");
+      const deferredAtBoot = { extractions: store.isDeferred("intakeExtractions"), provenance: store.isDeferred("fieldProvenance"), societies: store.isDeferred("societies") };
+      const bootRecords = (globalThis as any).__SOCIETYER_LOCAL_BOOT__?.records;
+      const rowBeforeUse = store.getRow("fieldProvenance", "p1");
+      const db = new LocalStoreDb(store);
+      const viaQuery = await db.query("fieldProvenance").withIndex("by_target", (q: any) => q.eq("targetTable", "meetings").eq("targetId", "m1")).collect();
+      const provenanceLoaded = !store.isDeferred("fieldProvenance");
+      const extractionStillDeferred = store.isDeferred("intakeExtractions");
+      const viaGet = await db.get("e1");
+      // A write to a deferred table loads it first, so stored rows are never lost.
+      await db.transaction(async () => { await db.insert("intakeFieldReviews", { _id: "rv1", societyId: "s1", runId: "r1", extractionId: "e1", fieldPath: "date", decision: "accept", reviewedAtISO: "2026-01-01T00:00:00Z" }); });
+      const backup = await store.exportSnapshot();
+      store.db.close();
+      return {
+        layout, storedKeys: Object.keys(stored.value), storedExternal: stored.external, fieldKeys: Object.keys(fields?.fields ?? {}), deferredAtBoot, bootRecords,
+        rowBeforeUse: rowBeforeUse ?? null, viaQuery: viaQuery.map((row: any) => row._id), provenanceLoaded, extractionStillDeferred,
+        viaGetQuoteLength: viaGet?.record?.date?.locators?.[0]?.quote?.length, quoteLength: quote.length,
+        backupTables: Object.fromEntries(Object.entries(backup.tables).map(([table, rows]) => [table, (rows as any[]).map((row) => row._id)])),
+        backupRecord: Boolean(backup.tables.intakeExtractions?.[0]?.record?.date),
+      };
+    } finally {
+      await new LocalDexieDatabase(name).delete();
+    }
+  });
+  expect(result.layout).toBe(3);
+  expect(result.storedKeys).not.toContain("record");
+  expect(result.storedExternal).toEqual(["record"]);
+  expect(result.fieldKeys).toEqual(["record"]);
+  expect(result.deferredAtBoot).toEqual({ extractions: true, provenance: true, societies: false });
+  expect(result.bootRecords, "boot read only the tables pages use").toBe(1);
+  expect(result.rowBeforeUse, "a deferred row is not in the cache before first use").toBeNull();
+  expect(result.viaQuery).toEqual(["p1"]);
+  expect(result.provenanceLoaded).toBe(true);
+  expect(result.extractionStillDeferred, "tables load one at a time").toBe(true);
+  expect(result.viaGetQuoteLength, "an id lookup loads the deferred tables and the lazy record").toBe(result.quoteLength);
+  expect(result.backupTables.intakeFieldReviews).toEqual(["rv1"]);
+  expect(result.backupTables.intakeExtractions).toEqual(["e1"]);
+  expect(result.backupTables.fieldProvenance).toEqual(["p1"]);
+  expect(result.backupRecord).toBe(true);
 });

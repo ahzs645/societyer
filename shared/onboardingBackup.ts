@@ -1,4 +1,11 @@
+/** Largest single JSON records file (a .json backup, or `workspace.json` in a version 1 ZIP): parsed as one string. */
 export const MAX_SETUP_BACKUP_BYTES = 256 * 1024 * 1024;
+/** Version 1 ZIP backups stay within what builds before chunked backups could restore. */
+export const V1_BACKUP_RECORD_LIMIT = 200_000;
+/** Records a device restore accepts (chunked version 2 ZIP backups are parsed a chunk at a time). */
+export const MAX_RESTORE_RECORDS = 1_000_000;
+/** Total serialized records of a chunked (version 2) ZIP backup. */
+export const MAX_CHUNKED_RECORD_BYTES = 1024 * 1024 * 1024;
 
 /** Validate and summarize local snapshot structure before asking to replace device records. */
 export function validateSetupBackup(snapshot: any): void {
@@ -10,7 +17,7 @@ export function validateSetupBackup(snapshot: any): void {
   for (const [table, rows] of entries) {
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(table) || ["constructor", "prototype", "__proto__"].includes(table) || !Array.isArray(rows)) throw new Error("The backup contains an invalid record table.");
     count += rows.length;
-    if (count > 200_000) throw new Error("The backup exceeds the 200,000-record device restore limit.");
+    if (count > MAX_RESTORE_RECORDS) throw new Error(`The backup exceeds the ${MAX_RESTORE_RECORDS.toLocaleString("en-CA")}-record device restore limit.`);
     const ids = new Set<string>();
     for (const row of rows) {
       if (!row || typeof row !== "object" || Array.isArray(row) || typeof row._id !== "string" || !row._id || row._id.length > 300 || ids.has(row._id)) throw new Error(`Backup table ${table} contains invalid or duplicate records.`);

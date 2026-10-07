@@ -82,7 +82,22 @@ export interface LocalRowStore {
   /** Persisted projection memos (survive reloads): id → { rev, value }. */
   loadProjections?(key: string, table: string, ids: string[]): Promise<Map<string, { rev: string; value: unknown }>>;
   saveProjections?(key: string, table: string, entries: Array<{ id: string; rev: string; value: unknown }>): void;
+  /**
+   * Deferred tables: rows of these tables are read from storage on first use instead of at boot, so a
+   * workspace's archive-scale staging (AI intake runs, field provenance) costs nothing on pages that never
+   * read it. Until `ensureTables` resolves for a table, `rows`/`getRow`/`rowsWhere`/`tableOf` do not see
+   * its stored rows; the adapter awaits `ensureTables` before every read of one, and before resolving an id
+   * it cannot place. `commitBatch` loads a deferred table before writing to it.
+   */
+  isDeferred?(table: string): boolean;
+  hasDeferredTables?(): boolean;
+  ensureTables?(tables?: readonly string[]): Promise<void>;
 }
+
+/** Tables a local store may hydrate on first use (see `LocalRowStore.isDeferred`). */
+export const DEFERRED_HYDRATION_TABLES: readonly string[] = Object.freeze([
+  "intakeRuns", "intakeFiles", "intakeClusters", "intakeExtracts", "intakeExtractions", "intakeFieldReviews", "intakeProcessingLog", "fieldProvenance",
+]);
 
 /** Rows loaded and projected per step of a `collectProjected` miss. */
 const PROJECTION_CHUNK = 250;
@@ -332,6 +347,9 @@ export class LocalStoreDb implements PortableDbWriter {
    * constraint, predicate or search is loaded first and evaluated again, so the
    * outcome equals evaluation over complete rows.
    */
+  // Deferred tables are loaded inline (`if (…) await …`), never through an extra async hop: a read that needs
+  // no load keeps exactly the microtask timing it had, so concurrent reads settle in the same order.
+
   async evaluate<T extends PortableDoc>(
     table: TableName,
     query: {
@@ -342,6 +360,7 @@ export class LocalStoreDb implements PortableDbWriter {
     },
   ): Promise<T[]> {
     this.record(table);
+    if (this.store.isDeferred?.(table)) await this.store.ensureTables!([table]);
     const candidates = this.candidateRows(table, query.constraints) as T[];
     if (!query.search && this.store.externalFields) {
       // Index/predicate query over rows that may be light: evaluate each row
@@ -576,7 +595,14 @@ export class LocalStoreDb implements PortableDbWriter {
   }
 
   async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName, options?: PortableGetOptions): Promise<T | null> {
-    const table = this.findTableOf(id);
+    if (expectedTable && this.store.isDeferred?.(expectedTable)) await this.store.ensureTables!([expectedTable]);
+    let table = this.findTableOf(id);
+    // An id the store cannot place may belong to a deferred table: load those, then look again (unless a
+    // minted id names a table that is not deferred: "documents_01M...").
+    if (!table && !expectedTable && this.store.hasDeferredTables?.() && this.mayBeDeferredId(id)) {
+      await this.store.ensureTables!();
+      table = this.findTableOf(id);
+    }
     if (!table) {
       this.record(expectedTable ?? "*");
       return null;
@@ -627,14 +653,30 @@ export class LocalStoreDb implements PortableDbWriter {
     this.overlayFor(table).set(id, { ...existing, ...patch, _id: id });
   }
 
+  /** False when a minted id's prefix names a table that is loaded (not deferred). */
+  private mayBeDeferredId(id: string) {
+    const separator = typeof id === "string" ? id.indexOf("_") : -1;
+    if (separator <= 0) return true;
+    const prefix = id.slice(0, separator);
+    return !this.store.tableNames().includes(prefix) || Boolean(this.store.isDeferred?.(prefix));
+  }
+
   async replace(id: string, doc: Record<string, any>): Promise<void> {
-    const table = this.findTableOf(id);
+    let table = this.findTableOf(id);
+    if (!table && this.store.hasDeferredTables?.()) {
+      await this.store.ensureTables!();
+      table = this.findTableOf(id);
+    }
     if (!table) throw new Error(`replace: document ${id} not found`);
     this.overlayFor(table).set(id, { ...doc, _id: id });
   }
 
   async delete(id: string): Promise<void> {
-    const table = this.findTableOf(id);
+    let table = this.findTableOf(id);
+    if (!table && this.store.hasDeferredTables?.()) {
+      await this.store.ensureTables!();
+      table = this.findTableOf(id);
+    }
     if (!table) return;
     this.overlayFor(table).set(id, null);
   }
@@ -697,6 +739,8 @@ export interface MemoryRowStoreOptions {
   heavyFields?: HeavyFieldPolicy | boolean;
   /** Offer the optional fast-path members (lookup, id → table, equality index). */
   indexed?: boolean;
+  /** Hold these tables' seeded rows back until `ensureTables` (deferred hydration, as the browser store). */
+  deferredTables?: readonly string[];
 }
 
 /**
@@ -720,10 +764,35 @@ export class MemoryRowStore implements LocalRowStore {
   private revisionCounter = 0;
   rowRevision?: (table: string, id: string) => string | undefined;
 
+  /** Deferred tables not loaded yet: their seeded rows. */
+  private stash = new Map<string, PortableDoc[]>();
+  /** Number of deferred-table loads (test observability). */
+  deferredLoads = 0;
+  isDeferred?: (table: string) => boolean;
+  hasDeferredTables?: () => boolean;
+  ensureTables?: (tables?: readonly string[]) => Promise<void>;
+
   constructor(seed: Record<string, PortableDoc[]> = {}, options: MemoryRowStoreOptions = {}) {
     this.policy = options.heavyFields === true ? DEFAULT_HEAVY_FIELD_POLICY : options.heavyFields || null;
+    const deferred = new Set(options.deferredTables ?? []);
     for (const [table, rows] of Object.entries(seed)) {
+      if (deferred.has(table)) { this.stash.set(table, rows.map(clone)); continue; }
       for (const row of rows) this.put(table, clone(row));
+    }
+    if (deferred.size) {
+      for (const table of deferred) if (!this.stash.has(table)) this.stash.set(table, []);
+      this.isDeferred = (table) => this.stash.has(table);
+      this.hasDeferredTables = () => this.stash.size > 0;
+      this.ensureTables = async (tables) => {
+        for (const table of tables ?? [...this.stash.keys()]) {
+          const rows = this.stash.get(table);
+          if (!rows) continue;
+          this.stash.delete(table);
+          this.deferredLoads += 1;
+          // Rows written before the load win over stored ones.
+          for (const row of rows) if (!this.tables.get(table)?.has(row._id)) this.put(table, row);
+        }
+      };
     }
     if (options.indexed || this.policy) {
       this.getRow = (table, id) => {
@@ -788,16 +857,25 @@ export class MemoryRowStore implements LocalRowStore {
     return [...(this.tables.get(table)?.values() ?? [])].map(clone);
   }
 
-  /** Complete rows, externalized heavy fields included (test/debug helper). */
+  /** Complete rows, externalized heavy fields included (test/debug helper; deferred tables included). */
   fullRows(table: string): PortableDoc[] {
+    if (this.stash.has(table)) return this.stash.get(table)!.map(clone);
     return [...(this.tables.get(table)?.values() ?? [])].map((row) => clone({ ...row, ...(this.heavy.get(table)?.get(row._id) ?? {}) }));
   }
 
   tableNames(): string[] {
-    return [...this.tables.keys()];
+    return [...new Set([...this.tables.keys(), ...this.stash.keys()])];
   }
 
   commitBatch(ops: RowStoreOp[]): void {
+    // A write to a deferred table loads it first (synchronously here: the stash is in memory).
+    for (const op of ops) {
+      const rows = this.stash.get(op.table);
+      if (!rows) continue;
+      this.stash.delete(op.table);
+      this.deferredLoads += 1;
+      for (const row of rows) if (!this.tables.get(op.table)?.has(row._id)) this.put(op.table, row);
+    }
     for (const op of ops) {
       if (op.kind === "delete") {
         this.tables.get(op.table)?.delete(op.id);

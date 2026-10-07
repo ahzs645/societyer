@@ -201,9 +201,12 @@ export async function measureRoute({ base, profile, route, timeoutMs, resolvedPa
   let latencyMs = null;
   let queries;
   let boot;
+  let deferred;
   if (!crashed) {
     try {
       boot = await withTimeout(page.evaluate(() => globalThis.__SOCIETYER_LOCAL_BOOT__ ?? null), 30_000, "boot timing");
+      // Deferred tables (AI intake staging, field provenance) this route loaded after boot.
+      deferred = await withTimeout(page.evaluate(() => globalThis.__SOCIETYER_LOCAL_DEFERRED__ ?? null), 30_000, "deferred tables");
       queries = await withTimeout(
         page.evaluate(() =>
           Object.entries(globalThis.__SOCIETYER_QUERY_PROFILE__ ?? {})
@@ -236,7 +239,7 @@ export async function measureRoute({ base, profile, route, timeoutMs, resolvedPa
       /* nothing left to kill */
     }
   });
-  return { route, path, readyMs, latencyMs, ...metrics, failure, errors: errors.slice(0, 3), boot, queries, discovered };
+  return { route, path, readyMs, latencyMs, ...metrics, failure, errors: errors.slice(0, 3), boot, deferred, queries, discovered };
 }
 
 export async function measureAll(options) {
@@ -262,7 +265,7 @@ export async function measureAll(options) {
       results.push({ ...result, run });
       options.onResult?.(results);
       console.log(
-        `${route.padEnd(24)} ready=${result.readyMs ?? "-"}ms heap=${result.heapUsedMB ?? "-"}MB (after GC ${result.heapUsedAfterGcMB ?? "-"}MB) nodes=${result.nodes ?? "-"} boot=${result.boot ? `${result.boot.totalMs}ms/${result.boot.records} rows` : "-"} ${result.failure ? "FAIL " + result.failure : ""}`,
+        `${route.padEnd(24)} ready=${result.readyMs ?? "-"}ms heap=${result.heapUsedMB ?? "-"}MB (after GC ${result.heapUsedAfterGcMB ?? "-"}MB) nodes=${result.nodes ?? "-"} boot=${result.boot ? `${result.boot.totalMs}ms/${result.boot.records} rows` : "-"}${result.deferred ? ` deferred=${Object.entries(result.deferred).map(([table, entry]) => `${table}:${entry.rows}/${entry.ms}ms`).join(",")}` : ""} ${result.failure ? "FAIL " + result.failure : ""}`,
       );
     }
   }

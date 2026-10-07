@@ -398,6 +398,11 @@ export class StaticConvexClient {
     return this.store.exportSnapshot();
   }
 
+  /** The workspace as table-by-table row batches, heavy fields loaded per batch (streaming ZIP backups). */
+  exportLocalWorkspaceSnapshotSource(batchSize?: number) {
+    return this.store.exportSnapshotSource(batchSize);
+  }
+
   async importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
     await this.store.importSnapshot(snapshot, files);
     this.scheduleProjectionWarmup();
