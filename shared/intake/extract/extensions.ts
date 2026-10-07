@@ -7,4 +7,6 @@ export function extensionOf(name: string): string {
 }
 
 export const TEXT_EXTENSIONS = new Set(["txt", "md", "csv", "tsv", "json", "html", "htm", "xml", "eml", "rtf"]);
-export const EXTRACTABLE_EXTENSIONS = new Set(["docx", "docm", "dotx", "pdf", "xlsx", "xlsm", "msg", "doc", "xls", "odt", "ods", "wpd", "pptx", "ppt", ...TEXT_EXTENSIONS]);
+export const EXTRACTABLE_EXTENSIONS = new Set(["docx", "docm", "dotx", "dotm", "pdf", "xlsx", "xlsm", "msg", "doc", "xls", "odt", "ods", "wpd", "pptx", "pptm", "potx", "ppsx", "ppt", "pps", "xps", "oxps", ...TEXT_EXTENSIONS]);
+/** Images a run reads by OCR when they look like documents (see `isDocumentImage`). */
+export const OCR_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "jfif", "png", "tif", "tiff", "bmp", "gif", "webp", "pbm", "pnm"]);

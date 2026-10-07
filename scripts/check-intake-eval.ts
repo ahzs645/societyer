@@ -18,7 +18,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { aggregate, predictedFromRecord, scoreDocument, type Aggregate, type DocScore, type GoldenSet } from "../shared/intake/eval";
+import { aggregate, calibrationItems, predictedFromRecord, scoreDocument, summarizeCalibration, type Aggregate, type CalibrationItem, type DocScore, type GoldenSet } from "../shared/intake/eval";
+import { thresholdFor } from "../shared/intake/review";
 import { extractFile } from "../shared/intake/node/extractFile";
 import { extractMeetingMinutes } from "../shared/intake/minutes/extractMinutes";
 import { validateExtraction } from "../shared/intake/schemas";
@@ -29,8 +30,9 @@ const args = process.argv.slice(2);
 const verbose = args.includes("--verbose");
 const jsonOut = args.includes("--json") ? args[args.indexOf("--json") + 1] : undefined;
 
-async function gradeSet(label: string, golden: GoldenSet, fileFor: (doc: GoldenSet["documents"][number]) => string | undefined): Promise<{ scores: DocScore[]; dev: Aggregate; holdout: Aggregate; all: Aggregate }> {
+async function gradeSet(label: string, golden: GoldenSet, fileFor: (doc: GoldenSet["documents"][number]) => string | undefined): Promise<{ scores: DocScore[]; dev: Aggregate; holdout: Aggregate; all: Aggregate; calibration: CalibrationItem[] }> {
   const scores: DocScore[] = [];
+  const calibration: CalibrationItem[] = [];
   for (const doc of golden.documents) {
     if (!doc.meeting) continue; // packages/agendas are graded elsewhere
     const file = fileFor(doc);
@@ -45,10 +47,19 @@ async function gradeSet(label: string, golden: GoldenSet, fileFor: (doc: GoldenS
     const verification = verifyRecord(envelope.record, extract);
     const score = scoreDocument(doc, predictedFromRecord(envelope.record), verification);
     scores.push(score);
+    calibration.push(...calibrationItems(doc, envelope.record, (pattern) => thresholdFor("meetingMinutes", pattern)));
     if (verbose) printDoc(score);
   }
   const all = aggregate(scores);
-  return { scores, all, dev: aggregate(scores.filter((score) => !score.holdout)), holdout: aggregate(scores.filter((score) => score.holdout)) };
+  return { scores, all, dev: aggregate(scores.filter((score) => !score.holdout)), holdout: aggregate(scores.filter((score) => score.holdout)), calibration };
+}
+
+/** Bulk-accept calibration: how many values of each field would be bulk-accepted, and how many of those are wrong. */
+function printCalibration(label: string, items: CalibrationItem[]) {
+  const summary = summarizeCalibration(items);
+  console.log(`${label} bulk-accept calibration: ${Object.entries(summary).map(([field, row]) => `${field} ${row.eligibleCorrect}/${row.expected} bulk-correct, ${row.eligibleWrong} bulk-wrong, ${row.correctBelowThreshold} correct below τ`).join(" | ")}`);
+  if (verbose) for (const item of items) console.log(`    ${item.docId} ${item.field}: expected ${JSON.stringify(item.expected)} got ${JSON.stringify(item.predicted)} conf ${item.confidence ?? "-"} ${item.eligible ? "BULK" : "below"} ${item.correct ? "ok" : "WRONG"}${item.note ? ` (${item.note.slice(0, 60)})` : ""}`);
+  return summary;
 }
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -75,6 +86,8 @@ const fixtureDir = keepDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "societyer-i
 const synthetic = await writeSyntheticFixtures(fixtureDir);
 const syntheticResult = await gradeSet("synthetic", synthetic.golden, (doc) => synthetic.files[doc.id]);
 printAggregate("synthetic", syntheticResult.all);
+const syntheticCalibration = printCalibration("synthetic", syntheticResult.calibration);
+for (const [field, row] of Object.entries(syntheticCalibration)) assert.equal(row.eligibleWrong, 0, `synthetic: a wrong ${field} would be bulk-accepted`);
 const s = syntheticResult.all;
 assert.ok(s.documents >= 4, "synthetic fixture documents were graded");
 assert.ok(s.motionRecall >= 0.95, `synthetic motion recall ${pct(s.motionRecall)} < 95%`);
@@ -103,6 +116,9 @@ if (goldenPath) {
   printAggregate("golden (all)", privateResult.all);
   printAggregate("golden (dev)", privateResult.dev);
   printAggregate("golden (holdout)", privateResult.holdout);
+  const goldenCalibration = printCalibration("golden", privateResult.calibration);
+  // Calibration never trades precision for coverage: no wrong value may be bulk-eligible.
+  for (const [field, row] of Object.entries(goldenCalibration)) assert.equal(row.eligibleWrong, 0, `golden: ${row.eligibleWrong} wrong ${field} value(s) would be bulk-accepted`);
   const minRecall = Number(process.env.SOCIETYER_EVAL_MIN_MOTION_RECALL ?? 0);
   if (minRecall) assert.ok(privateResult.all.motionRecall >= minRecall, `golden motion recall ${pct(privateResult.all.motionRecall)} < ${pct(minRecall)}`);
 } else {

@@ -3,7 +3,8 @@ export const DESKTOP_CSP_HEADER =
   "base-uri 'self'; " +
   "object-src 'none'; " +
   "frame-ancestors 'none'; " +
-  "script-src 'self' 'unsafe-inline'; " +
+  // 'wasm-unsafe-eval' lets the AI intake OCR compile its bundled WebAssembly (no eval of JS).
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' https://fonts.gstatic.com data:; " +
   "img-src 'self' data: blob: file: http: https:; " +

@@ -234,3 +234,74 @@ export function aggregate(scores: DocScore[]): Aggregate {
     counts: { motions: motion, attendance: att, tasks: task },
   };
 }
+
+// ---------------------------------------------------------------- bulk-accept calibration
+/** For the fields that most often stayed below the bulk-accept thresholds (chair, meeting type,
+ * body, adopts-minutes links), whether each extracted value would be bulk-accepted and whether it
+ * is right. Calibration raises a confidence or lowers a threshold only while every bulk-eligible
+ * value stays correct (precision is never traded for coverage). */
+export type CalibrationField = "chair" | "meetingType" | "body" | "adoptsMinutesOf";
+export type CalibrationItem = { docId: string; field: CalibrationField; expected?: string; predicted?: string; eligible: boolean; correct: boolean; confidence?: number; note?: string };
+export type CalibrationSummary = Record<CalibrationField, { expected: number; predicted: number; eligible: number; eligibleCorrect: number; eligibleWrong: number; correctBelowThreshold: number }>;
+
+const TYPE_OF_MEETING_TYPE: Record<string, string> = { regular: "Board", special: "Board", annual_general: "AGM", special_general: "AGM", joint: "AGM", committee: "Committee" };
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+/** ISO dates written in prose ("November 17, 2015", "21 November 2018", "2015-11-17"). */
+export function isoDatesIn(text: string): string[] {
+  const out = [...text.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((match) => match[1]);
+  for (const match of text.matchAll(/\b([A-Z][a-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b|\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Z][a-z]+)\.?,?\s+(\d{4})\b/g)) {
+    const name = (match[1] ?? match[5] ?? "").toLowerCase();
+    const month = MONTHS.findIndex((candidate) => candidate === name || (name.length >= 3 && candidate.startsWith(name)));
+    const day = Number(match[2] ?? match[4]);
+    const year = match[3] ?? match[6];
+    if (month >= 0 && day >= 1 && day <= 31) out.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+export const ADOPTS_MINUTES_WORDING = /\b(?:adopt|approv|accept)\w*\b.{0,60}\bminutes\b|\bminutes\b.{0,60}\b(?:adopt|approv)/i;
+
+export function calibrationItems(golden: GoldenDocument, record: any, threshold: (pattern: string) => number): CalibrationItem[] {
+  const items: CalibrationItem[] = [];
+  const docId = golden.id;
+  const eligible = (field: FieldValue<unknown> | undefined, pattern: string) => Boolean(field && field.status === "stated" && field.value !== undefined && field.value !== "" && (field.verification === "verified_span" || field.verification === "verified_fuzzy") && field.locators?.length && field.confidence >= threshold(pattern));
+  if (!golden.meeting) return items;
+  // Chair: a chair predicted where the golden record names none is a false positive.
+  const expectedChair = golden.minutes?.chairName ?? undefined;
+  const chairField = record?.chair as FieldValue<{ nameAsWritten: string; resolvedName?: string }> | undefined;
+  const chair = personName(chairField);
+  if (expectedChair || chair) items.push({ docId, field: "chair", expected: expectedChair ?? undefined, predicted: chair, eligible: eligible(chairField, "chair"), correct: Boolean(chair && expectedChair && namesMatch(chair, expectedChair)), confidence: chairField?.confidence, note: chairField?.note });
+  const expectedType = golden.meeting.type ?? undefined;
+  const body = val(record?.body) as string | undefined;
+  const bodyType = body ? BODY_TO_TYPE[body] : undefined;
+  if (expectedType || body) items.push({ docId, field: "body", expected: expectedType, predicted: bodyType ?? body, eligible: eligible(record?.body, "body"), correct: Boolean(bodyType && bodyType === expectedType), confidence: record?.body?.confidence });
+  const meetingType = val(record?.meetingType) as string | undefined;
+  // The executive committee acts for the board (golden "Board"): its meetings follow the body.
+  const typeLabel = meetingType ? (body === "executive" ? "Board" : TYPE_OF_MEETING_TYPE[meetingType]) : undefined;
+  if (expectedType || meetingType) items.push({ docId, field: "meetingType", expected: expectedType, predicted: typeLabel ?? meetingType, eligible: eligible(record?.meetingType, "meetingType"), correct: Boolean(typeLabel && typeLabel === expectedType), confidence: record?.meetingType?.confidence });
+  // Adopts-minutes links: the date the adopting motion names, against the golden motion's wording.
+  const expectedDates = new Set((golden.motions ?? []).filter((motion) => ADOPTS_MINUTES_WORDING.test(`${motion.text} ${motion.sectionTitle ?? ""}`)).flatMap((motion) => isoDatesIn(`${motion.text} ${motion.sectionTitle ?? ""}`)));
+  const predicted = ((record?.motions ?? []) as any[]).map((motion) => motion.adoptsMinutesOf).filter(Boolean);
+  for (const link of predicted) {
+    const date = link.value?.date as string | undefined;
+    items.push({ docId, field: "adoptsMinutesOf", expected: [...expectedDates].join(", ") || undefined, predicted: date ?? link.value?.text, eligible: eligible(link, "motions.adoptsMinutesOf"), correct: Boolean(date && expectedDates.has(date)), confidence: link.confidence, note: link.note });
+  }
+  for (const date of expectedDates) if (!predicted.some((link: any) => link.value?.date === date)) items.push({ docId, field: "adoptsMinutesOf", expected: date, eligible: false, correct: false });
+  return items;
+}
+
+export function summarizeCalibration(items: CalibrationItem[]): CalibrationSummary {
+  const fields: CalibrationField[] = ["chair", "meetingType", "body", "adoptsMinutesOf"];
+  return Object.fromEntries(fields.map((field) => {
+    const rows = items.filter((item) => item.field === field);
+    return [field, {
+      expected: rows.filter((item) => item.expected).length,
+      predicted: rows.filter((item) => item.predicted).length,
+      eligible: rows.filter((item) => item.eligible).length,
+      eligibleCorrect: rows.filter((item) => item.eligible && item.correct).length,
+      eligibleWrong: rows.filter((item) => item.eligible && !item.correct).length,
+      correctBelowThreshold: rows.filter((item) => !item.eligible && item.correct).length,
+    }];
+  })) as CalibrationSummary;
+}

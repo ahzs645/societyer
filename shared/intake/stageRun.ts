@@ -5,6 +5,7 @@
 import type { IntakeExtract } from "./blocks";
 import type { IntakeRunResult } from "./bundle";
 import type { CoverageReport } from "./bundle";
+import { compactOcrSummary } from "./extract/ocr";
 
 export type MutationCaller = (name: string, args: Record<string, unknown>) => Promise<any>;
 
@@ -39,7 +40,7 @@ export async function stageRunInWorkspace(mutation: MutationCaller, societyId: s
     tick(batch.length);
   }
   for (const [fileKey, extract] of Object.entries(extracts)) {
-    await mutation("intake:saveExtract", { societyId, runId, fileKey, extract: { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, pageCount: extract.pageCount, sheetNames: extract.sheetNames, emptyPages: extract.emptyPages, warnings: extract.warnings } });
+    await mutation("intake:saveExtract", { societyId, runId, fileKey, extract: { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, pageCount: extract.pageCount, sheetNames: extract.sheetNames, emptyPages: extract.emptyPages, warnings: extract.warnings, ...(extract.ocr ? { ocr: compactOcrSummary(extract.ocr) } : {}) } });
     tick(1);
   }
   for (const batch of chunks(run.clusters, 200)) await mutation("intake:saveClusters", { societyId, runId, clusters: batch });

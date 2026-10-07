@@ -4,13 +4,16 @@
  * MSG), clustering, classification and — unless the server extracts fields —
  * field extraction (deterministic, or the configured AI provider with
  * PII redaction), span verification and reconciliation. Legacy formats are
- * converted by the desktop host when the main thread can ask it to. */
+ * converted by the desktop host when the main thread can ask it to (and read
+ * natively otherwise). Scanned pages and document images are read by OCR
+ * (tesseract.js, local assets) when the run asks for it. */
 import { runIntakePipeline, type PipelineSourceFile } from "../../../shared/intake/pipeline";
 import { extractBytes } from "../../../shared/intake/extract";
 import type { PdfJsModule } from "../../../shared/intake/extract/pdf";
 import { buildImportBundle, coverageReport } from "../../../shared/intake/bundle";
 import type { GenerateObjectFn } from "../../../shared/intake/llm";
-import type { IntakeWorkerRequest, IntakeWorkerResponse, WorkerLlmConfig } from "./workerProtocol";
+import { withOcrActivity, type OcrHost } from "../../../shared/intake/extract/ocr";
+import type { IntakeWorkerRequest, IntakeWorkerResponse, WorkerLlmConfig, WorkerOcrConfig } from "./workerProtocol";
 
 type WorkerScope = { postMessage: (message: IntakeWorkerResponse, transfer?: Transferable[]) => void; onmessage: ((event: MessageEvent<IntakeWorkerRequest>) => void) | null };
 const scope = self as unknown as WorkerScope;
@@ -25,6 +28,12 @@ function loadPdfJs(): Promise<PdfJsModule> {
     return pdfjs as unknown as PdfJsModule;
   })();
   return pdfjsPromise;
+}
+
+/** The OCR host is created per run; tesseract.js itself starts on the first page that needs it. */
+async function makeOcr(config: WorkerOcrConfig): Promise<OcrHost & { terminate(): Promise<void> }> {
+  const { createWorkerOcrHost } = await import("./ocrHost");
+  return createWorkerOcrHost({ pageBudget: config.pageBudget, workers: config.workers, onPage: (done, total) => post({ type: "progress", stage: "ocr", done, total }) });
 }
 
 const pendingConversions = new Map<number, (bytes: Uint8Array | null) => void>();
@@ -74,6 +83,7 @@ scope.onmessage = (event) => {
         read: async () => new Uint8Array(await input.file.arrayBuffer()),
       }));
       const llm = message.options.llm ? await makeLlm(message.options.llm) : undefined;
+      const ocr = message.options.ocr ? await makeOcr(message.options.ocr) : undefined;
       const result = await runIntakePipeline(files, {
         name: message.options.name,
         sourceKind: message.options.sourceKind,
@@ -82,9 +92,10 @@ scope.onmessage = (event) => {
         concurrency: 2,
         hash: sha256,
         llm,
-        extract: async (file, bytes) => extractBytes(file.name, bytes, { pdfjs: /\.pdf$/i.test(file.name) ? await loadPdfJs() : undefined, convertLegacy: canConvert ? convertLegacy : undefined }),
+        ocrImages: Boolean(ocr),
+        extract: async (file, bytes, { keepAlive }) => extractBytes(file.name, bytes, { pdfjs: /\.pdf$/i.test(file.name) || !/\.[a-z0-9]{1,6}$/i.test(file.name) ? await loadPdfJs() : undefined, convertLegacy: canConvert ? convertLegacy : undefined, ocr: ocr && withOcrActivity(ocr, keepAlive) }),
         onProgress: (stage, done, total) => post({ type: "progress", stage, done, total }),
-      });
+      }).finally(() => ocr?.terminate());
       const { extracts, texts: _texts, ...run } = result;
       const coverage = message.options.fieldExtraction === false ? undefined : coverageReport(result, buildImportBundle(result));
       post({ type: "result", run: { ...run, texts: undefined }, extracts, coverage });

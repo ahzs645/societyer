@@ -47,7 +47,8 @@ function consentEntries(lines: Line[], fileName: string): { entries: Entry[]; bl
   const match = /\bI,?\s*[_\s]*([A-Z][A-Za-z.'’\- ]{1,60}?)[_\s]*,?\s*(?:hereby )?consent/.exec(consentLine.text);
   const name = match ? clean(match[1].replace(UNDERSCORES, " ")) : undefined;
   if (!name || !looksLikePersonName(name)) return { entries: [], blank: true };
-  const dateLine = lines.find((line) => /\bdated\b/i.test(line.text) && signedDateIn(line.text));
+  // "DATED effective the 20 day of …", or a "Date: May 20, 2025" line under the signature.
+  const dateLine = lines.find((line) => /\bdated\b/i.test(line.text) && signedDateIn(line.text)) ?? lines.find((line) => /^\s*(?:date(?:\s+signed)?|signed\s+(?:on|date))\s*[:\-–]/i.test(line.text) && signedDateIn(line.text));
   const signed = dateLine ? signedDateIn(dateLine.text) : undefined;
   const signedQuote = dateLine && signed ? rawSpan(dateLine, signed.text) ?? undefined : undefined;
   const printed = lines.find((line) => /print name/i.test(line.text) && line.text.replace(/print name[^:]*:?/i, "").replace(UNDERSCORES, " ").trim().length > 3);

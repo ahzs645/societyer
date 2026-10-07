@@ -2,7 +2,7 @@
  * baseline every LLM run is compared with. Table-aware, motion-aware and
  * attendance-aware; every value carries a locator quoting the source span,
  * a status and a confidence. It never invents a date, time or outcome. */
-import type { IntakeExtract } from "../blocks";
+import { isPositionedTextMethod, type IntakeExtract } from "../blocks";
 import { findDates, findDatesWithoutYear, findTimeRange, parseTime, type DateMatch } from "../parse";
 import { isOrgWord, isRoleWord, looksLikeNameFragment, looksLikePersonName, referenceMatches, splitLeadingName } from "../names";
 import { inferred, notStated, stated, type ExtractionEnvelope, type FieldValue, type Locator, type Reference, type UnsupportedDetail } from "../schemas/common";
@@ -89,6 +89,14 @@ function classifyTail(tail: string, flags: EntryFlags): { role?: string; affilia
     rest = rest.replace(/\s*\bproxy\b\s*/i, " ").trim();
   }
   if (/\b(?:minute (?:recorder|taker)|recording secretary|note[- ]?taker|recorder)\b/i.test(rest)) flags.recorder = true;
+  // "Carrier Lumber (chair)", "Northern Health Authority, chair", "(chair & notes)": the row's person chaired.
+  const chairNote = /(?:^|[(,;–—-]\s*|\s)(?:meeting\s+)?chair(?:person)?(?:\s*(?:&|and|\/)\s*(notes?|minutes?|recorder|note[- ]?taker))?\s*\)?\s*$/i.exec(rest);
+  if (chairNote && !/\b(?:vice|co-?|deputy|past)[\s-]*chair|\b(?:wg|committee|working group|board)\s+chair/i.test(rest)) {
+    flags.chair = true;
+    if (chairNote[1]) flags.recorder = true;
+    rest = rest.slice(0, chairNote.index).replace(/[\s,(–—-]+$/, "").trim();
+    if (!rest) return {};
+  }
   const words = rest.split(/\s+/);
   let lead = 0;
   while (lead < words.length && isRoleWord(words[lead]) && !/^(?:public|member|members|board|committee|all)$/i.test(words[lead])) lead++;
@@ -115,7 +123,9 @@ function parseEntry(raw: string, pair?: string): ParsedEntry | null {
     } else if (/^proxy$/i.test(value)) flags.proxy = true;
     else if (/\bchair(?:person)?\b/i.test(value) && !/vice|co-?chair|wg|committee|working/i.test(value)) {
       flags.chair = true;
-      const rest = value.replace(/\bchair(?:person)?\b/i, "").trim();
+      // "(chair & notes)": the chair also took the minutes.
+      if (/note[- ]?taker|\bnotes\b|recorder|minutes/i.test(value)) flags.recorder = true;
+      const rest = value.replace(/\bchair(?:person)?\b/i, "").replace(/^\s*(?:&|and|\/)?\s*(?:notes?|minutes?|recorder|note[- ]?taker)\s*$/i, "").trim();
       if (rest) notes.push(rest);
     } else if (/note[- ]?taker|^notes$|recorder|minute taker|minutes/i.test(value)) flags.recorder = true;
     else if (/teleconference|phone|zoom|virtual|remote/i.test(value)) notes.push(value);
@@ -233,6 +243,9 @@ function firstName(re: RegExp, text: string): string | undefined {
 }
 
 const NOT_A_PERSON = /^(?:The|A|An|It|This|That|All|Motion|Moved|Seconded|Carried|Directors?|Members?|Board|Committee|Chair)$/;
+/** Confidence of a chair marked in the attendance list ("Avery Quill (Chair)"). Calibrated on the
+ * private minutes golden set and the synthetic fixture: every such mark named the chair. */
+const CHAIR_FROM_ATTENDANCE = 0.88;
 
 export function parseMotion(line: string): ParsedMotion | null {
   let text = stripBullet(line).replace(/^\(?[a-z0-9]{1,3}[.)]\s+/i, "");
@@ -384,7 +397,7 @@ function bodyKey(label: string | undefined): string {
 // ---------------------------------------------------------------- main
 export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
   const { extract, fileName } = input;
-  const units = linearize(extract.blocks, { softWrap: extract.method === "pdfjs-text" });
+  const units = linearize(extract.blocks, { softWrap: isPositionedTextMethod(extract.method) });
   const unsupported: UnsupportedDetail[] = [];
   const references: Reference[] = [];
   const warnings: string[] = [];
@@ -567,6 +580,10 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
   // ---------------------------------------------------------- attendance
   let category: Category = "unlabelled";
   let secondary: { from: number; category: Category } | null = null;
+  // Every name the attendance list marks as chair (more than one, or one that disagrees with the text, is a conflict).
+  const chairMarks: Array<{ name: string; unit: Unit }> = [];
+  const chairCallers: Array<{ name: string; unit: Unit; quote: string }> = [];
+  let chairFromText = false;
   const addEntry = (entry: ParsedEntry, unit: Unit, cat: Category) => {
     let resolved: Category = cat;
     if (entry.flags.proxy) resolved = "proxy";
@@ -582,7 +599,8 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
     };
     if (record.attendance.some((existing) => existing.nameAsWritten.value === entry.name)) return;
     record.attendance.push(row);
-    if (entry.flags.chair && !record.chair) record.chair = stated({ nameAsWritten: entry.name, role: "Chair" }, [loc], 0.75, "Marked as chair in the attendance list.");
+    if (entry.flags.chair && !record.chair) record.chair = stated({ nameAsWritten: entry.name, role: "Chair" }, [loc], CHAIR_FROM_ATTENDANCE, "Marked as chair in the attendance list.");
+    if (entry.flags.chair) chairMarks.push({ name: entry.name, unit });
     if (entry.flags.recorder && !record.recorder) record.recorder = stated({ nameAsWritten: entry.name, role: entry.role ?? "Recorder" }, [loc], 0.8);
     if (/\b(?:minute recorder|recorder|note-?taker|recording secretary)\b/i.test(entry.role ?? "") && !record.recorder) record.recorder = stated({ nameAsWritten: entry.name, role: entry.role }, [loc], 0.8);
   };
@@ -735,10 +753,20 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
     }
 
     // Chair from the body text wins over the attendance annotation.
-    const chairMatch = new RegExp(ci(String.raw`(?:chaired\s+by|chair(?:person)?\s*[:\-–])\s*`) + String.raw`(${NAME})`).exec(text) ?? new RegExp(String.raw`(${NAME})\s+(?:chaired|was (?:the )?chair|presided)\b`).exec(text);
+    const chairMatch = new RegExp(ci(String.raw`(?:chaired\s+by|presided\s+(?:over\s+)?by|(?:^|\b(?:meeting|acting)\s+)chair(?:person)?\s*(?:[:\-–]|\t+))\s*`) + String.raw`(${NAME})`).exec(text) ?? new RegExp(String.raw`(${NAME})\s+(?:chaired|was (?:the )?chair\b|presided)\b`).exec(text);
     if (chairMatch && looksLikePersonName(cleanName(chairMatch[1])) || (chairMatch && /^[A-Z]\.\s?[A-Z]/.test(chairMatch[1]))) {
       const name = cleanName(chairMatch![1]);
-      if (!record.chair || record.chair.confidence < 0.85) record.chair = personRef(name, unit, chairMatch![0], 0.9);
+      // Chair from the body text wins over the attendance annotation (the first statement in the text wins).
+      if (!chairFromText) {
+        record.chair = personRef(name, unit, chairMatch![0], 0.9);
+        chairFromText = true;
+      }
+    } else if (/call(?:ed|s)?\s+(?:the\s+)?(?:meeting\s+)?to\s+order/i.test(text) && !/\bby (?:the )?chair\b/i.test(text)) {
+      // Who called the meeting to order: "… called to order at 5:30 PM by Terry Robert", "… at 5:32 PM (T. Robert)",
+      // "Avery Quill called the meeting to order". Usually the chair; corroborates (or contradicts) other evidence.
+      const caller = new RegExp(String.raw`to\s+order\b[^.•(]{0,40}?\bby\s+(${NAME})`).exec(text) ?? new RegExp(String.raw`to\s+order\b[^.•]{0,40}?\((${NAME})\)`).exec(text) ?? new RegExp(String.raw`(?:^|[.•]\s*)(${NAME})\s+call(?:ed|s)\s+(?:the\s+)?meeting\s+to\s+order`).exec(text);
+      const name = caller ? cleanName(caller[1]) : undefined;
+      if (name && (looksLikePersonName(name) || /^[A-Z]\.\s?[A-Z][\w'’-]+$/.test(name)) && !NOT_A_PERSON.test(name)) chairCallers.push({ name, unit, quote: caller![0] });
     } else if (!record.chair && /call(?:ed)? to order by (?:the )?chair/i.test(text) && currentSection) {
       const presenter = /\(([A-Z]\.\s?[A-Z][\w'’-]+)\)/.exec(currentSection.unit.text);
       if (presenter) record.chair = personRef(presenter[1], currentSection.unit, presenter[1], 0.6, "inferred", "Presenter of the call-to-order item; the minutes say the chair called the meeting to order.");
@@ -880,9 +908,18 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
         // Minutes adoption, agenda adoption and policy adoption.
         const context = `${motionText} ${sectionTitle ?? ""}`;
         if (/\b(?:adopt|approv|accept|receiv)\w*\b.{0,60}\bminutes\b|\bminutes\b.{0,60}\b(?:adopt|approv|accept)\w*/i.test(context)) {
-          const prior = findDates(motion.text)[0] ?? findDates(context)[0] ?? (meetingIso ? findDatesWithoutYear(context, meetingIso).map((date) => (date.iso >= meetingIso ? { ...date, iso: `${Number(date.iso.slice(0, 4)) - 1}${date.iso.slice(4)}` } : date))[0] : undefined);
+          // Evidence for the adopted minutes' date, strongest first: a full date in the motion itself, a
+          // full date in its agenda item's title, a day and month whose year follows from the meeting date.
+          const inMotion = findDates(motion.text).find((date) => date.precision === "day" && (!meetingIso || date.iso < meetingIso));
+          const inTitle = inMotion ? undefined : findDates(sectionTitle ?? "").find((date) => date.precision === "day" && (!meetingIso || date.iso < meetingIso));
+          const noYear = inMotion || inTitle || !meetingIso ? undefined : findDatesWithoutYear(context, meetingIso).map((date) => (date.iso >= meetingIso ? { ...date, iso: `${Number(date.iso.slice(0, 4)) - 1}${date.iso.slice(4)}` } : date))[0];
+          const prior = inMotion ?? inTitle ?? noYear;
           const value = { ...(prior ? { date: prior.iso, precision: "day" } : {}), body: record.bodyLabel?.value, text: prior?.text ?? "previous minutes" };
-          motionRecord.adoptsMinutesOf = prior ? fv(value, unit, prior.text, 0.85) : inferred(value, [unitLocator(unit)], 0.5, "Adopts the previous minutes; date not stated.");
+          const titleUnit = unit.section?.titleUnit ?? currentSection?.unit ?? unit;
+          motionRecord.adoptsMinutesOf = inMotion ? fv(value, unit, inMotion.text, 0.92)
+            : inTitle ? fv(value, titleUnit, inTitle.text, 0.88, "stated", "Date taken from the agenda item's title.")
+              : noYear ? fv(value, unit, noYear.text, 0.8, "stated", "Year inferred from the meeting date.")
+                : inferred(value, [unitLocator(unit)], 0.5, "Adopts the previous minutes; date not stated.");
           references.push({ kind: "prior_minutes", text: motion.text, ...(prior ? { date: prior.iso } : {}), ...(record.bodyLabel?.value ? { body: record.bodyLabel.value } : {}), locators: [unitLocator(unit)] });
         } else if (/\badopt\w*\b.{0,20}\bagenda\b|\bagenda\b.{0,40}\b(?:adopted|approved|moved)\b/i.test(context)) {
           motionRecord.adoptsAgenda = fv(true, unit, undefined, 0.85);
@@ -1021,6 +1058,44 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
   // Start/end times fall back to the call-to-order and adjournment times.
   if (!record.startTime && record.calledToOrderAt) record.startTime = { ...record.calledToOrderAt, status: "inferred", confidence: Math.min(0.5, record.calledToOrderAt.confidence), note: "No scheduled start time; using the call-to-order time." };
   if (!record.endTime && record.adjournedAt && record.startTime?.note) record.endTime = { ...record.adjournedAt, status: "inferred", confidence: 0.5, note: "No scheduled end time; using the adjournment time." };
+  // A "Chair: Name" line in the header block (beside Date/Time/Location) is text evidence too.
+  if (!chairFromText) {
+    for (const unit of headerUnits) {
+      const label = new RegExp(String.raw`^\s*(?:meeting\s+)?chair(?:person)?\s*(?::|\t)\s*(${NAME})`, "i").exec(unit.text);
+      const name = label ? cleanName(label[1]) : undefined;
+      if (name && (looksLikePersonName(name) || /^[A-Z]\.\s?[A-Z]/.test(name))) {
+        record.chair = personRef(name, unit, label![0].trim(), 0.9);
+        chairFromText = true;
+        break;
+      }
+    }
+  }
+  // Chair evidence: the text ("Chair:", "chaired by"), the attendance marks and who called the
+  // meeting to order. Agreement raises confidence; disagreement keeps the value below every
+  // bulk-accept threshold with a note; a caller alone is an inferred chair.
+  const sameChair = (a: string, b: string) => {
+    const x = a.toLowerCase().replace(/[^a-z ]/g, "").trim(), y = b.toLowerCase().replace(/[^a-z ]/g, "").trim();
+    return x === y || referenceMatches(a, b) || referenceMatches(b, a);
+  };
+  if (record.chair?.value) {
+    const chosen = record.chair.value.nameAsWritten;
+    const otherMarks = chairMarks.filter((mark) => !sameChair(mark.name, chosen));
+    const otherCallers = chairCallers.filter((caller) => !sameChair(caller.name, chosen));
+    const agreeing = chairCallers.find((caller) => sameChair(caller.name, chosen)) ?? (chairFromText ? chairMarks.find((mark) => sameChair(mark.name, chosen)) : undefined);
+    if (otherMarks.length || otherCallers.length) {
+      const others = [...otherMarks.map((mark) => `the attendance list marks ${mark.name} as chair`), ...otherCallers.map((caller) => `${caller.name} called the meeting to order`)];
+      record.chair.confidence = Math.min(record.chair.confidence, 0.84);
+      record.chair.note = `${record.chair.note ? `${record.chair.note} ` : ""}But ${[...new Set(others)].slice(0, 2).join(" and ")}: confirm who chaired.`;
+    } else if (agreeing && record.chair.status === "stated") {
+      record.chair.confidence = Math.max(record.chair.confidence, 0.92);
+      const callerQuote = (agreeing as { quote?: string }).quote;
+      record.chair.locators = [...record.chair.locators, unitLocator(agreeing.unit, callerQuote ?? agreeing.name)];
+      record.chair.note = `${record.chair.note ? `${record.chair.note} ` : ""}${callerQuote ? "The same person called the meeting to order." : "The attendance list also marks them as chair."}`;
+    }
+  } else if (chairCallers.length && chairCallers.every((caller) => sameChair(caller.name, chairCallers[0].name))) {
+    const caller = chairCallers[0];
+    record.chair = personRef(caller.name, caller.unit, caller.quote, 0.7, "inferred", "Called the meeting to order (usually the chair); the minutes do not label a chair.");
+  }
   if (record.chair?.value && !record.chair.value.resolvedName) {
     const resolvedName = resolveName(record.chair.value.nameAsWritten);
     if (resolvedName && resolvedName !== record.chair.value.nameAsWritten) record.chair.value.resolvedName = resolvedName;

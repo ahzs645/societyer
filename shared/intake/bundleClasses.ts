@@ -477,6 +477,9 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
     const record: any = extraction.record;
     const start = dayIso(record.termStart), end = dayIso(record.termEnd);
     if (!start && !val(record.policyNumber)) continue;
+    // The importer keeps a policy only with a known insurer or policy number (importSessionNormalize
+    // isImportableInsurancePolicy); without either the document stays a reviewable extraction.
+    if (!val(record.insurer) && !val(record.policyNumber)) continue;
     const coverages = (record.coverages ?? []).map((coverage: any) => `${val(coverage.type)}${val(coverage.limit) ? ` ${val(coverage.limit).text}` : ""}${val(coverage.deductible) ? ` (deductible ${val(coverage.deductible).text})` : ""}`);
     const limits = (record.coverages ?? []).map((coverage: any) => val(coverage.limit)?.amountCents).filter((cents: any) => typeof cents === "number");
     push(bundle, "insurancePolicies", {

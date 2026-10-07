@@ -120,6 +120,8 @@ export function minutesPayloadFromExtraction(extraction: IntakeExtractionResult,
       ...(val(motion.resolutionType) && val(motion.resolutionType) !== "unknown" ? { resolutionType: val(motion.resolutionType) } : {}),
       evidenceText: motion.text?.locators?.[0]?.quote,
       pageRef: locatorRef(motion.text?.locators),
+      // The minutes this motion adopts (resolved to the adopted meeting's minutes at import).
+      ...(val<any>(motion.adoptsMinutesOf)?.date ? { adoptsMinutes: { meetingDate: val<any>(motion.adoptsMinutesOf).date, ...(val<any>(motion.adoptsMinutesOf).body ? { bodyKey: String(val<any>(motion.adoptsMinutesOf).body) } : {}), text: val<any>(motion.adoptsMinutesOf).text } } : {}),
       sourceExternalIds,
     };
   });

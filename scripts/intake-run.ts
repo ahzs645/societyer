@@ -16,6 +16,11 @@
  *   # Re-runs of a large archive: reuse text/layout extracts by content hash
  *   npx tsx scripts/intake-run.ts <folder> --out <dir> --extract-cache <dir>
  *
+ *   # OCR (on by default): scanned PDF pages and document images are read locally with the
+ *   # system `tesseract` binary when installed, else tesseract.js with the bundled English model.
+ *   … --ocr-concurrency 2 --ocr-page-budget 2000 [--ocr-engine auto|tesseract.js|system] [--ocr-dpi 300]
+ *   … --no-ocr                      # catalogue scans as "OCR required" instead
+ *
  *   # JSON Schema for offline agents
  *   npx tsx scripts/intake-run.ts --export-schemas <dir>
  *
@@ -30,6 +35,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { buildImportBundle, coverageReport } from "../shared/intake/bundle";
 import { libreOfficeConverter, md5Hex, sha256Hex } from "../shared/intake/node/extractFile";
+import { createNodeOcrHost, type NodeOcrHost } from "../shared/intake/node/ocr";
+import { withOcrActivity } from "../shared/intake/extract/ocr";
+import type { IntakeExtract } from "../shared/intake/blocks";
 import { extractBytes } from "../shared/intake/extract";
 import { INTAKE_EXTRACT_VERSION } from "../shared/intake/blocks";
 import type { GenerateObjectFn } from "../shared/intake/llm";
@@ -110,7 +118,7 @@ if (inventoryPath) {
     });
   }
 } else {
-  const folder = args.find((arg, index) => !arg.startsWith("--") && !(index > 0 && args[index - 1].startsWith("--") && !["--allow-in-repo"].includes(args[index - 1]))) ?? fail("Pass a folder or --drive-inventory <inventory.json>.");
+  const folder = args.find((arg, index) => !arg.startsWith("--") && !(index > 0 && args[index - 1].startsWith("--") && !["--allow-in-repo", "--no-ocr"].includes(args[index - 1]))) ?? fail("Pass a folder or --drive-inventory <inventory.json>.");
   sourceRoot = path.resolve(folder);
   for (const file of walk(sourceRoot)) {
     const relative = path.relative(sourceRoot, file).split(path.sep).join("/");
@@ -144,19 +152,35 @@ if (llmProvider) {
   llm = { generate, provider: llmProvider, model, budgetTokens: Number(flag("--budget-tokens") ?? 2_000_000), concurrency: Number(flag("--llm-concurrency") ?? 4) };
 }
 
+// OCR host (local; never sends a page anywhere). A page budget bounds the run's OCR time.
+let ocr: NodeOcrHost | undefined;
+if (!has("--no-ocr")) {
+  const engine = (flag("--ocr-engine") ?? "auto") as "auto" | "tesseract.js" | "system";
+  ocr = await createNodeOcrHost({ engine, concurrency: Number(flag("--ocr-concurrency") ?? 2), pageBudget: flag("--ocr-page-budget") ? Number(flag("--ocr-page-budget")) : undefined, dpi: Number(flag("--ocr-dpi") ?? 300) });
+  console.warn(`OCR: ${ocr.engine.name} (${ocr.engineKind}), concurrency ${flag("--ocr-concurrency") ?? 2}, page budget ${flag("--ocr-page-budget") ?? "unlimited"}`);
+}
+/** A cached extract made before OCR (or before a native reader existed) is read again. */
+function staleForThisRun(cached: IntakeExtract): boolean {
+  if (cached.method === "unsupported" || !cached.text?.trim()) return true;
+  return Boolean(ocr && cached.emptyPages?.length);
+}
+
 const started = Date.now();
 let lastProgress = 0;
 const result = await runIntakePipeline(sourceFiles, {
   name: flag("--name") ?? path.basename(sourceRoot),
   sourceKind,
   sourceRoot,
-  extract: async (file, bytes) => {
+  extract: async (file, bytes, { keepAlive }) => {
     // --extract-cache <dir>: text/layout extracts keyed by content hash and extractor version,
     // so re-running a large archive after an extractor fix skips PDF parsing and LibreOffice.
     const cacheDir = flag("--extract-cache");
     const cacheFile = cacheDir ? path.join(cacheDir, `${sha256Hex(bytes)}-${INTAKE_EXTRACT_VERSION.replace(/[^\w.-]+/g, "_")}-${path.extname(file.name).toLowerCase().replace(/[^\w.]/g, "")}.json`) : undefined;
-    if (cacheFile && fs.existsSync(cacheFile)) return JSON.parse(fs.readFileSync(cacheFile, "utf8"));
-    const extract = await extractBytes(file.name, bytes, { convertLegacy: libreOfficeConverter });
+    if (cacheFile && fs.existsSync(cacheFile)) {
+      const cached = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as IntakeExtract;
+      if (!staleForThisRun(cached)) return cached;
+    }
+    const extract = await extractBytes(file.name, bytes, { convertLegacy: libreOfficeConverter, ocr: ocr && withOcrActivity(ocr, keepAlive) });
     if (cacheFile) {
       fs.mkdirSync(cacheDir!, { recursive: true });
       fs.writeFileSync(cacheFile, JSON.stringify(extract));
@@ -165,6 +189,7 @@ const result = await runIntakePipeline(sourceFiles, {
   },
   hash: (bytes) => sha256Hex(bytes),
   llm,
+  ocrImages: Boolean(ocr),
   concurrency: Number(flag("--concurrency") ?? 2),
   onProgress: (stage, done, total) => {
     if (Date.now() - lastProgress > 3000 || done === total) {
@@ -173,6 +198,7 @@ const result = await runIntakePipeline(sourceFiles, {
     }
   },
 });
+await ocr?.terminate();
 for (const file of result.files) if (!file.md5 && file.localPath && file.sizeBytes && file.sizeBytes < 200_000_000 && file.disposition !== "junk") file.md5 = md5Hex(new Uint8Array(fs.readFileSync(file.localPath)));
 
 const build = buildImportBundle(result);
@@ -189,10 +215,21 @@ for (const [fileKey, extract] of Object.entries(extracts)) {
 }
 const counts = result.files.reduce<Record<string, number>>((acc, file) => ({ ...acc, [file.disposition]: (acc[file.disposition] ?? 0) + 1 }), {});
 const motions = result.extractions.reduce((sum, extraction) => sum + ((extraction.record as any).motions?.length ?? 0), 0);
+const ocrPages = Object.values(extracts).flatMap((extract) => extract.ocr?.pages ?? []);
+const ocrSummary = ocr ? {
+  engine: ocr.engine.name,
+  files: Object.values(extracts).filter((extract) => extract.ocr?.pages.length).length,
+  pagesRead: ocrPages.length,
+  meanPageConfidence: ocrPages.length ? Number((ocrPages.reduce((sum, page) => sum + page.confidence, 0) / ocrPages.length).toFixed(3)) : null,
+  lowConfidencePages: ocrPages.filter((page) => page.confidence < 0.75).length,
+  rotatedPages: ocrPages.filter((page) => page.rotation).length,
+  skippedPages: Object.values(extracts).reduce((sum, extract) => sum + (extract.ocr?.skippedPages?.length ?? 0), 0),
+  pagesStillNeedingOcr: Object.values(extracts).reduce((sum, extract) => sum + (extract.emptyPages?.length ?? 0), 0),
+} : undefined;
 console.log(JSON.stringify({
   files: result.files.length, dispositions: counts, clusters: result.clusters.length, minutesExtracted: result.extractions.length, motions,
   meetings: result.reconciliation.meetings.length, meetingsBundled: build.meetingsBundled, recordGaps: result.reconciliation.gaps.length,
   representationGaps: (build.bundle.representationGaps as unknown[]).length, stagedRecords: build.stagedRecords, bundleIssues: build.issues.length,
-  nativeCoverage: coverage.headline.coverage, attendancePersonLinked: coverage.attendancePersonLinked, personRefsResolved: coverage.personRefsResolved, people: result.people?.length ?? 0, hallucinationRate: Number(coverage.hallucinationRate.toFixed(4)), seconds: Math.round((Date.now() - started) / 1000), out,
+  nativeCoverage: coverage.headline.coverage, attendancePersonLinked: coverage.attendancePersonLinked, personRefsResolved: coverage.personRefsResolved, people: result.people?.length ?? 0, hallucinationRate: Number(coverage.hallucinationRate.toFixed(4)), ...(ocrSummary ? { ocr: ocrSummary } : {}), seconds: Math.round((Date.now() - started) / 1000), out,
 }, null, 2));
 if (build.issues.length) console.warn(`Bundle preflight issues (first 10):\n${build.issues.slice(0, 10).map((issue) => `- ${issue}`).join("\n")}`);

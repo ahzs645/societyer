@@ -410,6 +410,9 @@ export const BULK_ACCEPT_THRESHOLDS: Record<string, Record<string, number>> = {
     // correct at the extractor's 0.8 (15 documents); chair (90%) stays at the default.
     location: 0.8,
     recorder: 0.8,
+    // The meeting type is read from the same header label as bodyLabel (0.8): 15 of 15 golden
+    // documents and 6 of 6 synthetic ones were right. File-name and default guesses stay inferred.
+    meetingType: 0.8,
     date: 0.9,
     body: 0.85,
     // Header labels the extractor quotes directly (0.8): the body as written names the meeting, the location is printed.

@@ -70,6 +70,8 @@ assert.equal(contentTypeFor("/dist/assets/app.mjs"), "text/javascript");
 assert.equal(contentTypeFor("/dist/assets/app.css"), "text/css");
 assert.equal(contentTypeFor("/dist/assets/icon.webp"), "image/webp");
 assert.equal(contentTypeFor("/dist/assets/data.json"), "application/json");
+assert.equal(contentTypeFor("/dist/assets/intake-ocr/pdfjs/jbig2.wasm"), "application/wasm");
+assert.doesNotMatch(DESKTOP_CSP_HEADER, /'unsafe-eval'/, "only WebAssembly compilation is allowed, never eval");
 
 assert.match(DESKTOP_CSP_HEADER, /default-src 'self'/);
 assert.match(DESKTOP_CSP_HEADER, /object-src 'none'/);

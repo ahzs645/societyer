@@ -4,13 +4,15 @@ import type { CoverageReport, IntakeRunResult } from "../../../shared/intake/bun
 
 export type WorkerFileInput = { fileKey: string; name: string; path: string; sizeBytes: number; modifiedTime?: string; mimeType?: string; file: Blob };
 export type WorkerLlmConfig = { provider: "openai" | "openrouter" | "openai-compatible"; modelId: string; apiKey: string; baseUrl?: string; budgetTokens: number; concurrency: number };
+/** OCR of scanned PDF pages and document images, on this device (tesseract.js). */
+export type WorkerOcrConfig = { pageBudget: number; workers?: number };
 
 export type IntakeWorkerRequest =
   | {
       type: "run";
       files: WorkerFileInput[];
       canConvertLegacy: boolean;
-      options: { name: string; sourceKind: "upload" | "local_folder"; sourceRoot: string; fieldExtraction: boolean; llm?: WorkerLlmConfig };
+      options: { name: string; sourceKind: "upload" | "local_folder"; sourceRoot: string; fieldExtraction: boolean; llm?: WorkerLlmConfig; ocr?: WorkerOcrConfig };
     }
   | { type: "convertResult"; id: number; bytes: ArrayBuffer | null };
 

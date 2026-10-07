@@ -2,7 +2,8 @@
  * the File System Access API (showDirectoryPicker) or a webkitdirectory input,
  * and — on the desktop app — a native folder pick through the Electron bridge. */
 import { junkVerdict } from "../../../shared/intake/junk";
-import { EXTRACTABLE_EXTENSIONS, extensionOf } from "../../../shared/intake/extract/extensions";
+import { EXTRACTABLE_EXTENSIONS, extensionOf, OCR_IMAGE_EXTENSIONS } from "../../../shared/intake/extract/extensions";
+import { isDocumentImage } from "../../../shared/intake/extract/ocr";
 import { getDesktopBridge } from "../../lib/desktopBridge";
 
 export type IntakeInputFile = { file: Blob; name: string; relativePath: string; size: number; lastModified?: number; type?: string };
@@ -96,11 +97,16 @@ export async function materializeSelection(selection: IntakeSelection, include: 
   return { ...selection, files };
 }
 
-export type SelectionSummary = { files: number; bytes: number; junk: number; excluded: number; catalogue: number; extract: number; byExtension: Array<[string, number]> };
+export type SelectionSummary = { files: number; bytes: number; junk: number; excluded: number; catalogue: number; extract: number; ocrImages: number; byExtension: Array<[string, number]> };
+
+/** A document-like image (scan, signed form, certificate) read by OCR when OCR is on. */
+function ocrImage(file: IntakeInputFile, ocr: boolean): boolean {
+  return ocr && OCR_IMAGE_EXTENSIONS.has(extensionOf(file.name)) && isDocumentImage(file.name, file.relativePath) && junkVerdict({ name: file.name, path: file.relativePath, sizeBytes: file.size }).disposition === "catalogue";
+}
 
 /** What the junk filter will do with the selection (shown before a run starts). */
-export function summarizeSelection(selection: IntakeSelection | null): SelectionSummary {
-  const summary: SelectionSummary = { files: 0, bytes: 0, junk: 0, excluded: 0, catalogue: 0, extract: 0, byExtension: [] };
+export function summarizeSelection(selection: IntakeSelection | null, options: { ocr?: boolean } = {}): SelectionSummary {
+  const summary: SelectionSummary = { files: 0, bytes: 0, junk: 0, excluded: 0, catalogue: 0, extract: 0, ocrImages: 0, byExtension: [] };
   const extensions = new Map<string, number>();
   for (const file of selection?.files ?? []) {
     summary.files++;
@@ -108,7 +114,10 @@ export function summarizeSelection(selection: IntakeSelection | null): Selection
     const verdict = junkVerdict({ name: file.name, path: file.relativePath, sizeBytes: file.size });
     if (verdict.disposition === "junk") summary.junk++;
     else if (verdict.disposition === "excluded") summary.excluded++;
-    else if (verdict.disposition === "catalogue" || !EXTRACTABLE_EXTENSIONS.has(extensionOf(file.name))) summary.catalogue++;
+    else if (ocrImage(file, Boolean(options.ocr))) {
+      summary.extract++;
+      summary.ocrImages++;
+    } else if (verdict.disposition === "catalogue" || (!EXTRACTABLE_EXTENSIONS.has(extensionOf(file.name)) && extensionOf(file.name))) summary.catalogue++;
     else summary.extract++;
     const ext = extensionOf(file.name) || "(none)";
     extensions.set(ext, (extensions.get(ext) ?? 0) + 1);
@@ -117,8 +126,12 @@ export function summarizeSelection(selection: IntakeSelection | null): Selection
   return summary;
 }
 
-/** Whether the junk filter keeps a file (only kept files are read into memory for desktop picks). */
-export function keptByJunkFilter(file: IntakeInputFile): boolean {
+/** Whether the junk filter keeps a file (only kept files are read into memory for desktop picks).
+ * With OCR on, document-like images are kept too; files without an extension are kept so their
+ * format can be read from their bytes. */
+export function keptByJunkFilter(file: IntakeInputFile, options: { ocr?: boolean } = {}): boolean {
   const verdict = junkVerdict({ name: file.name, path: file.relativePath, sizeBytes: file.size });
-  return verdict.disposition === "keep" && EXTRACTABLE_EXTENSIONS.has(extensionOf(file.name));
+  if (ocrImage(file, Boolean(options.ocr))) return true;
+  const ext = extensionOf(file.name);
+  return verdict.disposition === "keep" && (EXTRACTABLE_EXTENSIONS.has(ext) || !ext);
 }

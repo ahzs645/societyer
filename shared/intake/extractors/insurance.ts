@@ -28,7 +28,8 @@ function termIn(lines: Line[]): { start?: DateVal; end?: DateVal; line?: Line; s
       const end = validIsoDay(Number(dmy[6]), Number(dmy[5]), Number(dmy[4]));
       if (start && end) return { start: { iso: start, precision: "day", text: `${dmy[1]} ${dmy[2]} ${dmy[3]}` }, end: { iso: end, precision: "day", text: `${dmy[4]} ${dmy[5]} ${dmy[6]}` }, line, startText: `${dmy[1]} ${dmy[2]} ${dmy[3]}`, endText: `${dmy[4]} ${dmy[5]} ${dmy[6]}` };
     }
-    const ymd = /\b((?:19|20)\d{2})\/(\d{2})\/(\d{2})\s+((?:19|20)\d{2})\/(\d{2})\/(\d{2})\b/.exec(line.text);
+    // Certificate tables: "2024/08/27  2024/08/29" (OCR reads the column rule between them as "|").
+    const ymd = /\b((?:19|20)\d{2})\/(\d{2})\/(\d{2})[\s|]+((?:19|20)\d{2})\/(\d{2})\/(\d{2})\b/.exec(line.text);
     if (ymd) {
       const start = validIsoDay(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
       const end = validIsoDay(Number(ymd[4]), Number(ymd[5]), Number(ymd[6]));

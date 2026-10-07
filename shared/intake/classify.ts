@@ -31,6 +31,7 @@ const RULES: Rule[] = [
   { docClass: "agenda", re: /agenda\b/i, weight: 0.9, where: "name" },
   { docClass: "meetingMinutes", re: /\bminutes?\b|minutes?(?=[_ .-])|\bmtg notes\b|\bmeeting notes\b|\bmeeting summary\b|\bnotes from\b|\b(?:committee|board|meeting|mtg|working group)\b.*\bnotes\b/i, weight: 0.85, where: "name" },
   { docClass: "registryFiling", re: /\bannual report\b.*\b(?:filed|filing|confirmation|registry|bc registr|receipt)|(?<![a-z])(?:confirmation|receipt)\b.*\bannual report\b|\b(?:19|20)\d{2}\s+annual report\b|\bstatement of directors\b|\btransition application\b|\bnotice of (?:change|articles)\b|\bsocieties online\b|\bbc ?registr|\bsocietal filing\b|\bfiling receipt\b/i, weight: 0.88, where: "name" },
+  { docClass: "registryFiling", re: /\bcertificate of (?:incorporation|continuation|amalgamation|good standing)\b/i, weight: 0.88, where: "name" },
   { docClass: "bylaws", re: /by-?laws?(?![a-z])|\bconstitution\b/i, weight: 0.85, where: "name" },
   { docClass: "directorConsent", re: /\bconsent(?: to act)?\b|\bdirector(?:'s)? consent\b/i, weight: 0.85, where: "name" },
   { docClass: "proxy", re: /\bprox(?:y|ies)\b/i, weight: 0.82, where: "name" },
@@ -75,6 +76,8 @@ const RULES: Rule[] = [
   { docClass: "proxy", re: /\bhereby appoints?\b[\s\S]{0,200}\bproxy\b|\bproxy form\b/i, weight: 0.85, where: "text" },
   // Registry form headers are upper case; the same words in prose ("the statement of directors …") are not a filing.
   { docClass: "registryFiling", re: /\bBC SOCIETY ANNUAL REPORT\b|\bSTATEMENT OF DIRECTORS AND REGISTERED OFFICE\b/, weight: 0.85, where: "text" },
+  // A registrar's certificate (often a scan read by OCR).
+  { docClass: "registryFiling", re: /\bCERTIFICATE OF (?:INCORPORATION|CONTINUATION|AMALGAMATION)\b|\bhas this day been incorporated\b/, weight: 0.85, where: "text" },
   { docClass: "registryFiling", re: /\bconfirmation of filing\b|\bform filed\s*:|\bfiled date and time\s*:|\bthis is confirmation of payment for filing\b/i, weight: 0.85, where: "text" },
   { docClass: "invoice", re: /^\s*(?:[\w .,&-]{0,80}\n){0,6}\s*invoice\b|\binvoice\s*(?:#|no\.?|number)\s*:?\s*\w|\bbalance due\b|\bbill to\b/i, weight: 0.75, where: "text" },
   { docClass: "agreement", re: /\bbetween\s*:?[\s\S]{0,600}\band\s*:?[\s\S]{0,800}\b(?:agree|agreement|contract)\b|\bthe parties agree\b|\bgeneral service agreement\b/i, weight: 0.75, where: "text" },

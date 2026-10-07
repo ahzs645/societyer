@@ -31,10 +31,45 @@ export type IntakeBlock = {
   rows?: IntakeRow[];
   charStart: number;
   charEnd: number;
+  /** Text recognised by OCR: mean word confidence (0–1) and the words read below 0.6, so a
+   * quote that relies on an uncertain word lowers its field's confidence (never bulk-accepted). */
+  ocr?: { confidence: number; lowWords?: string[] };
 };
 
 export type IntakeExtractMethod =
-  | "docx-ooxml" | "pdfjs-text" | "xlsx-ooxml" | "msg-msgreader" | "libreoffice-docx" | "libreoffice-xlsx" | "doc-binary" | "plain-text" | "eml-headers" | "unsupported";
+  | "docx-ooxml" | "pdfjs-text" | "xlsx-ooxml" | "msg-msgreader" | "libreoffice-docx" | "libreoffice-xlsx" | "doc-binary" | "plain-text" | "eml-headers" | "unsupported"
+  /** Every page read by OCR (scanned PDF, image) / some pages from the text layer and some by OCR. */
+  | "ocr" | "pdfjs-text+ocr"
+  | "pptx-ooxml" | "ppt-binary" | "xls-biff8" | "xps-fixedpage";
+
+/** One line read by OCR: box in PDF points from the page's top-left corner, confidence 0–1,
+ * and its words as [text, confidence 0–100, x0, y0, x1, y1]. */
+export type IntakeOcrLine = { text: string; confidence: number; bbox: [number, number, number, number]; words?: Array<[string, number, number, number, number, number]> };
+export type IntakeOcrPage = {
+  page: number;
+  /** Mean word confidence, 0–1 (weighted by word length). */
+  confidence: number;
+  /** Extra clockwise rotation applied before recognition (0 when the page was upright). */
+  rotation: 0 | 90 | 180 | 270;
+  dpi: number;
+  words: number;
+  lowConfidenceWords: number;
+  width: number;
+  height: number;
+  lines?: IntakeOcrLine[];
+};
+export type IntakeOcrSummary = {
+  engine: string;
+  pages: IntakeOcrPage[];
+  /** Pages that needed OCR but were not read (page budget, render failure) and why. */
+  skippedPages?: number[];
+  skippedReason?: string;
+};
+
+/** Extract methods whose blocks were rebuilt from positioned text (soft-wrapped lines). */
+export function isPositionedTextMethod(method: IntakeExtractMethod | string): boolean {
+  return method === "pdfjs-text" || method === "ocr" || method === "pdfjs-text+ocr" || method === "xps-fixedpage";
+}
 
 export type IntakeExtract = {
   method: IntakeExtractMethod;
@@ -47,6 +82,8 @@ export type IntakeExtract = {
   emptyPages?: number[];
   attachments?: Array<{ name: string; extract?: IntakeExtract; error?: string }>;
   emailHeaders?: Record<string, string>;
+  /** Pages (or the image) read by OCR, with page confidence, rotation and line boxes. */
+  ocr?: IntakeOcrSummary;
   warnings: string[];
 };
 
