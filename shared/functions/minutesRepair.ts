@@ -63,6 +63,8 @@ export type RepairImportedReport = {
   legacyEmbeddedCleared: number;
   sectionTitlesCleaned: number;
   agendaTitlesCleaned: number;
+  /** Agendas still named after the imported file ("2016-07-31 X.doc section 7 agenda"). */
+  agendaNamesCleaned?: number;
   meetingTitlesCleaned: number;
   meetingBodiesReclassified: number;
   committeesCreated: number;
@@ -119,7 +121,7 @@ export async function repairImportedPortable(
   const now = new Date().toISOString();
   const report: RepairImportedReport = {
     dryRun: Boolean(dryRun), meetingsScanned: 0, minutesScanned: 0, motionsScanned: 0, motionsRederived: 0, motionsOutcomeTextKept: 0,
-    motionsUnrecognized: 0, embeddedMotionsSynced: 0, legacyEmbeddedCleared: 0, sectionTitlesCleaned: 0, agendaTitlesCleaned: 0,
+    motionsUnrecognized: 0, embeddedMotionsSynced: 0, legacyEmbeddedCleared: 0, sectionTitlesCleaned: 0, agendaTitlesCleaned: 0, agendaNamesCleaned: 0,
     meetingTitlesCleaned: 0, meetingBodiesReclassified: 0, committeesCreated: 0, datePrecisionMarked: 0, quorumFromSource: 0,
     attendeesScreened: 0, minutesWithAttendanceScreened: 0, skippedApprovedMinutes: 0, sameDayDuplicateGroups: 0, examples: [],
   };
@@ -275,6 +277,17 @@ export async function repairImportedPortable(
       report.datePrecisionMarked += 1;
     }
     if (Object.keys(patch).length && write) await ctx.db.patch(meeting._id, patch);
+    // The meeting's agenda kept the file-name title; name it after the meeting.
+    const meetingTitle = String(patch.title ?? meeting.title ?? "");
+    if (opts.titles && meetingTitle && !isFilenameOrGenericMeetingTitle(meetingTitle)) {
+      const agendas = await ctx.db.query("agendas").withIndex("by_meeting", (q) => q.eq("meetingId", meeting._id)).collect();
+      for (const agenda of agendas as any[]) {
+        const name = String(agenda.title ?? "").replace(/\s+agenda$/i, "");
+        if (!isFilenameOrGenericMeetingTitle(name)) continue;
+        report.agendaNamesCleaned = (report.agendaNamesCleaned ?? 0) + 1;
+        if (write) await ctx.db.patch(agenda._id, { title: `${meetingTitle} agenda`, updatedAtISO: now });
+      }
+    }
   }
   report.sameDayDuplicateGroups = [...byDayBody.values()].filter((count) => count > 1).length;
 
@@ -344,7 +357,7 @@ export async function repairImportedPortable(
   }
 
   const changed = report.motionsRederived + report.motionsOutcomeTextKept + report.embeddedMotionsSynced + report.legacyEmbeddedCleared + report.sectionTitlesCleaned
-    + report.agendaTitlesCleaned + report.meetingTitlesCleaned + report.meetingBodiesReclassified + report.datePrecisionMarked + report.quorumFromSource + report.attendeesScreened;
+    + report.agendaTitlesCleaned + (report.agendaNamesCleaned ?? 0) + report.meetingTitlesCleaned + report.meetingBodiesReclassified + report.datePrecisionMarked + report.quorumFromSource + report.attendeesScreened;
   if (write && changed > 0) {
     await ctx.db.insert("activity", {
       societyId,
