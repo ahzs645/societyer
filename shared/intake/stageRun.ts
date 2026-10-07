@@ -57,7 +57,7 @@ export async function stageRunInWorkspace(mutation: MutationCaller, societyId: s
       status: options.status ?? "extracted",
       stats: { files: run.files.length, extractions: run.extractions.length, clusters: run.clusters.length },
       recordGaps: run.reconciliation.gaps,
-      reconciliation: { meetings: run.reconciliation.meetings, links: run.reconciliation.links.slice(0, 2000), actionChains: run.reconciliation.actionChains.slice(0, 500) },
+      reconciliation: { meetings: run.reconciliation.meetings, links: run.reconciliation.links.slice(0, 2000), actionChains: run.reconciliation.actionChains.slice(0, 500), ...(run.people?.length ? { people: run.people.slice(0, 5000).map(({ fullName, aliases, occurrences }) => ({ fullName, aliases, occurrences })) } : {}) },
       ...(coverage ? { coverage: { headline: coverage.headline, byClass: coverage.byClass, byBody: coverage.byBody, byYear: coverage.byYear, dispositions: coverage.dispositions, hallucinationRate: coverage.hallucinationRate } } : {}),
     },
   });

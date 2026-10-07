@@ -34,11 +34,11 @@ export function findDates(raw: string, options: { allowMonthPrecision?: boolean;
     found.push({ iso, precision, text: raw.slice(index, index + length), index, length });
   };
   // Weekday, Month Day(st), Year | Month Day Year
-  for (const m of text.matchAll(new RegExp(`\\b${MONTH_RE}\\.?(?:\\s*,?\\s*|-)(\\d{1,2})(?:st|nd|rd|th)?(?:\\s*,\\s*|\\s+|,|-)(?:\\d{4}\\s*,\\s*)?((?:19|20)\\d{2})\\b`, "gi"))) {
+  for (const m of text.matchAll(new RegExp(`\\b${MONTH_RE}\\.?(?:\\s*,?\\s*|-)(\\d{1,2})(?:\\s?(?:st|nd|rd|th)\\b)?(?:\\s*,\\s*|\\s+|,|-)(?:\\d{4}\\s*,\\s*)?((?:19|20)\\d{2})\\b`, "gi"))) {
     push(validIsoDay(Number(m[3]), monthIndex(m[1]), Number(m[2])), "day", m.index!, m[0].length);
   }
-  // Day Month Year (28 November 2018, 23-Feb-2016)
-  for (const m of text.matchAll(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]+${MONTH_RE}\\.?[\\s,-]+((?:19|20)\\d{2})\\b`, "gi"))) {
+  // Day Month Year (28 November 2018, 23-Feb-2016) — not an item number ("4.2 July 2022 Minutes").
+  for (const m of text.matchAll(new RegExp(`(?<!\\d\\.)\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]+${MONTH_RE}\\.?[\\s,-]+((?:19|20)\\d{2})\\b`, "gi"))) {
     push(validIsoDay(Number(m[3]), monthIndex(m[2]), Number(m[1])), "day", m.index!, m[0].length);
   }
   // ISO-ish 2019-02-19, 2019_05_28, 2019/02/19, 2019.02.19
@@ -72,7 +72,7 @@ export function findDates(raw: string, options: { allowMonthPrecision?: boolean;
 export function findDatesWithoutYear(text: string, referenceIso: string): DateMatch[] {
   const refYear = Number(referenceIso.slice(0, 4));
   const out: DateMatch[] = [];
-  for (const m of text.matchAll(new RegExp(`\\b${MONTH_RE}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?!\\s*,?\\s*(?:19|20)\\d{2})`, "gi"))) {
+  for (const m of text.matchAll(new RegExp(`\\b${MONTH_RE}\\.?\\s+(\\d{1,2})(?:\\s?(?:st|nd|rd|th)\\b)?(?!\\s?(?:st|nd|rd|th)?\\s*,?\\s*(?:19|20)\\d{2})(?!\\d)`, "gi"))) {
     const month = monthIndex(m[1]);
     const iso = validIsoDay(refYear, month, Number(m[2]));
     if (iso) out.push({ iso, precision: "day", text: m[0], index: m.index!, length: m[0].length });

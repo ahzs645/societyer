@@ -42,6 +42,20 @@ export function normalizedStem(name: string): string {
     .toLowerCase();
 }
 
+const MONTH_TOKEN = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*$/;
+/** The dates a file name carries ("2013_05_14", "23-Feb-2016", "May 2013"): two names that
+ * differ only by version markers but carry different dates are different documents (the
+ * minutes of two meetings), never versions of one. Copy counters and version numbers are ignored. */
+export function nameDateSignature(name: string): string {
+  const tokens = name
+    .replace(/\.[a-z0-9]{1,6}$/i, "")
+    .replace(/\(\d+\)|\bv(?:ersion)?\s*\d+(?:\.\d+)?\b|\brev\s*\d+\b/gi, " ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return tokens.filter((token) => /^\d{1,4}$/.test(token) || MONTH_TOKEN.test(token)).map((token) => (/^\d+$/.test(token) ? String(Number(token)) : token.slice(0, 3))).join(" ");
+}
+
 function fnv1a(value: string, seed: number): number {
   let hash = seed >>> 0;
   for (let index = 0; index < value.length; index++) {
@@ -143,6 +157,9 @@ export function clusterFiles(files: ClusterInput[], options: { nearDuplicateBits
       if (uf.find(a.file.id) === uf.find(b.file.id) && edges.has(edgeKey(a.file.id, b.file.id))) continue;
       const distance = hamming(a.hash, b.hash);
       if (distance > maxBits) continue;
+      // Templated minutes of two meetings can be textually close; names dated differently are different documents.
+      const datesA = nameDateSignature(a.file.name), datesB = nameDateSignature(b.file.name);
+      if (datesA && datesB && datesA !== datesB) continue;
       const sameStem = normalizedStem(a.file.name) === normalizedStem(b.file.name);
       const differentFormat = a.file.name.replace(/^.*\./, "").toLowerCase() !== b.file.name.replace(/^.*\./, "").toLowerCase();
       link(a.file.id, b.file.id, differentFormat && sameStem ? "format-copy" : "near-duplicate", `Text SimHash distance ${distance}/64${differentFormat ? " across formats" : ""}`, 1 - distance / 64);

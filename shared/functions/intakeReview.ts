@@ -15,6 +15,7 @@
  *   row per promoted field.
  * - `reconcileRun`: reconciliation, record gaps and coverage for runs whose
  *   fields were extracted server-side (intakeActions:extractRun). */
+import { nameDateSignature } from "../intake/cluster";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId } from "./access";
 import { requirePermissionPortable } from "./permissions";
@@ -31,7 +32,7 @@ import {
 } from "./importSessions";
 import { bodyKeyForMeeting } from "../meetingBody";
 import { buildPromotionBundle, defaultInfoTypeForPath, gapLocatorFrom, matchKey, type MergeTarget, type PromotionFile, type PromotionMode } from "../intake/promotion";
-import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, directorMatchKey, RECORD_KIND_TABLE } from "../intake/promotionClasses";
+import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, directorMatchKey, RECORD_KIND_TABLE, versionPolicyRows } from "../intake/promotionClasses";
 import { annotateFiscalYearEndChanges, deriveEmbeddedMinutes, linkPolicyAdoptions } from "../intake/classStages";
 import { bodyKeyFor } from "../intake/entities";
 import { normalizePersonKey } from "../intake/names";
@@ -199,17 +200,37 @@ export async function bulkAcceptPreview(ctx: PortableQueryCtx, { societyId, runI
   return { count: candidates.length, extractions: new Set(candidates.map(({ extraction }) => String(extraction._id))).size, scopeExtractions: extractions.length, sample };
 }
 
-/** Accept every qualifying field in the scope (one transaction); returns review ids for the undo window. */
+export const BULK_ACCEPT_BATCH_FIELDS = 5000;
+
+/** Whole documents, in order, until adding the next would pass `limit` fields (at least one document). */
+export function takeBulkBatch(extractionIdPerField: string[], limit: number): Set<string> {
+  const perExtraction = new Map<string, number>();
+  for (const id of extractionIdPerField) perExtraction.set(id, (perExtraction.get(id) ?? 0) + 1);
+  const taken = new Set<string>();
+  let size = 0;
+  for (const [id, count] of perExtraction) {
+    if (taken.size && size + count > limit) break;
+    taken.add(id);
+    size += count;
+  }
+  return taken;
+}
+
+/** Accept every qualifying field in the scope; returns review ids for the undo window.
+ * One transaction holds at most ~5,000 fields: whole documents are taken in queue order
+ * until the batch is full and `remainingFields` reports what is left, so a client can
+ * repeat the call for a class across a large run. */
 export async function bulkAccept(ctx: PortableMutationCtx, { societyId, runId, scope }: { societyId: string; runId: string; scope: BulkScopeArgs }) {
   await canWrite(ctx, societyId);
   const extractions = await scopedExtractions(ctx, societyId, runId, scope);
-  const candidates = await bulkCandidatesFor(ctx, extractions);
-  if (candidates.length > 5000) throw new Error("Narrow the scope: more than 5,000 fields qualify.");
+  const all = await bulkCandidatesFor(ctx, extractions);
+  const taken = takeBulkBatch(all.map(({ extraction }) => String(extraction._id)), BULK_ACCEPT_BATCH_FIELDS);
+  const candidates = all.filter(({ extraction }) => taken.has(String(extraction._id)));
   const items: ReviewItem[] = candidates.map(({ extraction, field }) => ({ extractionId: extraction._id, fieldPath: field.path, decision: "accept", note: "Bulk accepted (stated, span-verified, at or above the threshold)." }));
   const result = items.length ? await reviewFields(ctx, { societyId, items: items.slice(0, 1000) }) : { reviewIds: [] as string[] };
   const reviewIds = [...result.reviewIds];
   for (let offset = 1000; offset < items.length; offset += 1000) reviewIds.push(...(await reviewFields(ctx, { societyId, items: items.slice(offset, offset + 1000) })).reviewIds);
-  return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size };
+  return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size, remainingFields: all.length - candidates.length };
 }
 
 // ---------------------------------------------------------------- merge candidates
@@ -258,9 +279,15 @@ async function clusterFiles(ctx: PortableQueryCtx, extraction: any, file: any): 
   const cluster = clusters.find((candidate) => candidate.clusterKey === file.clusterKey);
   for (const member of cluster?.members ?? []) {
     if (member.fileKey === file.fileKey || !member.fileId) continue;
+    // A package that embeds these minutes is its own document (a meeting material), not a copy of the record.
+    if (member.relation === "package-embedded") continue;
     // Only exact and format copies are the same record; drafts and other versions are sources of the same meeting too.
     const memberFile = await ctx.db.get<any>(member.fileId, "intakeFiles");
-    if (memberFile && memberFile.societyId === file.societyId) files.push(memberFile);
+    if (!memberFile || memberFile.societyId !== file.societyId) continue;
+    // Never cite another meeting's file: names dated differently are different records.
+    const own = nameDateSignature(file.name ?? ""), theirs = nameDateSignature(memberFile.name ?? "");
+    if (own && theirs && own !== theirs) continue;
+    files.push(memberFile);
   }
   return files;
 }
@@ -502,6 +529,9 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
   for (const required of requiredFieldsFor(docClass, extraction.record)) {
     if (!isPromotedDecision(decisions.get(required.path)?.decision)) throw new Error(`Accept or edit the ${required.label.toLowerCase()} before promoting.`);
   }
+  // A class without required fields (correspondence, agreements, consents…) still needs a reviewed value:
+  // promoting a document nobody accepted anything in would write records no person looked at.
+  if (![...decisions.values()].some((review) => isPromotedDecision(review?.decision))) throw new Error("Accept or edit at least one field before promoting.");
   const files = await Promise.all((await clusterFiles(ctx, extraction, file)).map((row) => promotionFile(ctx, row)));
   const at = now();
 
@@ -536,6 +566,13 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
     extraction, reviews, files, runName: run.name,
     context: { asOfISO: at, organizationName: society?.name, existingMeeting, policyAdoption, existingDirectorKeys: new Set(directorByKey.keys()) },
   });
+  // Versions of a policy promoted one document at a time: date the later versions; a repeated version is a copy.
+  if (Array.isArray(build.bundle.policies) && (build.bundle.policies as any[]).length) {
+    const existingPolicies = (await ctx.db.query("policies").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[];
+    const versioned = versionPolicyRows(build.bundle.policies as any[], existingPolicies);
+    if (versioned.copyOf) throw new Error(`A copy of this document is already promoted as the policy "${versioned.copyOf}".`);
+    build.bundle.policies = versioned.rows;
+  }
 
   // Stage and apply through the import-session handlers (same transaction).
   const sessionId = String(await createFromBundlePortable(ctx, { societyId, name: `Intake: ${file.name}`, bundle: build.bundle }));

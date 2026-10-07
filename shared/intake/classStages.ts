@@ -131,9 +131,16 @@ export function agendaEvidencedMeetings(extractions: IntakeExtractionResult[], f
     const label = val(record.bodyLabel) ?? val(record.body) ?? (extraction.docClass === "agmMaterial" ? "Annual General Meeting" : undefined);
     const bodyKey = bodyKeyFor(label ?? files.find((file) => file.fileKey === extraction.fileKey)?.classification?.bodyLabel);
     if (bodyKey === "unknown") continue;
+    const file = files.find((candidate) => candidate.fileKey === (extraction.parentFileKey ?? extraction.fileKey));
+    const name = `${file?.name ?? extraction.fileKey} ${val(record.title) ?? ""}`;
+    // A press or media release announces a meeting; it is not evidence that one was held.
+    if (/\b(?:press|media|news)\s+release\b/i.test(name)) continue;
     const key = meetingKey(bodyKey, date.iso);
-    // Same body within a day counts as found (agenda dated the evening before, etc.).
-    const near = [...known].some((existing) => existing.startsWith(`${bodyKey}@`) && Math.abs(Date.parse(existing.split("@")[1]) - Date.parse(date.iso)) <= 86400000);
+    // Same body within a day counts as found (agenda dated the evening before, etc.). An agenda
+    // within a week of a held meeting of the same body is that meeting's (rescheduled or
+    // misdated) agenda unless it says the meeting is a special one.
+    const toleranceDays = /\bspecial\b/i.test(name) ? 1 : 7;
+    const near = [...known].some((existing) => existing.startsWith(`${bodyKey}@`) && Math.abs(Date.parse(existing.split("@")[1]) - Date.parse(date.iso)) <= toleranceDays * 86400000);
     if (known.has(key) || near || out.has(key)) continue;
     out.set(key, { meetingKey: key, bodyKey, date: date.iso, fileId: extraction.fileKey, kind: String(val(record.kind) ?? extraction.docClass) });
   }
@@ -162,6 +169,9 @@ export function classRecordGaps(input: {
     if (extraction.docClass === "meetingMinutes") continue;
     for (const reference of extraction.references) {
       if ((reference.kind !== "prior_minutes" && reference.kind !== "meeting") || !reference.date || !/^\d{4}-\d{2}-\d{2}$/.test(reference.date)) continue;
+      // Only citations of minutes or meetings count: a heading such as "Notes:" or "Annual
+      // Activity Report", or a duration ("limited to 10 minutes"), is not a missing record.
+      if (!/\bminutes\b|\bmeeting\b|\bAGM\b/i.test(reference.text) || /\b\d+\s*(?:-\s*\d+\s*)?minutes\b/i.test(reference.text)) continue;
       const bodyKey = reference.body ? bodyKeyFor(reference.body) : undefined;
       const found = known.some((key) => (!bodyKey || bodyKey === "unknown" || key.startsWith(`${bodyKey}@`)) && Math.abs(Date.parse(key.split("@")[1]) - Date.parse(reference.date!)) <= 2 * 86400000)
         || input.evidenced.some((meeting) => meeting.date === reference.date);

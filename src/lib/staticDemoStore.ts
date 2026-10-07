@@ -76,6 +76,7 @@ export class StaticDemoDexieStore {
   }
 
   exportAttachmentReferences() { return this.rowsStore.exportAttachmentReferences(); }
+  saveFile(blob: Blob, sha256: string, references: string[] = []) { return this.rowsStore.saveFile(blob, sha256, references); }
 
   transaction<T>(mutate: () => T): T {
     return this.rowsStore.transaction(mutate);

@@ -20,6 +20,7 @@ import { SourceViewer, type ClusterVersion } from "../features/intake/SourceView
 import { FieldList, type FieldDecisionHandler } from "../features/intake/FieldPanel";
 import { EntityPanel } from "../features/intake/EntityPanel";
 import { GapPanel } from "../features/intake/GapPanel";
+import { AddRunPeopleButton } from "../features/intake/AddRunPeopleButton";
 import { BulkAcceptModal, CantRepresentModal, PromoteModal, type CantRepresentDraft, type PromoteChoice, type RunBulkScope } from "../features/intake/ReviewModals";
 import { canStoreOriginals, useStoreOriginals } from "../features/intake/useStoreOriginals";
 import { CLASS_PROMOTION } from "../../shared/intake/promotionClasses";
@@ -163,7 +164,8 @@ export function IntakeReviewPage() {
   const undo = async (ids: string[]) => {
     if (!societyId) return;
     try {
-      const { removed } = await undoReviews({ societyId, reviewIds: ids });
+      let removed = 0;
+      for (let offset = 0; offset < ids.length; offset += 1000) removed += (await undoReviews({ societyId, reviewIds: ids.slice(offset, offset + 1000) })).removed ?? 0;
       toast.info(`Undid ${pluralize(removed, "decision")}`);
     } catch (error) {
       toast.error("Could not undo", error instanceof Error ? error.message : undefined);
@@ -353,6 +355,7 @@ export function IntakeReviewPage() {
             <span><kbd className="intake-kbd">B</kbd> bulk accept · <kbd className="intake-kbd">?</kbd> this help</span>
           </div>
         )}
+        <AddRunPeopleButton societyId={society._id} people={run.reconciliation?.people} canWrite={canWrite && can("members:write")} />
         {run.status === "running" && <Badge tone="info">Run still in progress</Badge>}
         {run.status === "failed" && <Badge tone="danger">Run failed: {run.stats?.error ?? "see run details"}</Badge>}
       </div>
@@ -499,9 +502,20 @@ export function IntakeReviewPage() {
           }}
           onConfirmRun={(scope) => {
             setBulkScope(null);
-            void bulkAccept({ societyId: society._id, runId, scope: scope.scope }).then((result: any) => {
-              toast.success(`Accepted ${pluralize(result.fields, "field")} in ${pluralize(result.extractions, "document")}`, { duration: UNDO_MS, action: { label: "Undo", onClick: () => void undo(result.reviewIds) } });
-            }).catch((error: unknown) => toast.error("Could not bulk accept", error instanceof Error ? error.message : undefined));
+            // Large scopes are accepted in batches of whole documents (≤ 5,000 fields per transaction).
+            void (async () => {
+              const reviewIds: string[] = [];
+              let fieldsAccepted = 0;
+              let documents = 0;
+              for (let round = 0; round < 200; round++) {
+                const result: any = await bulkAccept({ societyId: society._id, runId, scope: scope.scope });
+                reviewIds.push(...(result.reviewIds ?? []));
+                fieldsAccepted += result.fields ?? 0;
+                documents += result.extractions ?? 0;
+                if (!result.remainingFields || !result.fields) break;
+              }
+              toast.success(`Accepted ${pluralize(fieldsAccepted, "field")} in ${pluralize(documents, "document")}`, { duration: UNDO_MS, action: { label: "Undo", onClick: () => void undo(reviewIds) } });
+            })().catch((error: unknown) => toast.error("Could not bulk accept", error instanceof Error ? error.message : undefined));
           }}
         />
       )}

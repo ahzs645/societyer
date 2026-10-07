@@ -1220,7 +1220,7 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
         isCurrent: true,
       };
       store.upsertRow("documentVersions", versionRow);
-      if (versionRow.storageProvider === "local-filesystem" && versionRow.storageKey) {
+      if ((versionRow.storageProvider === "local-filesystem" || versionRow.storageProvider === "local-indexeddb") && versionRow.storageKey) {
         store.upsertAttachment({
           societyId: versionRow.societyId,
           documentId: versionRow.documentId,

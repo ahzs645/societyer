@@ -62,11 +62,12 @@ export async function collectWorkspaceFiles(tables: Record<string, any[]>, attac
   }
   let done = 0; const total = candidates.length + attachments.length + intakeFiles.size;
   if (intakeFiles.size) {
-    const { getCachedOriginal } = await import("../features/intake/originalsCache");
+    // The intake cache, else the files a ZIP restore brought back: a restored workspace exports its originals again.
+    const { getOriginal } = await import("../features/intake/originalsCache");
     for (const entry of intakeFiles.values()) {
       progress?.(done++, total, entry.fileName);
       const file: ArchiveFile = { fileName: entry.fileName, mimeType: entry.mimeType, documentId: entry.documentId, sha256: entry.sha256, bytes: entry.bytes, status: "included" };
-      const cached = await getCachedOriginal(entry.sha256).catch(() => undefined);
+      const cached = await getOriginal(entry.sha256).catch(() => undefined);
       if (cached) await add(file, cached.blob);
       else await add({ ...file, status: "unavailable", reason: "The intake source file is not cached on this device (the browser cleared it, or the run was made on another device)." });
     }

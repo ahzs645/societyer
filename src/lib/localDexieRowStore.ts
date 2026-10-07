@@ -704,6 +704,16 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   exportAttachmentReferences() { return cloneLocalRows(this.attachmentsCache); }
+  /** Saves file bytes in this device's workspace (content-addressed) plus optional
+   * lookup references ("version:<id>", "document:<id>"); backups export them. */
+  async saveFile(blob: Blob, sha256: string, references: string[] = []) {
+    await this.whenHydrated();
+    if (!/^[a-f0-9]{64}$/.test(sha256)) throw new Error("Invalid file checksum.");
+    const rows: LocalWorkspaceBinaryFile[] = [{ key: `sha256:${sha256}`, sha256, blob }, ...references.map((key) => ({ key, sha256 }))];
+    for (const row of rows) this.filesCache = [...this.filesCache.filter((file) => file.key !== row.key), row];
+    if (this.db) await this.db.files.bulkPut(rows);
+  }
+
 
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }, files: LocalWorkspaceBinaryFile[] = [], preserveFiles = false) {
     await this.database();

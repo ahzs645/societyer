@@ -78,7 +78,9 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
   if (brokerName) {
     const parts = brokerName.text.split("\t").map((part) => part.trim());
     const name = parts.find((part) => /insurance (?:brokers?|group|services|agencies)|brokers? ltd/i.test(part)) ?? brokerName.text;
-    broker = at(clean(/((?:[A-Z&][\w&.'’-]*\s+){0,6}(?:INSURANCE\s+(?:BROKERS?|GROUP|SERVICES|AGENCIES)|BROKERS?)(?:\s+(?:LTD|LIMITED|INC)\.?)?)/i.exec(name)?.[1] ?? name), brokerName, undefined, 0.75);
+    const brokerText = clean(/((?:[A-Z&][\w&.'’-]*\s+){0,6}(?:INSURANCE\s+(?:BROKERS?|GROUP|SERVICES|AGENCIES)|BROKERS?)(?:\s+(?:LTD|LIMITED|INC)\.?)?)/i.exec(name)?.[1] ?? name);
+    // A bare "Broker" / "Agent or Broker" heading cell is a label, not a broker.
+    if (!/^(?:agent\s+or\s+)?(?:insurance\s+)?brokers?$/i.test(brokerText)) broker = at(brokerText, brokerName, undefined, 0.75);
   } else if (brokerLabel && brokerLabel.value.length < 80) broker = at(clean(brokerLabel.value), brokerLabel.line, brokerLabel.value, 0.7);
   void brokerHeader;
   const subscribing = head.findIndex((line) => /subscribing compan|the insurers/i.test(line.text));
@@ -143,7 +145,15 @@ export function extractInsurance(input: ClassExtractorInput & { asOfISO?: string
   const asOf = input.asOfISO ?? new Date().toISOString().slice(0, 10);
   const lapsed = term.end ? term.end.iso < asOf : false;
   const proposedStatus = termEnd && lapsed ? at("Lapsed" as const, term.line!, term.endText, 0.8, `Term ended ${term.end!.iso}; recorded as Lapsed history, not Active.`) : inferred("NeedsReview" as const, termEnd ? termEnd.locators : [fileLoc(fileName)], 0.7, "Current or unknown term: a reviewer confirms before it becomes Active.");
-  const additional = head.filter((line) => /additional insured/i.test(line.text)).map((line) => at(clean(line.text).slice(0, 200), line, undefined, 0.6));
+  // Additional insureds: the named party only ("… extended to cover <party> as an additional insured",
+  // "Additional Insured: <party>"); headings and boilerplate about additional insureds are not parties.
+  const additional = head.flatMap((line) => {
+    const text = clean(line.text);
+    const named = /(?:cover|include|includes|add|added|name|named)\s+(.{3,120}?)\s+as\s+(?:an?\s+)?additional\s+insured/i.exec(text) ?? /^\s*additional\s+insureds?\s*(?:\(s\))?\s*[:\-–]\s*(.{3,120})$/i.exec(text);
+    const party = named?.[1]?.replace(/^(?:the\s+)?/i, "").trim();
+    if (!party || /\b(?:policy|insured\(s\)|hereby|limits?|contract|agreement)\b/i.test(party)) return [];
+    return [at(party, line, party, 0.75)];
+  });
   if (isCertificate) {
     const agreement = /AGREEMENT IDENTIFICATION NO\.?[\s\S]{0,120}?\b([A-Z]{2}\d{2}[A-Z]{3}\d{4})\b/.exec(text);
     if (agreement) {

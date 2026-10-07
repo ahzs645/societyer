@@ -198,7 +198,10 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
     // Minutes exist: the agenda/package is a meeting material; consent receipts and agenda items enrich the minutes payload.
     const bodyKey = bodyFromText(String(val(record.bodyLabel) ?? val(record.body) ?? ""))?.body;
     const evidenceKey = bodyKeyFor(String(val(record.bodyLabel) ?? val(record.body) ?? (extraction.docClass === "agmMaterial" ? "Annual General Meeting" : "")));
-    const minutes = (bodyKey && minutesByKey.get(`${bodyKey}@${date}`)) ?? minutesByKey.get(date) ?? evidencedPayloads.get(`${evidenceKey}@${date}`);
+    // A rescheduled or misdated agenda (within a week, same body, not a special meeting) belongs to that meeting.
+    const nearby = () => (!bodyKey || /\bspecial\b/i.test(`${fileName(extraction.fileKey)} ${val(record.title) ?? ""}`) ? undefined
+      : context.minutesPayloads.find((payload) => bodyFromText(String(payload.meetingTitle ?? ""))?.body === bodyKey && typeof payload.meetingDate === "string" && Math.abs(Date.parse(payload.meetingDate) - Date.parse(date)) <= 7 * 86400000));
+    const minutes = (bodyKey && minutesByKey.get(`${bodyKey}@${date}`)) ?? minutesByKey.get(date) ?? evidencedPayloads.get(`${evidenceKey}@${date}`) ?? nearby();
     if (minutes) {
       if (items.length && (!(minutes.agendaItems as unknown[] | undefined)?.length || (consentOnlyAgenda.has(minutes) && val(record.kind) !== "consent_agenda"))) {
         minutes.agendaItems = items;
@@ -207,7 +210,7 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
       if (consentItems.length) minutes.consentItems = [...(minutes.consentItems ?? []), ...consentItems];
       minutes.sourceExternalIds = [...new Set([...(minutes.sourceExternalIds ?? []), extraction.fileKey])];
       push(bundle, "meetingMaterials", {
-        meetingDate: date,
+        meetingDate: typeof minutes.meetingDate === "string" ? minutes.meetingDate : date,
         ...(minutes.body ? { body: minutes.body } : bodyKey ? { body: bodyKey } : {}),
         meetingTitle: minutes.meetingTitle,
         label: String(val(record.title) ?? fileName(extraction.fileKey)).slice(0, 200),
@@ -231,22 +234,35 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
   }
   for (const family of families.values()) {
     const dated = family.map((extraction) => ({ extraction, date: dayIso((extraction.record as any).adoptedDate) ?? dayIso((extraction.record as any).effectiveDate) ?? (val((extraction.record as any).effectiveDate)?.iso as string | undefined) })).sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")));
+    // Copies of one version (same title, version and date, e.g. the same policy saved in two
+    // folders) stage one policy that cites every copy.
+    const versions = new Map<string, Record<string, unknown>>();
     dated.forEach(({ extraction, date }, index) => {
       const record: any = extraction.record;
       const link = policyLinks.get(extraction.fileKey);
-      const next = dated[index + 1];
+      const next = dated.slice(index + 1).find((candidate) => candidate.date !== date);
       const superseded = Boolean(next && next.date && date && next.date > date);
-      const title = String(val(record.title) ?? fileName(extraction.fileKey));
+      const title = String(val(record.title) ?? fileName(extraction.fileKey)).replace(/\s*\((?:approved|adopted)\s+by[^)]*\)\s*$/i, "").trim();
       const version = val(record.versionLabel);
+      const versionKey = `${date ?? ""}|${version ?? ""}|${title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+      const same = versions.get(versionKey);
+      if (same) {
+        same.sourceExternalIds = [...new Set([...(same.sourceExternalIds as string[]), extraction.fileKey])];
+        if (link && !same.adoptedAtMeeting) same.adoptedAtMeeting = { meetingDate: link.meetingDate, body: link.bodyKey };
+        bundle.transposed.add(extraction.fileKey);
+        return;
+      }
       push(bundle, "policies", {
-        policyName: (version && !title.includes(version) ? `${title} (${version})` : title).slice(0, 200),
+        // Versions of one policy carry their version label or date in the name, so each version is
+        // its own policy row (the import treats a repeated name as a duplicate of an existing policy).
+        policyName: (version && !title.includes(version) ? `${title} (${version})` : dated.length > 1 && date ? `${title} (${date})` : title).slice(0, 200),
         ...(val(record.policyNumber) ? { policyNumber: val(record.policyNumber) } : {}),
         ...(val(record.governsBody) ? { owner: val(record.governsBody) } : {}),
         // An explicit effective date wins; otherwise the stated adoption date is when it took effect (X-02).
         ...((dayIso(record.effectiveDate) ?? dayIso(record.adoptedDate)) ? { effectiveDate: dayIso(record.effectiveDate) ?? dayIso(record.adoptedDate) } : date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? { effectiveDate: date } : {}),
         ...(dayIso(record.adoptedDate) ? { adoptedDate: dayIso(record.adoptedDate) } : {}),
         ...(dayIso(record.reviewDate) ? { reviewDate: dayIso(record.reviewDate) } : {}),
-        ...(superseded && next.date && /^\d{4}-\d{2}-\d{2}$/.test(next.date) ? { ceasedDate: next.date } : {}),
+        ...(superseded && next?.date && /^\d{4}-\d{2}-\d{2}$/.test(next.date) ? { ceasedDate: next.date } : {}),
         ...(link ? { adoptedAtMeeting: { meetingDate: link.meetingDate, body: link.bodyKey } } : {}),
         status: superseded ? "Superseded" : "Draft",
         sourceExternalIds: [extraction.fileKey],
@@ -254,10 +270,11 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
         notes: [
           `${extraction.docClass === "bylaws" ? "Bylaws/constitution" : "Policy"} version${version ? ` "${version}"` : ""} from ${fileName(extraction.fileKey)}; ${(record.clauses ?? []).length} clause(s) outlined in the intake run.`,
           link ? `Adopting motion: ${link.detail}.` : val(record.status) === "adopted" ? "Marked approved/final in the source; no adopting motion found in the minutes." : "",
-          superseded ? `Superseded by ${fileName(next.extraction.fileKey)}.` : "",
+          superseded && next ? `Superseded by ${fileName(next.extraction.fileKey)}.` : "",
           "Imported as Draft: confirm the adopting motion before making it Active.",
         ].filter(Boolean).join("\n"),
       }, [extraction.fileKey]);
+      versions.set(versionKey, bundle.collections.policies[bundle.collections.policies.length - 1]);
       const rules = record.rules;
       if (!rules) return;
       // Terms of reference: the committee's own quorum and cadence.
