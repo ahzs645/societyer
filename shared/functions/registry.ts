@@ -114,6 +114,9 @@ import * as inventoryHubFns from "./inventoryHub";
 import * as meetingMaterialsFns from "./meetingMaterials";
 import * as minutesFns from "./minutes";
 import { repairImportedPortable as minutesRepairImportedPortable } from "./minutesRepair";
+import { listSummariesPortable as minutesListSummariesPortable } from "./minutesSummaries";
+import { saveAttendanceGridPortable as minutesSaveAttendanceGridPortable } from "./minutesAttendance";
+import { mergePortable as meetingsMergePortable, mergePreviewPortable as meetingsMergePreviewPortable } from "./meetingMerge";
 import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
 import * as societyFns from "./society";
@@ -685,6 +688,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "meetings:markSourceReview", handler: meetingsFns.markSourceReviewPortable }),
   definePortableMutation({ name: "meetings:setPackageReviewStatus", handler: meetingsFns.setPackageReviewStatusPortable }),
   definePortableMutation({ name: "meetings:remove", handler: meetingsFns.removePortable }),
+  definePortableQuery({ name: "meetings:mergePreview", handler: meetingsMergePreviewPortable }),
+  definePortableMutation({ name: "meetings:merge", handler: meetingsMergePortable }),
 
   // agendas
   definePortableQuery({ name: "agendas:listForMeeting", handler: agendasFns.listForMeetingPortable }),
@@ -970,6 +975,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "minutes:upsertFromDraft", handler: minutesFns.upsertFromDraftPortable }),
   definePortableMutation({ name: "minutes:backfillMotionPersonLinks", handler: minutesFns.backfillMotionPersonLinksPortable }),
   definePortableMutation({ name: "minutes:repairImported", handler: minutesRepairImportedPortable }),
+  definePortableQuery({ name: "minutes:listSummaries", handler: minutesListSummariesPortable }),
+  definePortableMutation({ name: "minutes:saveAttendanceGrid", handler: minutesSaveAttendanceGridPortable }),
 
   // meetingMaterials
   definePortableQuery({ name: "meetingMaterials:listForMeeting", handler: meetingMaterialsFns.listForMeetingPortable }),

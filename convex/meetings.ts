@@ -13,6 +13,7 @@ import {
   removePortable,
   backfillQuorumSnapshotPortable,
 } from "../shared/functions/meetings";
+import { mergePortable, mergePreviewPortable } from "../shared/functions/meetingMerge";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("meetings:list", query)({
@@ -160,4 +161,18 @@ export const remove = authorizedMutation("meetings:remove", mutation)({
   args: { id: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Duplicate meetings (same body, same day): preview, then fold the duplicate
+// into the kept meeting as an imported source version.
+export const mergePreview = authorizedQuery("meetings:mergePreview", query)({
+  args: { targetId: v.id("meetings"), duplicateId: v.id("meetings"), addMissingAttendees: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, args) => mergePreviewPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const merge = authorizedMutation("meetings:merge", mutation)({
+  args: { targetId: v.id("meetings"), duplicateId: v.id("meetings"), addMissingAttendees: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, args) => mergePortable(await toPortableMutationCtx(ctx), args),
 });
