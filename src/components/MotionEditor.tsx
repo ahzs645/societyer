@@ -1055,7 +1055,10 @@ function MotionRow({
   // long, the fallback renders as a wrapping, tap-to-edit heading rather than
   // the single-line name input (which would clip on narrow screens).
   const hasName = !!motion.name?.trim();
-  const showTextHeadline = !expanded && !hasName && !!motion.text?.trim();
+  // Keep the name input while it has focus: clearing the name to retype it
+  // used to swap the input for the wording headline mid-edit.
+  const [nameFocused, setNameFocused] = useState(false);
+  const showTextHeadline = !expanded && !hasName && !nameFocused && !!motion.text?.trim();
   const titleText = hasName ? motion.name! : (motion.text ?? "");
   const isLongTitle =
     titleText.length > 80 ||
@@ -1171,6 +1174,8 @@ function MotionRow({
               className="motion__name-input"
               value={motion.name ?? ""}
               onChange={(event) => onPatch({ name: event.target.value })}
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
               placeholder="Motion name"
               aria-label={`Motion name for ${titleText.trim() || "untitled motion"}`}
             />
