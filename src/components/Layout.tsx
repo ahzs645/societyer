@@ -1140,7 +1140,7 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.openTasks")}</span>
-                    <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
+                    <Pill size="sm">{counts ? counts.openTasks : <span aria-label="Loading" className="muted">…</span>}</Pill>
                   </NavLink>
                   <NavLink
                     to="/app/deadlines"
@@ -1149,7 +1149,7 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.upcomingDeadlines")}</span>
-                    <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
+                    <Pill size="sm">{counts ? counts.openDeadlines : <span aria-label="Loading" className="muted">…</span>}</Pill>
                   </NavLink>
                 </>
               )}

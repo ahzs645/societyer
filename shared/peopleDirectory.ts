@@ -16,6 +16,7 @@ export interface DirectoryPerson {
   dob?: string;
   editable?: boolean;
   isIndividual?: boolean;
+  aliases?: string[];
 }
 
 /**
@@ -44,7 +45,7 @@ export function normalizeSearchName(name: string): string {
  * are known. Returns the normalized fullName form otherwise.
  */
 function lastFirstForms(p: DirectoryPerson): string[] {
-  const forms: string[] = [normalizeSearchName(p.fullName)];
+  const forms: string[] = [normalizeSearchName(p.fullName), ...(p.aliases ?? []).map(normalizeSearchName)];
   if (p.lastName || p.firstName) {
     const lf = `${p.lastName ?? ""} ${p.firstName ?? ""}`;
     const fl = `${p.firstName ?? ""} ${p.lastName ?? ""}`;
@@ -54,8 +55,8 @@ function lastFirstForms(p: DirectoryPerson): string[] {
 }
 
 /**
- * Typeahead: return people whose normalized fullName (or normalized
- * "last first" / "first last" ordering) starts with the normalized prefix.
+ * Typeahead: return people whose normalized fullName, alias or "last first" /
+ * "first last" ordering starts with the normalized prefix, or has a word that does.
  * Sorted by normalized fullName. Default limit 10.
  */
 export function matchByPrefix(
@@ -68,7 +69,10 @@ export function matchByPrefix(
     np.length === 0
       ? people.slice()
       : people.filter((p) =>
-          lastFirstForms(p).some((form) => form.startsWith(np)),
+          // A prefix of the whole name or of any word in it, so a surname
+          // ("Pohl") or a later given name finds imported rows that only
+          // carry a fullName.
+          lastFirstForms(p).some((form) => form.startsWith(np) || ` ${form}`.includes(` ${np}`)),
         );
 
   matches.sort((a, b) => {

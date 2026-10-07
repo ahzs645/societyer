@@ -10,6 +10,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { describeCadenceRule, normalizeCadenceRule } from "../continuityRules";
+import { requireLinkablePerson } from "./personMerge";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -178,12 +179,43 @@ export async function committeeAddMemberPortable(
   await getOwned(ctx, "committees", args.committeeId, args.societyId);
   if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
-  if (args.personId) await getOwned(ctx, "peopleDirectory", args.personId, args.societyId);
+  if (args.personId) await requireLinkablePerson(ctx, args.personId, args.societyId, { allowMerged: false });
   if (args.joinedAt && args.leftAt && args.leftAt < args.joinedAt) throw new Error("A committee member cannot leave before joining.");
   return ctx.db.insert("committeeMembers", {
     ...args,
     joinedAt: args.joinedAt || new Date().toISOString().slice(0, 10),
   });
+}
+
+/** B10: edit a committee member (person link, role, joined/left dates, review). */
+export async function committeeUpdateMemberPortable(
+  ctx: PortableMutationCtx,
+  args: { id: string; patch: { name?: string; email?: string; role?: string; directorId?: string | null; memberId?: string | null; personId?: string | null; representedOrganization?: string; joinedAt?: string; leftAt?: string | null; reviewStatus?: string } },
+) {
+  const row = await requireOwnedRow(ctx, "committeeMembers", args.id);
+  const societyId = String(row.societyId);
+  const { requirePermissionPortable } = await import("./permissions");
+  await requirePermissionPortable(ctx, societyId, "committees:write");
+  const p = args.patch;
+  const next: Record<string, unknown> = {};
+  if (p.name !== undefined) { if (!p.name.trim()) throw new Error("A committee member needs a name."); next.name = p.name.trim(); }
+  if (p.email !== undefined) next.email = p.email.trim() || undefined;
+  if (p.role !== undefined) next.role = p.role.trim() || "Member";
+  if (p.directorId !== undefined) { if (p.directorId) await getOwned(ctx, "directors", p.directorId, societyId); next.directorId = p.directorId || undefined; }
+  if (p.memberId !== undefined) { if (p.memberId) await getOwned(ctx, "members", p.memberId, societyId); next.memberId = p.memberId || undefined; }
+  if (p.personId !== undefined) {
+    if (p.personId) await requireLinkablePerson(ctx, p.personId, societyId, { allowMerged: false });
+    next.personId = p.personId || undefined;
+  }
+  if (p.representedOrganization !== undefined) next.representedOrganization = p.representedOrganization.trim() || undefined;
+  if (p.joinedAt !== undefined) next.joinedAt = p.joinedAt;
+  if (p.leftAt !== undefined) next.leftAt = p.leftAt || undefined;
+  if (p.reviewStatus !== undefined) { if (!["pending", "verified"].includes(p.reviewStatus)) throw new Error("Review status must be pending or verified."); next.reviewStatus = p.reviewStatus; }
+  const joined = (next.joinedAt ?? row.joinedAt) as string | undefined;
+  const left = ("leftAt" in next ? next.leftAt : row.leftAt) as string | undefined;
+  if (joined && left && left < joined) throw new Error("A committee member cannot leave before joining.");
+  await ctx.db.patch(args.id, next);
+  return args.id;
 }
 
 export async function committeeRemoveMemberPortable(ctx: PortableMutationCtx, { id }: { id: string }) {

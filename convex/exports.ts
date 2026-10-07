@@ -226,6 +226,7 @@ export const EXPORTABLE_TABLES = [
   "personHistoryEvents",
   "personOccurrences",
   "seatProxyAuthorizations",
+  "personMerges",
 ] as const;
 
 export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({

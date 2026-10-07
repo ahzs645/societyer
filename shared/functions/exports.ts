@@ -228,6 +228,7 @@ export const EXPORTABLE_TABLES = [
   "personHistoryEvents",
   "personOccurrences",
   "seatProxyAuthorizations",
+  "personMerges",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
