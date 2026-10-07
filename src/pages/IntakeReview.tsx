@@ -560,12 +560,13 @@ function QueueList({ groups, selectedId, onSelect }: { groups: ReturnType<typeof
   };
   const item = (row: QueueRow, extra?: string) => (
     <button type="button" className="intake-queue__item" data-extraction={row._id} aria-current={row._id === selectedId} tabIndex={row._id === selectedId ? 0 : -1} onClick={() => onSelect(row._id)}>
-      <span className="intake-queue__title">{row.fileKey.replace(/^local:/, "").split("/").pop()}</span>
+      <span className="intake-queue__title">{(row.parentFileKey ?? row.fileKey).replace(/^local:/, "").split("/").pop()}</span>
       <span className="intake-queue__meta">
         {row.docClass === "meetingMinutes"
           ? <>{row.date ?? "no date"}{row.body ? ` · ${row.body}` : ""} · {pluralize(row.motions, "motion")}</>
           : <>{row.summary ?? row.docClass}{row.date ? ` · ${row.date}` : ""}</>}
         <Badge tone={STATUS_TONE[row.status] ?? "neutral"}>{STATUS_LABEL[row.status] ?? row.status}</Badge>
+        {row.parentFileKey && <Badge tone="info">Embedded minutes</Badge>}
         {(row.verification?.mismatched ?? 0) > 0 && <Badge tone="danger">{row.verification!.mismatched} unverified</Badge>}
         {extra && <span>{extra}</span>}
       </span>

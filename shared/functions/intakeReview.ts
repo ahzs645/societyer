@@ -307,7 +307,8 @@ export async function mergeCandidates(ctx: PortableQueryCtx, { societyId, extrac
 
 async function clusterFiles(ctx: PortableQueryCtx, extraction: any, file: any): Promise<any[]> {
   const files = [file];
-  if (!file.clusterKey) return files;
+  // Embedded minutes: the package is their only source; its cluster holds copies of the package, not of the minutes.
+  if (extraction.parentFileKey || !file.clusterKey) return files;
   const clusters = (await ctx.db.query("intakeClusters").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[];
   const cluster = clusters.find((candidate) => candidate.clusterKey === file.clusterKey);
   for (const member of cluster?.members ?? []) {
@@ -511,7 +512,7 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
  * the same record) need no separate promotion: their source IDs are already on the record. They
  * become "covered" (reopen one to promote it separately). Returns how many were covered. */
 async function markClusterCopiesCovered(ctx: PortableMutationCtx, extraction: any, file: any, at: string): Promise<number> {
-  if (!file.clusterKey) return 0;
+  if (!file.clusterKey || extraction.parentFileKey) return 0;
   const files = (await ctx.db.query("intakeFiles").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[];
   const members = new Set(files.filter((row) => row.clusterKey === file.clusterKey && String(row._id) !== String(file._id)).map((row) => String(row._id)));
   if (!members.size) return 0;
@@ -796,15 +797,16 @@ export async function reconcileRun(ctx: PortableMutationCtx, { societyId, runId 
     const current = byFile.get(row.fileKey);
     if (!current || (current.engine === "deterministic" && row.engine !== "deterministic")) byFile.set(row.fileKey, row);
   }
-  const extractions: any[] = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
+  const extractions: any[] = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, ...(row.parentFileKey ? { parentFileKey: row.parentFileKey } : {}), docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
   // Minutes embedded in packages are derived records (never stored): derive them again from the stored
   // extracts, as the in-browser pipeline does, so hosted runs see the same meetings and record gaps.
-  for (const row of [...byFile.values()].filter((candidate) => ["agenda", "meetingPackage", "agmMaterial"].includes(candidate.docClass))) {
+  const storedDerived = new Set(rows.filter((row) => row.parentFileKey).map((row) => row.fileKey));
+  for (const row of [...byFile.values()].filter((candidate) => ["agenda", "meetingPackage", "agmMaterial"].includes(candidate.docClass) && !candidate.parentFileKey)) {
     const extract = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", row.fileId)).first() as any;
     const file = files.find((candidate) => String(candidate._id) === String(row.fileId));
     if (!extract?.text || !file) continue;
     try {
-      extractions.push(...deriveEmbeddedMinutes(extractions.find((candidate) => candidate.fileKey === row.fileKey), { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, warnings: extract.warnings ?? [] } as any, file));
+      extractions.push(...deriveEmbeddedMinutes(extractions.find((candidate) => candidate.fileKey === row.fileKey), { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, warnings: extract.warnings ?? [] } as any, file).filter((derived) => !storedDerived.has(derived.fileKey)));
     } catch {
       // A truncated extract (very large package) cannot be split; its embedded minutes are skipped.
     }

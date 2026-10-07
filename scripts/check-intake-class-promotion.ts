@@ -287,4 +287,30 @@ fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(minutesDir, { recursive: true, force: true });
 }
 
+// ------------------------------------------------------------ minutes embedded in a package go through review and promotion
+{
+  const derived = (db.dump("intakeExtractions") as any[]).filter((row) => row.parentFileKey);
+  const canonicalDerived = run.extractions.filter((extraction) => extraction.parentFileKey && run.reconciliation.meetings.some((meeting) => meeting.canonicalFileId === extraction.fileKey));
+  assert.equal(derived.length, canonicalDerived.length, "package-embedded minutes that are a meeting's only copy are staged as their own extraction");
+  assert.ok(derived.length > 0, "the fixture has package-embedded minutes without a standalone copy");
+  for (const row of derived) {
+    const packageFile = (db.dump("intakeFiles") as any[]).find((file) => file._id === row.fileId);
+    assert.equal(packageFile.fileKey, row.parentFileKey, "a derived extraction lives on its package's file");
+    assert.ok(row.fileKey.startsWith(`${row.parentFileKey}#part-`));
+    assert.equal(row.status, "promoted", "embedded minutes are promoted from the review screen");
+    const provenance = (db.dump("fieldProvenance") as any[]).filter((item) => item.extractionId === row._id);
+    assert.ok(provenance.length > 5, "promoted embedded minutes carry field provenance");
+    const meetingId = row.promotion.targets.find((target: any) => target.table === "meetings").id;
+    const minutes = (db.dump("minutes") as any[]).find((item) => item.meetingId === meetingId);
+    assert.ok(minutes.sourceExternalIds.includes(row.parentFileKey), "the package is the minutes' source document");
+    assert.ok(!minutes.sourceExternalIds.some((key: string) => key.includes("#part-")), "no placeholder source for the derived key");
+    assert.ok(!(db.dump("documents") as any[]).some((doc) => (doc.tags ?? []).some((tag: string) => tag.includes("#part-"))), "no document is created for a derived key");
+    const viewSource = await query("intake:provenanceForRecords", { societyId: society, targets: [{ targetTable: "meetings", targetId: meetingId }] });
+    assert.ok(viewSource.some((item: any) => item.locator?.quote && item.value !== undefined), "View source reads the value and quote from the extraction");
+  }
+  // Server-side reconciliation does not derive the stored ones a second time.
+  const again = await mutate("intake:reconcileRun", { societyId: society, runId: staged.runId });
+  assert.equal(again.meetings, run.reconciliation.meetings.length);
+}
+
 console.log(`PASS intake class promotion: ${Object.keys(results).length} documents promoted across ${promotedClasses.size} classes into ${new Set(Object.values(results).flatMap((value) => value.tables)).size} native tables; ${db.dump("fieldProvenance").length} provenance rows; version-cluster copies covered and re-promotable`);

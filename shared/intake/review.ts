@@ -478,7 +478,7 @@ export function samplePreview<T>(items: readonly T[], size = 5): T[] {
 
 // ------------------------------------------------------------ queue
 
-export type QueueRow = { _id: string; fileId: string; fileKey: string; docClass: string; status: string; risk: number; motions: number; unsupported: number; lowConfidenceFields: number; verification?: { mismatched?: number }; date?: string; body?: string; summary?: string; promotion?: { targets?: Array<{ table: string; id: string; label: string }>; coveredByExtractionId?: string; coveredByFileKey?: string } };
+export type QueueRow = { _id: string; fileId: string; fileKey: string; /** Minutes embedded in a package: the package file. */ parentFileKey?: string; docClass: string; status: string; risk: number; motions: number; unsupported: number; lowConfidenceFields: number; verification?: { mismatched?: number }; date?: string; body?: string; summary?: string; promotion?: { targets?: Array<{ table: string; id: string; label: string }>; coveredByExtractionId?: string; coveredByFileKey?: string } };
 export type RiskTier = "high" | "medium" | "low";
 const LEGAL_CLASSES = new Set(["bylaws", "policy", "registryFiling", "directorConsent", "proxy", "financialStatement", "agreement"]);
 

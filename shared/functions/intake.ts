@@ -304,19 +304,23 @@ export async function saveClusters(ctx: PortableMutationCtx, { societyId, runId,
 export async function saveExtraction(ctx: PortableMutationCtx, { societyId, runId, fileKey, extraction }: { societyId: string; runId: string; fileKey: string; extraction: any }) {
   await canWrite(ctx, societyId);
   await ownedRun(ctx, societyId, runId);
-  const file = await fileByKey(ctx, runId, fileKey);
+  // A derived extraction (minutes embedded in a package, `<package>#part-N`) lives on the package's file.
+  const parentFileKey = typeof extraction?.parentFileKey === "string" && extraction.parentFileKey ? extraction.parentFileKey : undefined;
+  if (parentFileKey && !fileKey.startsWith(`${parentFileKey}#`)) throw new Error("A derived extraction's key must start with its package's file key.");
+  const file = await fileByKey(ctx, runId, parentFileKey ?? fileKey);
   if (!file) throw new Error("Record the intake file before its extraction.");
-  const envelope = { ...extraction, fileId: fileKey };
+  const { parentFileKey: _parent, ...rest } = extraction ?? {};
+  const envelope = { ...rest, fileId: fileKey };
   const validation = validateExtraction(envelope);
   if (!validation.ok) throw new Error(`Extraction does not match the intake schema: ${validation.issues.slice(0, 5).join("; ")}`);
   const extract = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", file._id)).first() as any;
   const record = JSON.parse(JSON.stringify(envelope.record));
   const verification = extract?.text !== undefined ? verifyRecord(record, { blocks: extract.blocks, text: extract.text }) : extraction.verification ?? null;
   const row = compact({
-    societyId, runId, fileId: file._id, fileKey, docClass: envelope.docClass, schemaVersion: envelope.schemaVersion, engine: envelope.engine, model: optionalText(envelope.model, 200),
+    societyId, runId, fileId: file._id, fileKey, parentFileKey, docClass: envelope.docClass, schemaVersion: envelope.schemaVersion, engine: envelope.engine, model: optionalText(envelope.model, 200),
     record, unsupported: envelope.unsupported, references: envelope.references, warnings: envelope.warnings, verification: verification ?? undefined, status: "pending_review", updatedAtISO: now(),
   });
-  const existing = (await ctx.db.query("intakeExtractions").withIndex("by_file", (q) => q.eq("fileId", file._id)).collect()).find((candidate: any) => candidate.engine === envelope.engine);
+  const existing = (await ctx.db.query("intakeExtractions").withIndex("by_file", (q) => q.eq("fileId", file._id)).collect()).find((candidate: any) => candidate.engine === envelope.engine && candidate.fileKey === fileKey);
   if (existing) {
     if ((existing as any).status === "promoted") throw new Error("A promoted extraction cannot be replaced; start a new run.");
     // Batch reviews read accepted values from the extraction itself: a reviewed record is never replaced underneath them.
