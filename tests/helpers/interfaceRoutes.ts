@@ -240,6 +240,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/intake",
+    "path": "/demo/app/intake",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/intake/:runId/review",
+    "path": "/demo/app/intake/interface-audit-missing/review",
+    "kind": "app",
+    "fixture": "missing-record"
+  },
+  {
     "pattern": "/app/members",
     "path": "/demo/app/members",
     "kind": "app",

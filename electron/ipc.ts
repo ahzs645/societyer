@@ -8,6 +8,7 @@ import { registerServiceHandlers } from "./ipc/serviceHandlers.js";
 import { registerUpdateHandlers } from "./ipc/updateHandlers.js";
 import { registerWorkspaceHandlers } from "./ipc/workspaceHandlers.js";
 import { registerModeHandlers } from "./ipc/modeHandlers.js";
+import { registerIntakeHandlers } from "./ipc/intakeHandlers.js";
 
 export function registerIpc(environment: DesktopEnvironment) {
   registerModeHandlers();
@@ -19,4 +20,5 @@ export function registerIpc(environment: DesktopEnvironment) {
   registerUpdateHandlers(environment);
   registerServiceHandlers(environment);
   registerSecretHandlers();
+  registerIntakeHandlers();
 }

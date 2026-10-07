@@ -106,6 +106,7 @@
     "notifications": "Notifications",
     "users": "Utilisateurs et rôles",
     "importSessions": "Sessions d'importation",
+    "aiIntake": "Intégration assistée par IA",
     "auditLog": "Journal d'audit",
     "dataExport": "Exportation des données",
     "aiAgents": "Agents IA",

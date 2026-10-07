@@ -102,6 +102,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/service-providers": "settings:read",
   "/app/finance-imports": "settings:read",
   "/app/imports": "settings:read",
+  "/app/intake": "settings:read",
   "/app/financials/wave": "settings:read",
   "/app/access-custody": "settings:read",
   "/app/secrets": "settings:read",

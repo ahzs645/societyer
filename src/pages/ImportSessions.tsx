@@ -2,6 +2,7 @@ import { importSectionPermission } from "../../shared/importPromotionPermissions
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -384,6 +385,7 @@ export function ImportSessionsPage() {
         subtitle="Review staged records from every import in one queue, then apply approved records into the app session by session."
         actions={
           <>
+          <Link className="btn-action" to="/app/intake"><Sparkles size={12} /> Start an AI intake run</Link>
           <RepairImportedMinutesAction societyId={society._id} />
           <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
             <Upload size={12} /> Import members CSV

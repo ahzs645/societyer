@@ -5,15 +5,17 @@ import type { IntakeExtract } from "./blocks";
 import type { IntakeFileRecord, IntakeExtractionResult, IntakeRunResult } from "./bundle";
 import { classifyPrior } from "./classify";
 import { clusterFiles } from "./cluster";
-import { bodyKeyFor, buildDirectoryFromOccurrences, resolvePerson } from "./entities";
+import { buildDirectoryFromOccurrences, resolvePerson } from "./entities";
 import { EXTRACTABLE_EXTENSIONS, extensionOf } from "./extract";
 import { junkVerdict } from "./junk";
 import { extractWithLlm, mapWithConcurrency, TokenBudget, type GenerateObjectFn } from "./llm";
 import { extractMeetingMinutes } from "./minutes/extractMinutes";
 import { detectPii, sensitivityFor, type ProcessingLogEntry } from "./privacy";
-import { agmGaps, carryForwardActions, reconcileMinutes, type MinutesSummary } from "./reconcile";
+import { reconcileExtractions } from "./reconcile";
 import { validateExtraction } from "./schemas";
 import { verifyRecord } from "./verify";
+
+export { reconcileExtractions };
 
 export type PipelineSourceFile = Omit<IntakeFileRecord, "disposition" | "classification" | "sensitivity" | "clusterKey" | "extractMethod" | "textLength"> & {
   read?: () => Promise<Uint8Array | null>;
@@ -29,6 +31,8 @@ export type PipelineOptions = {
   concurrency?: number;
   onProgress?: (stage: string, done: number, total: number) => void;
   keepExtracts?: boolean;
+  /** false: stop after classification (hosted runs extract fields server-side with intakeActions:extractRun). */
+  fieldExtraction?: boolean;
 };
 export type PipelineOutput = IntakeRunResult & { extracts: Record<string, IntakeExtract> };
 
@@ -115,7 +119,7 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
   log.push({ atISO: now(), stage: "classify", sentToProvider: false, note: `${live.length} files classified (deterministic priors)` });
   // 5–6. Field extraction (LLM when configured, deterministic otherwise) + span verification.
   const budget = options.llm ? new TokenBudget(options.llm.budgetTokens) : undefined;
-  const targets = files.filter((file) => file.disposition === "extract" && file.classification && MINUTES_LIKE.has(file.classification.docClass) && extracts[file.fileKey]);
+  const targets = options.fieldExtraction === false ? [] : files.filter((file) => file.disposition === "extract" && file.classification && MINUTES_LIKE.has(file.classification.docClass) && extracts[file.fileKey]);
   const extractions: IntakeExtractionResult[] = [];
   done = 0;
   await mapWithConcurrency(targets, options.llm?.concurrency ?? 4, async (file) => {
@@ -163,29 +167,7 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     }
   }
   // 8. Reconcile.
-  const summaries: MinutesSummary[] = extractions.map((extraction) => {
-    const record = extraction.record as any;
-    const date = record.date?.value;
-    return {
-      fileId: extraction.fileKey,
-      fileName: files.find((file) => file.fileKey === extraction.fileKey)?.name ?? extraction.fileKey,
-      bodyKey: bodyKeyFor(record.bodyLabel?.value ?? record.body?.value),
-      date: date?.precision === "day" ? date.iso : undefined,
-      recordStatus: String(record.recordStatus?.value ?? "unknown"),
-      adopts: [
-        ...(record.motions ?? []).map((motion: any, index: number) => (motion.adoptsMinutesOf ? { date: motion.adoptsMinutesOf.value?.date, motionIndex: index, text: motion.text?.value ?? "" } : null)).filter(Boolean),
-        // Approval recorded without a formal motion ("Minutes approved") is weaker evidence but still links the prior meeting.
-        ...extraction.references.filter((reference) => reference.kind === "prior_minutes" && !(record.motions ?? []).some((motion: any) => motion.text?.value === reference.text)).map((reference) => ({ date: reference.date, motionIndex: -1, text: reference.text })),
-      ],
-      actions: (record.actionItems ?? []).map((item: any, index: number) => ({ index, text: item.text?.value ?? "", assignee: item.assigneeAsWritten?.value, due: item.due?.value?.iso })),
-      policiesAdopted: (record.motions ?? []).map((motion: any, index: number) => ({ motionIndex: index, text: motion.adoptsPolicy?.value })).filter((item: any) => item.text),
-    };
-  });
-  const reconciled = reconcileMinutes(summaries);
-  const carry = carryForwardActions(summaries);
-  const years = reconciled.meetings.map((meeting) => Number(meeting.date.slice(0, 4))).filter(Number.isFinite);
-  const agmEvidence = files.filter((file) => file.classification?.docClass === "agmMaterial" && file.classification.date).map((file) => ({ year: Number(file.classification!.date!.iso.slice(0, 4)), kind: file.classification!.recordStatus }));
-  const gaps = [...reconciled.gaps, ...(years.length ? agmGaps(reconciled.meetings, Math.min(...years), Math.max(...years), agmEvidence) : [])];
+  const { reconciled, carry, gaps } = reconcileExtractions(files, extractions);
   log.push({ atISO: now(), stage: "bundle", sentToProvider: false, note: `${reconciled.meetings.length} meetings reconciled; ${gaps.length} record gaps` });
   return {
     runId,
@@ -205,3 +187,4 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     extracts: options.keepExtracts === false ? {} : extracts,
   };
 }
+

@@ -38,3 +38,6 @@ export const ACTIVATE_SERVICE_PROFILE_CHANNEL = "societyer:activateServiceProfil
 export const LIST_MANAGED_SERVICE_STATUSES_CHANNEL = "societyer:listManagedServiceStatuses";
 export const START_MANAGED_SERVICE_CHANNEL = "societyer:startManagedService";
 export const STOP_MANAGED_SERVICE_CHANNEL = "societyer:stopManagedService";
+export const PICK_INTAKE_FOLDER_CHANNEL = "societyer:pickIntakeFolder";
+export const READ_INTAKE_FILE_CHANNEL = "societyer:readIntakeFile";
+export const CONVERT_LEGACY_DOCUMENT_CHANNEL = "societyer:convertLegacyDocument";

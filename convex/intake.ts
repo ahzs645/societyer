@@ -2,6 +2,7 @@ import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import * as handlers from "../shared/functions/intake";
+import * as review from "../shared/functions/intakeReview";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 
 const societyId = v.id("societies");
@@ -27,3 +28,20 @@ export const setExtractionStatus = authorizedMutation("intake:setExtractionStatu
 export const appendProcessingLog = authorizedMutation("intake:appendProcessingLog", mutation)({ args: { societyId, runId, entries: v.array(v.any()) }, returns: v.any(), handler: async (ctx, args) => handlers.appendProcessingLog(await toPortableMutationCtx(ctx), args) });
 export const reviewField = authorizedMutation("intake:reviewField", mutation)({ args: { societyId, extractionId: v.id("intakeExtractions"), fieldPath: v.string(), decision: v.string(), editedValue: v.optional(v.any()), note: v.optional(v.string()), gap: v.optional(v.any()) }, returns: v.any(), handler: async (ctx, args) => handlers.reviewField(await toPortableMutationCtx(ctx), args) });
 export const recordProvenance = authorizedMutation("intake:recordProvenance", mutation)({ args: { societyId, entries: v.array(v.any()) }, returns: v.any(), handler: async (ctx, args) => handlers.recordProvenance(await toPortableMutationCtx(ctx), args) });
+
+// Review and promotion (shared/functions/intakeReview.ts).
+const reviewItem = v.object({ extractionId: v.id("intakeExtractions"), fieldPath: v.string(), decision: v.string(), editedValue: v.optional(v.any()), note: v.optional(v.string()), gap: v.optional(v.any()) });
+export const mergeCandidates = authorizedQuery("intake:mergeCandidates", query)({ args: { societyId, extractionId: v.id("intakeExtractions") }, returns: v.any(), handler: async (ctx, args) => review.mergeCandidates(await toPortableQueryCtx(ctx), args) });
+export const provenanceForExtraction = authorizedQuery("intake:provenanceForExtraction", query)({ args: { societyId, extractionId: v.id("intakeExtractions") }, returns: v.any(), handler: async (ctx, args) => review.provenanceForExtraction(await toPortableQueryCtx(ctx), args) });
+export const runSummaries = authorizedQuery("intake:runSummaries", query)({ args: { societyId }, returns: v.any(), handler: async (ctx, args) => review.runSummaries(await toPortableQueryCtx(ctx), args) });
+export const reviewFields = authorizedMutation("intake:reviewFields", mutation)({ args: { societyId, items: v.array(reviewItem) }, returns: v.any(), handler: async (ctx, args) => review.reviewFields(await toPortableMutationCtx(ctx), args) });
+export const undoReviews = authorizedMutation("intake:undoReviews", mutation)({ args: { societyId, reviewIds: v.array(v.id("intakeFieldReviews")) }, returns: v.any(), handler: async (ctx, args) => review.undoReviews(await toPortableMutationCtx(ctx), args) });
+export const promoteExtraction = authorizedMutation("intake:promoteExtraction", mutation)({ args: { societyId, extractionId: v.id("intakeExtractions"), mode: v.optional(v.string()), targetMeetingId: v.optional(v.id("meetings")) }, returns: v.any(), handler: async (ctx, args) => review.promoteExtraction(await toPortableMutationCtx(ctx), args) });
+export const reconcileRun = authorizedMutation("intake:reconcileRun", mutation)({ args: { societyId, runId }, returns: v.any(), handler: async (ctx, args) => review.reconcileRun(await toPortableMutationCtx(ctx), args) });
+export const getFileExtract = authorizedQuery("intake:getFileExtract", query)({ args: { societyId, fileId: v.id("intakeFiles") }, returns: v.any(), handler: async (ctx, args) => review.getFileExtract(await toPortableQueryCtx(ctx), args) });
+export const entityCandidates = authorizedQuery("intake:entityCandidates", query)({ args: { societyId, extractionId: v.id("intakeExtractions") }, returns: v.any(), handler: async (ctx, args) => review.entityCandidates(await toPortableQueryCtx(ctx), args) });
+export const linkNameAcrossRun = authorizedMutation("intake:linkNameAcrossRun", mutation)({ args: { societyId, runId, name: v.string(), personId: v.optional(v.id("peopleDirectory")), mode: v.optional(v.string()) }, returns: v.any(), handler: async (ctx, args) => review.linkNameAcrossRun(await toPortableMutationCtx(ctx), args) });
+export const provenanceForRecords = authorizedQuery("intake:provenanceForRecords", query)({ args: { societyId, targets: v.array(v.object({ targetTable: v.string(), targetId: v.string() })) }, returns: v.any(), handler: async (ctx, args) => review.provenanceForRecords(await toPortableQueryCtx(ctx), args) });
+const bulkScope = v.object({ extractionId: v.optional(v.id("intakeExtractions")), clusterKey: v.optional(v.string()), body: v.optional(v.string()), year: v.optional(v.string()), docClass: v.optional(v.string()) });
+export const bulkAcceptPreview = authorizedQuery("intake:bulkAcceptPreview", query)({ args: { societyId, runId, scope: bulkScope }, returns: v.any(), handler: async (ctx, args) => review.bulkAcceptPreview(await toPortableQueryCtx(ctx), args) });
+export const bulkAccept = authorizedMutation("intake:bulkAccept", mutation)({ args: { societyId, runId, scope: bulkScope }, returns: v.any(), handler: async (ctx, args) => review.bulkAccept(await toPortableMutationCtx(ctx), args) });

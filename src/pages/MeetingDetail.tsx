@@ -11,6 +11,7 @@ import { EditMeetingDrawer } from "../features/meetings/components/EditMeetingDr
 import { MergeMeetingDialog } from "../features/meetings/components/MergeMeetingDialog";
 import { MeetingGapsPanel } from "../features/meetings/components/MeetingGapsPanel";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
@@ -2128,6 +2129,7 @@ export function MeetingDetailPage() {
                 <CheckCircle2 size={12} /> Mark source reviewed
               </button>
             )}
+            <SourceProvenanceButton table="meetings" id={meeting._id} />
             {meeting.status !== "Held" && meeting.status !== "Cancelled" && (
               <button className="btn-action" onClick={markHeld} disabled={!canMeetingsWrite}>Mark held</button>
             )}
