@@ -374,7 +374,7 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     }
     const item = nativeTarget.item;
     if (nativeTarget.table === "meetings") {
-      if (landedValue(nativeTarget.field, (meeting as any)?.[nativeTarget.field], value, merged)) provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      if (landedValue(nativeTarget.field, nativeTarget.field === "scheduledAt" ? meetingCalendarDate(meeting as any) : (meeting as any)?.[nativeTarget.field], value, merged)) provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
       else notLandedPaths.push(path);
     } else if (nativeTarget.table === "agendaItems" && item) {
       const titleReview = decisions.get(`sections[${item.index}].title`);
