@@ -100,7 +100,9 @@ export async function readWorkspaceArchiveFile(file: File): Promise<{ database: 
     try { return { database: JSON.parse(await file.text()), files: new Map() }; }
     catch { throw new Error(`"${file.name}" is not readable JSON or a Societyer ZIP backup.`); }
   }
-  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  let zip: JSZip;
+  try { zip = await JSZip.loadAsync(await file.arrayBuffer()); }
+  catch { throw new Error(`"${file.name}" is not a readable ZIP backup. The file may be damaged or only partly downloaded.`); }
   const names = Object.keys(zip.files);
   if (names.length > 50_000) throw new Error("The ZIP contains too many files.");
   let expanded = 0;

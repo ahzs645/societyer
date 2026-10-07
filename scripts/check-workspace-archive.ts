@@ -53,4 +53,5 @@ assert.equal(preferredRestoredSocietyId({ ...demoFirst, activeSocietyId: "gone" 
 assert.equal(preferredRestoredSocietyId({ tables: { societies: [{ _id: "static_society_riverside", name: "Demo" }] } }), "static_society_riverside");
 const orgExport = archiveDatabaseSnapshot({ kind: "societyer.workspaceExport", generatedAtISO: "2026-10-06T12:00:00Z", society: { _id: "org_x", name: "Org" }, tables: { societies: [{ _id: "static_society_riverside", name: "Demo" }, { _id: "org_x", name: "Org" }] } });
 assert.equal(preferredRestoredSocietyId(orgExport), "org_x", "an organization export reopens its organization");
+await assert.rejects(readWorkspaceArchiveFile(new File([new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3])], "torn.zip")), /"torn\.zip" is not a readable ZIP backup/);
 console.log("ZIP archive checks passed: exact records/files, deduplication, external/missing inventory, legacy JSON/ZIP, preserved journal, corruption/path rejection and invalid-import atomicity.");

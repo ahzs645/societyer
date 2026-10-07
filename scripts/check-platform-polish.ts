@@ -122,6 +122,10 @@ assert.match(typedOk("2001-01-01", { min: "2005-01-01" }), /^ERR The date must b
 const datePicker = readFileSync(new URL("../src/components/DatePicker.tsx", import.meta.url), "utf8");
 assert.match(datePicker, /parseTypedDate\(typed, \{ min, max \}\)/, "the date picker validates typed dates against its bounds");
 
+// Settings → Restore validates the whole backup before the replace prompt.
+const storageCard = readFileSync(new URL("../src/components/WorkspaceStorageCard.tsx", import.meta.url), "utf8");
+assert.ok(storageCard.indexOf("readWorkspaceBackupFile(file)") > -1 && storageCard.indexOf("readWorkspaceBackupFile(file)") < storageCard.indexOf('title: "Restore this backup?"'), "the backup is read and validated before the restore confirmation");
+
 // Integration links only become anchors when a browser can open them.
 assert.equal(openableExternalUrl("demo://paperless/1001"), null, "placeholder schemes are not links");
 assert.equal(openableExternalUrl("javascript:alert(1)"), null);
