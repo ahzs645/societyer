@@ -90,7 +90,8 @@ for (const aliases of shaGroups.values()) {
     // Quorum as the source states it (achieved / reached / not met); never
     // forced to not_recorded when the minutes say so explicitly.
     const sectionText = parsedSections[entry.sectionIndex - 1]?.text ?? (parsedMinutes.length === 1 ? raw : entry.discussion ?? '');
-    const quorum = noQuorum ? { quorumStatus: 'not_met' as const, quorumMet: false } : quorumStatementFromText(sectionText);
+    const stated = quorumStatementFromText(sectionText);
+    const quorum = stated.quorumStatus === 'not_recorded' && noQuorum ? { quorumStatus: 'not_met' as const, quorumMet: false } : stated;
     const notes = [...flags, 'Candidate date, attendance, motions and meeting boundaries must be compared with the original. Filename approval is not relied on.',
       noQuorum ? 'Source contains no-quorum language; deferred and future approval requests must not become adopted decisions.' : '',
       /\bDRAFT\b/i.test(raw) && /approv/i.test(item.name) ? 'Filename/content conflict: source text contains DRAFT while filename indicates approval.' : '',

@@ -111,6 +111,7 @@ import * as grantsFns from "./grants";
 import * as inventoryHubFns from "./inventoryHub";
 import * as meetingMaterialsFns from "./meetingMaterials";
 import * as minutesFns from "./minutes";
+import { repairImportedPortable as minutesRepairImportedPortable } from "./minutesRepair";
 import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
 import * as societyFns from "./society";
@@ -963,6 +964,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "minutes:carryForwardAction", handler: minutesFns.carryForwardActionPortable }),
   definePortableMutation({ name: "minutes:upsertFromDraft", handler: minutesFns.upsertFromDraftPortable }),
   definePortableMutation({ name: "minutes:backfillMotionPersonLinks", handler: minutesFns.backfillMotionPersonLinksPortable }),
+  definePortableMutation({ name: "minutes:repairImported", handler: minutesRepairImportedPortable }),
 
   // meetingMaterials
   definePortableQuery({ name: "meetingMaterials:listForMeeting", handler: meetingMaterialsFns.listForMeetingPortable }),

@@ -19,6 +19,7 @@ import {
   backfillMotionPersonLinksPortable,
   backfillQuorumSnapshotPortable,
 } from "../shared/functions/minutes";
+import { repairImportedPortable } from "../shared/functions/minutesRepair";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const motion = v.object({
@@ -274,6 +275,28 @@ export const upsertFromDraft = authorizedMutation("minutes:upsertFromDraft", mut
   },
   returns: v.any(),
   handler: async (ctx, args) => upsertFromDraftPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// One-off, idempotent repair of data produced by the earlier rule-based
+// imports (motion outcomes, embedded motions, pipe titles, file-name titles,
+// date precision, stated quorum, non-person attendees). Pass dryRun first.
+export const repairImported = authorizedMutation("minutes:repairImported", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    dryRun: v.optional(v.boolean()),
+    options: v.optional(v.object({
+      motions: v.optional(v.boolean()),
+      embedded: v.optional(v.boolean()),
+      sections: v.optional(v.boolean()),
+      titles: v.optional(v.boolean()),
+      reclassifyBodies: v.optional(v.boolean()),
+      datePrecision: v.optional(v.boolean()),
+      quorum: v.optional(v.boolean()),
+      attendance: v.optional(v.boolean()),
+    })),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => repairImportedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillMotionPersonLinks = authorizedMutation("minutes:backfillMotionPersonLinks", mutation)({
