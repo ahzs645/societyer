@@ -270,14 +270,27 @@ export class LocalDexieRowStore implements LocalRowStore {
     if (!ops.length) return;
 
     const touched = new Set(ops.map((op) => op.table));
+    // Cache tables are replaced, never mutated in place (every write assigns a
+    // new array and a new row object), so a shallow copy is a faithful backup.
+    // Deep-cloning every touched table made a single approve in a large
+    // workspace re-serialise the whole documents table.
     const cacheBackup: LocalSeed = {};
-    for (const table of touched) cacheBackup[table] = this.rows(table).map(cloneLocalRow);
+    for (const table of touched) cacheBackup[table] = this.rows(table).slice();
 
     // Apply to the in-memory cache up front (reads see the new state immediately).
+    // Same ordering as a per-op upsert: existing rows keep their position, new
+    // rows are appended, a delete followed by an upsert re-appends.
+    const nextTables = new Map<string, Map<string, any>>();
     for (const op of ops) {
-      if (op.kind === "delete") this.cache[op.table] = this.rows(op.table).filter((row) => row._id !== op.id);
-      else this.cache[op.table] = upsertLocalRow(this.rows(op.table), op.row);
+      let rows = nextTables.get(op.table);
+      if (!rows) {
+        rows = new Map(this.rows(op.table).map((row) => [row._id, row]));
+        nextTables.set(op.table, rows);
+      }
+      if (op.kind === "delete") rows.delete(op.id);
+      else rows.set(op.row._id, op.row);
     }
+    for (const [table, rows] of nextTables) this.cache[table] = [...rows.values()];
     if (this.preHydrationOps) this.preHydrationOps.push(...ops.map((op) => (op.kind === "delete" ? op : { ...op, row: cloneLocalRow(op.row) })));
 
     const changes: LocalChangeEnvelope[] = [];
@@ -485,14 +498,28 @@ export class LocalDexieRowStore implements LocalRowStore {
       this.db.meta.get("workspace"),
     ]);
     const next = cloneLocalSeed(seed);
+    // Merge persisted records into the seed by id. A Map keeps the same order as
+    // the former per-record upsert (existing rows stay in place, new rows are
+    // appended) without copying the whole table for every record, which was
+    // quadratic and took seconds on a ten-thousand-document workspace.
+    const merged = new Map<string, Map<string, any>>();
+    const tableRows = (table: string) => {
+      let rows = merged.get(table);
+      if (!rows) {
+        rows = new Map((next[table] ?? []).map((row) => [row._id, row]));
+        merged.set(table, rows);
+      }
+      return rows;
+    };
     for (const record of localRecords) {
       if (!record?.table || !record?.value?._id) continue;
       if (record.deletedAtISO) {
-        next[record.table] = (next[record.table] ?? []).filter((row) => row._id !== record.value._id);
+        tableRows(record.table).delete(record.value._id);
         continue;
       }
-      next[record.table] = upsertLocalRow(next[record.table] ?? [], record.value);
+      tableRows(record.table).set(record.value._id, record.value);
     }
+    for (const [table, rows] of merged) next[table] = [...rows.values()];
 
     const persistedWorkspaceMeta = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta);
     let hydratedCache = next;
