@@ -104,6 +104,14 @@ export function motionRowToEmbedded(row: any): any {
     tags: row.tags,
     motionId: row._id,
     adoptsMinutesId: row.adoptsMinutesId,
+    movedByPersonId: row.movedByPersonId,
+    secondedByPersonId: row.secondedByPersonId,
+    abstainedBy: row.abstainedBy,
+    opposedBy: row.opposedBy,
+    dissentDocumentId: row.dissentDocumentId,
+    sourceLocator: row.sourceLocator,
+    sourceOutcomeText: row.sourceOutcomeText,
+    outcomeOverrideNote: row.outcomeOverrideNote,
   };
   for (const key of Object.keys(out)) if (out[key] === undefined) delete out[key];
   return out;

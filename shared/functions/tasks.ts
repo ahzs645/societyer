@@ -89,6 +89,10 @@ export async function taskCreate(
     status: string;
     priority: string;
     assignee?: string;
+    /** A1: the responsible person in the people directory. */
+    assigneePersonId?: string;
+    /** The assignee exactly as the source wrote it ("TG", "Gail / Deanna"). */
+    sourceAssignee?: string;
     responsibleUserIds?: string[];
     dueDate?: string;
     committeeId?: string;
@@ -103,6 +107,7 @@ export async function taskCreate(
   },
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
+  if (args.assigneePersonId) await getOwned(ctx, "peopleDirectory", args.assigneePersonId, args.societyId);
   if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
   if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   if (args.goalId) await getOwned(ctx, "goals", args.goalId, args.societyId);
@@ -142,6 +147,9 @@ export async function taskUpdate(
       status?: string;
       priority?: string;
       assignee?: string;
+      assigneePersonId?: string;
+      clearAssigneePersonId?: boolean;
+      sourceAssignee?: string;
       responsibleUserIds?: string[];
       dueDate?: string;
       committeeId?: string;
@@ -165,6 +173,7 @@ export async function taskUpdate(
   await requireSocietyMembership(ctx, candidate.societyId);
   const task = await getOwned(ctx, "tasks", id, candidate.societyId);
   if (patch.committeeId) await getOwned(ctx, "committees", patch.committeeId, candidate.societyId);
+  if (patch.assigneePersonId) await getOwned(ctx, "peopleDirectory", patch.assigneePersonId, candidate.societyId);
   if (patch.meetingId) await getOwned(ctx, "meetings", patch.meetingId, candidate.societyId);
   if (patch.goalId) await getOwned(ctx, "goals", patch.goalId, candidate.societyId);
   if (patch.filingId) await getOwned(ctx, "filings", patch.filingId, candidate.societyId);
@@ -175,8 +184,9 @@ export async function taskUpdate(
   for (const userId of patch.responsibleUserIds ?? []) {
     await getOwned(ctx, "users", userId, candidate.societyId);
   }
-  const { clearMeetingId, ...rest } = patch;
+  const { clearMeetingId, clearAssigneePersonId, ...rest } = patch;
   const next: Record<string, unknown> = { ...rest };
+  if (clearAssigneePersonId) next.assigneePersonId = undefined;
   // `undefined` fields are stripped from the wire, so unlinking arrives as an
   // explicit flag and is converted to an unset here.
   if (clearMeetingId) next.meetingId = undefined;

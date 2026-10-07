@@ -13,7 +13,8 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { isRoutineMotion } from "../lib/motionGovernance";
-import { ROUTINE_MOTION_TAGS } from "../../shared/proceduralMotions";
+import { DECIDED_BY_LABELS, DECIDED_BY_VALUES, ROUTINE_MOTION_TAGS } from "../../shared/proceduralMotions";
+import { OUTCOME_OVERRIDE_DECIDED_BY, motionOutcomeConsistencyIssues, motionVoteIssues } from "../../shared/motionValidation";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -44,7 +45,23 @@ type MotionForm = {
   votesFor: string;
   votesAgainst: string;
   abstentions: string;
+  decidedBy: string;
+  outcomeOverrideNote: string;
 };
+
+/** G-04: the same vote/outcome rules the server enforces. */
+function motionFormIssues(form: MotionForm, resolutionTypeLabel?: string): string[] {
+  const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+  return motionVoteIssues({
+    outcome: form.outcome || undefined,
+    votesFor: num(form.votesFor),
+    votesAgainst: num(form.votesAgainst),
+    abstentions: num(form.abstentions),
+    decidedBy: form.decidedBy || undefined,
+    outcomeOverrideNote: form.outcomeOverrideNote || undefined,
+    resolutionTypeLabel,
+  });
+}
 
 // A motion is safely editable from this master page only if it's a genuine
 // first-class row that doesn't mirror a meeting's minutes: motions with
@@ -190,6 +207,8 @@ function MotionsTableTab() {
       votesFor: row.votesFor != null ? String(row.votesFor) : "",
       votesAgainst: row.votesAgainst != null ? String(row.votesAgainst) : "",
       abstentions: row.abstentions != null ? String(row.abstentions) : "",
+      decidedBy: row.decidedBy ?? "",
+      outcomeOverrideNote: row.outcomeOverrideNote ?? "",
     });
   };
   const closeEdit = () => {
@@ -200,6 +219,11 @@ function MotionsTableTab() {
     if (!canWrite) return;
     if (!editing || !form) return;
     const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+    const issues = motionFormIssues(form, editing.resolutionTypeLabel);
+    if (issues.length) {
+      toast.error(issues[0]);
+      return;
+    }
     try {
       await update({
         motionId: editing._id as Id<"motions">,
@@ -213,6 +237,8 @@ function MotionsTableTab() {
           votesFor: num(form.votesFor),
           votesAgainst: num(form.votesAgainst),
           abstentions: num(form.abstentions),
+          decidedBy: form.decidedBy || undefined,
+          outcomeOverrideNote: form.outcomeOverrideNote.trim() || undefined,
         },
       });
       toast.success("Motion updated");
@@ -221,6 +247,15 @@ function MotionsTableTab() {
       toast.error(err?.message ?? "Could not update motion");
     }
   };
+
+  const formIssues = form ? motionFormIssues(form, editing?.resolutionTypeLabel) : [];
+  const overrideAvailable = form ? (OUTCOME_OVERRIDE_DECIDED_BY as readonly string[]).includes(form.decidedBy) : false;
+  const tallyConflict = form ? motionOutcomeConsistencyIssues({
+    outcome: form.outcome || undefined,
+    votesFor: form.votesFor.trim() === "" ? undefined : Number(form.votesFor),
+    votesAgainst: form.votesAgainst.trim() === "" ? undefined : Number(form.votesAgainst),
+    resolutionTypeLabel: editing?.resolutionTypeLabel,
+  }).length > 0 : false;
 
   return (
     <>
@@ -337,7 +372,7 @@ function MotionsTableTab() {
         footer={
           <>
             <button className="btn" onClick={closeEdit}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveEdit} disabled={!canWrite || (!form?.text.trim())}>
+            <button className="btn btn--accent" onClick={saveEdit} disabled={!canWrite || (!form?.text.trim()) || formIssues.length > 0}>
               Save
             </button>
           </>
@@ -360,14 +395,15 @@ function MotionsTableTab() {
               <Field label="Status">
                 <Select
                   value={form.status}
-                  onChange={(value) => setForm({ ...form, status: value })}
+                  // An outcome only exists for a voted motion.
+                  onChange={(value) => setForm({ ...form, status: value, outcome: value === "Voted" ? form.outcome : "" })}
                   options={MOTION_STATUSES.map((s) => ({ value: s, label: s }))}
                 />
               </Field>
               <Field label="Outcome">
                 <Select
                   value={form.outcome}
-                  onChange={(value) => setForm({ ...form, outcome: value })}
+                  onChange={(value) => setForm({ ...form, outcome: value, status: value ? "Voted" : form.status })}
                   options={MOTION_OUTCOMES}
                 />
               </Field>
@@ -391,6 +427,29 @@ function MotionsTableTab() {
                 <input className="input" type="number" min={0} value={form.abstentions} onChange={(e) => setForm({ ...form, abstentions: e.target.value })} />
               </Field>
             </div>
+            <Field label="Decided by" hint="Consensus, unanimous consent or a chair's ruling can stand against a recorded tally, with a note.">
+              <Select
+                value={form.decidedBy}
+                onChange={(value) => setForm({ ...form, decidedBy: value })}
+                options={[{ value: "", label: "—" }, ...DECIDED_BY_VALUES.map((value) => ({ value, label: DECIDED_BY_LABELS[value] }))]}
+              />
+            </Field>
+            {(overrideAvailable && tallyConflict) || form.outcomeOverrideNote ? (
+              <Field label="Override note" required={overrideAvailable && tallyConflict}>
+                <textarea
+                  className="input"
+                  rows={2}
+                  value={form.outcomeOverrideNote}
+                  placeholder="Why the recorded outcome stands despite the vote count"
+                  onChange={(e) => setForm({ ...form, outcomeOverrideNote: e.target.value })}
+                />
+              </Field>
+            ) : null}
+            {formIssues.length > 0 && (
+              <div role="alert" data-testid="motion-vote-issues" style={{ marginTop: 8 }}>
+                {formIssues.map((issue) => <p key={issue} className="field__error" style={{ margin: "4px 0" }}>{issue}</p>)}
+              </div>
+            )}
           </div>
         )}
       </Drawer>

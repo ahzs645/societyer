@@ -15,6 +15,7 @@ import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules
  */
 
 import { isCorporation } from "../organizationDomain";
+import { bodyQuorumRuleIssues } from "../bodyQuorum";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 
@@ -119,6 +120,11 @@ export async function upsertActivePortable(ctx: PortableMutationCtx, args: Recor
   }
   if (args.sourceAmendmentId) {
     await getOwned(ctx, "bylawAmendments", args.sourceAmendmentId, args.societyId);
+  }
+  const bodyRuleIssues = bodyQuorumRuleIssues(args.bodyQuorumRules);
+  if (bodyRuleIssues.length) throw new Error(`Invalid body quorum rules: ${bodyRuleIssues.join("; ")}`);
+  for (const row of args.bodyQuorumRules ?? []) {
+    if (row?.committeeId) await getOwned(ctx, "committees", row.committeeId, args.societyId);
   }
   const now = new Date().toISOString();
   const {

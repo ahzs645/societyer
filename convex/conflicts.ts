@@ -25,7 +25,9 @@ export const forMeeting = authorizedQuery("conflicts:forMeeting", query)({
 export const create = authorizedMutation("conflicts:create", mutation)({
   args: {
     societyId: v.id("societies"),
-    directorId: v.id("directors"),
+    directorId: v.optional(v.id("directors")),
+    personId: v.optional(v.id("peopleDirectory")),
+    personName: v.optional(v.string()),
     declaredAt: v.string(),
     contractOrMatter: v.string(),
     natureOfInterest: v.string(),
@@ -35,6 +37,7 @@ export const create = authorizedMutation("conflicts:create", mutation)({
     meetingId: v.optional(v.id("meetings")),
     motionIndex: v.optional(v.number()),
     motionText: v.optional(v.string()),
+    motionId: v.optional(v.id("motions")),
   },
   returns: v.any(),
   handler: async (ctx, args) => conflictsCreatePortable(await toPortableMutationCtx(ctx), args),

@@ -19,7 +19,11 @@ export const IMPORT_BUNDLE_COLLECTION_GROUPS: readonly (readonly string[])[] = [
   ["formationRecords", "incorporations"], ["nameSearchItems", "nameSearches"],
   ["entityAmendments", "amendments"], ["annualMaintenanceRecords", "annualGeneralMeetings"],
   ["jurisdictionMetadata"], ["supportLogs", "logs"], ["sourceEvidence"], ["secretVaultItems"],
-  ["pipaTrainings"], ["employees"], ["volunteers"], ["documentMap"],
+  ["pipaTrainings"], ["employees"], ["volunteers"],
+  ["committees"], ["committeeMembers"], ["members"], ["directors"], ["tasks"], ["goals"],
+  ["commitments"], ["fundingSources"], ["grantReports"], ["meetingMaterials"],
+  ["organizationSeats"], ["conflicts"], ["proxies"], ["bylawRuleSets"], ["operatingBudgets"],
+  ["documentMap"],
 ];
 
 const metadataKeys = new Set(["metadata", "name", "sourceExport", "specialistReports"]);
@@ -72,6 +76,23 @@ export function importBundlePreflightIssues(bundle: unknown): string[] {
   return issues;
 }
 
+/** Accepted input aliases: the value survives under its canonical field name. */
+const FIELD_ALIASES: Record<string, readonly string[]> = {
+  number: ["itemNumber"], startTime: ["scheduledTimeText", "localStartText"], time: ["scheduledTimeText"],
+  endTime: ["localEndText"], action: ["requestedAction"], responsibility: ["presenter"], body: ["bodyKey", "body"],
+  bodyKey: ["body"], date: ["at"], adoptsMinutesDate: ["adoptsMinutes"], dissentBy: ["opposedBy"],
+};
+
+function aliasPreserved(key: string, value: unknown, after: Record<string, unknown>): boolean {
+  return (FIELD_ALIASES[key] ?? []).some((alias) => {
+    const kept = after[alias];
+    if (kept === undefined || kept === null) return false;
+    if (typeof value === "string" && typeof kept === "string") return kept.trim().toLowerCase() === value.trim().toLowerCase();
+    if (typeof value === "string" && isObject(kept)) return Object.values(kept).some((entry) => typeof entry === "string" && entry.trim() === value.trim());
+    return JSON.stringify(kept) === JSON.stringify(value);
+  });
+}
+
 function collectLosses(before: unknown, after: unknown, location: string, issues: string[]): void {
   if (before === undefined || before === null) return;
   if (after === undefined || after === null) {
@@ -90,12 +111,21 @@ function collectLosses(before: unknown, after: unknown, location: string, issues
       issues.push(`${location}: normalization would replace a structured object; use the expected field type`);
       return;
     }
-    for (const [key, value] of Object.entries(before)) collectLosses(value, after[key], `${location}.${key}`, issues);
+    for (const [key, value] of Object.entries(before)) {
+      if ((after[key] === undefined || after[key] === null) && value !== undefined && value !== null && aliasPreserved(key, value, after)) continue;
+      collectLosses(value, after[key], `${location}.${key}`, issues);
+    }
   } else if (Array.isArray(after) || isObject(after)) {
     // The native minutes contract explicitly accepts a string action item and
     // expands it to { text, done }; that transformation preserves the input.
     if (typeof before === "string" && /\.actionItems\[\d+\]$/.test(location)
       && isObject(after) && after.text === before.trim()) return;
+    // Named people (abstainers, dissenters) expand "Name" to { name }.
+    if (typeof before === "string" && /\.(?:abstainedBy|opposedBy|dissentBy)\[\d+\]$/.test(location)
+      && isObject(after) && after.name === before.trim()) return;
+    // A plain next-meeting date expands to { at } (or { dateText }).
+    if (typeof before === "string" && /\.nextMeetings\[\d+\]$/.test(location)
+      && isObject(after) && (after.at === before.trim() || after.dateText === before.trim())) return;
     issues.push(`${location}: expected structured data; normalization would replace this scalar`);
   }
 }

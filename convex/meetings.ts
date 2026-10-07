@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { meetingExtensionFields } from "./validators/meetingModel";
 import {
   listPortable,
   getPortable,
@@ -58,6 +59,7 @@ export const create = authorizedMutation("meetings:create", mutation)({
     packageReviewedAtISO: v.optional(v.string()),
     packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
+    ...meetingExtensionFields,
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
@@ -119,6 +121,7 @@ export const update = authorizedMutation("meetings:update", mutation)({
       // wire, so the client can't unset a field by sending `field: undefined`.
       clearNoticeSent: v.optional(v.boolean()),
       clearCommitteeId: v.optional(v.boolean()),
+      ...meetingExtensionFields,
     }),
   },
   returns: v.any(),

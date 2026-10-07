@@ -1,4 +1,11 @@
 import { meetingHistoryFields } from "../validators/meetingHistory";
+import {
+  detailedAttendanceValidator,
+  meetingExtensionFields,
+  minutesActionItemValidator,
+  motionExtensionFields,
+  nextMeetingValidator,
+} from "../validators/meetingModel";
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -41,6 +48,7 @@ export const meetingTables = {
     packageReviewedAtISO: v.optional(v.string()),
     packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
+    ...meetingExtensionFields,
   })
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "scheduledAt"])
@@ -100,20 +108,7 @@ export const meetingTables = {
         instructions: v.optional(v.string()),
       }),
     ),
-    detailedAttendance: v.optional(
-      v.array(
-        v.object({
-          name: v.string(),
-          status: v.string(), // present | absent | regrets | guest | staff | invited | proxy
-          roleTitle: v.optional(v.string()),
-          affiliation: v.optional(v.string()),
-          memberIdentifier: v.optional(v.string()),
-          proxyFor: v.optional(v.string()),
-          quorumCounted: v.optional(v.boolean()),
-          notes: v.optional(v.string()),
-        }),
-      ),
-    ),
+    detailedAttendance: v.optional(v.array(detailedAttendanceValidator)),
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
@@ -141,16 +136,7 @@ export const meetingTables = {
           motionId: v.optional(v.id("motions")),
           reportSubmitted: v.optional(v.boolean()),
           decisions: v.optional(v.array(v.string())),
-          actionItems: v.optional(
-            v.array(
-              v.object({
-                text: v.string(),
-                assignee: v.optional(v.string()),
-                dueDate: v.optional(v.string()),
-                done: v.boolean(),
-              }),
-            ),
-          ),
+          actionItems: v.optional(v.array(minutesActionItemValidator)),
           linkedTaskIds: v.optional(v.array(v.id("tasks"))),
           // 0 = root agenda item, 1 = sub-item nested under the most recent
           // preceding root. Absent on legacy data, treated as 0.
@@ -162,6 +148,8 @@ export const meetingTables = {
           sourceReviewStatus: v.optional(v.string()),
           sourceKind: v.optional(v.string()),
           sourceEvidence: v.optional(v.any()),
+          // Section title exactly as imported, kept when cleanup changed it.
+          sourceTitle: v.optional(v.string()),
         }),
       ),
     ),
@@ -195,6 +183,7 @@ export const meetingTables = {
         // minutes" motion). When the motion carries, the referenced minutes are
         // automatically stamped approvedAt/approvedInMeetingId.
         adoptsMinutesId: v.optional(v.id("minutes")),
+        ...motionExtensionFields,
       }),
     )),
     // Immutable snapshot of motions[] frozen when the minutes are approved, so
@@ -222,6 +211,8 @@ export const meetingTables = {
           motionTemplateId: v.optional(v.id("motionTemplates")),
           motionId: v.optional(v.id("motions")),
           adoptsMinutesId: v.optional(v.id("minutes")),
+          tags: v.optional(v.array(v.string())),
+          ...motionExtensionFields,
         }),
       ),
     ),
@@ -233,19 +224,14 @@ export const meetingTables = {
     // Phase 2. Optional until the reseed populates every minutes.
     motionIds: v.optional(v.array(v.id("motions"))),
     decisions: v.array(v.string()),
-    actionItems: v.array(
-      v.object({
-        text: v.string(),
-        assignee: v.optional(v.string()),
-        dueDate: v.optional(v.string()),
-        done: v.boolean(),
-      }),
-    ),
+    actionItems: v.array(minutesActionItemValidator),
     approvedAt: v.optional(v.string()),
     approvedInMeetingId: v.optional(v.id("meetings")),
     nextMeetingAt: v.optional(v.string()),
     nextMeetingLocation: v.optional(v.string()),
     nextMeetingNotes: v.optional(v.string()),
+    // A16: several scheduled next meetings (the single nextMeetingAt stays the first).
+    nextMeetings: v.optional(v.array(nextMeetingValidator)),
     sessionSegments: v.optional(
       v.array(
         v.object({
@@ -321,6 +307,9 @@ export const meetingTables = {
     memberId: v.optional(v.id("members")),
     directorId: v.optional(v.id("directors")),
     roleTitle: v.optional(v.string()),
+    // A1: affiliation / represented organization as recorded for this meeting.
+    affiliation: v.optional(v.string()),
+    representedOrganization: v.optional(v.string()),
     attendanceStatus: v.string(), // present | absent | regrets | guest | needs_review
     quorumCounted: v.optional(v.boolean()),
     confidence: v.string(),

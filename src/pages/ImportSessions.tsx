@@ -6,6 +6,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { RepairImportedMinutesAction } from "../features/meetings/components/RepairImportedMinutesAction";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -451,6 +452,7 @@ export function ImportSessionsPage() {
         subtitle="Stage reviewed source bundles, review each item, then apply approved records into app modules."
         actions={
           <>
+          <RepairImportedMinutesAction societyId={society._id} />
           <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
             <Upload size={12} /> Import members CSV
           </button>
