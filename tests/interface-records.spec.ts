@@ -148,14 +148,17 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.getByRole("button", { name: "New document", exact: true })).toBeDisabled();
   await expect(page.locator("tr", { hasText: title })).toHaveCount(0);
   const publicBylaws = page.locator("tr", { hasText: "Current bylaws" });
-  await expect(publicBylaws.getByRole("button", { name: "Flag", exact: true })).toBeDisabled();
-  await expect(publicBylaws.getByRole("button", { name: "Delete Current bylaws", exact: true })).toBeDisabled();
-  await expect(publicBylaws.getByRole("button", { name: "Sync", exact: true })).toBeDisabled();
-  await publicBylaws.getByRole("button", { name: "Versions", exact: true }).click();
+  // Row actions live in the per-document menu; a Viewer sees the writes disabled.
+  const rowMenu = publicBylaws.getByRole("button", { name: "Actions for this document", exact: true });
+  await rowMenu.click();
+  await expect(page.getByRole("menuitem", { name: "Flag for purge", exact: true })).toBeDisabled();
+  await expect(page.getByRole("menuitem", { name: "Delete…", exact: true })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "File history", exact: true }).click();
   const versions = page.getByRole("dialog");
   await expect(versions.getByText("Document editing permission is required to upload or restore versions.", { exact: true })).toBeVisible();
   await versions.getByRole("button", { name: "Close", exact: true }).click();
-  await publicBylaws.getByRole("link", { name: "Review", exact: true }).click();
+  await rowMenu.click();
+  await page.getByRole("menuitem", { name: "Open review page", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Current bylaws", exact: true })).toBeVisible();
   await expect(page.getByText("Your role can read this document. Document editing permission is required to change review status or comments.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add comment", exact: true })).toBeDisabled();
