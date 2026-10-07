@@ -111,7 +111,12 @@ test("date and time picker closes without losing an unsaved meeting drawer", asy
   await expectInViewport(page, picker);
   await drawer.locator(".drawer__body").evaluate((element) => { element.scrollTop = 30; });
   await expectInViewport(page, picker);
+  // Focus starts in the typed-date field (O-9b): a keyboard user can type the
+  // date straight away; Tab then reaches the month navigation and the grid.
+  await expect(picker.getByLabel("Type a date", { exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(picker.getByRole("button", { name: "Previous month", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await expect(picker.getByRole("button", { name: "Done", exact: true })).toBeFocused();
   await picker.getByLabel("Hour", { exact: true }).selectOption("10");
