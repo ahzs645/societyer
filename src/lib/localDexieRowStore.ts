@@ -5,6 +5,7 @@ import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspa
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
 import { createEntityIdFactory } from "../../shared/portable/ids";
 import { HEAVY_FIELD_POLICY, splitHeavyFields } from "../../shared/portable/heavyFields";
+import { DEFERRED_HYDRATION_TABLES } from "../../shared/portable/localRowStore";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -200,6 +201,11 @@ export class LocalDexieRowStore implements LocalRowStore {
   private dbReady: Promise<LocalDexieDatabase | null> | null = null;
   /** Whether rows are persisted (heavy fields are split out only then). */
   private persistent = false;
+  /**
+   * Deferred tables (DEFERRED_HYDRATION_TABLES) whose stored rows have not been read yet: table → the load
+   * in flight (null = not started). Boot skips them; the first read (or write) of one loads it.
+   */
+  private deferred = new Map<string, Promise<void> | null>();
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string; projectionNamespace?: string }) {
     this.projectionNamespace = options?.projectionNamespace;
@@ -302,6 +308,60 @@ export class LocalDexieRowStore implements LocalRowStore {
       this.tables.set(table, { rows, array: null, indexes: new Map() });
       for (const id of rows.keys()) this.idTables.set(id, table);
     }
+  }
+
+  isDeferred(table: string) {
+    return this.deferred.has(table);
+  }
+
+  hasDeferredTables() {
+    return this.deferred.size > 0;
+  }
+
+  /** Reads deferred tables' stored rows into the cache (all of them when `tables` is omitted). */
+  async ensureTables(tables?: readonly string[]) {
+    if (!this.deferred.size) return;
+    const names = (tables ?? [...this.deferred.keys()]).filter((table) => this.deferred.has(table));
+    await Promise.all(names.map((table) => {
+      let loading = this.deferred.get(table);
+      if (!loading) {
+        loading = this.loadDeferredTable(table);
+        this.deferred.set(table, loading);
+      }
+      return loading;
+    }));
+  }
+
+  private async loadDeferredTable(table: string) {
+    const db = await this.database();
+    const started = now();
+    let count = 0;
+    if (db) {
+      const records = await db.records.where("table").equals(table).toArray();
+      // A table with nothing stored stays absent, exactly as boot would have left it.
+      const state = records.length ? this.tableState(table, true) : this.tableState(table);
+      for (const record of records) {
+        if (!record?.value?._id) continue;
+        const id = record.value._id;
+        // A row written in this session (it has a session revision) is newer than the stored one.
+        if (this.revisions.has(record.key) && this.revisions.get(record.key) !== record.rev) continue;
+        if (record.deletedAtISO) {
+          this.deleteCachedRow(table, id);
+          continue;
+        }
+        state!.rows.set(id, record.value);
+        this.idTables.set(id, table);
+        if (record.external?.length && !this.external.has(record.key)) this.external.set(record.key, record.external);
+        if (record.rev && !this.revisions.has(record.key)) this.revisions.set(record.key, record.rev);
+        count++;
+      }
+      if (state) {
+        state.array = null;
+        state.indexes.clear();
+      }
+    }
+    this.deferred.delete(table);
+    recordDeferredTiming(table, now() - started, count);
   }
 
   rows(table: string) {
@@ -516,9 +576,9 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
   }
 
-  /** Table names currently held in the cache (LocalRowStore contract). */
+  /** Table names held in the cache or deferred (LocalRowStore contract). */
   tableNames(): string[] {
-    return [...this.tables.keys()];
+    return this.deferred.size ? [...new Set([...this.tables.keys(), ...this.deferred.keys()])] : [...this.tables.keys()];
   }
 
   private get splitsHeavyFields() {
@@ -580,6 +640,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   async commitBatch(ops: RowStoreOp[]): Promise<void> {
     if (!ops.length) return;
+    if (this.deferred.size && ops.some((op) => this.deferred.has(op.table))) await this.ensureTables(ops.map((op) => op.table));
 
     const undo = new Map<string, UndoEntry>();
     for (const op of ops) {
@@ -656,6 +717,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   async exportSnapshot(): Promise<LocalWorkspaceSnapshot> {
     await this.whenHydrated();
+    await this.ensureTables();
     await this.flushProjections();
     const tables: LocalSeed = {};
     for (const table of this.tables.keys()) {
@@ -681,6 +743,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   async exportSnapshotSource(batchSize = 500): Promise<{ meta: Omit<LocalWorkspaceSnapshot, "tables">; tables: Array<{ name: string; rows: () => AsyncIterable<any[]> }> }> {
     await this.whenHydrated();
+    await this.ensureTables();
     await this.flushProjections();
     const meta = {
       kind: "societyer.localWorkspaceSnapshot" as const,
@@ -712,7 +775,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    * a backup must never silently omit them — use `exportSnapshot()`.
    */
   exportSnapshotSync(): LocalWorkspaceSnapshot {
-    if (this.external.size) {
+    if (this.external.size || this.deferred.size) {
       throw new Error("Some fields of this workspace are stored outside memory; export it with exportSnapshot().");
     }
     const tables: LocalSeed = {};
@@ -813,6 +876,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
 
     this.loadTables(split.light);
+    this.deferred = new Map();
     this.external = new Map(split.external);
     this.revisions = new Map();
     this.dataEpoch = nextEpoch;
@@ -850,6 +914,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   async reseed() {
     await this.database();
     this.loadTables(cloneLocalSeed(this.seed));
+    this.deferred = new Map();
     this.external = new Map();
     this.pendingHeavy = new Map();
     this.revisions = new Map();
@@ -904,12 +969,15 @@ export class LocalDexieRowStore implements LocalRowStore {
     });
 
     const readStarted = now();
-    // Boot reads LIGHT rows only: heavy fields stay in `recordFields`.
-    const [localRecords, attachments, changes, workspaceMeta] = await Promise.all([
-      db.records.toArray(),
+    // Boot reads LIGHT rows only: heavy fields stay in `recordFields`. Deferred tables (AI intake staging,
+    // field provenance) are read on first use, unless a schema migration needs every row now.
+    const workspaceMeta = await db.meta.get("workspace");
+    const needsMigration = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta).schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION;
+    const deferTables = needsMigration ? [] : DEFERRED_HYDRATION_TABLES.filter((table) => !this.seed[table]?.length);
+    const [localRecords, attachments, changes] = await Promise.all([
+      deferTables.length ? db.records.where("table").noneOf([...deferTables]).toArray() : db.records.toArray(),
       db.attachments.toArray(),
       db.changes.toArray(),
-      db.meta.get("workspace"),
     ]);
     // One pass, straight into per-table maps: seed rows first (in seed order;
     // `this.seed` is a private copy and cached rows are never mutated), then each
@@ -964,6 +1032,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     else this.loadTableMaps(tableMaps);
     this.external = external;
     this.revisions = revisions;
+    this.deferred = new Map(deferTables.map((table) => [table, null]));
     this.dataEpoch = await this.persistedDataEpoch();
     // Replay anything written while this read was in flight, so a mutation
     // issued during startup survives hydration.
@@ -1157,6 +1226,12 @@ function recordBootTiming(timing: { totalMs: number; readMs: number; records: nu
     readMs: Math.round(timing.readMs),
     records: timing.records,
   };
+}
+
+/** Opt-in diagnostics: deferred tables loaded on first use (table → { ms, rows }). */
+function recordDeferredTiming(table: string, ms: number, rows: number) {
+  const target = globalThis as { __SOCIETYER_LOCAL_DEFERRED__?: Record<string, { ms: number; rows: number }> };
+  (target.__SOCIETYER_LOCAL_DEFERRED__ ??= {})[table] = { ms: Math.round(ms), rows };
 }
 
 function isIndexableValue(value: unknown) {

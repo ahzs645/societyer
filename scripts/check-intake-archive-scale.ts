@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
 import { PortableRuntime } from "../shared/portable/define";
-import { LocalStoreDb, MemoryRowStore } from "../shared/portable/localRowStore";
+import { DEFERRED_HYDRATION_TABLES, LocalStoreDb, MemoryRowStore } from "../shared/portable/localRowStore";
 import { DEFAULT_HEAVY_FIELD_POLICY } from "../shared/portable/heavyFields";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import { latestDecisions } from "../shared/intake/review";
@@ -70,8 +70,8 @@ const base = {
   users: [{ _id: owner, societyId: society, role: "Owner", status: "Active", displayName: "Owner" }],
 };
 // The local engine as the browser runs it: lazy heavy fields (intake extracts and extraction records
-// included) and compound equality indexes.
-const store = new MemoryRowStore({ ...base, ...tables } as any, { heavyFields: DEFAULT_HEAVY_FIELD_POLICY, indexed: true });
+// included), deferred intake tables and compound equality indexes.
+const store = new MemoryRowStore({ ...base, ...tables } as any, { heavyFields: DEFAULT_HEAVY_FIELD_POLICY, indexed: true, deferredTables: DEFERRED_HYDRATION_TABLES });
 const db = { dump: (table: string) => store.fullRows(table), tableNames: () => store.tableNames() };
 const runtime = new PortableRuntime({
   db: new LocalStoreDb(store), capabilities: makeCapabilities({}),

@@ -239,7 +239,8 @@ export function IntakeReviewPage() {
   const promoteAllReady = async () => {
     if (!societyId) return;
     const rank = (row: QueueRow) => (row.docClass === "meetingMinutes" ? 0 : ["agenda", "meetingPackage", "agmMaterial"].includes(row.docClass) ? 1 : 2);
-    const rows = flat.filter((row) => !CLOSED.has(row.status) && (row.docClass === "meetingMinutes" || CLASS_PROMOTION[row.docClass])).map((row, index) => ({ row, index })).sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index).map(({ row }) => row);
+    // A document nobody reviewed anything in ("pending_review") cannot be promoted: skip it without a round trip.
+    const rows = flat.filter((row) => !CLOSED.has(row.status) && row.status !== "pending_review" && (row.docClass === "meetingMinutes" || CLASS_PROMOTION[row.docClass])).map((row, index) => ({ row, index })).sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index).map(({ row }) => row);
     if (!rows.length) return;
     const ok = await confirm({
       title: `Promote every ready document (${rows.length})?`,

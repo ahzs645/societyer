@@ -193,7 +193,7 @@
     "test:app-route-hrefs": "tsx scripts/check-app-route-hrefs.ts",
     "test:portable-query-cache": "tsx scripts/check-portable-query-cache.ts",
     "test:local-workspace-scale": "tsx scripts/check-local-workspace-scale.ts",
-    "test:local-workspace-perf": "node scripts/check-local-workspace-perf.mjs",
+    "test:local-workspace-perf": "NODE_OPTIONS=--max-old-space-size=6144 tsx scripts/check-local-workspace-perf.mjs",
     "perf:measure-local": "node scripts/perf/measure-local-workspace.mjs",
     "test:api-key-mint": "tsx scripts/check-api-key-mint.ts",
     "test:personal-view-access": "tsx scripts/check-personal-view-access.ts",
