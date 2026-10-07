@@ -307,6 +307,9 @@ fs.rmSync(dir, { recursive: true, force: true });
     assert.ok(!(db.dump("documents") as any[]).some((doc) => (doc.tags ?? []).some((tag: string) => tag.includes("#part-"))), "no document is created for a derived key");
     const viewSource = await query("intake:provenanceForRecords", { societyId: society, targets: [{ targetTable: "meetings", targetId: meetingId }] });
     assert.ok(viewSource.some((item: any) => item.locator?.quote && item.value !== undefined), "View source reads the value and quote from the extraction");
+    assert.ok(viewSource.filter((item: any) => item.extractionId === row._id).every((item: any) => /minutes embedded in this package/.test(item.fileName)), "View source names the package, not the derived key");
+    const meeting = (db.dump("meetings") as any[]).find((item) => item._id === meetingId);
+    assert.notEqual(meeting.status, "HeldMinutesMissing", "a meeting with promoted minutes is not 'minutes missing'");
   }
   // Server-side reconciliation does not derive the stored ones a second time.
   const again = await mutate("intake:reconcileRun", { societyId: society, runId: staged.runId });

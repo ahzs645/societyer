@@ -934,9 +934,12 @@ export async function provenanceForRecords(ctx: PortableQueryCtx, { societyId, t
   for (const row of rows) {
     const key = `${row.runId}|${row.fileKey}`;
     if (names.has(key) || !row.runId || !row.fileKey) continue;
-    const file = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", row.runId).eq("fileKey", row.fileKey)).first() as any;
+    // Minutes embedded in a package ("<package>#part-N") are shown as the package file.
+    const packageKey = String(row.fileKey).replace(/#part-\d+$/, "");
+    const file = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", row.runId).eq("fileKey", packageKey)).first() as any;
     const run = await ctx.db.get<any>(row.runId, "intakeRuns");
-    names.set(key, { name: file?.name ?? String(row.fileKey).replace(/^local:/, ""), runName: run?.name, sensitivity: file?.sensitivity });
+    const embedded = packageKey !== String(row.fileKey);
+    names.set(key, { name: file?.name ? `${file.name}${embedded ? " (minutes embedded in this package)" : ""}` : String(row.fileKey).replace(/^local:/, ""), runName: run?.name, sensitivity: file?.sensitivity });
   }
   const seesRestricted = await allowed(ctx, societyId, "settings:write");
   const seesContent = await allowed(ctx, societyId, "documents:read");

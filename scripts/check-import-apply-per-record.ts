@@ -168,4 +168,16 @@ await mutate("importSessions:bulkSetStatus", { sessionId: reapply, status: "Appr
 await mutate("importSessions:applyApprovedSectionRecords", { sessionId: reapply });
 assert.equal((db.dump("deadlines") as any[]).length, 1, "idempotency survives compaction (import targets, not staged copies)");
 
+// 7. Minutes merged into a meeting only an agenda evidenced ("Held — minutes missing") make it held.
+const evidenced = await mutate("importSessions:createFromBundle", { societyId: society, name: "Agenda only", bundle: { meetingMinutes: [{ meetingTitle: "Board meeting", meetingDate: "2024-05-14", body: "board", meetingStatus: "HeldMinutesMissing", sourceExternalIds: ["local:agenda-2024-05-14.pdf"] }] } });
+await mutate("importSessions:bulkSetStatus", { sessionId: evidenced, status: "Approved" });
+await mutate("importSessions:applyApprovedMeetings", { sessionId: evidenced });
+const evidencedMeeting = (db.dump("meetings") as any[]).find((row) => String(row.scheduledAt).startsWith("2024-05-14"));
+assert.equal(evidencedMeeting.status, "HeldMinutesMissing");
+const minutesLater = await mutate("importSessions:createFromBundle", { societyId: society, name: "Minutes later", bundle: { meetingMinutes: [{ meetingTitle: "Board meeting", meetingDate: "2024-05-14", body: "board", attendees: ["Avery Example"], discussion: "Synthetic minutes found in a package.", sourceExternalIds: ["local:package-2024-06.pdf#part-12"] }] } });
+await mutate("importSessions:bulkSetStatus", { sessionId: minutesLater, status: "Approved" });
+const merged = await mutate("importSessions:applyApprovedMeetings", { sessionId: minutesLater });
+assert.equal(merged.existing, 1, "the minutes fold into the evidenced meeting");
+assert.equal((db.dump("meetings") as any[]).find((row) => row._id === evidencedMeeting._id).status, "Held", "the meeting now has minutes");
+
 console.log("PASS import apply per record: valid records apply past blocked ones; duplicates, waiting and invalid records are reported with reasons; link/skip/defer/retry resolve them; waiting materials apply when their meeting is created; repeated applies and compaction stay idempotent");

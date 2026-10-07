@@ -1,7 +1,7 @@
 import { EVIDENCE_FIELDS, mergeImportedEvidence, normalizeImportedEvidence } from "../../evidenceReview";
 import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHistory";
 import { assertMeetingHistoryReferences, syncMotionsForMinutes, resolveMinutesMotions } from "../minutes";
-import { directoryPersonId, sourceVersionsCover, importedAgendaRows, importedMotionFromPayload, importedSectionsWithLinks, importedSourceVersionFor, linkActionItem, loadDirectoryIndex, screenImportedAttendance, type DirectoryIndex } from "./importMeetingApply";
+import { directoryPersonId, importedMeetingStatus, sourceVersionsCover, importedAgendaRows, importedMotionFromPayload, importedSectionsWithLinks, importedSourceVersionFor, linkActionItem, loadDirectoryIndex, screenImportedAttendance, type DirectoryIndex } from "./importMeetingApply";
 import { normalizeSigningAuthorityTiers } from "../../signingAuthorityTiers";
 import { normalizeDocumentCategory } from "../../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../../documentVersioning";
@@ -123,6 +123,8 @@ async function mergeExistingMeetingImport(
   if (!meeting.electronic && payload.electronic === true) meetingPatch.electronic = true;
   if (!meeting.localStartText && cleanText(payload.localStartText)) meetingPatch.localStartText = cleanText(payload.localStartText);
   if (!meeting.localEndText && cleanText(payload.localEndText)) meetingPatch.localEndText = cleanText(payload.localEndText);
+  // Minutes merged into a meeting only an agenda or package evidenced ("Held — minutes missing"): it has minutes now.
+  if (meeting.status === "HeldMinutesMissing" && !cleanText(payload.meetingStatus) && importedMeetingStatus(payload) === "Held") meetingPatch.status = "Held";
   // Agenda lives in the relational agendas/agendaItems store. Only overwrite the
   // existing items when the current agenda is just the generic imported
   // scaffold (so we don't clobber a reviewed agenda).
