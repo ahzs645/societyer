@@ -74,7 +74,6 @@ export function meetsNoticeWindow(value: string, minDays: number, maxDays: numbe
   return noticeWindowSatisfied(new Date(), value, minDays, maxDays, rules);
 }
 
-/** True when the meeting's calendar day is before today: the form records a meeting already held. */
 /**
  * Default start for a new meeting: the first day that satisfies the notice
  * period, at 6:00 PM local time (a usual board meeting hour) rather than the
@@ -95,6 +94,7 @@ export function meetingCreateLabels(scheduledAt: string, now: string | Date = ne
     : { title: "Schedule meeting", action: "Schedule", busy: "Scheduling…" };
 }
 
+/** True when the meeting's calendar day is before today: the form records a meeting already held. */
 export function isPastMeeting(value: string, now: string | Date = new Date()) {
   const days = daysUntil(value, now);
   return days != null && days < 0;
@@ -115,4 +115,19 @@ export function newGeneralMeetingNoticeProblem(value: string, minDays: number, r
 /** New meetings dated before today are recorded as held, not scheduled. */
 export function statusForNewMeeting(value: string, status: string, now: string | Date = new Date()) {
   return isPastMeeting(value, now) && (!status || status === "Scheduled") ? "Held" : status;
+}
+
+/**
+ * A notice date typed for a meeting that already happened: YYYY-MM-DD, not
+ * after the meeting. Returns the stored ISO value (local noon, so the day
+ * cannot shift) or an error message.
+ */
+export function pastNoticeDateValue(text: string, meetingScheduledAt: string): { iso?: string; error?: string } {
+  const value = String(text ?? "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return { error: "Enter the date as YYYY-MM-DD." };
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
+  if (Number.isNaN(date.getTime()) || date.getDate() !== Number(match[3])) return { error: "Enter a real calendar date." };
+  if (value > String(meetingScheduledAt ?? "").slice(0, 10)) return { error: "Notice must be sent on or before the meeting date." };
+  return { iso: date.toISOString() };
 }

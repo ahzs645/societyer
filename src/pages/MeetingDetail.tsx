@@ -88,7 +88,8 @@ import { MinutesDocumentPreview } from "../features/meetings/components/MinutesD
 import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
-import { Modal, useConfirm } from "../components/Modal";
+import { Modal, useConfirm, usePrompt } from "../components/Modal";
+import { isPastMeeting, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -241,6 +242,7 @@ export function MeetingDetailPage() {
   );
   const toast = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const motionEditorRef = useRef<MotionEditorHandle | null>(null);
@@ -788,11 +790,29 @@ export function MeetingDetailPage() {
   const toggleNoticeSent = async () => {
     if (!(canMeetingsWrite)) return;
     const wasSent = Boolean(meeting.noticeSentAt);
+    let noticeSentAt = new Date().toISOString();
+    // A meeting that already happened was not noticed today: ask for the date.
+    if (!wasSent && isPastMeeting(meeting.scheduledAt)) {
+      const typed = await prompt({
+        title: "When was notice sent?",
+        message: "This meeting has already happened. Enter the date the notice went out, as recorded in your files (YYYY-MM-DD).",
+        placeholder: "YYYY-MM-DD",
+        confirmLabel: "Record notice date",
+        required: true,
+      });
+      if (typed == null) return;
+      const parsed = pastNoticeDateValue(typed, meetingCalendarDate(meeting as any) ?? String(meeting.scheduledAt).slice(0, 10));
+      if (!parsed.iso) {
+        toast.error("Notice date not recorded", parsed.error);
+        return;
+      }
+      noticeSentAt = parsed.iso;
+    }
     await updateMeeting({
       id: meeting._id,
       patch: wasSent
         ? { clearNoticeSent: true }
-        : { noticeSentAt: new Date().toISOString() },
+        : { noticeSentAt },
     });
     toast.success(
       wasSent ? "Notice cleared" : "Notice marked sent",

@@ -9,7 +9,7 @@ import { cleanSourceLocation } from "../shared/meetingSourceHeader";
 import { attendanceRowsFromPaste, blankAttendanceRow, mergeAttendanceRows } from "../shared/meetingAttendanceGrid";
 import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
 import { effectiveSourceFidelity } from "../src/features/meetings/lib/minutesExportPrefs";
-import { defaultNewMeetingStart, meetingCreateLabels } from "../src/features/meetings/lib/noticeWindow";
+import { defaultNewMeetingStart, meetingCreateLabels, pastNoticeDateValue } from "../src/features/meetings/lib/noticeWindow";
 import { minutesApprovalIssues } from "../shared/meetingApproval";
 import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
 import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectionAlign";
@@ -265,3 +265,10 @@ assert.deepEqual(minutesApprovalIssues({ approvedOn: "2026-10-06", meeting: { sc
 assert.equal(upcomingMeetingsFromISO("2026-10-07T03:00:00.000Z", "2026-10-06"), "2026-10-06T00:00:00.000Z", "a BC evening keeps today's date-only meetings");
 assert.equal(upcomingMeetingsFromISO("2026-10-06T22:00:00.000Z", "2026-10-07"), "2026-10-06T22:00:00.000Z", "east of UTC keeps the current instant");
 console.log("✓ new meeting default 6 PM, Record vs Schedule, local-day approval and upcoming bounds");
+
+assert.equal(pastNoticeDateValue("2019-05-01", "2019-05-28T12:00:00.000Z").error, undefined);
+assert.equal(new Date(pastNoticeDateValue("2019-05-01", "2019-05-28").iso!).getDate(), 1, "stored at local noon so the day cannot shift");
+assert.match(String(pastNoticeDateValue("2019-06-01", "2019-05-28").error), /on or before/);
+assert.match(String(pastNoticeDateValue("2019-02-30", "2019-05-28").error), /real calendar date/);
+assert.match(String(pastNoticeDateValue("May 1", "2019-05-28").error), /YYYY-MM-DD/);
+console.log("✓ past meetings: notice is recorded with its real date, never 'sent today'");

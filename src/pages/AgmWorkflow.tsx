@@ -27,9 +27,9 @@ import {
 import { formatDateTime, formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
-import { useConfirm } from "../components/Modal";
+import { useConfirm, usePrompt } from "../components/Modal";
 import { AGM_STEP_ORDER, type AgmStep as Step } from "../features/meetings/components/MeetingDetailSupport";
-import { calendarDaysBetween, daysUntil } from "../features/meetings/lib/noticeWindow";
+import { calendarDaysBetween, daysUntil, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { annualReportForAgm, dateOnly as agmDateOnly } from "../../shared/agmEvidence";
 import { Undo2 } from "lucide-react";
@@ -68,6 +68,8 @@ export function AgmWorkflowPage() {
   );
   const init = useMutation(api.agm.init);
   const markStep = useMutation(api.agm.markStep);
+  const updateMeeting = useMutation(api.meetings.update);
+  const prompt = usePrompt();
   const sendMeetingNotice = useAction(api.communications.sendMeetingNotice);
   const actingUserId = useCurrentUserId() ?? undefined;
   const { rules: activeRules } = useBylawRules();
@@ -165,13 +167,34 @@ export function AgmWorkflowPage() {
   };
 
   const daysToMeeting = daysUntil(meeting.scheduledAt) ?? 0;
+  // A held AGM is being documented, not run: notice is recorded with its real
+  // date (or as not recorded), never "sent" today.
+  const meetingHeld = daysToMeeting < 0 || meeting.status === "Held";
+  const recordedNoticeAt: string | undefined = meeting.noticeSentAt ?? run?.noticeSentAt ?? undefined;
+  const recordPastNotice = async () => {
+    const typed = await prompt({
+      title: "When was notice of this AGM sent?",
+      message: "Enter the date from your records (YYYY-MM-DD). If no record of the notice survives, cancel and choose “No notice record”.",
+      placeholder: "YYYY-MM-DD",
+      confirmLabel: "Record notice date",
+      required: true,
+    });
+    if (typed == null) return;
+    const parsed = pastNoticeDateValue(typed, agmDateOnly(meeting.scheduledAt) ?? String(meeting.scheduledAt).slice(0, 10));
+    if (!parsed.iso) {
+      toast.error("Notice date not recorded", parsed.error);
+      return;
+    }
+    if (can("meetings:write")) await updateMeeting({ id: meeting._id, patch: { noticeSentAt: parsed.iso } });
+    await advance("notice", { noticeSentAt: parsed.iso, noticeRecipientCount: 0 });
+  };
   const noticeDaysBeforeMeeting = calendarDaysBetween(
     meeting.scheduledAt,
-    meeting.noticeSentAt ?? new Date(),
+    recordedNoticeAt ?? new Date(),
   ) ?? 0;
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
-  const noticeWithinWindow = noticeWindowSatisfied(meeting.noticeSentAt ?? new Date(), meeting.scheduledAt, noticeMinDays, noticeMaxDays, rules);
+  const noticeWithinWindow = noticeWindowSatisfied(recordedNoticeAt ?? (meetingHeld ? meeting.scheduledAt : new Date()), meeting.scheduledAt, noticeMinDays, noticeMaxDays, rules) && !(meetingHeld && !recordedNoticeAt);
   const meetingDate = agmDateOnly(meeting.scheduledAt);
   const annualReport = meetingDate ? annualReportForAgm(filings ?? [], meetingDate, { dueDays: rules?.annualReportDueDaysAfterMeeting ?? 30 }) : null;
   const votingMemberCount = (members ?? []).filter((member: any) => member.status === "Active" && member.votingRights).length;
@@ -204,16 +227,20 @@ export function AgmWorkflowPage() {
         subtitle={`${formatMeetingDate(meeting)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
       />
 
-      {isLocalDataRuntime() && <p className="muted" role="status">Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.</p>}
+      {isLocalDataRuntime() && !meetingHeld && <p className="muted" role="status">Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.</p>}
 
       <div className="card">
         <div className="card__head"><h2 className="card__title">Compliance posture</h2></div>
         <div className="card__body col" style={{ gap: 8 }}>
           <Item label="Notice window"
             value={
-              noticeWithinWindow
-                ? `Within ${noticeMinDays}–${noticeMaxDays} day range${meeting.noticeSentAt ? ` · sent ${noticeDaysBeforeMeeting} days before` : ""}`
-                : `Outside the ${noticeMinDays}–${noticeMaxDays} day range`
+              meetingHeld && !recordedNoticeAt
+                ? "Notice date not recorded"
+                : rules?.governanceAutomationBlocked
+                  ? `${recordedNoticeAt ? `Sent ${noticeDaysBeforeMeeting} days before · ` : ""}not checked: the notice rules wait on a bylaw review`
+                  : noticeWithinWindow
+                  ? `Within ${noticeMinDays}–${noticeMaxDays} day range${recordedNoticeAt ? ` · sent ${noticeDaysBeforeMeeting} days before` : ""}`
+                  : `Outside the ${noticeMinDays}–${noticeMaxDays} day range`
             }
             tone={noticeWithinWindow ? "success" : "warn"}
           />
@@ -296,7 +323,20 @@ export function AgmWorkflowPage() {
                         <Undo2 size={12} /> Undo
                       </button>
                     )}
-                    {!done && s.id === "notice" && (
+                    {!done && s.id === "notice" && meetingHeld && (
+                      <>
+                        <button className="btn-action btn-action--primary" onClick={() => { void recordPastNotice(); }}>
+                          <CheckCircle2 size={12} /> Record notice date…
+                        </button>
+                        <button
+                          className="btn-action"
+                          onClick={() => advanceWithReview("notice", { noticeRecipientCount: 0 }, "Close this step without a notice date: no record of the notice for this past AGM survives. The compliance posture keeps showing the notice date as not recorded.")}
+                        >
+                          No notice record
+                        </button>
+                      </>
+                    )}
+                    {!done && s.id === "notice" && !meetingHeld && (
                       <>
                         {communicationsEnabled ? (
                           <>
