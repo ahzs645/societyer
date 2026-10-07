@@ -13,6 +13,9 @@
 import type { PortableMutationCtx } from "../portable/ctx";
 import { riversideGamingProgramStatement } from "../programStatement";
 import { syncMotionsForMinutes } from "./minutes";
+import { syncAgreementDeadlines } from "./agreements";
+import { addDaysIso } from "../agreements";
+import { todayDateOnly } from "../dateOnly";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -1746,6 +1749,91 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     await ctx.db.patch(rec._id, { motions: undefined });
   }
 
+  // Agreements register (A5): signing-authority tiers and three synthetic
+  // agreements — a lease expiring within 90 days, an ended funding agreement
+  // linked to the gaming grant, and a print services agreement still being
+  // negotiated whose signatures do not yet satisfy its tier.
+  const agreementToday = todayDateOnly();
+  const tiers = [
+    { maxCents: 500000, signaturesRequired: 1, notes: "One signing officer up to $5,000" },
+    { minCents: 500001, maxCents: 1000000, signaturesRequired: 2, notes: "Two signing officers from $5,001 to $10,000" },
+    { minCents: 1000001, signaturesRequired: 2, roles: ["Board"], notes: "Board approval and two signing officers above $10,000" },
+  ];
+  for (const [personName, roleTitle] of [["Elena Vasquez", "President"], ["Priya Shah", "Treasurer"]] as const) {
+    await ctx.db.insert("signingAuthorities", {
+      societyId, personName, roleTitle, institutionName: "Vancity Credit Union", authorityType: "signing", tiers,
+      effectiveDate: "2024-06-15", status: "Active", confidence: "High", createdAtISO: nowISO,
+    });
+  }
+  const printMotion = (await ctx.db.query("motions").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect())
+    .find((motion: any) => /print vendor RFP/i.test(String(motion.text ?? "")));
+  const agreementRows: Array<Record<string, any>> = [
+    {
+      title: "Community hall lease",
+      kind: "lease",
+      status: "active",
+      agreementNumber: "CHA-2025-04",
+      summary: "Lease of the main hall and two program rooms for programming, storage and the society office.",
+      parties: [{ name: "Riverside Community Society", role: "us" }, { name: "Community Hall Association", role: "counterparty", contact: "Facility manager" }],
+      ourSignatories: [{ name: "Elena Vasquez", title: "President", signedAtISO: "2025-03-20" }, { name: "Priya Shah", title: "Treasurer", signedAtISO: "2025-03-20" }],
+      counterpartySignatories: [{ name: "Facility manager", title: "Community Hall Association" }],
+      signedDate: "2025-03-20",
+      effectiveDate: "2025-04-01",
+      endDate: addDaysIso(agreementToday, 75),
+      autoRenew: false,
+      renewalNoticeDays: 60,
+      terminationNoticeDays: 90,
+      valueCents: 2160000,
+      currency: "CAD",
+      paymentTerms: "Monthly rent of $1,800 due on the first of each month.",
+      reportingObligations: [{ id: "report-hall-needs", text: "Present the society's space, programming and accessibility needs to the landlord before the lease review.", dueDate: addDaysIso(agreementToday, 40), recurrence: "annual", recipient: "Community Hall Association", status: "not_started" }],
+      governingLaw: "British Columbia",
+      signedDocumentId: tenancyId,
+      approvedAtMeetingId: boardMeeting,
+      approvalNote: "Lease renewal terms reviewed and approved by the board.",
+      reviewStatus: "Verified",
+    },
+    {
+      title: "Community Gaming Grant funding agreement",
+      kind: "funding",
+      status: "active",
+      parties: [{ name: "Riverside Community Society", role: "us" }, { name: "BC Community Gaming Grants", role: "funder" }],
+      ourSignatories: [{ name: "Elena Vasquez", title: "President" }],
+      effectiveDate: "2024-04-01",
+      endDate: "2025-03-31",
+      valueCents: 400000,
+      currency: "CAD",
+      deliverables: [{ id: "deliverable-gaming-programs", text: "Deliver the Community Hall programs described in the application.", dueDate: "2025-03-31", status: "accepted" }],
+      reportingObligations: [{ id: "report-gaming-summary", text: "Summary report of gaming grant spending.", dueDate: "2025-06-30", status: "submitted", submittedAtISO: "2025-06-12" }],
+      linkedGrantId: gamingGrantId,
+      renewalDecision: { decision: "renew", decidedAtISO: "2025-02-15", notes: "Reapply in the next intake." },
+      reviewStatus: "Verified",
+    },
+    {
+      title: "Print services agreement",
+      kind: "service",
+      status: "negotiating",
+      parties: [{ name: "Riverside Community Society", role: "us" }, { name: "Harbour Print Cooperative", role: "counterparty" }],
+      ourSignatories: [{ name: "Priya Shah", title: "Treasurer" }],
+      effectiveDate: addDaysIso(agreementToday, 10),
+      endDate: addDaysIso(agreementToday, 375),
+      autoRenew: true,
+      renewalTermMonths: 12,
+      renewalNoticeDays: 30,
+      valueCents: 1250000,
+      currency: "CAD",
+      deliverables: [{ id: "deliverable-print-newsletter", text: "Quarterly newsletter print run (1,500 copies).", dueDate: addDaysIso(agreementToday, 45), owner: "Communications lead", status: "not_started" }],
+      approvedAtMeetingId: boardMeeting,
+      ...(printMotion ? { approvalMotionId: printMotion._id } : {}),
+      confidential: true,
+      reviewStatus: "Verified",
+    },
+  ];
+  for (const row of agreementRows) {
+    const agreementId = await ctx.db.insert("agreements", { ...row, societyId, createdAtISO: nowISO, updatedAtISO: nowISO });
+    await syncAgreementDeadlines(ctx, (await ctx.db.get(agreementId)) as any, agreementToday);
+  }
+
   return { societyId: String(societyId) };
 }
 
@@ -1807,6 +1895,8 @@ async function wipe(ctx: PortableMutationCtx) {
     "agmRuns",
     "noticeDeliveries",
     "insurancePolicies",
+    "agreements",
+    "signingAuthorities",
     "pipaTrainings",
     "proxies",
     "auditorAppointments",

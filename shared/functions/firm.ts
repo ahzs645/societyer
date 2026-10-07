@@ -96,7 +96,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { to
 
 export type GlobalSearchKind =
   | "deadline" | "document" | "person" | "member" | "meeting" | "minutes" | "motion" | "task"
-  | "committee" | "grant" | "policy" | "insurance" | "filing";
+  | "committee" | "grant" | "policy" | "insurance" | "filing" | "agreement";
 
 export type GlobalSearchResult = {
   kind: GlobalSearchKind;
@@ -230,6 +230,12 @@ export async function searchPortable(ctx: PortableQueryCtx, { query: term }: { q
     if (await permits(ctx, societyId, "grants:read")) {
       for (const row of await scanSociety(ctx, "grants", societyId, q, (r) => [r.title, r.funder, r.program, r.opportunityType])) {
         push({ kind: "grant", id: String(row._id), title: row.title, subtitle: [row.funder, row.status].filter(Boolean).join(" · "), to: `/app/grants/${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "agreements:read")) {
+      for (const row of await scanSociety(ctx, "agreements", societyId, q, (r) => [r.title, r.agreementNumber, r.kind, ...(Array.isArray(r.parties) ? r.parties.map((party: any) => party?.name) : [])])) {
+        const counterparty = (Array.isArray(row.parties) ? row.parties : []).find((party: any) => party?.role !== "us")?.name;
+        push({ kind: "agreement", id: String(row._id), title: row.title, subtitle: [counterparty, row.status, row.endDate ? `ends ${row.endDate}` : ""].filter(Boolean).join(" · "), to: `/app/agreements/${encodeURIComponent(String(row._id))}` });
       }
     }
     if (await permits(ctx, societyId, "financials:read")) {
