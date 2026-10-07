@@ -468,6 +468,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "seeded"
   },
   {
+    "pattern": "/app/agreements",
+    "path": "/demo/app/agreements",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/agreements/:id",
+    "path": "/demo/app/agreements/static_agreement_lease",
+    "kind": "app",
+    "fixture": "seeded"
+  },
+  {
     "pattern": "/app/grants/:id/edit",
     "path": "/demo/app/grants/static_grant/edit",
     "kind": "app",

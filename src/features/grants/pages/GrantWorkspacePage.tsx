@@ -20,6 +20,7 @@ import {
   GrantReadPanel,
 } from "../components/GrantPanels";
 import { buildCsjOrientationEmailBody } from "../lib/csjOrientationEmail";
+import { LinkedAgreementsCard } from "../../agreements/LinkedAgreementsCard";
 
 export function GrantDetailPage() {
   return <GrantWorkspacePage />;
@@ -237,6 +238,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
       ) : (
         <GrantReadPanel key="read" {...sharedReadPanelProps} grant={grant} />
       )}
+      {!editing && <LinkedAgreementsCard table="grants" recordId={grant._id} title="Funding agreements" />}
     </div>
   );
 }
