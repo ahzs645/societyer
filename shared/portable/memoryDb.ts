@@ -24,7 +24,7 @@ import type {
   SearchFilterBuilder,
   TableName,
 } from "./ctx";
-import { createEntityIdFactory } from "./ids";
+import { createEntityIdFactory, preservedSystemFields } from "./ids";
 import { omitRowFields } from "./heavyFields";
 
 type Constraint = { op: "eq" | "gt" | "gte" | "lt" | "lte"; field: string; value: unknown };
@@ -295,7 +295,7 @@ export class MemoryDb implements PortableDbWriter {
   async replace(id: string, doc: Record<string, any>): Promise<void> {
     const table = this.idIndex.get(id);
     if (!table) throw new Error(`replace: document ${id} not found`);
-    this.put(table, { ...doc, _id: id });
+    this.put(table, { ...doc, ...preservedSystemFields(this.tables.get(table)?.get(id), doc), _id: id });
   }
 
   async delete(id: string): Promise<void> {

@@ -3,7 +3,7 @@ import { stripImportedAuthBindings } from "../../shared/workspaceIdentity";
 import { quarantineImportedPathways } from "../../shared/pathways/imports";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
-import { createEntityIdFactory } from "../../shared/portable/ids";
+import { createEntityIdFactory, preservedSystemFields } from "../../shared/portable/ids";
 import { HEAVY_FIELD_POLICY, splitHeavyFields } from "../../shared/portable/heavyFields";
 import { DEFERRED_HYDRATION_TABLES } from "../../shared/portable/localRowStore";
 
@@ -188,6 +188,8 @@ export class LocalDexieRowStore implements LocalRowStore {
   private atomicUndo: Map<string, UndoEntry> | null = null;
   /** Ops issued through the legacy row API, whose rows may omit external fields. */
   private legacyOps = new WeakSet<RowStoreOp>();
+  /** Mints `entityId` for rows the legacy row API writes without one (portable inserts mint their own). */
+  private readonly legacyEntityIds = createEntityIdFactory();
   private hydrated: Promise<void> = Promise.resolve();
   /**
    * Writes that landed while the first read of IndexedDB was still in flight.
@@ -486,6 +488,13 @@ export class LocalDexieRowStore implements LocalRowStore {
 
   upsertRow(table: string, row: any) {
     if (!row?._id) return null;
+    // Legacy writes build rows by hand: keep the stored row's durable identity and creation time, and
+    // give a new row an entityId, as a portable insert would (a later restore would otherwise mint one).
+    if (!(typeof row.entityId === "string" && row.entityId) || row._creationTime === undefined) {
+      row = { ...row, ...preservedSystemFields(this.getRow(table, row._id), row) };
+      if (!(typeof row.entityId === "string" && row.entityId)) row.entityId = this.legacyEntityIds.mint(table);
+      if (row._creationTime === undefined) row._creationTime = Date.now();
+    }
     const op: RowStoreOp = { kind: "upsert", table, row };
     this.legacyOps.add(op);
     this.applyLegacyOp(op);
