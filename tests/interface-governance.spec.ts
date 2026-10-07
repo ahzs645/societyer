@@ -63,7 +63,13 @@ test("AGM steps fit a narrow phone and local delivery actions remain honest", as
   const errors = monitor(page);
   await page.goto("/demo/app/meetings/static_meeting_agm_2025/agm");
   await expect(page.getByRole("heading", { name: "AGM workflow · 2025 annual general meeting", exact: true })).toBeVisible();
-  await expect(page.getByText("Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.", { exact: true })).toBeVisible();
+  // The 2025 AGM was already held: its notice step is complete, so the page
+  // does not offer to send notices (and the "needs a server" note is only
+  // shown for meetings that have not happened yet; meetings retest 9406573).
+  const steps = page.locator(".card").filter({ has: page.getByRole("heading", { name: "Steps", exact: true }) });
+  await expect(steps.getByText("Send notice", { exact: true })).toBeVisible();
+  await expect(steps.getByText("Completed").first()).toBeVisible();
+  await expect(page.getByText("Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.", { exact: true })).toHaveCount(0);
   await fitsPage(page);
   await page.goto("/demo/app/notifications");
   await expect(page.getByRole("button", { name: "Send digest", exact: true })).toBeDisabled();
