@@ -255,6 +255,39 @@ export async function versionsForPortable(ctx: PortableQueryCtx, { id }: { id: s
   };
 }
 
+/**
+ * Source evidence that cites this document, with the target each row links
+ * to (finding D-13): the detail page shows what the document feeds.
+ */
+export async function evidenceForPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
+  const document = await requireDocumentAccess(ctx, id);
+  const rows = await ctx.db.query("sourceEvidence").withIndex("by_source", (q) => q.eq("sourceDocumentId", id)).collect();
+  const own = rows.filter((row: Row) => String(row.societyId) === String(document.societyId));
+  const materials = (await ctx.db.query("meetingMaterials").withIndex("by_document", (q) => q.eq("documentId", id)).collect())
+    .filter((row: Row) => String(row.societyId) === String(document.societyId));
+  const meetingIds = [...new Set([document.meetingId, ...materials.map((row: Row) => row.meetingId)].filter(Boolean).map(String))];
+  const meetings = ((await Promise.all(meetingIds.map((meetingId) => ctx.db.get(meetingId, "meetings")))) as Array<Row | null>)
+    .filter((meeting): meeting is Row => Boolean(meeting) && String(meeting!.societyId) === String(document.societyId));
+  return {
+    evidence: own
+      .sort((a: Row, b: Row) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")))
+      .slice(0, 100)
+      .map((row: Row) => ({
+        _id: row._id,
+        evidenceKind: row.evidenceKind,
+        targetTable: row.targetTable,
+        targetId: row.targetId,
+        status: row.status,
+        summary: row.summary,
+        sourceDate: row.sourceDate,
+        accessLevel: row.accessLevel,
+        excerpt: row.accessLevel === "restricted" ? undefined : row.excerpt,
+      })),
+    evidenceTotal: own.length,
+    meetings: meetings.map((meeting) => ({ _id: meeting._id, title: meeting.title, scheduledAt: meeting.scheduledAt, type: meeting.type })),
+  };
+}
+
 async function ownedDocumentPair(ctx: PortableMutationCtx, id: string, otherId: string) {
   if (String(id) === String(otherId)) throw new Error("Choose a different document.");
   const candidate = await ctx.db.get(id, "documents");

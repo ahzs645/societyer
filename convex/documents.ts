@@ -24,6 +24,7 @@ import {
 import {
   browsePortable,
   versionsForPortable,
+  evidenceForPortable,
   markDuplicatePortable,
   clearDuplicatePortable,
   setVersionInfoPortable,
@@ -231,6 +232,12 @@ export const versionsFor = authorizedQuery("documents:versionsFor", query)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => versionsForPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const evidenceFor = authorizedQuery("documents:evidenceFor", query)({
+  args: { id: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => evidenceForPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const markDuplicate = authorizedMutation("documents:markDuplicate", mutation)({

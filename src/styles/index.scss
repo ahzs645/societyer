@@ -44,6 +44,7 @@
 @use "views-governance"; // bylaw rules, motion library
 @use "views-widgets"; // tabs, progress, kanban, priority, timeline, activity, segmented
 @use "views-import"; // import sessions: scan, review, session rows
+@use "views-documents-review"; // documents facets/markers, document detail panels, import review queue
 @use "views-workflow"; // workflow detail/topbar/canvas/nodes/sidepanel
 @use "views-outbox-mapping"; // outbox, pdf picker, field mapping, mapping wizard, templates
 @use "views-grant"; // grant edit/dossier, requirements, formats, sources

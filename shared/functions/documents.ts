@@ -563,8 +563,9 @@ export async function reviewQueuesPortable(
     doc.linkedToMeetingPackage ||
     doc.openCommentCount > 0,
   );
+  const actionIds = new Set(actionRequired.map((doc) => String(doc._id)));
   const workInProgress = inProgress
-    .filter((doc) => !recentIds.has(String(doc._id)))
+    .filter((doc) => !recentIds.has(String(doc._id)) && !actionIds.has(String(doc._id)))
     .sort((a, b) =>
       Number(b.openCommentCount + b.openTaskCount) - Number(a.openCommentCount + a.openTaskCount) ||
       Number(b.linkedToMeetingPackage) - Number(a.linkedToMeetingPackage) ||

@@ -118,10 +118,15 @@ export function restrictedReasonFor(payload: Record<string, any> = {}, title = "
   return match ? `mentions "${match[1].toLowerCase()}"` : undefined;
 }
 
-/** Stored flags that still carry information (not the uniform keyword ones). */
+const STORED_FLAG_LABELS: Record<string, string> = {
+  cleanup: "source mentions OCR, duplicate or date cleanup",
+  validation: "failed an import validation check",
+};
+
+/** Stored flags that still carry information (not the uniform keyword ones), in words. */
 export function meaningfulStoredFlags(flags: unknown): string[] {
   if (!Array.isArray(flags)) return [];
-  return flags.map(String).filter((flag) => flag !== "needs review" && flag !== "restricted");
+  return flags.map(String).filter((flag) => flag !== "needs review" && flag !== "restricted").map((flag) => STORED_FLAG_LABELS[flag] ?? flag);
 }
 
 export type ReviewRisk = {
@@ -154,7 +159,7 @@ export function deriveReviewRisk(record: {
   if (restricted) { reasons.push(`restricted: ${restricted}`); score += 1; }
   for (const flag of stored) {
     if (!reasons.includes(flag)) reasons.push(flag);
-    score += flag === "cleanup" ? 0 : 1;
+    score += flag === STORED_FLAG_LABELS.cleanup ? 0 : 1;
   }
   const confidence = String(record.confidence ?? payload.confidence ?? "").toLowerCase();
   if (confidence === "high") score -= 1;
