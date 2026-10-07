@@ -331,7 +331,10 @@ export function useDialogStackSlot(open: boolean): number {
 
 // ---------------- Drag-to-resize dialog frame ---------------- //
 
-type DialogRect = { left: number; top: number; width: number; height: number };
+/** `autoHeight`: no remembered height yet, so the dialog keeps its natural
+ *  height (capped to the viewport) and re-centres as its content loads,
+ *  instead of freezing whatever height it had on the first frame. */
+type DialogRect = { left: number; top: number; width: number; height: number; autoHeight?: boolean };
 
 const RESIZE_DIRS = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
 type ResizeDir = (typeof RESIZE_DIRS)[number];
@@ -408,7 +411,7 @@ function computeResizedRect(start: DialogRect, dir: ResizeDir, dx: number, dy: n
     top = clampNum(start.top + dy, RESIZE_MARGIN, bottom - MIN_MODAL_H);
     height = bottom - top;
   }
-  return { left, top, width, height };
+  return { left, top, width, height, autoHeight: false };
 }
 
 function useResizableDialog(params: {
@@ -457,9 +460,31 @@ function useResizableDialog(params: {
     const h = clampNum(stored?.h ?? box.height, MIN_MODAL_H, vh - RESIZE_MARGIN * 2);
     const left = clampNum((vw - w) / 2, RESIZE_MARGIN, vw - w - RESIZE_MARGIN);
     const top = clampNum((vh - h) / 2, RESIZE_MARGIN, vh - h - RESIZE_MARGIN);
-    setRect({ left, top, width: w, height: h });
+    setRect({ left, top, width: w, height: h, autoHeight: !stored });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, storageKey]);
+
+  // Natural height: follow the content (rows that render after the first
+  // frame, a report that arrives later) and keep the dialog centred.
+  const autoHeight = Boolean(rect?.autoHeight);
+  useLayoutEffect(() => {
+    if (!active || !autoHeight) return;
+    const el = elementRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const recentre = () => {
+      const h = el.getBoundingClientRect().height;
+      setRect((current) => {
+        if (!current || !current.autoHeight) return current;
+        const top = clampNum((window.innerHeight - h) / 2, RESIZE_MARGIN, window.innerHeight - h - RESIZE_MARGIN);
+        if (Math.abs(top - current.top) < 1 && Math.abs(h - current.height) < 1) return current;
+        return { ...current, top, height: h };
+      });
+    };
+    const observer = new ResizeObserver(recentre);
+    observer.observe(el);
+    recentre();
+    return () => observer.disconnect();
+  }, [active, autoHeight, elementRef]);
 
   // A desktop dialog keeps an explicit rect after opening. Refit that rect
   // when the window shrinks (or rotates) so its header and footer remain
@@ -472,11 +497,11 @@ function useResizableDialog(params: {
         const availableWidth = Math.max(1, window.innerWidth - RESIZE_MARGIN * 2);
         const availableHeight = Math.max(1, window.innerHeight - RESIZE_MARGIN * 2);
         const width = Math.min(current.width, availableWidth);
-        const height = Math.min(current.height, availableHeight);
+        const height = current.autoHeight ? current.height : Math.min(current.height, availableHeight);
         const left = clampNum(current.left, RESIZE_MARGIN, window.innerWidth - width - RESIZE_MARGIN);
         const top = clampNum(current.top, RESIZE_MARGIN, window.innerHeight - height - RESIZE_MARGIN);
         if (width === current.width && height === current.height && left === current.left && top === current.top) return current;
-        return { left, top, width, height };
+        return { ...current, left, top, width, height };
       });
     };
     window.addEventListener("resize", refit);
@@ -506,13 +531,14 @@ function useResizableDialog(params: {
     (dir: ResizeDir) => (event: ReactPointerEvent) => {
       if (!rect) return;
       event.preventDefault();
-      dragRef.current = { dir, startX: event.clientX, startY: event.clientY, start: rect };
+      const measured = elementRef.current?.getBoundingClientRect().height ?? rect.height;
+      dragRef.current = { dir, startX: event.clientX, startY: event.clientY, start: { ...rect, height: measured, autoHeight: false } };
       document.body.classList.add("modal-resizing");
       document.body.style.cursor = cursorForDir(dir);
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp, { once: true });
     },
-    [rect, onPointerMove, onPointerUp],
+    [rect, onPointerMove, onPointerUp, elementRef],
   );
 
   // Safety net: drop listeners/cursor state if the dialog unmounts mid-drag.
@@ -530,9 +556,9 @@ function useResizableDialog(params: {
         top: rect.top,
         left: rect.left,
         width: rect.width,
-        height: rect.height,
+        height: rect.autoHeight ? undefined : rect.height,
         maxWidth: "none",
-        maxHeight: "none",
+        maxHeight: rect.autoHeight ? `calc(100dvh - ${RESIZE_MARGIN * 2}px)` : "none",
         transform: "none",
       }
     : {};
