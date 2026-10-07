@@ -159,6 +159,9 @@ export function classRecordGaps(input: {
     if (extraction.docClass === "meetingMinutes") continue;
     for (const reference of extraction.references) {
       if ((reference.kind !== "prior_minutes" && reference.kind !== "meeting") || !reference.date || !/^\d{4}-\d{2}-\d{2}$/.test(reference.date)) continue;
+      // Only citations of minutes or meetings count: a heading such as "Notes:" or "Annual
+      // Activity Report", or a duration ("limited to 10 minutes"), is not a missing record.
+      if (!/\bminutes\b|\bmeeting\b|\bAGM\b/i.test(reference.text) || /\b\d+\s*(?:-\s*\d+\s*)?minutes\b/i.test(reference.text)) continue;
       const bodyKey = reference.body ? bodyKeyFor(reference.body) : undefined;
       const found = known.some((key) => (!bodyKey || bodyKey === "unknown" || key.startsWith(`${bodyKey}@`)) && Math.abs(Date.parse(key.split("@")[1]) - Date.parse(reference.date!)) <= 2 * 86400000)
         || input.evidenced.some((meeting) => meeting.date === reference.date);

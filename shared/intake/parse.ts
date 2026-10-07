@@ -37,8 +37,8 @@ export function findDates(raw: string, options: { allowMonthPrecision?: boolean;
   for (const m of text.matchAll(new RegExp(`\\b${MONTH_RE}\\.?(?:\\s*,?\\s*|-)(\\d{1,2})(?:st|nd|rd|th)?(?:\\s*,\\s*|\\s+|,|-)(?:\\d{4}\\s*,\\s*)?((?:19|20)\\d{2})\\b`, "gi"))) {
     push(validIsoDay(Number(m[3]), monthIndex(m[1]), Number(m[2])), "day", m.index!, m[0].length);
   }
-  // Day Month Year (28 November 2018, 23-Feb-2016)
-  for (const m of text.matchAll(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]+${MONTH_RE}\\.?[\\s,-]+((?:19|20)\\d{2})\\b`, "gi"))) {
+  // Day Month Year (28 November 2018, 23-Feb-2016) — not an item number ("4.2 July 2022 Minutes").
+  for (const m of text.matchAll(new RegExp(`(?<!\\d\\.)\\b(\\d{1,2})(?:st|nd|rd|th)?[\\s-]+${MONTH_RE}\\.?[\\s,-]+((?:19|20)\\d{2})\\b`, "gi"))) {
     push(validIsoDay(Number(m[3]), monthIndex(m[2]), Number(m[1])), "day", m.index!, m[0].length);
   }
   // ISO-ish 2019-02-19, 2019_05_28, 2019/02/19, 2019.02.19
