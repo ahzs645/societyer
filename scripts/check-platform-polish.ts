@@ -72,6 +72,19 @@ assert.match(helpers, /useDocumentTitle\(/, "the shared PageHeader sets the docu
 assert.match(helpers, /translateNavLabel\(t, title\)/, "the shared PageHeader translates sidebar labels");
 const moduleGate = readFileSync(new URL("../src/components/ModuleGate.tsx", import.meta.url), "utf8");
 assert.match(moduleGate, /\/app\/settings\?tab=modules/, "a disabled module links straight to the Modules tab");
+// A module that gates a route also hides its sidebar/palette entry, and the
+// other way round: otherwise a nav item opens a "module is disabled" card.
+const mainSource = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
+const gatedRoutes = new Map([...mainSource.matchAll(/path="([^"]+)"\s*element=\{withModule\("(\w+)"/g)].map((m) => [`/app/${m[1]}`, m[2]]));
+assert.ok(gatedRoutes.size > 20, "found the module-gated routes in main.tsx");
+for (const [path, module] of gatedRoutes) {
+  const identity = (ROUTE_IDENTITY as Record<string, { module?: string }>)[path];
+  if (identity) assert.equal(identity.module, module, `${path} is gated by ${module} in main.tsx; its nav identity must use the same module`);
+}
+for (const [path, identity] of Object.entries(ROUTE_IDENTITY as Record<string, { module?: string }>)) {
+  if (identity.module && !path.includes(":")) assert.equal(gatedRoutes.get(path), identity.module, `${path} is hidden with ${identity.module}; its route must be gated by it too`);
+}
+
 // Stack-on-phone tables must beat the more specific scrolling-table rules.
 const tableCss = readFileSync(new URL("../src/styles/_components-tables-misc.scss", import.meta.url), "utf8");
 assert.match(tableCss, /\.table-wrap > \.table\.table--stack-mobile/, "stacked phone tables override .table-wrap > .table");
