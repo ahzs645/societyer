@@ -139,6 +139,16 @@ async function settle(run: () => Promise<unknown>): Promise<Outcome> {
 
 // --- the matrix ---------------------------------------------------------------
 const { fixture, societyId, principal } = await buildFixture();
+// Give every document extracted text and every minutes record a verbatim source
+// copy, so the lazy engine really keeps them out of its row cache and every
+// handler that reads them goes through the load-on-demand path.
+for (const document of fixture.documents ?? []) {
+  document.content ??= `Synthetic extracted text for ${document._id}. ${"Lorem ipsum ".repeat(8)}`;
+}
+for (const minutes of fixture.minutes ?? []) {
+  minutes.draftTranscript ??= `Synthetic transcript for ${minutes._id}.`;
+}
+assert.ok((fixture.documents ?? []).length > 0, "fixture must contain documents to exercise lazy content");
 const CANDIDATE_ARGS: Record<string, unknown>[] = [{ societyId }, {}];
 
 // Shared read engines: queries are read-only, so one pair serves every query.
@@ -236,4 +246,5 @@ if (divergences.length) {
 
 console.log(`  elapsed: ${((performance.now() - startedAt) / 1000).toFixed(2)}s`);
 console.log(`  lazy heavy-field loads: ${queryLazyStore.externalLoads} (query engine)`);
+assert.ok(queryLazyStore.externalLoads > 0, "the lazy engine must have loaded heavy fields on demand");
 console.log("\n✓ MemoryDb and LocalStoreDb (eager, and lazy/indexed) agree across the entire portable surface.");

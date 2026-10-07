@@ -99,21 +99,22 @@ export class HeavyFieldNotLoaded extends Error {
  * code reads, enumerates or tests one of the row's externalized fields.
  */
 export function guardedLightRow<T extends Record<string, any>>(row: T, external: readonly string[]): T {
-  const missing = new Set(external);
+  // `external` is one to three field names: a linear scan beats building a Set per row.
+  const missing = (property: string | symbol) => typeof property === "string" && external.includes(property);
   return new Proxy(row, {
     get(target, property, receiver) {
-      if (typeof property === "string" && missing.has(property)) throw new HeavyFieldNotLoaded(property);
+      if (missing(property)) throw new HeavyFieldNotLoaded(property as string);
       return Reflect.get(target, property, receiver);
     },
     has(target, property) {
-      if (typeof property === "string" && missing.has(property)) throw new HeavyFieldNotLoaded(property);
+      if (missing(property)) throw new HeavyFieldNotLoaded(property as string);
       return Reflect.has(target, property);
     },
     ownKeys() {
       throw new HeavyFieldNotLoaded(external[0] ?? "");
     },
     getOwnPropertyDescriptor(target, property) {
-      if (typeof property === "string" && missing.has(property)) throw new HeavyFieldNotLoaded(property);
+      if (missing(property)) throw new HeavyFieldNotLoaded(property as string);
       return Reflect.getOwnPropertyDescriptor(target, property);
     },
   });

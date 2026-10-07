@@ -132,13 +132,17 @@ export function evaluateQuery<T extends PortableDoc>(
 ): T[] {
   let out = rows.filter((doc) => matchesConstraints(doc, constraints));
   for (const p of predicates) out = out.filter(p);
-  out = out.slice().sort((a, b) => {
+  return sortByCreation(out, direction);
+}
+
+/** The result order every engine uses: `_creationTime`, then `_id`. Returns a new array. */
+export function sortByCreation<T extends PortableDoc>(rows: T[], direction: "asc" | "desc"): T[] {
+  return rows.slice().sort((a, b) => {
     const at = Number(a._creationTime ?? 0);
     const bt = Number(b._creationTime ?? 0);
     const byTime = at - bt || String(a._id).localeCompare(String(b._id));
     return direction === "desc" ? -byTime : byTime;
   });
-  return out;
 }
 
 class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {

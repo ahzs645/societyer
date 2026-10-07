@@ -203,6 +203,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   private readonly sessionToken = newRevisionToken();
   /** Namespace for persisted projection memos (a build id); undefined = memory only. */
   private projectionNamespace: string | undefined;
+  private projectionWrites = new Set<Promise<void>>();
   /** Heavy values written but not yet durable (read before IndexedDB). */
   private pendingHeavy = new Map<string, Record<string, unknown>>();
   /** Heavy values when there is no IndexedDB (memory-only session never splits). */
@@ -315,6 +316,15 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
   }
 
+  private loadTableMaps(tableMaps: Map<string, Map<string, any>>) {
+    this.tables = new Map();
+    this.idTables = new Map();
+    for (const [table, rows] of tableMaps) {
+      this.tables.set(table, { rows, array: null, indexes: new Map() });
+      for (const id of rows.keys()) this.idTables.set(id, table);
+    }
+  }
+
   rows(table: string) {
     const state = this.tableState(table);
     if (!state) return [];
@@ -387,7 +397,14 @@ export class LocalDexieRowStore implements LocalRowStore {
   saveProjections(key: string, table: string, entries: Array<{ id: string; rev: string; value: unknown }>) {
     if (!this.db || !this.projectionNamespace || !entries.length) return;
     const rows = entries.map((entry) => ({ key: projectionKey(key, table, entry.id), table, rev: entry.rev, value: entry.value }));
-    void this.db.projections.bulkPut(rows).catch(() => undefined);
+    const write = this.db.projections.bulkPut(rows).then(() => undefined, () => undefined);
+    this.projectionWrites.add(write);
+    void write.finally(() => this.projectionWrites.delete(write));
+  }
+
+  /** Resolves once every projection memo handed to `saveProjections` is durable. */
+  async flushProjections() {
+    while (this.projectionWrites.size) await Promise.all([...this.projectionWrites]);
   }
 
   externalFields(table: string, id: string) {
@@ -702,7 +719,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       await db.open();
       await db.transaction(
         "rw",
-        [db.meta, db.records, db.recordFields, db.changes, db.attachments, db.meetings, db.minutes, db.files],
+        [db.meta, db.records, db.recordFields, db.projections, db.changes, db.attachments, db.meetings, db.minutes, db.files],
         async () => {
           await db.meta.clear();
           await db.records.clear();
@@ -828,47 +845,37 @@ export class LocalDexieRowStore implements LocalRowStore {
       db.changes.toArray(),
       db.meta.get("workspace"),
     ]);
-    const next = cloneLocalSeed(seed);
-    const seedIndex = new Map<string, Map<string, number>>();
-    for (const [table, rows] of Object.entries(next)) seedIndex.set(table, new Map(rows.map((row, index) => [row._id, index])));
+    // One pass, straight into per-table maps: seed rows first (in seed order;
+    // `this.seed` is a private copy and cached rows are never mutated), then each
+    // persisted record overrides in place or is appended in key order.
+    const tableMaps = new Map<string, Map<string, any>>();
+    for (const [table, rows] of Object.entries(this.seed)) {
+      const rowsById = new Map<string, any>();
+      for (const row of rows) if (row?._id) rowsById.set(row._id, row);
+      tableMaps.set(table, rowsById);
+    }
     const external = new Map<string, readonly string[]>();
     const revisions = new Map<string, string>();
-    const persisted = new Map<string, Map<string, any>>();
     for (const record of localRecords) {
       if (!record?.table || !record?.value?._id) continue;
       const id = record.value._id;
+      let rowsById = tableMaps.get(record.table);
       if (record.deletedAtISO) {
-        persisted.get(record.table)?.delete(id);
-        const index = seedIndex.get(record.table)?.get(id);
-        if (index !== undefined) next[record.table][index] = undefined;
+        rowsById?.delete(id);
         continue;
       }
-      let table = persisted.get(record.table);
-      if (!table) persisted.set(record.table, (table = new Map()));
-      table.set(id, record.value);
+      if (!rowsById) tableMaps.set(record.table, (rowsById = new Map()));
+      rowsById.set(id, record.value);
       if (record.external?.length) external.set(record.key, record.external);
       if (record.rev) revisions.set(record.key, record.rev);
     }
-    // Seed rows first (in seed order) unless overridden, then persisted rows in key order.
-    const merged: LocalSeed = {};
-    for (const [table, rows] of Object.entries(next)) {
-      const overrides = persisted.get(table);
-      merged[table] = rows
-        .filter((row) => row !== undefined)
-        .map((row) => {
-          const override = overrides?.get(row._id);
-          if (override) overrides!.delete(row._id);
-          return override ?? row;
-        });
-    }
-    for (const [table, rows] of persisted) {
-      (merged[table] ??= []).push(...rows.values());
-    }
 
     const persistedWorkspaceMeta = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta);
-    let hydratedCache = merged;
+    let hydratedCache: LocalSeed | null = null;
     let hydratedWorkspaceMeta = persistedWorkspaceMeta;
     if (persistedWorkspaceMeta.schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION) {
+      const merged: LocalSeed = {};
+      for (const [table, rowsById] of tableMaps) merged[table] = [...rowsById.values()];
       hydratedCache = migrateLocalWorkspaceSnapshotTables(merged);
       hydratedWorkspaceMeta = {
         ...persistedWorkspaceMeta,
@@ -887,7 +894,8 @@ export class LocalDexieRowStore implements LocalRowStore {
       });
     }
 
-    this.loadTables(hydratedCache);
+    if (hydratedCache) this.loadTables(hydratedCache);
+    else this.loadTableMaps(tableMaps);
     this.external = external;
     this.revisions = revisions;
     this.dataEpoch = await this.persistedDataEpoch();

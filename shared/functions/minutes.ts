@@ -376,8 +376,22 @@ function newSourceAccessMemo(): SourceAccessMemo {
 }
 
 /** Imported source copies obey the source document ACL as well as minutes access. */
-async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any, memo: SourceAccessMemo = newSourceAccessMemo()) {
-  if (!minutes?.sourceTransposition && !minutes?.sourceMeetingRecord && !(minutes?.sourceDocumentIds?.length && [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS].some(field => minutes[field]?.length))) return minutes;
+/**
+ * What the source ACL needs from a minutes view: whether it carries imported
+ * source content at all, and which source documents it cites. Pure, so list
+ * queries can memoize it per row (`collectProjected`) without reloading the
+ * heavy source fields it is derived from.
+ */
+type SourceAccessFacts = { check: boolean; sourceIds: string[] };
+function sourceAccessFacts(minutes: any): SourceAccessFacts {
+  const check = Boolean(minutes?.sourceTransposition || minutes?.sourceMeetingRecord || (minutes?.sourceDocumentIds?.length && [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS].some(field => minutes[field]?.length)));
+  if (!check) return { check, sourceIds: [] };
+  const sourceIds = [...new Set([...(minutes.sourceDocumentIds ?? []),...(minutes.sourceTransposition?.originalSources ?? []).map((source:any) => source.documentId).filter(Boolean),...(minutes.sourceMeetingRecord?.documents ?? []).map((source:any) => source.documentId).filter(Boolean)])].map(String);
+  return { check, sourceIds };
+}
+
+async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any, memo: SourceAccessMemo = newSourceAccessMemo(), facts: SourceAccessFacts = sourceAccessFacts(minutes)) {
+  if (!facts.check) return minutes;
   let visible = true;
   try {
     const societyId = String(minutes.societyId);
@@ -387,8 +401,7 @@ async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any, memo: Sour
       memo.predicates.set(societyId, predicate);
     }
     const allows = await predicate;
-    const sourceIds = [...new Set([...(minutes.sourceDocumentIds ?? []),...(minutes.sourceTransposition?.originalSources ?? []).map((source:any) => source.documentId).filter(Boolean),...(minutes.sourceMeetingRecord?.documents ?? []).map((source:any) => source.documentId).filter(Boolean)])];
-    for (const id of sourceIds) {
+    for (const id of facts.sourceIds) {
       // The access decision never reads a document's extracted text.
       let pending = memo.documents.get(String(id));
       if (!pending) {
@@ -439,8 +452,20 @@ export const MINUTES_SUMMARY_OMITTED_FIELDS = ["sourceMeetingRecord", "sourceTra
  * same (they still see the whole record); a restricted record keeps its small
  * `sourceTransposition` restriction marker.
  */
-export async function listSummariesPortable(ctx: PortableQueryCtx, args: { societyId: string }) {
-  const rows = await listPortable(ctx, args);
+export async function listSummariesPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const minutesOfSociety = () => ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId));
+  // Light rows plus memoized ACL facts: the heavy source fields are read only
+  // for rows that changed since their facts were last derived.
+  const [light, factRows] = await Promise.all([
+    minutesOfSociety().omitFields(...MINUTES_SUMMARY_OMITTED_FIELDS).collect(),
+    minutesOfSociety().collectProjected("minutes.sourceAccessFacts/v1", (m: any) => ({ id: String(m._id), facts: sourceAccessFacts(adoptedMinutesView(m)) })),
+  ]);
+  const factsById = new Map(factRows.map((row) => [row.id, row.facts]));
+  const memo = newSourceAccessMemo();
+  const rows = await Promise.all(
+    light.map(async (m) => sourceMinutesView(ctx, { ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }, memo, factsById.get(String(m._id)) ?? { check: true, sourceIds: [] })),
+  );
   return rows.map((row: any) => {
     const restricted = row?.sourceTransposition?.reviewStatus === "restricted" ? row.sourceTransposition : undefined;
     const summary: Record<string, unknown> = { ...row };

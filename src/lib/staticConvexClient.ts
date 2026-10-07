@@ -19,7 +19,7 @@ const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
 const LEGACY_UNTRACKED_READ_ID = "__societyer_legacy_dispatch_reads_every_table__";
 /** Queries whose `collectProjected` memos are rebuilt in the background after a restore. */
-const PROJECTION_WARMUP_QUERIES = ["documents:browse", "importSessions:pendingByTarget"] as const;
+const PROJECTION_WARMUP_QUERIES = ["documents:browse", "importSessions:pendingByTarget", "minutes:listSummaries"] as const;
 
 export type LocalActorChoice = {
   _id: string;
@@ -369,7 +369,14 @@ export class StaticConvexClient {
    */
   private scheduleProjectionWarmup() {
     if (typeof window === "undefined") return;
+    // Observable by the perf gate (scripts/check-local-workspace-perf.mjs).
+    const status = globalThis as { __SOCIETYER_PROJECTION_WARMUP__?: string };
+    status.__SOCIETYER_PROJECTION_WARMUP__ = "scheduled";
     const run = async () => {
+      status.__SOCIETYER_PROJECTION_WARMUP__ = "running";
+      // Restored societies also need their record-table metadata; seed it now
+      // rather than during the first page load of the next session.
+      await this.ensureRecordTableMetadata();
       for (const society of (this.store.listRows("societies") ?? []) as any[]) {
         for (const name of PROJECTION_WARMUP_QUERIES) {
           try {
@@ -379,9 +386,10 @@ export class StaticConvexClient {
           }
         }
       }
+      await this.store.rowStore.flushProjections();
+      status.__SOCIETYER_PROJECTION_WARMUP__ = "done";
     };
-    const idle = (window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
-    if (idle) idle(() => void run(), { timeout: 5_000 });
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(() => void run(), { timeout: 5_000 });
     else setTimeout(() => void run(), 1_000);
   }
 

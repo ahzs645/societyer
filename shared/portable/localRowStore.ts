@@ -34,7 +34,7 @@ import type {
   SearchFilterBuilder,
   TableName,
 } from "./ctx";
-import { collectSearch, evaluateQuery, evaluateSearch, matchesConstraints, type MemoryDbOptions, type SearchSpec } from "./memoryDb";
+import { collectSearch, evaluateQuery, evaluateSearch, matchesConstraints, sortByCreation, type MemoryDbOptions, type SearchSpec } from "./memoryDb";
 import { createEntityIdFactory } from "./ids";
 import {
   DEFAULT_HEAVY_FIELD_POLICY,
@@ -343,6 +343,33 @@ export class LocalStoreDb implements PortableDbWriter {
   ): Promise<T[]> {
     this.record(table);
     const candidates = this.candidateRows(table, query.constraints) as T[];
+    if (!query.search && this.store.externalFields) {
+      // Index/predicate query over rows that may be light: evaluate each row
+      // once (constraints, then predicates, as evaluateQuery does), on a guard
+      // when it has lazy fields; rows whose evaluation touched a lazy field are
+      // loaded and evaluated again in full. Survivors get the standard order.
+      const matches = (doc: T) =>
+        matchesConstraints(doc, query.constraints) && query.predicates.every((predicate) => predicate(doc));
+      const passed: T[] = [];
+      const toLoad: T[] = [];
+      for (const row of candidates) {
+        const external = this.externalOf(table, row);
+        if (!external) {
+          if (matches(row)) passed.push(row);
+          continue;
+        }
+        try {
+          if (matches(guardedLightRow(row, external))) passed.push(row);
+        } catch (error) {
+          if (!(error instanceof HeavyFieldNotLoaded)) throw error;
+          toLoad.push(row);
+        }
+      }
+      if (toLoad.length) {
+        for (const row of await this.withExternalFields(table, toLoad)) if (matches(row)) passed.push(row);
+      }
+      return sortByCreation(passed, query.direction);
+    }
     const needsGuard =
       Boolean(this.store.externalFields) &&
       (query.predicates.length > 0 || query.search !== null || query.constraints.length > 0);
