@@ -408,6 +408,15 @@ assert.doesNotMatch(fromScratch, /Motion wording:/, "template motion wording alr
 assert.equal((fromScratch.match(/>\s*(?:\d+\.\s*)?Adjournment\s*</g) ?? []).length, 1, "one Adjournment heading: the agenda item carries the adjournment record");
 assert.match(fromScratch, /The meeting was adjourned at 7:41 PM/);
 assert.match(fromScratch, /<strong>Motion:<\/strong> That the agenda for this meeting be adopted as presented\./, "the trimmed resolution reads as a sentence");
+const notedAdjournment = renderMinutesHtml({
+  society: { name: "Retest Society" } as any,
+  meeting: { title: "Executive meeting", scheduledAt: "2012-05-15T12:00:00.000Z", scheduledAtPrecision: "date", type: "Board" } as any,
+  minutes: { heldAt: "2012-05-15T12:00:00.000Z", attendees: [], absent: [], quorumMet: false, discussion: "", decisions: [], actionItems: [], motions: [], adjournedAt: "4:00 PM",
+    sections: [{ title: "Welcome" }, { title: "Adjournment", discussion: "Meeting is adjourned at 4:00 PM" }] } as any,
+  styleId: "numbered-agenda",
+  options: { sourceFidelity: false },
+} as any);
+assert.doesNotMatch(notedAdjournment, /The meeting was adjourned at/, "notes that already record the adjournment are not echoed");
 console.log("✓ numbered export: quorum counts members only; no repeated motion wording or second Adjournment heading");
 
 // ---------- the first templated meeting has no "previous meeting date" filler ----

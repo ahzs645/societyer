@@ -769,7 +769,10 @@ function renderNumberedAgendaMinutes({
         const rendered = renderNumberedAgendaSection(label, originalIndex, section, minutes, topicMotions, options, depth);
         // The agenda's own closing "Adjournment" item carries the adjournment
         // record instead of a second, unnumbered "Adjournment" heading.
-        return position === closingAdjournmentPosition ? rendered + adjournmentBody : rendered;
+        if (position !== closingAdjournmentPosition) return rendered;
+        // The section's own notes may already say when it adjourned.
+        const notesSayAdjourned = /\badjourn/i.test(String(section.discussion ?? ""));
+        return rendered + (notesSayAdjourned ? (adjournmentMotion ? renderSampleMotion(adjournmentMotion) : "") : adjournmentBody);
       }).join("");
     })()}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
