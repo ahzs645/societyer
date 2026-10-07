@@ -74,6 +74,7 @@ import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNu
 import { meetingTypeCategory } from "../../shared/functions/meetings";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
 import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../features/meetings/lib/sourceAgendaNavigation";
+import { alignSectionsToAgenda } from "../features/meetings/lib/agendaSectionAlign";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
@@ -1488,28 +1489,61 @@ export function MeetingDetailPage() {
       const title = entry.title.trim();
       if (!title) continue;
       const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
-      cleaned.push({ title, depth });
+      cleaned.push({ title, depth, ...(entry._id ? { _id: entry._id } : {}) });
       if (depth === 0) hasRoot = true;
     }
     // Both root and sub-items become real minute sections. Depth is preserved
     // on the section so the editor and exports can render sub-numbering.
     const next = cleaned;
 
+    // Align minutes sections to the edited agenda BEFORE re-syncing it: the
+    // sync matches sections by title, so a renamed item must already carry its
+    // new title (and keep its notes, actions and motions). Sections keep the
+    // agenda item ids that still exist at this point; the sync re-links them.
+    if (minutes && !minutes.approvedAt) {
+      const sectionHasDetails = (section: any) =>
+        !!(
+          section?.discussion ||
+          section?.presenter ||
+          (section?.decisions ?? []).length ||
+          (section?.actionItems ?? []).length ||
+          (section?.linkedTaskIds ?? []).length
+        );
+      const aligned = alignSectionsToAgenda(
+        (minutes.sections ?? []) as any[],
+        next,
+        displayMotions as any[],
+        (title, depth) => buildSectionFromTitle(title, depth),
+        sectionHasDetails,
+      );
+      if (aligned.sectionsChanged || aligned.motionsChanged) {
+        const patch: any = {};
+        if (aligned.sectionsChanged) patch.sections = aligned.sections;
+        if (aligned.motionsChanged) patch.motions = aligned.motions;
+        await updateMinutes({ id: minutes._id, patch });
+      }
+    }
+
     await syncAgendaForMeeting({
       societyId: meeting.societyId,
       meetingId: meeting._id,
       title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
-      items: cleaned.map((entry) => ({
-        title: entry.title,
-        depth: entry.depth,
-        type: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.type ?? inferAgendaSectionType(entry.title),
-        presenter: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.presenter,
-        details: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.details,
-        timeAllottedMinutes: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.timeAllottedMinutes,
-        motionTemplateId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionTemplateId,
-        motionId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionId,
-        motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
-      })),
+      items: cleaned.map((entry) => {
+        // A renamed item keeps its type, presenter, details and motion link.
+        const metadata = (entry._id ? canonicalAgendaItems?.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
+          ?? canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
+        return {
+          title: entry.title,
+          depth: entry.depth,
+          type: metadata?.type ?? inferAgendaSectionType(entry.title),
+          presenter: metadata?.presenter,
+          details: metadata?.details,
+          timeAllottedMinutes: metadata?.timeAllottedMinutes,
+          motionTemplateId: metadata?.motionTemplateId,
+          motionId: metadata?.motionId,
+          motionText: metadata?.motionText,
+        };
+      }),
     });
 
     // Auto-bootstrap the minutes record on first save. This subsumes the old
@@ -1552,90 +1586,6 @@ export function MeetingDetailPage() {
       setAgendaEdit(null);
       toast.success("Agenda saved");
       return;
-    }
-
-    // Keep agenda and minutes.sections in 1-to-1 sync: align section order to
-    // the agenda, reuse existing sections by title, and create empty sections
-    // for new titles. Sections whose titles were dropped from the agenda are
-    // removed only if they have no recorded content; sections with data are
-    // preserved as orphans so we never silently destroy recorded minutes.
-    if (minutes) {
-      const existingSections = ((minutes.sections ?? []) as any[]);
-      const existingMotions = displayMotions;
-      const normalize = (title: string) => title.trim().toLowerCase();
-      const sectionHasDetails = (section: any) =>
-        !!(
-          section?.discussion ||
-          section?.presenter ||
-          (section?.decisions ?? []).length ||
-          (section?.actionItems ?? []).length ||
-          (section?.linkedTaskIds ?? []).length
-        );
-
-      // Queue per-title so each duplicate-titled agenda entry consumes its own
-      // matching section instead of all resolving to the first one (which
-      // would clobber sibling sections' content).
-      const sectionsByTitle = new Map<string, any[]>();
-      for (const section of existingSections) {
-        const key = normalize(section?.title ?? "");
-        if (!key) continue;
-        const queue = sectionsByTitle.get(key) ?? [];
-        queue.push(section);
-        sectionsByTitle.set(key, queue);
-      }
-
-      // Preserve existing section content when titles match; always overwrite
-      // depth from the agenda since the agenda is the source of truth for
-      // hierarchy. Brand-new titles get a fresh empty section at the correct
-      // depth.
-      const aligned = next.map((entry) => {
-        const existing = sectionsByTitle.get(normalize(entry.title))?.shift();
-        return existing
-          ? { ...existing, depth: entry.depth }
-          : buildSectionFromTitle(entry.title, entry.depth);
-      });
-
-      const newTitles = new Set(next.map((entry) => normalize(entry.title)));
-      const orphans = existingSections.filter((section) => {
-        const key = normalize(section?.title ?? "");
-        return !newTitles.has(key) && sectionHasDetails(section);
-      });
-
-      const finalSections = [...aligned, ...orphans];
-
-      const sectionsChanged =
-        finalSections.length !== existingSections.length ||
-        finalSections.some((s, i) => s !== existingSections[i]);
-
-      const titleToNewIndex = new Map<string, number>();
-      finalSections.forEach((section, index) => {
-        const key = normalize(section?.title ?? "");
-        if (key && !titleToNewIndex.has(key)) titleToNewIndex.set(key, index);
-      });
-
-      let motionsChanged = false;
-      const remappedMotions = existingMotions.map((motion) => {
-        if (motion.sectionIndex == null) return motion;
-        const oldSection = existingSections[motion.sectionIndex];
-        if (!oldSection) return motion;
-        const oldKey = normalize(oldSection?.title ?? "");
-        const newIndex = titleToNewIndex.get(oldKey);
-        if (newIndex == null) {
-          const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
-          motionsChanged = true;
-          return rest as Motion;
-        }
-        if (newIndex === motion.sectionIndex) return motion;
-        motionsChanged = true;
-        return { ...motion, sectionIndex: newIndex };
-      });
-
-      if (sectionsChanged || motionsChanged) {
-        const patch: any = {};
-        if (sectionsChanged) patch.sections = finalSections;
-        if (motionsChanged) patch.motions = remappedMotions;
-        await updateMinutes({ id: minutes._id, patch });
-      }
     }
 
     setAgendaEdit(null);

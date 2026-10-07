@@ -12,6 +12,7 @@ import { effectiveSourceFidelity } from "../src/features/meetings/lib/minutesExp
 import { defaultNewMeetingStart, meetingCreateLabels } from "../src/features/meetings/lib/noticeWindow";
 import { minutesApprovalIssues } from "../shared/meetingApproval";
 import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
+import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectionAlign";
 
 // ---------- rich-editor markdown is shown without escapes ---------------------
 // What the rich editor saves after a no-change round trip of imported text.
@@ -103,6 +104,28 @@ assert.equal(motion.outcomeOverrideNote, "Consensus recorded by the chair", "ove
 assert.equal(motion.sourceOutcomeText, "approved", "source outcome wording survives");
 console.log("✓ agenda re-sync keeps action status/owner links and motion person links, dissent and notes");
 
+// Reordering the agenda moves each motion with its section; a motion whose
+// section disappears stays in the minutes, unassigned.
+await client.mutation("minutes:update", { id: "min1", patch: { sections: [
+  { title: "Budget", discussion: "Carry-forward reviewed." },
+  { title: "Work plan", discussion: "Plan discussed." },
+  { title: "Scratch item" },
+], motions: [
+  { motionId: "mo1", text: "To approve the 2021 draft budget", outcome: "Carried", sectionIndex: 0, sectionTitle: "Budget", movedByPersonId: "p_alex" },
+  { text: "To adopt the work plan", outcome: "Carried", sectionIndex: 1, sectionTitle: "Work plan" },
+  { text: "To note the scratch item", outcome: "Carried", sectionIndex: 2, sectionTitle: "Scratch item" },
+] } });
+await client.mutation("agendas:syncForMeeting", { societyId, meetingId: "m1", title: "Board agenda", items: [
+  { title: "Work plan", depth: 0 }, { title: "Budget", depth: 0 },
+] });
+const reorderedMotions = tables().motions.filter((row) => row.minutesId === "min1");
+const byText = (text: string) => reorderedMotions.find((row) => row.text === text);
+assert.equal(reorderedMotions.length, 3, "no motion is lost when the agenda changes");
+assert.deepEqual([byText("To adopt the work plan")?.sectionIndex, byText("To approve the 2021 draft budget")?.sectionIndex], [0, 1], "motions follow their sections");
+assert.equal(byText("To note the scratch item")?.sectionIndex, undefined, "a motion on a dropped, empty section is kept unassigned");
+assert.equal(byText("To approve the 2021 draft budget")?.movedByPersonId, "p_alex");
+console.log("✓ agenda reorder: motions follow their sections; none are lost");
+
 // ---------- exports show corrected text and actions ----------------------------
 const html = renderMinutesHtml({
   society: { name: "Retest Society" } as any,
@@ -147,6 +170,31 @@ assert.equal(effectiveSourceFidelity(true, undefined, { approvedAt: "2012-05-29"
 assert.equal(effectiveSourceFidelity(true, undefined, {}, { sourceReviewStatus: "source_reviewed" }), false, "reviewed meetings export the corrected minutes");
 assert.equal(effectiveSourceFidelity(false, true, { approvedAt: "2012-05-29" }), true, "an explicit choice wins");
 console.log("✓ export default: corrected minutes once reviewed or approved");
+
+// ---------- agenda edits keep section content on rename / reorder --------------
+{
+  const existing = [
+    { title: "Welcome", agendaItemId: "ai1", discussion: "" },
+    { title: "Agenda: Review and", agendaItemId: "ai2", discussion: "Agenda approved." },
+    { title: "Budget", agendaItemId: "ai3", discussion: "Budget approved." },
+    { title: "Old item", agendaItemId: "ai4", discussion: "Kept because it has notes." },
+  ];
+  const motionRows = [
+    { text: "Approve the agenda", sectionIndex: 1, sectionTitle: "Agenda: Review and" },
+    { text: "Approve the budget", sectionIndex: 2, sectionTitle: "Budget" },
+  ];
+  const result = alignSectionsToAgenda(existing, [
+    { title: "Agenda: Review and Approval", depth: 0, _id: "ai2" },
+    { title: "Welcome", depth: 0, _id: "ai1" },
+    { title: "Budget", depth: 0 },
+    { title: "Upcoming meetings", depth: 0 },
+  ], motionRows, (title, depth) => ({ title, depth, agendaItemId: undefined as any, discussion: "" }), (section) => !!section.discussion);
+  assert.deepEqual(result.sections.map((section) => section.title), ["Agenda: Review and Approval", "Welcome", "Budget", "Upcoming meetings", "Old item"]);
+  assert.equal(result.sections[0].discussion, "Agenda approved.", "renamed item keeps its notes");
+  assert.deepEqual(result.motions.map((motion) => [motion.sectionIndex, motion.sectionTitle]), [[0, "Agenda: Review and Approval"], [2, "Budget"]]);
+  assert.equal(result.sectionsChanged, true);
+}
+console.log("✓ agenda editor: renamed and reordered items keep their notes and motions");
 
 // ---------- governance retest items O-5..O-7 ----------------------------------
 const defaultStart = defaultNewMeetingStart(14, new Date(2026, 9, 7, 4, 16));

@@ -233,7 +233,7 @@ function ResolutionTypeSelect({
     opts.push({ value: "Procedural", label: "Procedural" });
     return opts;
   }, [rules]);
-  return <Select value={value} onChange={onChange} options={options} size={size} />;
+  return <Select value={value} onChange={onChange} options={options} size={size} aria-label="Resolution type" />;
 }
 
 /** Director/member name autocomplete. Uses the shared NameAutocomplete so the

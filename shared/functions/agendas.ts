@@ -495,10 +495,16 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     queue.push(section);
     byTitle.set(key, queue);
   }
-  const nextSections = items.map((item) => {
+  // Where each existing section lands, so motions follow their section when
+  // the agenda is reordered (their sectionIndex was left pointing at whatever
+  // section moved into the old position).
+  const oldIndexOf = new Map<any, number>(existingSections.map((section: any, index: number) => [section, index]));
+  const newIndexOfOld = new Map<number, number>();
+  const nextSections = items.map((item, newIndex) => {
     const existing = byTitle.get(normalizeTitle(item.title))?.shift();
     const base = sectionFromAgendaItem(item);
     if (!existing) return base;
+    newIndexOfOld.set(oldIndexOf.get(existing)!, newIndex);
     const merged: Record<string, unknown> = {
       title: item.title,
       agendaItemId:item._id,
@@ -532,6 +538,7 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     const key = normalizeTitle(section?.title ?? "");
     if (key && nextTitles.has(key)) continue;
     if (sectionHasDetails(section)) {
+      newIndexOfOld.set(oldIndexOf.get(section)!, nextSections.length);
       const preserved=cleanMinutesSection(section);
       if (!items.some(item=>item._id===preserved.agendaItemId)) delete preserved.agendaItemId;
       nextSections.push(preserved);
@@ -557,7 +564,18 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     const key = normalizeTitle(motion?.text ?? "");
     return !agendaMotionKeys.has(key);
   });
-  const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map(cleanMotion)];
+  const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map((motion: any) => {
+    if (motion.sectionIndex == null) return cleanMotion(motion);
+    const newIndex = newIndexOfOld.get(Number(motion.sectionIndex));
+    if (newIndex == null) {
+      // Its section is gone: keep the motion, unassigned, rather than attach
+      // it to whichever section now has that position.
+      const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
+      return cleanMotion(rest);
+    }
+    const title = (nextSections[newIndex] as any)?.title;
+    return cleanMotion({ ...motion, sectionIndex: newIndex, ...(motion.sectionTitle != null && title ? { sectionTitle: title } : {}) });
+  })];
   // Only sections are stored on the minutes row now; motions are materialized
   // into the table by syncMotionsForMinutes (which maintains motionIds). Phase 4C.
   await ctx.db.patch(minutes._id, {
