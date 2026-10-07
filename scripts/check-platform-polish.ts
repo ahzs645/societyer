@@ -14,6 +14,7 @@ import { formatDocumentTitle } from "../src/lib/documentTitle";
 import { openableExternalUrl } from "../src/lib/externalUrl";
 import { parseTypedDate } from "../src/lib/typedDate";
 import { userDisplayName } from "../shared/functions/users";
+import { MODULE_DEFINITIONS } from "../src/lib/modules";
 import { newSocietyOwnerFields } from "../shared/functions/society";
 
 type Catalog = { [key: string]: string | Catalog };
@@ -123,6 +124,13 @@ assert.match(typedOk("soon"), /^ERR /);
 assert.match(typedOk("2001-01-01", { min: "2005-01-01" }), /^ERR The date must be on or after 2005-01-01/);
 const datePicker = readFileSync(new URL("../src/components/DatePicker.tsx", import.meta.url), "utf8");
 assert.match(datePicker, /parseTypedDate\(typed, \{ min, max \}\)/, "the date picker validates typed dates against its bounds");
+
+// Settings → Modules lists every module in the interface language.
+for (const module of MODULE_DEFINITIONS) {
+  assert.ok(frKeys.has(`modules.${module.key}.label`) && frKeys.has(`modules.${module.key}.description`), `module ${module.key} needs a French label and description`);
+  assert.equal(enKeys.get(`modules.${module.key}.label`), module.label, `en modules.${module.key}.label matches the module definition`);
+  assert.ok(frKeys.has(`moduleCategories.${module.category}`), `module category ${module.category} needs a French name`);
+}
 
 // Sidebar counts say what they count and hide a misleading "Meetings 0".
 const layoutInternal = readFileSync(new URL("../src/components/Layout.internal.tsx", import.meta.url), "utf8");

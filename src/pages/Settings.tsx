@@ -24,6 +24,7 @@ import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import { useTranslation } from "react-i18next";
+import { translateNavLabel } from "../i18n/navLabels";
 import { usePermissions } from "../hooks/usePermissions";
 import type { ThemePreference } from "../lib/theme";
 import {
@@ -588,7 +589,7 @@ export function SettingsPage() {
             checked={!aiChatHidden}
             onChange={(checked) => setAiChatHidden(!checked)}
             label={t("settings.aiToggle", "Enable AI chat")}
-            hint="When off, the sidebar bot button and the floating AI assistant are removed. Other AI-driven helpers (e.g. transcript generation) stay available."
+            hint={t("settings.aiToggleHint")}
           />
         </div>
       </div>
@@ -605,18 +606,18 @@ export function SettingsPage() {
         <div className="card__body col" style={{ gap: 16 }}>
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
             {t("settings.modulesHint")}
-            {" "}Modules are workspace-wide feature switches. User access follows workspace roles.
-            {!canManageModules && " Only an Owner or Admin can change these settings."}
+            {" "}{t("settings.modulesAccessNote")}
+            {!canManageModules && ` ${t("settings.modulesOwnerOnly")}`}
           </div>
           <Link to="/app/users" className="btn btn--ghost btn--sm" style={{ alignSelf: "flex-start" }}>
-            View users & access
+            {t("settings.viewUsersAccess")}
           </Link>
 
           <div className="settings-modules">
             {modulesByCategory.map(({ category, items }) => (
               <div key={category} className="card" style={{ background: "var(--bg-base)" }}>
                 <div className="card__head">
-                  <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>{category}</h3>
+                  <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>{t(`moduleCategories.${category}`, category)}</h3>
                 </div>
                 <div className="card__body col" style={{ gap: 12 }}>
                   {items.map((module) => (
@@ -634,11 +635,11 @@ export function SettingsPage() {
                         checked={moduleSettings[module.key]}
                         onChange={(checked) => toggleModule(module.key, checked)}
                         disabled={!canManageModules || savingModule !== null}
-                        label={module.label}
-                        hint={module.description}
+                        label={t(`modules.${module.key}.label`, module.label)}
+                        hint={t(`modules.${module.key}.description`, module.description)}
                       />
                       <div className="muted" style={{ fontSize: "var(--fs-sm)", paddingLeft: 42, marginTop: 4 }}>
-                        Includes: {module.includes.join(", ")}
+                        {t("settings.moduleIncludes", { items: module.includes.map((item) => translateNavLabel(t, item)).join(", ") })}
                       </div>
                     </div>
                   ))}
@@ -652,7 +653,7 @@ export function SettingsPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{t("settings.inventoryTitle", "Inventory")}</h2>
-          <span className="card__subtitle">Controls for asset and consumable workflows.</span>
+          <span className="card__subtitle">{t("settings.inventorySubtitle")}</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
           <Toggle
@@ -660,7 +661,7 @@ export function SettingsPage() {
             onChange={toggleConsumablePrompt}
             disabled={!canEditSettings || savingInventorySettings}
             label={t("settings.inventoryPrompt", "Prompt for current count when adding consumables")}
-            hint="When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count."
+            hint={t("settings.inventoryPromptHint")}
           />
         </div>
       </div>
@@ -713,12 +714,12 @@ export function SettingsPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{t("settings.notificationsTitle", "Notifications")}</h2>
-          <span className="card__subtitle">Controls for the in-app notification center.</span>
+          <span className="card__subtitle">{t("settings.notificationsSubtitle")}</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
           <div className="settings-row" style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 500 }}>Keep cleared notifications for</div>
+              <div style={{ fontWeight: 500 }}>{t("settings.keepClearedFor")}</div>
               <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
                 When you clear a notification it leaves the bell immediately, but stays on the
                 Notifications page under “Dismissed” for this long before it’s permanently deleted.
@@ -767,7 +768,7 @@ export function SettingsPage() {
         <div className="card__head">
           <AlertTriangle size={16} style={{ color: "var(--danger)", flexShrink: 0 }} />
           <h2 className="card__title">{t("settings.dangerTitle", "Danger zone")}</h2>
-          <Badge tone="danger">Irreversible</Badge>
+          <Badge tone="danger">{t("settings.irreversible")}</Badge>
         </div>
         <div className="card__body col" style={{ gap: 20 }}>
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -775,7 +776,7 @@ export function SettingsPage() {
           </div>
 
           <div className="col" style={{ gap: 8 }}>
-            <div style={{ fontWeight: 500 }}>Workspace shared views</div>
+            <div style={{ fontWeight: 500 }}>{t("settings.sharedViews")}</div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
               Seed shared governance views for board work, filings, attestations, conflicts, and grants.
             </div>
@@ -802,7 +803,7 @@ export function SettingsPage() {
           </div>
 
           <div className="col" style={{ gap: 8, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-            <div style={{ fontWeight: 500 }}>Demo data</div>
+            <div style={{ fontWeight: 500 }}>{t("settings.demoData")}</div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
               Seed a fake demo society, or wipe every table in this deployment. Wiping cannot be undone.
             </div>

@@ -22,6 +22,9 @@ import { useConfirm } from "./Modal";
 import { useInspectorPanel } from "./InspectorPanel";
 import { CitationBadge } from "./CitationTooltip";
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
+import { useTranslation } from "react-i18next";
+import { translateNavLabel } from "../i18n/navLabels";
+import { useDocumentTitle } from "../lib/documentTitle";
 
 export type Breadcrumb = {
   label: ReactNode;
@@ -385,6 +388,9 @@ export function SettingsShell({
     ? createElement(identity.icon, { size: 16 })
     : icon;
   const resolvedTone: IconTone = identity?.color ?? iconColor ?? "gray";
+  const { t } = useTranslation();
+  const displayTitle = typeof title === "string" ? translateNavLabel(t, title) : title;
+  useDocumentTitle(typeof displayTitle === "string" ? displayTitle : identity ? translateNavLabel(t, identity.label) : null);
 
   return (
     <div className="settings-shell">
@@ -396,7 +402,7 @@ export function SettingsShell({
                 {resolvedIcon}
               </TintedIconTile>
             )}
-            <span className="settings-shell__title-text">{title}</span>
+            <span className="settings-shell__title-text">{displayTitle}</span>
           </h1>
           {description && <div className="settings-shell__description">{description}</div>}
         </div>
