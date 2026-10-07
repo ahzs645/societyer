@@ -111,8 +111,9 @@ test("document metadata opens its review workbench and validates page comments",
   await page.locator("tr", { hasText: title }).getByRole("button", { name: "Actions for this document", exact: true }).click();
   await page.getByRole("menuitem", { name: "Open review page", exact: true }).click();
   await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Open file", exact: true }).click();
-  await expect(page.getByText("No file or URL is attached to this document.", { exact: true })).toBeVisible();
+  // A metadata-only record cannot be opened; the page says why instead.
+  await expect(page.getByRole("button", { name: "Open file", exact: true })).toBeDisabled();
+  await expect(page.getByRole("note").filter({ hasText: "No file is attached to this document — it is a metadata record." })).toBeVisible();
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
   await expect(page.getByText("Add a comment first.", { exact: true })).toBeVisible();
   await page.locator("[contenteditable=true]").first().pressSequentially("Synthetic page review note for interface verification.");

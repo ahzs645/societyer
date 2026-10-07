@@ -30,7 +30,8 @@ async function fits(page: Page) {
 async function exportedBackup(page: Page) {
   await page.goto("/app/settings?tab=runtime");
   const event = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download backup", exact: true }).click();
+  // The JSON records export carries the same snapshot as the ZIP backup, without files.
+  await page.getByRole("button", { name: "Records JSON", exact: true }).click();
   const stream = await (await event).createReadStream();
   if (!stream) throw new Error("The workspace backup download did not contain bytes.");
   const chunks: Buffer[] = []; for await (const chunk of stream) chunks.push(Buffer.from(chunk));
