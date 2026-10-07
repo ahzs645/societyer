@@ -13,6 +13,8 @@ import { NAV_ITEM_LABEL_KEYS, translateNavLabel } from "../src/i18n/navLabels";
 import { formatDocumentTitle } from "../src/lib/documentTitle";
 import { openableExternalUrl } from "../src/lib/externalUrl";
 import { parseTypedDate } from "../src/lib/typedDate";
+import { userDisplayName } from "../shared/functions/users";
+import { newSocietyOwnerFields } from "../shared/functions/society";
 
 type Catalog = { [key: string]: string | Catalog };
 function flatten(catalog: Catalog, prefix = ""): Map<string, string> {
@@ -127,6 +129,17 @@ const layoutInternal = readFileSync(new URL("../src/components/Layout.internal.t
 assert.match(layoutInternal, /case "\/app\/meetings": return counts\.meetingsThisYear \|\| null;/);
 assert.match(layoutInternal, /className="sr-only">, \{description\}/, "count badges carry an announced description");
 assert.match(layoutInternal, /"meeting this year", "meetings this year"/);
+
+// Users always have a visible name (a blank privacy-officer name left the
+// sidebar user button and Users table empty).
+assert.equal(userDisplayName({ displayName: "  ", email: "office@example.org" }), "office@example.org");
+assert.equal(userDisplayName({ displayName: "Ada" }), "Ada");
+assert.equal(userDisplayName({}), "Unnamed user");
+assert.equal(
+  newSocietyOwnerFields({ kind: "system" } as any, { societyId: "s", placeholderEmail: "o@example.org", placeholderDisplayName: "", createdAtISO: "2026-01-01" }).displayName,
+  "Owner",
+  "a workspace created without an owner name still names its Owner",
+);
 
 // Settings → Restore validates the whole backup before the replace prompt.
 const storageCard = readFileSync(new URL("../src/components/WorkspaceStorageCard.tsx", import.meta.url), "utf8");

@@ -357,7 +357,7 @@ export class StaticConvexClient {
       .filter((row: any) => row.societyId === societyId)
       .map((row: any) => ({
         _id: row._id,
-        displayName: row.displayName,
+        displayName: String(row.displayName ?? "").trim() || String(row.email ?? "").trim() || "Unnamed user",
         email: row.email,
         role: row.role,
         status: row.status,

@@ -925,7 +925,7 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
           args?.officialEmail ??
           args?.privacyOfficerEmail ??
           `owner@${String(args?.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
-        placeholderDisplayName: args?.privacyOfficerName ?? "Owner",
+        placeholderDisplayName: String(args?.privacyOfficerName ?? "").trim() || "Owner",
         createdAtISO: now,
       });
       // Mirror convex/society.createWorkspace exactly. The UI reads `name`,
@@ -1528,7 +1528,7 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
         placeholderEmail:
           row.officialEmail ??
           `owner@${String(row.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
-        placeholderDisplayName: row.privacyOfficerName ?? "Owner",
+        placeholderDisplayName: String(row.privacyOfficerName ?? "").trim() || "Owner",
         createdAtISO: row.createdAtISO,
       });
     }

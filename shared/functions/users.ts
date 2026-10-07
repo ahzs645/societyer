@@ -142,19 +142,33 @@ export async function securityDisableUserPortable(ctx: PortableMutationCtx, { id
   await recordMembershipChange(ctx, target.societyId, actor._id, id, "security-disabled", `Security incident: ${reason.trim().slice(0, 1000)}`);
 }
 
+/**
+ * Name shown for a workspace user. Workspaces created locally without a
+ * privacy-officer name stored an empty displayName, which left the sidebar
+ * user button, the Users table and per-row labels ("Role for ") blank.
+ */
+export function userDisplayName(row: { displayName?: unknown; email?: unknown }): string {
+  return String(row.displayName ?? "").trim() || String(row.email ?? "").trim() || "Unnamed user";
+}
+
+function withDisplayName<T extends { displayName?: unknown; email?: unknown }>(row: T): T & { displayName: string } {
+  return { ...row, displayName: userDisplayName(row) };
+}
+
 export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  return ctx.db
+  const rows = await ctx.db
     .query("users")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  return rows.map(withDisplayName);
 }
 
 export async function userGet(ctx: PortableQueryCtx, { id }: { id: string }) {
   const target = await requireOwnedRow(ctx, "users", id);
   const actor = await requireSocietyMembership(ctx, target.societyId);
   if (actor._id !== target._id) await requirePermissionPortable(ctx, target.societyId, "users:read");
-  return target;
+  return withDisplayName(target);
 }
 
 export async function userGetByEmail(ctx: PortableQueryCtx, { email }: { email: string }) {
