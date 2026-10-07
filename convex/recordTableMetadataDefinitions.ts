@@ -2497,6 +2497,23 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "flagged", size: 100 },
       ],
     },
+    // Triage columns first (finding D-15). Existing workspaces keep their
+    // "All documents" column order; this view gives them the review layout.
+    extraViews: [
+      {
+        name: "Review and provenance",
+        columns: [
+          { fieldName: "title", size: 320 },
+          { fieldName: "reviewStatus", size: 140 },
+          { fieldName: "category", size: 170 },
+          { fieldName: "sourceDate", size: 120 },
+          { fieldName: "sourceSystemLabel", size: 130 },
+          { fieldName: "sourceVersionStatus", size: 110 },
+          { fieldName: "linkedRecordCount", size: 120 },
+          { fieldName: "tags", size: 200 },
+        ],
+      },
+    ],
   },
   {
     nameSingular: "financialTransaction",

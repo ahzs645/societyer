@@ -25,6 +25,7 @@ import {
   browsePortable,
   versionsForPortable,
   evidenceForPortable,
+  categoryCountsPortable,
   markDuplicatePortable,
   clearDuplicatePortable,
   setVersionInfoPortable,
@@ -232,6 +233,12 @@ export const versionsFor = authorizedQuery("documents:versionsFor", query)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => versionsForPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const categoryCounts = authorizedQuery("documents:categoryCounts", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => categoryCountsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const evidenceFor = authorizedQuery("documents:evidenceFor", query)({

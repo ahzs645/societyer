@@ -1,5 +1,5 @@
 import { hasErrors, validateDocumentInput, type FieldErrors } from "../../shared/recordValidation";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -92,6 +92,23 @@ export function DocumentsPage() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // Workspaces restored from older backups carry document metadata without the
+  // review columns; top it up once (idempotent seed) for people who may.
+  const ensureMetadata = useMutation(api.seedRecordTableMetadata.ensureForSociety);
+  const metadataUpgradeTried = useRef(false);
+  const canSeedMetadata = permissions.loaded && permissions.can("settings:write");
+  const missingReviewFields = Boolean(tableData.objectMetadata && !tableData.objectMetadata.fields.some((field: any) => field.name === "reviewStatus"));
+  useEffect(() => {
+    if (!society || !missingReviewFields || !canSeedMetadata || metadataUpgradeTried.current) return;
+    metadataUpgradeTried.current = true;
+    void ensureMetadata({ societyId: society._id }).catch(() => undefined);
+  }, [society, missingReviewFields, canSeedMetadata, ensureMetadata]);
+  // Open the review layout by default when the workspace has it.
+  const reviewViewId = tableData.views.find((view) => view.name === "Review and provenance")?._id;
+  const effectiveViewId = currentViewId ?? (reviewViewId as Id<"views"> | undefined);
+  useEffect(() => {
+    if (!currentViewId && reviewViewId) setCurrentViewId(reviewViewId as Id<"views">);
+  }, [currentViewId, reviewViewId]);
   const allRows: any[] = useMemo(() => browse?.rows ?? [], [browse]);
   const activeRows = useMemo(() => allRows.filter((row) => showArchived || !row.archivedAtISO), [allRows, showArchived]);
   const facets = useMemo(() => documentCategoryFacets(activeRows), [activeRows]);
@@ -340,7 +357,7 @@ export function DocumentsPage() {
             icon={<FolderOpen size={14} />}
             label="All documents"
             views={tableData.views}
-            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            currentViewId={effectiveViewId ?? tableData.views[0]?._id ?? null}
             onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
             onOpenFilter={() => setFilterOpen((x) => !x)}
           />
@@ -437,7 +454,7 @@ function DocumentTitleCell({ row }: { row: any }) {
   const showFileName = row.fileName && row.fileName.trim().toLowerCase() !== String(row.title ?? "").trim().toLowerCase();
   const secondary = showFileName ? row.fileName : row.sourcePath;
   return (
-    <div className="record-table__identifier-lines">
+    <div className="record-table__identifier-lines document-title-cell">
       <strong className="record-table__identifier-primary" title={row.title}>{row.title}</strong>
       <div className="record-table__identifier-secondary document-title-markers">
         {row.duplicateCount > 1 && (
@@ -498,6 +515,8 @@ function DocumentQueueCard({
   documents: any[];
   empty: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? documents : documents.slice(0, 3);
   return (
     <div className="card">
       <div className="card__head">
@@ -505,7 +524,7 @@ function DocumentQueueCard({
         <span className="card__subtitle">{subtitle}</span>
       </div>
       <div className="card__body col" style={{ gap: 8 }}>
-        {documents.map((doc) => (
+        {shown.map((doc) => (
           <Link key={doc._id} to={`/app/documents/${doc._id}`} className="col document-queue-link">
             <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
               <strong className="document-queue-link__title">{doc.title}</strong>
@@ -522,6 +541,9 @@ function DocumentQueueCard({
             </div>
           </Link>
         ))}
+        {documents.length > shown.length && (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setExpanded(true)}>Show {documents.length - shown.length} more</button>
+        )}
         {documents.length === 0 && <div className="muted">{empty}</div>}
       </div>
     </div>

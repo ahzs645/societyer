@@ -188,6 +188,18 @@ export async function browsePortable(ctx: PortableQueryCtx, { societyId }: { soc
   };
 }
 
+/** Visible documents per canonical category, for "N documents" links on register pages. */
+export async function categoryCountsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const counts: Record<string, number> = {};
+  for (const doc of await visibleSocietyDocuments(ctx, societyId)) {
+    if (doc.archivedAtISO) continue;
+    const key = normalizeDocumentCategory(doc.category);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function versionsForPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
   const document = await requireDocumentAccess(ctx, id);
   const societyId = String(document.societyId);

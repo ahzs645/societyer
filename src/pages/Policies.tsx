@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Menu } from "../components/Menu";
 import { DatePicker } from "../components/DatePicker";
@@ -133,6 +134,7 @@ export function PoliciesPage() {
           </button>
         }
       />
+      <ImportCandidatesNotice noun="policy" targets={["policies"]} kinds={["policy"]} documentCategory="Policy" emptyRegister={!(policies ?? []).length} />
 
       <div className="card">
         <div className="card__head">

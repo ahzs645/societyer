@@ -286,10 +286,23 @@ export async function pendingByTargetPortable(ctx: PortableQueryCtx, { societyId
   const { items } = await loadQueue(ctx, societyId);
   const byTarget = new Map<string, number>();
   const byKind = new Map<string, number>();
+  const approvedByTarget = new Map<string, number>();
+  const approvedByKind = new Map<string, number>();
   for (const item of items) {
-    if (item.status !== "Pending") continue;
-    countInto(byTarget, item.targetModule);
-    countInto(byKind, item.recordKind);
+    if (item.status === "Pending") {
+      countInto(byTarget, item.targetModule);
+      countInto(byKind, item.recordKind);
+    } else if (item.status === "Approved" && !Object.values(item.importedTargets ?? {}).some(Boolean)) {
+      // Approved but never applied: the register still looks empty.
+      countInto(approvedByTarget, item.targetModule);
+      countInto(approvedByKind, item.recordKind);
+    }
   }
-  return { byTarget: Object.fromEntries(byTarget), byKind: Object.fromEntries(byKind), pending: [...byTarget.values()].reduce((sum, count) => sum + count, 0) };
+  return {
+    byTarget: Object.fromEntries(byTarget),
+    byKind: Object.fromEntries(byKind),
+    pending: [...byTarget.values()].reduce((sum, count) => sum + count, 0),
+    approvedByTarget: Object.fromEntries(approvedByTarget),
+    approvedByKind: Object.fromEntries(approvedByKind),
+  };
 }

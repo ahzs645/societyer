@@ -45,6 +45,14 @@
   flex-wrap: wrap;
   gap: token('s-3');
 }
+.document-title-cell .record-table__identifier-primary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .document-title-markers {
   display: flex;
   flex-wrap: wrap;
@@ -253,6 +261,24 @@
 }
 .document-status-buttons .btn {
   white-space: nowrap;
+}
+
+/* "N candidates awaiting review" on register pages (D-19). */
+.import-candidates-notice {
+  display: flex;
+  align-items: baseline;
+  gap: token('s-2');
+  margin: 0 0 token('s-4');
+  padding: token('s-2') token('s-3');
+  border: 1px solid token('border');
+  border-left: 3px solid token('accent');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  font-size: token('fs-sm');
+}
+.import-candidates-notice svg {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 /* Document detail layout: preview and panels in the main column, review
@@ -576,7 +602,9 @@
 }
 
 @media (max-width: 760px) {
-  .import-queue__select,
+  .import-queue__select {
+    flex: 1 1 calc(50% - 8px);
+  }
   .import-queue__search {
     flex: 1 1 100%;
   }
@@ -585,6 +613,27 @@
   }
   .import-queue__filters .segmented__btn {
     flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 4px;
+    white-space: nowrap;
+    font-size: token('fs-sm');
+  }
+  .import-queue__decide kbd {
+    display: none;
+  }
+  /* One scrollable line of facet chips instead of a wall of wrapped chips. */
+  .documents-facets__row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .documents-facets .chip {
+    flex: 0 0 auto;
+  }
+  .documents-facets__toggle {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .import-queue__keys {
     display: none;

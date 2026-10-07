@@ -670,6 +670,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "documents:browse", handler: documentCatalogFns.browsePortable }),
   definePortableQuery({ name: "documents:versionsFor", handler: documentCatalogFns.versionsForPortable }),
   definePortableQuery({ name: "documents:evidenceFor", handler: documentCatalogFns.evidenceForPortable }),
+  definePortableQuery({ name: "documents:categoryCounts", handler: documentCatalogFns.categoryCountsPortable }),
   definePortableMutation({ name: "documents:markDuplicate", handler: documentCatalogFns.markDuplicatePortable }),
   definePortableMutation({ name: "documents:clearDuplicate", handler: documentCatalogFns.clearDuplicatePortable }),
   definePortableMutation({ name: "documents:setVersionInfo", handler: documentCatalogFns.setVersionInfoPortable }),

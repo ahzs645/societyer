@@ -67,6 +67,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   for (const table of REGISTER_TABLES) {
     result[table] = await filterRegisterSourceRows(ctx, societyId, result[table], table);
   }
+  result.sourceEvidence = await withCanonicalSourceDocuments(ctx, societyId, result.sourceEvidence);
   // Detail lines inherit the source ACL of their imported parent register.
   const budgetIds = new Set(result.budgetSnapshots.map(row => String(row._id)));
   const statementIds = new Set(result.financialStatementImports.map(row => String(row._id)));
@@ -547,6 +548,57 @@ async function filterRegisterSourceRows(ctx: PortableQueryCtx, societyId: string
   const allowed = new Set(visible.map(row => String(row._id)));
   const linkedIds = new Set(linked.map(row => String(row._id)));
   return rows.filter(row => (table !== "sourceEvidence" && !linkedIds.has(String(row._id))) || allowed.has(String(row._id)));
+}
+
+/**
+ * Evidence rows sometimes cite the staged import candidate instead of the
+ * document created from it (finding D-20). Point those rows at the canonical
+ * document: the candidate's applied target, else the document with the same
+ * source id. Rows keep their stored sourceDocumentId; the UI links the
+ * canonical one.
+ */
+async function withCanonicalSourceDocuments(ctx: PortableQueryCtx, societyId: string, rows: any[]) {
+  if (!rows.length) return rows;
+  const sourceIds = [...new Set(rows.map((row) => row.sourceDocumentId).filter(Boolean).map(String))];
+  const sources = new Map<string, any>();
+  for (const id of sourceIds) {
+    const doc = await ctx.db.get(id, "documents");
+    if (doc && String(doc.societyId) === societyId) sources.set(id, doc);
+  }
+  const isCandidate = (doc: any) => doc && (doc.category === "Import Candidate" || doc.category === "Import Session");
+  if (![...sources.values()].some(isCandidate)) return rows.map((row) => ({ ...row, sourceDocumentKind: row.sourceDocumentId ? (sources.has(String(row.sourceDocumentId)) ? "document" : "missing") : undefined }));
+  const byExternalId = new Map<string, string>();
+  const docs = await ctx.db.query("documents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+  for (const doc of docs as any[]) {
+    if (isCandidate(doc)) continue;
+    const ids: unknown[] = [...(doc.sourceExternalIds ?? []), ...(doc.tags ?? [])];
+    if (typeof doc.content === "string" && doc.content.includes("externalId")) {
+      try {
+        const content = JSON.parse(doc.content);
+        ids.push(content?.externalId, ...(Array.isArray(content?.sourceExternalIds) ? content.sourceExternalIds : []));
+      } catch {
+        // Not JSON content.
+      }
+    }
+    for (const id of ids) {
+      const key = cleanText(id)?.toLowerCase();
+      if (key && key.includes(":") && !byExternalId.has(key)) byExternalId.set(key, String(doc._id));
+    }
+  }
+  return rows.map((row) => {
+    const source = row.sourceDocumentId ? sources.get(String(row.sourceDocumentId)) : undefined;
+    if (!row.sourceDocumentId) return row;
+    if (!source) return { ...row, sourceDocumentKind: "missing" };
+    if (!isCandidate(source)) return { ...row, sourceDocumentKind: "document" };
+    let applied: string | undefined;
+    try {
+      applied = JSON.parse(source.content ?? "{}")?.importedTargets?.documents;
+    } catch {
+      applied = undefined;
+    }
+    const canonical = applied ?? (row.externalId ? byExternalId.get(String(row.externalId).toLowerCase()) : undefined);
+    return { ...row, sourceDocumentKind: "candidate", canonicalDocumentId: canonical };
+  });
 }
 
 function sortDesc(rows: any[], field: string) {
