@@ -12363,6 +12363,22 @@
     ]
   },
   {
+    "key": "convex:meetings:attendanceRecords",
+    "surface": "convex",
+    "name": "meetings:attendanceRecords",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:meetings:backfillQuorumSnapshot",
     "surface": "convex",
     "name": "meetings:backfillQuorumSnapshot",
@@ -12475,6 +12491,50 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:meetings:merge",
+    "surface": "convex",
+    "name": "meetings:merge",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "targetId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "duplicateId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:meetings:mergePreview",
+    "surface": "convex",
+    "name": "meetings:mergePreview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/meetings.ts",
+    "idArguments": [
+      {
+        "path": "targetId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "duplicateId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -13471,6 +13531,22 @@
     ]
   },
   {
+    "key": "convex:minutes:listSummaries",
+    "surface": "convex",
+    "name": "minutes:listSummaries",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/minutes.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:minutes:repairImported",
     "surface": "convex",
     "name": "minutes:repairImported",
@@ -13481,6 +13557,22 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:minutes:saveAttendanceGrid",
+    "surface": "convex",
+    "name": "minutes:saveAttendanceGrid",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/minutes.ts",
+    "idArguments": [
+      {
+        "path": "minutesId",
+        "table": "minutes",
         "array": false,
         "optional": false
       }
@@ -32406,6 +32498,22 @@
     ]
   },
   {
+    "key": "portable:meetings:attendanceRecords",
+    "surface": "portable",
+    "name": "meetings:attendanceRecords",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:meetings:backfillQuorumSnapshot",
     "surface": "portable",
     "name": "meetings:backfillQuorumSnapshot",
@@ -32518,6 +32626,50 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:merge",
+    "surface": "portable",
+    "name": "meetings:merge",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "targetId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "duplicateId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:meetings:mergePreview",
+    "surface": "portable",
+    "name": "meetings:mergePreview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "targetId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "duplicateId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -33498,6 +33650,22 @@
     ]
   },
   {
+    "key": "portable:minutes:listSummaries",
+    "surface": "portable",
+    "name": "minutes:listSummaries",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:minutes:repairImported",
     "surface": "portable",
     "name": "minutes:repairImported",
@@ -33508,6 +33676,22 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:minutes:saveAttendanceGrid",
+    "surface": "portable",
+    "name": "minutes:saveAttendanceGrid",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "minutesId",
+        "table": "minutes",
         "array": false,
         "optional": false
       }
