@@ -1,6 +1,7 @@
 import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
 import { meetingStatusLabel, meetingStatusTone } from "../../shared/meetingStatus";
 import { formatMeetingDate, meetingCalendarDate } from "../../shared/meetingDates";
+import { todayDateOnly } from "../../shared/dateOnly";
 import { meetingBodyLabel } from "../../shared/meetingBodyPicker";
 import { approvingMeetingCandidates, minutesApprovalIssues } from "../../shared/meetingApproval";
 import { minutesPresentCount } from "../../shared/meetingAttendanceGrid";
@@ -761,6 +762,18 @@ export function MeetingDetailPage() {
   const markHeld = async () => {
     if (!(canMeetingsWrite)) return;
     try {
+      // A meeting dated in the future has not happened yet: say so before
+      // recording it as held (a meeting that met early needs its date fixed).
+      const meetingDay = meetingCalendarDate(meeting as any);
+      if (meetingDay && meetingDay > todayDateOnly()) {
+        const ok = await confirm({
+          title: "Mark a future meeting held?",
+          message: `This meeting is dated ${formatMeetingDate(meeting, { withTime: false })}, which hasn't happened yet. If it met on another day, change the date with Edit meeting first.`,
+          confirmLabel: "Mark held anyway",
+          tone: "warn",
+        });
+        if (!ok) return;
+      }
       if (calculatedQuorumMet === false) {
         const ok = await confirm({
           title: "Mark meeting held without quorum?",

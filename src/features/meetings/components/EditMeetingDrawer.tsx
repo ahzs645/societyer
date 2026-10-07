@@ -23,7 +23,7 @@ import { MEETING_STATUS_LABELS, MEETING_STATUS_OPTIONS } from "../../../../share
 import { bodyChoiceIssue, bodyPatchForValue, bodyValueForMeeting, meetingBodyOptions } from "../../../../shared/meetingBodyPicker";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { clockTextTo24h, meetingDateDraftFrom, meetingDateDraftIssue, meetingDatePatchFromDraft, type MeetingDateDraft } from "../../../../shared/meetingDateEdit";
-import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
+import { normalizedMeetingTitle, titleForChangedDate } from "../lib/meetingDetailHelpers";
 import { cleanSourceLocation } from "../../../../shared/meetingSourceHeader";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 
@@ -135,7 +135,12 @@ export function EditMeetingDrawer({
   if (!meeting) return null;
   const header = minutes?.sourceMeetingRecord?.header ?? null;
   const patchDraft = (diff: Partial<Draft>) => setDraft((current) => (current ? { ...current, ...diff } : current));
-  const patchDate = (diff: Partial<MeetingDateDraft>) => setDraft((current) => (current ? { ...current, date: { ...current.date, ...diff } } : current));
+  const patchDate = (diff: Partial<MeetingDateDraft>) => setDraft((current) => (current ? {
+    ...current,
+    // "Board meeting — 2026-10-22" follows a changed date.
+    title: diff.date !== undefined ? titleForChangedDate(current.title, current.date.date, diff.date) : current.title,
+    date: { ...current.date, ...diff },
+  } : current));
 
   const titleIssue = draft && !normalizedMeetingTitle(draft.title) ? "Enter a meeting title." : null;
   const bodyIssue = draft ? bodyChoiceIssue(draft.body, draft.externalOrganization) : null;

@@ -24,6 +24,7 @@ import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindo
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
+import { suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 
 export type MeetingDraft = {
   type: string;
@@ -304,11 +305,11 @@ export function MeetingFormFields({
           )}
         </div>
       )}
-      <Field label="Title" required>
+      <Field label="Title" hint={editingId ? undefined : "Leave blank to use the suggested title."}>
         <input
           className="input"
-          required
           value={value.title}
+          placeholder={editingId ? undefined : suggestedMeetingTitle(value, committees) || undefined}
           onChange={(e) => onChange({ title: e.target.value })}
         />
       </Field>

@@ -27,7 +27,7 @@ import type { ToneVariant } from "../components/ui";
 import { type MenuSection } from "../components/Menu";
 import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
-import { normalizedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
+import { normalizedMeetingTitle, suggestedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
 import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, OVERLAP_WINDOW_MS, statusForNewMeeting } from "../features/meetings/lib/noticeWindow";
 import {
   MeetingFormFields,
@@ -332,7 +332,7 @@ export function MeetingsPage() {
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
-    const title = normalizedMeetingTitle(form.title);
+    const title = normalizedMeetingTitle(form.title) || suggestedMeetingTitle(form, data.committees);
     if (!title) {
       toast.error("Enter a meeting title.");
       return;

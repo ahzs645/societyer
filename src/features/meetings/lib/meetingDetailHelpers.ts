@@ -5,11 +5,39 @@ import { motionCompletionGaps } from "../../../lib/motionGovernance";
 import { recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { todayDateOnly } from "../../../../shared/dateOnly";
+import { bodyKeyForMeeting, cleanMeetingTitle } from "../../../../shared/meetingBody";
 
 export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1; _id?: string };
 
 export function normalizedMeetingTitle(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+/**
+ * The title a new meeting gets when the title box is left empty:
+ * "<Body> meeting — YYYY-MM-DD", the same shape imported titles are cleaned to.
+ */
+export function suggestedMeetingTitle(
+  draft: { type?: string; committeeId?: string; special?: boolean; scheduledAt?: string },
+  committees?: ReadonlyArray<{ _id: unknown; name?: string; bodyKey?: string }> | null,
+): string {
+  const date = String(draft.scheduledAt ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  const committee = draft.committeeId ? committees?.find((row) => String(row._id) === String(draft.committeeId)) : undefined;
+  const bodyKey = bodyKeyForMeeting({ type: draft.type, committeeId: draft.committeeId || null }, committee ?? null);
+  return cleanMeetingTitle({ bodyKey, committeeName: committee?.name, special: draft.special, date });
+}
+
+/**
+ * A "<Body> meeting — YYYY-MM-DD" title follows its date when the date is
+ * edited; any other title is left exactly as typed.
+ */
+export function titleForChangedDate(title: string, previousDate: string | undefined, nextDate: string | undefined): string {
+  const before = String(previousDate ?? "").slice(0, 10);
+  const after = String(nextDate ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(before) || !/^\d{4}-\d{2}-\d{2}$/.test(after) || before === after) return title;
+  const suffix = ` — ${before}`;
+  return title.endsWith(suffix) ? `${title.slice(0, -suffix.length)} — ${after}` : title;
 }
 
 export function quorumPresentCount(minutes: any): number {

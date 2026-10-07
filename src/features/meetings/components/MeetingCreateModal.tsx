@@ -7,7 +7,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, statusForNewMeeting } from "../lib/noticeWindow";
-import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
+import { normalizedMeetingTitle, suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 import {
   MeetingFormFields,
   blankMeetingDraft,
@@ -65,7 +65,7 @@ function MeetingCreateModalForm({
 
   const save = async () => {
     if (!open || !canCreate) return;
-    const title = normalizedMeetingTitle(form.title);
+    const title = normalizedMeetingTitle(form.title) || suggestedMeetingTitle(form, data.committees);
     if (!title) {
       toast.error("Enter a meeting title.");
       return;

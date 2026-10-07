@@ -14,7 +14,7 @@ import { approvingMeetingCandidates, minutesApprovalIssues } from "../shared/mee
 import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
 import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectionAlign";
 import { preferredMeetingToKeep } from "../shared/meetingMerge";
-import { formalMinutesExportBlockers } from "../src/features/meetings/lib/meetingDetailHelpers";
+import { formalMinutesExportBlockers, suggestedMeetingTitle, titleForChangedDate } from "../src/features/meetings/lib/meetingDetailHelpers";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../src/features/meetings/lib/actionItemTidy";
 import { agendaOnlyMeetingStatus } from "../shared/meetingStatus";
 
@@ -339,3 +339,11 @@ assert.equal(agendaOnlyMeetingStatus("2027-01-12", "2026-10-07"), "Scheduled");
   assert.equal(statusOf("real_minutes"), "Held", "meetings with recorded minutes are untouched");
 }
 console.log("✓ agenda-only meetings: Held — minutes missing when past, Scheduled otherwise");
+
+// ---------- new meeting title: suggested from body and date, follows the date --
+assert.equal(suggestedMeetingTitle({ type: "Board", scheduledAt: "2026-10-22T18:00" }), "Board meeting — 2026-10-22");
+assert.equal(suggestedMeetingTitle({ type: "Committee", committeeId: "c1", scheduledAt: "2026-11-03T18:00" }, [{ _id: "c1", name: "Finance Committee" }]), "Finance Committee meeting — 2026-11-03");
+assert.equal(suggestedMeetingTitle({ type: "Board", scheduledAt: "" }), "", "no date, no suggestion");
+assert.equal(titleForChangedDate("Board meeting — 2026-10-22", "2026-10-22", "2026-10-06"), "Board meeting — 2026-10-06");
+assert.equal(titleForChangedDate("Fall planning session", "2026-10-22", "2026-10-06"), "Fall planning session", "a typed title is kept");
+console.log("✓ new meetings: blank title uses the body and date; dated titles follow a date change");
