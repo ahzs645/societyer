@@ -144,8 +144,18 @@ export function documentProvenance(doc: {
 }
 
 export function excerptOf(text: string, length: number) {
-  const compact = text.replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
-  return compact.length > length ? `${compact.slice(0, length - 1).trimEnd()}…` : compact;
+  const head = text.length > length * 4 ? text.slice(0, length * 4) : text;
+  const compact = head.replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+  return detachString(compact.length > length || head !== text ? `${compact.slice(0, length - 1).trimEnd()}…` : compact);
+}
+
+/**
+ * Copy a short string out of a larger one. Engines may represent a substring
+ * as a view that keeps the whole parent alive; excerpts are memoized for every
+ * document, so without a copy each one would pin its full OCR text in memory.
+ */
+export function detachString(value: string) {
+  return (` ${value}`).slice(1);
 }
 
 const PROVENANCE_CACHE = new Map<string, { content: unknown; url: unknown; tags: unknown; value: DocumentProvenance }>();

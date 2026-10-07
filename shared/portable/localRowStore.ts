@@ -214,7 +214,7 @@ export class LocalStoreDb implements PortableDbWriter {
     }
     // Minted ids carry their table as a prefix ("documents_01M…"). Try that
     // table first so a lookup does not scan every row of every table.
-    const separator = id.indexOf("_");
+    const separator = typeof id === "string" ? id.indexOf("_") : -1;
     const tables = this.store.tableNames();
     if (separator > 0) {
       const guess = id.slice(0, separator);

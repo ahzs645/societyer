@@ -33,13 +33,20 @@ filter) and D-11 (Milkdown editor) belong to WP-A.
 
 | Page | Before | After |
 | --- | --- | --- |
-| `/app/documents` first table row | 25.4 s, 446 MB heap | see below |
-| `/app/imports` first queue row | 14.4 s, 382 MB heap | see below |
-| Approve one candidate → next item | 1–4 s (audit) | 0.2–0.25 s |
+| `/app/documents` first table row | 25.4 s, 446 MB heap (audit: ~23 s, 441 MB) | 6.7 s, 397 MB |
+| `/app/imports` first queue row (one session before; all 6,544 candidates after) | 14.4 s, 382 MB | 5.8 s, 392 MB |
+| Approve one candidate → next item focused | 1–4 s (audit) | 0.2–0.25 s |
+| Reject → next item | — | 0.19 s |
 
-The machine is shared by several agents (load average 3–17 during runs), so
-absolute numbers vary; the before/after pairs were taken with the same script
-(`scratchpad/wpi/measure.mjs`).
+Measured with `scratchpad/wpi/measure.mjs` (copy of the restored profile,
+warm dev server, GC before reading `usedJSHeapSize`). The machine is shared by
+several agents: the "before" run had a load average of ~16, the "after" run
+~5, so part of the time difference is load. A CPU profile of the same
+navigation shows the structural gain independent of load: hydration merge
+(2.4 s + 0.7 s), JSON row clones (2.2 s) and table scans in `get` (0.4 s)
+dropped to under 0.3 s together. The first "after" run measured 552 MB:
+memoized excerpts were substring views pinning every OCR text; excerpts are
+now copied (`detachString`).
 
 ## Assumptions and decisions
 

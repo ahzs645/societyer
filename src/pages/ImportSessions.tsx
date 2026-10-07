@@ -183,6 +183,10 @@ export function ImportSessionsPage() {
 
   const createFromJson = async () => {
     if (!canWrite || importCreating) return;
+    // Explain why a bundle cannot be staged instead of silently disabling the button.
+    if (!importPreview?.data) { setImportError(importPreview?.error || "Paste or upload a JSON bundle first."); return; }
+    if (importPreview.data.mixedOrganizations) { setImportError("This bundle declares multiple organizations. Split it by organization before importing."); return; }
+    if (importPreview.data.needsReview && !importOwnershipReviewed) { setImportError("Confirm that you reviewed the source ownership before staging these records."); return; }
     setImportCreating(true);
     try {
       const parsed = prepareImportBundle(JSON.parse(importText), society, importOwnershipReviewed, importFileName || undefined);
@@ -664,7 +668,7 @@ export function ImportSessionsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setCreateOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite || importCreating || !importPreview?.data || importPreview.data.mixedOrganizations || (importPreview.data.needsReview && !importOwnershipReviewed)}>
+            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite || importCreating || !importText.trim()}>
               <Upload size={14} /> {importCreating ? "Creating..." : "Create session"}
             </button>
           </>
