@@ -190,7 +190,7 @@ export function CommitmentFormFields({
             min={0}
             max={100}
             value={value.confidence === "" || value.confidence == null ? "" : Math.round(value.confidence * 100)}
-            onChange={(e) => onChange({ confidence: e.target.value === "" ? "" : Number(e.target.value) / 100 })}
+            onChange={(e) => onChange({ confidence: e.target.value === "" ? "" : Math.min(100, Math.max(0, Number(e.target.value))) / 100 })}
           />
         </Field>
       </div>

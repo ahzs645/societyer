@@ -1,3 +1,4 @@
+import { JURISDICTION_WORKSPACE_CONFIGS } from "../../shared/jurisdictionWorkspace";
 import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -692,7 +693,7 @@ function getOnboardingSteps({
       id: "timing",
       title: "Confirm fiscal year and AGM timing",
       description: hasAgmTiming ? "Fiscal year and the next AGM are visible." : "Set the fiscal year end and schedule the next AGM.",
-      to: "/app/meetings",
+      to: "/app/compliance-settings",
       complete: hasAgmTiming,
       icon: CalendarClock,
     },
@@ -780,9 +781,10 @@ function Stat({
 }
 
 function renderFilingRow(f: any) {
+  // Each row opens that filing (G-24: rows were not clickable).
   return (
     <tr key={f._id}>
-      <td>{kindLabel(f.kind)}</td>
+      <td><Link to={`/app/filings?filing=${encodeURIComponent(String(f._id))}`}>{kindLabel(f.kind)}</Link></td>
       <td className="table__cell--muted">{f.periodLabel ?? "—"}</td>
       <td className="table__cell--mono">{formatDate(f.dueDate)}</td>
       <td>{renderFilingStatus(f)}</td>
@@ -811,9 +813,14 @@ export function kindLabel(k: string) {
     case "GSTHST":
       return "GST/HST return";
     default:
-      return k;
+      return ALL_FILING_KIND_LABELS.get(k) ?? k;
   }
 }
+
+/** Every jurisdiction's filing kind code -> human label (e.g. BCSocietyAnnualReport). */
+const ALL_FILING_KIND_LABELS = new Map(
+  JURISDICTION_WORKSPACE_CONFIGS.flatMap((config) => config.module.filingKinds.map((definition) => [definition.kind, definition.label] as const)),
+);
 
 export function renderFilingStatus(f: any) {
   if (f.status === "Filed") return <Badge tone="success">Filed</Badge>;

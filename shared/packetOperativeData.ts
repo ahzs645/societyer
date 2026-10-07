@@ -1,3 +1,4 @@
+import { officerTitleLabel } from "./orgHubOptions";
 /**
  * Operative-data view builders for the document packets that previously rendered
  * grammar prose with no bound data (YCN `Doc - *` operative tables).
@@ -35,7 +36,7 @@ export function officerAppointmentView(roleHolders: NamedRow[]) {
   const officers = roleHolders
     .filter((r) => r.roleType === "officer" && isCurrent(r))
     .slice(0, MAX_ROWS)
-    .map((r) => ({ name: String(r.fullName ?? ""), title: String(r.officerTitle ?? "Officer") }));
+    .map((r) => ({ name: String(r.fullName ?? ""), title: officerTitleLabel(r.officerTitle) }));
   return { appointment: { hasOfficers: officers.length > 0, officers } };
 }
 

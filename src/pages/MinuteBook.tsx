@@ -159,10 +159,15 @@ export function MinuteBookPage() {
   const save = async () => {
     if (!canWrite) return;
     if (!draft) return;
+    if (!String(draft.title ?? "").trim()) {
+      toast.error("Record not saved", "Give the minute-book record a title.");
+      return;
+    }
+    try {
     await upsert({
       id: draft._id,
       societyId: society._id,
-      title: draft.title || "Untitled record",
+      title: draft.title.trim(),
       recordType: draft.recordType || "minute_book_record",
       effectiveDate: draft.effectiveDate || undefined,
       status: draft.status || "NeedsReview",
@@ -181,6 +186,9 @@ export function MinuteBookPage() {
     setOpen(false);
     setDraft(null);
     toast.success("Minute book record saved");
+    } catch (error) {
+      toast.error("Record not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const confirmDelete = async (row: any) => {
@@ -423,7 +431,7 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
         <Badge tone={gapCount ? "warn" : partial ? "neutral" : "success"}>{gapCount ? `${gapCount} visible gaps` : partial ? "Access limited" : `${rows.length} records`}</Badge>
       </div>
       <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
-        <table className="table">
+        <table className="table table--stack-mobile">
           <thead>
             <tr>
               <th>Record</th>
@@ -436,17 +444,17 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
           <tbody>
             {visibleRows.map((row) => (
               <tr key={row.key}>
-                <td>
+                <td data-label="Record">
                   <div style={{marginTop: 3}}>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
                   <div className="row" style={{ gap: 6 , flexWrap: "wrap", marginTop: 9 }}>
                     <Badge>{labelize(row.type)}</Badge>
                     {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
                   </div>
                 </td>
-                <td><BundleLinks links={row.links ?? []} partial={partial} /></td>
-                <td><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
-                <td><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
-                <td><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
+                <td data-label="Connected evidence"><BundleLinks links={row.links ?? []} partial={partial} /></td>
+                <td data-label="Counts"><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
+                <td data-label="Gaps"><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
+                <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
               </tr>
             ))}
             {rows.length === 0 && (

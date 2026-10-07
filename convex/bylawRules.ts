@@ -34,6 +34,8 @@ export const upsertActive = authorizedMutation("bylawRules:upsertActive", mutati
     id: v.optional(v.id("bylawRuleSets")),
     societyId: v.id("societies"),
     effectiveFromISO: v.optional(v.string()),
+    /** Explicitly record a historical (backdated) rule version. */
+    allowBackdated: v.optional(v.boolean()),
     sourceBylawDocumentId: v.optional(v.id("documents")),
     sourceAmendmentId: v.optional(v.id("bylawAmendments")),
     generalNoticeMinDays: v.number(),

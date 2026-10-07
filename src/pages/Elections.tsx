@@ -1,3 +1,5 @@
+import { formatDate } from "../lib/format";
+import { useConfirm } from "../components/Modal";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -55,6 +57,7 @@ export function ElectionsPage() {
   const closeElection = useMutation(api.elections.close);
   const tallyElection = useMutation(api.elections.tallyElection);
   const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ElectionCreateForm | null>(null);
   const [saving, setSaving] = useState(false);
@@ -201,8 +204,8 @@ export function ElectionsPage() {
                   </Badge>
                 </div>
                 <div className="muted" style={{ fontSize: 13 }}>
-                  Opens {new Date(row.election.opensAtISO).toLocaleDateString()} · closes{" "}
-                  {new Date(row.election.closesAtISO).toLocaleDateString()}
+                  Opens {formatDate(row.election.opensAtISO)} · closes{" "}
+                  {formatDate(row.election.closesAtISO)}
                 </div>
               </Link>
             ))}
@@ -216,7 +219,7 @@ export function ElectionsPage() {
           <span className="card__subtitle">{elections?.length ?? 0} total</span>
         </div>
         <div style={{ overflowX: "auto" }}>
-        <table className="table">
+        <table className="table elections-table">
           <thead>
             <tr>
               <th>Election</th>
@@ -251,10 +254,10 @@ export function ElectionsPage() {
                   </Badge>
                 </td>
                 <td className="mono">
-                  {new Date(election.opensAtISO).toLocaleDateString()}
+                  {formatDate(election.opensAtISO)}
                 </td>
                 <td className="mono">
-                  {new Date(election.closesAtISO).toLocaleDateString()}
+                  {formatDate(election.closesAtISO)}
                 </td>
                 <td>
                   <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
@@ -282,6 +285,14 @@ export function ElectionsPage() {
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
+                              const early = Date.parse(election.closesAtISO) > Date.now();
+                              const ok = await confirm({
+                                title: `Close voting on "${election.title}"?`,
+                                message: `${early ? `Voting is scheduled to stay open until ${formatDate(election.closesAtISO)}. ` : ""}Closing stops all further ballots and cannot be reopened.`,
+                                confirmLabel: early ? "Close early" : "Close voting",
+                                tone: early ? "danger" : "warn",
+                              });
+                              if (!ok) return;
                               await closeElection({
                                 electionId: election._id,
                               });
@@ -295,6 +306,13 @@ export function ElectionsPage() {
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
+                              const ok = await confirm({
+                                title: `Publish results for "${election.title}"?`,
+                                message: "The ballots will be tallied and the results recorded as final. Open the election to review the ballot count first.",
+                                confirmLabel: "Publish results",
+                                tone: "warn",
+                              });
+                              if (!ok) return;
                               await tallyElection({
                                 electionId: election._id,
                               });

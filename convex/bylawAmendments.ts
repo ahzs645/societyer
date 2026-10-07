@@ -71,6 +71,8 @@ export const markResolutionPassed = authorizedMutation("bylawAmendments:markReso
     votesAgainst: v.optional(v.number()),
     abstentions: v.optional(v.number()),
     actor: v.optional(v.string()),
+    /** Date the special resolution was passed (YYYY-MM-DD); defaults to the meeting date or today. */
+    resolutionDateISO: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => markResolutionPassedPortable(await toPortableMutationCtx(ctx), args),

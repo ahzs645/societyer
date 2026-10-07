@@ -1,4 +1,5 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { calendarDateKey } from "../lib/calendarDates";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -8,7 +9,20 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
-import { History, Plus, Trash2 } from "lucide-react";
+import { History, Pencil, Plus, Trash2 } from "lucide-react";
+import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
+import { formatDate } from "../lib/format";
+
+const CONSTATING_ACTION_LABELS: Record<string, string> = {
+  incorporated: "Incorporated",
+  transitioned: "Transitioned",
+  continued: "Continued",
+  amalgamated: "Amalgamated",
+  restated: "Restated",
+  other: "Other",
+};
+const constatingActionLabel = (action: string) => CONSTATING_ACTION_LABELS[action] ?? action;
 
 /**
  * Corporate history — effective-dated corporate NAME history plus the
@@ -64,6 +78,9 @@ export function CorporateHistoryPage() {
   const nameRemove = usePermissionedMutation(api.nameHistory.remove, canWriteNames);
   const constatingCreate = usePermissionedMutation(api.constating.create, canWriteEvents);
   const constatingRemove = usePermissionedMutation(api.constating.remove, canWriteEvents);
+  const constatingUpdate = usePermissionedMutation(api.constating.update, canWriteEvents);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [nameOpen, setNameOpen] = useState(false);
   const [nameForm, setNameForm] = useState<any>(null);
@@ -73,12 +90,69 @@ export function CorporateHistoryPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  const nameProblems = nameForm
+    ? [
+        ...(!String(nameForm.name ?? "").trim() ? ["Enter the corporate name."] : []),
+        ...(!/^\d{4}-\d{2}-\d{2}$/.test(String(nameForm.startISO ?? "")) ? ["Choose the date the name took effect."] : []),
+      ]
+    : [];
+  const eventProblems = eventForm
+    ? [
+        ...(!String(eventForm.jurisdiction ?? "").trim() ? ["Enter the jurisdiction."] : []),
+        ...(!String(eventForm.legislation ?? "").trim() ? ["Enter the legislation (the Act)."] : []),
+        ...(!/^\d{4}-\d{2}-\d{2}$/.test(String(eventForm.startISO ?? "")) ? ["Choose the effective date."] : []),
+      ]
+    : [];
+
+  const editName = (row: any) => {
+    if (!canWriteNames || !row._id) return;
+    setNameForm({ id: row._id, name: row.name, shortName: row.shortName ?? "", startISO: row.startISO, regPosn: row.regPosn ?? "" });
+    setNameOpen(true);
+  };
+  const removeName = async (row: any) => {
+    if (!canWriteNames || !row._id) return;
+    const ok = await confirm({
+      title: `Remove "${row.name}"?`,
+      message: `The name record effective ${formatDate(row.startISO)} will be removed from the name history and the as-of name lookups used in documents.`,
+      confirmLabel: "Remove name",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await nameRemove({ id: row._id });
+      toast.success("Name removed");
+    } catch (error) {
+      toast.error("Could not remove the name", error instanceof Error ? error.message : String(error));
+    }
+  };
+  const editEvent = (row: any) => {
+    if (!canWriteEvents || !row._id) return;
+    setEventForm({ id: row._id, action: row.action, jurisdiction: row.jurisdiction, legislation: row.legislation, regNumber: row.regNumber ?? "", startISO: row.startISO });
+    setEventOpen(true);
+  };
+  const removeEvent = async (row: any) => {
+    if (!canWriteEvents || !row._id) return;
+    const ok = await confirm({
+      title: `Remove the ${constatingActionLabel(row.action).toLowerCase()} event?`,
+      message: `${constatingActionLabel(row.action)} under ${row.legislation} (${row.jurisdiction}) on ${formatDate(row.startISO)} will be removed from the constating timeline and the governing-Act lookup.`,
+      confirmLabel: "Remove event",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await constatingRemove({ id: row._id });
+      toast.success("Event removed");
+    } catch (error) {
+      toast.error("Could not remove the event", error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const openName = () => {
     if (!canWriteNames) return;
     setNameForm({
       name: "",
       shortName: "",
-      startISO: new Date().toISOString().slice(0, 10),
+      startISO: calendarDateKey(new Date()),
       regPosn: "",
     });
     setNameOpen(true);
@@ -86,15 +160,25 @@ export function CorporateHistoryPage() {
 
   const saveName = async () => {
     if (!canWriteNames) return;
-    await nameUpsert({
-      societyId: society._id,
-      name: nameForm.name,
-      shortName: nameForm.shortName || undefined,
-      startISO: nameForm.startISO,
-      regPosn: nameForm.regPosn === "" ? undefined : Number(nameForm.regPosn),
-      nowISO: new Date().toISOString(),
-    });
-    setNameOpen(false);
+    if (nameProblems.length) {
+      toast.error("Name not saved", nameProblems[0]);
+      return;
+    }
+    try {
+      await nameUpsert({
+        id: nameForm.id || undefined,
+        societyId: society._id,
+        name: nameForm.name.trim(),
+        shortName: nameForm.shortName?.trim() || undefined,
+        startISO: nameForm.startISO,
+        regPosn: nameForm.regPosn === "" ? undefined : Number(nameForm.regPosn),
+        nowISO: new Date().toISOString(),
+      });
+      setNameOpen(false);
+      toast.success(nameForm.id ? "Name updated" : "Name added");
+    } catch (error) {
+      toast.error("Name not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const openEvent = () => {
@@ -104,23 +188,32 @@ export function CorporateHistoryPage() {
       jurisdiction: "",
       legislation: "",
       regNumber: "",
-      startISO: new Date().toISOString().slice(0, 10),
+      startISO: calendarDateKey(new Date()),
     });
     setEventOpen(true);
   };
 
   const saveEvent = async () => {
     if (!canWriteEvents) return;
-    await constatingCreate({
-      societyId: society._id,
-      action: eventForm.action,
-      jurisdiction: eventForm.jurisdiction,
-      legislation: eventForm.legislation,
-      regNumber: eventForm.regNumber || undefined,
-      startISO: eventForm.startISO,
-      nowISO: new Date().toISOString(),
-    });
-    setEventOpen(false);
+    if (eventProblems.length) {
+      toast.error("Event not saved", eventProblems[0]);
+      return;
+    }
+    try {
+      const values = {
+        action: eventForm.action,
+        jurisdiction: eventForm.jurisdiction.trim(),
+        legislation: eventForm.legislation.trim(),
+        regNumber: eventForm.regNumber?.trim() || undefined,
+        startISO: eventForm.startISO,
+      };
+      if (eventForm.id) await constatingUpdate({ id: eventForm.id, ...values });
+      else await constatingCreate({ societyId: society._id, ...values, nowISO: new Date().toISOString() });
+      setEventOpen(false);
+      toast.success(eventForm.id ? "Event updated" : "Event added");
+    } catch (error) {
+      toast.error("Event not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   return (
@@ -163,13 +256,21 @@ export function CorporateHistoryPage() {
                 <span>
                   {n.name}
                   {n.shortName ? ` — ${n.shortName}` : ""}
-                  <span style={{ color: "var(--text-tertiary)" }}> — since {n.startISO}</span>
+                  <span style={{ color: "var(--text-tertiary)" }}> — since {formatDate(n.startISO)}</span>
                 </span>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Edit name ${n.name}`}
+                  disabled={!canWriteNames || !n._id}
+                  onClick={() => editName(n)}
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove name ${n.name}`}
-                  disabled={!canWriteNames}
-                  onClick={() => canWriteNames && n._id && nameRemove({ id: n._id })}
+                  disabled={!canWriteNames || !n._id}
+                  onClick={() => removeName(n)}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -198,14 +299,22 @@ export function CorporateHistoryPage() {
                 style={{ display: "flex", alignItems: "center", gap: 8 }}
               >
                 <span>
-                  {c.action} — {c.legislation} ({c.jurisdiction}) — {c.startISO}
+                  <strong>{constatingActionLabel(c.action)}</strong> — {c.legislation} ({c.jurisdiction}) — {formatDate(c.startISO)}
                   {c.regNumber ? ` — No. ${c.regNumber}` : ""}
                 </span>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Edit ${c.action} event`}
+                  disabled={!canWriteEvents || !c._id}
+                  onClick={() => editEvent(c)}
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove ${c.action} event`}
-                  disabled={!canWriteEvents}
-                  onClick={() => canWriteEvents && c._id && constatingRemove({ id: c._id })}
+                  disabled={!canWriteEvents || !c._id}
+                  onClick={() => removeEvent(c)}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -223,13 +332,13 @@ export function CorporateHistoryPage() {
       <Drawer
         open={nameOpen && canWriteNames}
         onClose={() => setNameOpen(false)}
-        title="Add corporate name"
+        title={nameForm?.id ? "Edit corporate name" : "Add corporate name"}
         footer={
           <>
             <button className="btn" onClick={() => setNameOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" disabled={!canWriteNames} onClick={saveName}>
+            <button className="btn btn--accent" disabled={!canWriteNames || nameProblems.length > 0} onClick={saveName}>
               Save
             </button>
           </>
@@ -237,7 +346,7 @@ export function CorporateHistoryPage() {
       >
         {nameForm && (
           <div>
-            <Field label="Name">
+            <Field label="Name" error={nameProblems.find((p) => /name/.test(p))}>
               <input
                 className="input"
                 value={nameForm.name}
@@ -274,13 +383,13 @@ export function CorporateHistoryPage() {
       <Drawer
         open={eventOpen && canWriteEvents}
         onClose={() => setEventOpen(false)}
-        title="Add constating event"
+        title={eventForm?.id ? "Edit constating event" : "Add constating event"}
         footer={
           <>
             <button className="btn" onClick={() => setEventOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" disabled={!canWriteEvents} onClick={saveEvent}>
+            <button className="btn btn--accent" disabled={!canWriteEvents || eventProblems.length > 0} onClick={saveEvent}>
               Save
             </button>
           </>
@@ -292,26 +401,21 @@ export function CorporateHistoryPage() {
               <Select
                 value={eventForm.action}
                 onChange={(value) => setEventForm({ ...eventForm, action: value })}
-                options={[
-                  { value: "incorporated", label: "incorporated" },
-                  { value: "transitioned", label: "transitioned" },
-                  { value: "continued", label: "continued" },
-                  { value: "amalgamated", label: "amalgamated" },
-                  { value: "restated", label: "restated" },
-                  { value: "other", label: "other" },
-                ]}
+                options={Object.entries(CONSTATING_ACTION_LABELS).map(([value, label]) => ({ value, label }))}
               />
             </Field>
-            <Field label="Jurisdiction">
+            <Field label="Jurisdiction" error={eventProblems.find((p) => /jurisdiction/.test(p))}>
               <input
                 className="input"
+                placeholder="e.g. British Columbia"
                 value={eventForm.jurisdiction}
                 onChange={(e) => setEventForm({ ...eventForm, jurisdiction: e.target.value })}
               />
             </Field>
-            <Field label="Legislation">
+            <Field label="Legislation" error={eventProblems.find((p) => /legislation/.test(p))}>
               <input
                 className="input"
+                placeholder="e.g. Societies Act"
                 value={eventForm.legislation}
                 onChange={(e) => setEventForm({ ...eventForm, legislation: e.target.value })}
               />

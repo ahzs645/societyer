@@ -245,8 +245,8 @@ const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack = {
       citation: "Societies Act s.42 director consent requirements",
       evidenceRequired: ["Active director register", "Written consent or meeting-attendance/non-refusal evidence"],
       remediationActions: [
-        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors" },
-        { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents" },
+        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors?intent=consent" },
+        { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents?intent=new&category=Governance&title=Director%20consent" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
       passFail(context) {

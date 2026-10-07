@@ -1,6 +1,6 @@
 import { hasErrors, validateDocumentInput, type FieldErrors } from "../../shared/recordValidation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -83,6 +83,21 @@ export function DocumentsPage() {
       })),
     [docs],
   );
+  // ?intent=new&category=…&title=… (dashboard remediation "Upload evidence")
+  // opens the new-document form prefilled instead of a bare list (G-24).
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("intent") !== "new" || !canEdit || !society) return;
+    setForm({ title: params.get("title") ?? "", category: params.get("category") ?? "Other", tags: [], retentionYears: 10 });
+    setOpen(true);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      next.delete("category");
+      next.delete("title");
+      return next;
+    }, { replace: true });
+  }, [canEdit, params, setParams, society]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
