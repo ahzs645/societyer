@@ -20,7 +20,7 @@ export type ClassificationPrior = {
 
 type Rule = { docClass: DocClass; re: RegExp; weight: number; where: "name" | "path" | "text" };
 // Name rules are ordered by priority (the first matching name rule breaks ties). Names are
-// matched with underscores as spaces; CamelCase joins ("BoardPackage", "PGAIRBudget") are
+// matched with underscores as spaces; CamelCase joins ("BoardPackage", "LCASBudget") are
 // matched without a leading word boundary.
 const RULES: Rule[] = [
   // Strong negatives first: blank forms and third-party bylaws are not governance records.

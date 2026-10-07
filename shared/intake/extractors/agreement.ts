@@ -154,7 +154,7 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   const status: FieldValue<"draft" | "signed" | "expired" | "unknown"> = marker === "draft" || /\bdraft\b/i.test(fileName) ? inferred("draft", [fileLoc(fileName)], 0.7)
     : expiry?.value && expiry.value.iso < asOf && (signedName || signedLine) ? inferred("expired", expiry.locators, 0.7, `Signed; term ended ${expiry.value.iso}.`)
       : signedName ? fromFile("signed", fileName, 0.65) : signedLine ? guessAt("signed", signedLine, undefined, 0.55) : notStated("No signature evidence.");
-  // Contract numbers often sit in the page header ("Contract #: FBC-2013-2015").
+  // Contract numbers often sit in the page header ("Contract #: ABC-2013-2015").
   const numberLine = lines.slice(0, 80).find((line) => AGREEMENT_NUMBER.test(line.text)) ?? linesOf(extract, { includeParts: true }).filter((line) => line.part === "header").find((line) => AGREEMENT_NUMBER.test(line.text));
   const numberMatch = numberLine ? AGREEMENT_NUMBER.exec(numberLine.text) : AGREEMENT_NUMBER.exec(fileName);
   const agreementNumber = numberMatch ? (numberLine ? at(numberMatch[1] ?? numberMatch[2], numberLine, numberMatch[1] ?? numberMatch[2], 0.75) : fromFile(numberMatch[1] ?? numberMatch[2], fileName, 0.6)) : undefined;

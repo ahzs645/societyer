@@ -52,7 +52,7 @@ export function extractRegistryFiling(input: ClassExtractorInput): ExtractionEnv
   const feeText = feeLine ? feeLine.text.slice(Math.max(0, feeLine.text.search(/\b(?:fee paid|filing fee|fee|total(?: paid)?)\s*:\s*\$/i))) : "";
   const fee = feeLine ? parseAmount(/\$\s?[\d,]+(?:\.\d{2})?/.exec(feeText)?.[0] ?? "") : undefined;
   const confirmation = labelled(lines, /confirmation (?:number|no\.?)|transaction id|payment invoice number|filing id|reference number/i);
-  // Directors listed: "Last Name, First Name Middle Name:" followed by "CLAUS, DAVID H".
+  // Directors listed: "Last Name, First Name Middle Name:" followed by "QUILL, AVERY J".
   const directors: Array<FieldValue<{ nameAsWritten: string; resolvedName?: string }>> = [];
   lines.forEach((line, index) => {
     if (!/last name,\s*first name/i.test(line.text)) return;

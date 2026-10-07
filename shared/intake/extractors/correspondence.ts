@@ -11,7 +11,7 @@ import { at, clean, dateValue, fileLoc, fromFile, guessAt, labelled, linesOf, lo
 
 export const DETERMINISTIC_CORRESPONDENCE_ENGINE = "deterministic-correspondence/1";
 
-/** Display names only: "Kenna Jonkman <kjonkman@…>" → "Kenna Jonkman"; Exchange paths dropped. */
+/** Display names only: "Avery Quill <aquill@…>" → "Avery Quill"; Exchange paths dropped. */
 export function displayName(value: string): string {
   const named = /^\s*"?([^"<]+?)"?\s*</.exec(value);
   if (named) return clean(named[1]);

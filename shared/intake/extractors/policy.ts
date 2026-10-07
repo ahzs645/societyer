@@ -183,7 +183,8 @@ export function extractPolicy(input: ClassExtractorInput): ExtractionEnvelope {
   const warnings: string[] = [];
   const namedTitle = lines.slice(0, 12).find((line) => /\b(?:constitution|by-?laws?|terms of reference|policy|procedures?|protocol|charter|code of conduct)\b/i.test(line.text) && line.text.trim().length < 140 && !/^\s*(?:the|in|a|an)\s/i.test(line.text) && !/[.;]\s*$/.test(line.text.trim()));
   const headingLine = namedTitle ?? lines.slice(0, 12).find((line) => line.kind === "heading" && line.text.trim().length > 3 && !/^\s*(?:form\s+\d|\d{1,2}[.)]\s)/i.test(line.text)) ?? titleLine(lines);
-  const genericFirst = headingLine && /^\s*(?:pg ?air policy|policy|bylaws?|constitution)\s*$/i.test(headingLine.text) ? lines[lines.indexOf(headingLine) + 1] : undefined;
+  // A bare running header ("Policy", "LCAS Policy" with an upper-case acronym): the title is the next line.
+  const genericFirst = headingLine && /^\s*(?:[A-Z][A-Z&.]{1,6}(?:\s[A-Z]{2,6})?\s+)?(?:[Pp]olicy|POLICY)\s*$|^\s*(?:[Bb]ylaws?|BYLAWS?|[Cc]onstitution|CONSTITUTION)\s*$/.test(headingLine.text) ? lines[lines.indexOf(headingLine) + 1] : undefined;
   const titleSource = genericFirst && genericFirst.text.trim().length > 3 && genericFirst.text.trim().length < 140 && !/^\s*(?:last updated|date|effective|\d{1,2}[.)]\s|[a-z]\.\s)/i.test(genericFirst.text) ? genericFirst : headingLine;
   const titleText = titleSource ? clean(titleSource.text.replace(/^\s*(?:subject|title|re)\s*:\s*/i, "")) : fileName.replace(/\.[a-z0-9]+$/i, "");
   const kind = kindFor(fileName, titleText);
