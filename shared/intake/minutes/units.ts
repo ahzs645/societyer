@@ -156,8 +156,8 @@ export function linearize(blocks: IntakeBlock[], options: { softWrap?: boolean }
       }
       const width = Math.max(0, ...rows.map((row) => row.cells.reduce((sum, cell) => sum + (cell.colSpan ?? 1), 0)));
       const ownRoles = headerRoles(block);
-      const continued = !ownRoles && lastMinutes && lastMinutes.width === width && blocks.slice(lastMinutes.blockIndex + 1, block.index).every((between) => between.kind === "page_break" || !between.text.trim() || between.kind === "table");
-      const roles = ownRoles ?? (continued ? lastMinutes!.roles : null);
+      const continued: boolean | null = !ownRoles && lastMinutes && lastMinutes.width === width && blocks.slice(lastMinutes.blockIndex + 1, block.index).every((between) => between.kind === "page_break" || !between.text.trim() || between.kind === "table");
+      const roles: ReturnType<typeof headerRoles> = ownRoles ?? (continued ? lastMinutes!.roles : null);
       if (roles) {
         lastMinutes = { roles, width, blockIndex: block.index };
         (ownRoles ? rows.slice(1) : rows).forEach((row, rowIndex) => {

@@ -235,7 +235,7 @@ export function getDisabledModuleKeys(source?: StoredModuleSource): ModuleKey[] 
   const legacy = getLegacyModuleSettings(source);
   if (!legacy) return [];
 
-  return MODULE_KEYS.filter((key) => legacy[key] === false);
+  return MODULE_KEYS.filter((key) => (legacy as Record<string, unknown>)[key] === false);
 }
 
 export function settingsToDisabledModules(settings: ModuleSettings): ModuleKey[] {

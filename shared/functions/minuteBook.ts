@@ -1050,7 +1050,21 @@ function minuteBookChecks({
   motionEvidence,
   archiveAccessions,
   writtenResolutions,
-}: { society?: any; [key: string]: any }) {
+}: {
+  society?: any;
+  items: any[];
+  documents: any[];
+  binderDocuments: any[];
+  meetings: any[];
+  minutes: any[];
+  filings: any[];
+  policies: any[];
+  workflowPackages: any[];
+  signatures: any[];
+  motionEvidence: any[];
+  archiveAccessions: any[];
+  writtenResolutions: any[];
+}) {
   // Core records can be evidenced several ways, not only by a binder document
   // category (G-15): the society profile links the constitution and bylaws,
   // and minutes records (or meetings with linked minutes) evidence minutes.

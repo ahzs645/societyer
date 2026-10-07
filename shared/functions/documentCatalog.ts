@@ -337,7 +337,7 @@ export async function markDuplicatePortable(
   const seen = new Set<string>([String(id)]);
   let cursor: Row | null = other;
   while (cursor?.duplicateOfDocumentId) {
-    const next = String(cursor.duplicateOfDocumentId);
+    const next: string = String(cursor.duplicateOfDocumentId);
     if (seen.has(next)) throw new Error(`"${other.title}" is already marked as a copy of this document.`);
     seen.add(next);
     cursor = await ctx.db.get(next, "documents");

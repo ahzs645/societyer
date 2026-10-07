@@ -109,7 +109,7 @@ export function isInternalDocumentCategory(value: unknown) {
 export function isInternalDocumentRecord(doc: any) {
   if (!doc) return false;
   const tags = Array.isArray(doc.tags) ? doc.tags.map(String) : [];
-  return isInternalDocumentCategory(doc.category) || tags.some((tag) => INTERNAL_TAGS.includes(tag));
+  return isInternalDocumentCategory(doc.category) || tags.some((tag: string) => INTERNAL_TAGS.includes(tag));
 }
 
 /** Categories for a picker: the known pickable ones plus any category already in use. */

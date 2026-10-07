@@ -136,7 +136,7 @@ async function loadQueue(ctx: PortableQueryCtx, societyId: string) {
     const session = hydrateSession(doc);
     sessions.set(String(doc._id), { _id: String(doc._id), name: String(session.name ?? doc.title ?? "Import session"), sourceSystem: session.sourceSystem, createdAtISO: session.createdAtISO });
   }
-  const items = recordDocs.filter(isImportRecord).map(queueItem).filter((item) => sessions.has(item.sessionId));
+  const items = recordDocs.filter(isImportRecord).map(queueItem).filter((item: any) => sessions.has(item.sessionId));
   return { sessions, items };
 }
 
@@ -173,7 +173,7 @@ export async function reviewQueuePortable(
   }
   progress.reviewed = progress.approved + progress.rejected;
 
-  const inStatus = status ? items.filter((item) => item.status === status) : items;
+  const inStatus = status ? items.filter((item: any) => item.status === status) : items;
   const shaCounts = new Map<string, number>();
   for (const item of inStatus) if (item.sha256) countInto(shaCounts, item.sha256);
 
@@ -200,14 +200,14 @@ export async function reviewQueuePortable(
   const sessionOrder = new Map([...sessions.values()]
     .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")) || a.name.localeCompare(b.name, undefined, { numeric: true }))
     .map((session, index) => [session._id, index]));
-  const filtered = inStatus.filter((item) => matches(item));
+  const filtered = inStatus.filter((item: any) => matches(item));
   filtered.sort(args.sort === "session"
-    ? (a, b) => (sessionOrder.get(a.sessionId) ?? 0) - (sessionOrder.get(b.sessionId) ?? 0) || a.sortKey.localeCompare(b.sortKey) || a._id.localeCompare(b._id)
-    : (a, b) => b.risk.score - a.risk.score || RISK_ORDER[a.risk.level] - RISK_ORDER[b.risk.level] || (sessionOrder.get(a.sessionId) ?? 0) - (sessionOrder.get(b.sessionId) ?? 0) || a.sortKey.localeCompare(b.sortKey) || a._id.localeCompare(b._id));
+    ? (a: any, b: any) => (sessionOrder.get(a.sessionId) ?? 0) - (sessionOrder.get(b.sessionId) ?? 0) || a.sortKey.localeCompare(b.sortKey) || a._id.localeCompare(b._id)
+    : (a: any, b: any) => b.risk.score - a.risk.score || RISK_ORDER[a.risk.level as ReviewRiskLevel] - RISK_ORDER[b.risk.level as ReviewRiskLevel] || (sessionOrder.get(a.sessionId) ?? 0) - (sessionOrder.get(b.sessionId) ?? 0) || a.sortKey.localeCompare(b.sortKey) || a._id.localeCompare(b._id));
 
   const limit = Math.max(1, Math.min(Number(args.limit) || 50, 200));
   const offset = Math.max(0, Math.min(Number(args.offset) || 0, Math.max(0, filtered.length - 1)));
-  const page = filtered.slice(offset, offset + limit).map(({ searchText: _searchText, sortKey: _sortKey, ...item }) => {
+  const page = filtered.slice(offset, offset + limit).map(({ searchText: _searchText, sortKey: _sortKey, ...item }: any) => {
     const duplicateCount = item.sha256 ? shaCounts.get(item.sha256) ?? 1 : 1;
     const session = sessions.get(item.sessionId);
     return {
