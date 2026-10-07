@@ -281,6 +281,8 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
   const meeting = await ctx.db.get<any>(meetingId, "meetings");
   const minutes = await ctx.db.get<any>(minutesId, "minutes");
   const motions = (await Promise.all(((minutes?.motionIds ?? []) as string[]).map((id) => ctx.db.get<any>(id, "motions")))).filter(Boolean) as any[];
+  const agenda = await ctx.db.query("agendas").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).first() as any;
+  const agendaItems = agenda ? ((await ctx.db.query("agendaItems").withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id)).collect()) as any[]) : [];
   const findIndex = (rows: any[] | undefined, key: string, wanted: unknown) => (rows ?? []).findIndex((row) => matchKey(row?.[key]) === matchKey(wanted) || (matchKey(wanted).length > 12 && matchKey(row?.[key]).includes(matchKey(wanted))));
   const provenance: Provenance[] = [];
   const notLandedPaths: string[] = [];
@@ -298,6 +300,12 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     const item = nativeTarget.item;
     if (nativeTarget.table === "meetings") {
       provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+    } else if (nativeTarget.table === "agendaItems" && item) {
+      const titleReview = decisions.get(`sections[${item.index}].title`);
+      const title = titleReview?.decision === "edit" ? titleReview.editedValue : record.sections?.[item.index]?.title?.value;
+      const agendaItem = agendaItems.find((row) => matchKey(row.title) === matchKey(title));
+      if (agendaItem) provenance.push({ targetTable: "agendaItems", targetId: String(agendaItem._id), fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      else notLandedPaths.push(path);
     } else if (nativeTarget.table === "motions" && item) {
       const reviewedText = decisions.get(`motions[${item.index}].text`)?.decision === "edit" ? decisions.get(`motions[${item.index}].text`)!.editedValue : record.motions?.[item.index]?.text?.value;
       const motion = motions.find((row) => matchKey(row.text) === matchKey(reviewedText)) ?? motions.find((row) => matchKey(row.text).includes(matchKey(reviewedText)) && matchKey(reviewedText).length > 8);

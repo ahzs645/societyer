@@ -424,14 +424,14 @@ export function linkedValue(occurrence: NameOccurrence, field: FieldValue<any> |
 
 // ------------------------------------------------------------ native targets
 
-export type NativeTarget = { table: "meetings" | "minutes" | "motions"; field: string; item?: { group: "attendance" | "motions" | "actionItems" | "sections" | "decisions"; index: number } };
+export type NativeTarget = { table: "meetings" | "minutes" | "motions" | "agendaItems"; field: string; item?: { group: "attendance" | "motions" | "actionItems" | "sections" | "decisions"; index: number } };
 
 const MEETING_FIELDS: Record<string, string> = { title: "title", date: "scheduledAt", startTime: "localStartText", endTime: "localEndText", location: "location", electronic: "electronic", body: "type", bodyLabel: "type", meetingType: "type" };
 const MINUTES_FIELDS: Record<string, string> = { chair: "chairName", recorder: "recorderName", calledToOrderAt: "calledToOrderAt", adjournedAt: "adjournedAt", nextMeeting: "nextMeetingAt", recordStatus: "importedSourceVersions", "quorum.stated": "quorumStatus", "quorum.count": "quorumStatus", organizationName: "sourceExternalIds" };
 const ATTENDANCE_FIELDS: Record<string, string> = { nameAsWritten: "name", category: "status", role: "roleTitle", affiliation: "affiliation", proxyFor: "proxyFor", arrivalOrLeave: "notes" };
-const MOTION_FIELDS: Record<string, string> = { text: "text", movedBy: "movedBy", secondedBy: "secondedBy", outcome: "outcome", votes: "votesFor", byConsensus: "decidedBy", resolutionType: "resolutionTypeLabel", adoptsMinutesOf: "adoptsMinutesId", adoptsPolicy: "sourceLocator", adoptsAgenda: "text", ratifies: "sourceLocator", conditional: "sourceLocator", sectionRef: "sourceLocator" };
+const MOTION_FIELDS: Record<string, string> = { text: "text", movedBy: "movedBy", secondedBy: "secondedBy", outcome: "outcome", votes: "votesFor", byConsensus: "decidedBy", resolutionType: "resolutionTypeLabel", adoptsMinutesOf: "adoptsMinutesId", adoptsPolicy: "sourceLocator", adoptsAgenda: "sourceLocator", ratifies: "sourceLocator", conditional: "sourceLocator", sectionRef: "sourceLocator" };
 const ACTION_FIELDS: Record<string, string> = { text: "text", assigneeAsWritten: "assignee", due: "dueDate", statusAsWritten: "sourceStatus", carriedFromRef: "notes", sectionRef: "notes" };
-const SECTION_FIELDS: Record<string, string> = { title: "title", number: "title", presenter: "presenter", reportRefs: "reportRefs" };
+const SECTION_FIELDS: Record<string, string> = { title: "title", presenter: "presenter", reportRefs: "reportRefs" };
 
 /** Where a reviewed field lands natively (for fieldProvenance). Item indices are original extraction indices. */
 export function nativeTargetForPath(path: string): NativeTarget | null {
@@ -442,6 +442,7 @@ export function nativeTargetForPath(path: string): NativeTarget | null {
     if (group === "motions") return { table: "motions", field: MOTION_FIELDS[leaf ?? "text"] ?? leaf ?? "text", item };
     if (group === "attendance") return { table: "minutes", field: `detailedAttendance.${ATTENDANCE_FIELDS[leaf ?? "nameAsWritten"] ?? leaf}`, item };
     if (group === "actionItems") return { table: "minutes", field: `actionItems.${ACTION_FIELDS[leaf ?? "text"] ?? leaf}`, item };
+    if (group === "sections" && leaf === "number") return { table: "agendaItems", field: "itemNumber", item };
     if (group === "sections") return { table: "minutes", field: `sections.${SECTION_FIELDS[leaf ?? "title"] ?? leaf}`, item };
     return { table: "minutes", field: "decisions", item };
   }

@@ -128,6 +128,12 @@ export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
   const end = applied.record.endTime?.value;
   if (typeof start === "string") payload.localStartText = start;
   if (typeof end === "string") payload.localEndText = end;
+  // Accepted sections become the meeting's agenda items (with their item numbers, A9).
+  const agendaItems = (applied.record.sections ?? [])
+    .map((section: any) => ({ title: typeof section.title?.value === "string" ? section.title.value : "", number: section.number?.value, presenter: section.presenter?.value }))
+    .filter((section: any) => section.title)
+    .map((section: any) => ({ title: section.title, ...(section.number !== undefined && section.number !== null && String(section.number).trim() ? { itemNumber: String(section.number).trim() } : {}), ...(section.presenter ? { presenter: section.presenter.resolvedName ?? section.presenter.nameAsWritten } : {}) }));
+  if (agendaItems.length) payload.agendaItems = agendaItems;
   if (input.mode === "new") payload.meetingIdentityKey = `intake:${extraction._id}`;
   if (input.mode === "merge" && input.mergeTarget) {
     payload.meetingDate = input.mergeTarget.dateKey;
