@@ -73,7 +73,14 @@ export function liveObservations(seat:any){return (seat.observations??[]).filter
 export function currentRepresentatives(seat:any){
  const live=liveObservations(seat).filter((o:any)=>['representative','contact','organization_member'].includes(o.kind)&&o.personName&&!observationTerm(o).termEnd&&o.reviewStatus!=='rejected');
  const reps=live.filter((o:any)=>o.kind==='representative');
- return reps.length?reps:live;
+ const pool=reps.length?reps:live;
+ // A roster seen twice (2022, then 2025-03) lists the same people again: only the
+ // most recent observation date describes who holds the seat now.
+ const when=(o:any)=>String(observationTerm(o).termStart??o.observedDate??'');
+ const latest=pool.map(when).sort().at(-1)??'';
+ const recent=pool.filter((o:any)=>when(o)===latest||(o.kind==='representative'&&observationTerm(o).termStart));
+ const seen=new Set<string>();
+ return recent.filter((o:any)=>{const key=String(o.personId??o.personName).toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
 }
 async function requireSeat(ctx:PortableMutationCtx,seatId:string){const seat=await requireOwnedRow(ctx,'organizationSeats',seatId);const societyId=String(seat.societyId);await requirePermissionPortable(ctx,societyId,'members:write');return {seat,societyId};}
 async function requirePerson(ctx:PortableQueryCtx,personId:string,societyId:string){return requireLinkablePerson(ctx,personId,societyId,{allowMerged:false});}

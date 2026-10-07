@@ -68,6 +68,19 @@ export async function buildRostersFromSeats(ctx: PortableMutationCtx, args: { so
     if (!seen.has(`${row.seat._id}::${row.observation.id}`)) entry.rows.push(row);
     plan.set(key, entry);
   }
+  // One roster row per person per committee: a roster sheet read twice (2022 and
+  // 2025) lists the same people again. Keep the latest observation as the source
+  // and the earliest date as "joined"; skip people already on the roster.
+  const personKey = (row: any) => row.personId ? `p:${row.personId}` : `n:${normalizeSearchName(row.observation.personName)}`;
+  for (const entry of plan.values()) {
+    const onRoster = new Set(existing.filter((m) => m.committeeId === entry.committeeId).flatMap((m) => [m.personId ? `p:${m.personId}` : "", `n:${normalizeSearchName(m.name)}`]));
+    const byPerson = new Map<string, any[]>();
+    for (const row of entry.rows) { const key = personKey(row); if (onRoster.has(key) || onRoster.has(`n:${normalizeSearchName(row.observation.personName)}`)) continue; byPerson.set(key, [...(byPerson.get(key) ?? []), row]); }
+    entry.rows = [...byPerson.values()].map((rows) => {
+      const sorted = [...rows].sort((a, b) => String(a.observation.observedDate ?? "").localeCompare(String(b.observation.observedDate ?? "")));
+      return { ...sorted[sorted.length - 1], firstObserved: sorted[0].observation.observedDate, observationCount: rows.length };
+    });
+  }
   const summary = [...plan.values()].map((entry) => ({ sheet: entry.sheet, committeeName: entry.committeeName, committeeId: entry.committeeId, createsCommittee: entry.create, newMembers: entry.rows.length, linkedToPeople: entry.rows.filter((row) => row.personId).length }));
   const result = { dryRun, committees: summary, newMembers: summary.reduce((n, s) => n + s.newMembers, 0), skippedSheets: Object.fromEntries(skippedSheets), createsCommittees: summary.filter((s) => s.createsCommittee).length };
   if (dryRun) return result;
@@ -88,7 +101,7 @@ export async function buildRostersFromSeats(ctx: PortableMutationCtx, args: { so
         role: row.observation.roleTitle && !/^[+()\d\s.-]{7,}$/.test(row.observation.roleTitle) ? row.observation.roleTitle : "Member",
         ...(row.personId ? { personId: row.personId } : {}),
         ...(row.seat.organizationName && !/^public$/i.test(row.seat.organizationName) ? { representedOrganization: row.seat.organizationName } : {}),
-        joinedAt: termStart ?? row.observation.observedDate ?? "",
+        joinedAt: termStart ?? row.firstObserved ?? row.observation.observedDate ?? "",
         ...(termEnd ? { leftAt: termEnd } : {}),
         reviewStatus: "pending", sourceSeatId: row.seat._id, sourceObservationId: row.observation.id,
         ...(row.observation.observedDate ? { observedDate: row.observation.observedDate } : {}),

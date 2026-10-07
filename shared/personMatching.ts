@@ -91,7 +91,7 @@ export function editDistance(a: string, b: string, max = 3): number {
 }
 
 export function nameTokens(name: string): string[] {
-  return normalizeSearchName(name).split(" ").filter(Boolean);
+  return normalizeSearchName(name).split(" ").filter((t) => t && !/^(?:dr|mr|mrs|ms|miss|prof|rev|hon|sir)$/.test(t));
 }
 
 /** True when two given names are plausibly the same person's name. */

@@ -1,7 +1,7 @@
 import {sourceRoleLabel} from '../../shared/personHistory';
 import {useMemo,useState} from 'react';import {Link,useParams} from 'react-router-dom';import {useMutation,useQuery} from 'convex/react';import {api} from '@/lib/convexApi';import {useSociety} from '@/hooks/useSociety';import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {PageLoading,SeedPrompt} from './_helpers';import {PersonOccurrenceReview} from '@/components/PersonRecordLinks';
 import {useConfirm} from '@/components/Modal';import {EmptyState} from '@/components/ui';import {UnsupportedDetailsBadge} from '@/components/UnsupportedDetailsBadge';import {PersonPicker,useDirectoryPeople} from '@/components/PersonPicker';import {PersonMergeDialog} from '../features/people/PersonMergeDialog';
-import {GitMerge,UserX,Undo2,Wrench} from 'lucide-react';
+import {GitMerge,UserX,Undo2,Wrench} from 'lucide-react';import {useRecordQuery} from '@/hooks/useRecordQuery';
 
 const PAGE=25;
 function Pager({page,count,setPage,label}:{page:number;count:number;setPage:(n:number)=>void;label:string}){
@@ -62,7 +62,8 @@ function MergeIntoThis({societyId,person}:{societyId:string;person:any}){
 
 export function PersonProfilePage(){
  const {id}=useParams();const society=useSociety();const {can}=usePermissions();const toast=useToast();const confirm=useConfirm();const [asOf,setAsOf]=useState('');
- const data=useQuery(api.personHistory.profile,society&&id&&can('members:read')?{societyId:society._id,personId:id,...(asOf?{asOf}:{})}:'skip') as any;
+ // P12: a profile from another workspace (or a missing id) resolves to null and shows a not-found state.
+ const data=useRecordQuery<any>(api.personHistory.profile,society&&id&&can('members:read')?{societyId:society._id,personId:id,...(asOf?{asOf}:{})}:'skip');
  const merges=useQuery(api.personHistory.mergeHistory,society&&id&&can('members:read')?{societyId:society._id,personId:id}:'skip') as any[]|undefined;
  const unmerge=useMutation(api.personHistory.unmergePeople);
  const addContact=useMutation(api.personHistory.addContactPoint);const [contact,setContact]=useState({kind:'email',value:'',observedDate:'',reviewStatus:'pending',sourceUrl:'',sourceReference:''});
@@ -70,8 +71,8 @@ export function PersonProfilePage(){
  const blank={kind:'observation',title:'',value:'',scope:'general',effectiveDate:'',endDate:'',transition:'observed',details:'',reviewStatus:'pending',sourceUrl:'',sourceReference:'',supersedesEventId:''};const [form,setForm]=useState(blank);const [busy,setBusy]=useState(false);
  const [eventPage,setEventPage]=useState(0);const [occPage,setOccPage]=useState(0);
  const grouped=useMemo(()=>groupEvents(data?.events??[]),[data]);
- if(society===undefined)return <PageLoading/>;if(!society)return <SeedPrompt/>;if(!can('members:read'))return <p>People access required.</p>;if(!data)return <PageLoading/>;
- if(data.notFound)return <div className="page"><EmptyState icon={<UserX size={18}/>} title="Person not found in this workspace" description="This profile does not exist here. It may belong to another workspace, or the link is out of date." action={<Link className="btn btn--accent" to="/app/people-directory">Back to the people directory</Link>}/></div>;
+ if(society===undefined)return <PageLoading/>;if(!society)return <SeedPrompt/>;if(!can('members:read'))return <p>People access required.</p>;if(data===undefined)return <PageLoading/>;
+ if(data===null||data.notFound)return <div className="page"><EmptyState icon={<UserX size={18}/>} title="Person not found in this workspace" description="This profile does not exist here. It may belong to another workspace, or the link is out of date." action={<Link className="btn btn--accent" to="/app/people-directory">Back to the people directory</Link>}/></div>;
  if(data.mergedInto)return <div className="page"><EmptyState icon={<GitMerge size={18}/>} title={`${data.person.fullName} was merged`} description={`This profile was merged into ${data.mergedInto.fullName}. Its history now appears there.`} action={<Link className="btn btn--accent" to={`/app/people-directory/${data.mergedInto._id}`}>Open {data.mergedInto.fullName}</Link>}/></div>;
  const field=(key:keyof typeof blank,label:string)=><label style={{display:'block'}}>{label}<input className="input" value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>;
  const occurrences:any[]=data.occurrences;

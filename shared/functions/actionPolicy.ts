@@ -66,6 +66,10 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "minutes:carryForwardAction": ["sourceEntryId"],
   // Task handlers validate known source-correlation keys or actual completion IDs.
   "tasks:create": ["eventId"],
+  // Seat observation ids are keys inside organizationSeats.observations; the seat id stays an owned reference.
+  "memberGovernance:recordRepresentative": ["endPreviousObservationId"],
+  "memberGovernance:supersedeSeatObservation": ["observationId"],
+  "directors:promoteRosterObservation": ["observationId"],
   "complianceObligations:markReviewed": ["ruleId"],
   "complianceObligations:dismissDecision": ["ruleId"],
   "complianceObligations:reopenDecision": ["ruleId"],
