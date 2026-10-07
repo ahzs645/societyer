@@ -300,6 +300,27 @@ export function bodyFields(candidates: Array<Line | undefined>, fileName: string
   return { body: notStated<string>("No governing body named.") };
 }
 
+/** Lines of the page-header group that describes the agenda: a header table (Date/Location/Subject)
+ * with the title paragraph above it; the one whose subject names an agenda wins. */
+function pageHeaderGroup(extract: IntakeExtract): Line[] {
+  // "Item 6.0 …" labels in a header belong to another section's document.
+  const headerLines = linesOf(extract, { includeParts: true }).filter((line) => line.part === "header" && !/^\s*(?:item|attachment)\s*#?\s*\d/i.test(line.text));
+  if (!headerLines.length) return [];
+  const blocks = extract.blocks.filter((block) => block.part === "header");
+  const groups: Line[][] = [];
+  let current: number[] = [];
+  for (const block of blocks) {
+    current.push(block.index);
+    if (block.kind === "table") {
+      groups.push(headerLines.filter((line) => current.includes(line.blockIndex)));
+      current = [];
+    }
+  }
+  if (current.length) groups.push(headerLines.filter((line) => current.includes(line.blockIndex)));
+  const withDate = groups.filter((group) => group.some((line) => /\bdate\b/i.test(line.text)));
+  return withDate.find((group) => /subject\s*:?[^\n]*\bagenda\b|\bagenda\b/i.test(group.map((line) => line.text).join("\n"))) ?? (withDate.length === 1 ? withDate[0] : []);
+}
+
 export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
   const { extract, fileName } = input;
   const segments = splitPackage(extract);
@@ -314,11 +335,15 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
   const agendaLines = lines.filter((line) => line.blockIndex >= range.blockStart && line.blockIndex <= range.blockEnd);
   const titleCandidate = agendaLines.find((line) => line.blockIndex === agendaSegment?.titleBlock) ?? agendaLines[0];
   const titleLineValue = titleCandidate && !/^\s*(?:chair|notes?|date|location|subject|time|zoom)\s*:/i.test(titleCandidate.text) ? titleCandidate : undefined;
-  const coverLines = coverSegment ? lines.filter((line) => line.blockIndex >= coverSegment.blockStart && line.blockIndex <= coverSegment.blockEnd) : [];
   const header = meetingHeader(agendaLines.length ? agendaLines : lines, fileName);
+  // Word templates often keep the meeting title/date/subject table in the page header.
+  const pageHeader = !coverSegment && (!header.date.value || header.date.locators[0]?.kind === "filename" || !header.startTime) ? pageHeaderGroup(extract) : [];
+  const coverLines = coverSegment ? lines.filter((line) => line.blockIndex >= coverSegment.blockStart && line.blockIndex <= coverSegment.blockEnd) : pageHeader;
   const coverHeader = coverLines.length ? meetingHeader(coverLines, fileName) : undefined;
   // A package cover's meeting date wins over an agenda that kept last meeting's date (copy-paste).
-  const date = coverHeader?.date.value && header.date.value && coverHeader.date.value.iso !== header.date.value.iso
+  const fromFileName = header.date.locators[0]?.kind === "filename";
+  const date = fromFileName && coverHeader?.date.value && coverHeader.date.locators[0]?.kind !== "filename" ? coverHeader.date
+    : coverHeader?.date.value && header.date.value && coverHeader.date.value.iso !== header.date.value.iso
     ? { ...coverHeader.date, status: "conflicting" as const, locators: [...coverHeader.date.locators, ...header.date.locators], note: `Package cover says ${coverHeader.date.value.iso}; the agenda inside says ${header.date.value.iso}.` }
     : header.date.value ? header.date : coverHeader?.date ?? header.date;
   const title = !titleLineValue ? fileName.replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ") : clean(titleLineValue.text.replace(/^\s*(?:item|attachment)\s*#?\s*\d+(?:\.\d+)?(?:\s*&\s*\d+)?\s*[-–:]?\s*/i, "")) || clean(titleLineValue.text);
@@ -405,7 +430,7 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
     ...(header.startTime ?? coverHeader?.startTime ? { startTime: header.startTime ?? coverHeader?.startTime } : {}),
     ...(header.endTime ?? coverHeader?.endTime ? { endTime: header.endTime ?? coverHeader?.endTime } : {}),
     ...(header.location ?? coverHeader?.location ? { location: header.location ?? coverHeader?.location } : {}),
-    ...(header.electronic ? { electronic: header.electronic } : {}),
+    ...(header.electronic ?? coverHeader?.electronic ? { electronic: header.electronic ?? coverHeader?.electronic } : {}),
     title: titleLineValue ? at(title, titleLineValue, undefined, 0.8) : fromFile(fileName, fileName, 0.4),
     kind: inferred(kind, [fileLoc(fileName)], 0.7, "From the title and file name."),
     recordStatus: marker === "draft" ? inferred("draft" as const, [fileLoc(fileName)], 0.7) : inferred("agenda" as const, [fileLoc(fileName)], 0.7),

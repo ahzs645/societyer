@@ -216,7 +216,17 @@ export function extractFinancial(input: ClassExtractorInput): ExtractionEnvelope
   // Period.
   let periodStart: FieldValue<ReturnType<typeof dateValue>> | undefined;
   let periodEnd: FieldValue<ReturnType<typeof dateValue>> = notStated("No period end found.");
-  for (const line of lines.slice(0, 60)) {
+  const isBudgetDoc = statementType === "budget" || input.docClass === "budget";
+  // A budget is for a fiscal year named in its title ("2020 DRAFT Income Statement", "2025-26 Budget");
+  // "Bank Account (as of Dec 31, 2019)" is the opening balance carried forward, not the period.
+  const budgetYearLine = isBudgetDoc ? lines.slice(0, 4).find((line) => /\b(?:19|20)\d{2}\b/.test(line.text) && !/\b(?:as (?:of|at)|carry|bank|balance)\b/i.test(line.text) && line.text.length < 160) : undefined;
+  const budgetYear = budgetYearLine ? /\b((?:19|20)\d{2})(?:\s*[-–/_]\s*((?:19|20)?\d{2}))?\b/.exec(budgetYearLine.text) : undefined;
+  if (budgetYearLine && budgetYear) {
+    const endYear = budgetYear[2] && Number(budgetYear[2].slice(-2)) === (Number(budgetYear[1]) + 1) % 100 ? `${budgetYear[1].slice(0, 2)}${budgetYear[2].slice(-2)}` : budgetYear[1];
+    periodEnd = at({ iso: endYear, precision: "year" as const, text: budgetYear[0] }, budgetYearLine, budgetYear[0], 0.7, "Fiscal year named in the budget title.");
+  }
+  for (const line of periodEnd.value ? [] : lines.slice(0, 60)) {
+    if (isBudgetDoc && /\b(?:as (?:of|at)|carry[- ]?forward|bank|balance)\b/i.test(line.text)) continue;
     const range = slashRange(line.text);
     if (range?.end) {
       periodEnd = at(dateValue(range.end), line, range.end.text, 0.9);

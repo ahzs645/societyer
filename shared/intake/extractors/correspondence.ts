@@ -4,7 +4,7 @@
  * copied into shared views; personal contact data is flagged, not extracted. */
 import { looksLikePersonName } from "../names";
 import { findDates } from "../parse";
-import { detectPii } from "../privacy";
+import { detectPii, redact } from "../privacy";
 import { inferred, notStated, type ExtractionEnvelope, type FieldValue, type Reference, type UnsupportedDetail } from "../schemas/common";
 import type { ClassExtractorInput } from "./agenda";
 import { at, clean, dateValue, fileLoc, fromFile, guessAt, labelled, linesOf, loc, type Line } from "./toolkit";
@@ -19,6 +19,17 @@ export function displayName(value: string): string {
 }
 
 const DECISION = /\b(?:(?:has|have|was|were) (?:been )?(?:approved|appointed|decided|agreed|accepted|elected|ratified|confirmed|resolved)|will be (?:replacing|stepping down|resigning|appointed|representing)|is replacing|replacing me|resign(?:s|ed|ing)?\b(?: from)?|step(?:ping|s|ped)? down|agreed to|decided to|motion (?:was )?(?:carried|passed)|resolved (?:to|that)|approve[sd]? (?:the|a|our)|we will|I will|please (?:approve|sign|confirm|file)|i accept|accepted the)\b/i;
+
+/** A value with account / card / SIN / e-mail / phone numbers masked, and a quote that stops before
+ * the first of them (quotes must stay verbatim, so the sensitive part is left out of the quote). */
+function withoutPii(line: Line, value: string, quote = value): { value: string; quote: string } {
+  const findings = detectPii(value);
+  if (!findings.length) return { value, quote };
+  const masked = redact(value).text;
+  const quoteFindings = detectPii(quote);
+  const cut = quoteFindings.length ? quote.slice(0, Math.min(...quoteFindings.map((finding) => finding.index))).replace(/[\s,;:–-]+$/, "") : quote;
+  return { value: masked, quote: cut.length >= 4 && line.text.includes(cut) ? cut : line.text.split(":")[0] };
+}
 
 export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnvelope {
   const { extract, fileName } = input;
@@ -48,7 +59,10 @@ export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnv
       }
     }
     const subjectLine = headerLine("Subject");
-    if (subjectLine) subject = at(clean(subjectLine.text.replace(/^subject:\s*/i, "")), subjectLine, undefined, 0.9);
+    if (subjectLine) {
+      const safe = withoutPii(subjectLine, clean(subjectLine.text.replace(/^subject:\s*/i, "")));
+      subject = at(safe.value, subjectLine, safe.quote, 0.9);
+    }
     const dateLine = headerLine("Date");
     if (dateLine) {
       const raw = dateLine.text.replace(/^date:\s*/i, "");
@@ -63,7 +77,10 @@ export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnv
     const dateHit = head.map((line) => ({ line, date: findDates(line.text)[0] })).find((hit) => hit.date && hit.line.text.trim().length < 60);
     if (dateHit) date = at(dateValue(dateHit.date!), dateHit.line, dateHit.date!.text, 0.8);
     const re = labelled(head, /re|subject/i);
-    if (re) subject = at(clean(re.value), re.line, re.value, 0.85);
+    if (re) {
+      const safe = withoutPii(re.line, clean(re.value), re.value);
+      subject = at(safe.value, re.line, safe.quote, 0.85);
+    }
     const attn = labelled(head, /attn|attention|to/i);
     if (attn && looksLikePersonName(clean(attn.value))) to.push(at(clean(attn.value), attn.line, attn.value, 0.75));
     const dear = head.find((line) => /^\s*dear\s+/i.test(line.text));
@@ -82,7 +99,8 @@ export function extractCorrespondence(input: ClassExtractorInput): ExtractionEnv
     for (const sentence of line.text.split(/(?<=[.!?])\s+/)) {
       if (sentence.length < 15 || sentence.length > 400 || !DECISION.test(sentence)) continue;
       if (/unsubscribe|do not click|confidential|legal advice|survey/i.test(sentence)) continue;
-      decisions.push(at(clean(sentence), line, sentence.trim(), 0.6, "Stated in correspondence: evidence for review, not a recorded decision."));
+      const safe = withoutPii(line, clean(sentence), sentence.trim());
+      decisions.push(at(safe.value, line, safe.quote, 0.6, "Stated in correspondence: evidence for review, not a recorded decision."));
       if (decisions.length >= 12) break;
     }
   }

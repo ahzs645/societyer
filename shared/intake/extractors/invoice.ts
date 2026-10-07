@@ -63,11 +63,23 @@ export function extractInvoice(input: ClassExtractorInput): ExtractionEnvelope {
   }
   const subtotalLine = lines.find((line) => /\bsub-?total\b/i.test(line.text));
   const subtotal = subtotalLine ? amountAfter(subtotalLine, /\bsub-?total\b\s*:?\s*/i) : undefined;
-  const gstLine = lines.find((line) => /\b(?:gst|hst)\b(?!\/hst registration| registration)[^\n]*?\d/i.test(line.text) && !/registration/i.test(line.text));
-  const gst = gstLine ? amountAfter(gstLine, /\b(?:gst|hst)\b(?:\s*@\s*\d+%)?\s*:?\s*/i) : undefined;
+  const GST_LABEL = /\b(?:gst|hst)\b(?:\s*@\s*\d+%)?\s*:?\s*/i;
+  // The tax line carries an amount ("GST @ 5% 12.00"); a description mentioning GST does not.
+  const gstLine = lines.find((line) => /\b(?:gst|hst)\b(?!\/hst registration| registration)[^\n]*?\d/i.test(line.text) && !/registration/i.test(line.text) && amountAfter(line, GST_LABEL));
+  const gst = gstLine ? amountAfter(gstLine, GST_LABEL) : undefined;
   // Parties: letterhead (vendor) and "Bill To".
   const billTo = labelled(lines.slice(0, 40), /bill to|billed to|sold to|invoice to/i);
-  const billToValue = billTo && !/invoice|#|\bdate\b/i.test(billTo.value.split(/\t/)[0]) ? clean(billTo.value.split(/\t/)[0]) : undefined;
+  let billToValue = billTo && !/invoice|#|\bdate\b/i.test(billTo.value.split(/\t/)[0]) ? clean(billTo.value.split(/\t/)[0]) : undefined;
+  let billToLine = billTo?.line;
+  if (!billToValue) {
+    // Letter-style invoices: the addressee block above "ATTN:".
+    const attn = lines.slice(0, 20).findIndex((line) => /^\s*(?:attn|attention)\s*:/i.test(line.text));
+    const addressee = attn > 0 ? lines.slice(Math.max(0, attn - 3), attn).reverse().find((line) => !/^\s*(?:by (?:mail|hand|e-?mail|courier)|invoice|re\s*:)/i.test(line.text) && !findDates(line.text)[0] && line.text.trim().length >= 2 && line.text.length < 100) : undefined;
+    if (addressee) {
+      billToValue = clean(addressee.text);
+      billToLine = addressee;
+    }
+  }
   const letterhead = titleLine(lines.filter((line) => !/^\s*(?:invoice|receipt|statement)\s*$/i.test(line.text) && !/invoice\s*#|\binvoice\b.*:|^\s*(?:by mail|attn)/i.test(line.text) && !findDates(line.text)[0]), 6);
   const payeeLine = lines.find((line) => /(?:cheques?|payments?)\s+(?:payable\s+)?(?:to|payable to)\s*:?\s*[“"]?[A-Z]|select .+? as the payee/i.test(line.text));
   const payee = payeeLine ? /(?:payable to|payments? to)\s*:?\s*(?:the\s+)?[“"]?([A-Z][^”",\n]{3,80}?)[”"]?(?:,|\s+and\b|\.?\s*$)|select\s+(.+?)\s+as the payee/i.exec(payeeLine.text) : undefined;
@@ -82,7 +94,7 @@ export function extractInvoice(input: ClassExtractorInput): ExtractionEnvelope {
   const direction: FieldValue<"payable" | "receivable" | "receipt" | "unknown"> = isReceipt ? inferred("receipt", [fileLoc(fileName)], 0.7)
     : payableTo && org && payableTo.text.toLowerCase().includes(org) ? at("receivable", payableTo, undefined, 0.75, "The organization asks to be paid: issued by it.")
       : org && vendor.value && vendor.value.toLowerCase().includes(org) ? inferred("receivable", vendor.locators, 0.65)
-      : billToValue && org && billToValue.toLowerCase().includes(org) ? at("payable", billTo!.line, undefined, 0.75)
+      : billToValue && org && billToLine && billToValue.toLowerCase().includes(org) ? at("payable", billToLine, undefined, 0.75)
         : /invoice[_ -]\d*[_ -]*from/i.test(fileName) ? fromFile("payable", fileName, 0.6) : inferred("unknown", [fileLoc(fileName)], 0.4);
   const dueLine = lines.find((line) => /\b(?:payment is due|due date|due on|due by)\b/i.test(line.text) && invoiceDate(line.text));
   const due = dueLine ? invoiceDate(dueLine.text.slice(dueLine.text.search(/due/i))) : undefined;
@@ -108,7 +120,7 @@ export function extractInvoice(input: ClassExtractorInput): ExtractionEnvelope {
     amount: total && totalAt ? at({ amountCents: total.cents, currency: "CAD", text: total.text }, totalAt, total.text, 0.8) : notStated("No total."),
     ...(gst && gstLine ? { gst: at({ amountCents: gst.cents, currency: "CAD", text: gst.text }, gstLine, undefined, 0.7) } : {}),
     ...(numberMatch && numberLine ? { invoiceNumber: at(numberMatch[1], numberLine, numberMatch[1], 0.85) } : {}),
-    ...(billToValue && billTo ? { billTo: at(billToValue, billTo.line, billTo.value.split(/\t/)[0].trim(), 0.75) } : {}),
+    ...(billToValue && billToLine ? { billTo: at(billToValue, billToLine, billTo && billToLine === billTo.line ? billTo.value.split(/\t/)[0].trim() : undefined, billTo && billToLine === billTo.line ? 0.75 : 0.6) } : {}),
     direction,
     ...(subtotal && subtotalLine ? { subtotal: at({ amountCents: subtotal.cents, currency: "CAD", text: subtotal.text }, subtotalLine, undefined, 0.75) } : {}),
     ...(due && dueLine ? { dueDate: at(due, dueLine, due.text, 0.75) } : {}),

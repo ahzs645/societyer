@@ -24,6 +24,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { buildImportBundle, coverageReport } from "../shared/intake/bundle";
+import { fiscalYearLabel } from "../shared/intake/bundleClasses";
+import { splitPackage } from "../shared/intake/extractors/packageSplit";
+import { CLASS_GUIDANCE, extractWithLlm } from "../shared/intake/llm";
 import { classifyPrior } from "../shared/intake/classify";
 import { aggregateByClass, aggregateClassScores, classificationReport, scoreClassDocument, type ClassDocScore, type ClassGoldenDoc, type ClassGoldenSet } from "../shared/intake/evalClasses";
 import { extractBytes } from "../shared/intake/extract";
@@ -73,6 +76,27 @@ function printTable(label: string, scores: ClassDocScore[]) {
   const all = aggregateClassScores(scores);
   console.log(`  ${"ALL".padEnd(18)} docs ${String(all.documents).padStart(2)} | fields ${all.passed}/${all.checks} ${pct(all.fieldAccuracy)} | classified ${pct(all.classificationAccuracy)} | hallucination ${pct(all.hallucinationRate)} of ${all.quoted} | PII leaks ${all.piiLeaks}`);
   return { byClass, all };
+}
+
+// 0. Unit checks: classification rules, fiscal-year labels, provider exclusion, package splitting.
+assert.equal(classifyPrior({ name: "Re Consent to Act as a Director - Updated.msg" }).docClass, "correspondence", "a saved reply is correspondence, not a consent");
+assert.equal(classifyPrior({ name: "CAFF Funding Agreement 2025.docx" }).docClass, "grant");
+assert.equal(classifyPrior({ name: "Board Transition Briefing Note.docx", headText: "the statement of directors and registered office of the society" }).docClass, "report", "prose mentioning a registry form is not a filing");
+assert.equal(classifyPrior({ name: "2016Confirmation of filing Annual Report.PDF" }).docClass, "registryFiling");
+assert.equal(fiscalYearLabel("Budget2014_15.xlsx"), "2014-15");
+assert.equal(fiscalYearLabel("2024 Budget.xlsx"), "2024");
+for (const docClass of ["directorConsent", "proxy", "roster", "invoice", "correspondence"] as const) {
+  let called = false;
+  const result = await extractWithLlm({ fileId: "x", fileName: "x.docx", docClass, extract: { method: "plain-text", methodVersion: "1", blocks: [], text: "", warnings: [] }, restricted: false, generate: async () => { called = true; return { object: {} }; }, provider: "test", model: "test" });
+  assert.equal(called, false, `${docClass} is never sent to a model provider`);
+  assert.equal(result.skippedReason, "restricted");
+}
+assert.ok(CLASS_GUIDANCE.agenda && CLASS_GUIDANCE.insurance && /never 'adopted'/.test(CLASS_GUIDANCE.agenda!), "per-class LLM guidance");
+{
+  const pdfText = ["Board Meeting Package", "\f", "Agenda", "Date: May 4, 2025", "1. Call to Order", "2. Adoption of Minutes", "\f", "Business Arising and Current", "Agenda Item\tResponsibility", "3. Report\tChair"];
+  const extract = await extractBytes("pkg.txt", new TextEncoder().encode(pdfText.join("\n\n")));
+  const titles = splitPackage(extract).map((segment) => segment.title);
+  assert.ok(!titles.some((title) => /Agenda Item/.test(title)), `an agenda table header is not a new document: ${titles.join(" | ")}`);
 }
 
 // 1. Synthetic per-class fixture (committed; CI gate).
@@ -153,7 +177,10 @@ if (goldenPath) {
   const locate = (source: { localPath?: string; path?: string; fileName: string }) => source.localPath ?? (source.path ? path.join(filesDir, source.path) : path.join(filesDir, source.fileName));
   const scores = await gradeDocs("golden", golden.documents, (doc) => locate(doc.source), golden);
   const summary = printTable("golden (real originals)", scores);
-  privateReport = { byClass: summary.byClass, all: summary.all, documents: scores.map((score) => ({ ...score, failures: score.failures.map((failure) => failure.path) })) };
+  const dev = aggregateClassScores(scores.filter((score) => !score.holdout));
+  const holdout = aggregateClassScores(scores.filter((score) => score.holdout));
+  console.log(`  dev (tuned on) ${dev.passed}/${dev.checks} ${pct(dev.fieldAccuracy)} over ${dev.documents} docs | holdout (never tuned on) ${holdout.passed}/${holdout.checks} ${pct(holdout.fieldAccuracy)} over ${holdout.documents} docs`);
+  privateReport = { byClass: summary.byClass, all: summary.all, dev, holdout, documents: scores.map((score) => ({ ...score, failures: score.failures.map((failure) => failure.path) })) };
   if (golden.classification?.length) {
     const labels = [] as Array<{ id: string; expected: any; predicted: any }>;
     for (const label of golden.classification) {

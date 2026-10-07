@@ -78,7 +78,7 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   const kind = /memorandum of understanding|\bmou\b/i.test(textHead) ? "mou"
     : /\bgrant\b|funding agreement|contribution agreement|funding (?:request|support|application)|proposal|application/i.test(textHead) && input.docClass === "grant" ? (/letter/i.test(fileName) ? "funding_letter" : "grant")
       : /\bcontract\b/i.test(textHead) ? "contract" : /agreement/i.test(textHead) ? "agreement" : input.docClass === "grant" ? "grant" : "unknown";
-  const grantStage = /\bapplication\b/i.test(textHead) ? "application" : /\bproposal\b/i.test(textHead) ? "proposal" : /\breport\b/i.test(fileName) ? "report" : /pleased to (?:inform|advise|confirm)|has been approved|award(?:ed)?\b/i.test(textHead) ? "award" : /agreement|contract/i.test(textHead) ? "agreement" : "unknown";
+  const grantStage = /\bapplication\b|\brequest(?:ing|s)?\b[^.]{0,40}\b(?:funding|support|contribution)\b/i.test(textHead) ? "application" : /\bproposal\b/i.test(textHead) ? "proposal" : /\breport\b/i.test(fileName) ? "report" : /pleased to (?:inform|advise|confirm)|has been approved|award(?:ed)?\b/i.test(textHead) ? "award" : /agreement|contract/i.test(textHead) ? "agreement" : "unknown";
   const parties = partiesIn(lines);
   const { effective, expiry } = termIn(lines);
   // Amount: the largest money value next to a "maximum / total / amount / not exceed / contribution / grant" cue.
@@ -154,15 +154,19 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   const status: FieldValue<"draft" | "signed" | "expired" | "unknown"> = marker === "draft" || /\bdraft\b/i.test(fileName) ? inferred("draft", [fileLoc(fileName)], 0.7)
     : expiry?.value && expiry.value.iso < asOf && (signedName || signedLine) ? inferred("expired", expiry.locators, 0.7, `Signed; term ended ${expiry.value.iso}.`)
       : signedName ? fromFile("signed", fileName, 0.65) : signedLine ? guessAt("signed", signedLine, undefined, 0.55) : notStated("No signature evidence.");
-  const numberLine = lines.slice(0, 80).find((line) => AGREEMENT_NUMBER.test(line.text));
+  // Contract numbers often sit in the page header ("Contract #: FBC-2013-2015").
+  const numberLine = lines.slice(0, 80).find((line) => AGREEMENT_NUMBER.test(line.text)) ?? linesOf(extract, { includeParts: true }).filter((line) => line.part === "header").find((line) => AGREEMENT_NUMBER.test(line.text));
   const numberMatch = numberLine ? AGREEMENT_NUMBER.exec(numberLine.text) : AGREEMENT_NUMBER.exec(fileName);
   const agreementNumber = numberMatch ? (numberLine ? at(numberMatch[1] ?? numberMatch[2], numberLine, numberMatch[1] ?? numberMatch[2], 0.75) : fromFile(numberMatch[1] ?? numberMatch[2], fileName, 0.6)) : undefined;
   const funderLabel = labelled(lines.slice(0, 60), /funder|funding (?:agency|organization|source)|granting agency|submitted to/i);
   const fundingFrom = lines.find((line) => /\b(?:funding|grant|contribution)s? (?:from|by)\s+(?:the\s+)?[A-Z]/.test(line.text));
   const funderFrom = fundingFrom ? /\b(?:funding|grant|contribution)s? (?:from|by)\s+(?:the\s+)?([A-Z][\w&.'’ -]{2,80}?)(?:[,.;(]|\s+for\b|\s+to\b|$)/.exec(fundingFrom.text) : undefined;
   // A funder's letterhead / first line ("Coastal Air Futures Fund") on a grant document.
+  // A funding request letter is addressed to the funder: the organization under "Attn:".
+  const attnIndex = input.docClass === "grant" ? lines.slice(0, 12).findIndex((line) => /^\s*(?:attn|attention)\s*:/i.test(line.text)) : -1;
+  const addressee = attnIndex >= 0 ? lines.slice(attnIndex + 1, attnIndex + 3).find((line) => /\b(?:district|council|ministry|fund|foundation|trust|agency|government|city|province|society|association|authority|credit union|bank)\b/i.test(line.text) && line.text.length < 100) : undefined;
   const letterhead = input.docClass === "grant" ? lines.slice(0, 3).find((line) => /\b(?:fund|foundation|ministry|trust|agency|government of|council|program)\b/i.test(line.text) && line.text.length < 100 && !/\b(?:agreement|application|proposal|report|society)\b/i.test(line.text)) : undefined;
-  const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : letterhead ? guessAt(clean(letterhead.text), letterhead, undefined, 0.55, "Funder named in the letterhead.") : undefined;
+  const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : letterhead ? guessAt(clean(letterhead.text), letterhead, undefined, 0.55, "Funder named in the letterhead.") : addressee ? guessAt(clean(addressee.text), addressee, undefined, 0.5, "Addressee of a funding request.") : undefined;
   const program = labelled(lines.slice(0, 60), /program(?: name)?|project (?:title|name)|initiative/i);
   const purpose = labelled(lines.slice(0, 80), /purpose|objective|project description/i);
   // An agreement has no native target: record a representation gap (grants are native).

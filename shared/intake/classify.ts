@@ -30,7 +30,7 @@ const RULES: Rule[] = [
   { docClass: "meetingPackage", re: /package|\bboard book\b|\bbinder\b|\bconsent agenda\b|\bbusiness agenda\b/i, weight: 0.9, where: "name" },
   { docClass: "agenda", re: /agenda\b/i, weight: 0.9, where: "name" },
   { docClass: "meetingMinutes", re: /\bminutes?\b|minutes?(?=[_ .-])|\bmtg notes\b|\bmeeting notes\b|\bmeeting summary\b|\bnotes from\b|\b(?:committee|board|meeting|mtg|working group)\b.*\bnotes\b/i, weight: 0.85, where: "name" },
-  { docClass: "registryFiling", re: /\bannual report\b.*\b(?:filed|filing|confirmation|registry|bc registr|receipt)|\b(?:confirmation|receipt)\b.*\bannual report\b|\b(?:19|20)\d{2}\s+annual report\b|\bstatement of directors\b|\btransition application\b|\bnotice of (?:change|articles)\b|\bsocieties online\b|\bbc ?registr|\bsocietal filing\b|\bfiling receipt\b/i, weight: 0.88, where: "name" },
+  { docClass: "registryFiling", re: /\bannual report\b.*\b(?:filed|filing|confirmation|registry|bc registr|receipt)|(?<![a-z])(?:confirmation|receipt)\b.*\bannual report\b|\b(?:19|20)\d{2}\s+annual report\b|\bstatement of directors\b|\btransition application\b|\bnotice of (?:change|articles)\b|\bsocieties online\b|\bbc ?registr|\bsocietal filing\b|\bfiling receipt\b/i, weight: 0.88, where: "name" },
   { docClass: "bylaws", re: /by-?laws?(?![a-z])|\bconstitution\b/i, weight: 0.85, where: "name" },
   { docClass: "directorConsent", re: /\bconsent(?: to act)?\b|\bdirector(?:'s)? consent\b/i, weight: 0.85, where: "name" },
   { docClass: "proxy", re: /\bprox(?:y|ies)\b/i, weight: 0.82, where: "name" },

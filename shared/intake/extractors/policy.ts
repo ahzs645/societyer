@@ -71,7 +71,9 @@ export function extractRules(lines: Line[], context: { governsBody?: string } = 
     if (max) rules.noticeMaxDays = at(numberIn(max[1])!.value, notice.line, max[0], 0.8);
   }
   // AGM cadence.
-  const agm = pick(/annual general meeting|general meeting must be held annually|held annually/i, (sentence) => /calendar year|every year|annually|months? after|days? of the fiscal year/i.test(sentence.text));
+  // The AGM-holding rule ("… shall be held at least once in every calendar year"), not
+  // "membership shall be determined annually at the AGM".
+  const agm = pick(/annual general meeting|general meeting must be held annually|held annually/i, (sentence) => /\b(?:held|hold|holds)\b/i.test(sentence.text) && /calendar year|every year|annually|months? after|days? of the fiscal year/i.test(sentence.text));
   if (agm) {
     const calendar = /at least once in every calendar year|once (?:in )?every calendar year|each calendar year/i.exec(agm.text);
     const annually = calendar ? undefined : /held annually|every year|once a year/i.exec(agm.text);
@@ -193,10 +195,12 @@ export function extractPolicy(input: ClassExtractorInput): ExtractionEnvelope {
   const versionLabel = versionLine ? at(clean(versionLine.text).slice(0, 160), versionLine, undefined, 0.75) : nameVersion ? fromFile(nameVersion[0], fileName, 0.55) : undefined;
   const effectiveLine = lines.slice(0, 40).find((line) => /\beffective\b/i.test(line.text) && findDates(line.text)[0]);
   const updatedLine = lines.slice(0, 20).find((line) => /\b(?:last updated|last revised|amended|updated)\b/i.test(line.text) && findDates(line.text, { allowMonthPrecision: true })[0]);
+  // "October 2018 (last updated February 15, 2022)": the date after the keyword is the current version's.
+  const updatedDate = updatedLine ? (findDates(updatedLine.text.slice(updatedLine.text.search(/\b(?:last updated|last revised|amended|updated)\b/i)), { allowMonthPrecision: true })[0] ?? findDates(updatedLine.text, { allowMonthPrecision: true })[0]) : undefined;
   const adoptedLine = lines.find((line) => /\b(?:approved|adopted|accepted|ratified|passed)\b/i.test(line.text) && findDates(line.text)[0] && line.text.length < 300);
   const nameDate = findDates(fileName.replace(/_/g, " "), { allowNumericShortYear: false }).find((date) => date.precision === "day");
   const effectiveDate = effectiveLine ? at(dateValue(findDates(effectiveLine.text)[0]), effectiveLine, findDates(effectiveLine.text)[0].text, 0.8)
-    : updatedLine ? guessAt(dateValue(findDates(updatedLine.text, { allowMonthPrecision: true })[0]), updatedLine, findDates(updatedLine.text, { allowMonthPrecision: true })[0].text, 0.6, "Last-updated / amended date; effective date assumed.")
+    : updatedLine && updatedDate ? guessAt(dateValue(updatedDate), updatedLine, updatedDate.text, 0.6, "Last-updated / amended date; effective date assumed.")
       : undefined;
   const adoptedDate = adoptedLine ? at(dateValue(findDates(adoptedLine.text)[0]), adoptedLine, findDates(adoptedLine.text)[0].text, 0.7)
     : nameDate && /approved|accepted|adopted|amended/i.test(fileName) ? fromFile(dateValue(nameDate), fileName, 0.55, "Approval/amendment date from the file name.") : undefined;

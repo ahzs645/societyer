@@ -572,14 +572,14 @@ export const AFFECTED_TABLE: Record<string, string> = {
 /** "2014_15" / "2014-2015" → "2014-15"; a bare year → that year. */
 export function fiscalYearLabel(...texts: Array<string | undefined>): string | undefined {
   for (const text of texts) {
-    const split = /\b((?:19|20)\d{2})\s*[_\-–/]\s*((?:19|20)?\d{2})\b/.exec(text ?? "");
+    const split = /(?<!\d)((?:19|20)\d{2})\s*[_\-–/]\s*((?:19|20)?\d{2})(?!\d)/.exec(text ?? "");
     if (split) {
       const second = split[2].slice(-2);
       if (Number(second) === (Number(split[1]) + 1) % 100) return `${split[1]}-${second}`;
     }
   }
   for (const text of texts) {
-    const year = /\b((?:19|20)\d{2})\b/.exec(text ?? "");
+    const year = /(?<!\d)((?:19|20)\d{2})(?!\d)/.exec(text ?? "");
     if (year) return year[1];
   }
   return undefined;
