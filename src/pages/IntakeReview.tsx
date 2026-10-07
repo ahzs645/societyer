@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowLeft, CheckCheck, CircleSlash, ExternalLink, Keyboard, Layers, Lock, RotateCcw, Upload } from "lucide-react";
+import { ArrowLeft, CheckCheck, CircleSlash, ExternalLink, Keyboard, Layers, Loader2, Lock, RotateCcw, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -131,7 +131,8 @@ export function IntakeReviewPage() {
   const undo = async (ids: string[]) => {
     if (!societyId) return;
     try {
-      const { removed } = await undoReviews({ societyId, reviewIds: ids });
+      let removed = 0;
+      for (let offset = 0; offset < ids.length; offset += 1000) removed += (await undoReviews({ societyId, reviewIds: ids.slice(offset, offset + 1000) })).removed ?? 0;
       toast.info(`Undid ${pluralize(removed, "decision")}`);
     } catch (error) {
       toast.error("Could not undo", error instanceof Error ? error.message : undefined);
@@ -191,6 +192,42 @@ export function IntakeReviewPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Bulk promotion: the canonical copy of each reconciled meeting whose required fields
+  // (exact date, body) are accepted. Anything that fails a rule stays pending with its reason.
+  const [bulkPromote, setBulkPromote] = useState<{ done: number; total: number } | null>(null);
+  const promotableCanonical = useMemo(() => {
+    const canonical = new Set(((run?.reconciliation?.meetings ?? []) as Array<{ canonicalFileId: string }>).map((meeting) => meeting.canonicalFileId));
+    return (queue ?? []).filter((row) => row.docClass === "meetingMinutes" && row.status !== "promoted" && row.status !== "rejected" && canonical.has(row.fileKey));
+  }, [run?.reconciliation?.meetings, queue]);
+  const promoteReady = async () => {
+    if (!societyId || !promotableCanonical.length) return;
+    const ok = await confirm({
+      title: `Promote up to ${pluralize(promotableCanonical.length, "meeting")}?`,
+      message: `The canonical copy of each meeting is promoted when its exact date and body are accepted. Only accepted fields are written; drafts, copies and documents with unaccepted required fields stay pending for review. Each promotion creates or merges one meeting with a source locator per field.`,
+      confirmLabel: "Promote ready meetings",
+    });
+    if (!ok) return;
+    setBulkPromote({ done: 0, total: promotableCanonical.length });
+    const reasons = new Map<string, number>();
+    let promoted = 0;
+    let originals = 0;
+    for (const [index, row] of promotableCanonical.entries()) {
+      try {
+        const result: any = await promoteExtraction({ societyId, extractionId: row._id, mode: "auto" });
+        promoted++;
+        const stored = await storeOriginals(societyId, result.sourceDocuments ?? []);
+        originals += stored.stored;
+      } catch (error) {
+        const reason = (error instanceof Error ? error.message : String(error)).slice(0, 120);
+        reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+      }
+      setBulkPromote({ done: index + 1, total: promotableCanonical.length });
+    }
+    setBulkPromote(null);
+    const pending = [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([reason, count]) => `${count}: ${reason}`).join(" · ");
+    toast.success(`Promoted ${pluralize(promoted, "meeting")}`, { description: `${pluralize(originals, "original file")} saved as document versions.${reasons.size ? ` Still pending — ${pending}` : ""}`, duration: 15000 });
   };
 
   const rejectDocument = async () => {
@@ -268,6 +305,11 @@ export function IntakeReviewPage() {
             <span><kbd className="intake-kbd">A</kbd> accept · <kbd className="intake-kbd">E</kbd> edit · <kbd className="intake-kbd">R</kbd> reject · <kbd className="intake-kbd">C</kbd> can't represent</span>
             <span><kbd className="intake-kbd">B</kbd> bulk accept · <kbd className="intake-kbd">?</kbd> this help</span>
           </div>
+        )}
+        {canWrite && promotableCanonical.length > 0 && (
+          <button type="button" className="btn btn--sm" onClick={() => void promoteReady()} disabled={Boolean(bulkPromote) || busy} data-testid="intake-promote-ready">
+            {bulkPromote ? <><Loader2 size={12} className="spin" /> Promoting {bulkPromote.done}/{bulkPromote.total}…</> : <><Upload size={12} /> Promote ready meetings ({promotableCanonical.length})</>}
+          </button>
         )}
         {run.status === "running" && <Badge tone="info">Run still in progress</Badge>}
         {run.status === "failed" && <Badge tone="danger">Run failed: {run.stats?.error ?? "see run details"}</Badge>}
@@ -386,9 +428,20 @@ export function IntakeReviewPage() {
           }}
           onConfirmRun={(scope) => {
             setBulkScope(null);
-            void bulkAccept({ societyId: society._id, runId, scope: scope.scope }).then((result: any) => {
-              toast.success(`Accepted ${pluralize(result.fields, "field")} in ${pluralize(result.extractions, "document")}`, { duration: UNDO_MS, action: { label: "Undo", onClick: () => void undo(result.reviewIds) } });
-            }).catch((error: unknown) => toast.error("Could not bulk accept", error instanceof Error ? error.message : undefined));
+            // Large scopes are accepted in batches of whole documents (≤ 5,000 fields per transaction).
+            void (async () => {
+              const reviewIds: string[] = [];
+              let fieldsAccepted = 0;
+              let documents = 0;
+              for (let round = 0; round < 200; round++) {
+                const result: any = await bulkAccept({ societyId: society._id, runId, scope: scope.scope });
+                reviewIds.push(...(result.reviewIds ?? []));
+                fieldsAccepted += result.fields ?? 0;
+                documents += result.extractions ?? 0;
+                if (!result.remainingFields || !result.fields) break;
+              }
+              toast.success(`Accepted ${pluralize(fieldsAccepted, "field")} in ${pluralize(documents, "document")}`, { duration: UNDO_MS, action: { label: "Undo", onClick: () => void undo(reviewIds) } });
+            })().catch((error: unknown) => toast.error("Could not bulk accept", error instanceof Error ? error.message : undefined));
           }}
         />
       )}

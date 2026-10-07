@@ -19,6 +19,7 @@ import {
   desktopIntakeBridge, pickDesktopFolder, pickDirectory, selectionFromFileList, summarizeSelection, supportsDirectoryPicker, type IntakeSelection,
 } from "../features/intake/collectFiles";
 import { runIntake, type IntakeProgress, type IntakeStageId } from "../features/intake/runIntake";
+import { importPipelineOutput, pipelineOutputFiles, type ImportProgress, type PipelineOutputFiles } from "../features/intake/importPipelineOutput";
 import { clearOriginals, originalsUsage } from "../features/intake/originalsCache";
 import { defaultModelFor, keyStorageLabel, providerHost, readLlmPrefs, readLocalApiKey, storeLocalApiKey, writeLlmPrefs, type LocalLlmProvider } from "../features/intake/localLlm";
 import "../features/intake/intake.css";
@@ -87,6 +88,11 @@ export function IntakeRunsPage() {
   const [apiKey, setApiKey] = useState("");
   const [keyStored, setKeyStored] = useState(false);
   const filesInput = useRef<HTMLInputElement>(null);
+  const outputInput = useRef<HTMLInputElement>(null);
+  const originalsInput = useRef<HTMLInputElement>(null);
+  const [pipelineOutput, setPipelineOutput] = useState<PipelineOutputFiles | null>(null);
+  const [pipelineOriginals, setPipelineOriginals] = useState<FileList | null>(null);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
 
@@ -196,6 +202,29 @@ export function IntakeRunsPage() {
     }
   };
 
+  const onPipelineOutput = (event: ChangeEvent<HTMLInputElement>) => {
+    const found = pipelineOutputFiles(event.target.files);
+    event.target.value = "";
+    if ("error" in found) { toast.error("Not an intake run folder", found.error); return; }
+    setPipelineOutput(found);
+  };
+  const importOutput = async () => {
+    if (!pipelineOutput || !canWrite) return;
+    setBusy(true);
+    try {
+      const result = await importPipelineOutput(pipelineOutput, { societyId: society._id, name: name.trim(), mutation, originals: pipelineOriginals, onProgress: setImportProgress });
+      toast.success("Run imported", { description: `${pluralize(result.extractions, "document")} ready for review · ${pluralize(result.originalsCached, "original")} cached on this device.`, action: { label: "Review", onClick: () => navigate(`/app/intake/${result.runId}/review`) } });
+      setPipelineOutput(null);
+      setPipelineOriginals(null);
+      setActiveRunId(result.runId);
+      void originalsUsage().then(setUsage);
+    } catch (error) {
+      toast.error("Could not import the run", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stageIndex = progress ? STAGE_ORDER.indexOf(progress.stage) : -1;
   const allRuns = runs ?? [];
 
@@ -280,6 +309,30 @@ export function IntakeRunsPage() {
               {busy && <button type="button" className="btn" onClick={() => abort.current?.abort()}>Cancel</button>}
               {!canWrite && loaded && <span className="muted">Only Owners and Admins can start a run.</span>}
             </div>
+            <details className="intake-import" data-testid="intake-import-output">
+              <summary>Import a run processed on another computer</summary>
+              <p className="muted" style={{ margin: "6px 0" }}>For large archives: run <span className="mono">npm run intake:run</span> on a workstation (legacy .doc/.xls are converted with LibreOffice there), then choose its output folder (run.json, coverage.json, extracts). Optionally choose the original source folder so the review viewer and promotion can use the original files.</p>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="btn btn--sm" onClick={() => outputInput.current?.click()} disabled={busy || !canWrite}><FolderOpen size={12} /> Choose run output folder</button>
+                <button type="button" className="btn btn--sm" onClick={() => originalsInput.current?.click()} disabled={busy || !canWrite || !pipelineOutput}><FolderOpen size={12} /> Choose originals folder (optional)</button>
+                <input ref={outputInput} type="file" multiple hidden aria-label="Choose an intake run output folder" data-testid="intake-output-input" onChange={onPipelineOutput} {...{ webkitdirectory: "", directory: "" }} />
+                <input ref={originalsInput} type="file" multiple hidden aria-label="Choose the original source folder" data-testid="intake-originals-input" onChange={(event) => { setPipelineOriginals(event.target.files); }} {...{ webkitdirectory: "", directory: "" }} />
+              </div>
+              {pipelineOutput && (
+                <div className="muted" style={{ marginTop: 6 }} aria-live="polite">
+                  run.json · {pipelineOutput.coverage ? "coverage.json · " : ""}{pluralize(pipelineOutput.extracts.length, "extract")}{pipelineOriginals ? ` · ${pluralize(pipelineOriginals.length, "original file")}` : ""}
+                </div>
+              )}
+              {importProgress && importProgress.stage !== "done" && (
+                <div style={{ marginTop: 6 }}>
+                  <progress className="intake-bar" max={importProgress.total || 1} value={importProgress.done} aria-label="Import progress" />
+                  <span className="muted">{importProgress.message}</span>
+                </div>
+              )}
+              <button type="button" className="btn btn--sm btn--accent" style={{ marginTop: 8 }} onClick={() => void importOutput()} disabled={busy || !canWrite || !pipelineOutput} data-testid="intake-import-start">
+                {busy && importProgress ? <Loader2 size={12} className="spin" /> : <FileSearch size={12} />} Import run
+              </button>
+            </details>
           </div>
         </section>
 

@@ -191,17 +191,31 @@ export async function bulkAcceptPreview(ctx: PortableQueryCtx, { societyId, runI
   return { count: candidates.length, extractions: new Set(candidates.map(({ extraction }) => String(extraction._id))).size, scopeExtractions: extractions.length, sample };
 }
 
-/** Accept every qualifying field in the scope (one transaction); returns review ids for the undo window. */
+export const BULK_ACCEPT_BATCH_FIELDS = 5000;
+
+/** Accept every qualifying field in the scope; returns review ids for the undo window.
+ * One transaction holds at most ~5,000 fields: whole documents are taken in queue order
+ * until the batch is full and `remainingFields` reports what is left, so a client can
+ * repeat the call for a class across a large run. */
 export async function bulkAccept(ctx: PortableMutationCtx, { societyId, runId, scope }: { societyId: string; runId: string; scope: BulkScopeArgs }) {
   await canWrite(ctx, societyId);
   const extractions = await scopedExtractions(ctx, societyId, runId, scope);
-  const candidates = await bulkCandidatesFor(ctx, extractions);
-  if (candidates.length > 5000) throw new Error("Narrow the scope: more than 5,000 fields qualify.");
+  const all = await bulkCandidatesFor(ctx, extractions);
+  const perExtraction = new Map<string, number>();
+  for (const { extraction } of all) perExtraction.set(String(extraction._id), (perExtraction.get(String(extraction._id)) ?? 0) + 1);
+  const taken = new Set<string>();
+  let size = 0;
+  for (const [id, count] of perExtraction) {
+    if (taken.size && size + count > BULK_ACCEPT_BATCH_FIELDS) break;
+    taken.add(id);
+    size += count;
+  }
+  const candidates = all.filter(({ extraction }) => taken.has(String(extraction._id)));
   const items: ReviewItem[] = candidates.map(({ extraction, field }) => ({ extractionId: extraction._id, fieldPath: field.path, decision: "accept", note: "Bulk accepted (stated, span-verified, at or above the threshold)." }));
   const result = items.length ? await reviewFields(ctx, { societyId, items: items.slice(0, 1000) }) : { reviewIds: [] as string[] };
   const reviewIds = [...result.reviewIds];
   for (let offset = 1000; offset < items.length; offset += 1000) reviewIds.push(...(await reviewFields(ctx, { societyId, items: items.slice(offset, offset + 1000) })).reviewIds);
-  return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size };
+  return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size, remainingFields: all.length - candidates.length };
 }
 
 // ---------------------------------------------------------------- merge candidates
