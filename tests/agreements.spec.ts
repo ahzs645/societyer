@@ -60,7 +60,7 @@ test("create, edit, renew and terminate an agreement", async ({ page }) => {
   await drawer.getByLabel("Party 2 name").fill("Example Hall Association");
   await drawer.getByLabel("Value", { exact: true }).fill("2400");
   await pickDate(page, "End date", iso(60));
-  await drawer.getByLabel("Renewal notice (days before end)").fill("30");
+  await drawer.getByLabel("Renewal notice (days)").fill("30");
   await drawer.getByRole("button", { name: "Add reporting obligation" }).click();
   await drawer.getByLabel("Report 1", { exact: true }).fill("Annual use report to the landlord");
   await drawer.getByRole("button", { name: "Save agreement" }).click();
