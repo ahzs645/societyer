@@ -649,11 +649,7 @@ function renderNavItem(
           <Icon size={14} />
         </TintedIconTile>
         <span className="sidebar__label">{label}</span>
-        {count != null && (
-          <Pill size="sm" className="sidebar__count">
-            {count}
-          </Pill>
-        )}
+        {count != null && <NavCountPill to={item.to} count={count} />}
       </NavLink>
       {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
        * without needing right-click (desktop) or the command palette. A real
@@ -673,14 +669,44 @@ function renderNavItem(
 }
 
 
+/** What a sidebar count means, for its tooltip and screen readers. */
+function getCountDescription(to: string, count: number): string {
+  const n = (one: string, many: string) => `${count.toLocaleString()} ${count === 1 ? one : many}`;
+  switch (to) {
+    case "/app/members": return n("active member", "active members");
+    case "/app/directors": return n("active director", "active directors");
+    case "/app/meetings": return n("meeting this year", "meetings this year");
+    case "/app/filings": return n("overdue filing", "overdue filings");
+    case "/app/deadlines": return n("open deadline", "open deadlines");
+    case "/app/conflicts": return n("open conflict", "open conflicts");
+    case "/app/committees": return n("committee", "committees");
+    case "/app/goals": return n("open goal", "open goals");
+    case "/app/tasks": return n("open task", "open tasks");
+    default: return count.toLocaleString();
+  }
+}
+
+/** Sidebar count badge: the number is visual; the description is announced. */
+function NavCountPill({ to, count }: { to: string; count: number }) {
+  const description = getCountDescription(to, count);
+  return (
+    <Pill size="sm" className="sidebar__count" title={description}>
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">, {description}</span>
+    </Pill>
+  );
+}
+
 function getCount(to: string, counts: any): number | null {
   if (!counts) return null;
   switch (to) {
     case "/app/members": return counts.members;
     case "/app/directors": return counts.directors;
-    case "/app/meetings": return counts.meetingsThisYear;
+    // "Meetings 0" beside a register of 142 past meetings read as an empty
+    // register; the badge only appears when meetings are scheduled this year.
+    case "/app/meetings": return counts.meetingsThisYear || null;
     case "/app/filings": return counts.overdueFilings || null;
-    case "/app/deadlines": return counts.openDeadlines;
+    case "/app/deadlines": return counts.openDeadlines || null;
     case "/app/conflicts": return counts.openConflicts || null;
     case "/app/committees": return counts.committees || null;
     case "/app/goals": return counts.openGoals || null;
@@ -723,6 +749,7 @@ export {
   getSidebarMenuPosition,
   renderNavItem,
   getCount,
+  NavCountPill,
 };
 
 export type {

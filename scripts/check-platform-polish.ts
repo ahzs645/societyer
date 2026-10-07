@@ -122,6 +122,12 @@ assert.match(typedOk("2001-01-01", { min: "2005-01-01" }), /^ERR The date must b
 const datePicker = readFileSync(new URL("../src/components/DatePicker.tsx", import.meta.url), "utf8");
 assert.match(datePicker, /parseTypedDate\(typed, \{ min, max \}\)/, "the date picker validates typed dates against its bounds");
 
+// Sidebar counts say what they count and hide a misleading "Meetings 0".
+const layoutInternal = readFileSync(new URL("../src/components/Layout.internal.tsx", import.meta.url), "utf8");
+assert.match(layoutInternal, /case "\/app\/meetings": return counts\.meetingsThisYear \|\| null;/);
+assert.match(layoutInternal, /className="sr-only">, \{description\}/, "count badges carry an announced description");
+assert.match(layoutInternal, /"meeting this year", "meetings this year"/);
+
 // Settings → Restore validates the whole backup before the replace prompt.
 const storageCard = readFileSync(new URL("../src/components/WorkspaceStorageCard.tsx", import.meta.url), "utf8");
 assert.ok(storageCard.indexOf("readWorkspaceBackupFile(file)") > -1 && storageCard.indexOf("readWorkspaceBackupFile(file)") < storageCard.indexOf('title: "Restore this backup?"'), "the backup is read and validated before the restore confirmation");

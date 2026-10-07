@@ -193,17 +193,18 @@ type PillProps = {
   tone?: ToneVariant;
   size?: "sm" | "md";
   className?: string;
+  title?: string;
   children: ReactNode;
 };
 
 export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
-  { tone = "neutral", size = "md", className, children },
+  { tone = "neutral", size = "md", className, title, children },
   ref,
 ) {
   const classes = ["pill", `pill--${size}`];
   if (tone !== "neutral") classes.push(`pill--${tone}`);
   if (className) classes.push(className);
-  return <span ref={ref} className={classes.join(" ")}>{children}</span>;
+  return <span ref={ref} className={classes.join(" ")} title={title}>{children}</span>;
 });
 
 /** Twenty-style chip with leftComponent / rightComponent slots.
