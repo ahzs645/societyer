@@ -1557,7 +1557,7 @@ const electionQuestions = [
     societyId: SOCIETY_ID,
     electionId: ELECTION_ID,
     title: "Approve the nominated director slate",
-    description: "One anonymous vote is recorded. Eligibility is kept separate from the ballot.",
+    description: "Two anonymous ballots were recorded. Eligibility is kept separate from the ballot.",
     kind: "single_choice",
     maxSelections: 1,
     seatsAvailable: 1,
@@ -1579,9 +1579,11 @@ const electionEligibleVoters = [
     userId: USER_OWNER_ID,
     email: "mina@riverside.example",
     fullName: "Mina Patel",
-    status: "Eligible",
+    status: "Voted",
     eligibilityReason: "Active voting member at the eligibility cutoff.",
-    createdAtISO: "2026-04-16T16:00:00.000Z",
+    confirmedAtISO: "2025-06-19T18:31:00.000Z",
+    votedAtISO: "2025-06-19T18:41:00.000Z",
+    createdAtISO: "2025-06-19T18:30:00.000Z",
   },
   {
     _id: "static_election_eligible_jordan",
@@ -1591,10 +1593,11 @@ const electionEligibleVoters = [
     userId: USER_TREASURER_ID,
     email: "jordan@riverside.example",
     fullName: "Jordan Lee",
-    status: "Confirmed",
+    status: "Voted",
     eligibilityReason: "Active voting member at the eligibility cutoff.",
-    confirmedAtISO: "2026-04-16T16:10:00.000Z",
-    createdAtISO: "2026-04-16T16:00:00.000Z",
+    confirmedAtISO: "2025-06-19T18:32:00.000Z",
+    votedAtISO: "2025-06-19T18:47:00.000Z",
+    createdAtISO: "2025-06-19T18:30:00.000Z",
   },
 ];
 
@@ -1606,7 +1609,35 @@ const electionAuditEvents = [
     actorName: "Avery Santos",
     action: "opened",
     detail: "Eligible voting members were snapshotted and voting opened.",
-    createdAtISO: "2026-04-16T16:00:00.000Z",
+    createdAtISO: "2025-06-19T18:30:00.000Z",
+  },
+  {
+    _id: "static_election_audit_tallied",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    actorName: "Avery Santos",
+    action: "tallied",
+    detail: "Voting closed and 2 anonymous ballots were tallied.",
+    createdAtISO: "2025-06-19T19:40:00.000Z",
+  },
+];
+
+const electionBallots = [
+  {
+    _id: "static_election_ballot_1",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    receiptCode: "DEMO-7K2Q",
+    submittedAtISO: "2025-06-19T18:41:00.000Z",
+    choices: [{ questionId: ELECTION_QUESTION_ID, optionIds: ["approve"] }],
+  },
+  {
+    _id: "static_election_ballot_2",
+    societyId: SOCIETY_ID,
+    electionId: ELECTION_ID,
+    receiptCode: "DEMO-9M4T",
+    submittedAtISO: "2025-06-19T18:47:00.000Z",
+    choices: [{ questionId: ELECTION_QUESTION_ID, optionIds: ["approve"] }],
   },
 ];
 
@@ -2962,7 +2993,7 @@ const tables: Record<string, any[]> = {
   paperlessConnections,
   paperlessDocumentSyncs,
   electionAuditEvents,
-  electionBallots: [],
+  electionBallots,
   electionEligibleVoters,
   electionNominations: [],
   electionQuestions,

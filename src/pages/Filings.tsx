@@ -1,3 +1,4 @@
+import { serverActionErrorMessage, serverActionsUnavailable, serverConnectionMessage } from "../lib/serverConnection";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -183,8 +184,13 @@ export function FilingsPage() {
     } finally { setSaving(false); }
   };
 
+  const registryNeedsServer = serverActionsUnavailable();
   const importRegistryHistory = async () => {
     if (!canImportRegistry) return;
+    if (registryNeedsServer) {
+      toast.info("Registry import unavailable here", serverConnectionMessage(`Importing ${jurisdictionModule.registryPortalLabel} filings`));
+      return;
+    }
     setImportingRegistry(true);
     try {
       const response = await authenticatedFetch("/api/v1/browser-connectors/filing-history/import", {
@@ -208,7 +214,7 @@ export function FilingsPage() {
     } catch (error: any) {
       toast.error(
         `Could not import ${jurisdictionModule.registryPortalLabel} filings`,
-        error?.message ?? `Open a ${jurisdictionModule.registryPortalLabel} browser session and try again.`,
+        serverActionErrorMessage(`Importing ${jurisdictionModule.registryPortalLabel} filings`, error, `Open a ${jurisdictionModule.registryPortalLabel} browser session and try again.`),
       );
     } finally {
       setImportingRegistry(false);
@@ -228,7 +234,12 @@ export function FilingsPage() {
         actions={
           <>
             {jurisdictionModule.registryImportSupported && (
-              <button className="btn-action" onClick={importRegistryHistory} disabled={!canImportRegistry || (importingRegistry)}>
+              <button
+                className="btn-action"
+                onClick={importRegistryHistory}
+                disabled={!canImportRegistry || importingRegistry || registryNeedsServer}
+                title={registryNeedsServer ? serverConnectionMessage(`Importing ${jurisdictionModule.registryPortalLabel} filings`) : undefined}
+              >
                 <FileDown size={12} /> {importingRegistry ? "Importing…" : "Import registry"}
               </button>
             )}

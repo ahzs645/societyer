@@ -326,6 +326,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "constating:narrative", handler: constatingFns.narrativePortable }),
   definePortableMutation({ name: "constating:create", handler: constatingFns.createPortable }),
   definePortableMutation({ name: "constating:remove", handler: constatingFns.removePortable }),
+  definePortableMutation({ name: "constating:update", handler: constatingFns.updatePortable }),
 
   // corporationSettings
   definePortableQuery({ name: "corporationSettings:complianceDeadlines", handler: corporationSettingsFns.complianceDeadlinesPortable }),
@@ -1142,6 +1143,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "elections:create", handler: electionsFns.createPortable }),
   definePortableMutation({ name: "elections:updateSettings", handler: electionsFns.updateSettingsPortable }),
   definePortableMutation({ name: "elections:addQuestion", handler: electionsFns.addQuestionPortable }),
+  definePortableMutation({ name: "elections:removeQuestion", handler: electionsFns.removeQuestionPortable }),
   definePortableMutation({ name: "elections:reviewNomination", handler: electionsFns.reviewNominationPortable }),
   definePortableMutation({ name: "elections:publishNominationToBallot", handler: electionsFns.publishNominationToBallotPortable }),
   definePortableMutation({ name: "elections:snapshotEligibleVoters", handler: electionsFns.snapshotEligibleVotersPortable }),

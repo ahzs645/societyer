@@ -159,10 +159,15 @@ export function MinuteBookPage() {
   const save = async () => {
     if (!canWrite) return;
     if (!draft) return;
+    if (!String(draft.title ?? "").trim()) {
+      toast.error("Record not saved", "Give the minute-book record a title.");
+      return;
+    }
+    try {
     await upsert({
       id: draft._id,
       societyId: society._id,
-      title: draft.title || "Untitled record",
+      title: draft.title.trim(),
       recordType: draft.recordType || "minute_book_record",
       effectiveDate: draft.effectiveDate || undefined,
       status: draft.status || "NeedsReview",
@@ -181,6 +186,9 @@ export function MinuteBookPage() {
     setOpen(false);
     setDraft(null);
     toast.success("Minute book record saved");
+    } catch (error) {
+      toast.error("Record not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const confirmDelete = async (row: any) => {

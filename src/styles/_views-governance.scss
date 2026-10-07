@@ -246,3 +246,12 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+// Elections list: keep columns readable on phones by scrolling the table
+// horizontally instead of squeezing the title to one character per line (G-30).
+.elections-table {
+  min-width: 600px;
+}
+.elections-table td:first-child {
+  min-width: 180px;
+}
