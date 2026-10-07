@@ -57,6 +57,10 @@ fixes and aggregate behaviour only.
 | Unresolved references | Headings ("Notes:"), report titles and durations ("limited to 10 minutes") became missing-minutes record gaps | Only citations of minutes or meetings count |
 | Policies | Copies of one version staged once per copy; "(Approved by: …)" stayed in the name; versions sharing a title were refused by the import as duplicates | One policy per (title, version, date) citing every copy; approval suffixes removed; versions of one family carry their date in the name |
 | Insurance | A "Broker" heading cell became the broker; every line mentioning additional insureds became one | Heading cells are not brokers; only the named party is an additional insured |
+| PDF columns | pdf.js reports the space between two columns as one wide " " item, so the second column ran into the first; a long organization in a "Name / Organization" list swallowed the next attendee (names came through as fragments) | Whitespace items never close a column gap; tabbed rows that start at the same left edge stay separate rows |
+| PDF minutes tables | "Agenda Item / Group Action" tables were not recognised, a table lost its columns on the next page, and a vertically centred cell ("1:08PM" over "7. Adjourn") became its own row | More header labels (group, who, responsible, decision, minutes); column anchors carry to a header-less next page; a one-line cell just above its row's item joins that row; a bare time in an "Adjourn" item is the adjournment time |
+| ACTION / DECISION lines | "DECISION:" lines stayed in the discussion; decisions repeated the motions | "DECISION:" lines are stated decisions (cut before an "ACTION:" on the same line); a decision equal to or contained in a motion is dropped |
+| Action / WHO / FOR columns | "Agenda Item / Discussion / Action / WHO / FOR" tables were read as action registers or the WHO cell became a second action | Such tables are minutes tables; WHO is the action's assignee and FOR its due date |
 
 ### Review, promotion and staging
 
@@ -72,9 +76,11 @@ fixes and aggregate behaviour only.
 - **Run-wide bulk accept in batches** (`intake:bulkAccept`): whole documents
   up to 5,000 fields per call with `remainingFields`; the review screen
   repeats the call and undo works across batches.
-- **Promote ready meetings** (review screen): the canonical copy of every
-  reconciled meeting whose exact date and body are accepted; everything else
-  stays pending with a summarized reason.
+- **Promote all ready** (review screen, from the integration branch; it
+  replaced this package's earlier "Promote ready meetings"): after the
+  run-wide minutes bulk accept it promotes the canonical copy of every
+  meeting whose exact date and body are accepted; documents missing a
+  required field stay in the queue.
 - **Add run people to directory** (review screen): one directory person per
   distinct full name as written in the run (role words, organizations and
   single names excluded; spelling variants stay separate so the directory's
@@ -135,8 +141,10 @@ fixes and aggregate behaviour only.
 - OCR for scanned PDFs (registry certificates, signed consents, scanned
   annual reports): catalogued, not extracted.
 - `.xps`, `.pages`, `.nib`, design and media files are catalogued only.
-- Promotion of non-minutes classes through the intake review (field
-  provenance) instead of import sessions.
+- The integration branch can now promote non-minutes classes through the
+  intake review (field provenance). This re-transposition still stages them
+  through import sessions with the evidence rule. Moving the staging to
+  class promotion needs run-wide bulk accept per class.
 - Fields for what is still a representation gap (agreements, quorum
   head-counts, consensus rules, signing tiers, AGM notice, bylaw cadence and
   term rules, insurance continuity dates).
