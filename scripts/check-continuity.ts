@@ -167,6 +167,43 @@ assert.equal(statusOf("BC-SOC-DIRECTORS-MIN", "2021").status, "satisfied");
 assert.equal(statusOf("BC-SOC-DIRECTOR-CONSENT", "2020").status, "satisfied");
 assert.equal(statusOf("BC-SOC-DIRECTOR-CONSENT", "2021").status, "record_missing");
 
+// X-05: directors still marked NeedsReview (from an intake roster) are reported as unconfirmed
+// (source_only, with a "Confirm directors" action), never as missing, and never counted as confirmed.
+{
+  const currentYear = String(range.toYear);
+  const intake = {
+    ...snapshot,
+    directors: [
+      { _id: "n1", firstName: "Ivy", lastName: "Intake", termStart: `${currentYear}-01-15`, consentOnFile: true, status: "NeedsReview" },
+      { _id: "n2", firstName: "Jo", lastName: "Intake", termStart: `${currentYear}-01-15`, consentOnFile: true, status: "NeedsReview" },
+      { _id: "n3", firstName: "Kai", lastName: "Intake", termStart: `${currentYear}-01-15`, consentOnFile: false, status: "NeedsReview" },
+    ],
+  };
+  const intakeRows = evaluateContinuity(expectations, intake, range);
+  const period = (key: string) => intakeRows.find((row) => row.expectation.key === key)!.periods.find((p) => p.periodKey === currentYear)!;
+  assert.equal(period("BC-SOC-DIRECTORS-MIN").status, "source_only", "three unconfirmed directors are not 'missing'");
+  assert.equal(period("BC-SOC-DIRECTORS-MIN").foundCount, 0, "unconfirmed directors are not counted as confirmed");
+  assert.match(period("BC-SOC-DIRECTORS-MIN").note ?? "", /0 of 3 directors confirmed; 3 directors from source files await confirmation/);
+  assert.deepEqual(period("BC-SOC-DIRECTORS-MIN").action, { label: "Confirm directors", href: "/app/directors" });
+  assert.ok(period("BC-SOC-DIRECTORS-MIN").evidence.every((item) => item.status === "unconfirmed" && /\(unconfirmed\)$/.test(item.label)));
+  assert.equal(period("BC-SOC-DIRECTOR-CONSENT").status, "source_only");
+  // Two confirmed + one unconfirmed: still short of 3 confirmed → source_only, not missing.
+  const mixed = evaluateContinuity(expectations, { ...intake, directors: intake.directors.map((row, index) => index < 2 ? { ...row, status: "Active" } : row) }, range);
+  const mixedPeriod = mixed.find((row) => row.expectation.key === "BC-SOC-DIRECTORS-MIN")!.periods.find((p) => p.periodKey === currentYear)!;
+  assert.equal(mixedPeriod.status, "source_only");
+  assert.equal(mixedPeriod.foundCount, 2);
+  // Only one unconfirmed and nobody else: genuinely short → record_missing, still with the confirm action.
+  const short = evaluateContinuity(expectations, { ...intake, directors: intake.directors.slice(0, 1) }, range);
+  const shortPeriod = short.find((row) => row.expectation.key === "BC-SOC-DIRECTORS-MIN")!.periods.find((p) => p.periodKey === currentYear)!;
+  assert.equal(shortPeriod.status, "record_missing");
+  assert.equal(shortPeriod.action?.label, "Confirm directors");
+  // All confirmed → satisfied, no action.
+  const done = evaluateContinuity(expectations, { ...intake, directors: intake.directors.map((row) => ({ ...row, status: "Active" })) }, range);
+  const donePeriod = done.find((row) => row.expectation.key === "BC-SOC-DIRECTORS-MIN")!.periods.find((p) => p.periodKey === currentYear)!;
+  assert.equal(donePeriod.status, "satisfied");
+  assert.equal(donePeriod.action, undefined);
+}
+
 // Unreadable families are not reported as missing records.
 const hidden = evaluateContinuity(expectations, { ...snapshot, readable: { ...snapshot.readable, directors: false } }, range);
 assert.ok(hidden.find((row) => row.expectation.key === "BC-SOC-DIRECTOR-CONSENT")!.periods.every((p) => p.status === "not_applicable"));
