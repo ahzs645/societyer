@@ -362,6 +362,9 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
   if (extraction.status === "promoted") throw new Error("This extraction was already promoted.");
   if (extraction.status === "rejected") throw new Error("This extraction was rejected; reopen it before promoting.");
   if (extraction.status === "covered") throw new Error("A copy of this document was already promoted; choose \"Review separately\" to promote it on its own.");
+  // Nothing reviewed yet (the first decision moves it to in_review): refuse before reading anything else,
+  // so "Promote all ready" passes over unreviewed documents of a large run quickly.
+  if (extraction.status === "pending_review") throw new Error(extraction.docClass === "meetingMinutes" ? "Accept or edit the meeting date and body before promoting." : "Accept or edit at least one field before promoting.");
   const run = await getOwned<any>(ctx, "intakeRuns", extraction.runId, societyId);
   const file = await getOwned<any>(ctx, "intakeFiles", extraction.fileId, societyId);
   if (file.sensitivity === "restricted") await requirePermissionPortable(ctx, societyId, "settings:write");
