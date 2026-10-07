@@ -6,7 +6,9 @@ test("restore waits for startup and retains the restored vault after reopening",
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `recovery-startup-${crypto.randomUUID()}`;
     const original = LocalDexieRowStore.prototype.hydrate;
     let release!: () => void;
@@ -52,7 +54,9 @@ test("failed storage restore rolls every table back without replacing the visibl
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `recovery-atomic-${crypto.randomUUID()}`;
     const store = new LocalDexieRowStore({}, { databaseName: name });
     await store.whenHydrated();
@@ -89,7 +93,9 @@ test("direct restore rejects corrupt records and strips hosted authority while r
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `recovery-authority-${crypto.randomUUID()}`;
     const store = new LocalDexieRowStore({}, { databaseName: name });
     await store.whenHydrated();
@@ -138,7 +144,9 @@ test("heavy fields stay out of the row cache, load on demand and survive reopen 
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `heavy-fields-${crypto.randomUUID()}`;
     const longText = "Synthetic extracted text. ".repeat(400);
     try {
@@ -191,7 +199,9 @@ test("a layout-1 vault is migrated in place to lazy heavy fields without losing 
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `layout-migration-${crypto.randomUUID()}`;
     const source = { text: "Verbatim source minutes. ".repeat(300) };
     try {
