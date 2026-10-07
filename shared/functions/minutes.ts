@@ -362,16 +362,39 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
   }));
 }
 
+/**
+ * Per-call memo for `sourceMinutesView`: a list of N minutes resolves the
+ * document access predicate and each source document once, not N times.
+ */
+type SourceAccessMemo = {
+  predicates: Map<string, Promise<Awaited<ReturnType<typeof documentAccessPredicate>>>>;
+  documents: Map<string, Promise<any>>;
+};
+function newSourceAccessMemo(): SourceAccessMemo {
+  return { predicates: new Map(), documents: new Map() };
+}
+
 /** Imported source copies obey the source document ACL as well as minutes access. */
-async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any) {
+async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any, memo: SourceAccessMemo = newSourceAccessMemo()) {
   if (!minutes?.sourceTransposition && !minutes?.sourceMeetingRecord && !(minutes?.sourceDocumentIds?.length && [...MEETING_HISTORY_FIELDS, ...EVIDENCE_FIELDS].some(field => minutes[field]?.length))) return minutes;
   let visible = true;
   try {
-    await requirePermissionPortable(ctx,String(minutes.societyId),"documents:read");
-    const allows = await documentAccessPredicate(ctx,String(minutes.societyId));
+    const societyId = String(minutes.societyId);
+    let predicate = memo.predicates.get(societyId);
+    if (!predicate) {
+      predicate = requirePermissionPortable(ctx,societyId,"documents:read").then(() => documentAccessPredicate(ctx,societyId));
+      memo.predicates.set(societyId, predicate);
+    }
+    const allows = await predicate;
     const sourceIds = [...new Set([...(minutes.sourceDocumentIds ?? []),...(minutes.sourceTransposition?.originalSources ?? []).map((source:any) => source.documentId).filter(Boolean),...(minutes.sourceMeetingRecord?.documents ?? []).map((source:any) => source.documentId).filter(Boolean)])];
     for (const id of sourceIds) {
-      const document = await ctx.db.get(id,"documents");
+      // The access decision never reads a document's extracted text.
+      let pending = memo.documents.get(String(id));
+      if (!pending) {
+        pending = ctx.db.get(id,"documents",{ omitFields: ["content"] });
+        memo.documents.set(String(id), pending);
+      }
+      const document = await pending;
       if (!document || document.societyId !== minutes.societyId || !allows(document,"view")) {visible=false;break;}
     }
   } catch {visible=false;}
@@ -396,9 +419,34 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
   // display read (all routed through minutesMotionsForDisplay in Phase 0) becomes
   // table-sourced transparently. The live embedded `motions[]` stays untouched on
   // the row for the editor's write path. See docs/motions-migration-finish-scope.md.
+  const memo = newSourceAccessMemo();
   return Promise.all(
-    rows.map(async (m) => sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) })),
+    rows.map(async (m) => sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) }, memo)),
   );
+}
+
+/**
+ * Fields `minutes:listSummaries` leaves out: the verbatim imported source
+ * record, the transposition trace and the raw transcript. Together they are
+ * most of a transposed workspace's minutes bytes, and no list, picker or
+ * adoption flow reads them. `minutes:getByMeeting` returns the whole record.
+ */
+export const MINUTES_SUMMARY_OMITTED_FIELDS = ["sourceMeetingRecord", "sourceTransposition", "draftTranscript"] as const;
+
+/**
+ * `minutes:list` without the heavy source fields. Access decisions are the
+ * same (they still see the whole record); a restricted record keeps its small
+ * `sourceTransposition` restriction marker.
+ */
+export async function listSummariesPortable(ctx: PortableQueryCtx, args: { societyId: string }) {
+  const rows = await listPortable(ctx, args);
+  return rows.map((row: any) => {
+    const restricted = row?.sourceTransposition?.reviewStatus === "restricted" ? row.sourceTransposition : undefined;
+    const summary: Record<string, unknown> = { ...row };
+    for (const field of MINUTES_SUMMARY_OMITTED_FIELDS) delete summary[field];
+    if (restricted) summary.sourceTransposition = restricted;
+    return summary;
+  });
 }
 
 export async function getByMeetingPortable(

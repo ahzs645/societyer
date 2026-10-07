@@ -23,7 +23,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function MinutesPage() {
   const society = useSociety();
-  const minutes = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip");
+  const minutes = useQuery(api.minutes.listSummaries, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();

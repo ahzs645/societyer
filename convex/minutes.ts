@@ -10,6 +10,7 @@ import {
   transposeSourcesPortable,
   completeSourceRecordsPortable,
   listPortable,
+  listSummariesPortable,
   getByMeetingPortable,
   createPortable,
   carryForwardActionPortable,
@@ -173,6 +174,13 @@ export const list = authorizedQuery("minutes:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
+});
+
+/** `list` without the heavy imported-source fields — for lists, pickers and adoption flows. */
+export const listSummaries = authorizedQuery("minutes:listSummaries", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => listSummariesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByMeeting = authorizedQuery("minutes:getByMeeting", query)({

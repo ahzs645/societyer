@@ -292,7 +292,31 @@ export async function publicDocumentAccessPredicate(ctx: PortableQueryCtx, socie
 
 export async function listPortable(
   ctx: PortableQueryCtx,
-  { societyId, actingUserId }: { societyId: string; actingUserId?: string },
+  args: { societyId: string; actingUserId?: string },
+) {
+  return listVisibleDocuments(ctx, args, []);
+}
+
+/**
+ * Fields `documents:listSummaries` leaves out. `content` holds the extracted
+ * text of imported files (up to hundreds of KB per row); list screens and
+ * pickers never show it, and on the local runtime it is never even loaded.
+ * Open a single document with `documents:get` for its content.
+ */
+export const DOCUMENT_SUMMARY_OMITTED_FIELDS = ["content"] as const;
+
+/** `documents:list` without the heavy `content` field — for tables and pickers. */
+export async function listSummariesPortable(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; actingUserId?: string },
+) {
+  return listVisibleDocuments(ctx, args, DOCUMENT_SUMMARY_OMITTED_FIELDS);
+}
+
+async function listVisibleDocuments(
+  ctx: PortableQueryCtx,
+  { societyId }: { societyId: string; actingUserId?: string },
+  omitted: readonly string[],
 ) {
   const principalId = await principalUserId(ctx, societyId);
   const [groups, linkedMaterials, accessContext] = await Promise.all([
@@ -300,6 +324,7 @@ export async function listPortable(
       ctx.db
         .query("documents")
         .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
+        .omitFields(...omitted)
         .collect(),
     )),
     ctx.db
@@ -471,6 +496,7 @@ export async function reviewQueuesPortable(
         ctx.db
           .query("documents")
           .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
+          .omitFields(...DOCUMENT_SUMMARY_OMITTED_FIELDS)
           .take(DOCUMENT_QUEUE_CATEGORY_SCAN_LIMIT),
       ),
     ),
@@ -478,6 +504,7 @@ export async function reviewQueuesPortable(
       .query("documents")
       .withIndex("by_last_opened", (q) => q.eq("societyId", societyId))
       .order("desc")
+      .omitFields(...DOCUMENT_SUMMARY_OMITTED_FIELDS)
       .take(DOCUMENT_QUEUE_LIMIT),
     ctx.db
       .query("tasks")

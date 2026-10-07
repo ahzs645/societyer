@@ -63,7 +63,7 @@ export function MeetingsPage() {
   const data = useMeetingFormData(society?._id, form?.scheduledAt);
   const meetings = data.meetings;
   const meetingTemplates = data.meetingTemplates;
-  const minutesList = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip") as
+  const minutesList = useQuery(api.minutes.listSummaries, society ? { societyId: society._id } : "skip") as
     | Doc<"minutes">[]
     | undefined;
   const create = useMutation(api.meetings.create);

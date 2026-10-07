@@ -644,6 +644,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // documents
   definePortableQuery({ name: "documents:list", handler: documentsFns.listPortable }),
+  definePortableQuery({ name: "documents:listSummaries", handler: documentsFns.listSummariesPortable }),
   definePortableQuery({ name: "documents:get", handler: documentsFns.getPortable }),
   definePortableQuery({ name: "documents:getMany", handler: documentsFns.getManyPortable }),
   definePortableQuery({ name: "documents:reviewQueues", handler: documentsFns.reviewQueuesPortable }),
@@ -954,6 +955,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // minutes
   definePortableQuery({ name: "minutes:list", handler: minutesFns.listPortable }),
+  definePortableQuery({ name: "minutes:listSummaries", handler: minutesFns.listSummariesPortable }),
   definePortableQuery({ name: "minutes:getByMeeting", handler: minutesFns.getByMeetingPortable }),
   definePortableMutation({ name: "minutes:create", handler: minutesFns.createPortable }),
   definePortableMutation({ name: "minutes:update", handler: minutesFns.updatePortable }),

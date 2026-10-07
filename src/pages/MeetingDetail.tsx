@@ -159,13 +159,13 @@ export function MeetingDetailPage() {
     api.committees.detail,
     can("committees:read") && meeting?.committeeId && permissionsLoaded && can("committees:read") ? { id: meeting.committeeId } : "skip",
   );
-  const allDocuments = useQuery(api.documents.list, can("documents:read") && society ? { societyId: society._id } : "skip");
+  const allDocuments = useQuery(api.documents.listSummaries, can("documents:read") && society ? { societyId: society._id } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, can("meetings:read") && society ? { societyId: society._id } : "skip");
   // All minutes records: powers the "minutes awaiting adoption" card and the
   // adoption-target picker on motions.
-  const allMinutes = useQuery(api.minutes.list, can("minutes:read") && society ? { societyId: society._id } : "skip");
+  const allMinutes = useQuery(api.minutes.listSummaries, can("minutes:read") && society ? { societyId: society._id } : "skip");
   // Captured e-signatures on these minutes — surfaced in the signing panel and
   // rendered into the export's signature block.
   const minutesSignatures = useQuery(

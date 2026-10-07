@@ -43,7 +43,7 @@ export function DocumentsPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
-  const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const docs = useQuery(api.documents.listSummaries, society ? { societyId: society._id } : "skip");
   const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id } : "skip");
   const importSessions = useQuery(api.importSessions.list, society && permissions.loaded && permissions.can("settings:read") ? { societyId: society._id } : "skip");
   const create = useMutation(api.documents.create);
