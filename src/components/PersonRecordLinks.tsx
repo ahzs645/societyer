@@ -8,7 +8,7 @@ const STATUS_LABELS:Record<string,string>={verified:'Confirmed',suggested:'Sugge
 /** P10: split a merged fragment into people, or create a profile from it. */
 function FragmentTools({row,people}:{row:any;people:DirectoryPersonOption[]}){
  const toast=useToast();const split=useMutation(api.personHistory.splitOccurrence);const createPerson=useMutation(api.personHistory.createPersonFromOccurrence);
- const named=useMemo(()=>peopleNamedInFragment(people,row.personName),[people,row.personName]);
+ const named=useMemo(()=>peopleNamedInFragment(people,[row.personName,row.roleTitle,row.affiliation].filter(Boolean).join(' ')),[people,row.personName,row.roleTitle,row.affiliation]);
  const [parts,setParts]=useState<Array<{personName:string;personId:string}>>(()=>named.length?named.map(p=>({personName:p.fullName,personId:p._id})):[{personName:stripRoleAffixes(row.personName),personId:''}]);
  const [name,setName]=useState(()=>stripRoleAffixes(row.personName));const [rationale,setRationale]=useState('');const [busy,setBusy]=useState(false);
  const run=async(action:()=>Promise<unknown>,message:string)=>{setBusy(true);try{await action();toast.success(message);}catch(e:any){toast.error(e.message);}finally{setBusy(false);}};

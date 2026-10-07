@@ -50,7 +50,7 @@ export async function overview(ctx:PortableQueryCtx,{societyId}:{societyId:strin
  return {people:people.map(p=>({...p,occurrences:counts.get(p._id)?.n??0,unreviewed:counts.get(p._id)?.u??0})),
  // P11: single given names list every person with that given name or a variant.
  // P10: fragments marked not_person that contain a known person's full name.
- occurrences:occurrences.map(o=>({...o,href:personRecordHref(o),candidates:candidatesFor(o.personName),...(o.matchStatus==='not_person'||o.personName.trim().split(/\s+/).length>3?{namedPeople:namedIn(o.personName)}:{})}))};
+ occurrences:occurrences.map(o=>({...o,href:personRecordHref(o),candidates:candidatesFor(o.personName),...(o.matchStatus==='not_person'||o.personName.trim().split(/\s+/).length>3?{namedPeople:namedIn([o.personName,o.roleTitle,o.affiliation].filter(Boolean).join(' '))}:{})}))};
 }
 export async function profile(ctx:PortableQueryCtx,{societyId,personId,asOf}:{societyId:string;personId:string;asOf?:string}){
  await requirePermissionPortable(ctx,societyId,'members:read');

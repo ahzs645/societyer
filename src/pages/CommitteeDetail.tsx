@@ -212,8 +212,8 @@ export function CommitteeDetailPage() {
   const membersContent = (
         <div className="card">
           <div className="card__head">
-            <h2 className="card__title">Members</h2>
-            <div style={{ marginLeft: "auto" }} className="row">
+            <h2 className="card__title" style={{ whiteSpace: "nowrap" }}>Members</h2>
+            <div style={{ marginLeft: "auto", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }} className="row">
               <BuildRostersButton societyId={society._id} disabled={!canWrite} createMissingCommittees={false} label="Add from roster sheets…" />
               <button className="btn btn--accent btn--sm" disabled={!canWrite} onClick={() => {
                 if (!canWrite) return;
