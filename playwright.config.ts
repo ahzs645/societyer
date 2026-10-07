@@ -13,6 +13,7 @@ export default defineConfig({
     "live-interface-*.spec.ts",
     "offline-rollout-*.spec.ts",
     "guided-setup.spec.ts",
+    "governance-retest.spec.ts",
     "meeting-history.spec.ts",
     "meetings-editing.spec.ts",
     "people-identity.spec.ts",
