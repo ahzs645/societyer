@@ -1,5 +1,6 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import fs from "fs";
 import path from "path";
 
 const base = process.env.VITE_BASE_PATH ?? "/";
@@ -31,9 +32,42 @@ const build = {
   rollupOptions: { output },
 };
 
+/** AI intake OCR runs offline: the tesseract.js worker, its WebAssembly cores, the English model
+ * and pdf.js's image decoders are copied from node_modules into `assets/intake-ocr/` (served from
+ * any `/intake-ocr/` path in dev). They load only when a run reads a scanned page, so they are
+ * not part of the app's bundles. See src/features/intake/ocrHost.ts. */
+const INTAKE_OCR_ASSETS: Record<string, string> = {
+  "tesseract-worker.min.js": "node_modules/tesseract.js/dist/worker.min.js",
+  "tesseract-core-simd-lstm.wasm.js": "node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js",
+  "tesseract-core-lstm.wasm.js": "node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js",
+  "eng.traineddata.gz": "node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz",
+  "pdfjs/jbig2.wasm": "node_modules/pdfjs-dist/wasm/jbig2.wasm",
+  "pdfjs/openjpeg.wasm": "node_modules/pdfjs-dist/wasm/openjpeg.wasm",
+  "pdfjs/qcms_bg.wasm": "node_modules/pdfjs-dist/wasm/qcms_bg.wasm",
+};
+function intakeOcrAssets(): Plugin {
+  const source = (name: string) => path.resolve(__dirname, INTAKE_OCR_ASSETS[name]);
+  const contentType = (name: string) => (name.endsWith(".js") ? "text/javascript" : name.endsWith(".wasm") ? "application/wasm" : "application/gzip");
+  return {
+    name: "societyer-intake-ocr-assets",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const match = /\/intake-ocr\/([\w./-]+?)(?:\?.*)?$/.exec(request.url ?? "");
+        const name = match?.[1];
+        if (!name || !INTAKE_OCR_ASSETS[name]) return next();
+        response.setHeader("Content-Type", contentType(name));
+        fs.createReadStream(source(name)).pipe(response);
+      });
+    },
+    generateBundle() {
+      for (const name of Object.keys(INTAKE_OCR_ASSETS)) this.emitFile({ type: "asset", fileName: `assets/intake-ocr/${name}`, source: fs.readFileSync(source(name)) });
+    },
+  };
+}
+
 export default defineConfig({
   base,
-  plugins: [react()],
+  plugins: [react(), intakeOcrAssets()],
   // Milkdown's Crepe toolbar ships Vue components. Without these compile-time
   // flags Vue's esm-bundler build warns on every editor mount. Options API stays
   // on (Vue's default, in case a toolbar component uses it); devtools are off.

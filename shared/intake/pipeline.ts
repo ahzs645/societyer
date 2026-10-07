@@ -8,7 +8,8 @@ import { agendaEvidencedMeetings, annotateFiscalYearEndChanges, classRecordGaps,
 import { extractForClass } from "./extractors";
 import { clusterFiles } from "./cluster";
 import { buildDirectoryFromOccurrences, resolvePerson } from "./entities";
-import { EXTRACTABLE_EXTENSIONS, extensionOf } from "./extract";
+import { EXTRACTABLE_EXTENSIONS, extensionOf, OCR_IMAGE_EXTENSIONS } from "./extract";
+import { applyOcrConfidence, isDocumentImage } from "./extract/ocr";
 import { junkVerdict } from "./junk";
 import { extractWithLlm, mapWithConcurrency, TokenBudget, type GenerateObjectFn } from "./llm";
 import { detectPii, sensitivityFor, type ProcessingLogEntry } from "./privacy";
@@ -42,6 +43,9 @@ export type PipelineOptions = {
   asOfISO?: string;
   /** The organization the records belong to; detected from the corpus when omitted. */
   organizationName?: string;
+  /** The host's extractor reads images by OCR: document-like images (scans, signed forms,
+   * certificates; see `isDocumentImage`) are extracted instead of catalogued. */
+  ocrImages?: boolean;
 };
 export type PipelineOutput = IntakeRunResult & { extracts: Record<string, IntakeExtract> };
 
@@ -74,8 +78,12 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
   const startedAtISO = now();
   // 1. Junk filter.
   const files: Array<IntakeFileRecord & { read?: PipelineSourceFile["read"] }> = sourceFiles.map((file) => {
-    const verdict = junkVerdict(file);
-    const disposition = verdict.disposition === "keep" ? (EXTRACTABLE_EXTENSIONS.has(extensionOf(file.name)) ? "extract" : "catalogue") : verdict.disposition;
+    let verdict = junkVerdict(file);
+    const ext = extensionOf(file.name);
+    // Scanned letters, signed forms and certificates saved as images are read by OCR when the host can.
+    if (options.ocrImages && verdict.disposition === "catalogue" && OCR_IMAGE_EXTENSIONS.has(ext) && isDocumentImage(file.name, file.path)) verdict = { disposition: "keep" };
+    // A file without an extension is identified from its bytes at extraction.
+    const disposition = verdict.disposition === "keep" ? (EXTRACTABLE_EXTENSIONS.has(ext) || OCR_IMAGE_EXTENSIONS.has(ext) || (!ext && file.name.trim() !== "") ? "extract" : "catalogue") : verdict.disposition;
     if (verdict.disposition !== "keep") log.push({ atISO: now(), fileKey: file.fileKey, stage: "junk", sentToProvider: false, note: verdict.reason });
     return { ...file, disposition, ...(verdict.reason ? { dispositionReason: verdict.reason } : disposition === "catalogue" ? { dispositionReason: `No text extractor for .${extensionOf(file.name) || "(none)"}` } : {}) };
   });
@@ -142,7 +150,9 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
   // 4. Classify (deterministic priors) + sensitivity.
   for (const file of live) {
     const head = texts[file.fileKey]?.slice(0, 3000);
-    file.classification = classifyPrior({ name: file.name, path: file.path, headText: head });
+    // An image read by OCR is classified by its name and text, not as a picture by its extension.
+    const readImage = file.extractMethod === "ocr" && OCR_IMAGE_EXTENSIONS.has(extensionOf(file.name));
+    file.classification = classifyPrior({ name: readImage ? file.name.replace(/\.[a-z0-9]+$/i, "") : file.name, path: file.path, headText: head });
     const findings = texts[file.fileKey] ? detectPii(texts[file.fileKey].slice(0, 200000)) : [];
     file.sensitivity = sensitivityFor({ restrictedClass: file.classification.restricted, findings });
     if (file.sensitivity === "restricted" && file.disposition === "extract" && !MINUTES_LIKE.has(file.classification.docClass)) {
@@ -169,12 +179,18 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     if (options.llm && !restricted) {
       const result = await extractWithLlm({ fileId: file.fileKey, fileName: file.name, docClass, extract, restricted, generate: options.llm.generate, provider: options.llm.provider, model: options.llm.model, budget }).catch((error) => ({ log: [{ atISO: now(), fileKey: file.fileKey, stage: "llm_skipped" as const, sentToProvider: true, note: `Provider error: ${error instanceof Error ? error.message : String(error)}` }], envelope: undefined, verification: undefined }));
       log.push(...result.log);
-      if (result.envelope && validateExtraction(result.envelope).ok) envelope = { ...result.envelope, verification: result.verification, fileKey: file.fileKey };
+      if (result.envelope && validateExtraction(result.envelope).ok) {
+        applyOcrConfidence(result.envelope.record, extract);
+        envelope = { ...result.envelope, verification: result.verification, fileKey: file.fileKey };
+      }
     }
     if (!envelope) {
       const deterministic = extractForClass(docClass, { fileId: file.fileKey, fileName: file.name, path: file.path, extract, asOfISO, organizationName });
       if (deterministic) {
         const verification = verifyRecord(deterministic.record, extract);
+        // Values read by OCR from a low-confidence page (or through an uncertain word) are never bulk-accepted.
+        const lowered = applyOcrConfidence(deterministic.record, extract);
+        if (lowered) deterministic.warnings = [...(deterministic.warnings ?? []), `${lowered} field(s) lowered for OCR confidence.`];
         envelope = { ...deterministic, verification, fileKey: file.fileKey };
         log.push({ atISO: now(), fileKey: file.fileKey, stage: "extract_fields", sentToProvider: false, note: `deterministic ${docClass}; ${verification.verified + verification.fuzzy}/${verification.quoted} quotes verified` });
       }
@@ -183,7 +199,11 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
       if (MINUTES_LIKE.has(docClass)) guardFutureMinutesDate(envelope, file.name, asOfISO);
       extractions.push(envelope);
       // Packages, consent agendas and AGM packages carry earlier minutes: derive them as minutes records.
-      if (["agenda", "meetingPackage", "agmMaterial"].includes(docClass)) extractions.push(...deriveEmbeddedMinutes(envelope, extract, file));
+      if (["agenda", "meetingPackage", "agmMaterial"].includes(docClass)) {
+        const embedded = deriveEmbeddedMinutes(envelope, extract, file);
+        for (const derived of embedded) applyOcrConfidence(derived.record, extract);
+        extractions.push(...embedded);
+      }
     }
     options.onProgress?.("fields", ++done, targets.length);
   });

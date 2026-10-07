@@ -2,7 +2,7 @@
  * baseline every LLM run is compared with. Table-aware, motion-aware and
  * attendance-aware; every value carries a locator quoting the source span,
  * a status and a confidence. It never invents a date, time or outcome. */
-import type { IntakeExtract } from "../blocks";
+import { isPositionedTextMethod, type IntakeExtract } from "../blocks";
 import { findDates, findDatesWithoutYear, findTimeRange, parseTime, type DateMatch } from "../parse";
 import { isOrgWord, isRoleWord, looksLikeNameFragment, looksLikePersonName, referenceMatches, splitLeadingName } from "../names";
 import { inferred, notStated, stated, type ExtractionEnvelope, type FieldValue, type Locator, type Reference, type UnsupportedDetail } from "../schemas/common";
@@ -384,7 +384,7 @@ function bodyKey(label: string | undefined): string {
 // ---------------------------------------------------------------- main
 export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
   const { extract, fileName } = input;
-  const units = linearize(extract.blocks, { softWrap: extract.method === "pdfjs-text" });
+  const units = linearize(extract.blocks, { softWrap: isPositionedTextMethod(extract.method) });
   const unsupported: UnsupportedDetail[] = [];
   const references: Reference[] = [];
   const warnings: string[] = [];

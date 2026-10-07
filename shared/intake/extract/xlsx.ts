@@ -27,6 +27,14 @@ export function excelSerialToIso(serial: number): string | undefined {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+/** A number format that displays a date: day or year codes outside quoted text, [colour/locale]
+ * sections and escaped characters (`"Budget" #,##0` and `[$-1009]#,##0.00` are not dates). */
+export function isDateFormatCode(code: string): boolean {
+  const stripped = code.replace(/"[^"]*"|\[[^\]]*\]|\\.|_.|\*./g, "");
+  if (/\[h\]|h:mm/i.test(code) && !/[dy]/i.test(stripped)) return false;
+  return /[dy]/i.test(stripped) || (/m/i.test(stripped) && !/[hs]/i.test(stripped) && /[\/-]/.test(stripped) && !/[#0?]/.test(stripped));
+}
+
 const DATE_FORMAT_IDS = new Set([14, 15, 16, 17, 22, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180]);
 
 export async function extractXlsx(bytes: Uint8Array | ArrayBuffer, options: { maxCellsPerSheet?: number } = {}): Promise<IntakeExtract> {
@@ -48,7 +56,7 @@ export async function extractXlsx(bytes: Uint8Array | ArrayBuffer, options: { ma
     const root = parseXml(stylesXml).children.find(isNode);
     const customDateFormats = new Set<number>();
     for (const fmt of descendants(root ?? { name: "", attrs: {}, children: [] }, "numFmt")) {
-      if (/[dy]/i.test(attr(fmt, "formatCode") ?? "") && !/\[h\]|h:mm/i.test(attr(fmt, "formatCode") ?? "")) customDateFormats.add(Number(attr(fmt, "numFmtId")));
+      if (isDateFormatCode(attr(fmt, "formatCode") ?? "")) customDateFormats.add(Number(attr(fmt, "numFmtId")));
     }
     const cellXfs = root ? firstChild(root, "cellXfs") : undefined;
     childrenNamed(cellXfs ?? { name: "", attrs: {}, children: [] }, "xf").forEach((xf, index) => {
@@ -59,6 +67,9 @@ export async function extractXlsx(bytes: Uint8Array | ArrayBuffer, options: { ma
   const rels = new Map<string, string>();
   const relsXml = await read("xl/_rels/workbook.xml.rels");
   if (relsXml) for (const rel of descendants(parseXml(relsXml), "Relationship")) rels.set(attr(rel, "Id") ?? "", attr(rel, "Target") ?? "");
+  // Workbooks saved in the 1904 date system (old Mac Excel, and LibreOffice conversions of them)
+  // count days from 1904-01-01.
+  const date1904 = /^(?:1|true)$/i.test(attr(descendants(parseXml(workbookXml), "workbookPr")[0], "date1904") ?? "");
   const sheets = descendants(parseXml(workbookXml), "sheet").map((sheet) => ({ name: attr(sheet, "name") ?? "Sheet", target: rels.get(attr(sheet, "id") ?? "") ?? "", hidden: attr(sheet, "state") === "hidden" || attr(sheet, "state") === "veryHidden" }));
   const drafts: DraftBlock[] = [];
   const limit = options.maxCellsPerSheet ?? 20000;
@@ -89,7 +100,7 @@ export async function extractXlsx(bytes: Uint8Array | ArrayBuffer, options: { ma
       else if (v) {
         value = textContent(v);
         const style = Number(attr(c, "s") ?? -1);
-        if (type !== "str" && type !== "e" && dateStyles.has(style)) value = excelSerialToIso(Number(value)) ?? value;
+        if (type !== "str" && type !== "e" && dateStyles.has(style)) value = excelSerialToIso(Number(value) + (date1904 ? 1462 : 0)) ?? value;
       }
       if (!value.trim()) continue;
       cellCount += 1;

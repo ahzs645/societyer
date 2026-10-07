@@ -16,6 +16,7 @@ import { makeGenerateObject } from "../shared/intake/aiGenerate";
 import { extractWithLlm, mapWithConcurrency, TokenBudget, type GenerateObjectFn } from "../shared/intake/llm";
 import { EXTRACTION_CLASSES, PROVIDER_EXCLUDED_CLASSES } from "../shared/intake/classify";
 import { extractForClass } from "../shared/intake/extractors";
+import { applyOcrConfidence } from "../shared/intake/extract/ocr";
 import type { DocClass } from "../shared/intake/schemas";
 
 type Outcome = { fileKey: string; engine: "llm" | "deterministic" | "skipped"; reason?: string; extractionId?: string };
@@ -34,6 +35,8 @@ async function extractOne(ctx: any, args: { societyId: any; runId: any; fileKey:
       const result = await extractWithLlm({ fileId: args.fileKey, fileName: file.name, docClass, extract: fullExtract, restricted, generate, provider: runtime.provider, model: runtime.modelId, budget: args.budget });
       await ctx.runMutation((api as any).intake.appendProcessingLog, { societyId: args.societyId, runId: args.runId, entries: result.log });
       if (result.envelope) {
+        // Values quoted from low-confidence OCR text stay below the bulk-accept thresholds.
+        applyOcrConfidence(result.envelope.record, fullExtract);
         const extractionId = await ctx.runMutation((api as any).intake.saveExtraction, { societyId: args.societyId, runId: args.runId, fileKey: args.fileKey, extraction: result.envelope });
         return { fileKey: args.fileKey, engine: "llm", extractionId };
       }
@@ -46,6 +49,7 @@ async function extractOne(ctx: any, args: { societyId: any; runId: any; fileKey:
   }
   const envelope = extractForClass(docClass, { fileId: args.fileKey, fileName: file.name, path: file.path, extract: fullExtract as any, asOfISO: new Date().toISOString().slice(0, 10) });
   if (!envelope) return { fileKey: args.fileKey, engine: "skipped", reason: `No deterministic extractor for ${docClass}.` };
+  applyOcrConfidence(envelope.record, fullExtract);
   const extractionId = await ctx.runMutation((api as any).intake.saveExtraction, { societyId: args.societyId, runId: args.runId, fileKey: args.fileKey, extraction: envelope });
   return { fileKey: args.fileKey, engine: "deterministic", extractionId };
 }

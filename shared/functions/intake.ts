@@ -245,7 +245,15 @@ export async function recordFiles(ctx: PortableMutationCtx, { societyId, runId, 
   return ids;
 }
 
-export async function saveExtract(ctx: PortableMutationCtx, { societyId, runId, fileKey, extract }: { societyId: string; runId: string; fileKey: string; extract: { method: string; methodVersion: string; blocks: IntakeBlock[]; text?: string; pageCount?: number; sheetNames?: string[]; emptyPages?: number[]; warnings?: string[] } }) {
+/** OCR page summaries (engine, page confidence, rotation); line boxes are dropped and the row stays small. */
+function ocrSummaryForRow(ocr: unknown): unknown {
+  if (!ocr || typeof ocr !== "object" || !Array.isArray((ocr as { pages?: unknown }).pages)) return undefined;
+  const summary = ocr as { engine?: unknown; pages: Array<Record<string, unknown>>; skippedPages?: unknown; skippedReason?: unknown };
+  const pages = summary.pages.slice(0, 2000).map(({ lines: _lines, ...page }) => page);
+  return { engine: String(summary.engine ?? "ocr").slice(0, 120), pages, ...(Array.isArray(summary.skippedPages) ? { skippedPages: summary.skippedPages.slice(0, 2000), skippedReason: String(summary.skippedReason ?? "").slice(0, 300) } : {}) };
+}
+
+export async function saveExtract(ctx: PortableMutationCtx, { societyId, runId, fileKey, extract }: { societyId: string; runId: string; fileKey: string; extract: { method: string; methodVersion: string; blocks: IntakeBlock[]; text?: string; pageCount?: number; sheetNames?: string[]; emptyPages?: number[]; warnings?: string[]; ocr?: unknown } }) {
   await canWrite(ctx, societyId);
   await ownedRun(ctx, societyId, runId);
   const file = await fileByKey(ctx, runId, fileKey);
@@ -261,7 +269,7 @@ export async function saveExtract(ctx: PortableMutationCtx, { societyId, runId, 
     body = body?.slice(0, blocks[blocks.length - 1]?.charEnd ?? 0);
     warnings.push(`Stored the first ${blocks.length} of ${extract.blocks.length} blocks; the full extract is in the run output.`);
   }
-  const row = compact({ societyId, runId, fileId: file._id, method: text(extract.method, "method", 60), methodVersion: text(extract.methodVersion, "methodVersion", 120), blocks, text: body, textLength: body?.length ?? 0, pageCount: optionalNumber(extract.pageCount), sheetNames: extract.sheetNames, emptyPages: extract.emptyPages, warnings, createdAtISO: now() });
+  const row = compact({ societyId, runId, fileId: file._id, method: text(extract.method, "method", 60), methodVersion: text(extract.methodVersion, "methodVersion", 120), blocks, text: body, textLength: body?.length ?? 0, pageCount: optionalNumber(extract.pageCount), sheetNames: extract.sheetNames, emptyPages: extract.emptyPages, warnings, ocr: ocrSummaryForRow(extract.ocr), createdAtISO: now() });
   const existing = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", file._id)).first();
   if (existing) {
     await ctx.db.replace(existing._id, row);

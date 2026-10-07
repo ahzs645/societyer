@@ -3,10 +3,12 @@
  * keep their columns, and ruled tables with a recognisable header row are
  * rebuilt as real table blocks. Pages without a text layer are reported in
  * `emptyPages` for OCR. */
-import { finalizeBlocks, INTAKE_EXTRACT_VERSION, type DraftBlock, type IntakeExtract, type IntakeRow } from "../blocks";
+import { finalizeBlocks, INTAKE_EXTRACT_VERSION, type DraftBlock, type IntakeExtract, type IntakeOcrPage, type IntakeRow } from "../blocks";
+import { itemsFromRecognition, ocrBlockStats, ocrPageSummary, recognizeUpright, type OcrHost } from "./ocr";
 
-type PdfItem = { str: string; x: number; y: number; w: number; h: number };
-type PdfLine = { y: number; h: number; items: PdfItem[]; text: string; x0: number; x1: number };
+/** A positioned text item in PDF points (y up). `conf` (0-100) is set for words read by OCR. */
+export type PdfItem = { str: string; x: number; y: number; w: number; h: number; conf?: number };
+export type PdfLine = { y: number; h: number; items: PdfItem[]; text: string; x0: number; x1: number };
 
 export type PdfJsModule = { getDocument: (src: any) => { promise: Promise<any> }; GlobalWorkerOptions?: any; version?: string };
 
@@ -17,7 +19,7 @@ async function loadPdfJs(): Promise<PdfJsModule> {
   return cachedPdfJs;
 }
 
-function linesFromItems(items: PdfItem[]): PdfLine[] {
+export function linesFromItems(items: PdfItem[]): PdfLine[] {
   const sorted = items.filter((item) => item.str.length).sort((a, b) => b.y - a.y || a.x - b.x);
   const lines: PdfLine[] = [];
   for (const item of sorted) {
@@ -41,7 +43,8 @@ function linesFromItems(items: PdfItem[]): PdfLine[] {
       const charWidth = item.w / Math.max(1, item.str.length);
       const gap = item.x - end;
       if (text && gap > Math.max(18, charWidth * 4)) text = `${text.replace(/ +$/, "")}\t`;
-      else if (text && (pendingSpace || gap > charWidth * 0.25) && !/\s$/.test(text) && !/^\s/.test(item.str)) text += " ";
+      // OCR items are whole words: two of them are always separated, however tight the boxes.
+      else if (text && (pendingSpace || gap > charWidth * 0.25 || item.conf !== undefined) && !/\s$/.test(text) && !/^\s/.test(item.str)) text += " ";
       pendingSpace = false;
       text += item.str;
       end = Math.max(end, item.x + item.w);
@@ -188,27 +191,118 @@ function tableFromLines(lines: PdfLine[], header: PdfLine, page: number, rightEd
   return { block: { kind: "table", rows, page }, consumed, anchors };
 }
 
-export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdfjs?: PdfJsModule; maxPages?: number } = {}): Promise<IntakeExtract> {
+/** A page is read by OCR when its text layer has fewer characters than this and it paints an
+ * image (a scan) or many vector paths (text converted to outlines). */
+const MIN_TEXT_LAYER_CHARS = 20;
+
+async function pageNeedsOcr(page: any, pdfjs: PdfJsModule, textChars: number): Promise<boolean> {
+  if (textChars >= MIN_TEXT_LAYER_CHARS) return false;
+  const OPS = (pdfjs as { OPS?: Record<string, number> }).OPS;
+  if (!OPS || typeof page.getOperatorList !== "function") return textChars === 0;
+  try {
+    const list = await page.getOperatorList();
+    const images = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintImageXObjectRepeat, OPS.paintInlineImageXObjectGroup, OPS.paintImageMaskXObjectGroup, OPS.paintImageMaskXObjectRepeat].filter((op) => op !== undefined));
+    let paths = 0;
+    for (const fn of list.fnArray as number[]) {
+      if (images.has(fn)) return true;
+      if (fn === OPS.constructPath) paths += 1;
+    }
+    return paths > 60;
+  } catch {
+    return textChars === 0;
+  }
+}
+
+export type PdfExtractOptions = { pdfjs?: PdfJsModule; maxPages?: number; ocr?: OcrHost };
+
+export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: PdfExtractOptions = {}): Promise<IntakeExtract> {
   const pdfjs = options.pdfjs ?? await loadPdfJs();
   const data = bytes instanceof Uint8Array ? new Uint8Array(bytes) : new Uint8Array(bytes);
-  const task = pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: false, disableFontFace: true, verbosity: 0 });
+  const ocr = options.ocr;
+  const task = pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: false, disableFontFace: true, verbosity: 0, ...(ocr?.pdfjsWasmUrl ? { wasmUrl: ocr.pdfjsWasmUrl } : {}), ...(ocr?.pdfjsDocumentOptions ?? {}) });
   const doc = await task.promise;
-  const drafts: DraftBlock[] = [];
-  const emptyPages: number[] = [];
   const warnings: string[] = [];
   const pageCount: number = doc.numPages;
   const limit = Math.min(pageCount, options.maxPages ?? 400);
   if (limit < pageCount) warnings.push(`Only the first ${limit} of ${pageCount} pages were read.`);
-  const pages: Array<{ pageNumber: number; lines: PdfLine[] }> = [];
+  const pages: PdfLayoutPage[] = [];
+  const ocrPages: IntakeOcrPage[] = [];
+  const skipped: number[] = [];
+  let skippedReason: string | undefined;
   for (let pageNumber = 1; pageNumber <= limit; pageNumber++) {
     const page = await doc.getPage(pageNumber);
     const content = await page.getTextContent();
-    const items: PdfItem[] = (content.items as any[]).filter((item) => typeof item.str === "string").map((item) => ({
+    let items: PdfItem[] = (content.items as any[]).filter((item) => typeof item.str === "string").map((item) => ({
       str: String(item.str), x: Number(item.transform?.[4] ?? 0), y: Number(item.transform?.[5] ?? 0), w: Number(item.width ?? 0), h: Math.abs(Number(item.height ?? item.transform?.[3] ?? 10)),
     }));
+    const textChars = items.reduce((sum, item) => sum + item.str.trim().length, 0);
+    if (ocr && await pageNeedsOcr(page, pdfjs, textChars)) {
+      if (ocr.budget && !ocr.budget.take()) {
+        skipped.push(pageNumber);
+        skippedReason = `the run's OCR page budget (${ocr.budget.limit} pages) is used up`;
+      } else {
+        try {
+          const read = await ocrPdfPage(page, pageNumber, ocr);
+          items = read.items;
+          ocrPages.push(read.summary);
+        } catch (error) {
+          skipped.push(pageNumber);
+          skippedReason = `OCR failed: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+    }
     pages.push({ pageNumber, lines: linesFromItems(items) });
     page.cleanup?.();
   }
+  await doc.destroy?.();
+  const { drafts, emptyPages } = layoutPages(pages);
+  if (ocrPages.length) {
+    const mean = ocrPages.reduce((sum, page) => sum + page.confidence, 0) / ocrPages.length;
+    const rotated = ocrPages.filter((page) => page.rotation);
+    warnings.push(`OCR read page(s) ${ocrPages.map((page) => page.page).join(", ")} (mean confidence ${Math.round(mean * 100)}%${rotated.length ? `; rotated ${rotated.map((page) => `p${page.page} ${page.rotation}°`).join(", ")}` : ""}).`);
+  }
+  if (skipped.length) warnings.push(`OCR skipped page(s) ${skipped.join(", ")}: ${skippedReason}.`);
+  const ocrBlank = emptyPages.filter((page) => ocrPages.some((read) => read.page === page));
+  const unread = emptyPages.filter((page) => !ocrBlank.includes(page));
+  if (ocrBlank.length) warnings.push(`OCR found no text on page(s) ${ocrBlank.join(", ")}.`);
+  if (unread.length) warnings.push(`No text layer on page(s) ${unread.join(", ")}; OCR required.`);
+  const { blocks, text } = finalizeBlocks(drafts);
+  const method = !ocrPages.length ? "pdfjs-text" : ocrPages.length === pages.length ? "ocr" : "pdfjs-text+ocr";
+  return {
+    method,
+    methodVersion: `${INTAKE_EXTRACT_VERSION}+pdfjs-${pdfjs.version ?? "unknown"}${ocrPages.length && ocr ? `+${ocr.engine.name}` : ""}`,
+    blocks, text, pageCount, emptyPages: unread, warnings,
+    ...(ocr && (ocrPages.length || skipped.length) ? { ocr: { engine: ocr.engine.name, pages: ocrPages, ...(skipped.length ? { skippedPages: skipped, skippedReason } : {}) } } : {}),
+  };
+}
+
+async function ocrPdfPage(page: any, pageNumber: number, ocr: OcrHost): Promise<{ items: PdfItem[]; summary: IntakeOcrPage }> {
+  const base = page.getViewport({ scale: 1 });
+  const dpi = ocr.dpi ?? 300;
+  const maxPixels = ocr.maxPixels ?? 20_000_000;
+  // Large-format pages are read at a lower resolution so one page stays within the pixel budget.
+  const scale = Math.min(dpi / 72, Math.sqrt(maxPixels / Math.max(1, base.width * base.height)));
+  const probeScale = Math.min(scale, 150 / 72);
+  const pageRotation = Number(page.rotate ?? 0);
+  const { recognition, rotation } = await recognizeUpright(ocr.engine, (extra, probe) => ocr.renderPdfPage(page, { scale: probe ? probeScale : scale, rotation: (pageRotation + extra) % 360 }));
+  return {
+    items: itemsFromRecognition(recognition, scale),
+    summary: ocrPageSummary(recognition, { page: pageNumber, rotation, dpi: Math.round(scale * 72), keepLines: ocr.keepLineBoxes }),
+  };
+}
+
+export type PdfLayoutPage = { pageNumber: number; lines: PdfLine[] };
+
+function withOcr(block: DraftBlock, lines: PdfLine[]): DraftBlock {
+  const stats = ocrBlockStats(lines.flatMap((line) => line.items));
+  return stats ? { ...block, ocr: stats } : block;
+}
+
+/** Lines of positioned text (a PDF text layer or OCR words) → blocks: running headers removed,
+ * minutes tables and action registers rebuilt, paragraphs from vertical gaps and soft wraps. */
+export function layoutPages(pages: PdfLayoutPage[]): { drafts: DraftBlock[]; emptyPages: number[] } {
+  const drafts: DraftBlock[] = [];
+  const emptyPages: number[] = [];
   // Running headers/footers (repeated at the top or bottom of several pages) and
   // "Page X of Y" lines are page furniture, not content: keep the first occurrence only.
   const runningKey = (text: string) => text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
@@ -255,7 +349,7 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
           const soft = !tabbedRows && prior.x1 >= rightEdge - 45 && !/:$/.test(prior.text) && !/^\s*(?:[•●▪◦*]|ACTION\b|\d{1,2}[.)]\s)/.test(next);
           text += soft ? `${/[a-z]-$/.test(prior.text) && /^[a-z]/.test(next) ? "" : " "}${next}` : `\n${next}`;
         }
-        drafts.push({ kind: "paragraph", text, page: pageNumber });
+        drafts.push(withOcr({ kind: "paragraph", text, page: pageNumber }, paragraph));
       }
       paragraph = [];
     };
@@ -264,7 +358,7 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
       // A register continued from the previous page without a repeated header.
       alignAnchors(openRegister.anchors, lines, 15);
       const { block, consumed } = registerFromLines(lines, openRegister, pageNumber);
-      drafts.push(block);
+      drafts.push(withOcr(block, lines.slice(0, consumed)));
       registerStart = consumed;
     }
     openRegister = null;
@@ -273,7 +367,7 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
       const aligned = lines.slice(0, 6).filter((line) => line.items.some((item) => item.str.trim() && Math.abs(item.x - anchors[anchors.length - 1]) < 12) && line.x0 >= anchors[0] - 30).length;
       if (aligned >= 1 && lines[0].x0 >= anchors[0] - 30) {
         const { block, consumed } = tableFromLines(lines, openTable.header, pageNumber, Math.max(...lines.map((line) => line.x1)), anchors);
-        drafts.push(block);
+        drafts.push(withOcr(block, lines.slice(0, consumed)));
         registerStart = consumed;
         openTable = consumed >= lines.length ? openTable : null;
       } else openTable = null;
@@ -291,7 +385,7 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
         }
         alignAnchors(open.anchors, lines.slice(index + 1), 15);
         const { block, consumed } = registerFromLines(lines.slice(index + 1), open, pageNumber);
-        drafts.push(block);
+        drafts.push(withOcr(block, lines.slice(index + 1, index + 1 + consumed)));
         index += consumed;
         previous = lines[index] ?? null;
         if (index >= lines.length - 1) openRegister = open;
@@ -300,7 +394,7 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
       if (TABLE_HEADER.test(line.text.replace(new RegExp(` +(?=(?:${TABLE_HEADER_LABELS})\\b)`, "i"), "\t")) && line.items.length >= 2) {
         flush();
         const { block, consumed, anchors } = tableFromLines(lines.slice(index + 1), line, pageNumber, rightEdge);
-        drafts.push(block);
+        drafts.push(withOcr(block, lines.slice(index + 1, index + 1 + consumed)));
         index += consumed;
         previous = lines[index] ?? null;
         // The table reached the bottom of the page: it may continue on the next one.
@@ -313,8 +407,5 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
     }
     flush();
   }
-  await doc.destroy?.();
-  if (emptyPages.length) warnings.push(`No text layer on page(s) ${emptyPages.join(", ")}; OCR required.`);
-  const { blocks, text } = finalizeBlocks(drafts);
-  return { method: "pdfjs-text", methodVersion: `${INTAKE_EXTRACT_VERSION}+pdfjs-${pdfjs.version ?? "unknown"}`, blocks, text, pageCount, emptyPages, warnings };
+  return { drafts, emptyPages };
 }

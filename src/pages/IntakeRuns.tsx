@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
-import { AlertTriangle, CheckCircle2, Circle, FileSearch, FolderOpen, Files, Loader2, Lock, ScrollText, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, FileSearch, FolderOpen, Files, Loader2, Lock, ScanText, ScrollText, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -86,6 +86,9 @@ export function IntakeRunsPage() {
   const [baseUrl, setBaseUrl] = useState(prefs.baseUrl ?? "");
   const [budgetTokens, setBudgetTokens] = useState(prefs.budgetTokens);
   const [apiKey, setApiKey] = useState("");
+  // OCR of scanned pages runs on this device; the page budget bounds how long a run can take.
+  const [ocrEnabled, setOcrEnabled] = useState(() => readOcrPrefs().enabled);
+  const [ocrPageBudget, setOcrPageBudget] = useState(() => readOcrPrefs().pageBudget);
   const [keyStored, setKeyStored] = useState(false);
   const filesInput = useRef<HTMLInputElement>(null);
   const outputInput = useRef<HTMLInputElement>(null);
@@ -109,7 +112,7 @@ export function IntakeRunsPage() {
     if (effective.baseUrl) setBaseUrl(effective.baseUrl);
   }, [effective, prefs.enabled]);
 
-  const summary = useMemo(() => summarizeSelection(selection), [selection]);
+  const summary = useMemo(() => summarizeSelection(selection, { ocr: ocrEnabled }), [selection, ocrEnabled]);
   const desktop = desktopIntakeBridge();
   const summariesById = useMemo(() => new Map((summaries ?? []).map((row: any) => [String(row.runId), row])), [summaries]);
 
@@ -186,6 +189,7 @@ export function IntakeRunsPage() {
     try {
       const result = await runIntake(selection, {
         societyId: society._id, name: name.trim() || `Intake ${todayDateOnly()}`, hosted, llm, mutation,
+        ocr: ocrEnabled ? { pageBudget: ocrPageBudget } : undefined,
         extractRun: hosted ? (args) => extractRun(args) : undefined,
         onRunCreated: setActiveRunId,
         onProgress: setProgress,
@@ -269,10 +273,26 @@ export function IntakeRunsPage() {
                   <Badge>{summary.catalogue} catalogue only</Badge>
                   <Badge tone="warn">{summary.junk} junk</Badge>
                   {summary.excluded > 0 && <Badge tone="danger">{summary.excluded} excluded</Badge>}
+                  {summary.ocrImages > 0 && <Badge tone="info">{summary.ocrImages} document images (OCR)</Badge>}
                 </div>
                 <div className="muted intake-ext">{summary.byExtension.slice(0, 8).map(([ext, count]) => `.${ext} ${count}`).join(" · ")}</div>
               </div>
             )}
+            <fieldset className="intake-llm" data-testid="intake-ocr-options">
+              <legend><ScanText size={13} /> Scanned documents</legend>
+              <label className="intake-check">
+                <input type="checkbox" checked={ocrEnabled} onChange={(event) => { setOcrEnabled(event.target.checked); writeOcrPrefs({ enabled: event.target.checked, pageBudget: ocrPageBudget }); }} disabled={busy} />
+                Read scanned PDF pages and document images (signed forms, certificates, letters) with OCR on this device.
+              </label>
+              {ocrEnabled && (
+                <div className="intake-llm__grid">
+                  <Field label="Most pages to read by OCR in this run" hint="A page takes a few seconds. Pages beyond the limit stay listed as needing OCR.">
+                    <input className="input" type="number" min={1} max={5000} step={10} value={ocrPageBudget} onChange={(event) => { const next = Math.min(5000, Math.max(1, Number(event.target.value) || 1)); setOcrPageBudget(next); writeOcrPrefs({ enabled: true, pageBudget: next }); }} disabled={busy} />
+                  </Field>
+                </div>
+              )}
+              <p className="muted intake-llm__note"><Lock size={12} /> OCR runs locally with the bundled English model; no page is sent anywhere. Values read from low-confidence pages are never bulk-accepted.</p>
+            </fieldset>
             {!hosted && (
               <fieldset className="intake-llm">
                 <legend><Sparkles size={13} /> AI extraction (optional)</legend>
@@ -557,4 +577,22 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
       )}
     </Drawer>
   );
+}
+
+const OCR_PREFS_KEY = "societyer.intake.ocr";
+function readOcrPrefs(): { enabled: boolean; pageBudget: number } {
+  try {
+    const stored = JSON.parse(localStorage.getItem(OCR_PREFS_KEY) ?? "null");
+    if (stored && typeof stored.enabled === "boolean") return { enabled: stored.enabled, pageBudget: Math.min(5000, Math.max(1, Number(stored.pageBudget) || 200)) };
+  } catch {
+    // unavailable storage: defaults
+  }
+  return { enabled: true, pageBudget: 200 };
+}
+function writeOcrPrefs(prefs: { enabled: boolean; pageBudget: number }) {
+  try {
+    localStorage.setItem(OCR_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // not remembered
+  }
 }

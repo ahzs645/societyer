@@ -1,17 +1,57 @@
 /** Stage 2 dispatcher: bytes + file name → IntakeExtract. Runtime-neutral; the
- * legacy-format converter (LibreOffice) and OCR are injected by Node/Electron hosts. */
-import { blocksFromPlainText, finalizeBlocks, INTAKE_EXTRACT_VERSION, type DraftBlock, type IntakeExtract } from "../blocks";
-import { extractDoc } from "./doc";
+ * legacy-format converter (LibreOffice) and the OCR engine and rasterizer are
+ * injected by the host (web worker, Node CLI, Electron). Legacy Word, Excel and
+ * PowerPoint files, PPTX and XPS are also read natively, so a host without
+ * LibreOffice still reads them. */
+import { blocksFromPlainText, finalizeBlocks, INTAKE_EXTRACT_VERSION, type DraftBlock, type IntakeExtract, type IntakeRow } from "../blocks";
+import { extractDoc, readCompoundStreams } from "./doc";
 import { extractDocx } from "./docx";
+import { extractImage } from "./image";
 import { extractMsg } from "./msg";
+import { OCR_IMAGE_EXTENSIONS, type OcrHost } from "./ocr";
 import { extractPdf, type PdfJsModule } from "./pdf";
+import { extractPpt, extractPptx, extractXps } from "./slides";
+import { extractXls } from "./xls";
 import { extractXlsx } from "./xlsx";
 import { EXTRACTABLE_EXTENSIONS, extensionOf, TEXT_EXTENSIONS } from "./extensions";
 
 export type LegacyConverter = (bytes: Uint8Array, fileName: string, target: "docx" | "xlsx") => Promise<Uint8Array | null>;
-export type ExtractOptions = { convertLegacy?: LegacyConverter; pdfjs?: PdfJsModule; maxAttachmentDepth?: number };
+export type ExtractOptions = { convertLegacy?: LegacyConverter; pdfjs?: PdfJsModule; maxAttachmentDepth?: number; ocr?: OcrHost };
 
-export { extensionOf, TEXT_EXTENSIONS, EXTRACTABLE_EXTENSIONS };
+export { extensionOf, TEXT_EXTENSIONS, EXTRACTABLE_EXTENSIONS, OCR_IMAGE_EXTENSIONS };
+
+/** The format of a file with no (or a misleading) extension, from its first bytes. */
+export function sniffExtension(bytes: Uint8Array): string | undefined {
+  const head = new TextDecoder("latin1").decode(bytes.subarray(0, 512));
+  if (head.startsWith("%PDF-")) return "pdf";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
+  if (head.startsWith("\x89PNG")) return "png";
+  if (head.startsWith("II*\0") || head.startsWith("MM\0*")) return "tif";
+  if (head.trimStart().startsWith("{\\rtf")) return "rtf";
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) {
+    try {
+      const streams = readCompoundStreams(bytes);
+      if (streams.has("WordDocument")) return "doc";
+      if (streams.has("Workbook") || streams.has("Book")) return "xls";
+      if (streams.has("PowerPoint Document")) return "ppt";
+      if ([...streams.keys()].some((name) => name.startsWith("__substg1.0_"))) return "msg";
+    } catch {
+      return undefined;
+    }
+    return undefined;
+  }
+  if (head.startsWith("PK\x03\x04")) {
+    if (head.includes("word/")) return "docx";
+    if (head.includes("xl/")) return "xlsx";
+    if (head.includes("ppt/")) return "pptx";
+    if (/FixedDocSeq|\.fdseq|Documents\//.test(head)) return "xps";
+    return "zip";
+  }
+  if (/^(?:from|received|return-path|message-id|mime-version|date|subject):/im.test(head.slice(0, 200))) return "eml";
+  const sample = bytes.subarray(0, 2048);
+  if (sample.length && [...sample].every((byte) => byte === 9 || byte === 10 || byte === 13 || (byte >= 32 && byte !== 127))) return "txt";
+  return undefined;
+}
 
 function unsupported(reason: string): IntakeExtract {
   return { method: "unsupported", methodVersion: INTAKE_EXTRACT_VERSION, blocks: [], text: "", warnings: [reason] };
@@ -23,10 +63,20 @@ function decodeText(bytes: Uint8Array): string {
 }
 
 export async function extractBytes(fileName: string, bytes: Uint8Array, options: ExtractOptions = {}, depth = 0): Promise<IntakeExtract> {
-  const ext = extensionOf(fileName);
+  let ext = extensionOf(fileName);
   if (!bytes.byteLength) return unsupported("Zero-byte file.");
-  if (ext === "docx" || ext === "docm" || ext === "dotx") return extractDocx(bytes);
-  if (ext === "pdf") return extractPdf(bytes, { pdfjs: options.pdfjs });
+  // No extension (or one no extractor knows): read the format from the bytes.
+  if (!EXTRACTABLE_EXTENSIONS.has(ext) && !OCR_IMAGE_EXTENSIONS.has(ext)) {
+    const sniffed = sniffExtension(bytes);
+    if (!sniffed || sniffed === "zip") return unsupported(`No text extractor for .${ext || "(no extension)"} files.`);
+    return extractBytes(`${fileName}.${sniffed}`, bytes, options, depth);
+  }
+  if (ext === "docx" || ext === "docm" || ext === "dotx" || ext === "dotm") return extractDocx(bytes);
+  if (ext === "pdf") return extractPdf(bytes, { pdfjs: options.pdfjs, ocr: options.ocr });
+  if (OCR_IMAGE_EXTENSIONS.has(ext)) return extractImage(fileName, bytes, options.ocr);
+  if (ext === "pptx" || ext === "pptm" || ext === "potx" || ext === "ppsx") return extractPptx(bytes);
+  if (ext === "ppt" || ext === "pps") return extractPpt(bytes);
+  if (ext === "xps" || ext === "oxps") return extractXps(bytes);
   if (ext === "xlsx" || ext === "xlsm") return extractXlsx(bytes);
   if (ext === "msg") {
     const { extract, attachments } = extractMsg(bytes);
@@ -46,31 +96,38 @@ export async function extractBytes(fileName: string, bytes: Uint8Array, options:
     }
     return { ...extract, attachments: nested };
   }
-  if (["doc", "odt", "wpd", "rtf", "ppt", "pptx"].includes(ext) || ext === "xls" || ext === "ods") {
+  if (["doc", "odt", "wpd", "rtf"].includes(ext) || ext === "xls" || ext === "ods") {
     const target = ext === "xls" || ext === "ods" ? "xlsx" : "docx";
     if (ext === "rtf" && !options.convertLegacy) return textExtract(stripRtf(decodeText(bytes)));
-    // Word 97–2003 without LibreOffice (browser): read the binary directly (text and approximate tables).
+    // Word and Excel 97–2003 without LibreOffice (browser, or a failed conversion): read the binary directly.
     const direct = () => {
       // Some ".doc" files are RTF or HTML saved under a Word name.
       const head = new TextDecoder("latin1").decode(bytes.subarray(0, 64)).trimStart();
       if (head.startsWith("{\\rtf")) return textExtract(stripRtf(decodeText(bytes)));
-      if (/^<(?:!doctype html|html)/i.test(head)) return textExtract(decodeText(bytes).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(?:p|div|tr|li|h\d)>/gi, "\n\n").replace(/<[^>]+>/g, ""));
+      // HTML saved under a Word or Excel name (web exports, report tools): tables stay tables.
+      if (/^<(?:!doctype html|html)/i.test(head) || (bytes[0] !== 0xd0 && /<table[\s>]/i.test(new TextDecoder("latin1").decode(bytes.subarray(0, 4096))))) return htmlExtract(decodeText(bytes));
       try {
-        return extractDoc(bytes);
+        return ext === "xls" ? extractXls(bytes) : extractDoc(bytes);
       } catch (error) {
-        return unsupported(`This .doc could not be read without LibreOffice: ${error instanceof Error ? error.message : String(error)}`);
+        return unsupported(`This .${ext} could not be read without LibreOffice: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
-    if (!options.convertLegacy) return ext === "doc" ? direct() : unsupported(`Legacy .${ext} needs LibreOffice conversion, which is not available in this runtime.`);
+    const hasDirect = ext === "doc" || ext === "xls";
+    if (!options.convertLegacy) return hasDirect ? direct() : unsupported(`Legacy .${ext} needs LibreOffice conversion, which is not available in this runtime.`);
     const converted = await options.convertLegacy(bytes, fileName, target);
-    if (!converted) return ext === "doc" ? direct() : unsupported(`LibreOffice could not convert this .${ext} file.`);
+    if (!converted) return hasDirect ? direct() : unsupported(`LibreOffice could not convert this .${ext} file.`);
     const extract = target === "xlsx" ? await extractXlsx(converted) : await extractDocx(converted);
+    // A conversion that comes back empty (an unusual or damaged file) gets a second reading.
+    if (!extract.text.trim() && hasDirect) {
+      const fallback = direct();
+      if (fallback.text.trim()) return { ...fallback, warnings: [...fallback.warnings, "LibreOffice returned no text; read directly from the binary."] };
+    }
     return { ...extract, method: target === "xlsx" ? "libreoffice-xlsx" : "libreoffice-docx", warnings: [...extract.warnings, `Converted from .${ext} with LibreOffice; page numbers are approximate.`] };
   }
   if (ext === "eml") return emlExtract(decodeText(bytes));
   if (TEXT_EXTENSIONS.has(ext)) {
     const raw = decodeText(bytes);
-    return textExtract(ext === "html" || ext === "htm" ? raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(?:p|div|tr|li|h\d)>/gi, "\n\n").replace(/<[^>]+>/g, "") : raw);
+    return ext === "html" || ext === "htm" ? htmlExtract(raw) : textExtract(raw);
   }
   return unsupported(`No text extractor for .${ext || "(no extension)"} files.`);
 }
@@ -98,6 +155,42 @@ function emlExtract(raw: string): IntakeExtract {
   drafts.push(...blocksFromPlainText(body).map((draft) => ({ ...draft, page: undefined })));
   const { blocks, text } = finalizeBlocks(drafts);
   return { method: "eml-headers", methodVersion: INTAKE_EXTRACT_VERSION, blocks, text, emailHeaders: headers, warnings: [] };
+}
+
+const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“" };
+function htmlText(fragment: string): string {
+  return fragment
+    .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|h\d)>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(#\d+|#x[0-9a-f]+|\w+);/gi, (entity, code: string) => code[0] === "#" ? String.fromCodePoint(code[1].toLowerCase() === "x" ? parseInt(code.slice(2), 16) : Number(code.slice(1))) : HTML_ENTITIES[code.toLowerCase()] ?? entity);
+}
+
+/** HTML → paragraphs, with each <table> as a table block (cells keep their R{row}C{col}). */
+function htmlExtract(raw: string): IntakeExtract {
+  const drafts: DraftBlock[] = [];
+  const body = raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/gi, "");
+  let cursor = 0;
+  const pushText = (fragment: string) => {
+    for (const paragraph of htmlText(fragment).split(/\n{2,}/)) if (paragraph.trim()) drafts.push({ kind: "paragraph", text: paragraph.replace(/[ \t]+\n/g, "\n").trim() });
+  };
+  for (const match of body.matchAll(/<table[\s\S]*?<\/table>/gi)) {
+    pushText(body.slice(cursor, match.index));
+    cursor = (match.index ?? 0) + match[0].length;
+    const rows: IntakeRow[] = [];
+    for (const row of match[0].matchAll(/<tr[\s\S]*?<\/tr>/gi)) {
+      const cells = [...row[0].matchAll(/<t([dh])([^>]*)>([\s\S]*?)<\/t[dh]>/gi)].map((cell, column) => {
+        const span = Number(/colspan\s*=\s*"?(\d+)/i.exec(cell[2])?.[1] ?? 1);
+        return { text: htmlText(cell[3]).replace(/\s+/g, " ").trim(), cell: `R${rows.length + 1}C${column + 1}`, ...(span > 1 ? { colSpan: span } : {}), ...(cell[1].toLowerCase() === "h" ? { header: true } : {}) };
+      });
+      if (cells.length) rows.push({ cells });
+    }
+    if (rows.length) drafts.push({ kind: "table", rows });
+  }
+  pushText(body.slice(cursor));
+  const { blocks, text } = finalizeBlocks(drafts);
+  return { method: "plain-text", methodVersion: INTAKE_EXTRACT_VERSION, blocks, text, warnings: [] };
 }
 
 function textExtract(raw: string): IntakeExtract {

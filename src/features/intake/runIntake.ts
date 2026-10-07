@@ -33,6 +33,8 @@ export type RunIntakeOptions = {
   name: string;
   hosted: boolean;
   llm?: LocalLlmConfig;
+  /** Read scanned PDF pages and document images by OCR on this device, up to `pageBudget` pages. */
+  ocr?: { pageBudget: number };
   mutation: MutationCaller;
   extractRun?: (args: { societyId: string; runId: string; budgetTokens?: number }) => Promise<any>;
   onRunCreated?: (runId: string) => void;
@@ -70,15 +72,19 @@ export async function runIntake(selection: IntakeSelection, options: RunIntakeOp
   options.onRunCreated?.(runId);
   try {
     await options.mutation("intake:updateRun", { societyId: options.societyId, runId, patch: { status: "running", stats: { phase: "extracting", files: selection.files.length } } });
-    const materialized = await materializeSelection(selection, keptByJunkFilter);
+    const materialized = await materializeSelection(selection, (file) => keptByJunkFilter(file, { ocr: Boolean(options.ocr) }));
     const inputs: WorkerFileInput[] = materialized.files.map((file) => ({
       fileKey: fileKeyFor(file.relativePath), name: file.name, path: file.relativePath, sizeBytes: file.size,
       ...(file.lastModified ? { modifiedTime: new Date(file.lastModified).toISOString() } : {}), mimeType: file.type || undefined, file: file.file,
     }));
     const result = await runWorker(inputs, {
       name: options.name, sourceKind: selection.sourceKind, sourceRoot: selection.root, fieldExtraction: !options.hosted,
+      ...(options.ocr ? { ocr: { pageBudget: options.ocr.pageBudget, workers: 1 } } : {}),
       ...(options.llm && !options.hosted ? { llm: { provider: options.llm.provider, modelId: options.llm.modelId, apiKey: options.llm.apiKey, baseUrl: providerBaseUrl(options.llm), budgetTokens: options.llm.budgetTokens, concurrency: options.llm.concurrency } } : {}),
-    }, (stage, done, total) => emit({ stage: stage === "fields" ? "fields" : "extract", done, total }), options.signal);
+    }, (stage, done, total) => {
+      if (stage === "ocr") emit({ stage: "extract", message: `Reading scanned pages by OCR on this device: ${done} of up to ${total} pages.` });
+      else emit({ stage: stage === "fields" ? "fields" : "extract", done, total, ...(stage === "fields" ? { message: undefined } : {}) });
+    }, options.signal);
     const { run, extracts, coverage } = result;
     const counts = progress.counts;
     counts.junk = run.files.filter((file) => file.disposition === "junk").length;
