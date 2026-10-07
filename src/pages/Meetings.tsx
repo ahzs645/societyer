@@ -41,7 +41,7 @@ import { MergeMeetingDialog } from "../features/meetings/components/MergeMeeting
 import { useDirtyCloseGuard } from "../features/meetings/lib/useDirtyCloseGuard";
 import { formatMeetingDate, meetingDatePrecision } from "../../shared/meetingDates";
 import { bodyPatchForValue, bodyValueForMeeting, meetingBodyLabel, meetingBodyOptions } from "../../shared/meetingBodyPicker";
-import { duplicateMeetingGroups } from "../../shared/meetingMerge";
+import { duplicateMeetingGroups, preferredMeetingToKeep } from "../../shared/meetingMerge";
 import type { Doc } from "../../convex/_generated/dataModel";
 
 
@@ -439,10 +439,23 @@ export function MeetingsPage() {
                     <span key={row._id}>
                       {index > 0 ? " · " : ""}
                       <Link to={`/app/meetings/${row._id}`}>{row.title}</Link>
+                      {/* Copies usually share a generated title: say which file each came from. */}
+                      <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                        {" "}({[
+                          row.sourceTitle ? String(row.sourceTitle).replace(/^\d{4}-\d{2}-\d{2}\s*/, "") : "",
+                          summaryByMeeting.get(String(row._id))?.approvedAt ? "minutes approved" : "",
+                          `${summaryByMeeting.get(String(row._id))?.sectionCount ?? 0} sections`,
+                          `${summaryByMeeting.get(String(row._id))?.motionCount ?? 0} motions`,
+                        ].filter(Boolean).join(", ")})
+                      </span>
                     </span>
                   ))}
                   {canManage && (
-                    <button type="button" className="btn-action" style={{ marginLeft: 8 }} onClick={() => setMergeFor({ meeting: group.meetings[0], suggested: group.meetings.slice(1).map((row: any) => String(row._id)) })}>
+                    <button type="button" className="btn-action" style={{ marginLeft: 8 }} onClick={() => {
+                      // Keep the approved/final copy by default, not whichever sorts first.
+                      const keep: any = preferredMeetingToKeep(group.meetings as any[], (row: any) => summaryByMeeting.get(String(row._id))) ?? group.meetings[0];
+                      setMergeFor({ meeting: keep, suggested: group.meetings.filter((row: any) => String(row._id) !== String(keep._id)).map((row: any) => String(row._id)) });
+                    }}>
                       <Merge size={12} /> Merge…
                     </button>
                   )}

@@ -103,8 +103,8 @@ async function loadPair(ctx: PortableQueryCtx, args: MergeArgs) {
 }
 
 export type MergePreview = MergePlan & {
-  target: { _id: string; title: string; date?: string; status?: string };
-  duplicate: { _id: string; title: string; date?: string; status?: string };
+  target: { _id: string; title: string; date?: string; status?: string; sourceTitle?: string };
+  duplicate: { _id: string; title: string; date?: string; status?: string; sourceTitle?: string };
   references: Record<string, number>;
 };
 
@@ -126,7 +126,8 @@ async function countReferences(ctx: PortableQueryCtx, societyId: string, duplica
 export async function mergePreviewPortable(ctx: PortableQueryCtx, args: MergeArgs): Promise<MergePreview> {
   const pair = await loadPair(ctx, args);
   const references = await countReferences(ctx, pair.societyId, String(pair.duplicate._id), pair.duplicateMinutes ? String(pair.duplicateMinutes._id) : undefined);
-  const describe = (meeting: any) => ({ _id: String(meeting._id), title: String(meeting.title ?? ""), date: meetingCalendarDate(meeting), status: meeting.status });
+  // Copies usually share a generated title; the source file tells them apart.
+  const describe = (meeting: any) => ({ _id: String(meeting._id), title: String(meeting.title ?? ""), date: meetingCalendarDate(meeting), status: meeting.status, ...(meeting.sourceTitle ? { sourceTitle: String(meeting.sourceTitle) } : {}) });
   return { ...pair.plan, target: describe(pair.target), duplicate: describe(pair.duplicate), references };
 }
 

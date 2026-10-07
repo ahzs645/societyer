@@ -13,6 +13,7 @@ import { defaultNewMeetingStart, meetingCreateLabels, pastNoticeDateValue } from
 import { approvingMeetingCandidates, minutesApprovalIssues } from "../shared/meetingApproval";
 import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
 import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectionAlign";
+import { preferredMeetingToKeep } from "../shared/meetingMerge";
 import { formalMinutesExportBlockers } from "../src/features/meetings/lib/meetingDetailHelpers";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../src/features/meetings/lib/actionItemTidy";
 
@@ -295,3 +296,13 @@ const withStaff = renderMinutesHtml({
 assert.match(withStaff, /<strong>Present:<\/strong> Alex Example<\/p>/);
 assert.match(withStaff, /<strong>Also present:<\/strong> Casey Demo \(Note-taker\)/);
 console.log("✓ approval candidates by body; staff listed as also present");
+
+assert.equal(preferredMeetingToKeep([
+  { _id: "draft", sourceTitle: "2021_10_12_Ops_DRAFT Minutes.docx" },
+  { _id: "approved", sourceTitle: "2021_10_12_Ops_APPROVED Minutes.pdf" },
+], () => ({ sectionCount: 7 }))?._id, "approved", "the approved copy is kept by default");
+assert.equal(preferredMeetingToKeep([
+  { _id: "a", title: "Board meeting" },
+  { _id: "b", title: "Board meeting" },
+], (row) => (row._id === "b" ? { approvedAt: "2021-01-01" } : {}))?._id, "b");
+console.log("✓ merge: approved / final copy kept by default");
