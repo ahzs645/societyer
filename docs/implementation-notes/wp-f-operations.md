@@ -98,7 +98,16 @@ notifications dialog role L22, French i18n M10).
   `/app/source-model-coverage` (routes added without manifest entries; not
   touched here).
 
+- Playwright `tests/interface-operations.spec.ts` (desktop project): 15 of 16
+  pass. The remaining failure ("inventory creation and staged import
+  parsing") stops at the import-session dialog, which now disables "Create
+  session" for invalid JSON; that page was not changed here.
+
 ## For other work packages
+
+- `Field required` now draws its asterisk with CSS (`.field__required::before`),
+  so a label's text is just the field name. Tests that matched "Name *" must
+  match "Name".
 
 - New Convex functions: `grants:deletionImpact` (query), `grants:setArchived`
   (mutation), `accounting:backfillPreview` (query). The backfill mutation has
