@@ -39,6 +39,7 @@ import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecisio
 import { visibleDirectoryRows } from "./peopleDirectory";
 import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
 import { reconcileExtractions } from "../intake/reconcile";
+import { reviewStatusAfterTransposition } from "../documentReviewStatus";
 import { buildImportBundle, coverageReport, type IntakeRunResult } from "../intake/bundle";
 
 const now = () => new Date().toISOString();
@@ -338,6 +339,7 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     sourceDocuments.push(compact({ fileKey, documentId: String(documentId), name: intakeFile?.name ?? fileKey, sha256: intakeFile?.sha256, mimeType: intakeFile?.mimeType, sizeBytes: intakeFile?.sizeBytes }) as any);
     const row = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", extraction.runId).eq("fileKey", fileKey)).first() as any;
     if (row && !row.documentId) await ctx.db.patch(row._id, { documentId, updatedAtISO: now() });
+    await markSourceDocumentTransposed(ctx, documentId);
   }
 
   // Merging only fills blank minutes fields and keeps action items as observations;
@@ -569,6 +571,7 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
       sourceDocuments.push(compact({ fileKey, documentId: String(documentId), name: intakeFile?.name ?? fileKey, sha256: intakeFile?.sha256, mimeType: intakeFile?.mimeType, sizeBytes: intakeFile?.sizeBytes }) as any);
       const row = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", extraction.runId).eq("fileKey", fileKey)).first() as any;
       if (row && !row.documentId) await ctx.db.patch(row._id, { documentId, updatedAtISO: at });
+      await markSourceDocumentTransposed(ctx, documentId);
     } else if (record.recordKind === "meetingMinutes" && record.importedTargets?.meetings?.meetingId) {
       created.push({ kind: "meetingMinutes", table: "meetings", id: String(record.importedTargets.meetings.meetingId), payload: record.payload ?? {}, label: String(record.payload?.meetingTitle ?? "Meeting") });
     } else if (RECORD_KIND_TABLE[record.recordKind] && record.importedTargets?.sections) {
@@ -882,4 +885,10 @@ export function landedValue(field: string, native: unknown, value: unknown, merg
       return Boolean(b) && (a === b || a.includes(b) || (!merged && b.includes(a)));
     }
   }
+}
+
+async function markSourceDocumentTransposed(ctx: PortableMutationCtx, documentId: unknown) {
+  const document = await ctx.db.get(documentId as any, "documents") as any;
+  const next = document ? reviewStatusAfterTransposition(document.reviewStatus) : undefined;
+  if (next) await ctx.db.patch(document._id, { reviewStatus: next });
 }

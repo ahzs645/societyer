@@ -218,6 +218,7 @@ assert.ok(db.dump("representationGaps").some((row: any) => String(row.dedupeKey 
 assert.equal(promoted.sourceDocuments.length, 1);
 const sourceDocument = db.dump("documents").find((row: any) => row._id === promoted.sourceDocuments[0].documentId) as any;
 assert.equal(sourceDocument.title, "2025-05-13_Board_Minutes_APPROVED.docx");
+assert.equal(sourceDocument.reviewStatus, "transposed", "a promoted source document leaves the review backlog (INT-14)");
 assert.ok(minutes.sourceDocumentIds.map(String).includes(String(sourceDocument._id)), "minutes link the source document");
 assert.equal((db.dump("intakeFiles").find((row: any) => row.fileKey === boardRow.fileKey) as any).documentId, sourceDocument._id);
 assert.equal((db.dump("intakeExtractions").find((row: any) => row._id === boardRow._id) as any).status, "promoted");
