@@ -23,6 +23,7 @@ const CONSTATING_ACTION_LABELS: Record<string, string> = {
   other: "Other",
 };
 const constatingActionLabel = (action: string) => CONSTATING_ACTION_LABELS[action] ?? action;
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Corporate history — effective-dated corporate NAME history plus the
@@ -152,7 +153,7 @@ export function CorporateHistoryPage() {
     setNameForm({
       name: "",
       shortName: "",
-      startISO: calendarDateKey(new Date()),
+      startISO: todayDateOnly(),
       regPosn: "",
     });
     setNameOpen(true);
@@ -188,7 +189,7 @@ export function CorporateHistoryPage() {
       jurisdiction: "",
       legislation: "",
       regNumber: "",
-      startISO: calendarDateKey(new Date()),
+      startISO: todayDateOnly(),
     });
     setEventOpen(true);
   };

@@ -51,6 +51,7 @@ import {
   grantRelatedDocuments,
   groupEvidenceDocuments,
 } from "./GrantPanels.internal.documentLookup";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
 export type GrantDossierTabId = "overview" | "timeline" | "people" | "evidence" | "financials" | "source" | "edit";
 
@@ -264,7 +265,7 @@ export function GrantProjectLifecyclePanel({
   const items = buildGrantTimeline(grant, reports);
   if (items.length === 0) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const completeStatuses = /(submitted|complete|attached|ready|saved|done)/i;
   const overdueStatuses = /(overdue|missing|not|needed)/i;
   const stages = items.map((item) => {

@@ -10,6 +10,7 @@ import {exactDay,requireEvidence} from "../evidenceReview";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertValid, directorProblems } from "../registerValidation";
+import { todayDateOnly } from "../dateOnly";
 
 export interface DirectorCreateArgs {
   societyId: string;
@@ -69,7 +70,7 @@ export async function directorUpdate(ctx: PortableMutationCtx, { id, patch }: { 
     if(!positionChangeEvidence||!exactDay(positionChangeEvidence.effectiveDate))throw new Error("Record the effective day and source evidence for a position change.");
     requireEvidence(positionChangeEvidence);
     if(positionChangeEvidence.reviewStatus!=="verified")throw new Error("Review position-change evidence before changing the current register.");
-    if(positionChangeEvidence.effectiveDate>new Date().toISOString().slice(0,10))throw new Error("Record a future appointment in history; the current register changes when it takes effect.");
+    if(positionChangeEvidence.effectiveDate>todayDateOnly())throw new Error("Record a future appointment in history; the current register changes when it takes effect.");
     const linkedMember=authorizedRow.memberId?await getOwned(ctx,"members",authorizedRow.memberId,societyId):null;
     const personId=authorizedRow.directoryPersonId??linkedMember?.directoryPersonId??await createContact(ctx,{societyId,fullName:`${authorizedRow.firstName} ${authorizedRow.lastName}`.trim(),sourceKey:`director:${id}`});
     const source={sourceUrl:positionChangeEvidence.sourceUrl,sourceReference:positionChangeEvidence.sourceReference,reviewStatus:'verified'};

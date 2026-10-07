@@ -238,6 +238,8 @@ export function ImportSessionsPage() {
     });
   }, [records, statusFilter, kindFilter, targetFilter, searchText]);
 
+  const [applyScope, setApplyScope] = useState("visible");
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
@@ -321,7 +323,6 @@ export function ImportSessionsPage() {
     }
   };
 
-  const [applyScope, setApplyScope] = useState("visible");
   const applyRecords = applyScope === "all" ? records : filteredRecords;
   const applyRecordIds = applyRecords.map((row: any) => row._id);
   const canPromote = (...permissions: string[]) => canWrite && permissions.every(permission => can(permission as any));

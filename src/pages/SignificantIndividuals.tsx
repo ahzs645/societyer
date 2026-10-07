@@ -11,6 +11,7 @@ import { ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
 import { isCorporation } from "../../shared/organizationDomain";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * BC Transparency Register of Significant Individuals + a diligence-steps
@@ -22,7 +23,7 @@ export function SignificantIndividualsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("deadlines:write");
-  const [asOf, setAsOf] = useState(calendarDateKey(new Date()));
+  const [asOf, setAsOf] = useState(todayDateOnly());
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const toast = useToast();
@@ -69,7 +70,7 @@ export function SignificantIndividualsPage() {
     if (!canWrite) return;
     setForm({
       individualName: "",
-      stepDate: calendarDateKey(new Date()),
+      stepDate: todayDateOnly(),
       stepsNarrative: "",
       nextReviewDate: "",
     });

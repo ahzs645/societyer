@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { pluralize } from "../../../../lib/format";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import {
@@ -101,9 +103,7 @@ function RecordTableAggregateFooterCell({
         if (event.key === "Escape") setOpen(false);
         return;
       }
-      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
+      if (isOutsidePointerEvent(event, menuRef)) setOpen(false);
     };
     window.addEventListener("pointerdown", close);
     window.addEventListener("keydown", close);
@@ -129,7 +129,7 @@ function RecordTableAggregateFooterCell({
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
         >
-          <span>{value || (isFirst ? `${recordCount} records` : "Calculate")}</span>
+          <span>{value || (isFirst ? pluralize(recordCount, "record") : "Calculate")}</span>
           <ChevronDown size={11} />
         </button>
         {open && (

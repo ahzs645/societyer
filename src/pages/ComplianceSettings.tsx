@@ -16,6 +16,7 @@ import {
 } from "../../shared/corporationSettings";
 import { deriveAgmFacts } from "../../shared/agmEvidence";
 import { formatDate } from "../lib/format";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -102,7 +103,7 @@ export function ComplianceSettingsPage() {
     annualMeetingDate: agmFacts.annualMeetingDate,
     heldAgmYears: agmFacts.agmYears,
   };
-  const today = todayISO;
+  const today = todayDateOnly();
   const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
 
   const onSave = async () => {

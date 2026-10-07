@@ -10,6 +10,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { describeCadenceRule, normalizeCadenceRule } from "../continuityRules";
+import { todayDateOnly } from "../dateOnly";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -182,7 +183,7 @@ export async function committeeAddMemberPortable(
   if (args.joinedAt && args.leftAt && args.leftAt < args.joinedAt) throw new Error("A committee member cannot leave before joining.");
   return ctx.db.insert("committeeMembers", {
     ...args,
-    joinedAt: args.joinedAt || new Date().toISOString().slice(0, 10),
+    joinedAt: args.joinedAt || todayDateOnly(),
   });
 }
 

@@ -172,6 +172,7 @@ export function UserPicker() {
         createPortal(
           <div
             ref={menuRef}
+            data-floating-layer=""
             role="listbox"
             aria-label="Acting user"
             tabIndex={-1}

@@ -14,6 +14,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/society/new": "society:read",
   "/app/members": "members:read",
   "/app/people-directory": "members:read",
+  "/app/people-history": "members:read",
   "/app/point-in-time-register": "settings:read",
   "/app/org-chart": "members:read",
   "/app/directors": "directors:read",

@@ -1,6 +1,7 @@
 import { isDemoMode } from "../lib/demoMode";
 import { Sparkles, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useConfirm } from "./Modal";
 import { useToast } from "./Toast";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -12,6 +13,7 @@ export function DemoBanner() {
   const confirm = useConfirm();
   const toast = useToast();
   const [busy, setBusy] = useState<"seed" | "reset" | null>(null);
+  const { t } = useTranslation();
 
   if (!demo || society === undefined || (society && !society.demoMode)) return null;
 
@@ -19,10 +21,10 @@ export function DemoBanner() {
     <div className="demo-banner">
       <Sparkles size={14} />
       <span className="demo-banner__copy">
-        <strong>Demo mode.</strong>{" "}
+        <strong>{t("demo.label", "Demo mode.")}</strong>{" "}
         <span className="demo-banner__detail">
           {society
-            ? `Viewing ${society.name} — a demo society used to showcase the app.`
+            ? t("demo.viewing", { name: society.name, defaultValue: "Viewing {{name}} — a demo society used to showcase the app." })
             : "No demo society yet. Click Seed to load Riverside Community Society."}
         </span>
       </span>
@@ -45,7 +47,7 @@ export function DemoBanner() {
           }}
         >
           <RefreshCw size={12} />
-          {society ? "Reseed" : "Seed demo society"}
+          {society ? t("demo.reseed", "Reseed") : "Seed demo society"}
         </button>
         {society && (
           <button
@@ -71,7 +73,7 @@ export function DemoBanner() {
               }
             }}
           >
-            Wipe
+            {t("demo.wipe", "Wipe")}
           </button>
         )}
       </div>

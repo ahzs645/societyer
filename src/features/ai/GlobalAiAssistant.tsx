@@ -355,7 +355,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     setOpen(false);
   };
 
-  const usePrompt = (prompt: SuggestedPrompt) => {
+  const applySuggestedPrompt = (prompt: SuggestedPrompt) => {
     const variant = prompt.prefills[Math.floor(Math.random() * prompt.prefills.length)];
     setInput(variant);
     composerRef.current?.focus();
@@ -546,7 +546,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                               key={prompt.id}
                               type="button"
                               className="global-ai-suggested-prompt"
-                              onClick={() => usePrompt(prompt)}
+                              onClick={() => applySuggestedPrompt(prompt)}
                             >
                               <Icon size={13} />
                               <span>{prompt.label}</span>

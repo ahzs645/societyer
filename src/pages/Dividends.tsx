@@ -9,6 +9,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Plus, Coins, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { validateDividend } from "../../shared/dividends";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Dividend declarations register (corporations track). Lists each declaration
@@ -53,7 +54,7 @@ export function DividendsPage() {
 
   const openNew = () => {
     setForm({
-      declaredOn: new Date().toISOString().slice(0, 10),
+      declaredOn: todayDateOnly(),
       shareClass: "",
       perShareCents: "",
       sharesOutstanding: "",

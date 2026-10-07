@@ -10,6 +10,7 @@ import { Select } from "@/components/Select";
 import { escapeCsvCell } from "@/lib/csv";
 import { buildAccountingStatements, buildProgramSummary, type StatementRow } from "../../../../shared/accountingStatements";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
 /** Locale currency formatting in the statement's own currency (matches the trial balance's "$34,480"). */
 function formatCurrency(cents: number, currency: string) {
@@ -21,7 +22,7 @@ function formatCurrency(cents: number, currency: string) {
 }
 
 export function AccountingStatementsCard({ societyId }: { societyId: Id<"societies"> }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
   const { canExport, canWrite } = useFinancePermissions();

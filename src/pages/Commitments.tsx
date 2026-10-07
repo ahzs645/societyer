@@ -35,7 +35,8 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { formatDate, relative } from "../lib/format";
+import { daysUntilDate, formatDate, isPastDue, relative, todayDateOnly } from "../lib/format";
+import { addDaysToDateOnly } from "../../shared/dateOnly";
 import {
   CommitmentFormFields,
   commitmentFormFromRow,
@@ -122,14 +123,13 @@ export function CommitmentsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const now = Date.now();
   const rows = (commitments ?? []) as any[];
   const activeRows = rows.filter((row) => row.status !== "Closed");
-  const overdue = activeRows.filter((row) => row.nextDueDate && row.status !== "Paused" && new Date(row.nextDueDate).getTime() < now);
+  const overdue = activeRows.filter((row) => row.nextDueDate && row.status !== "Paused" && isPastDue(row.nextDueDate));
   const dueSoon = activeRows.filter((row) => {
     if (!row.nextDueDate || row.status === "Paused") return false;
-    const due = new Date(row.nextDueDate).getTime();
-    return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
+    const days = daysUntilDate(row.nextDueDate);
+    return days != null && days >= 0 && days <= 30;
   });
   const needsReview = activeRows.filter((row) => (row.reviewStatus ?? "NeedsReview") !== "Verified");
   const linkedEvidenceCount = (events ?? []).filter((event: any) => event.evidenceDocumentIds?.length > 0 || event.meetingId).length;
@@ -161,7 +161,7 @@ export function CommitmentsPage() {
 
   const openRecord = (row: any) => {
     if (!canWrite) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayDateOnly();
     setEventForm({
       commitment: row,
       title: `${row.title} completed`,
@@ -875,14 +875,12 @@ function formatConfidence(value: number) {
 }
 
 function isOverdue(row: any) {
-  return row.status !== "Closed" && row.status !== "Paused" && row.nextDueDate && new Date(row.nextDueDate).getTime() < Date.now();
+  return row.status !== "Closed" && row.status !== "Paused" && row.nextDueDate && isPastDue(row.nextDueDate);
 }
 
 function subtractDays(value: string, days: number) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return undefined;
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  // Local calendar arithmetic; toISOString() would shift east-of-UTC users a day back.
+  return addDaysToDateOnly(value.slice(0, 10), -days) ?? undefined;
 }
 
 function truncate(value: string, max: number) {

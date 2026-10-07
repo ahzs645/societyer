@@ -27,6 +27,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const PUBLICATION_PRESETS = [
   { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
@@ -302,7 +303,7 @@ export function TransparencyPage() {
               merged.reviewStatus = "Approved";
               merged.approvedByUserId = merged.approvedByUserId ?? actingUserId;
               merged.approvedAtISO = merged.approvedAtISO ?? new Date().toISOString();
-              merged.publishedAtISO = merged.publishedAtISO || new Date().toISOString().slice(0, 10);
+              merged.publishedAtISO = merged.publishedAtISO || todayDateOnly();
             }
             await upsertPublication({
               id: recordId as Id<"publications">,
@@ -484,7 +485,7 @@ export function TransparencyPage() {
                   url: publicationDraft.url || undefined,
                   publishedAtISO:
                     publicationDraft.status === "Published"
-                      ? publicationDraft.publishedAtISO || new Date().toISOString().slice(0, 10)
+                      ? publicationDraft.publishedAtISO || todayDateOnly()
                       : publicationDraft.publishedAtISO || undefined,
                   reviewStatus:
                     publicationDraft.status === "Published"

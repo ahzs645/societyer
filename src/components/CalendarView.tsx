@@ -4,6 +4,9 @@ import type { ToneVariant } from "./ui";
 import { calendarDate, calendarDateKey, calendarWeekDays } from "../lib/calendarDates";
 
 export type CalendarLayout = "month" | "week" | "list";
+/** "Agenda", not "List": pages put a List/Calendar view toggle next to this
+ * group, and two same-named "List" buttons are ambiguous for screen readers. */
+const CALENDAR_LAYOUT_LABELS: Record<CalendarLayout, string> = { month: "Month", week: "Week", list: "Agenda" };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -87,7 +90,7 @@ export function CalendarView<T>({
       </div>
       <div className="record-table__segmented" role="group" aria-label="Calendar layout">
         {(["month", "week", "list"] as const).map((value) => <button key={value} type="button" aria-pressed={mode === value}
-          className={mode === value ? "is-active" : ""} onClick={() => changeLayout(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}
+          className={mode === value ? "is-active" : ""} onClick={() => changeLayout(value)}>{CALENDAR_LAYOUT_LABELS[value]}</button>)}
       </div>
     </div>
     {mode === "list" ? <div className="calendar-view__agenda" role="region" aria-label={`${monthLabel} events`}>

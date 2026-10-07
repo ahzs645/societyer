@@ -16,6 +16,7 @@ import {
 import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import i18n from "../i18n";
 
 type ModalSize = "sm" | "md" | "lg" | "xl";
 
@@ -102,7 +103,7 @@ export function Modal({
         {resize.handles}
         <div className="modal__head">
           <h2 className="modal__title" id={titleId}>{title}</h2>
-          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close">
+          <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label={i18n.t("common.close", "Close")}>
             <X />
           </button>
         </div>
@@ -160,7 +161,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           footer={
             <>
               <button className="btn" onClick={() => close(false)}>
-                {state.cancelLabel ?? "Cancel"}
+                {state.cancelLabel ?? i18n.t("common.cancel", "Cancel")}
               </button>
               <button
                 className={`btn ${
@@ -173,7 +174,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 onClick={() => close(true)}
                 autoFocus
               >
-                {state.confirmLabel ?? "Confirm"}
+                {state.confirmLabel ?? i18n.t("common.confirm", "Confirm")}
               </button>
             </>
           }
@@ -257,14 +258,14 @@ export function PromptProvider({ children }: { children: ReactNode }) {
           footer={
             <>
               <button className="btn" onClick={() => close(null)}>
-                {state.cancelLabel ?? "Cancel"}
+                {state.cancelLabel ?? i18n.t("common.cancel", "Cancel")}
               </button>
               <button
                 className="btn btn--accent"
                 onClick={submit}
                 disabled={state.required ? !draft.trim() : false}
               >
-                {state.confirmLabel ?? "OK"}
+                {state.confirmLabel ?? i18n.t("common.ok", "OK")}
               </button>
             </>
           }

@@ -7,7 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
-import { formatDate, formatDateTime, relative } from "../lib/format";
+import { formatDate, formatDateTime, isPastDue, relative } from "../lib/format";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import {
@@ -824,6 +824,6 @@ const ALL_FILING_KIND_LABELS = new Map(
 
 export function renderFilingStatus(f: any) {
   if (f.status === "Filed") return <Badge tone="success">Filed</Badge>;
-  const overdue = new Date(f.dueDate).getTime() < Date.now();
+  const overdue = isPastDue(f.dueDate);
   return overdue ? <Badge tone="danger">Overdue</Badge> : <Badge tone="info">Upcoming</Badge>;
 }

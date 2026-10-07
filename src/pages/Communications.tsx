@@ -319,6 +319,39 @@ export function CommunicationsPage() {
   );
   const deliveryRecords = useMemo(() => (deliveries ?? []) as any[], [deliveries]);
 
+  const selectedSendTemplate = useMemo(
+    () => (templates ?? []).find((template) => String(template._id) === sendDraft?.templateId),
+    [templates, sendDraft?.templateId],
+  );
+
+  const memberClassOptions = useMemo(
+    () =>
+      [...new Set((members ?? []).map((member) => member.membershipClass).filter(Boolean))].sort() as string[],
+    [members],
+  );
+  const memberStatusOptions = useMemo(
+    () =>
+      [...new Set((members ?? []).map((member) => member.status).filter(Boolean))].sort() as string[],
+    [members],
+  );
+
+  const audiencePreview = useMemo(() => {
+    if (!sendDraft) return null;
+    const audience = buildAudienceValue(sendDraft);
+    return estimateAudience({
+      audience,
+      members: members ?? [],
+      directors: directors ?? [],
+      subscriptions: subscriptions ?? [],
+      volunteers: volunteers ?? [],
+      segments: segments ?? [],
+      committees:
+        committeeDetail && sendDraft.audienceTarget
+          ? [{ _id: sendDraft.audienceTarget, members: committeeDetail.members ?? [] }]
+          : [],
+    });
+  }, [sendDraft, members, directors, subscriptions, volunteers, segments, committeeDetail]);
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
@@ -362,39 +395,6 @@ export function CommunicationsPage() {
     value: String(segment._id),
     label: segment.name,
   }));
-
-  const selectedSendTemplate = useMemo(
-    () => (templates ?? []).find((template) => String(template._id) === sendDraft?.templateId),
-    [templates, sendDraft?.templateId],
-  );
-
-  const memberClassOptions = useMemo(
-    () =>
-      [...new Set((members ?? []).map((member) => member.membershipClass).filter(Boolean))].sort() as string[],
-    [members],
-  );
-  const memberStatusOptions = useMemo(
-    () =>
-      [...new Set((members ?? []).map((member) => member.status).filter(Boolean))].sort() as string[],
-    [members],
-  );
-
-  const audiencePreview = useMemo(() => {
-    if (!sendDraft) return null;
-    const audience = buildAudienceValue(sendDraft);
-    return estimateAudience({
-      audience,
-      members: members ?? [],
-      directors: directors ?? [],
-      subscriptions: subscriptions ?? [],
-      volunteers: volunteers ?? [],
-      segments: segments ?? [],
-      committees:
-        committeeDetail && sendDraft.audienceTarget
-          ? [{ _id: sendDraft.audienceTarget, members: committeeDetail.members ?? [] }]
-          : [],
-    });
-  }, [sendDraft, members, directors, subscriptions, volunteers, segments, committeeDetail]);
 
   return (
     <div className="page">

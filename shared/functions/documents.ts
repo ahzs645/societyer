@@ -21,6 +21,7 @@ import {
   principalUserId,
   requireSocietyMembership,
 } from "./access";
+import { todayDateOnly } from "../dateOnly";
 
 const VISIBLE_DOCUMENT_CATEGORIES = [
   "Constitution",
@@ -1179,7 +1180,7 @@ function isInternalDocumentRecord(doc: any) {
 }
 
 function buildPipaPolicyDraft(society: any) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
   const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");
@@ -1338,7 +1339,7 @@ Next review date: [YYYY-MM-DD]
 }
 
 function buildMemberDataGapMemoDraft(society: any) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const currentStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Institution-held / Partially available / Society-controlled / Unknown");
   return `# ${legalName} Member-Data Access Gap Memo

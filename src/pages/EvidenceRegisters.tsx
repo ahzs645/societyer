@@ -13,6 +13,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
@@ -92,7 +93,7 @@ export function GovernanceRegistersPage() {
         subtitle="Source-backed director/officer timeline, board role changes, and signing authority records."
         actions={
           <>
-            <button className="btn-action" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: new Date().toISOString().slice(0, 10), notes: "" })}>
+            <button className="btn-action" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: todayDateOnly(), notes: "" })}>
               <Plus size={12} /> Add record
             </button>
             <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>

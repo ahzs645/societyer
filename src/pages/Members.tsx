@@ -35,6 +35,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function MembersPage() {
   const society = useSociety();
@@ -83,7 +84,7 @@ export function MembersPage() {
       id: r._id,
       patch: {
         status: "Inactive",
-        leftAt: new Date().toISOString().slice(0, 10),
+        leftAt: todayDateOnly(),
         votingRights: false,
         notes: [r.notes, `Archived: ${reason}`].filter(Boolean).join("\n\n"),
       },
@@ -116,7 +117,7 @@ export function MembersPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `members-${todayDateOnly()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -140,7 +141,7 @@ export function MembersPage() {
       firstName: "", lastName: "", email: "",
       aliases: [],
       membershipClass: "Regular", status: "Active", votingRights: true,
-      joinedAt: new Date().toISOString().slice(0, 10),
+      joinedAt: todayDateOnly(),
     });
     setDrawerOpen(true);
   };

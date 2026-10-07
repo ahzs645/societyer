@@ -6,6 +6,7 @@ import {
 } from "../../../shared/organizationDomain";
 import { deriveAgmFacts, type AgmMeetingLike } from "../../../shared/agmEvidence";
 import type { ComplianceFacts } from "./engine";
+import { todayDateOnly } from "../../../shared/dateOnly";
 
 export type RegistrationComplianceSource = {
   _id?: string;
@@ -33,7 +34,7 @@ export function complianceFactsForOrganization(
     meetings?: readonly AgmMeetingLike[];
   } = {},
 ): ComplianceFacts[] {
-  const asOfDate = options.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const asOfDate = options.asOfDate ?? todayDateOnly();
   const agm = deriveAgmFacts(organization, options.meetings, asOfDate);
   // Held AGMs prove an existing, operating organization. A profile that still
   // says "preparing"/"pre-incorporation" (common for imported workspaces) is
@@ -79,7 +80,7 @@ export function complianceFactsForOrganization(
   return [homeFacts, ...registrationFacts];
 }
 
-export function fiscalYearEndDateForCurrentCycle(fiscalYearEnd?: string | null, asOfDate = new Date().toISOString().slice(0, 10)) {
+export function fiscalYearEndDateForCurrentCycle(fiscalYearEnd?: string | null, asOfDate = todayDateOnly()) {
   if (!fiscalYearEnd) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(fiscalYearEnd)) return fiscalYearEnd;
   if (!/^\d{2}-\d{2}$/.test(fiscalYearEnd)) return undefined;

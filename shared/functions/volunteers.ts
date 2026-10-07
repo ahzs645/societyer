@@ -15,6 +15,7 @@ import {
   requireSocietyMembership,
 } from "./access";
 import { authorizeApplicationIntake } from "./publicIntake";
+import { daysUntilDate, isPastDue } from "../dateOnly";
 
 function isoNow() {
   return new Date().toISOString();
@@ -77,12 +78,12 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
     ).length,
     expiringChecks: screenings.filter((screening) => {
       if (!screening.expiresAtISO) return false;
-      const due = new Date(screening.expiresAtISO).getTime();
-      return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
+      const days = daysUntilDate(screening.expiresAtISO, now);
+      return days != null && days >= 0 && days <= 30 && !isPastDue(screening.expiresAtISO, now);
     }).length,
     overdueChecks: screenings.filter((screening) => {
       if (!screening.expiresAtISO) return false;
-      return new Date(screening.expiresAtISO).getTime() < now;
+      return isPastDue(screening.expiresAtISO, now);
     }).length,
   };
 }

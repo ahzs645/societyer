@@ -37,14 +37,14 @@ test("calendar layouts save, discard and reload while dated records open their a
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeHidden();
   await page.reload();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await calendar.getByRole("button", { name: "List", exact: true }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await page.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await calendar.getByRole("button", { name: "List", exact: true }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeHidden();
   await page.reload();
-  await expect(calendar.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(calendar.getByRole("button", { name: "Agenda", exact: true })).toHaveAttribute("aria-pressed", "true");
   await fits(page);
   await calendar.getByRole("button", { name: "Calendar source deadline", exact: true }).click();
   await page.locator(".record-side-panel__open").click();
@@ -62,10 +62,15 @@ test("calendar layouts save, discard and reload while dated records open their a
   await calendar.getByRole("button", { name: "Month", exact: true }).click();
   await fits(page);
   await calendar.getByRole("button", { name: "Week", exact: true }).click();
-  page.once("dialog", (prompt) => prompt.accept("Personal week agenda"));
   await page.getByRole("button", { name: "Save as", exact: true }).click();
+  const saveAs = page.getByRole("dialog", { name: "Save as a new view", exact: true });
+  await saveAs.getByRole("textbox").fill("Personal week agenda");
+  await saveAs.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(saveAs).toBeHidden();
   await expect(page.locator(".record-table__view-button")).toContainText("Personal week agenda");
   await page.reload();
+  // The saved view stays selected across a reload.
+  await expect(page.locator(".record-table__view-button")).toContainText("Personal week agenda");
   await page.locator(".record-table__view-button").click();
   await page.getByRole("button", { name: "Personal week agenda", exact: true }).click();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -122,7 +127,7 @@ test("Viewer can change the presentation and inspect a deadline while save and e
   await palette.getByRole("option", { name: /^Deadlines/ }).first().click();
   await page.getByRole("button", { name: "Calendar view", exact: true }).click();
   const calendar = page.locator(".calendar-view");
-  await calendar.getByRole("button", { name: "List", exact: true }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save as", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "New deadline", exact: true })).toBeDisabled();

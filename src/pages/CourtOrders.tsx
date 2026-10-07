@@ -20,6 +20,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Court orders affecting the society — required to be kept with
@@ -58,7 +59,7 @@ export function CourtOrdersPage() {
     if (!canWrite) return;
     setForm({
       title: "",
-      orderDate: new Date().toISOString().slice(0, 10),
+      orderDate: todayDateOnly(),
       court: "Supreme Court of British Columbia",
       description: "",
       status: "Active",
