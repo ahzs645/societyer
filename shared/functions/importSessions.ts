@@ -430,7 +430,7 @@ export async function removeSessionPortable(ctx: PortableMutationCtx, { sessionI
  */
 export async function compactAppliedRecordsPortable(ctx: PortableMutationCtx, { sessionId, maxRecords }: { sessionId: string; maxRecords?: number }) {
   const session = await ctx.db.get<any>(sessionId);
-  if (!isImportSession(session)) return { removed: 0, kept: 0, remaining: 0 };
+  if (!isImportSession(session)) return { removed: 0, kept: 0, remaining: 0, bytes: 0 };
   const societyId = String(session.societyId);
   await requirePermissionPortable(ctx, societyId, "settings:write");
   await requirePermissionPortable(ctx, societyId, "documents:write");
@@ -439,7 +439,7 @@ export async function compactAppliedRecordsPortable(ctx: PortableMutationCtx, { 
   const appliedAll = records.filter((record: any) => record.status === "Approved" && record.importedTargets && Object.values(record.importedTargets).some(Boolean));
   const limit = Math.max(1, Math.min(Number(maxRecords) || 2000, 5000));
   const applied = appliedAll.slice(0, limit);
-  if (!applied.length) return { removed: 0, kept: records.length, remaining: 0 };
+  if (!applied.length) return { removed: 0, kept: records.length, remaining: 0, bytes: 0 };
   const payload = hydrateSession(session);
   const previous = payload.compactedRecords ?? {};
   const removedSummary = summarizeRecords(applied);
@@ -465,13 +465,17 @@ export async function compactAppliedRecordsPortable(ctx: PortableMutationCtx, { 
   const ids = new Set(applied.map((record: any) => String(record._id)));
   const gaps = (await ctx.db.query("representationGaps").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()) as any[];
   for (const gap of gaps) if (gap.importRecordId && ids.has(String(gap.importRecordId))) await ctx.db.patch(gap._id, { importRecordId: undefined });
-  for (const record of applied) await ctx.db.delete(record._id);
+  let bytes = 0;
+  for (const record of applied) {
+    bytes += String((await ctx.db.get<any>(record._id))?.content ?? "").length;
+    await ctx.db.delete(record._id);
+  }
   const atISO = new Date().toISOString();
   await ctx.db.patch(sessionId, {
     content: JSON.stringify({ ...payload, _id: undefined, _creationTime: undefined, compactedRecords: { atISO, removed: summary.total, summary, targets }, updatedAtISO: atISO }),
   });
   await patchSessionUpdatedAt(ctx, sessionId);
-  return { removed: applied.length, kept: records.length - applied.length, remaining: appliedAll.length - applied.length };
+  return { removed: applied.length, kept: records.length - applied.length, remaining: appliedAll.length - applied.length, bytes };
 }
 
 export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx, { sessionId, recordIds }: { sessionId: string; recordIds?: string[] }) {

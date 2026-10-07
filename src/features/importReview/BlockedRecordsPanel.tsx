@@ -86,14 +86,14 @@ export function BlockedRecordsPanel({ sessionId, records, canWrite, onEdit }: { 
                 )}
                 {reason !== "waiting" && (
                   <button type="button" className="btn btn--sm" disabled={!canWrite || Boolean(busy)} onClick={() => void act("retry", rows, "Retried")}>
-                    <RotateCcw size={12} /> Retry {rows.length === 1 ? "" : "all"}
+                    <RotateCcw size={12} /> {rows.length === 1 ? "Retry" : "Retry all"}
                   </button>
                 )}
                 <button type="button" className="btn btn--sm" disabled={!canWrite || Boolean(busy)} onClick={() => void act("defer", rows, "Deferred to pending")}>
-                  <Undo2 size={12} /> Defer {rows.length === 1 ? "" : "all"}
+                  <Undo2 size={12} /> {rows.length === 1 ? "Defer" : "Defer all"}
                 </button>
                 <button type="button" className="btn btn--sm btn--danger" disabled={!canWrite || Boolean(busy)} onClick={() => void act("skip", rows, "Skipped")}>
-                  <SkipForward size={12} /> Skip {rows.length === 1 ? "" : "all"}…
+                  <SkipForward size={12} /> {rows.length === 1 ? "Skip…" : "Skip all…"}
                 </button>
               </div>
               <ul className="blocked-records__list">

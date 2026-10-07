@@ -184,14 +184,11 @@ export async function compactRun(ctx: PortableMutationCtx, { societyId, runId, c
     } else if (phase === "sessions") {
       const sessions = promotionSessionIds(run, extractions);
       if (index >= sessions.length) { phase = "extracts"; index = 0; continue; }
-      const before = await ctx.db.get<any>(sessions[index]);
       const result = await compactAppliedRecordsPortable(ctx, { sessionId: sessions[index], maxRecords: Math.max(50, limit - writes) });
-      const after = await ctx.db.get<any>(sessions[index]);
       totals.sessionRecordsRemoved += result.removed;
-      totals.bytesFreed += Math.max(0, result.removed ? size(before) - size(after) : 0);
+      totals.bytesFreed += result.bytes ?? 0;
       writes += result.removed + (result.removed ? 1 : 0);
       if (!result.remaining) index++;
-      // Removed record bodies: estimated from the session's record count (their content is gone now).
     } else {
       const needed = await neededExtractFiles(ctx, runId, extractions);
       const extracts = ((await ctx.db.query("intakeExtracts").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[])
