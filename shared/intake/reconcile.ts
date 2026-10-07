@@ -46,6 +46,8 @@ export type RecordGap = {
 export type ActionChain = { bodyKey: string; items: Array<{ meetingKey: string; fileId: string; index: number; text: string; assignee?: string }>; latestStatus: "open" | "carried_forward" };
 
 const STATUS_RANK: Record<string, number> = { signed: 4, approved: 3, recorded: 2, unknown: 1, draft: 0 };
+/** File id of minutes derived from a package (see `deriveEmbeddedMinutes`). */
+const EMBEDDED_PART = /#part-\d+$/;
 
 export function reconcileMinutes(summaries: MinutesSummary[]): { meetings: ReconciledMeeting[]; links: ReconcileLink[]; gaps: RecordGap[] } {
   const byKey = new Map<string, MinutesSummary[]>();
@@ -87,7 +89,10 @@ export function reconcileMinutes(summaries: MinutesSummary[]): { meetings: Recon
     }
   }
   for (const [key, group] of byKey) {
-    const sorted = [...group].sort((a, b) => (STATUS_RANK[b.recordStatus] ?? 1) - (STATUS_RANK[a.recordStatus] ?? 1) || a.fileName.localeCompare(b.fileName));
+    // Most authoritative copy first; at equal status a standalone minutes file is the record and minutes
+    // embedded in a later meeting's package (`<package>#part-N`) are a copy of it, whatever the file names.
+    const embedded = (summary: MinutesSummary) => (EMBEDDED_PART.test(summary.fileId) ? 1 : 0);
+    const sorted = [...group].sort((a, b) => (STATUS_RANK[b.recordStatus] ?? 1) - (STATUS_RANK[a.recordStatus] ?? 1) || embedded(a) - embedded(b) || a.fileName.localeCompare(b.fileName));
     const canonical = sorted[0];
     for (const other of sorted.slice(1)) {
       links.push({ kind: other.recordStatus === "draft" && canonical.recordStatus !== "draft" ? "draft-of" : "duplicate-of", from: other.fileId, to: canonical.fileId });

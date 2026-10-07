@@ -35,7 +35,7 @@ import type {
   TableName,
 } from "./ctx";
 import { collectSearch, evaluateQuery, evaluateSearch, matchesConstraints, sortByCreation, type MemoryDbOptions, type SearchSpec } from "./memoryDb";
-import { createEntityIdFactory } from "./ids";
+import { createEntityIdFactory, preservedSystemFields } from "./ids";
 import {
   DEFAULT_HEAVY_FIELD_POLICY,
   guardedLightRow,
@@ -668,7 +668,8 @@ export class LocalStoreDb implements PortableDbWriter {
       table = this.findTableOf(id);
     }
     if (!table) throw new Error(`replace: document ${id} not found`);
-    this.overlayFor(table).set(id, { ...doc, _id: id });
+    const existing = await this.get(id);
+    this.overlayFor(table).set(id, { ...doc, ...preservedSystemFields(existing, doc), _id: id });
   }
 
   async delete(id: string): Promise<void> {

@@ -77,6 +77,9 @@ for (const engine of ["memory", "local-store"] as const) {
       { _id: "pa2", societyId: A, fullName: "Jordon Sample", searchName: "jordon sample", createdAtISO: now, updatedAtISO: now },
       { _id: "pb1", societyId: B, fullName: "Foreign Private Person", searchName: "foreign private person", createdAtISO: now, updatedAtISO: now },
       { _id: "pu1", fullName: "Reusable Legacy Contact", searchName: "reusable legacy contact", createdAtISO: now, updatedAtISO: now },
+      // A trusted local workspace's directory keeps people unowned (no societyId), e.g. "Add run people".
+      { _id: "pu2", fullName: "Casey Localperson", searchName: "casey localperson", createdAtISO: now, updatedAtISO: now },
+      { _id: "pu3", fullName: "Casey Localpersen", searchName: "casey localpersen", createdAtISO: now, updatedAtISO: now },
     ],
     meetings: [
       { _id: "m1", societyId: A, title: "Fictional finance meeting", type: "Committee", committeeId: "c1", scheduledAt: "2019-03-01T12:00:00.000Z", status: "Held", attendeeIds: [] },
@@ -138,6 +141,7 @@ for (const engine of ["memory", "local-store"] as const) {
   // P7: duplicate suggestion, merge and undo.
   const suggestions = await query("personHistory:duplicateSuggestions", { societyId: A }) as any[];
   assert.ok(suggestions.some((s) => s.ids.includes("pa1") && s.ids.includes("pa2")), `${engine}: the spelling variant is suggested`);
+  assert.ok(suggestions.some((s) => s.ids.includes("pu2") && s.ids.includes("pu3")), `${engine}: unowned local directory people are suggested too`);
   const merged: any = await mutate("personHistory:mergePeople", { societyId: A, survivorId: "pa1", mergedIds: ["pa2"], rationale: "Same person, spelling variant" });
   assert.ok(merged.merges[0].moved >= 9, `${engine}: every reference moved (${merged.merges[0].moved})`);
   assert.equal((await row("personOccurrences", "o1")).personId, "pa1");

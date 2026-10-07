@@ -632,7 +632,7 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
   const session = await getImportSessionPortable(ctx, { sessionId }) as any;
   if (sectionResult?.preflightBlocked || Object.keys(sectionResult?.byKind ?? {}).some((key) => key.endsWith(":blocked"))) {
     const issues = (session?.records ?? []).map((record: any) => /Promotion blocked: ([^\n]+)/.exec(String(record.reviewNotes ?? ""))?.[1]).filter(Boolean).slice(0, 3);
-    throw new Error(`The ${spec.noun} could not be written: ${issues.join("; ") || "a staged record failed its checks"}. Nothing was promoted.`);
+    throw new Error(`The ${spec.noun} could not be written: ${issues.map((issue: string) => issue.replace(/\.+$/, "")).join("; ") || "a staged record failed its checks"}. Nothing was promoted.`);
   }
 
   // What was created.
