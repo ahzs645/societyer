@@ -7,6 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { Drawer } from "./ui";
 import { pluralize } from "../lib/format";
+import { isStructuralProvenanceField, provenanceFieldLabel } from "../../shared/provenanceFields";
 
 type ProvenanceRow = {
   _id: string; targetTable: string; targetId: string; fieldPath: string; sourceFieldPath?: string; runId?: string; extractionId?: string; fileKey?: string;
@@ -47,10 +48,12 @@ export function SourceProvenanceButton({ table, id, label = "View source" }: { t
   const society = useSociety();
   const { can } = usePermissions();
   const [open, setOpen] = useState(false);
-  const rows = useQuery(
+  const allRows = useQuery(
     api.intake.provenanceForRecords,
     society && id && can("settings:read") ? { societyId: society._id, targets: [{ targetTable: table, targetId: String(id) }] } : "skip",
   ) as ProvenanceRow[] | undefined;
+  // Structural paths (the extractor's `kind`, source ids, column keys…) stay stored but are not shown.
+  const rows = allRows?.filter((row) => !isStructuralProvenanceField(row.fieldPath));
   if (!rows?.length) return null;
   const files = new Map<string, { fileName: string; runId?: string; runName?: string; extractionId?: string; restricted?: boolean; rows: ProvenanceRow[] }>();
   const order: Record<string, number> = { meetings: 0, minutes: 1, motions: 2 };
@@ -80,7 +83,7 @@ export function SourceProvenanceButton({ table, id, label = "View source" }: { t
                 {file.rows.map((row) => (
                   <li key={row._id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "baseline" }}>
-                      <strong>{TABLE_LABEL[row.targetTable] ?? row.targetTable} · {row.fieldPath}</strong>
+                      <strong>{TABLE_LABEL[row.targetTable] ?? row.targetTable} · {provenanceFieldLabel(row.fieldPath)}</strong>
                       {valueText(row.value) && <span>= {valueText(row.value)}</span>}
                       {row.decision === "edit" && <span className="badge badge--warn">edited by reviewer</span>}
                     </div>

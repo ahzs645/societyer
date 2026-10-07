@@ -1,10 +1,11 @@
 /** Enumerate production public wrappers; this is source coverage, not runtime coverage. */
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { actionPermission } from "../shared/functions/actionPolicy";
 import { ROLES } from "../shared/functions/access";
 import { listPermissionsForRole } from "../shared/functions/permissions";
 import { getModuleAccess, MODULE_ACCESS_POLICY_NOTE } from "../src/lib/moduleAccess";
+import { writeTrackedReport } from "./lib/writeTrackedReport.mjs";
 
 const endpoints: any[] = [];
 for (const file of readdirSync("convex").filter(file => file.endsWith(".ts")).sort()) {
@@ -24,5 +25,5 @@ const payload = { recordedAt: new Date().toISOString(), qualification: "Static e
   total: endpoints.length, fixedPermission: endpoints.filter(row => row.permission).length, specializedHandler: endpoints.filter(row => !row.permission).length,
   modules: Object.fromEntries(ROLES.map(role => [role, getModuleAccess(role)])), modulePolicyNote: MODULE_ACCESS_POLICY_NOTE,
   endpoints };
-writeFileSync("artifacts/offline/authorization-surface.json", JSON.stringify(payload, null, 2) + "\n");
+writeTrackedReport("artifacts/offline/authorization-surface.json", JSON.stringify(payload, null, 2) + "\n");
 console.log(`Enumerated ${payload.total} production public wrappers: ${payload.fixedPermission} fixed permission, ${payload.specializedHandler} specialized handler.`);

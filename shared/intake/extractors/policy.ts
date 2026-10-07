@@ -203,7 +203,10 @@ export function extractPolicy(input: ClassExtractorInput): ExtractionEnvelope {
   const effectiveDate = effectiveLine ? at(dateValue(findDates(effectiveLine.text)[0]), effectiveLine, findDates(effectiveLine.text)[0].text, 0.8)
     : updatedLine && updatedDate ? guessAt(dateValue(updatedDate), updatedLine, updatedDate.text, 0.6, "Last-updated / amended date; effective date assumed.")
       : undefined;
-  const adoptedDate = adoptedLine ? at(dateValue(findDates(adoptedLine.text)[0]), adoptedLine, findDates(adoptedLine.text)[0].text, 0.7)
+  // A labelled "Adopted: <date>" / "Approved by the board: <date>" line states the date directly (bulk-acceptable);
+  // a date elsewhere in a sentence that mentions approval stays a lower-confidence reading.
+  const adoptedLabelled = adoptedLine ? /^\s*(?:date\s+)?(?:approved|adopted|accepted|ratified|passed)\b[^:]{0,40}:\s*\S/i.test(adoptedLine.text) : false;
+  const adoptedDate = adoptedLine ? at(dateValue(findDates(adoptedLine.text)[0]), adoptedLine, findDates(adoptedLine.text)[0].text, adoptedLabelled ? 0.85 : 0.7)
     : nameDate && /approved|accepted|adopted|amended/i.test(fileName) ? fromFile(dateValue(nameDate), fileName, 0.55, "Approval/amendment date from the file name.") : undefined;
   const status: FieldValue<"draft" | "adopted" | "filed" | "superseded" | "unknown"> = marker === "draft" || /\bdraft\b/i.test(fileName) && !/approved/i.test(fileName)
     ? inferred("draft", [fileLoc(fileName)], 0.7, "DRAFT marker in the file name.")

@@ -16,6 +16,7 @@ import { parseTypedDate } from "../src/lib/typedDate";
 import { userDisplayName } from "../shared/functions/users";
 import { MODULE_DEFINITIONS } from "../src/lib/modules";
 import { newSocietyOwnerFields } from "../shared/functions/society";
+import { formatIcsWhen, parseIcs } from "../shared/icsCalendar";
 
 type Catalog = { [key: string]: string | Catalog };
 function flatten(catalog: Catalog, prefix = ""): Map<string, string> {
@@ -157,6 +158,23 @@ assert.ok(storageCard.indexOf("readWorkspaceBackupFile(file)") > -1 && storageCa
 assert.equal(openableExternalUrl("demo://paperless/1001"), null, "placeholder schemes are not links");
 assert.equal(openableExternalUrl("javascript:alert(1)"), null);
 assert.equal(openableExternalUrl(" https://paperless.example.org/documents/12/ "), "https://paperless.example.org/documents/12/");
+
+// P-O6: calendar sync keeps the time of timed events (UTC, TZID and floating) and all-day dates.
+{
+  const ics = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "SUMMARY:Board meeting", "DTSTART:20261113T020000Z", "DTEND:20261113T033000Z", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:Committee", "DTSTART;TZID=America/Toronto:20261112T090000", "DTEND;TZID=America/Toronto:20261112T100000", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:Holiday", "DTSTART;VALUE=DATE:20261111", "DTEND;VALUE=DATE:20261112", "END:VEVENT",
+    "BEGIN:VEVENT", "SUMMARY:Floating", "DTSTART:20261114T183000", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const [board, committee, holiday, floating] = parseIcs(ics, { displayTimeZone: "America/Vancouver" });
+  assert.deepEqual([board.start, board.end, board.startTimeZone, board.allDay], ["2026-11-12T18:00", "2026-11-12T19:30", "America/Vancouver", false], "a UTC time is shown in the viewer's zone, on its local day");
+  assert.deepEqual([committee.start, committee.startTimeZone], ["2026-11-12T09:00", "America/Toronto"]);
+  assert.deepEqual([holiday.start, holiday.allDay], ["2026-11-11", true]);
+  assert.equal(floating.start, "2026-11-14T18:30");
+  assert.equal(formatIcsWhen(board.start, board.startTimeZone, "America/Vancouver"), "2026-11-12 18:00");
+  assert.equal(formatIcsWhen(committee.start, committee.startTimeZone, "America/Vancouver"), "2026-11-12 09:00 (America/Toronto)");
+  assert.equal(formatIcsWhen(holiday.start), "2026-11-11");
+  assert.match(readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8"), /formatIcsWhen\(e\.start/, "the parsed-events table formats the time");
+}
 
 // Destructive platform actions name what is lost before they run.
 const calendarSync = readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8");

@@ -16,6 +16,7 @@ import { requirePermissionPortable } from "../permissions";
 import { arrayOf, cleanDate, cleanText, compactRecord, numberOrUndefined, optionalBoolean, personKey, splitName, todayDate, unique } from "./importSessionUtils";
 import { confidenceFor } from "./importSessionRecordKinds";
 import { directoryPersonId, loadDirectoryIndex, resolveImportCommittee } from "./importMeetingApply";
+import { meetingCalendarDate } from "../../meetingDates";
 
 type HandlerContext = {
   ctx: any;
@@ -34,7 +35,7 @@ export async function resolveMeetingReference(ctx: any, societyId: string, ref: 
   const date = cleanDate(value.meetingDate ?? value.date);
   if (!date) return null;
   const meetings = (await ctx.db.query("meetings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect())
-    .filter((meeting: any) => String(meeting.scheduledAt ?? "").slice(0, 10) === date);
+    .filter((meeting: any) => (meetingCalendarDate(meeting) ?? "") === date);
   if (!meetings.length) return null;
   const named = value.body || value.bodyKey || value.committeeName || value.meetingType || value.meetingTitle;
   let candidates = meetings;

@@ -1,13 +1,18 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { assertLiveFits, liveFixture } from "./helpers/liveInterface";
 
-const laboratory = JSON.parse(readFileSync("experiments/live-qualification/.env.accounts.local", "utf8"));
-const operator = new ConvexHttpClient(laboratory.convexUrl, { logger: false });
-operator.setAdminAuth(laboratory.adminKey);
+// These tests need the isolated live-qualification lab (Docker Convex, Better
+// Auth broker and its account file). Without the lab they are skipped, so the
+// local recovery specs in the same config still run.
+const LABORATORY_FILE = process.env.OFFLINE_ROLLOUT_LAB_FILE ?? "experiments/live-qualification/.env.accounts.local";
+const laboratory = existsSync(LABORATORY_FILE) ? JSON.parse(readFileSync(LABORATORY_FILE, "utf8")) : null;
+test.skip(!laboratory, `live-qualification lab is not running (${LABORATORY_FILE} is missing)`);
+const operator = new ConvexHttpClient(laboratory?.convexUrl ?? "http://127.0.0.1:0", { logger: false });
+if (laboratory) operator.setAdminAuth(laboratory.adminKey);
 async function open(page: Page, role = "Owner") {
   const account = liveFixture().identities[role];
   await page.goto("/login");

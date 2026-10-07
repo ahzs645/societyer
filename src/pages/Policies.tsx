@@ -163,7 +163,7 @@ export function PoliciesPage() {
           <Badge>{policies?.length ?? 0}</Badge>
         </div>
         <div className="table-wrap">
-          <table className="table table--stack-mobile">
+          <table className="table table--stack-mobile policies-table">
             <thead>
               <tr>
                 <th>Policy</th>
@@ -172,7 +172,6 @@ export function PoliciesPage() {
                 <th>Documents</th>
                 <th>Adoption</th>
                 <th>Signers</th>
-                <th>Lifecycle</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -205,15 +204,21 @@ export function PoliciesPage() {
                   <td data-label="Adoption"><AdoptionCell row={row} maps={adoptionMaps} /></td>
                   <td data-label="Signers">
                     {row.signatureRequired ? (
-                      <Badge tone="warn">{(row.requiredSigners ?? []).map((value: string) => optionLabel("requiredSigners", value)).join(", ") || "Needs review"}</Badge>
+                      <div className="row policies-table__badges">
+                        {(row.requiredSigners ?? []).length
+                          ? (row.requiredSigners ?? []).map((value: string) => <Badge key={value} tone="warn">{optionLabel("requiredSigners", value)}</Badge>)
+                          : <Badge tone="warn">Needs review</Badge>}
+                      </div>
                     ) : (
                       <span className="muted">Not required</span>
                     )}
                   </td>
-                  <td data-label="Lifecycle">
-                    <LifecycleBadges lifecycle={row.lifecycle} />
+                  <td data-label="Status">
+                    <div className="row policies-table__badges">
+                      <Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status) || row.status}</Badge>
+                      <LifecycleBadges lifecycle={row.lifecycle} />
+                    </div>
                   </td>
-                  <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status) || row.status}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
                       <Menu
@@ -243,7 +248,7 @@ export function PoliciesPage() {
                 </tr>
               ))}
               {(policies ?? []).length === 0 && (
-                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -368,24 +373,25 @@ function AdoptionCell({ row, maps }: { row: any; maps: any }) {
   );
 }
 
+/**
+ * Lifecycle facts not already shown in their own column (review state is in
+ * Dates, signers in Signers, adoption in Adoption): publication, versions and
+ * open tasks. Kept compact so the table fits a 1440 px window (X-02).
+ */
 function LifecycleBadges({ lifecycle }: { lifecycle?: any }) {
-  if (!lifecycle) return <span className="muted">-</span>;
+  if (!lifecycle) return null;
+  const published = lifecycle.publicationStatus === "Published";
   return (
-    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-      <Badge tone={lifecycle.reviewState === "overdue" ? "danger" : lifecycle.reviewState === "due_soon" || lifecycle.reviewState === "missing_review_date" ? "warn" : "success"}>
-        {labelize(lifecycle.reviewState)}
-      </Badge>
-      <Badge tone={lifecycle.publicationStatus === "Published" ? "success" : "neutral"}>{lifecycle.publicationStatus === "Published" ? "Published" : lifecycle.publicationStatus ? `Publication ${String(lifecycle.publicationStatus).toLowerCase()}` : "Not published"}</Badge>
-      <Badge tone={lifecycle.signatureState === "missing_signers" ? "danger" : lifecycle.signatureState === "required" ? "warn" : "neutral"}>
-        {labelize(lifecycle.signatureState)}
-      </Badge>
-      <Badge tone={lifecycle.adoptionState === "linked" ? "success" : lifecycle.adoptionState === "missing_adoption_record" ? "warn" : "neutral"}>
-        {labelize(lifecycle.adoptionState)}
-      </Badge>
-      <Badge>{lifecycle.versionCount ?? 0} versions</Badge>
-      <Badge>{lifecycle.taskCount ?? 0} tasks</Badge>
-    </div>
+    <>
+      <Badge tone={published ? "success" : "neutral"}>{published ? "Published" : lifecycle.publicationStatus ? `Publication ${String(lifecycle.publicationStatus).toLowerCase()}` : "Not published"}</Badge>
+      {lifecycle.signatureState === "missing_signers" && <Badge tone="danger">{labelize(lifecycle.signatureState)}</Badge>}
+      <span className="muted policies-table__counts">{pluralizeCount(lifecycle.versionCount ?? 0, "version")} · {pluralizeCount(lifecycle.taskCount ?? 0, "task")}</span>
+    </>
   );
+}
+
+function pluralizeCount(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function toneForStatus(status?: string) {

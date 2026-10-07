@@ -17,7 +17,8 @@ import { computeQuorumFromRule, resolveMeetingQuorumRule, bodyQuorumRuleIssues }
 import { quorumStatementFromText } from "../shared/quorumStatement";
 import { dedupeKeyForDriveItem, EMPTY_CONTENT_SHA256 } from "../shared/driveDedupe";
 import { normalizeSigningAuthorityTiers, signingTierForAmount } from "../shared/signingAuthorityTiers";
-import { zonedTimeToUtc } from "../shared/functions/importSessionHelpers/importMeetingApply";
+import { importedMeetingTime, unambiguousLocalTime, zonedTimeToUtc } from "../shared/functions/importSessionHelpers/importMeetingApply";
+import { organizationTimeZone } from "../shared/organizationDomain";
 import { CONSENT_ITEM_OUTCOMES } from "../shared/evidenceReview";
 import { inferMeetingType } from "../shared/functions/importSessionHelpers/importSessionRecordKinds";
 
@@ -73,6 +74,28 @@ assert.match(dateOnly, /2021/);
 assert.match(dateOnly, /6:00 PM – 7:00 PM/);
 assert.doesNotMatch(dateOnly, /5:00|4:00|12:00/, "the noon-UTC placeholder is never shown as a time");
 assert.equal(zonedTimeToUtc("2021-05-18", "18:00", "America/Vancouver"), "2021-05-19T01:00:00.000Z");
+// X-04: a stated local start time is placed in the organization's zone (BC → America/Vancouver).
+assert.equal(organizationTimeZone({ jurisdictionCode: "CA-BC", entityType: "society" }), "America/Vancouver");
+assert.equal(organizationTimeZone({ jurisdiction: "british_columbia" }), "America/Vancouver");
+assert.equal(organizationTimeZone({ jurisdictionCode: "CA-ON-OBCA" }), "America/Toronto");
+assert.equal(organizationTimeZone({ jurisdictionCode: "CA-FED-CBCA" }), undefined, "federal: no zone is guessed");
+assert.equal(organizationTimeZone({}), undefined);
+assert.equal(organizationTimeZone({ jurisdictionCode: "CA-BC", timeZone: "America/Edmonton" } as any), "America/Edmonton", "an explicit zone wins");
+for (const text of ["7:00 PM", "7 p.m.", "19:00", "07:30", "0:15"]) assert.equal(unambiguousLocalTime(text), true, text);
+for (const text of ["7:00", "7", "", "noon-ish"]) assert.equal(unambiguousLocalTime(text), false, text);
+{
+  const placed = importedMeetingTime({ meetingDate: "2021-05-18", localStartText: "6:00 PM" }, "2021-05-18T12:00:00.000Z", { defaultTimeZone: "America/Vancouver" });
+  assert.deepEqual([placed.scheduledAt, placed.scheduledAtPrecision, placed.timeZone, placed.localStartText], ["2021-05-19T01:00:00.000Z", "datetime", "America/Vancouver", "6:00 PM"]);
+  const winter = importedMeetingTime({ meetingDate: "2020-02-11", localStartText: "6:00 PM" }, "2020-02-11T12:00:00.000Z", { defaultTimeZone: "America/Vancouver" });
+  assert.equal(winter.scheduledAt, "2020-02-12T02:00:00.000Z", "PST in winter");
+  assert.equal(meetingCalendarDate(winter), "2020-02-11", "the calendar day stays the local day");
+  const ambiguous = importedMeetingTime({ meetingDate: "2021-05-18", localStartText: "7:00" }, "2021-05-18T12:00:00.000Z", { defaultTimeZone: "America/Vancouver" });
+  assert.deepEqual([ambiguous.scheduledAt, ambiguous.scheduledAtPrecision, ambiguous.timeZone], ["2021-05-18T12:00:00.000Z", "date", undefined], "an ambiguous time stays text");
+  const dateOnlyMeeting = importedMeetingTime({ meetingDate: "2021-05-18" }, "2021-05-18T12:00:00.000Z", { defaultTimeZone: "America/Vancouver" });
+  assert.equal(dateOnlyMeeting.scheduledAtPrecision, "date", "a date-only meeting stays date-only");
+  const noZone = importedMeetingTime({ meetingDate: "2021-05-18", localStartText: "6:00 PM" }, "2021-05-18T12:00:00.000Z");
+  assert.equal(noZone.scheduledAtPrecision, "date", "without an organization zone the time stays text");
+}
 
 assert.equal(actionStatusFromSource("Done"), "completed");
 assert.equal(actionStatusFromSource("ongoing"), "ongoing");
@@ -154,12 +177,14 @@ const draftResult: any = await stageAndApply({ sources: [src("draft", "2020-02-1
 }] });
 assert.equal(draftResult.meetings, 1);
 let t = tables();
-const meeting = t.meetings.find((row) => row.scheduledAt.startsWith("2020-02-11"))!;
+const meeting = t.meetings.find((row) => meetingCalendarDate(row) === "2020-02-11")!;
 const minutes = t.minutes.find((row) => row.meetingId === meeting._id)!;
 assert.equal(meeting.title, "Board meeting — 2020-02-11", "file-name titles become <Body> meeting — <date>");
 assert.equal(meeting.sourceTitle, "2020-02-11 Example Board Minutes DRAFT.docx");
-assert.equal(meeting.scheduledAtPrecision, "date");
-assert.equal(meeting.localStartText, "6:00 PM");
+assert.equal(meeting.scheduledAtPrecision, "datetime", "X-04: the stated 6:00 PM is placed in the BC society's zone");
+assert.equal(meeting.scheduledAt, "2020-02-12T02:00:00.000Z");
+assert.equal(meeting.timeZone, "America/Vancouver");
+assert.equal(meeting.localStartText, "6:00 PM", "the local text is kept");
 assert.equal(meeting.status, "Held");
 assert.deepEqual(minutes.attendees, ["Alex Example", "Blair Sample"], "role words, organizations and headings are not attendees");
 assert.deepEqual(JSON.parse(minutes.draftTranscript).nonPersonAttendance.map((row: any) => row.name).sort(), ["City of Example", "Members", "Vice President"]);
@@ -206,7 +231,7 @@ const approvedResult: any = await stageAndApply({ sources: [src("approved", "Exa
 }] });
 assert.equal(approvedResult.existing, 1);
 t = tables();
-assert.equal(t.meetings.filter((row) => row.scheduledAt.startsWith("2020-02-11")).length, 1, "draft and approved copies are one meeting");
+assert.equal(t.meetings.filter((row) => meetingCalendarDate(row) === "2020-02-11").length, 1, "draft and approved copies are one meeting");
 const merged = t.minutes.find((row) => row._id === minutes._id)!;
 assert.equal(merged.importedSourceVersions.length, 2);
 assert.equal(merged.motions, undefined, "the retired embedded field is not written");
@@ -219,7 +244,7 @@ await stageAndApply({ sources: [src("agm", "AGM 2020"), src("exec", "Exec")], me
   { meetingDate: "2020-02-18", meetingTitle: "2020-02-18 ExampleExecutiveMinutes.docx", sourceExternalIds: ["google-drive:exec"], confidence: "High", meetingStatus: "Scheduled", localStartText: "6:00 PM", timeZone: "America/Vancouver" },
 ] });
 t = tables();
-assert.equal(t.meetings.filter((row) => row.scheduledAt.startsWith("2020-02-11")).length, 2, "AGM and Board on one evening are not merged");
+assert.equal(t.meetings.filter((row) => meetingCalendarDate(row) === "2020-02-11").length, 2, "AGM and Board on one evening are not merged");
 const exec = t.meetings.find((row) => row.title === "Executive Committee meeting — 2020-02-19" || row.title === "Executive Committee meeting — 2020-02-18")!;
 assert.ok(exec, "executive minutes become an Executive Committee meeting");
 assert.equal(exec.type, "Committee");
@@ -276,7 +301,7 @@ const conflict = t.conflicts.find((row) => row.personName === "Casey Rep")!;
 assert.equal(conflict.directorId, undefined, "A1: conflicts no longer require a director");
 assert.equal(conflict.personId, "person_casey");
 assert.equal(conflict.motionId, t.motions.find((row) => /defer the budget/.test(row.text))!._id);
-const agmMeeting = t.meetings.find((row) => row.type === "AGM" && row.scheduledAt.startsWith("2020-02-11"))!;
+const agmMeeting = t.meetings.find((row) => row.type === "AGM" && meetingCalendarDate(row) === "2020-02-11")!;
 assert.equal(t.proxies[0].meetingId, agmMeeting._id);
 const ruleSet = t.bylawRuleSets.find((row) => row.bodyQuorumRules)!;
 assert.equal(ruleSet.status, "Draft", "imported rules never become active by themselves");
@@ -328,6 +353,8 @@ const legacy = new StaticConvexClient({ seed: {
   meetings: [
     { _id: "m_exec", societyId: legacySociety, type: "Board", title: "2013-05-14 ExampleExecutiveMinutes_May_2013 DRAFT.docx", scheduledAt: "2013-05-14T12:00:00.000Z", electronic: false, status: "Held", attendeeIds: [], minutesId: "min_exec" },
     { _id: "m_board", societyId: legacySociety, type: "Board", title: "| Subject: | Draft Meeting Minutes", scheduledAt: "2019-02-19T12:00:00.000Z", electronic: false, status: "Held", attendeeIds: [], minutesId: "min_board" },
+    { _id: "m_timed", societyId: legacySociety, type: "Board", title: "Board meeting — 2018-06-12", scheduledAt: "2018-06-12T12:00:00.000Z", scheduledAtPrecision: "date", localStartText: "7:00 p.m.", electronic: false, status: "Held", attendeeIds: [] },
+    { _id: "m_vague", societyId: legacySociety, type: "Board", title: "Board meeting — 2018-07-10", scheduledAt: "2018-07-10T12:00:00.000Z", scheduledAtPrecision: "date", localStartText: "7:00", electronic: false, status: "Held", attendeeIds: [] },
   ],
   minutes: [
     { _id: "min_exec", societyId: legacySociety, meetingId: "m_exec", heldAt: "2013-05-14T12:00:00.000Z", attendees: ["Members", "Alex Example", "Vice President"], absent: [], quorumMet: false, quorumStatus: "not_recorded", discussion: "Quorum achieved (5 members present).", decisions: [], actionItems: [], sourceExternalIds: ["google-drive:legacy-exec"],
@@ -350,6 +377,9 @@ assert.deepEqual(
   [1, 2, 1, 1, 2, 1, 2, 1, 2],
 );
 const repaired = legacy.exportLocalWorkspaceSnapshot().tables as Record<string, any[]>;
+assert.equal(run.meetingTimesPlaced, 1, "X-04: the repair places the stated 7:00 p.m. in America/Vancouver");
+assert.deepEqual(["scheduledAt", "scheduledAtPrecision", "timeZone", "localStartText"].map((key) => repaired.meetings.find((row) => row._id === "m_timed")![key]), ["2018-06-13T02:00:00.000Z", "datetime", "America/Vancouver", "7:00 p.m."]);
+assert.equal(repaired.meetings.find((row) => row._id === "m_vague")!.scheduledAtPrecision, "date", "an ambiguous 7:00 stays date-only");
 const execMeeting = repaired.meetings.find((row) => row._id === "m_exec")!;
 assert.equal(execMeeting.title, "Executive Committee meeting — 2013-05-14");
 assert.equal(execMeeting.sourceTitle, "2013-05-14 ExampleExecutiveMinutes_May_2013 DRAFT.docx");
@@ -366,7 +396,7 @@ assert.equal(execMinutes.quorumStatus, "confirmed");
 assert.equal(execMinutes.quorumCheckpoints[0].eligibleCount, 5);
 assert.equal(execMinutes.sections[0].title, "Welcome");
 const again: any = await legacy.mutation("minutes:repairImported", { societyId: legacySociety });
-for (const key of ["motionsRederived", "embeddedMotionsSynced", "sectionTitlesCleaned", "agendaTitlesCleaned", "meetingTitlesCleaned", "meetingBodiesReclassified", "datePrecisionMarked", "quorumFromSource", "attendeesScreened", "committeesCreated"]) {
+for (const key of ["motionsRederived", "embeddedMotionsSynced", "sectionTitlesCleaned", "agendaTitlesCleaned", "meetingTitlesCleaned", "meetingBodiesReclassified", "datePrecisionMarked", "meetingTimesPlaced", "quorumFromSource", "attendeesScreened", "committeesCreated"]) {
   assert.equal(again[key], 0, `repair is idempotent (${key})`);
 }
 console.log("✓ repair: dry run, motion outcomes, embedded motions, pipes, titles/bodies, precision, quorum, attendance; second run changes nothing");

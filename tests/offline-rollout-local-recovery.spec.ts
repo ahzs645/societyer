@@ -6,7 +6,9 @@ test("restore waits for startup and retains the restored vault after reopening",
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `recovery-startup-${crypto.randomUUID()}`;
     const original = LocalDexieRowStore.prototype.hydrate;
     let release!: () => void;
@@ -52,7 +54,9 @@ test("failed storage restore rolls every table back without replacing the visibl
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `recovery-atomic-${crypto.randomUUID()}`;
     const store = new LocalDexieRowStore({}, { databaseName: name });
     await store.whenHydrated();
@@ -89,7 +93,9 @@ test("direct restore rejects corrupt records and strips hosted authority while r
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `recovery-authority-${crypto.randomUUID()}`;
     const store = new LocalDexieRowStore({}, { databaseName: name });
     await store.whenHydrated();
@@ -138,7 +144,9 @@ test("heavy fields stay out of the row cache, load on demand and survive reopen 
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `heavy-fields-${crypto.randomUUID()}`;
     const longText = "Synthetic extracted text. ".repeat(400);
     try {
@@ -187,11 +195,51 @@ test("heavy fields stay out of the row cache, load on demand and survive reopen 
   expect(result.syncError).toContain("exportSnapshot()");
 });
 
+test("projection memos of a large list are read back by key range, exactly as per-row reads (SU-12)", async ({ page }) => {
+  await page.goto("/login");
+  const result = await page.evaluate(async () => {
+    const { LocalDexieRowStore } = await import("/src/lib/localDexieRowStore.ts" as string);
+    const { LocalDexieDatabase } = await import("/src/lib/localDexieDatabase.ts" as string);
+    const name = `projection-range-${crypto.randomUUID()}`;
+    try {
+      const store = new LocalDexieRowStore({}, { databaseName: name, projectionNamespace: "synthetic-build" });
+      await store.whenHydrated();
+      const entries = Array.from({ length: 400 }, (_, index) => ({ id: `doc_${index}`, rev: `r${index}`, value: { n: index } }));
+      store.saveProjections("list/v1#abc", "documents", entries);
+      store.saveProjections("list/v1#abcd", "documents", [{ id: "doc_1", rev: "other", value: { n: -1 } }]);
+      store.saveProjections("list/v1#abc", "minutes", [{ id: "doc_2", rev: "other", value: { n: -2 } }]);
+      await store.flushProjections();
+      const wanted = entries.slice(50, 350).map((entry) => entry.id).concat(["doc_missing"]);
+      const ranged = await store.loadProjections("list/v1#abc", "documents", wanted);
+      const small = await store.loadProjections("list/v1#abc", "documents", wanted.slice(0, 10));
+      store.db.close();
+      return {
+        rangedSize: ranged.size,
+        rangedSample: ranged.get("doc_60"),
+        rangedOutside: ranged.has("doc_10"),
+        rangedMissing: ranged.has("doc_missing"),
+        smallSize: small.size,
+        smallSample: small.get("doc_55"),
+      };
+    } finally {
+      await new LocalDexieDatabase(name).delete();
+    }
+  });
+  expect(result.rangedSize).toBe(300);
+  expect(result.rangedSample).toEqual({ rev: "r60", value: { n: 60 } });
+  expect(result.rangedOutside, "only the requested rows").toBe(false);
+  expect(result.rangedMissing).toBe(false);
+  expect(result.smallSize).toBe(10);
+  expect(result.smallSample).toEqual({ rev: "r55", value: { n: 55 } });
+});
+
 test("a layout-1 vault is migrated in place to lazy heavy fields without losing data", async ({ page }) => {
   await page.goto("/login");
   const result = await page.evaluate(async () => {
     const modulePath = "/src/lib/localDexieRowStore.ts";
-    const { LocalDexieRowStore, LocalDexieDatabase } = await import(modulePath);
+    const { LocalDexieRowStore } = await import(modulePath);
+    const databaseModulePath = "/src/lib/localDexieDatabase.ts";
+    const { LocalDexieDatabase } = await import(databaseModulePath);
     const name = `layout-migration-${crypto.randomUUID()}`;
     const source = { text: "Verbatim source minutes. ".repeat(300) };
     try {
