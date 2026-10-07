@@ -176,11 +176,26 @@ function termIn(lines: Line[]): { effective?: FieldValue<any>; expiry?: FieldVal
       expiry ??= at(dateValue(dates[1]), termLine, dates[1].text, 0.8);
     }
   }
+  if (!expiry) {
+    const ranged = lines.find((line) => /\bfrom\b.{3,40}\bto\b|\brun(?:s|ning)?\s+(?:from|until)\b|\bthrough\b/i.test(line.text) && /\b(?:project|program|term|period|agreement|grant|funding)\b/i.test(line.text));
+    const end = ranged ? findDates(ranged.text.slice(ranged.text.search(/\bto\b|\buntil\b|\bthrough\b/i))).find((date) => date.precision === "day") : undefined;
+    if (ranged && end) expiry = at(dateValue(end), ranged, end.text, 0.75);
+  }
   return { effective, expiry };
 }
 
 const TITLE_WORDS = /\b(?:agreement|contract|memorandum of understanding|mou|letter of (?:agreement|understanding)|terms and conditions|proposal|application|funding|grant|contribution|addendum|amendment|licen[cs]e)\b/i;
 /** "Event #: 12756 License Agreement" → "License Agreement"; "Contract #: PGAIR-RWG-2013" → "" (a label, not a title). */
+/** "… the BC Lung Association, is able to provide funding …" → the funder named in its own sentence. */
+export function funderSentence(lines: Line[]): { name: string; line: Line } | undefined {
+  for (const line of lines) {
+    const funding = /(?:^|,\s*|\bthe\s+)([A-Z][\w&.'’ -]{3,80}?),?\s+(?:is able to provide|agrees to (?:provide|pay|contribute)|will provide|is pleased to provide)\s+(?:funding|a grant|financial)/.exec(line.text);
+    const name = funding ? partyName(funding[1].replace(/^.*\bthe\s+(?=[A-Z])/, "")) : undefined;
+    if (name && line.text.includes(name)) return { name, line };
+  }
+  return undefined;
+}
+
 export function agreementTitleText(text: string): string {
   return clean(text.replace(/^\s*(?:event|contract|agreement|account|file|project|reference|ref)\s*(?:#|no\.?|number)\s*:?\s*[A-Z0-9][\w-]*(?:\s(?:19|20)\d{2})?\s*/i, "").replace(/^\s*(?:title|re|subject)\s*:\s*/i, "").replace(/\t+/g, " "));
 }
@@ -316,7 +331,11 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   const attnIndex = input.docClass === "grant" ? lines.slice(0, 12).findIndex((line) => /^\s*(?:attn|attention)\s*:/i.test(line.text)) : -1;
   const addressee = attnIndex >= 0 ? lines.slice(attnIndex + 1, attnIndex + 3).find((line) => /\b(?:district|council|ministry|fund|foundation|trust|agency|government|city|province|society|association|authority|credit union|bank)\b/i.test(line.text) && line.text.length < 100) : undefined;
   const letterhead = input.docClass === "grant" ? lines.slice(0, 3).find((line) => /\b(?:fund|foundation|ministry|trust|agency|government of|council|program)\b/i.test(line.text) && line.text.length < 100 && !/\b(?:agreement|application|proposal|report|society)\b/i.test(line.text)) : undefined;
-  const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : letterhead ? guessAt(clean(letterhead.text), letterhead, undefined, 0.55, "Funder named in the letterhead.") : addressee ? guessAt(clean(addressee.text), addressee, undefined, 0.5, "Addressee of a funding request.") : undefined;
+  // "… the BC Lung Association, is able to provide funding of $10,500": the funder says so itself.
+  const fundingSentence = input.docClass === "grant" ? funderSentence(lines.slice(0, 120)) : undefined;
+  // Only a request is addressed to its funder; an award letter is addressed to the recipient.
+  const requestLetter = grantStage === "application" || grantStage === "proposal";
+  const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : fundingSentence ? at(fundingSentence.name, fundingSentence.line, fundingSentence.name, 0.6) : letterhead ? guessAt(clean(letterhead.text), letterhead, undefined, 0.55, "Funder named in the letterhead.") : addressee && requestLetter ? guessAt(clean(addressee.text), addressee, undefined, 0.5, "Addressee of a funding request.") : undefined;
   const program = labelled(lines.slice(0, 60), /program(?: name)?|project (?:title|name)|initiative/i);
   const purpose = labelled(lines.slice(0, 80), /purpose|objective|project description/i);
   // Agreements are native (agreements register, A5); no whole-record gap is recorded any more.
