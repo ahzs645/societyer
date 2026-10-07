@@ -2,6 +2,8 @@
 
 Audit date: 2026-10-06. Branch: `claude/clever-babbage-mu46rq`.
 
+> **Follow-up:** the findings below have since been implemented and re-tested. See [pgair-implementation-status.md](pgair-implementation-status.md) for what was built, the re-transposition results and what remains open.
+
 This is a review of the PGAIR example transposition, a full interface test pass, and a design for AI-led intake. It is analysis only: no application code was changed. Personal names from the source records are deliberately left out of this public document. The detailed per-area reports and the golden set are kept outside git because they quote personal names. See [Detailed reports](#detailed-reports).
 
 **Terminology.** *Transposed* means a source fact landed in a **native** object or field that a user can see, filter and edit in the app: a meeting with its body, date and times; a motion with mover, seconder and outcome; attendance linked to a person; a task with an owner; a role term; a policy version. Text that is only kept in discussion, the source meeting record, notes or `sourceEvidence` is **evidence-only**, not transposed.
