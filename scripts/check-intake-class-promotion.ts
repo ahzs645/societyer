@@ -22,6 +22,7 @@ import { orderedVersionFiles } from "../shared/intake/promotion";
 import { clusterFiles, nameDateKey } from "../shared/intake/cluster";
 import { infoTypeDefinition } from "../shared/gapCatalog";
 import { CLASS_PROMOTION } from "../shared/intake/promotionClasses";
+import { PROVIDER_EXCLUDED_CLASSES } from "../shared/intake/classify";
 import { promotionReadiness, latestDecisions, requiredFieldsFor, reviewFieldsForRecord, thresholdFor } from "../shared/intake/review";
 import { writeClassFixtures, writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
 
@@ -72,6 +73,22 @@ await writeClassFixtures(dir);
 const run = await runIntakePipeline(fs.readdirSync(dir).map((name) => ({ fileKey: `local:${name}`, name, path: name, acquisitionStatus: "local" as const, read: async () => new Uint8Array(fs.readFileSync(path.join(dir, name))) })), {
   name: "Synthetic class run", sourceKind: "upload", sourceRoot: "browser upload", extract: (file, bytes) => extractBytes(file.name, bytes), hash: sha256Hex,
 });
+// Privacy: with a provider configured, personal-data classes never reach it and the processing log says so per file.
+{
+  const prompts: string[] = [];
+  const llmRun = await runIntakePipeline(fs.readdirSync(dir).map((name) => ({ fileKey: `local:${name}`, name, path: name, acquisitionStatus: "local" as const, read: async () => new Uint8Array(fs.readFileSync(path.join(dir, name))) })), {
+    name: "Synthetic class run (provider)", sourceKind: "upload", sourceRoot: "browser upload", extract: (file, bytes) => extractBytes(file.name, bytes), hash: sha256Hex,
+    llm: { generate: async ({ prompt }) => { prompts.push(prompt); throw new Error("fake provider"); }, provider: "openai-compatible", model: "fake", budgetTokens: 1_000_000, concurrency: 2 },
+  });
+  const excluded = llmRun.files.filter((file) => PROVIDER_EXCLUDED_CLASSES.has(file.classification?.docClass as any) && file.disposition === "extract");
+  assert.ok(excluded.length >= 4, "the fixture has consents, rosters, invoices and correspondence");
+  for (const file of excluded) {
+    assert.ok(!prompts.some((prompt) => prompt.includes(file.name)), `${file.name} was never sent`);
+    assert.ok(llmRun.processingLog.some((entry) => entry.fileKey === file.fileKey && entry.stage === "llm_skipped" && entry.sentToProvider === false && /never sent/.test(entry.note ?? "")), `the log records that ${file.name} was withheld`);
+  }
+  assert.ok(prompts.length > 0 && prompts.every((prompt) => !/[\w.+-]+@[\w-]+\.[a-z]{2,}/i.test(prompt.replace(/x{2,}/gi, ""))), "prompts carry no e-mail address");
+}
+
 const staged = await stageRunInWorkspace(mutate, society, run, run.extracts, coverageReport(run, buildImportBundle(run)));
 // Server-side reconciliation (hosted runs) derives package-embedded minutes again and reaches the pipeline's record gaps.
 const embedded = run.extractions.filter((extraction) => extraction.parentFileKey).length;
