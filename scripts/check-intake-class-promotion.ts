@@ -28,6 +28,7 @@ import { REGISTRY_FILING_KIND } from "../shared/intake/bundleClasses";
 import { BC_SOCIETY_PRE_FILL_KINDS } from "../shared/filingPreparation";
 import { extractRegistryFiling } from "../shared/intake/extractors/filing";
 import { policyEffectiveDate } from "../shared/functions/importSessionHelpers/importSessionMergeAndApply";
+import { isStructuralProvenanceField, provenanceFieldLabel } from "../shared/provenanceFields";
 import { writeClassFixtures, writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
 
 // ------------------------------------------------------------ pure model
@@ -205,6 +206,22 @@ const insuranceProvenance = await query("intake:provenanceForRecords", { society
 assert.ok(insuranceProvenance.some((row: any) => row.fieldPath === "insurer" || row.fieldPath === "startDate"));
 const director = db.dump("directors")[0] as any;
 assert.ok((await query("intake:provenanceForRecords", { societyId: society, targets: [{ targetTable: "directors", targetId: director._id }] })).some((row: any) => row.fieldPath === "fullName"), "a director links to the line that names them");
+// X-06: the "View source" drawer hides structural paths (the extractor's `kind`, source ids,
+// column keys) and shows human labels; the rows themselves stay stored.
+{
+  const provenanceRows = db.dump("fieldProvenance") as any[];
+  assert.ok(provenanceRows.some((row) => row.targetTable === "directors" && row.fieldPath === "kind"), "the structural row is still stored");
+  const visible = provenanceRows.filter((row) => !isStructuralProvenanceField(row.fieldPath));
+  assert.ok(visible.length > 0 && visible.length < provenanceRows.length);
+  for (const hidden of ["kind", "organizationName", "sourceExternalIds", "recordStatus", "totals[0].arithmeticCheck", "lines[3].column", "sourceLocator"]) assert.equal(isStructuralProvenanceField(hidden), true, hidden);
+  for (const shown of ["fullName", "termStart", "effectiveDate", "detailedAttendance[2].name", "lines[0].amount", "policyName"]) assert.equal(isStructuralProvenanceField(shown), false, shown);
+  assert.equal(provenanceFieldLabel("termStart"), "Term start");
+  assert.equal(provenanceFieldLabel("fullName"), "Name");
+  assert.equal(provenanceFieldLabel("detailedAttendance[2].status"), "Attendance 3 › Status");
+  assert.equal(provenanceFieldLabel("feePaidCents"), "Fee paid");
+  assert.equal(provenanceFieldLabel("organisationRepresented"), "Organization represented");
+  assert.ok(visible.every((row) => !/[a-z][A-Z]/.test(provenanceFieldLabel(row.fieldPath))), `no camelCase label is shown: ${[...new Set(visible.map((row) => provenanceFieldLabel(row.fieldPath)).filter((label) => /[a-z][A-Z]/.test(label)))].join(", ")}`);
+}
 // Each promoted class document is linked to a source document of its register's category.
 const promotedRows = (await query("intake:listExtractions", { societyId: society, runId: staged.runId }) as any[]).filter((row) => row.status === "promoted");
 assert.ok(promotedRows.every((row) => Array.isArray(row.promotion?.targets)), "promoted rows list the records they created");
