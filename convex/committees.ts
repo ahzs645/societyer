@@ -10,7 +10,9 @@ import {
   committeeRemovePortable,
   committeeAddMemberPortable,
   committeeRemoveMemberPortable,
+  committeeUpdateStructurePortable,
 } from "../shared/functions/committees";
+import { cadenceRuleValidator, committeeMandateVersionValidator } from "./validators/gaps";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("committees:list", query)({
@@ -41,6 +43,8 @@ export const create = authorizedMutation("committees:create", mutation)({
     cadenceNotes: v.optional(v.string()),
     chairDirectorId: v.optional(v.id("directors")),
     color: v.string(),
+    kind: v.optional(v.string()),
+    parentBody: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => committeeCreatePortable(await toPortableMutationCtx(ctx), args),
@@ -89,4 +93,18 @@ export const removeMember = authorizedMutation("committees:removeMember", mutati
   args: { id: v.id("committeeMembers") },
   returns: v.any(),
   handler: async (ctx, args) => committeeRemoveMemberPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const updateStructure = authorizedMutation("committees:updateStructure", mutation)({
+  args: {
+    id: v.id("committees"),
+    kind: v.optional(v.union(v.string(), v.null())),
+    parentBody: v.optional(v.union(v.string(), v.null())),
+    parentCommitteeId: v.optional(v.union(v.id("committees"), v.null())),
+    cadenceRule: v.optional(v.union(cadenceRuleValidator, v.null())),
+    mandateVersions: v.optional(v.array(committeeMandateVersionValidator)),
+    cadenceLabel: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => committeeUpdateStructurePortable(await toPortableMutationCtx(ctx), args),
 });

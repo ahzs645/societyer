@@ -86,6 +86,7 @@ function recordsFromBundle(bundle: any) {
   for (const employee of arrayOf(bundle?.employees)) records.push(makeRecord("employee", "employees", employee));
   for (const volunteer of arrayOf(bundle?.volunteers)) records.push(makeRecord("volunteer", "volunteers", volunteer));
   for (const doc of arrayOf(bundle?.documentMap)) records.push(makeRecord("documentCandidate", firstSection(doc), doc));
+  for (const gap of arrayOf(bundle?.representationGaps)) records.push(makeRecord("representationGap", "representationGaps", gap));
   return records;
 }
 
@@ -157,6 +158,7 @@ function targetTableForRecordKind(kind: string) {
     pipaTraining: "pipaTrainings",
     employee: "employees",
     volunteer: "volunteers",
+    representationGap: "representationGaps",
   } as Record<string, string>)[kind] ?? kind;
 }
 

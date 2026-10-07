@@ -9,6 +9,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { describeCadenceRule, normalizeCadenceRule } from "../continuityRules";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -71,10 +72,14 @@ export async function committeeCreatePortable(
     cadenceNotes?: string;
     chairDirectorId?: string;
     color: string;
+    kind?: string;
+    parentBody?: string;
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   if (args.chairDirectorId) await getOwned(ctx, "directors", args.chairDirectorId, args.societyId);
+  if (args.kind && !(COMMITTEE_KINDS as readonly string[]).includes(args.kind)) throw new Error(`Unsupported committee kind: ${args.kind}.`);
+  if (args.parentBody && !(COMMITTEE_PARENT_BODIES as readonly string[]).includes(args.parentBody)) throw new Error(`Unsupported parent body: ${args.parentBody}.`);
   const id = await ctx.db.insert("committees", {
     ...args,
     status: "Active",
@@ -152,4 +157,97 @@ export async function committeeAddMemberPortable(
 export async function committeeRemoveMemberPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   await requireOwnedRow(ctx, "committeeMembers", id);
   await ctx.db.delete(id);
+}
+
+/* --------------- A4: committee kind, parent body, cadence, mandate --------------- */
+
+export const COMMITTEE_KINDS = ["standing", "ad_hoc", "working_group", "executive", "advisory"] as const;
+export const COMMITTEE_PARENT_BODIES = ["board", "members", "committee"] as const;
+
+type CommitteeCadenceRule = { frequency: string; count?: number; months?: number[]; anchor?: string; offsetDays?: number; minimumCount?: number; seriesKey?: string; notes?: string };
+type CommitteeMandateVersion = {
+  id: string;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  title?: string;
+  mandate?: string;
+  documentId?: string;
+  cadenceRule?: CommitteeCadenceRule;
+  quorumText?: string;
+  notes?: string;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Update a committee's structured model (kind, parent body, cadence rule and
+ * effective-dated mandate versions). The free-text `cadence` label is kept for
+ * compatibility; when a cadence rule is set and no label is given, the label
+ * follows the rule.
+ */
+export async function committeeUpdateStructurePortable(
+  ctx: PortableMutationCtx,
+  args: {
+    id: string;
+    kind?: string | null;
+    parentBody?: string | null;
+    parentCommitteeId?: string | null;
+    cadenceRule?: CommitteeCadenceRule | null;
+    mandateVersions?: CommitteeMandateVersion[];
+    cadenceLabel?: string;
+  },
+) {
+  const committee = await requireOwnedRow(ctx, "committees", args.id);
+  const societyId = String(committee.societyId);
+  const patch: Record<string, unknown> = {};
+  if (args.kind !== undefined) {
+    if (args.kind !== null && !(COMMITTEE_KINDS as readonly string[]).includes(args.kind)) throw new Error(`Unsupported committee kind: ${args.kind}.`);
+    patch.kind = args.kind ?? undefined;
+  }
+  if (args.parentBody !== undefined) {
+    if (args.parentBody !== null && !(COMMITTEE_PARENT_BODIES as readonly string[]).includes(args.parentBody)) throw new Error(`Unsupported parent body: ${args.parentBody}.`);
+    patch.parentBody = args.parentBody ?? undefined;
+  }
+  if (args.parentCommitteeId !== undefined) {
+    if (args.parentCommitteeId) {
+      if (args.parentCommitteeId === args.id) throw new Error("A committee cannot be its own parent.");
+      await getOwned(ctx, "committees", args.parentCommitteeId, societyId);
+    }
+    patch.parentCommitteeId = args.parentCommitteeId || undefined;
+  }
+  if (args.cadenceRule !== undefined) {
+    patch.cadenceRule = args.cadenceRule ? normalizeCadenceRule(args.cadenceRule) : undefined;
+    if (args.cadenceRule && !args.cadenceLabel) patch.cadence = describeCadenceRule(patch.cadenceRule as any);
+  }
+  if (args.cadenceLabel !== undefined) patch.cadence = args.cadenceLabel.trim().slice(0, 80) || "Ad hoc";
+  if (args.mandateVersions !== undefined) {
+    const versions: CommitteeMandateVersion[] = [];
+    const ids = new Set<string>();
+    for (const raw of args.mandateVersions.slice(0, 50)) {
+      if (!raw.effectiveFrom || !ISO_DATE.test(raw.effectiveFrom)) throw new Error("Each mandate version needs an effective-from date (YYYY-MM-DD).");
+      if (raw.effectiveTo && (!ISO_DATE.test(raw.effectiveTo) || raw.effectiveTo < raw.effectiveFrom)) throw new Error("A mandate version's end date must be on or after its start.");
+      const id = String(raw.id || `mandate-${raw.effectiveFrom}`).slice(0, 80);
+      if (ids.has(id)) throw new Error("Mandate versions need distinct ids.");
+      ids.add(id);
+      if (raw.documentId) await getOwned(ctx, "documents", raw.documentId, societyId);
+      const version: CommitteeMandateVersion = { id, effectiveFrom: raw.effectiveFrom };
+      if (raw.effectiveTo) version.effectiveTo = raw.effectiveTo;
+      if (raw.title?.trim()) version.title = raw.title.trim().slice(0, 200);
+      if (raw.mandate?.trim()) version.mandate = raw.mandate.trim().slice(0, 8000);
+      if (raw.documentId) version.documentId = raw.documentId;
+      if (raw.cadenceRule) version.cadenceRule = normalizeCadenceRule(raw.cadenceRule);
+      if (raw.quorumText?.trim()) version.quorumText = raw.quorumText.trim().slice(0, 300);
+      if (raw.notes?.trim()) version.notes = raw.notes.trim().slice(0, 2000);
+      versions.push(version);
+    }
+    versions.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+    for (let i = 1; i < versions.length; i += 1) {
+      const previous = versions[i - 1];
+      if (previous.effectiveTo && previous.effectiveTo >= versions[i].effectiveFrom) throw new Error("Mandate versions overlap; end the earlier version before the next one starts.");
+    }
+    patch.mandateVersions = versions;
+  }
+  if (!Object.keys(patch).length) return { ok: true };
+  await ctx.db.patch(args.id, patch);
+  return { ok: true };
 }

@@ -74,6 +74,7 @@ const SECTION_RECORD_KINDS = [
   "pipaTraining",
   "employee",
   "volunteer",
+  "representationGap",
 ] as const;
 
 export {

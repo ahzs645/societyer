@@ -14,11 +14,11 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   minutes: ["minutes", "minuteBook", "minutesReview"], agendas: ["agendas"], motions: ["motions", "motionBacklog", "motionTemplates", "writtenResolutions", "memberProposals"],
   proxies: ["proxies"], conflicts: ["conflicts"], attestations: ["attestations", "pipaTraining"], auditors: ["auditors"], courtOrders: ["courtOrders"],
   filings: ["filings", "annualFilings", "filingExports", "filingBot"],
-  deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", ],
+  deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", "continuity"],
   commitments: ["commitments", "goals"],
   financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
   elections: ["elections"], grants: ["grants", "grantSources"],
-  documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations"],
+  documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],
   exports: ["exports"], audit: ["activity"], volunteers: ["volunteers"], communications: ["communications", "pendingEmails", "partyPortals", "publicPortal"],
   settings: ["apiPlatform", "aiSettings", "aiSettingsActions", "corporationSettings", "serviceProviders", "subscriptions", "programStatements", "secrets", "nameHistory", "recordLayouts", "objectMetadata", "customFields", "fieldMetadata", "views", "commandMenuItems", "importSessions", "waveCache", "permissions", "transparency", "calendarFeed"],
@@ -43,6 +43,7 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   communicationTemplates: "communications", communicationSegments: "communications",
   communicationCampaigns: "communications", communicationDeliveries: "communications",
   grantApplications: "grants", grantTransactions: "grants", grantReports: "grants",
+  governanceExpectations: "continuity", continuityPeriodMarks: "continuity",
 };
 const HANDLER_POLICIES = new Set([
   "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",

@@ -7,6 +7,7 @@ import { normalizeMeetingQuorum } from "../../minutesQuorum";
 import { transposeSourcePortable } from "../minutes";
 import { validateFiledFacts } from "../filings";
 import { requirePermissionPortable } from "../permissions";
+import { insertRepresentationGapFromImport } from "../representationGaps";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
 import { reconcileDividend } from "../../dividends";
 import {
@@ -1455,6 +1456,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       createdAtISO: cleanDateTime(payload.createdAtISO) || new Date().toISOString(),
     });
   },
+
+  representationGap: async ({ ctx, societyId, record, payload, firstSourceDocumentId }: SectionRecordContext) =>
+    insertRepresentationGapFromImport(ctx, societyId, payload, { importRecordId: record._id, importSessionId: record.sessionId, sourceDocumentId: firstSourceDocumentId }),
 
   sourceEvidence: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const externalId = cleanText(payload.externalId) || cleanText(payload.sourceExternalIds?.[0]);
