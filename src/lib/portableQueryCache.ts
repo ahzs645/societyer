@@ -28,6 +28,43 @@ function isPortablePaginatedCache(value: unknown): value is {
   );
 }
 
+/** Structural equality for JSON-shaped query results (cheaper than stringify twice). */
+export function sameQueryResult(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== "object") {
+    // JSON.stringify maps NaN to null; mirror the old stringify comparison.
+    if (typeof a === "number" && typeof b === "number") return Number.isNaN(a) && Number.isNaN(b);
+    return false;
+  }
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index++) if (!sameQueryResult(a[index], b[index])) return false;
+    return true;
+  }
+  if (Array.isArray(b)) return false;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  let leftCount = 0;
+  for (const key in left) {
+    if (left[key] === undefined) continue;
+    leftCount++;
+    if (!sameQueryResult(left[key], right[key])) return false;
+  }
+  let rightCount = 0;
+  for (const key in right) if (right[key] !== undefined) rightCount++;
+  return leftCount === rightCount;
+}
+
+/** Tables a result depends on; null means "unknown — refresh on every change". */
+type ReadSet = ReadonlySet<string> | null;
+
+type TrackingRuntime = PortableRuntime & {
+  runQueryTracked?: (name: string, args: Record<string, any>) => Promise<{ result: unknown; tables: ReadSet }>;
+};
+
+/** Every query's authority comes from the current user row. */
+const ALWAYS_READ = ["users"];
+
 type PortableWatchSpec = {
   name: string;
   args?: StaticArgs;
@@ -67,6 +104,10 @@ export class PortableQueryCache {
    *  so store-level updates (hydration, mutations) can refresh the cache
    *  without depending on React's subscription timing. */
   private portableWatchSpecs = new Map<string, PortableWatchSpec>();
+  /** Read set of the last completed run per cache key (see `affectedBy`). */
+  private portableReadSets = new Map<string, ReadSet>();
+  /** Cache keys with a run in flight. */
+  private portablePending = new Set<string>();
 
   constructor(
     private readonly portable: PortableRuntime,
@@ -78,21 +119,58 @@ export class PortableQueryCache {
     // portable query. Watch-level subscriptions alone race React's effect
     // timing — a hydration that completes between a component's render and its
     // onUpdate subscription would otherwise leave that query stale.
-    this.store.onUpdate(() => {
+    //
+    // The store reports WHICH tables changed, and each result remembers which
+    // tables it read, so a write to `tasks` no longer re-runs (and re-diffs) the
+    // documents list. A store event without a table set, or a result whose
+    // reads are unknown, still refreshes everything.
+    this.store.onUpdate((changed?: ReadonlySet<string>) => {
       // Retained snapshots bridge render/subscription churn only while the
       // store is unchanged. An inactive miss must not be consumed before a
       // fresh authorized query after the missing record has been created.
-      for (const cacheKey of this.portableCache.keys()) {
+      for (const cacheKey of [...this.portableCache.keys()]) {
         if (this.portableWatchSpecs.has(cacheKey)) continue;
+        if (!this.affectedBy(cacheKey, changed)) continue;
         this.portableCache.delete(cacheKey);
         this.portableErrors.delete(cacheKey);
         this.paginatedSnapshots.delete(cacheKey);
+        this.portableReadSets.delete(cacheKey);
       }
       for (const [cacheKey, spec] of this.portableWatchSpecs) {
+        if (!this.affectedBy(cacheKey, changed)) continue;
         if (spec.pagination) this.recomputePortablePaginated(cacheKey, spec);
         else this.recomputePortable(cacheKey, spec.name, spec.args);
       }
     });
+  }
+
+  /** Whether a store change can affect this cached result. */
+  private affectedBy(cacheKey: string, changed: ReadonlySet<string> | undefined) {
+    if (!changed) return true;
+    if (!this.portableReadSets.has(cacheKey)) return true;
+    const reads = this.portableReadSets.get(cacheKey);
+    if (!reads) return true;
+    for (const table of changed) if (reads.has(table)) return true;
+    return false;
+  }
+
+  /** A completed, still-valid result whose re-run would be wasted work. */
+  private isFresh(cacheKey: string) {
+    return (
+      !this.portablePending.has(cacheKey) &&
+      this.portableCache.get(cacheKey) !== undefined &&
+      Boolean(this.portableReadSets.get(cacheKey))
+    );
+  }
+
+  private async runTracked(name: string, args: StaticArgs | undefined): Promise<{ result: unknown; tables: ReadSet }> {
+    const runtime = this.portable as TrackingRuntime;
+    if (typeof runtime.runQueryTracked !== "function") {
+      return { result: await this.portable.runQuery(name, args ?? {}), tables: null };
+    }
+    const tracked = await runtime.runQueryTracked(name, args ?? {});
+    if (!tracked.tables) return tracked;
+    return { result: tracked.result, tables: new Set([...tracked.tables, ...ALWAYS_READ]) };
   }
 
   emit() {
@@ -103,6 +181,8 @@ export class PortableQueryCache {
 
   /** Drop results authorized for the previous selected local actor. */
   invalidatePrincipal() {
+    this.portableReadSets.clear();
+    this.portablePending.clear();
     this.portableRunTokens.clear();
     this.portablePaginatedRunTokens.clear();
     this.portableErrors.clear();
@@ -121,6 +201,7 @@ export class PortableQueryCache {
     const message = String(error);
     if (this.portableErrors.get(cacheKey) !== message) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
     this.portableErrors.set(cacheKey, message);
+    this.portableReadSets.delete(cacheKey);
     const hadResult = this.portableCache.get(cacheKey) !== undefined;
     // Failed authorization never supplies fixture data or retains another
     // actor's result. Undefined is a stable loading/unavailable value for the
@@ -132,18 +213,21 @@ export class PortableQueryCache {
   private recomputePortable(cacheKey: string, name: string, args?: StaticArgs) {
     const runId = ++this.portableRunId;
     this.portableRunTokens.set(cacheKey, runId);
-    this.portable
-      .runQuery(name, args ?? {})
-      .then((next) => {
+    this.portablePending.add(cacheKey);
+    this.runTracked(name, args)
+      .then(({ result: next, tables }) => {
         if (this.portableRunTokens.get(cacheKey) !== runId) return;
+        this.portablePending.delete(cacheKey);
         this.portableErrors.delete(cacheKey);
+        this.portableReadSets.set(cacheKey, tables);
         const prev = this.portableCache.get(cacheKey);
-        if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
+        if (!this.portableCache.has(cacheKey) || !sameQueryResult(next, prev)) {
           this.portableCache.set(cacheKey, next);
           this.emit();
         }
       })
       .catch((error) => {
+        if (this.portableRunTokens.get(cacheKey) === runId) this.portablePending.delete(cacheKey);
         this.rejectResult(cacheKey, runId, error);
       });
   }
@@ -166,7 +250,7 @@ export class PortableQueryCache {
     // Convex also constructs watches merely to read the synchronous snapshot.
     // Executing a fresh query on each such read creates microtask feedback when
     // its notification causes another snapshot read.
-    if (needsRefresh) recompute();
+    if (needsRefresh && !this.isFresh(cacheKey)) recompute();
 
     return {
       onUpdate: (callback: () => void) => {
@@ -181,7 +265,9 @@ export class PortableQueryCache {
         // still refreshes the shared cache; the cached value is read
         // synchronously by localQueryResult regardless of which watch instance
         // convex/react keeps (it re-creates the Watch on every render).
-        recompute();
+        // A result whose read set is known and untouched since it was computed
+        // is already current: re-running it would only repeat the same work.
+        if (!this.isFresh(cacheKey)) recompute();
         let subscribed = true;
         return () => {
           if (!subscribed) return;
@@ -216,16 +302,20 @@ export class PortableQueryCache {
     const pageSizes = spec.pagination?.pageSizes.slice() ?? [];
     const runId = ++this.portablePaginatedRunId;
     this.portablePaginatedRunTokens.set(cacheKey, runId);
+    let readSet: Set<string> | null = new Set<string>();
     const run = async () => {
       const results: unknown[] = [];
       let cursor: string | null = null;
       let isDone = false;
 
       for (const numItems of pageSizes) {
-        const next = await this.portable.runQuery<unknown>(spec.name, {
+        const tracked = await this.runTracked(spec.name, {
           ...(spec.args ?? {}),
           paginationOpts: { numItems, cursor },
         });
+        const next = tracked.result;
+        if (!tracked.tables) readSet = null;
+        else if (readSet) for (const table of tracked.tables) readSet.add(table);
         if (!isPortablePageResult(next)) {
           return { results: next ?? [], status: "Exhausted" as const };
         }
@@ -242,8 +332,9 @@ export class PortableQueryCache {
       .then((next) => {
         if (this.portablePaginatedRunTokens.get(cacheKey) !== runId) return;
         this.portableErrors.delete(cacheKey);
+        this.portableReadSets.set(cacheKey, readSet);
         const prev = this.portableCache.get(cacheKey);
-        if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
+        if (!this.portableCache.has(cacheKey) || !sameQueryResult(next, prev)) {
           this.portableCache.set(cacheKey, next);
           this.emit();
         }
@@ -316,6 +407,7 @@ export class PortableQueryCache {
           if (this.portableWatchSpecs.get(cacheKey) === spec) {
             this.portableWatchSpecs.delete(cacheKey);
             this.portableCache.delete(cacheKey);
+            this.portableReadSets.delete(cacheKey);
             this.portablePaginatedRunTokens.delete(cacheKey);
           }
         };

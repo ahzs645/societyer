@@ -11,7 +11,7 @@ async function start() {
   if (choice?.mode !== "local" || typeof choice.workspaceId !== "string" || !choice.workspaceId) localStorage.setItem("societyer:app-runtime", JSON.stringify({ mode: "local", workspaceId, chosenAtISO: new Date().toISOString() }));
   const { localDataClient } = await import("./lib/localDataClient");
   await localDataClient.whenLocalWorkspaceReady();
-  const existing = localDataClient.exportLocalWorkspaceSnapshot().tables.societies ?? [];
+  const existing = (await localDataClient.exportLocalWorkspaceSnapshot()).tables.societies ?? [];
   if (!existing.length) {
     const response = await fetch("/test-data/manifest.json");
     if (!response.ok) throw new Error("The test records could not be loaded. Please try again.");

@@ -114,6 +114,14 @@ export interface PortableQuery<T extends PortableDoc = PortableDoc> {
   withSearchIndex(indexName: string, search: (q: SearchFilterBuilder) => SearchFilterBuilder): PortableQuery<T>;
   filter(predicate: (doc: T) => boolean): PortableQuery<T>;
   order(direction: "asc" | "desc"): PortableQuery<T>;
+  /**
+   * Projection: drop these top-level fields from every returned row. Filters and
+   * search still see the whole row. On Convex this only trims what the handler
+   * returns; on the local engines an omitted heavy field (see
+   * shared/portable/heavyFields.ts) is never loaded from storage, which is what
+   * keeps list views over big workspaces cheap.
+   */
+  omitFields(...fields: string[]): PortableQuery<T>;
   collect(): Promise<T[]>;
   take(n: number): Promise<T[]>;
   first(): Promise<T | null>;
@@ -121,9 +129,15 @@ export interface PortableQuery<T extends PortableDoc = PortableDoc> {
   paginate(opts: PaginationOptions): Promise<PaginationResult<T>>;
 }
 
+/** Options for `PortableDbReader.get`. */
+export interface PortableGetOptions {
+  /** Projection, as `PortableQuery.omitFields`: these top-level fields are dropped (and, locally, never loaded). */
+  omitFields?: readonly string[];
+}
+
 /** Read surface of the database. */
 export interface PortableDbReader {
-  get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName): Promise<T | null>;
+  get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName, options?: PortableGetOptions): Promise<T | null>;
   query<T extends PortableDoc = PortableDoc>(table: TableName): PortableQuery<T>;
 }
 

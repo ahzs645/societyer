@@ -17,6 +17,7 @@ import type { StaticArgs } from "./staticConvexFixtures";
 
 const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
+const LEGACY_UNTRACKED_READ_ID = "__societyer_legacy_dispatch_reads_every_table__";
 
 export type LocalActorChoice = {
   _id: string;
@@ -167,7 +168,11 @@ export class StaticConvexClient {
   private registerLegacyQuery(name: string) {
     if (this.portable.has(name)) throw new Error(`Function ${name} is not a query.`);
     this.portable.register(definePortableQuery({ name, applicationPolicy: true,
-      handler: async (_ctx, args) => {
+      handler: async (ctx, args) => {
+        // The legacy dispatcher reads the store directly, outside ctx.db, so the
+        // query cache cannot know its tables. Looking up an id that exists in
+        // no table marks the read set unbounded: it refreshes on every write.
+        await ctx.db.get(LEGACY_UNTRACKED_READ_ID);
         const { mutableQueryResult } = await import("./staticLegacyDispatch");
         return mutableQueryResult(name, args, this.store);
       },
@@ -324,6 +329,7 @@ export class StaticConvexClient {
     return () => { subscribed = false; unsubscribe(); };
   }
 
+  /** Full workspace snapshot (async: heavy fields are read back from IndexedDB). */
   exportLocalWorkspaceSnapshot() {
     return this.store.exportSnapshot();
   }

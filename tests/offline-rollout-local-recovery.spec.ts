@@ -27,11 +27,11 @@ test("restore waits for startup and retains the restored vault after reopening",
       release();
       await restoring;
       await store.whenHydrated();
-      const before = store.exportSnapshot();
+      const before = await store.exportSnapshot();
       store.db?.close();
       const reopened = new LocalDexieRowStore({}, { databaseName: name });
       await reopened.whenHydrated();
-      const after = reopened.exportSnapshot();
+      const after = await reopened.exportSnapshot();
       reopened.db?.close();
       return { waited, before, after };
     } finally {
@@ -58,7 +58,7 @@ test("failed storage restore rolls every table back without replacing the visibl
     await store.whenHydrated();
     await store.importSnapshot({ tables: { societies: [{ _id: "existing", name: "Keep existing organization" }], meetings: [{ _id: "existing-meeting", societyId: "existing", title: "Keep existing meeting" }] },
       attachments: [{ key: "old-file", provider: "filesystem", storageKey: "old.txt", createdAtISO: "2026-10-01T00:00:00Z", updatedAtISO: "2026-10-01T00:00:00Z" }] });
-    const before = store.exportSnapshot();
+    const before = await store.exportSnapshot();
     const actualBulkPut = store.db.records.bulkPut.bind(store.db.records);
     store.db.records.bulkPut = async () => { throw new Error("Injected restore disk failure"); };
     let rejected = false;
@@ -67,11 +67,11 @@ test("failed storage restore rolls every table back without replacing the visibl
     } catch { rejected = true; }
     store.db.records.bulkPut = actualBulkPut;
     try {
-      const visible = store.exportSnapshot();
+      const visible = await store.exportSnapshot();
       store.db.close();
       const reopened = new LocalDexieRowStore({}, { databaseName: name });
       await reopened.whenHydrated();
-      const persisted = reopened.exportSnapshot();
+      const persisted = await reopened.exportSnapshot();
       reopened.db?.close();
       return { rejected, before, visible, persisted };
     } finally {
@@ -105,7 +105,7 @@ test("direct restore rejects corrupt records and strips hosted authority while r
     for (const snapshot of invalid) {
       try { await store.importSnapshot(snapshot); } catch { rejected++; }
     }
-    const retained = store.exportSnapshot();
+    const retained = await store.exportSnapshot();
     const input = { tables: { societies: [{ _id: "restored", name: "Restored local organization" }],
       users: [{ _id: "historical-user", societyId: "restored", role: "Owner", status: "Active", email: "history@example.test", authIssuer: "https://hosted.example.test", authSubject: "verified-before-export", externalIdentityId: "identity", authProvider: "clerk", emailVerifiedAtISO: "2026-10-01T00:00:00Z", lastLoginAtISO: "2026-10-01T00:00:00Z" }],
       externalIdentities: [{ _id: "identity", issuer: "https://hosted.example.test", subject: "verified-before-export", status: "Active" }],
@@ -114,7 +114,7 @@ test("direct restore rejects corrupt records and strips hosted authority while r
     } };
     try {
       await store.importSnapshot(input);
-      const restored = store.exportSnapshot();
+      const restored = await store.exportSnapshot();
       return { rejected, retained, restored, originalSubject: input.tables.users[0].authSubject };
     } finally {
       store.db?.close();

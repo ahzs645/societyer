@@ -36,7 +36,7 @@ export function WorkspaceStorageCard() {
     setBusy("export");
     setProgress("Preparing backup…");
     try {
-      if (format === "json") toast.success("Records downloaded", downloadLocalWorkspaceSnapshot());
+      if (format === "json") toast.success("Records downloaded", await downloadLocalWorkspaceSnapshot());
       else {
         const { filename, manifest } = await downloadLocalWorkspaceZip(setProgress);
         if (manifest.completeStoredFiles) toast.success("ZIP backup downloaded", `${manifest.rowCount} records and ${manifest.includedFiles} saved files. ${filename}`);

@@ -20,7 +20,8 @@ export class StaticDemoDexieStore {
     });
   }
 
-  onUpdate(listener: () => void) {
+  /** `changed` lists the tables a write touched; undefined means "anything may have changed". */
+  onUpdate(listener: (changed?: ReadonlySet<string>) => void) {
     return this.rowsStore.onUpdate(listener);
   }
 
@@ -83,6 +84,7 @@ export class StaticDemoDexieStore {
     return this.rowsStore.transactionAsync(mutate);
   }
 
+  /** Full snapshot, heavy fields included (they are read back from IndexedDB). */
   exportSnapshot() {
     return this.rowsStore.exportSnapshot();
   }

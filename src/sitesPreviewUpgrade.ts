@@ -25,7 +25,7 @@ export async function upgradeTestWorkspace(client: any, updateStatus: (s: string
   const upgrade = await response.json();
   if (upgrade.kind !== "pgair-interface-upgrade" || upgrade.revision !== revision || upgrade.testOnly !== true) throw new Error("The test update is not recognized.");
   const societyId = upgrade.societyId;
-  const snapshot = client.exportLocalWorkspaceSnapshot();
+  const snapshot = await client.exportLocalWorkspaceSnapshot();
   const tables = snapshot.tables as Record<string, any[]>;
   const byTable = Object.fromEntries(Object.entries(tables).map(([name, rows]) => [name, new Map(rows.map(row => [row._id, row]))]));
   const protectedMinutes = new Set<string>();

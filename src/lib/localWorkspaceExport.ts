@@ -5,7 +5,7 @@ import { triggerBlobDownload } from "./zip";
 import { isLocalDataRuntime } from "./staticRuntime";
 
 type LocalExportCapableClient = {
-  exportLocalWorkspaceSnapshot?: () => unknown;
+  exportLocalWorkspaceSnapshot?: () => unknown | Promise<unknown>;
   importLocalWorkspaceSnapshot?: (snapshot: any, files?: ReturnType<typeof archiveFileRows>) => Promise<unknown> | unknown;
 };
 
@@ -20,9 +20,10 @@ export type WorkspaceBackupSummary = {
   societies: Array<{ _id: string; name: string }>;
 };
 
-export function getLocalWorkspaceSnapshot() {
+/** Full snapshot of the local workspace, heavy fields included (read back from IndexedDB). */
+export async function getLocalWorkspaceSnapshot(): Promise<any> {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return client.exportLocalWorkspaceSnapshot?.() ?? null;
+  return (await client.exportLocalWorkspaceSnapshot?.()) ?? null;
 }
 
 export function localWorkspaceBackupSupported() {
@@ -35,8 +36,8 @@ export function localWorkspaceRestoreSupported() {
   return isLocalDataRuntime() && typeof client.importLocalWorkspaceSnapshot === "function";
 }
 
-export function downloadLocalWorkspaceSnapshot(filename = defaultBackupFilename()) {
-  const snapshot = getLocalWorkspaceSnapshot();
+export async function downloadLocalWorkspaceSnapshot(filename = defaultBackupFilename()) {
+  const snapshot = await getLocalWorkspaceSnapshot();
   if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -56,7 +57,7 @@ export function defaultBackupFilename(now = new Date()) {
 
 export async function downloadLocalWorkspaceZip(onProgress?: (message: string) => void) {
   await localDataClient.whenLocalWorkspaceReady?.();
-  const snapshot: any = getLocalWorkspaceSnapshot();
+  const snapshot: any = await getLocalWorkspaceSnapshot();
   if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
   const attachments: AttachmentDownload[] = [];
   for (const society of snapshot.tables.societies ?? []) {
