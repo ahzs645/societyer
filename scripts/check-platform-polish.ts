@@ -9,6 +9,8 @@ import fr from "../src/i18n/locales/fr.json";
 import { ROUTE_IDENTITY } from "../src/lib/routeIdentity";
 import { pluralize } from "../src/lib/format";
 import { FLOATING_LAYER_SELECTOR } from "../src/lib/floatingLayer";
+import { NAV_ITEM_LABEL_KEYS, translateNavLabel } from "../src/i18n/navLabels";
+import { formatDocumentTitle } from "../src/lib/documentTitle";
 
 type Catalog = { [key: string]: string | Catalog };
 function flatten(catalog: Catalog, prefix = ""): Map<string, string> {
@@ -30,10 +32,7 @@ for (const [key, value] of enKeys) {
 }
 
 // Every sidebar/palette route label resolves to a catalogue key.
-const layout = readFileSync(new URL("../src/components/Layout.internal.tsx", import.meta.url), "utf8");
-const start = layout.indexOf("const NAV_ITEM_LABEL_KEYS");
-const block = layout.slice(start, layout.indexOf("};", start));
-const mapped = new Map([...block.matchAll(/^\s+(?:"([^"]+)"|([A-Za-z]+)): "([^"]+)"/gm)].map((m) => [m[1] ?? m[2], m[3]]));
+const mapped = new Map(Object.entries(NAV_ITEM_LABEL_KEYS));
 const labels = new Set<string>();
 for (const identity of Object.values(ROUTE_IDENTITY) as Array<{ label: string; labelByEntityKind?: Record<string, string> }>) {
   labels.add(identity.label);
@@ -58,5 +57,24 @@ assert.equal(pluralize(1200, "record"), "1,200 records");
 for (const selector of ["[data-floating-layer]", ".menu", ".calendar", ".menu-backdrop"]) {
   assert.ok(FLOATING_LAYER_SELECTOR.includes(selector), `floating layers must include ${selector}`);
 }
+
+// Page headers translate their sidebar label (the page heading matches the
+// sidebar entry in French) and leave free text such as record names alone.
+const frLookup = (key: string, fallback: string) => frKeys.get(key) ?? fallback;
+assert.equal(translateNavLabel(frLookup, "Dashboard"), frKeys.get("nav.dashboard"));
+assert.notEqual(translateNavLabel(frLookup, "Dashboard"), "Dashboard");
+assert.equal(translateNavLabel(frLookup, "Q2 board meeting"), "Q2 board meeting");
+// Every page names the browser tab after itself.
+assert.equal(formatDocumentTitle("Members"), "Members · Societyer");
+assert.equal(formatDocumentTitle("  "), "Societyer");
+const helpers = readFileSync(new URL("../src/pages/_helpers.tsx", import.meta.url), "utf8");
+assert.match(helpers, /useDocumentTitle\(/, "the shared PageHeader sets the document title");
+assert.match(helpers, /translateNavLabel\(t, title\)/, "the shared PageHeader translates sidebar labels");
+const moduleGate = readFileSync(new URL("../src/components/ModuleGate.tsx", import.meta.url), "utf8");
+assert.match(moduleGate, /\/app\/settings\?tab=modules/, "a disabled module links straight to the Modules tab");
+// Stack-on-phone tables must beat the more specific scrolling-table rules.
+const tableCss = readFileSync(new URL("../src/styles/_components-tables-misc.scss", import.meta.url), "utf8");
+assert.match(tableCss, /\.table-wrap > \.table\.table--stack-mobile/, "stacked phone tables override .table-wrap > .table");
+assert.match(tableCss, /\.table-scroll > \.table\.table--stack-mobile/, "stacked phone tables override .table-scroll > .table");
 
 console.log(`PASS: ${frKeys.size} French keys in parity, ${labels.size} navigation labels translated, pluralisation and floating-layer selector`);
