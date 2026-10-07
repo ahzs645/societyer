@@ -34,6 +34,14 @@ const build = {
 export default defineConfig({
   base,
   plugins: [react()],
+  // Milkdown's Crepe toolbar ships Vue components. Without these compile-time
+  // flags Vue's esm-bundler build warns on every editor mount. Options API stays
+  // on (Vue's default, in case a toolbar component uses it); devtools are off.
+  define: {
+    __VUE_OPTIONS_API__: "true",
+    __VUE_PROD_DEVTOOLS__: "false",
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: "false",
+  },
   // PowerSync uses its own worker and WASM loader. Pre-bundling that loader
   // rewrites its worker URL and can leave SQLite initialization waiting forever.
   optimizeDeps: {

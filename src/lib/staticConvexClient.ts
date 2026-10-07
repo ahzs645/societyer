@@ -48,7 +48,32 @@ function warnLegacyFallback(
     );
     return;
   }
-  console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+  // Functions the portable manifest classifies as `static-fallback` are served
+  // by the local mirror on purpose (documented in the manifest); only an
+  // unclassified name is a real gap worth a console warning.
+  void knownStaticFallbacks().then((known) => {
+    if (known.has(name)) {
+      console.debug(`[societyer-local] "${name}" served by its local mirror (classified static-fallback in the portable manifest)`);
+    } else {
+      console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+    }
+  });
+}
+
+let staticFallbackNames: Promise<Set<string>> | null = null;
+/** Names classified `static-fallback`; the manifest is loaded only on the first fallback. */
+export function knownStaticFallbacks(): Promise<Set<string>> {
+  staticFallbackNames ??= import("../../shared/functions/portable-manifest.json")
+    .then((module: any) => {
+      const manifest = module.default ?? module;
+      return new Set<string>(
+        (manifest.functions ?? [])
+          .filter((entry: any) => entry?.classification === "static-fallback")
+          .map((entry: any) => String(entry.name)),
+      );
+    })
+    .catch(() => new Set<string>());
+  return staticFallbackNames;
 }
 
 /**
