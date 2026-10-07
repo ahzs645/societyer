@@ -25,7 +25,7 @@ only touched where a shared fix required a one-line change (date comparisons,
 | L20 | Demo banner label uses `blue-11` (7.3:1 in dark mode, was 2.9:1). |
 | L22 | Notifications popover: `role=dialog`, label, focus in, Escape, focus return. |
 | M10 i18n | `<html lang>` follows the language (`en`/`fr`). French catalogue now covers every navigation label (43 added + "Advanced setup" group, "Browser apps" key was missing), Settings tabs/cards/toggles, demo banner, record-table toolbar, Save-as prompt and modal default buttons. |
-| G-30, D-17, M11 phone tables | Shared plain tables on phones keep words whole, give text cells a 6.5rem minimum and one-line headers, so they scroll sideways instead of wrapping per character. Card-edge `.table-wrap` no longer bleeds past the card. Record-table row actions are static and visible below 760px (sticky actions covered all cells on narrow non-touch windows); invisible hover actions no longer intercept clicks. |
+| G-30, D-17, M11 phone tables | Shared plain tables on phones keep words whole, give text cells a 6.5rem minimum and one-line headers, so they scroll sideways instead of wrapping per character. Card-edge `.table-wrap` no longer bleeds past the card. Record-table row actions are static and visible below 760px (sticky actions covered all cells on narrow non-touch windows, and their invisible links took taps). |
 | G-22 | Static demo keeps the selected workspace in `sessionStorage` for the tab, so a new workspace stays selected after reload. |
 
 ## Gates added
@@ -46,6 +46,6 @@ only touched where a shared fix required a one-line change (date comparisons,
 - Search scans society tables in memory (no new search indexes, no schema change); fine for workspace-sized data.
 
 ## Deferred / for other packages
-- `/app/people-directory/:id` with an unknown id may still sit on "Loading" (P12/M1, owned by the people package); the new route fixture exercises it.
+- `/app/people-directory/:id` with an unknown id still sits on "Loading" (P12/M1: `personHistory.profile` throws and the page treats undefined as loading; owned by the people package). The new `missing-record` route fixture therefore FAILS in `tests/interface-routes.spec.ts` until that not-found state lands; the coverage gate itself passes.
 - Import review session cards that render one letter per line (`.import-session-row`, D-17/D-09) and the documents' frozen-title width are page-specific (documents package).
 - `test:interface-checks` still chains with `&&` (suggestion only).
