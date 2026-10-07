@@ -84,6 +84,17 @@ async function societyRows(ctx: PortableQueryCtx, table: string, societyId: stri
   return ctx.db.query(table).withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
 }
 
+/**
+ * The people this workspace's directory shows: owned rows, plus the unowned rows the trusted local runtime
+ * keeps its directory in (a browser-local or desktop workspace inserts people without a societyId), as
+ * `peopleDirectory:list` and `ownedPerson` treat them. Hosted workspaces see only their own rows.
+ */
+async function directoryPeople(ctx: PortableQueryCtx, societyId: string) {
+  const trustedLocal = ctx.principal.kind === "user" && ctx.principal.assurance === "trusted-workspace" && ctx.principal.runtime !== "convex-hosted";
+  if (!trustedLocal) return societyRows(ctx, "peopleDirectory", societyId);
+  return (await ctx.db.query("peopleDirectory").collect()).filter((row) => !row.societyId || row.societyId === societyId);
+}
+
 async function canRead(ctx: PortableQueryCtx, societyId: string, permission: Permission) {
   try { await requirePermissionPortable(ctx, societyId, permission); return true; }
   catch (e) { if (e instanceof Error && /^(Permission|Service scope) .* required\.$/.test(e.message)) return false; throw e; }
@@ -108,7 +119,7 @@ async function ownedPerson(ctx: PortableQueryCtx, id: string, societyId: string)
 
 export async function duplicateSuggestions(ctx: PortableQueryCtx, { societyId, minScore }: { societyId: string; minScore?: number }) {
   await requirePermissionPortable(ctx, societyId, "members:read");
-  const people = (await societyRows(ctx, "peopleDirectory", societyId)).filter((row) => !row.mergedIntoId);
+  const people = (await directoryPeople(ctx, societyId)).filter((row) => !row.mergedIntoId);
   const occurrences = await societyRows(ctx, "personOccurrences", societyId);
   const readable = new Map<string, boolean>();
   const stats = new Map<string, { meetings: Set<string>; dates: string[]; count: number }>();
