@@ -86,6 +86,7 @@ export function GrantEditorPageLayout({
   documents,
   reports,
   accountById,
+  errors,
 }: {
   grantDraft: any;
   setGrantDraft: (draft: any) => void;
@@ -95,6 +96,7 @@ export function GrantEditorPageLayout({
   documents: any[];
   reports: any[];
   accountById: Map<string, any>;
+  errors?: Record<string, string>;
 }) {
   const update = (patch: Record<string, any>) => setGrantDraft({ ...grantDraft, ...patch });
 
@@ -102,11 +104,11 @@ export function GrantEditorPageLayout({
     <div className="grant-edit-layout">
       <div className="grant-edit-layout__main">
         <EditSection id="grant-edit-overview" title="Overview" description="Funder, program, and high-level positioning.">
-          <Field label="Title">
+          <Field label="Title" required error={errors?.title}>
             <input className="input" value={grantDraft.title} onChange={(e) => update({ title: e.target.value })} />
           </Field>
           <div className="grant-edit-grid grant-edit-grid--2">
-            <Field label="Funder">
+            <Field label="Funder" required error={errors?.funder}>
               <input className="input" value={grantDraft.funder} onChange={(e) => update({ funder: e.target.value })} />
             </Field>
             <Field label="Program">
@@ -122,7 +124,7 @@ export function GrantEditorPageLayout({
               <Select value={grantDraft.priority ?? ""} onChange={(value) => update({ priority: value })}
                 options={[{ value: "", label: "Unspecified" }, { value: "High", label: "High" }, { value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }]} />
             </Field>
-            <Field label="Fit score" hint="0 to 100">
+            <Field label="Fit score" hint="0 to 100" error={errors?.fitScore}>
               <input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => update({ fitScore: e.target.value })} />
             </Field>
           </div>
@@ -143,10 +145,10 @@ export function GrantEditorPageLayout({
             </Field>
           </div>
           <div className="grant-edit-grid grant-edit-grid--2">
-            <Field label="Requested" hint="Dollars">
+            <Field label="Requested" hint="Dollars" error={errors?.amountRequestedCents}>
               <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => update({ amountRequestedDollars: e.target.value })} />
             </Field>
-            <Field label="Awarded" hint="Dollars">
+            <Field label="Awarded" hint="Dollars" error={errors?.amountAwardedCents}>
               <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => update({ amountAwardedDollars: e.target.value })} />
             </Field>
           </div>
@@ -189,7 +191,7 @@ export function GrantEditorPageLayout({
             <Field label="Start">
               <DatePicker value={grantDraft.startDate ?? ""} onChange={(value) => update({ startDate: value })} />
             </Field>
-            <Field label="End">
+            <Field label="End" error={errors?.endDate}>
               <DatePicker value={grantDraft.endDate ?? ""} onChange={(value) => update({ endDate: value })} />
             </Field>
           </div>
