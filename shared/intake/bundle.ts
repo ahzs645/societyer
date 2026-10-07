@@ -12,6 +12,7 @@ import type { ActionChain, RecordGap, ReconcileLink, ReconciledMeeting } from ".
 import type { ExtractionEnvelope, FieldValue, Locator, UnsupportedDetail } from "./schemas/common";
 import { isFieldValue, type VerificationSummary } from "./verify";
 import { AFFECTED_TABLE, classBundleRecords } from "./bundleClasses";
+import { markEvidenceVerified } from "./evidenceRule";
 
 export type IntakeFileRecord = {
   fileKey: string;
@@ -319,6 +320,8 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
     ...Object.fromEntries(Object.entries(classes.collections).filter(([key, rows]) => key !== "meetingMinutes" && rows.length)),
     representationGaps,
   };
+  // Class records whose source facts meet the bulk-accept rule are staged as evidence-verified (confidence High).
+  markEvidenceVerified(bundle, run.extractions as any);
   const transposedFiles = new Set<string>(classes.transposed);
   for (const minutes of meetingMinutes) for (const id of (minutes as any).sourceExternalIds ?? []) transposedFiles.add(String(id));
   const collectionCounts = Object.fromEntries(Object.entries(bundle).filter(([, value]) => Array.isArray(value)).map(([key, value]) => [key, (value as unknown[]).length]));

@@ -259,6 +259,28 @@ export function ImportSessionsPage() {
     }
   };
 
+  // Records whose source facts met the intake bulk-accept rule (stated, span-verified, not conflicting).
+  const evidenceVerifiedPending = records.filter(isEvidenceVerifiedPending);
+  const approveEvidenceVerified = async () => {
+    if (!session || !evidenceVerifiedPending.length) return;
+    const ok = await confirm({
+      title: `Approve ${evidenceVerifiedPending.length} evidence-verified record${evidenceVerifiedPending.length === 1 ? "" : "s"}?`,
+      message: `Every header fact of these records was stated in its source, re-found at its quoted location and not in conflict with another copy. They are marked approved in "${session.name}"; nothing is published until you apply sections, and they land in their review statuses (draft policies and rule sets, unconfirmed directors, insurance needing review). Everything else stays pending.`,
+      confirmLabel: `Approve ${evidenceVerifiedPending.length}`,
+    });
+    if (!ok) return;
+    try {
+      let updated = 0;
+      for (let offset = 0; offset < evidenceVerifiedPending.length; offset += 500) {
+        const result = await bulkSetStatus({ sessionId: session._id, status: "Approved", recordIds: evidenceVerifiedPending.slice(offset, offset + 500).map((record: any) => record._id) });
+        updated += result.updated ?? 0;
+      }
+      toast.success(`${updated} evidence-verified records approved`, "Apply sections when ready to publish them");
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not approve records");
+    }
+  };
+
   const canPromote = (...permissions: string[]) => canWrite && permissions.every(permission => can(permission as any));
   const runApply = async (label: string, action: () => Promise<string>) => {
     if (!session) return;
@@ -576,6 +598,14 @@ export function ImportSessionsPage() {
               {session.qualitySummary && (
                 <InspectorNote title="Quality gates">
                   {session.qualitySummary.importBlockers ?? 0} import blockers, {session.qualitySummary.badDateDocuments ?? 0} bad-date documents, and {session.qualitySummary.sensitiveDocuments ?? 0} sensitive documents were reported in the source bundle.
+                </InspectorNote>
+              )}
+              {evidenceVerifiedPending.length > 0 && (
+                <InspectorNote title="Evidence-verified records">
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span>{evidenceVerifiedPending.length} pending record{evidenceVerifiedPending.length === 1 ? "" : "s"} met the intake bulk-accept rule (stated, re-found in the source, not conflicting).</span>
+                    <button type="button" className="btn btn--sm" onClick={() => { void approveEvidenceVerified(); }} disabled={!canWrite} data-testid="import-approve-verified"><Check size={12} /> Approve evidence-verified</button>
+                  </div>
                 </InspectorNote>
               )}
               <InsuranceImportReviewPanel
@@ -1011,6 +1041,12 @@ function linkInsightsFor(record: any): LinkInsight[] {
   }
 
   return insights;
+}
+
+function isEvidenceVerifiedPending(record: any) {
+  if (record.status !== "Pending") return false;
+  const payload = record.payload ?? {};
+  return payload.evidenceVerified === true && String(record.confidence ?? payload.confidence ?? "").toLowerCase() === "high";
 }
 
 function isImportReadyInsuranceRecord(record: any) {
