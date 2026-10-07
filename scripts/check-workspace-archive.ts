@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { archiveDatabaseSnapshot, buildWorkspaceArchive, hashBytes, readWorkspaceArchiveFile } from "../src/lib/workspaceArchive";
 import { LocalDexieRowStore } from "../src/lib/localDexieRowStore";
 import { archiveFileRows } from "../src/lib/workspaceArchiveFiles";
+import { preferredRestoredSocietyId } from "../src/lib/restoredSociety";
 const database = { kind: "societyer.localWorkspaceSnapshot", exportedAtISO: "2026-10-06T12:00:00Z", tables: { societies: [{ _id: "s1", name: "Archive test" }], minutes: [{ _id: "m1", societyId: "s1", text: "µg/m³ · source wording", sourceMeetingRecord: { documents: [] } }] }, attachments: [], changes: [{ table: "minutes", id: "m1", op: "upsert", createdAtISO: "2026-10-06T11:00:00Z", snapshot: { text: "Earlier wording" } }] };
 const content = new TextEncoder().encode("Exact original file bytes");
 const result = await buildWorkspaceArchive(database, async add => {
@@ -42,4 +43,14 @@ aliasManifest.files[1].archivePath = "files/unchecked-alias";
 wrongAlias.file("files/unchecked-alias", "corrupted alias bytes");
 wrongAlias.file("manifest.json", JSON.stringify(aliasManifest));
 await assert.rejects(readWorkspaceArchiveFile(new File([await wrongAlias.generateAsync({ type: "uint8array" })], "alias.zip")), /inconsistent file aliases/);
+// O-1: a restore opens the organization that was active at backup time, else
+// the first non-demo organization — never the bundled demo just because its
+// row comes first.
+const demoFirst = { tables: { societies: [{ _id: "static_society_riverside", name: "Demo" }, { _id: "org_b", name: "Restored" }, { _id: "org_c", name: "Other" }] } };
+assert.equal(preferredRestoredSocietyId(demoFirst), "org_b");
+assert.equal(preferredRestoredSocietyId({ ...demoFirst, activeSocietyId: "org_c" }), "org_c");
+assert.equal(preferredRestoredSocietyId({ ...demoFirst, activeSocietyId: "gone" }), "org_b");
+assert.equal(preferredRestoredSocietyId({ tables: { societies: [{ _id: "static_society_riverside", name: "Demo" }] } }), "static_society_riverside");
+const orgExport = archiveDatabaseSnapshot({ kind: "societyer.workspaceExport", generatedAtISO: "2026-10-06T12:00:00Z", society: { _id: "org_x", name: "Org" }, tables: { societies: [{ _id: "static_society_riverside", name: "Demo" }, { _id: "org_x", name: "Org" }] } });
+assert.equal(preferredRestoredSocietyId(orgExport), "org_x", "an organization export reopens its organization");
 console.log("ZIP archive checks passed: exact records/files, deduplication, external/missing inventory, legacy JSON/ZIP, preserved journal, corruption/path rejection and invalid-import atomicity.");

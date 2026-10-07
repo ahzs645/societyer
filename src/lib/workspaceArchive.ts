@@ -161,6 +161,8 @@ export function archiveDatabaseSnapshot(database: any) {
   const snapshot = database?.kind === "societyer.workspaceExport" ? {
     kind: "societyer.localWorkspaceSnapshot", exportedAtISO: database.generatedAtISO,
     tables: database.tables, attachments: [], changes: [],
+    // An organization export names its organization; open it after restoring.
+    ...(typeof database.society?._id === "string" ? { activeSocietyId: database.society._id } : {}),
   } : database;
   validateSetupBackup(snapshot);
   return snapshot;

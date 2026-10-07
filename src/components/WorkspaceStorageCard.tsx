@@ -71,7 +71,7 @@ export function WorkspaceStorageCard() {
     setBusy("import");
     try {
       const summary = await restoreLocalWorkspaceBackup(file);
-      const restoredSocietyId = summary.societies[0]?._id;
+      const restoredSocietyId = summary.preferredSocietyId;
       if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       toast.success(
         "Backup restored",
