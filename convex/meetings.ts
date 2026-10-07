@@ -14,6 +14,7 @@ import {
   backfillQuorumSnapshotPortable,
 } from "../shared/functions/meetings";
 import { mergePortable, mergePreviewPortable } from "../shared/functions/meetingMerge";
+import { attendanceRecordsForMeetingPortable } from "../shared/functions/minutesAttendance";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("meetings:list", query)({
@@ -161,6 +162,13 @@ export const remove = authorizedMutation("meetings:remove", mutation)({
   args: { id: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// The meeting's attendance register rows, edited through the attendance grid.
+export const attendanceRecords = authorizedQuery("meetings:attendanceRecords", query)({
+  args: { meetingId: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, args) => attendanceRecordsForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Duplicate meetings (same body, same day): preview, then fold the duplicate

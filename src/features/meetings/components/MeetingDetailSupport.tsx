@@ -14,6 +14,14 @@ import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
 import { minutesQuorumLabel } from "../../../../shared/minutesQuorum";
 import { materialEffectiveStatus } from "../lib/meetingMaterialAccess";
+import { NameAutocomplete } from "../../../components/NameAutocomplete";
+import {
+  APPENDIX_COLUMNS,
+  DIRECTOR_APPOINTMENT_COLUMNS,
+  SESSION_SEGMENT_COLUMNS,
+  SPECIAL_RESOLUTION_EXHIBIT_COLUMNS,
+  StructuredRowsField,
+} from "./StructuredRowsField";
 
 export function AttendanceDetails({
   present,
@@ -90,12 +98,15 @@ export function StructuredMinutesEditor({
   value,
   onChange,
   isAgm,
-  includeRecordArrays = true,
+  includeRecordArrays: _includeRecordArrays = false,
+  peopleNames = [],
 }: {
   value: StructuredMinutesEdit;
   onChange: (value: StructuredMinutesEdit) => void;
   isAgm: boolean;
   includeRecordArrays?: boolean;
+  /** People-directory names suggested for chair / secretary / recorder. */
+  peopleNames?: string[];
 }) {
   const patch = (diff: Partial<StructuredMinutesEdit>) => onChange({ ...value, ...diff });
   return (
@@ -109,21 +120,21 @@ export function StructuredMinutesEditor({
       </Field>
       <div className="structured-minutes-editor__grid">
         <Field label="Chair">
-          <input className="input" value={value.chairName} onChange={(event) => patch({ chairName: event.target.value })} />
+          <NameAutocomplete value={value.chairName} onChange={(chairName) => patch({ chairName })} options={peopleNames} ariaLabel="Chair" placeholder="Name as written" />
         </Field>
         <Field label="Secretary">
-          <input className="input" value={value.secretaryName} onChange={(event) => patch({ secretaryName: event.target.value })} />
+          <NameAutocomplete value={value.secretaryName} onChange={(secretaryName) => patch({ secretaryName })} options={peopleNames} ariaLabel="Secretary" placeholder="Name as written" />
         </Field>
         <Field label="Recorder / minute-taker">
-          <input className="input" value={value.recorderName} onChange={(event) => patch({ recorderName: event.target.value })} />
+          <NameAutocomplete value={value.recorderName} onChange={(recorderName) => patch({ recorderName })} options={peopleNames} ariaLabel="Recorder" placeholder="Name as written" />
         </Field>
-        <Field label="Called to order" hint="ISO date/time or source text such as 5:32 pm.">
-          <input className="input" value={value.calledToOrderAt} onChange={(event) => patch({ calledToOrderAt: event.target.value })} />
+        <Field label="Called to order" hint="Time as written, e.g. 3:04 PM.">
+          <input className="input" value={value.calledToOrderAt} onChange={(event) => patch({ calledToOrderAt: event.target.value })} aria-label="Called to order" />
         </Field>
-        <Field label="Adjourned" hint="ISO date/time or source text.">
-          <input className="input" value={value.adjournedAt} onChange={(event) => patch({ adjournedAt: event.target.value })} />
+        <Field label="Adjourned" hint="Time as written, e.g. 4:45 PM.">
+          <input className="input" value={value.adjournedAt} onChange={(event) => patch({ adjournedAt: event.target.value })} aria-label="Adjourned" />
         </Field>
-        <Field label="Next meeting">
+        <Field label="Next meeting (as written)" hint="Structured next meetings are listed below.">
           <input className="input" value={value.nextMeetingAt} onChange={(event) => patch({ nextMeetingAt: event.target.value })} />
         </Field>
       </div>
@@ -144,21 +155,18 @@ export function StructuredMinutesEditor({
         <MarkdownEditor rows={2} value={value.remoteInstructions} onChange={(markdown) => patch({ remoteInstructions: markdown })} />
       </Field>
 
-      {includeRecordArrays && <><Field label="Detailed attendance" hint="JSON array preserves all fields and punctuation. Legacy input: one row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
-        <textarea className="textarea" rows={5} value={value.detailedAttendance} onChange={(event) => patch({ detailedAttendance: event.target.value })} />
-      </Field>
+      {/* Attendance and agenda sections have dedicated editors (attendance grid,
+          section editor); they are never edited as raw text here (B4). */}
 
-      <Field label="Agenda record / per-topic notes" hint="JSON array preserves all fields and punctuation. Legacy input: one row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
-        <textarea className="textarea" rows={10} value={value.sections} onChange={(event) => patch({ sections: event.target.value })} />
-      </Field></>}
+      <details className="structured-minutes-editor__group">
+        <summary>Session segments (in camera, closed sessions)</summary>
+        <StructuredRowsField title="Session segments" value={value.sessionSegments} onChange={(sessionSegments) => patch({ sessionSegments })} columns={SESSION_SEGMENT_COLUMNS} />
+      </details>
 
-      <Field label="Session segments" hint="JSON array preserves all fields and punctuation. Legacy input: one row per segment: type | title | started | ended | notes">
-        <textarea className="textarea" rows={3} value={value.sessionSegments} onChange={(event) => patch({ sessionSegments: event.target.value })} />
-      </Field>
-
-      <Field label="Appendices / attachments" hint="JSON array preserves all fields and punctuation. Legacy input: one row: title | type | reference | notes">
-        <textarea className="textarea" rows={3} value={value.appendices} onChange={(event) => patch({ appendices: event.target.value })} />
-      </Field>
+      <details className="structured-minutes-editor__group">
+        <summary>Appendices / attachments</summary>
+        <StructuredRowsField title="Appendices" value={value.appendices} onChange={(appendices) => patch({ appendices })} columns={APPENDIX_COLUMNS} />
+      </details>
 
       <div className="structured-minutes-editor__grid">
         <Field label="Next meeting location">
@@ -184,12 +192,8 @@ export function StructuredMinutesEditor({
           <Field label="Director election / appointment notes">
             <MarkdownEditor rows={3} value={value.directorElectionNotes} onChange={(markdown) => patch({ directorElectionNotes: markdown })} />
           </Field>
-          <Field label="Director appointments" hint="JSON array preserves all fields and punctuation. Legacy input: one row: status | name | role | affiliation | term | consent yes/no | votes | elected yes/no | notes">
-            <textarea className="textarea" rows={4} value={value.directorAppointments} onChange={(event) => patch({ directorAppointments: event.target.value })} />
-          </Field>
-          <Field label="Special-resolution exhibits" hint="JSON array preserves all fields and punctuation. Legacy input: one row: title | reference | notes">
-            <textarea className="textarea" rows={3} value={value.specialResolutionExhibits} onChange={(event) => patch({ specialResolutionExhibits: event.target.value })} />
-          </Field>
+          <StructuredRowsField title="Director appointments" value={value.directorAppointments} onChange={(directorAppointments) => patch({ directorAppointments })} columns={DIRECTOR_APPOINTMENT_COLUMNS} />
+          <StructuredRowsField title="Special-resolution exhibits" value={value.specialResolutionExhibits} onChange={(specialResolutionExhibits) => patch({ specialResolutionExhibits })} columns={SPECIAL_RESOLUTION_EXHIBIT_COLUMNS} />
         </>
       )}
     </div>

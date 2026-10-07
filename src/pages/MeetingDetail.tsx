@@ -1,5 +1,15 @@
 import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
-import { meetingStatusLabel } from "../../shared/meetingStatus";
+import { meetingStatusLabel, meetingStatusTone } from "../../shared/meetingStatus";
+import { formatMeetingDate, meetingCalendarDate } from "../../shared/meetingDates";
+import { meetingBodyLabel } from "../../shared/meetingBodyPicker";
+import { approvingMeetingCandidates, minutesApprovalIssues } from "../../shared/meetingApproval";
+import { minutesPresentCount } from "../../shared/meetingAttendanceGrid";
+import { duplicateIndex } from "../../shared/meetingMerge";
+import { canonicalMotionOutcomeLabel } from "../../shared/motionOutcome";
+import { motionOutcomeConsistencyIssues } from "../../shared/motionValidation";
+import { EditMeetingDrawer } from "../features/meetings/components/EditMeetingDrawer";
+import { MergeMeetingDialog } from "../features/meetings/components/MergeMeetingDialog";
+import { MeetingGapsPanel } from "../features/meetings/components/MeetingGapsPanel";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
@@ -20,7 +30,7 @@ import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, Calendar, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, BookMarked, Calendar, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, Merge, MoreHorizontal, PackageCheck, Pencil, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import { isPostponedOutcome, normalizeMotionOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
@@ -161,13 +171,23 @@ export function MeetingDetailPage() {
     api.committees.detail,
     can("committees:read") && meeting?.committeeId && permissionsLoaded && can("committees:read") ? { id: meeting.committeeId } : "skip",
   );
-  const allDocuments = useQuery(api.documents.list, can("documents:read") && society ? { societyId: society._id } : "skip");
+  const [materialDraft, setMaterialDraft] = useState<any | null>(null);
+  // The full document library is large (every imported source file); load it
+  // only while the material drawer needs its picker (ui-meetings F26).
+  const allDocuments = useQuery(api.documents.list, can("documents:read") && society && materialDraft ? { societyId: society._id } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, can("meetings:read") && society ? { societyId: society._id } : "skip");
   // All minutes records: powers the "minutes awaiting adoption" card and the
   // adoption-target picker on motions.
-  const allMinutes = useQuery(api.minutes.list, can("minutes:read") && society ? { societyId: society._id } : "skip");
+  // Light summaries (approval state, counts, action observations) — not every
+  // minutes row with its full source record (ui-meetings F26).
+  const allMinutes = useQuery(api.minutes.listSummaries, can("minutes:read") && society ? { societyId: society._id } : "skip") as any[] | undefined;
+  const directoryPeople = useQuery(api.peopleDirectory.list, can("members:read") && society ? { societyId: society._id } : "skip") as any[] | undefined;
+  const [editMeetingOpen, setEditMeetingOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  // Bulk outcome for imported motions (F6): apply one outcome to the selected scope.
+  const [bulkOutcome, setBulkOutcome] = useState<{ outcome: string; decidedBy: string; scope: "pending" | "all" } | null>(null);
   // Captured e-signatures on these minutes — surfaced in the signing panel and
   // rendered into the export's signature block.
   const minutesSignatures = useQuery(
@@ -239,9 +259,8 @@ export function MeetingDetailPage() {
     agendaEditRef.current = value;
     setAgendaEditState(value);
   };
-  const [attendanceEdit, setAttendanceEdit] = useState<{
-    people: { name: string; status: "present" | "absent" }[];
-  } | null>(null);
+  // Attendance grid edit mode (the grid owns its rows; see MeetingAttendanceGrid).
+  const [attendanceEdit, setAttendanceEdit] = useState<boolean | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   // Drawer state for recording minutes approval (date + the meeting at which
@@ -323,7 +342,6 @@ export function MeetingDetailPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, focusMotionParam, isSyntheticFocus, focusMotions, minutes, displayMotions]);
 
-  const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");
   const [packageReviewNote, setPackageReviewNote] = useState("");
@@ -565,7 +583,7 @@ export function MeetingDetailPage() {
   const adoptionTargets: MotionAdoptionTarget[] = priorMeetingsWithMinutes.map(
     ({ meeting: m, record }: any) => ({
       id: String(record._id),
-      label: `${m.title} — ${formatDate(m.scheduledAt)}${record.approvedAt ? " (approved)" : ""}`,
+      label: `${m.title} — ${formatMeetingDate(m, { withTime: false })}${record.approvedAt ? " (approved)" : ""}`,
     }),
   );
   const quorumLegalGuides = getLegalGuideRules({
@@ -777,7 +795,7 @@ export function MeetingDetailPage() {
       // walks the date back a day for users east of UTC on every edit cycle.
       approvedAt: minutes.approvedAt
         ? toDateTimeLocalValue(new Date(minutes.approvedAt)).slice(0, 10)
-        : toDateTimeLocalValue(new Date()).slice(0, 10),
+        : "",
       approvedInMeetingId: (minutes.approvedInMeetingId as string | undefined) ?? "",
     });
   };
@@ -840,7 +858,7 @@ export function MeetingDetailPage() {
         {
           title: `Approval of minutes — ${meeting.title}`,
           type: "motion",
-          motionText: `BE IT RESOLVED THAT the minutes of ${meeting.title} held ${formatDate(meeting.scheduledAt)} be approved as circulated.`,
+          motionText: `BE IT RESOLVED THAT the minutes of ${meeting.title} held ${formatMeetingDate(meeting, { withTime: false })} be approved as circulated.`,
           adoptsMinutesId: minutes?._id ? String(minutes._id) : undefined,
         },
       ];
@@ -1309,6 +1327,53 @@ export function MeetingDetailPage() {
     toast.success("Adoption motion added", entry.meetingTitle);
   };
 
+  // Motions whose stored source wording classifies to a decided outcome while
+  // the motion still shows Pending (F6/F11).
+  const sourceWordingUpdates = (displayMotions as any[])
+    .map((motion, index) => {
+      // Stored wording first; else an explicit "(Carried)" / "(Defeated)" marker
+      // the source left inside the motion text.
+      const marker = String(motion.text ?? "").match(/\((carried(?: unanimously)?|passed|approved|adopted|defeated|not carried|tabled|deferred)\)/i)?.[1];
+      const wording = motion.sourceOutcomeText || marker;
+      return { motion, index, outcome: wording ? canonicalMotionOutcomeLabel(wording) : "Pending" };
+    })
+    .filter(({ motion, outcome }) => outcome !== "Pending" && (!motion.outcome || motion.outcome === "Pending"));
+  const acceptSourceOutcomes = async () => {
+    if (!canMinutesWrite || !sourceWordingUpdates.length) return;
+    const byIndex = new Map(sourceWordingUpdates.map((row) => [row.index, row.outcome]));
+    const next = (displayMotions as any[]).map((motion, index) => {
+      const outcome = byIndex.get(index);
+      if (!outcome) return motion;
+      const candidate = { ...motion, outcome };
+      return motionOutcomeConsistencyIssues(candidate).length ? motion : candidate;
+    });
+    const changed = next.filter((motion, index) => motion !== (displayMotions as any[])[index]).length;
+    const ok = await confirm({
+      title: `Accept the source wording for ${changed} motion${changed === 1 ? "" : "s"}?`,
+      message: "Each pending motion takes the outcome its source records (for example “Passed” becomes Carried). Motions whose recorded tally contradicts the wording are left pending for review.",
+      confirmLabel: "Accept source wording",
+    });
+    if (!ok) return;
+    await saveMotions(next as Motion[]);
+    toast.success("Outcomes updated", `${changed} motion${changed === 1 ? "" : "s"} now follow the source wording.`);
+  };
+  const applyBulkOutcome = async () => {
+    if (!bulkOutcome || !canMinutesWrite) return;
+    let skipped = 0;
+    let changed = 0;
+    const next = (displayMotions as any[]).map((motion) => {
+      if (isAdjournmentMotion(motion)) return motion;
+      if (bulkOutcome.scope === "pending" && motion.outcome && motion.outcome !== "Pending") return motion;
+      const candidate = { ...motion, outcome: bulkOutcome.outcome, ...(bulkOutcome.decidedBy ? { decidedBy: bulkOutcome.decidedBy } : {}) };
+      if (motionOutcomeConsistencyIssues(candidate).length) { skipped += 1; return motion; }
+      changed += 1;
+      return candidate;
+    });
+    await saveMotions(next as Motion[]);
+    setBulkOutcome(null);
+    toast.success("Outcomes updated", `${changed} motion${changed === 1 ? "" : "s"} set to ${bulkOutcome.outcome}${skipped ? `; ${skipped} left unchanged because their tally contradicts it` : ""}.`);
+  };
+
   const saveMinuteSections = async (next: any[]) => {
     if (!(canMinutesWrite && canAgendasWrite)) return;
     if (!minutes) return;
@@ -1552,95 +1617,14 @@ export function MeetingDetailPage() {
   const startAttendanceEdit = () => {
     if (!(canMinutesWrite && canMeetingsWrite)) return;
     if (!minutes) return;
-    const existing = [
-      ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
-      ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
-    ];
-    setAttendanceEdit({
-      people: existing,
-    });
+    setAttendanceEdit(true);
   };
 
-  const autofillCurrentDirectors = () => {
-    if (!(canMinutesWrite && canMeetingsWrite)) return;
-    const isCommitteeMeeting = meeting.type === "Committee";
-    const expectedRows = isCommitteeMeeting
-      ? ((meetingCommitteeDetail?.members ?? []) as any[])
-          .map((member) => ({ name: String(member.name ?? "").trim(), status: "present" as const }))
-          .filter((person) => person.name)
-      : attendanceRowsForDirectors(currentDirectors);
-    if (!expectedRows.length) {
-      toast.info(
-        isCommitteeMeeting ? "No committee members found" : "No current directors found",
-        isCommitteeMeeting
-          ? "Link this meeting to a committee with members before filling attendance."
-          : "Directors must be active and not past their end date.",
-      );
-      return;
-    }
-    const existing = attendanceEdit?.people ?? [];
-    const existingNames = new Set(existing.map((person: any) => person.name.trim().toLowerCase()).filter(Boolean));
-    const additions = expectedRows.filter((person) => !existingNames.has(person.name.toLowerCase()));
-    setAttendanceEdit({
-      people: [...existing, ...additions],
-    });
-    const noun = isCommitteeMeeting ? "committee member" : "director";
-    toast.success(
-      isCommitteeMeeting ? "Committee members added" : "Current directors added",
-      `${additions.length} ${noun}${additions.length === 1 ? "" : "s"} added to attendance.`,
-    );
-  };
-
-  const saveAttendance = async () => {
-    if (!(canMinutesWrite && canMeetingsWrite)) return;
-    if (!minutes || !attendanceEdit) return;
-    try {
-      const attendees = attendanceEdit.people
-        .filter((p) => p.status === "present")
-        .map((p) => p.name.trim())
-        .filter(Boolean);
-      const absent = attendanceEdit.people
-        .filter((p) => p.status === "absent")
-        .map((p) => p.name.trim())
-        .filter(Boolean);
-      const required = quorumSnapshot.required ?? meeting.quorumRequired;
-      const quorumMet = computedQuorumMet({
-    requiresLegalRegister: requiresLegalQuorumRegister,
-        presentCount: attendees.length,
-        activeProxyCount,
-        required,
-      });
-      const priorDetailedByName = new Map(
-        ((minutes.detailedAttendance ?? []) as any[]).map((row) => [String(row.name).trim().toLowerCase(), row]),
-      );
-      const detailedAttendance = attendanceEdit.people
-        .map((person) => {
-          const name = person.name.trim();
-          if (!name) return null;
-          const prior = priorDetailedByName.get(name.toLowerCase()) ?? {};
-          return {
-            ...prior,
-            name,
-            status: person.status === "present" ? "present" : "regrets",
-            quorumCounted: person.status === "present",
-          };
-        })
-        .filter(Boolean);
-      await updateMinutes({
-        id: minutes._id,
-        patch: { attendees, absent, detailedAttendance, quorumMet: minutes.quorumStatus ? minutes.quorumStatus === "confirmed" : quorumMet ?? false, quorumStatus: minutes.quorumStatus ?? (quorumMet == null ? "not_recorded" : quorumMet ? "confirmed" : "not_met") },
-      });
-      await updateMeeting({
-        id: meeting._id,
-        patch: { attendeeIds: attendees },
-      });
-      setAttendanceEdit(null);
-      toast.success("Attendance saved");
-    } catch (error) {
-      console.error("[saveAttendance]", error);
-      toast.error("Couldn't save attendance", error instanceof Error ? error.message : String(error));
-    }
-  };
+  // Names offered by the grid's "Add current directors / committee members".
+  const expectedAttendees = (meeting.type === "Committee"
+    ? ((meetingCommitteeDetail?.members ?? []) as any[]).map((member) => String(member.name ?? "").trim())
+    : attendanceRowsForDirectors(currentDirectors).map((row) => row.name)
+  ).filter(Boolean);
 
   const openMaterialDrawer = (agendaLabel?: string, material?: any) => {
     if (!(canMeetingsWrite)) return;
@@ -1824,7 +1808,7 @@ export function MeetingDetailPage() {
     if (!(canDownload)) return;
     if (!meeting || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const subject = `${meeting.title} package - ${formatDateTime(meeting.scheduledAt)}`;
+    const subject = `${meeting.title} package - ${formatMeetingDate(meeting)}`;
     const materials = packageMaterials.map((material: any, index: number) => {
       const doc = material.document ?? {};
       return {
@@ -1950,7 +1934,7 @@ export function MeetingDetailPage() {
       files["attachments/download-errors.txt"] = failedDownloads.join("\n");
     }
     downloadStoredZip({
-      filename: `${safe}-outbox-package-${formatDate(meeting.scheduledAt, "yyyy-MM-dd")}.zip`,
+      filename: `${safe}-outbox-package-${meetingCalendarDate(meeting) ?? ""}.zip`,
       files,
     });
     toast.success(
@@ -2054,6 +2038,26 @@ export function MeetingDetailPage() {
   const meetingCommittee = (committees ?? []).find(
     (c: any) => String(c._id) === String(meeting.committeeId),
   );
+  // The source header as written, shown under the corrected values (F3).
+  const sourceHeader = minutes?.sourceMeetingRecord?.header;
+  const sourceHeaderText = sourceHeader
+    ? [sourceHeader.dateText, sourceHeader.timeText && !String(sourceHeader.dateText ?? "").includes(sourceHeader.timeText) ? sourceHeader.timeText : "", sourceHeader.locationText]
+      .map((part: any) => String(part ?? "").trim())
+      .filter(Boolean)
+      .join(" · ")
+    : "";
+  const motionDocumentOptions = [
+    ...((sourceDocuments ?? []) as any[]).map((doc) => ({ value: String(doc._id), label: `Source: ${doc.title}` })),
+    ...packageMaterials.filter((material: any) => material.document?._id || material.documentId).map((material: any) => ({ value: String(material.document?._id ?? material.documentId), label: `Material: ${material.label || material.document?.title || "Document"}` })),
+  ].filter((option, index, all) => all.findIndex((row) => row.value === option.value) === index);
+  const approvalIssues = approvalEdit
+    ? minutesApprovalIssues({
+        approvedOn: approvalEdit.approvedAt,
+        meeting,
+        approvingMeeting: approvalEdit.approvedInMeetingId ? (allMeetings ?? []).find((m: any) => String(m._id) === approvalEdit.approvedInMeetingId) : null,
+      })
+    : [];
+  const duplicateIds = duplicateIndex((allMeetings ?? []) as any[], (committees ?? []) as any[]).get(String(meeting._id)) ?? [];
 
   return (
     <div className="page page--wide meeting-detail-page">
@@ -2064,24 +2068,42 @@ export function MeetingDetailPage() {
         title={meeting.title}
         subtitle={
           <>
-            {meeting.type} · {minutes?.sourceMeetingRecord ? (minutes.sourceMeetingRecord.header?.dateText || formatDate(meeting.scheduledAt)) : formatDateTime(meeting.scheduledAt)}
-            {minutes?.sourceMeetingRecord?.header?.timeText ? ` · ${minutes.sourceMeetingRecord.header.timeText}` : ""}
-            {minutes?.sourceMeetingRecord?.header?.locationText || meeting.location ? ` · ${minutes?.sourceMeetingRecord?.header?.locationText || meeting.location}` : ""}
-            {meetingCommittee && (
-              <>
-                {" · "}
-                <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingCommittee.name}</Link>
-              </>
+            <span className="meeting-detail-subtitle" data-testid="meeting-subtitle">
+              {meetingBodyLabel(meeting, committees as any)} · {formatMeetingDate(meeting, { dateStyle: "long" })}
+              {meeting.location ? ` · ${meeting.location}` : meeting.electronic ? " · Online" : ""}
+              {meetingCommittee && (
+                <>
+                  {" · "}
+                  <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingCommittee.name}</Link>
+                </>
+              )}
+            </span>
+            {sourceHeaderText && (
+              <span className="meeting-detail-subtitle__source" title="The meeting header exactly as written in the source document">
+                As written in source: {sourceHeaderText}
+              </span>
             )}
           </>
         }
         actions={
           <>
-            <Badge tone={meeting.status === "Held" ? "success" : meeting.status === "Cancelled" ? "danger" : "warn"}>
+            <Badge tone={meetingStatusTone(meeting.status) as any}>
               {meetingStatusLabel(meeting.status)}
             </Badge>
+            {sourceReviewStatus === "imported_needs_review" && <Badge tone="warn">Source review pending</Badge>}
+            {sourceReviewStatus === "source_reviewed" && <Badge tone="success">Source reviewed</Badge>}
             <UnsupportedDetailsBadge table="meetings" id={meeting._id} />
-            {meeting.status !== "Held" && (
+            {canMeetingsWrite && (
+              <button className="btn-action btn-action--primary" type="button" onClick={() => setEditMeetingOpen(true)} data-testid="edit-meeting">
+                <Pencil size={12} /> Edit meeting
+              </button>
+            )}
+            {sourceReviewStatus === "imported_needs_review" && canMeetingsWrite && (
+              <button className="btn-action" type="button" onClick={() => { void completeSourceReview(); }} data-testid="mark-source-reviewed">
+                <CheckCircle2 size={12} /> Mark source reviewed
+              </button>
+            )}
+            {meeting.status !== "Held" && meeting.status !== "Cancelled" && (
               <button className="btn-action" onClick={markHeld} disabled={!canMeetingsWrite}>Mark held</button>
             )}
             {meeting.type === "AGM" && (
@@ -2103,6 +2125,32 @@ export function MeetingDetailPage() {
                 </button>
               }
               sections={[
+                {
+                  id: "edit",
+                  items: [
+                    {
+                      id: "edit-meeting",
+                      label: "Edit meeting",
+                      icon: <Pencil size={12} />,
+                      disabled: !canMeetingsWrite,
+                      onSelect: () => setEditMeetingOpen(true),
+                    },
+                    {
+                      id: "source-review",
+                      label: sourceReviewStatus === "source_reviewed" ? "Reopen source review" : "Mark source reviewed",
+                      icon: <CheckCircle2 size={12} />,
+                      disabled: !canMeetingsWrite || sourceReviewStatus === "not_applicable",
+                      onSelect: sourceReviewStatus === "source_reviewed" ? reopenSourceReview : completeSourceReview,
+                    },
+                    {
+                      id: "merge",
+                      label: duplicateIds.length ? `Merge a duplicate (${duplicateIds.length} found)…` : "Merge a duplicate…",
+                      icon: <Merge size={12} />,
+                      disabled: !canMeetingsWrite || !canMinutesWrite,
+                      onSelect: () => setMergeOpen(true),
+                    },
+                  ],
+                },
                 ...(meeting.status === "Held"
                   ? [
                       {
@@ -2204,8 +2252,8 @@ export function MeetingDetailPage() {
           <strong>{agenda.length}</strong>
         </div>
         <div>
-          <span>Attendees</span>
-          <strong>{minutes?.attendees.length ?? meeting.attendeeIds?.length ?? 0}</strong>
+          <span>Present</span>
+          <strong>{minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
         </div>
         <div>
           <span>Motions</span>
@@ -2218,6 +2266,8 @@ export function MeetingDetailPage() {
     </div>
 
       <Tabs<MeetingDetailTab>
+        tabRoles
+        ariaLabel="Meeting sections"
         value={activeTab}
         onChange={setActiveTab}
         items={[
@@ -2299,6 +2349,7 @@ export function MeetingDetailPage() {
                 {...sharedSidebarProps}
                 visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
               />
+              <MeetingGapsPanel meetingId={meeting._id} minutesId={minutes?._id} />
               {society && can("conflicts:read") && (
                 <div className="meeting-signatures-card">
                   <MeetingConflictsCard
@@ -2389,9 +2440,12 @@ export function MeetingDetailPage() {
             attendanceEdit={attendanceEdit}
             setAttendanceEdit={setAttendanceEdit}
             startAttendanceEdit={startAttendanceEdit}
-            autofillCurrentDirectors={autofillCurrentDirectors}
+            autofillCurrentDirectors={() => undefined}
             attendanceAutofillLabel={meeting.type === "Committee" ? "Add committee members" : "Add current directors"}
-            saveAttendance={saveAttendance}
+            saveAttendance={() => undefined}
+            meeting={meeting}
+            directoryPeople={directoryPeople}
+            expectedAttendees={expectedAttendees}
             quorumSnapshot={quorumSnapshot}
             activeProxyCount={activeProxyCount}
             quorumLegalGuides={quorumLegalGuides}
@@ -2412,8 +2466,8 @@ export function MeetingDetailPage() {
             saveTranscriptEditText={saveTranscriptEditText}
             savingTranscript={savingTranscript}
           />
-          <MeetingEvidenceCard key={minutes?._id ?? "no-evidence"} minutes={minutes} />
-          <MinutesMetadataCard key={minutes?._id ?? "no-minutes"} minutes={minutes} meetingType={meeting.type} />
+          <MeetingEvidenceCard key={`evidence-${minutes?._id ?? "none"}`} minutes={minutes} allMinutes={allMinutes} meetings={allMeetings} />
+          <MinutesMetadataCard key={`metadata-${minutes?._id ?? "none"}`} minutes={minutes} meetingType={meeting.type} committees={committees} people={directoryPeople} />
           </>
         )}
 
@@ -2454,7 +2508,17 @@ export function MeetingDetailPage() {
                   })()}
                 </span>
               ) : null}
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {sourceWordingUpdates.length > 0 && (
+                  <button className="btn-action" type="button" onClick={() => { void acceptSourceOutcomes(); }} disabled={!canMinutesWrite} data-testid="accept-source-outcomes" title="Set each pending motion's outcome from the wording the source records (Passed, Carried, Defeated, Tabled…)">
+                    <CheckCircle2 size={12} /> Accept source wording ({sourceWordingUpdates.length})
+                  </button>
+                )}
+                {businessMotions.length > 0 && (
+                  <button className="btn-action" type="button" onClick={() => setBulkOutcome({ outcome: "Carried", decidedBy: "", scope: "pending" })} disabled={!canMinutesWrite} data-testid="bulk-outcome">
+                    <Gavel size={12} /> Set outcome…
+                  </button>
+                )}
                 <button
                   className="btn-action btn-action--primary"
                   type="button"
@@ -2480,6 +2544,8 @@ export function MeetingDetailPage() {
                 onAddToBacklog={canMotionsWrite ? addMotionToBacklog : undefined}
                 hideInlineAdd
                 adoptionTargets={adoptionTargets}
+                directoryPeople={directoryPeople as any}
+                documentOptions={motionDocumentOptions}
               />
             </div>
           </div>
@@ -2569,6 +2635,24 @@ export function MeetingDetailPage() {
         )}
       </div>
 
+      <EditMeetingDrawer
+        open={editMeetingOpen}
+        onClose={() => setEditMeetingOpen(false)}
+        meeting={meeting}
+        minutes={minutes}
+        committees={committees}
+        recentLocations={[...new Set(((allMeetings ?? []) as any[]).map((m) => String(m.location ?? "").trim()).filter(Boolean))].slice(0, 30)}
+      />
+      {mergeOpen && (
+        <MergeMeetingDialog
+          meeting={meeting}
+          meetings={(allMeetings ?? []) as any[]}
+          committees={(committees ?? []) as any[]}
+          suggestedIds={duplicateIds}
+          onClose={() => setMergeOpen(false)}
+        />
+      )}
+
       <MeetingMaterialDrawer
         materialDraft={materialDraft}
         setMaterialDraft={setMaterialDraft}
@@ -2612,6 +2696,40 @@ export function MeetingDetailPage() {
       </Drawer>
 
       <Modal
+        open={!!bulkOutcome}
+        onClose={() => setBulkOutcome(null)}
+        title="Set outcome for motions"
+        size="sm"
+        footer={
+          <>
+            <button className="btn" onClick={() => setBulkOutcome(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={() => { void applyBulkOutcome(); }} data-testid="bulk-outcome-apply">Apply</button>
+          </>
+        }
+      >
+        {bulkOutcome && (
+          <div>
+            <Field label="Apply to">
+              <Select
+                value={bulkOutcome.scope}
+                onChange={(scope) => setBulkOutcome({ ...bulkOutcome, scope: scope as "pending" | "all" })}
+                options={[
+                  { value: "pending", label: `Pending motions (${businessMotions.filter((motion: any) => !motion.outcome || motion.outcome === "Pending").length})` },
+                  { value: "all", label: `All business motions (${businessMotions.length})` },
+                ]}
+              />
+            </Field>
+            <Field label="Outcome">
+              <Select value={bulkOutcome.outcome} onChange={(outcome) => setBulkOutcome({ ...bulkOutcome, outcome })} options={["Carried", "Defeated", "Tabled", "Deferred", "Pending"].map((value) => ({ value, label: value }))} />
+            </Field>
+            <Field label="Decided by" hint="Consent or a chair's ruling records an outcome with no counted vote.">
+              <Select value={bulkOutcome.decidedBy} onChange={(decidedBy) => setBulkOutcome({ ...bulkOutcome, decidedBy })} options={[{ value: "", label: "Keep as recorded" }, { value: "vote", label: "Recorded vote" }, { value: "consent", label: "General consent" }, { value: "chair_ruling", label: "Chair's ruling" }]} />
+            </Field>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={!!approvalEdit && canApproveMinutes}
         onClose={() => setApprovalEdit(null)}
         title="Record minutes approval"
@@ -2624,7 +2742,7 @@ export function MeetingDetailPage() {
               </button>
             )}
             <button className="btn" onClick={() => setApprovalEdit(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveApproval} disabled={!approvalEdit?.approvedAt || !canApproveMinutes}>
+            <button className="btn btn--accent" onClick={saveApproval} disabled={!approvalEdit?.approvedAt || !canApproveMinutes || approvalIssues.length > 0}>
               Save
             </button>
           </>
@@ -2636,25 +2754,31 @@ export function MeetingDetailPage() {
               Minutes are usually adopted at the next meeting. Record when these minutes were
               approved and, if you like, which meeting adopted them.
             </p>
-            <Field label="Approved on">
+            <Field label="Approved at meeting" hint="Later meetings, nearest first. Picking one sets the approval date to that meeting's date.">
+              <Select
+                value={approvalEdit.approvedInMeetingId}
+                searchable
+                onChange={(value) => {
+                  const picked = (allMeetings ?? []).find((m: any) => String(m._id) === value);
+                  setApprovalEdit({
+                    ...approvalEdit,
+                    approvedInMeetingId: value,
+                    approvedAt: picked ? meetingCalendarDate(picked) ?? approvalEdit.approvedAt : approvalEdit.approvedAt,
+                  });
+                }}
+                options={[
+                  { value: "", label: "Not specified" },
+                  ...approvingMeetingCandidates(meeting, (allMeetings ?? []) as any[]).map((m: any) => ({
+                    value: m._id as string,
+                    label: `${formatMeetingDate(m, { withTime: false })} · ${m.title}`,
+                  })),
+                ]}
+              />
+            </Field>
+            <Field label="Approved on" error={approvalIssues.length ? approvalIssues.join(" ") : undefined}>
               <DatePicker
                 value={approvalEdit.approvedAt}
                 onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedAt: value })}
-              />
-            </Field>
-            <Field label="Approved at meeting">
-              <Select
-                value={approvalEdit.approvedInMeetingId}
-                onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedInMeetingId: value })}
-                options={[
-                  { value: "", label: "Not specified" },
-                  ...(allMeetings ?? [])
-                    .filter((m: any) => m._id !== meeting._id)
-                    .map((m: any) => ({
-                      value: m._id as string,
-                      label: `${m.title} · ${formatDate(m.scheduledAt)}`,
-                    })),
-                ]}
               />
             </Field>
           </div>

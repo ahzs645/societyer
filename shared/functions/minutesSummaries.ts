@@ -31,6 +31,10 @@ export type MinutesSummary = {
   hasSourceRecord: boolean;
   sourceVersionCount: number;
   sourceExternalIdCount: number;
+  /** Names in attendance and officer fields, for list search (F24). */
+  peopleText: string;
+  /** Action observations (small; needed by the carry-forward picker). */
+  actionObservations?: any[];
 };
 
 function actionItemsOf(minutes: any): any[] {
@@ -77,6 +81,14 @@ export function summarizeMinutes(minutes: any): MinutesSummary {
     hasSourceRecord: !!minutes.sourceMeetingRecord,
     sourceVersionCount: Array.isArray(minutes.importedSourceVersions) ? minutes.importedSourceVersions.length : 0,
     sourceExternalIdCount: Array.isArray(minutes.sourceExternalIds) ? minutes.sourceExternalIds.length : 0,
+    peopleText: [
+      ...(Array.isArray(minutes.attendees) ? minutes.attendees : []),
+      ...(Array.isArray(minutes.absent) ? minutes.absent : []),
+      minutes.chairName,
+      minutes.secretaryName,
+      minutes.recorderName,
+    ].filter(Boolean).join(" · ").slice(0, 4000),
+    ...(Array.isArray(minutes.actionObservations) && minutes.actionObservations.length ? { actionObservations: minutes.actionObservations } : {}),
   };
 }
 

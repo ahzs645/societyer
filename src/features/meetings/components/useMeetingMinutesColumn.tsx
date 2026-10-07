@@ -63,6 +63,8 @@ import type {
   AttendancePerson,
 } from "./MeetingMinutesColumn.internal";
 
+import { minutesPresentCount } from "../../../../shared/meetingAttendanceGrid";
+
 export type MeetingMinutesColumnProps = {
   minutes: any;
   agenda: string[];
@@ -97,7 +99,13 @@ export type MeetingMinutesColumnProps = {
   /** Prior meetings' minutes offered by the "Adopts minutes of" picker on the
    *  section editor's embedded motion editor. */
   adoptionTargets?: MotionAdoptionTarget[];
-};
+  /** The meeting row (attendance grid, agenda item details). */
+  meeting?: any;
+  /** People-directory rows for person pickers. */
+  directoryPeople?: Array<{ _id: string; fullName: string; aliases?: string[] | null }>;
+  /** Names offered by "Add current directors / committee members". */
+  expectedAttendees?: string[];
+}; 
 
 export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -223,9 +231,8 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const sectionContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
   const confirm = useConfirm();
-  const attendancePresentCount = attendanceEdit
-    ? attendanceEdit.people.filter((person: AttendancePerson) => person.status === "present").length
-    : minutes?.attendees.length;
+  // The attendance grid owns its edit rows; the column reports what is saved.
+  const attendancePresentCount = minutesPresentCount(minutes);
   const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
   const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocusIndex = useRef<number | null>(null);
@@ -1345,6 +1352,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               directorNames={assigneeOptions}
               people={motionPeople}
               adoptionTargets={adoptionTargets}
+              directoryPeople={props.directoryPeople as any}
               agendaSections={sections.map((section: any) => ({
                 title: section.title || "Untitled section",
                 discussion: section.discussion ?? "",

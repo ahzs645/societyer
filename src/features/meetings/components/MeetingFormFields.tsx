@@ -5,6 +5,7 @@
  * (MeetingCreateModal).
  */
 import { MEETING_STATUS_OPTIONS } from "../../../../shared/meetingStatus";
+import { bodyPatchForValue, bodyValueForMeeting, meetingBodyOptions } from "../../../../shared/meetingBodyPicker";
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -36,6 +37,8 @@ export type MeetingDraft = {
   committeeId: string;
   conflictAcknowledged: boolean;
   notes?: string;
+  /** B8: a special meeting of the board or a committee. */
+  special?: boolean;
 };
 
 type BylawRules = ReturnType<typeof useBylawRules>["rules"];
@@ -199,6 +202,7 @@ export function meetingToDraft(meeting: Doc<"meetings">): MeetingDraft {
     committeeId: meeting.committeeId ? String(meeting.committeeId) : "",
     conflictAcknowledged: false,
     notes: meeting.notes ?? "",
+    special: !!(meeting as any).special,
   };
 }
 
@@ -304,19 +308,25 @@ export function MeetingFormFields({
         />
       </Field>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Type">
+        <Field label="Body" hint="Board, a special meeting, AGM/SGM, or a committee.">
           <Select
-            value={value.type}
+            value={bodyValueForMeeting({ type: value.type, committeeId: value.committeeId || null, special: value.special })}
+            searchable
+            aria-label="Meeting body"
             onChange={(v) => {
-              const templates = meetingTemplatesForType(meetingTemplates, v);
+              const body = bodyPatchForValue(v);
+              const templates = meetingTemplatesForType(meetingTemplates, body.type);
               const template = templates.find((row) => row.isDefault) ?? templates[0];
               onChange({
-                type: v,
-                committeeId: v === "Committee" ? value.committeeId : "",
+                type: body.type,
+                committeeId: body.committeeId ?? "",
+                special: body.special,
                 meetingTemplateId: editingId ? value.meetingTemplateId : template ? String(template._id) : "",
               });
             }}
-            options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: t }))}
+            options={meetingBodyOptions((committees ?? []).map((committee) => ({ _id: String(committee._id), name: committee.name, status: (committee as any).status })))
+              .filter((option) => option.value !== "external")
+              .map((option) => ({ value: option.value, label: option.label, hint: option.group }))}
           />
         </Field>
         <Field label="Scheduled">
@@ -326,21 +336,6 @@ export function MeetingFormFields({
           />
         </Field>
       </div>
-      {value.type === "Committee" && (
-        <Field label="Committee" required>
-          <Select
-            value={value.committeeId}
-            onChange={(committeeId) => onChange({ committeeId })}
-            options={[
-              { value: "", label: "Select committee" },
-              ...(committees ?? []).map((committee) => ({
-                value: String(committee._id),
-                label: committee.name,
-              })),
-            ]}
-          />
-        </Field>
-      )}
       {editingId && (
         <Field label="Status">
           <Select

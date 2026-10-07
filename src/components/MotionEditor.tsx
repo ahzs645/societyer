@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
 import {
   MOTION_OUTCOMES,
@@ -46,6 +46,8 @@ import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Modal, useConfirm } from "./Modal";
+import { PersonPicker, type DirectoryPerson } from "../features/meetings/components/PersonPicker";
+import { matchDirectoryPerson } from "../../shared/meetingAttendanceGrid";
 
 export type Motion = {
   /** Stable id of the backing `motions` table row, back-linked into the display
@@ -80,7 +82,116 @@ export type Motion = {
   /** Which minutes record this motion adopts. When the motion carries, the
    *  referenced minutes are automatically stamped approved (backend). */
   adoptsMinutesId?: string;
+  /** A1: mover / seconder as people-directory persons. */
+  movedByPersonId?: string;
+  secondedByPersonId?: string;
+  /** A11: named abstainers and dissenters, and a retained dissent report. */
+  abstainedBy?: NamedMotionPerson[];
+  opposedBy?: NamedMotionPerson[];
+  dissentDocumentId?: string;
+  /** C1: the outcome exactly as the source worded it. */
+  sourceOutcomeText?: string;
+  sourceLocator?: { voteSummary?: string; pageRef?: string; evidenceText?: string; sectionReference?: string; quote?: string; sourceExternalIds?: string[] };
 };
+
+export type NamedMotionPerson = { name: string; personId?: string; notes?: string };
+
+/** People-directory rows and document choices for the motion editors (A1/A11). */
+type MotionEditorExtras = { directoryPeople?: DirectoryPerson[]; documentOptions?: Array<{ value: string; label: string }> };
+const MotionEditorExtrasContext = createContext<MotionEditorExtras>({});
+
+/** Mover / seconder field: a people-directory picker when the directory is
+ *  available, the plain name autocomplete otherwise. */
+function MotionPersonField({
+  role,
+  motion,
+  nameOptions,
+  people,
+  ariaLabel,
+  placeholder,
+  onPatch,
+}: {
+  role: "movedBy" | "secondedBy";
+  motion: Motion;
+  nameOptions: string[];
+  people: MotionPerson[];
+  ariaLabel: string;
+  placeholder?: string;
+  onPatch: (patch: Partial<Motion>) => void;
+}) {
+  const { directoryPeople } = useContext(MotionEditorExtrasContext);
+  const personKey = role === "movedBy" ? "movedByPersonId" : "secondedByPersonId";
+  if (directoryPeople && directoryPeople.length) {
+    return (
+      <PersonPicker
+        value={{ name: motion[role] ?? "", personId: motion[personKey] }}
+        people={directoryPeople}
+        ariaLabel={ariaLabel}
+        placeholder={placeholder ?? "Name as written"}
+        onChange={(next) => onPatch({ [role]: next.name, [personKey]: next.personId, ...motionPersonPatch(role, resolveMotionPerson(next.name, people)) } as Partial<Motion>)}
+      />
+    );
+  }
+  return (
+    <NameInput
+      nameOptions={nameOptions}
+      value={motion[role]}
+      onChange={(v) => onPatch({ [role]: v, ...motionPersonPatch(role, resolveMotionPerson(v, people)) } as Partial<Motion>)}
+      placeholder={placeholder}
+      ariaLabel={ariaLabel}
+    />
+  );
+}
+
+/** A11: named abstainers / dissenters with people-directory links. */
+function NamedPeopleField({
+  label,
+  value,
+  onChange,
+  nameOptions,
+}: {
+  label: string;
+  value: NamedMotionPerson[] | undefined;
+  onChange: (next: NamedMotionPerson[] | undefined) => void;
+  nameOptions: string[];
+}) {
+  const { directoryPeople } = useContext(MotionEditorExtrasContext);
+  const [draft, setDraft] = useState("");
+  const rows = value ?? [];
+  const options = useMemo(() => [...new Set([...nameOptions, ...(directoryPeople ?? []).map((person) => person.fullName)])].filter(Boolean).sort(), [nameOptions, directoryPeople]);
+  const add = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || rows.some((row) => row.name.toLowerCase() === trimmed.toLowerCase())) { setDraft(""); return; }
+    const match = matchDirectoryPerson(trimmed, directoryPeople ?? []);
+    onChange([...rows, { name: trimmed, ...(match ? { personId: String(match._id) } : {}) }]);
+    setDraft("");
+  };
+  return (
+    <Field label={label}>
+      <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+        {rows.map((row) => (
+          <Badge key={row.name} tone={row.personId ? "info" : "neutral"}>
+            <span className="row" style={{ gap: 2, alignItems: "center" }} title={row.personId ? "Linked to the people directory" : "Not linked"}>
+              {row.name}
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon"
+                style={{ padding: 0, height: 14 }}
+                aria-label={`Remove ${row.name} from ${label.toLowerCase()}`}
+                onClick={() => { const next = rows.filter((candidate) => candidate.name !== row.name); onChange(next.length ? next : undefined); }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          </Badge>
+        ))}
+        <div style={{ minWidth: 160, flex: "1 1 160px" }}>
+          <NameAutocomplete value={draft} onChange={setDraft} options={options} onCommit={add} placeholder="Add a name…" ariaLabel={`Add to ${label.toLowerCase()}`} />
+        </div>
+      </div>
+    </Field>
+  );
+}
 
 export type MotionAdoptionTarget = {
   id: string;
@@ -276,7 +387,7 @@ function DecidedByPicker({
           options={DECIDED_BY_VALUES.map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))}
         />
         <Tooltip content={kind.citation}>
-          <Badge tone="neutral">{kind.label}</Badge>
+          <span style={{ display: "inline-flex" }}><Badge tone="neutral">{kind.label}</Badge></span>
         </Tooltip>
       </div>
     </Field>
@@ -357,6 +468,10 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
    * get an "Adopts minutes of" picker; a carried adoption motion auto-stamps
    * the referenced minutes approved. */
   adoptionTargets?: MotionAdoptionTarget[];
+  /** People-directory rows: mover/seconder/abstainer pickers link to them (A1). */
+  directoryPeople?: DirectoryPerson[];
+  /** Documents that can be linked as a retained dissent report (A11). */
+  documentOptions?: Array<{ value: string; label: string }>;
 }>(function MotionEditor({
   motions,
   readOnly = false,
@@ -369,6 +484,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   sectionScope,
   onPendingDraftChange,
   adoptionTargets = [],
+  directoryPeople,
+  documentOptions,
 }, ref) {
   const { can } = usePermissions();
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
@@ -552,7 +669,9 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdjournmentScope, adjournmentRows.length]);
 
+  const extras = useMemo(() => ({ directoryPeople, documentOptions }), [directoryPeople, documentOptions]);
   return (
+    <MotionEditorExtrasContext.Provider value={extras}>
     <div>
       {businessMotionRows.length === 0 && !adding && (
         <div className="muted">
@@ -633,23 +752,23 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             <summary className="motion-draft__details-summary">Details</summary>
             <div className="motion-draft__grid">
               <Field label="Moved by">
-              <NameInput
+              <MotionPersonField
+                role="movedBy"
+                motion={draft}
                 nameOptions={nameOptions}
-                value={draft.movedBy}
-                onChange={(v) =>
-                  updateDraftPerson("movedBy", v, motionPersonPatch("movedBy", resolveMotionPerson(v, people)))
-                }
+                people={people}
+                onPatch={(diff) => updateDraftPerson("movedBy", String(diff.movedBy ?? ""), diff)}
                 placeholder="Start typing…"
                 ariaLabel="New motion mover"
               />
             </Field>
             <Field label="Seconded by">
-              <NameInput
+              <MotionPersonField
+                role="secondedBy"
+                motion={draft}
                 nameOptions={nameOptions}
-                value={draft.secondedBy}
-                onChange={(v) =>
-                  updateDraftPerson("secondedBy", v, motionPersonPatch("secondedBy", resolveMotionPerson(v, people)))
-                }
+                people={people}
+                onPatch={(diff) => updateDraftPerson("secondedBy", String(diff.secondedBy ?? ""), diff)}
                 placeholder="Optional"
                 ariaLabel="New motion seconder"
               />
@@ -772,8 +891,25 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       </div>
       )}
     </div>
+    </MotionEditorExtrasContext.Provider>
   );
 });
+
+/** A11: link a retained dissent report from the documents offered to the editor. */
+function DissentDocumentField({ value, onChange }: { value?: string; onChange: (value: string | undefined) => void }) {
+  const { documentOptions } = useContext(MotionEditorExtrasContext);
+  if (!documentOptions?.length && !value) return null;
+  const options = [
+    { value: "", label: "None" },
+    ...(documentOptions ?? []),
+    ...(value && !(documentOptions ?? []).some((option) => option.value === value) ? [{ value, label: "Linked document" }] : []),
+  ];
+  return (
+    <Field label="Dissent report" hint="A dissenting director's written statement, if one is kept on file.">
+      <Select value={value ?? ""} onChange={(next) => onChange(next || undefined)} options={options} searchable aria-label="Dissent report document" />
+    </Field>
+  );
+}
 
 function MotionRow({
   motion,
@@ -909,6 +1045,10 @@ function MotionRow({
             {motion.decidedBy && <p>Decided by {DECIDED_BY_LABELS[motion.decidedBy]}</p>}
             {assignedAgendaLabel && <p>Agenda item: {assignedAgendaLabel}</p>}
             {motion.adoptsMinutesId && <p>Adopts minutes of: {adoptionTargets.find(target => target.id === motion.adoptsMinutesId)?.label || motion.adoptsMinutesId}</p>}
+            {(motion.abstainedBy ?? []).length > 0 && <p>Abstained: {motion.abstainedBy!.map((row) => row.name).join(", ")}</p>}
+            {(motion.opposedBy ?? []).length > 0 && <p>Opposed / dissent: {motion.opposedBy!.map((row) => row.name).join(", ")}</p>}
+            {motion.sourceOutcomeText && <p>Outcome as written in the source: “{motion.sourceOutcomeText}”</p>}
+            {motion.outcomeOverrideNote && <p>Outcome override: {motion.outcomeOverrideNote}</p>}
             {(motion.tags ?? []).length > 0 && <p>Tags: {motion.tags!.join(", ")}</p>}
           </div>
         </details>
@@ -1032,18 +1172,22 @@ function MotionRow({
           </Field>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Moved by">
-              <NameInput
+              <MotionPersonField
+                role="movedBy"
+                motion={motion}
                 nameOptions={nameOptions}
-                value={motion.movedBy}
-                onChange={(v) => onPatch({ movedBy: v, ...motionPersonPatch("movedBy", resolveMotionPerson(v, people)) })}
+                people={people}
+                onPatch={onPatch}
                 ariaLabel={`Mover for ${titleText.trim() || "untitled motion"}`}
               />
             </Field>
             <Field label="Seconded by">
-              <NameInput
+              <MotionPersonField
+                role="secondedBy"
+                motion={motion}
                 nameOptions={nameOptions}
-                value={motion.secondedBy}
-                onChange={(v) => onPatch({ secondedBy: v, ...motionPersonPatch("secondedBy", resolveMotionPerson(v, people)) })}
+                people={people}
+                onPatch={onPatch}
                 ariaLabel={`Seconder for ${titleText.trim() || "untitled motion"}`}
               />
             </Field>
@@ -1088,6 +1232,16 @@ function MotionRow({
                 options={adoptionTargetOptions(adoptionTargets, motion.adoptsMinutesId)}
               />
             </Field>
+          )}
+          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+            <NamedPeopleField label="Abstained (named)" value={motion.abstainedBy} onChange={(abstainedBy) => onPatch({ abstainedBy })} nameOptions={nameOptions} />
+            <NamedPeopleField label="Opposed / dissent recorded" value={motion.opposedBy} onChange={(opposedBy) => onPatch({ opposedBy })} nameOptions={nameOptions} />
+          </div>
+          <DissentDocumentField value={motion.dissentDocumentId} onChange={(dissentDocumentId) => onPatch({ dissentDocumentId })} />
+          {motion.sourceOutcomeText && (
+            <p className="muted" style={{ margin: "4px 0", fontSize: 12 }} data-testid="motion-source-outcome">
+              Outcome as written in the source: “{motion.sourceOutcomeText}”
+            </p>
           )}
           <OutcomePicker stretch canCarry={!motion.adoptsMinutesId || canApproveAdoption} value={motion.outcome} onChange={(v) => { void setOutcomeWithReview(v); }} />
           {pendingOverrideOutcome && (

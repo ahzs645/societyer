@@ -1890,11 +1890,47 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           options: [
             { value: "Scheduled", label: "Scheduled", color: "blue" },
             { value: "Held", label: "Held", color: "green" },
+            { value: "HeldMinutesMissing", label: "Held — minutes missing", color: "amber" },
             { value: "Cancelled", label: "Cancelled", color: "gray" },
+            { value: "Draft", label: "Draft (source)", color: "purple" },
           ],
         },
       },
       { name: "minutes", label: "Minutes", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true },
+      // Review-at-scale columns (ui-meetings F24). Derived on the page from the
+      // meeting row and the light minutes summaries; read-only in the table.
+      { name: "body", label: "Body", fieldType: FIELD_TYPES.TEXT, icon: "Users", isReadOnly: true },
+      {
+        name: "sourceReviewStatus",
+        label: "Source review",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "ClipboardCheck",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "imported_needs_review", label: "Needs review", color: "amber" },
+            { value: "source_reviewed", label: "Reviewed", color: "green" },
+            { value: "rejected", label: "Rejected", color: "red" },
+            { value: "not_applicable", label: "Not imported", color: "gray" },
+          ],
+        },
+      },
+      { name: "motionCount", label: "Motions", fieldType: FIELD_TYPES.NUMBER, icon: "Gavel", isReadOnly: true },
+      { name: "presentCount", label: "Present", fieldType: FIELD_TYPES.NUMBER, icon: "Users", isReadOnly: true },
+      {
+        name: "datePrecision",
+        label: "Date precision",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "CalendarClock",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "date", label: "Date only", color: "gray" },
+            { value: "datetime", label: "Date and time", color: "blue" },
+          ],
+        },
+      },
+      { name: "duplicateCount", label: "Same-day duplicates", fieldType: FIELD_TYPES.NUMBER, icon: "Copy", isReadOnly: true },
     ],
     defaultView: {
       name: "All meetings",
@@ -1905,6 +1941,9 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "location", size: 180 },
         { fieldName: "status", size: 120 },
         { fieldName: "minutes", size: 110 },
+        { fieldName: "body", size: 170 },
+        { fieldName: "sourceReviewStatus", size: 130 },
+        { fieldName: "motionCount", size: 90 },
       ],
     },
     extraViews: [

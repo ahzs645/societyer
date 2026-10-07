@@ -12,7 +12,7 @@
  *  - entries marked "not a person" into the minutes' non-person evidence list
  *    and the matching person occurrences, so counts and quorum change at once.
  */
-import type { PortableMutationCtx } from "../portable/ctx";
+import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import {
@@ -32,6 +32,15 @@ export type SaveAttendanceGridArgs = {
 };
 
 const MAX_ROWS = 500;
+
+/** The meeting's attendance register rows (B5), for the meeting page grid. */
+export async function attendanceRecordsForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  await requireOwnedRow(ctx, "meetings", meetingId);
+  return ctx.db
+    .query("meetingAttendanceRecords")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+    .collect();
+}
 
 export async function saveAttendanceGridPortable(ctx: PortableMutationCtx, args: SaveAttendanceGridArgs) {
   const minutes: any = await requireOwnedRow(ctx, "minutes", args.minutesId);

@@ -115,7 +115,7 @@ import * as meetingMaterialsFns from "./meetingMaterials";
 import * as minutesFns from "./minutes";
 import { repairImportedPortable as minutesRepairImportedPortable } from "./minutesRepair";
 import { listSummariesPortable as minutesListSummariesPortable } from "./minutesSummaries";
-import { saveAttendanceGridPortable as minutesSaveAttendanceGridPortable } from "./minutesAttendance";
+import { saveAttendanceGridPortable as minutesSaveAttendanceGridPortable, attendanceRecordsForMeetingPortable as meetingsAttendanceRecordsPortable } from "./minutesAttendance";
 import { mergePortable as meetingsMergePortable, mergePreviewPortable as meetingsMergePreviewPortable } from "./meetingMerge";
 import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
@@ -690,6 +690,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "meetings:remove", handler: meetingsFns.removePortable }),
   definePortableQuery({ name: "meetings:mergePreview", handler: meetingsMergePreviewPortable }),
   definePortableMutation({ name: "meetings:merge", handler: meetingsMergePortable }),
+  definePortableQuery({ name: "meetings:attendanceRecords", handler: meetingsAttendanceRecordsPortable }),
 
   // agendas
   definePortableQuery({ name: "agendas:listForMeeting", handler: agendasFns.listForMeetingPortable }),

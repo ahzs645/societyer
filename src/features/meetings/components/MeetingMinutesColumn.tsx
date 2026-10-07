@@ -15,7 +15,6 @@ import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import {
-  AttendanceDetails,
   formatSourceReferences,
   personLinkCandidates,
   type AgendaItemEntry,
@@ -30,7 +29,6 @@ import {
   agendaAlphaLabel,
   agendaNumberingLabel,
   agendaEntryLabel,
-  AttendanceRoster,
   cleanOptional,
   normalizeActionDrafts,
   emptyActionDraft,
@@ -46,7 +44,6 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import { agendaSequenceLabel } from "../lib/agendaNumbering";
-import { computedQuorumMet } from "../lib/meetingDetailHelpers";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 import type {
   AgendaNumberingMode,
@@ -57,6 +54,7 @@ import type {
 } from "./MeetingMinutesColumn.internal";
 import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMeetingMinutesColumn";
 import { SourceMinutesContext, sourceIsProposal } from "./SourceMinutesContext";
+import { MeetingAttendanceGrid } from "./MeetingAttendanceGrid";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -70,9 +68,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     attendanceEdit,
     setAttendanceEdit,
     startAttendanceEdit,
-    autofillCurrentDirectors,
     attendanceAutofillLabel,
-    saveAttendance,
     quorumSnapshot,
     activeProxyCount,
     quorumLegalGuides,
@@ -530,79 +526,38 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
 
         {minutes && (
           <>
-            <div className="card">
+            <div className="card" id="meeting-attendance-card">
               <div className="card__head">
                 <h2 className="card__title">
                   <FileText size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
                   Attendance
                 </h2>
                 <span className="card__subtitle">
-                  {attendancePresentCount} present
-                  {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
+                  <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
+                    Quorum: {minutesQuorumLabel(minutes)}
+                  </Badge>
                 </span>
               </div>
               <div className="card__body">
-                {attendanceEdit && canEditAttendance ? (
-                  <div className="col" style={{ gap: 12 }}>
-                    <AttendanceRoster
-                      people={attendanceEdit.people}
-                      peopleNames={personLinkCandidates(members, directors).map((p) => p.name)}
-                      onChange={(next) => setAttendanceEdit({ ...attendanceEdit, people: next })}
-                    />
-                    <button className="btn-action" type="button" onClick={autofillCurrentDirectors}>
-                      {attendanceAutofillLabel}
-                    </button>
-                    {(() => {
-                      const preview = computedQuorumMet({
-                        presentCount: attendancePresentCount,
-                        activeProxyCount,
-                        required: quorumSnapshot.required,
-                      });
-                      return (
-                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                          <Badge tone={preview ? "success" : "warn"}>
-                            {preview == null ? "Quorum requirement unavailable" : preview ? "Quorum will be met" : "Quorum will not be met"}
-                          </Badge>
-                          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                            {attendancePresentCount} present
-                            {activeProxyCount ? ` + ${activeProxyCount} active ${activeProxyCount === 1 ? "proxy" : "proxies"}` : ""}
-                            {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                      <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
-                      <button className="btn-action btn-action--primary" disabled={!canEditAttendance} onClick={saveAttendance}>
-                        <Save size={12} /> Save attendance
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="col" style={{ gap: 8 }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
-                        Quorum: {minutesQuorumLabel(minutes)}
-                      </Badge>
-                      {quorumSnapshot.label && (
-                        <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>
-                          Rule: {quorumSnapshot.label}
-                        </span>
-                      )}
-                      <div style={{ flexBasis: "100%" }}>
-                        <LegalGuideInline rules={quorumLegalGuides} />
-                      </div>
-                      <button className="btn-action" disabled={!canEditAttendance} onClick={startAttendanceEdit}>
-                        Edit attendance
-                      </button>
-                    </div>
-                    <AttendanceDetails
-                      present={minutes.attendees}
-                      absent={minutes.absent}
-                      people={personLinkCandidates(members, directors)}
-                    />
-                  </div>
-                )}
+                <div className="col" style={{ gap: 8 }}>
+                  {quorumSnapshot.label && (
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      Rule: {quorumSnapshot.label}
+                    </span>
+                  )}
+                  <LegalGuideInline rules={quorumLegalGuides} />
+                  <MeetingAttendanceGrid
+                    meeting={props.meeting ?? { _id: minutes.meetingId }}
+                    minutes={minutes}
+                    people={props.directoryPeople}
+                    editing={!!attendanceEdit && canEditAttendance}
+                    onEditingChange={(next) => (next ? startAttendanceEdit() : setAttendanceEdit(null))}
+                    quorumRequired={quorumSnapshot.required ?? null}
+                    activeProxyCount={activeProxyCount}
+                    expectedPeople={props.expectedAttendees}
+                    expectedPeopleLabel={attendanceAutofillLabel}
+                  />
+                </div>
               </div>
             </div>
 
