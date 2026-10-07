@@ -116,6 +116,11 @@ extraction already holds.
 - **One-click resolutions** (`importSessions:resolveBlockedRecords`, settings write; several records at
   once): `link_existing` (a duplicate counts as applied to the register record it duplicates and is
   remembered in `importTargets`), `retry`, `defer` (back to Pending) and `skip` (Rejected). Each leaves a note.
+- **Minutes too** (`applyApprovedMeetingsPortable`): a minutes record whose action observations or source
+  versions contradict what its meeting already holds from the same source is blocked as a duplicate of that
+  meeting (checked before any write for that record); the other minutes apply. Link sets its `meetings`
+  target. A minutes record merged into a meeting only an agenda evidenced ("Held — minutes missing") makes
+  the meeting Held.
 - The result lists `blocked` with reasons; when everything was blocked it still reports
   `preflightBlocked: true` (older callers). Intake promotion keeps all-or-nothing semantics
   (`allOrNothing: true`): one document's records are one unit.
@@ -190,6 +195,22 @@ agents): boot reads 23,228 records in 0.7 s (the 76,000 deferred intake and prov
 2,069-document run: 3.3–4.1 s. A meeting page loads `fieldProvenance` (48,582 rows, 0.7 s) in the
 background for its View source badge, which reads values and quotes from the extraction; for embedded
 minutes it names the package. (Before the key-range boot read, the same boot took 3.0 s.)
+
+**Per-record apply on the real archive.** On a copy of the restored profile, the WP-R class-records bundles
+were staged as import sessions and run through Approve evidence-verified → Create docs → Create minutes →
+Apply sections:
+
+- Batch 1: **532 section records applied, 103 blocked** in one apply (149 grants, 7 directors, 1 seat, 23
+  insurance, 13 deadlines, 10 filings, 51 statements, 5 budgets, 30 policies, 62 evidence rows, 172
+  meeting materials, 9 bylaw rule sets). Blocked: 54 already on record (policies the intake review had
+  promoted), 30 waiting for a meeting no source in the run creates, 19 needing a fix (ambiguous or undated
+  meeting). In WP-R one blocked record held back the whole section and the apply had to be repeated.
+- Approving the session's 48 pending meetings and Create minutes: 10 meetings created, 36 merged, and 2
+  blocked per record (their minutes had been reviewed and promoted from the intake run with different
+  action observations) — before this change, that one contradiction failed Create minutes for all 48
+  (found during this check, fixed in `400e17e`). 7 s.
+- "Link all to the existing records" resolved the 56 duplicates in 2 s; 49 records stay blocked with their
+  reasons (30 waiting, 19 to fix), everything else is applied.
 
 ## Assumptions and decisions
 
