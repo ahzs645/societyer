@@ -147,12 +147,12 @@ export async function securityDisableUserPortable(ctx: PortableMutationCtx, { id
  * privacy-officer name stored an empty displayName, which left the sidebar
  * user button, the Users table and per-row labels ("Role for ") blank.
  */
-export function userDisplayName(row: { displayName?: unknown; email?: unknown }): string {
+export function userDisplayName(row: { displayName?: unknown; email?: unknown } | Record<string, unknown>): string {
   return String(row.displayName ?? "").trim() || String(row.email ?? "").trim() || "Unnamed user";
 }
 
-function withDisplayName<T extends { displayName?: unknown; email?: unknown }>(row: T): T & { displayName: string } {
-  return { ...row, displayName: userDisplayName(row) };
+function withDisplayName<T extends object>(row: T): T & { displayName: string } {
+  return { ...row, displayName: userDisplayName(row as Record<string, unknown>) };
 }
 
 export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
