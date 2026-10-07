@@ -216,6 +216,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               value={transcriptEdit}
               onChange={(event) => setTranscriptEdit(event.target.value)}
               placeholder="Paste or type the meeting transcript here."
+              aria-label="Meeting transcript"
               autoFocus
             />
           </div>
@@ -328,6 +329,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                       <input
                         ref={(el) => { agendaInputRefs.current[index] = el; }}
                         className="input"
+                        aria-label={`Agenda item ${itemLabel} title`}
                         value={item.title}
                         onChange={(event) => updateAgendaItem(index, event.target.value)}
                         onKeyDown={(event) => {
