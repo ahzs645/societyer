@@ -116,7 +116,7 @@ test("local Owner can edit storage policy while acting Member remains restricted
   await expect(provider).toHaveCount(0);
   await expect(save).toHaveCount(0);
   await picker.click();
-  await page.getByText("Owner", { exact: true }).click();
+  await page.getByRole("listbox", { name: "Acting user", exact: true }).getByRole("option").filter({ hasText: "Owner" }).click();
   await expect(picker).toContainText("Owner");
   await expect(provider).toBeEnabled();
   await page.getByLabel("Custodian / administrator contact", { exact: true }).fill("Owner after reload");

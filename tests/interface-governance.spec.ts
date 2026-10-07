@@ -141,7 +141,7 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await expect(page.locator(".record-table__cell--editable")).toHaveCount(0);
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
-  await page.getByText("Owner", { exact: true }).click();
+  await page.getByRole("listbox", { name: "Acting user", exact: true }).getByRole("option").filter({ hasText: "Owner" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "New meeting", exact: true })).toBeEnabled();
   expect(errors).toEqual([]);
