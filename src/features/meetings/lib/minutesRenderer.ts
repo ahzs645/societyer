@@ -1,4 +1,4 @@
-import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
+import { resolveSourceMeetingRecord, changedSourceMinuteSections, splitPipeTables, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
 import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
 import { screenAttendanceName } from "../../../../shared/attendanceNames";
@@ -1327,7 +1327,19 @@ function renderMinuteSections(sections: MinutesRenderArgs["minutes"]["sections"]
     .join("");
 }
 
-function renderMinutesMarkdownHtml(value: string | undefined | null) {
+/** Section text; pipe-table rows written by older imports ("Item | Discussion | Action") become a table. */
+function renderMinutesMarkdownHtml(value: string | undefined | null): string {
+  const segments = splitPipeTables(minutesTextForDisplay(value));
+  if (!segments.some((segment) => segment.kind === "table")) return renderMinutesProseHtml(value);
+  return segments.map((segment) => {
+    if (segment.kind === "text") return renderMinutesProseHtml(segment.text);
+    const head = segment.header ? `<thead><tr>${segment.rows[0].map((cell) => `<th>${renderMarkdownInline(cell)}</th>`).join("")}</tr></thead>` : "";
+    const body = (segment.header ? segment.rows.slice(1) : segment.rows).map((row) => `<tr>${row.map((cell) => `<td>${renderMarkdownInline(cell)}</td>`).join("")}</tr>`).join("");
+    return `<table class="source-table">${head}<tbody>${body}</tbody></table>`;
+  }).join("");
+}
+
+function renderMinutesProseHtml(value: string | undefined | null) {
   const text = minutesTextForDisplay(value).trim();
   if (!text) return "";
   const lines = text.replace(/\r\n/g, "\n").split("\n");

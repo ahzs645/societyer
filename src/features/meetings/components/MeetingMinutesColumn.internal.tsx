@@ -10,6 +10,7 @@ import { ListEditor } from "../../../components/ListEditor";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
+import { splitPipeTables } from "../../../../shared/sourceMeetingRecord";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
@@ -258,7 +259,33 @@ function emptyActionDraft(): SectionActionDraft {
 }
 
 
+/** Section text with pipe-table rows (from older imports: "Item | Discussion | Action/WHO") shown as a table. */
 function renderMinutesMarkdown(value: string) {
+  const segments = splitPipeTables(minutesTextForDisplay(value));
+  if (segments.some((segment) => segment.kind === "table")) {
+    return (
+      <>
+        {segments.map((segment, index) => segment.kind === "text"
+          ? <div key={index}>{renderMinutesProse(segment.text)}</div>
+          : (
+            <div className="table-wrap" key={index}>
+              <table className="table meeting-minutes-source-table" data-testid="minutes-source-table">
+                {segment.header && <thead><tr>{segment.rows[0].map((cell, cellIndex) => <th key={cellIndex}>{renderInlineMarkdown(cell)}</th>)}</tr></thead>}
+                <tbody>
+                  {(segment.header ? segment.rows.slice(1) : segment.rows).map((row, rowIndex) => (
+                    <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{renderInlineMarkdown(cell)}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+      </>
+    );
+  }
+  return renderMinutesProse(value);
+}
+
+function renderMinutesProse(value: string) {
   const text = minutesTextForDisplay(value).trim();
   if (!text) return <p className="muted">Nothing recorded yet.</p>;
   const lines = text.replace(/\r\n/g, "\n").split("\n");

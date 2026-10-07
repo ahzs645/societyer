@@ -42,6 +42,28 @@ export function parseSourceMeetingBlocks(value:string):SourceMeetingBlock[] {
  }
  flushParagraph();flushTable();return blocks;
 }
+/** Text with pipe-delimited table rows ("Item | Discussion | Action/WHO") split into prose and
+ * table segments, so stored minutes and source text written by earlier imports (cells joined with
+ * " | ") render as tables instead of pipes. A line is a table row when it has at least two cells
+ * and either sits next to another row or has three or more cells; a single "A | B" line in prose
+ * stays prose. The stored text is never changed. */
+export type TextOrTableSegment = {kind:'text';text:string}|{kind:'table';rows:string[][];header:boolean};
+export function splitPipeTables(value:string):TextOrTableSegment[] {
+ const lines=readableSourceText(value).split('\n');const cells=lines.map(literalCells);
+ const isRow=(index:number)=>{const row=cells[index];if(!row||row.length<2||!row.some(cell=>cell))return false;
+  const neighbour=(other:number)=>Boolean(cells[other]&&cells[other]!.length>=2);
+  return row.length>=3||neighbour(index-1)||neighbour(index+1);};
+ const segments:TextOrTableSegment[]=[];let text:string[]=[];let rows:string[][]=[];
+ const flushText=()=>{if(text.join('\n').trim())segments.push({kind:'text',text:text.join('\n')});text=[];};
+ const flushRows=()=>{if(rows.length){const width=Math.max(...rows.map(row=>row.length));const padded=rows.map(row=>[...row,...Array(width-row.length).fill('')]);
+  // A first row of short labels ("Item | Discussion | Action") is the header.
+  const header=padded.length>1&&padded[0].every(cell=>cell.length<=40&&!/[.!?]$/.test(cell))&&/\b(?:item|agenda|topic|discussion|action|who|for|decision|notes?|name|organi[sz]ation|date|status|responsib\w*)\b/i.test(padded[0].join(' '));
+  segments.push({kind:'table',rows:padded,header});rows=[];}};
+ lines.forEach((line,index)=>{if(isRow(index)){flushText();rows.push(cells[index]!);}else{flushRows();text.push(line);}});
+ flushRows();flushText();return segments;
+}
+/** Plain text of a block. Table cells are joined with " | " so stored records round-trip through
+ * `parseSourceMeetingBlocks`; displays render them as tables (`splitPipeTables`). */
 export function sourceMeetingBlockText(block:SourceMeetingBlock):string {
  if(block.kind==='table')return block.rows.map(row=>row.cells.map(cell=>cell.blocks?.length?cell.blocks.map(sourceMeetingBlockText).join('\n'):cell.text).join(' | ')).join('\n');
  if(block.kind==='paragraph'||block.kind==='heading')return block.text;
