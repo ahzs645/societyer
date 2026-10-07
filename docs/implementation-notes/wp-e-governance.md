@@ -150,6 +150,60 @@ There are no schema changes.
   - `tests/interface-election-lifecycle.spec.ts`: Close and Publish now confirm.
   - `tests/interface-filing-ledger-handoffs.spec.ts`: the native select became the app Select.
 
+## Browser verification
+
+Screenshots are saved as `scratchpad/shots/impl-wpe-*.png`.
+
+**Demo/E2E harness runtime**
+
+- **Bylaw amendments:** the full lifecycle was exercised. A new draft saved,
+  consultation started, a 6/4 vote was recorded as failed, -2 abstentions were
+  rejected, and an 8/4 vote passed.
+- **Bylaw rules:** an invalid set was blocked, a valid v2 took effect today, the
+  2025 AGM still used v1, and Reset asked for confirmation.
+- **AGM workflow and obligations:** the AGM workflow posture was checked.
+  Obligations showed the 2025 AGM evidence, and Dismiss confirmed and decremented
+  the count.
+- **Compliance settings:** the AGM was due Dec 31, 2026.
+- **Annual cycle:**
+  - 2026: no AGM, so the no-AGM report is due Jan 31, 2027.
+  - 2025: the report was filed on time and the stage is consistent.
+- **Registers:** the blank director form was blocked, and a seeded role holder
+  edited and saved.
+- **Transparency:** a saved draft was edited, then published. It showed on the
+  public page.
+- **Other pages:** corporate history add, edit, remove and validation;
+  filings derived Overdue.
+- **Phone width (390 px):** Obligations, Policies, Minute book and Elections
+  showed no page overflow.
+
+**Local runtime with the PGAIR backup restored**
+
+- **Obligations:** 6 held AGMs were found and obligations computed
+  provisionally with the banner.
+- **Sidebar:** shows "Set up".
+- **Directors:** the empty-register explanation appears, and "Add as director"
+  pre-fills a drawer (P16).
+
+**Interface specs** (`--project=desktop`, preinstalled Chromium)
+
+Passing:
+
+- `interface-governance`
+- `interface-election-lifecycle`
+- `interface-filing-ledger-handoffs`
+- `interface-dashboard`
+- `interface-public-links`
+- `interface-role-settings`
+- the certificate/formation test in `interface-records`
+
+Failing for reasons outside WP-E:
+
+- `interface-records` "legal record forms remain usable": the Deadlines
+  calendar now shows a second "List" button.
+- `interface-operations`: the inventory import "Create session" button is
+  disabled.
+
 ## Notes for the orchestrator
 
 - `shared/functions/portable-manifest.json` and `scripts/stage2/function-inventory.json`

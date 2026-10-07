@@ -207,7 +207,8 @@ export function DirectorsPage() {
             email: "",
             position: /president|chair|treasurer|secretary|vice/i.test(role) ? sourceRoleLabel(role) : "Director",
             isBCResident: directorProfile.showBcResidentField,
-            termStart: observation.startDate ?? observation.observedDate ?? calendarDateKey(new Date()),
+            // Only a full date is a usable term start; partial source dates ("2025-03") are left for the user to confirm.
+            termStart: [observation.startDate, observation.observedDate].find((value: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""))) ?? "",
             consentOnFile: false,
             status: "Active",
             aliases: [],
