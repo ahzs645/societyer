@@ -11,6 +11,7 @@ import { pluralize } from "../src/lib/format";
 import { FLOATING_LAYER_SELECTOR } from "../src/lib/floatingLayer";
 import { NAV_ITEM_LABEL_KEYS, translateNavLabel } from "../src/i18n/navLabels";
 import { formatDocumentTitle } from "../src/lib/documentTitle";
+import { openableExternalUrl } from "../src/lib/externalUrl";
 
 type Catalog = { [key: string]: string | Catalog };
 function flatten(catalog: Catalog, prefix = ""): Map<string, string> {
@@ -84,6 +85,11 @@ for (const [path, module] of gatedRoutes) {
 for (const [path, identity] of Object.entries(ROUTE_IDENTITY as Record<string, { module?: string }>)) {
   if (identity.module && !path.includes(":")) assert.equal(gatedRoutes.get(path), identity.module, `${path} is hidden with ${identity.module}; its route must be gated by it too`);
 }
+
+// Integration links only become anchors when a browser can open them.
+assert.equal(openableExternalUrl("demo://paperless/1001"), null, "placeholder schemes are not links");
+assert.equal(openableExternalUrl("javascript:alert(1)"), null);
+assert.equal(openableExternalUrl(" https://paperless.example.org/documents/12/ "), "https://paperless.example.org/documents/12/");
 
 // Destructive platform actions name what is lost before they run.
 const calendarSync = readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8");
