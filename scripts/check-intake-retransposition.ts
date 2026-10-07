@@ -22,7 +22,7 @@ import { verifyRecord } from "../shared/intake/verify";
 import { clusterFiles, nameDateSignature } from "../shared/intake/cluster";
 import { guardFutureMinutesDate } from "../shared/intake/pipeline";
 import { agmGaps } from "../shared/intake/reconcile";
-import { findDates } from "../shared/intake/parse";
+import { findDates, findDatesWithoutYear } from "../shared/intake/parse";
 import { classRecordGaps } from "../shared/intake/classStages";
 import { runPeopleNames } from "../src/features/intake/runPeople";
 import { directoryPersonId, loadDirectoryIndex } from "../shared/functions/importSessionHelpers/importMeetingApply";
@@ -174,6 +174,9 @@ assert.deepEqual(agmGaps([agm("2022-06-01"), agm("2024-06-01")], 2022, 2025).map
 // ------------------------------------------------------------ item numbers and non-minutes citations
 assert.equal(findDates("4.2 July 2022 Operations Committee Meeting Minutes").length, 0, "an item number is not a day");
 assert.equal(findDates("Minutes of 28 November 2018")[0]?.iso, "2018-11-28");
+assert.equal(findDates("Adoption of previous minutes, November 20 th , 2012")[0]?.iso, "2012-11-20", "a spaced ordinal keeps its year");
+assert.equal(findDatesWithoutYear("Adoption of previous minutes, November 20 th , 2012", "2013-11-26").length, 0, "a dated citation is not a date without a year");
+assert.equal(findDatesWithoutYear("Next meeting: November 20th at noon", "2013-11-26")[0]?.iso, "2013-11-20");
 const citing = (text: string, date: string) => ({ fileKey: `local:${text}`, docClass: "correspondence", record: {}, references: [{ kind: "prior_minutes", text, date }], unsupported: [] }) as any;
 const unresolved = classRecordGaps({ extractions: [citing("Your presentation is limited to 10 minutes", "2023-06-28"), citing("Notes:", "2014-07-31"), citing("Minutes of the June 4 board meeting", "2024-06-04")], meetings: [], evidenced: [], policyLinks: [], fiscalChanges: [] }).filter((gap) => gap.kind === "unresolved_reference");
 assert.deepEqual(unresolved.map((gap) => gap.date), ["2024-06-04"], "durations and headings are not missing minutes");
