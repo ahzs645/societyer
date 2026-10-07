@@ -111,6 +111,14 @@ export function linkPolicyAdoptions(extractions: IntakeExtractionResult[], meeti
 
 export type ExtendedRecordGap = RecordGap;
 
+const KIND_LABEL: Record<string, string> = { agenda: "agenda", consent_agenda: "consent agenda", agm_agenda: "AGM agenda", package: "meeting package", meetingPackage: "meeting package", agmMaterial: "AGM notice or package", agm_notice: "AGM notice", agm_script: "AGM script", agm_package: "AGM package" };
+const BODY_LABEL: Record<string, string> = { board: "board", agm: "annual general", sgm: "special general", executive: "executive committee", operations: "operations committee", committee: "committee", members: "members'", joint: "joint" };
+const CLASS_LABEL: Record<string, string> = { agenda: "An agenda", meetingPackage: "A meeting package", agmMaterial: "AGM material", bylaws: "The bylaws", policy: "A policy", correspondence: "Correspondence", agreement: "An agreement", grant: "A grant document", registryFiling: "A registry filing", financialStatement: "A financial statement", budget: "A budget", insurance: "An insurance document" };
+/** "an agenda", "a consent agenda" — the article English needs before a label. */
+const withArticle = (label: string) => `${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}`;
+/** Body key → words ("committee:aqmp-committee" → "aqmp committee"). */
+const bodyWords = (bodyKey: string) => BODY_LABEL[bodyKey] ?? bodyKey.replace(/^committee:/, "").replace(/-/g, " ");
+
 /** Meetings evidenced by an agenda / package / AGM material but with no minutes in the corpus. */
 export function agendaEvidencedMeetings(extractions: IntakeExtractionResult[], files: IntakeFileRecord[], meetings: ReconciledMeeting[]): Array<{ meetingKey: string; bodyKey: string; date: string; fileId: string; kind: string }> {
   const known = new Set(meetings.map((meeting) => meeting.meetingKey));
@@ -143,7 +151,9 @@ export function classRecordGaps(input: {
 }): ExtendedRecordGap[] {
   const gaps: ExtendedRecordGap[] = [];
   for (const meeting of input.evidenced) {
-    gaps.push({ kind: "meeting_without_minutes", bodyKey: meeting.bodyKey, date: meeting.date, severity: meeting.bodyKey === "agm" ? "statutory" : "practice", explanation: `A ${meeting.kind.replace(/_/g, " ")} shows a ${meeting.bodyKey} meeting on ${meeting.date}, but no minutes for it were found. Staged as "held, minutes missing".`, evidence: [{ fileId: meeting.fileId }] });
+    const label = KIND_LABEL[meeting.kind] ?? meeting.kind.replace(/_/g, " ");
+    const shown = withArticle(label);
+    gaps.push({ kind: "meeting_without_minutes", bodyKey: meeting.bodyKey, date: meeting.date, severity: meeting.bodyKey === "agm" ? "statutory" : "practice", explanation: `${shown[0].toUpperCase()}${shown.slice(1)} shows ${withArticle(bodyWords(meeting.bodyKey))} meeting on ${meeting.date}, but no minutes for it were found. Staged as "held, minutes missing".`, evidence: [{ fileId: meeting.fileId }] });
   }
   // References to earlier minutes (packages, AGM material, correspondence) that no meeting satisfies.
   const known = input.meetings.map((meeting) => meeting.meetingKey);
@@ -158,7 +168,10 @@ export function classRecordGaps(input: {
       const key = `${bodyKey ?? "any"}@${reference.date}`;
       if (found || seen.has(key)) continue;
       seen.add(key);
-      gaps.push({ kind: "unresolved_reference", bodyKey, date: reference.date, severity: "practice", explanation: `${extraction.docClass} cites "${reference.text.slice(0, 120)}" (${reference.date}); no minutes or meeting record for that date were found.`, evidence: [{ fileId: extraction.fileKey, text: reference.text.slice(0, 200) }] });
+      // Embedded minutes are cited by their heading; a bare heading ("Members Present:") says nothing, so it is not quoted.
+      const quoted = reference.text.trim().length > 12 && !/:\s*$/.test(reference.text.trim()) ? ` ("${reference.text.slice(0, 120)}")` : "";
+      const what = reference.kind === "prior_minutes" ? `minutes of ${reference.date}` : `a meeting on ${reference.date}`;
+      gaps.push({ kind: "unresolved_reference", bodyKey, date: reference.date, severity: "practice", explanation: `${CLASS_LABEL[extraction.docClass] ?? "A document"} cites ${what}${quoted}, but no minutes or meeting record for that date were found.`, evidence: [{ fileId: extraction.fileKey, text: reference.text.slice(0, 200) }] });
     }
   }
   // Annual report filing evidence for every year with an AGM (BC Societies Act: within 30 days of the AGM).

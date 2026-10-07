@@ -219,8 +219,9 @@ export function representationGapRow(detail: UnsupportedDetail, fileKey: string,
   };
 }
 
-const CATEGORY: Partial<Record<string, string>> = { meetingMinutes: "Minutes", agenda: "Minutes", meetingPackage: "Minutes", agmMaterial: "Minutes", bylaws: "Bylaws", policy: "Policy", financialStatement: "FinancialStatement", budget: "FinancialStatement", insurance: "Insurance", agreement: "Agreement", grant: "Grant", registryFiling: "Filing", invoice: "Receipt" };
-const SECTION: Partial<Record<string, string>> = { meetingMinutes: "meetings", agenda: "meetings", meetingPackage: "meetings", agmMaterial: "meetings", bylaws: "policies", policy: "policies", financialStatement: "financials", budget: "financials", insurance: "insurance", directorConsent: "directors", proxy: "directors", roster: "directors", agreement: "archiveAccessions", grant: "grants", registryFiling: "filings", invoice: "financials", correspondence: "archiveAccessions" };
+/** Document category and register section per intake class (also used by promotion). */
+export const CATEGORY: Partial<Record<string, string>> = { meetingMinutes: "Minutes", agenda: "Minutes", meetingPackage: "Minutes", agmMaterial: "Minutes", bylaws: "Bylaws", policy: "Policy", financialStatement: "FinancialStatement", budget: "FinancialStatement", insurance: "Insurance", agreement: "Agreement", grant: "Grant", registryFiling: "Filing", invoice: "Receipt" };
+export const SECTION: Partial<Record<string, string>> = { meetingMinutes: "meetings", agenda: "meetings", meetingPackage: "meetings", agmMaterial: "meetings", bylaws: "policies", policy: "policies", financialStatement: "financials", budget: "financials", insurance: "insurance", directorConsent: "directors", proxy: "directors", roster: "directors", agreement: "archiveAccessions", grant: "grants", registryFiling: "filings", invoice: "financials", correspondence: "archiveAccessions" };
 
 export type BundleBuild = { bundle: Record<string, unknown>; issues: string[]; stagedRecords: number; meetingsBundled: number; minutesSkipped: Array<{ fileKey: string; reason: string }>; /** Files with at least one native (non-documentMap) record. */ transposedFiles?: string[]; /** Records per bundle collection. */ collectionCounts?: Record<string, number> };
 

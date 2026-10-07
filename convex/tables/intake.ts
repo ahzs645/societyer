@@ -121,7 +121,9 @@ export const intakeTables = {
     references: v.array(v.any()),
     warnings: v.optional(v.array(v.string())),
     verification: v.optional(v.any()), // span re-verification summary
-    status: v.string(), // pending_review | in_review | accepted | promoted | rejected
+    status: v.string(), // pending_review | in_review | accepted | promoted | rejected | covered (a copy of a promoted record)
+    // Promotion result: import session, native records created ({ table, id, label }), or the promoted copy that covers this one.
+    promotion: v.optional(v.any()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
