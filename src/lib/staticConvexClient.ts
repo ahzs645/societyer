@@ -206,6 +206,22 @@ export class StaticConvexClient {
     }
   }
 
+  /**
+   * convex/society.createWorkspace seeds the record-table metadata for the new
+   * society; offline, the definitions are bundled here, so seed right after the
+   * portable handler. Without it every record page in a freshly created
+   * workspace shows "Metadata not seeded".
+   */
+  private async afterCreateWorkspace<T>(value: T): Promise<T> {
+    try {
+      await this.seedRecordTableMetadataFor((value as any)?.societyId);
+      this.portableQueries.emit();
+    } catch (error) {
+      console.warn("[societyer-local] record-table metadata seed failed for the new workspace", error);
+    }
+    return value;
+  }
+
   private async seedRecordTableMetadataFor(societyId: string) {
     if (!societyId) return;
     await this.portable.runMutation("seedRecordTableMetadata:ensureForSociety", {
@@ -276,29 +292,15 @@ export class StaticConvexClient {
         name === "seedRecordTableMetadata:ensureForSociety" && !(args as any)?.objects
           ? { ...(args ?? {}), objects: RECORD_TABLE_OBJECTS }
           : args ?? {};
-      return this.portable.runMutation(name, enriched);
+      const ran = this.portable.runMutation(name, enriched);
+      if (name === "society:createWorkspace") return ran.then((value) => this.afterCreateWorkspace(value));
+      return ran;
     }
     warnLegacyFallback(name, kind, "mutation");
     const result = this.portable.authorizeFunction(name, "mutation", args ?? {}).then(async () => {
       const { mutationResult } = await import("./staticLegacyDispatch");
       return mutationResult(name, args, this.store);
     });
-    if (name === "society:createWorkspace") {
-      // convex/society.createWorkspace seeds the record-table metadata for the
-      // new society (seedSociety). The offline mirror doesn't, and the one-shot
-      // seed in the constructor only covers societies that already existed — so
-      // without this every record page in a freshly created workspace shows
-      // "Metadata not seeded", which is the first thing setup hands the operator.
-      return result.then(async (value) => {
-        try {
-          await this.seedRecordTableMetadataFor((value as any)?.societyId);
-          this.portableQueries.emit();
-        } catch (error) {
-          console.warn("[societyer-local] record-table metadata seed failed for the new workspace", error);
-        }
-        return value;
-      });
-    }
     return result;
   }
 

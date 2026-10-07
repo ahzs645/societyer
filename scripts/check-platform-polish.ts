@@ -94,10 +94,14 @@ for (const [path, identity] of Object.entries(ROUTE_IDENTITY as Record<string, {
 // O-3: functions the local mirror serves on purpose are classified in the
 // portable manifest, and the local client only warns for unclassified ones.
 const manifest = JSON.parse(readFileSync(new URL("../shared/functions/portable-manifest.json", import.meta.url), "utf8"));
-for (const name of ["society:createWorkspace", "workflows:get", "workflows:listCatalog"]) {
+for (const name of ["workflows:get", "workflows:listCatalog"]) {
   const entry = manifest.functions.find((fn: { name: string }) => fn.name === name);
   assert.equal(entry?.classification, "static-fallback", `${name} is classified static-fallback`);
 }
+// A4: organization setup runs one portable handler on both runtimes; the
+// hand-written local mirror is gone.
+assert.equal(manifest.functions.find((fn: { name: string }) => fn.name === "society:createWorkspace")?.classification, "portable", "society:createWorkspace is portable");
+assert.doesNotMatch(readFileSync(new URL("../src/lib/staticLegacyDispatch.ts", import.meta.url), "utf8"), /name === "society:createWorkspace"/, "no local createWorkspace mirror");
 const staticClient = readFileSync(new URL("../src/lib/staticConvexClient.ts", import.meta.url), "utf8");
 assert.match(staticClient, /known\.has\(name\)\)\s*\{\s*console\.debug/, "classified static fallbacks are logged at debug level");
 

@@ -4,6 +4,7 @@ const rosterPromotionFns = lazyHandlers(() => import("./rosterPromotion"), "rost
 const financialReviewFns = lazyHandlers(() => import("./financialReview"), "financialReview");
 import * as memberGovernanceFns from "./memberGovernance";
 const minutesReviewFns = lazyHandlers(() => import("./minutesReview"), "minutesReview");
+const societyCreateFns = lazyHandlers(() => import("./societyCreate"), "societyCreate");
 /**
  * The set of functions ported to the portable `ctx.db` contract.
  *
@@ -937,6 +938,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "society:setLogoInvertInDarkMode", handler: societyFns.setLogoInvertInDarkModePortable }),
   definePortableMutation({ name: "society:updateModules", handler: societyFns.updateModulesPortable }),
   definePortableMutation({ name: "society:cloneSociety", handler: societyFns.cloneSocietyPortable }),
+  definePortableMutation({ name: "society:createWorkspace", handler: (ctx, args: any) => societyCreateFns.createWorkspacePortable(ctx, args) }),
   definePortableMutation({ name: "society:updateComplianceSettings", handler: societyFns.updateComplianceSettingsPortable }),
   definePortableMutation({ name: "society:updateInventorySettings", handler: societyFns.updateInventorySettingsPortable }),
   definePortableMutation({ name: "society:updateNotificationSettings", handler: societyFns.updateNotificationSettingsPortable }),
