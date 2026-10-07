@@ -210,8 +210,10 @@ export function bylawRuleEffectiveDateProblem(
   if (options.allowBackdated) return null;
   const effective = String(newEffectiveFromISO ?? "").slice(0, 10);
   if (!effective) return null;
+  // A "Baseline" row is the jurisdiction's draft defaults, not an adopted
+  // version: recording the society's own rules may replace it on any day.
   const latest = existing
-    .filter((row) => row.status !== "Draft" && row.effectiveFromISO)
+    .filter((row) => row.status !== "Draft" && row.status !== "Baseline" && row.effectiveFromISO)
     .sort((a, b) => String(b.effectiveFromISO).localeCompare(String(a.effectiveFromISO)))[0];
   if (!latest) return null;
   const latestDate = String(latest.effectiveFromISO).slice(0, 10);

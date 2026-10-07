@@ -163,6 +163,7 @@
     "test:compliance-agm-evidence": "tsx scripts/check-compliance-agm-evidence.ts",
     "test:governance-forms": "tsx scripts/check-governance-forms.ts",
     "test:governance-quorum": "tsx scripts/check-governance-quorum.ts",
+    "test:governance-timezone": "tsx scripts/check-governance-timezone.ts",
     "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts",
     "test:authorization-policy": "tsx scripts/check-authorization-policy.ts",
     "test:hosted-identity": "tsx scripts/check-hosted-identity.ts",

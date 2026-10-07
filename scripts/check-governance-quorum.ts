@@ -70,4 +70,26 @@ assert.equal(boardQuorum.required, 3, "majority of 5 directors");
 const committeeDefault = await requiredQuorumForMeeting({ db } as any, active, { societyId: "soc", meetingType: "Committee", committeeId: opsId });
 assert.equal(committeeDefault.required, 2, "committee default applies when the committee has no rule");
 
+// "Reset to defaults" then "Save new version" on the same day: the saved
+// version is not "backdated" against the draft baseline, and it governs.
+{
+  const fresh = new MemoryDb({
+    seed: {
+      societies: [{ _id: "soc3", name: "Synthetic Fresh Society", jurisdictionCode: "CA-BC", entityType: "society", isMemberFunded: false }],
+      users: [{ _id: "owner3", societyId: "soc3", role: "Owner", status: "Active", displayName: "Owner" }],
+    },
+  });
+  const run = new PortableRuntime({ db: fresh, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "user" as const, runtime: "test" as const, assurance: "trusted-workspace" as const, subject: "owner3", userId: "owner3", societyId: "soc3" }) }).registerAll(PORTABLE_FUNCTIONS);
+  await run.runMutation("bylawRules:resetToDefault", { societyId: "soc3" });
+  const baseline = (fresh.dump("bylawRuleSets") as any[])[0];
+  assert.equal(baseline.status, "Baseline");
+  const todayMidnight = `${String(baseline.effectiveFromISO).slice(0, 10)}T00:00:00.000Z`;
+  await run.runMutation("bylawRules:upsertActive", { ...baseRules, societyId: "soc3", quorumValue: 4, effectiveFromISO: todayMidnight });
+  const governing: any = await run.runQuery("bylawRules:getActive", { societyId: "soc3" });
+  assert.equal(governing.version, 2, "the society's saved version governs over the same-day baseline");
+  assert.equal(governing.quorumValue, 4);
+  const dashboardRules: any = await run.runQuery("dashboard:summary", { societyId: "soc3" });
+  assert.ok(!JSON.stringify(dashboardRules.complianceFlags ?? []).includes("Bylaw rule set not configured"), "dashboard reads the saved version");
+}
+
 console.log("governance quorum checks passed");

@@ -1,3 +1,4 @@
+import { calendarDateKey } from "../lib/calendarDates";
 import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -95,7 +96,7 @@ export function TimelinePage() {
         });
       });
     });
-    const today = new Date().toISOString().slice(0, 10);
+    const today = calendarDateKey(new Date());
     (deadlines ?? []).forEach((deadline: any) => {
       if (!deadline.dueDate) return;
       const done = deadline.status ? deadline.status !== "open" : Boolean(deadline.done);
