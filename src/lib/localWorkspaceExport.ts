@@ -3,6 +3,7 @@ import { archiveDatabaseSnapshot, buildWorkspaceArchive, readWorkspaceArchiveFil
 import { archiveFileRows, collectWorkspaceFiles, type AttachmentDownload } from "./workspaceArchiveFiles";
 import { triggerBlobDownload } from "./zip";
 import { isLocalDataRuntime } from "./staticRuntime";
+import { preferredRestoredSocietyId } from "./restoredSociety";
 
 type LocalExportCapableClient = {
   exportLocalWorkspaceSnapshotAsync?: () => Promise<unknown>;
@@ -18,12 +19,30 @@ export type WorkspaceBackupSummary = {
   unavailableFiles: number;
   externalFiles: number;
   societies: Array<{ _id: string; name: string }>;
+  /**
+   * Organization to open after the restore: the one that was active when the
+   * backup was made, else the first organization that is not the bundled demo.
+   */
+  preferredSocietyId: string | null;
 };
+
+/** Selected-organization key written by `setStoredSocietyId` (hooks/useSociety). */
+const SELECTED_SOCIETY_KEY = "societyer.currentSocietyId";
+
+function readSelectedSocietyId(): string | null {
+  try { return localStorage.getItem(SELECTED_SOCIETY_KEY); } catch { return null; }
+}
+
+export { preferredRestoredSocietyId };
 
 /** Full snapshot of the local workspace, heavy fields included (read back from IndexedDB). */
 export async function getLocalWorkspaceSnapshot(): Promise<any> {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return (await client.exportLocalWorkspaceSnapshotAsync?.()) ?? null;
+  const snapshot: any = (await client.exportLocalWorkspaceSnapshotAsync?.()) ?? null;
+  // Remember which organization was open so a restore reopens it.
+  const activeSocietyId = readSelectedSocietyId();
+  if (snapshot && activeSocietyId) snapshot.activeSocietyId = activeSocietyId;
+  return snapshot;
 }
 
 export function localWorkspaceBackupSupported() {
@@ -121,6 +140,7 @@ export function summarizeWorkspaceBackup(snapshot: any): WorkspaceBackupSummary 
     societies: societies
       .filter((row) => typeof row?._id === "string")
       .map((row) => ({ _id: String(row._id), name: String(row.name ?? "Untitled organization") })),
+    preferredSocietyId: preferredRestoredSocietyId(snapshot),
   };
 }
 

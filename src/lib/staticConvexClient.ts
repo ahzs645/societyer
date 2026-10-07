@@ -48,7 +48,32 @@ function warnLegacyFallback(
     );
     return;
   }
-  console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+  // Functions the portable manifest classifies as `static-fallback` are served
+  // by the local mirror on purpose (documented in the manifest); only an
+  // unclassified name is a real gap worth a console warning.
+  void knownStaticFallbacks().then((known) => {
+    if (known.has(name)) {
+      console.debug(`[societyer-local] "${name}" served by its local mirror (classified static-fallback in the portable manifest)`);
+    } else {
+      console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+    }
+  });
+}
+
+let staticFallbackNames: Promise<Set<string>> | null = null;
+/** Names classified `static-fallback`; the manifest is loaded only on the first fallback. */
+export function knownStaticFallbacks(): Promise<Set<string>> {
+  staticFallbackNames ??= import("../../shared/functions/portable-manifest.json")
+    .then((module: any) => {
+      const manifest = module.default ?? module;
+      return new Set<string>(
+        (manifest.functions ?? [])
+          .filter((entry: any) => entry?.classification === "static-fallback")
+          .map((entry: any) => String(entry.name)),
+      );
+    })
+    .catch(() => new Set<string>());
+  return staticFallbackNames;
 }
 
 /**
@@ -165,7 +190,14 @@ export class StaticConvexClient {
         try {
           await this.seedRecordTableMetadataFor(society._id);
         } catch (error) {
-          console.warn("[societyer-local] metadata auto-seed skipped a workspace", society._id, error);
+          // Previewing a role without settings:write (or a workspace the acting
+          // user is not in) is expected to skip; the next Owner/Admin load seeds it.
+          const message = error instanceof Error ? error.message : String(error);
+          if (/Permission [\w:]+ required|not a member|FORBIDDEN|Not authorized/i.test(message)) {
+            console.debug("[societyer-local] metadata auto-seed deferred for", society._id, "-", message);
+          } else {
+            console.warn("[societyer-local] metadata auto-seed skipped a workspace", society._id, error);
+          }
         }
       }
       this.portableQueries.emit();
@@ -332,7 +364,7 @@ export class StaticConvexClient {
       .filter((row: any) => row.societyId === societyId)
       .map((row: any) => ({
         _id: row._id,
-        displayName: row.displayName,
+        displayName: String(row.displayName ?? "").trim() || String(row.email ?? "").trim() || "Unnamed user",
         email: row.email,
         role: row.role,
         status: row.status,

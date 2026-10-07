@@ -276,7 +276,7 @@ export function ExportsPage() {
     setRestoreBusy(true);
     try {
       const summary = await restoreLocalWorkspaceBackup(restoreFile);
-      if (summary.societies[0]?._id) setStoredSocietyId(summary.societies[0]._id as any);
+      if (summary.preferredSocietyId) setStoredSocietyId(summary.preferredSocietyId as any);
       toast.success("Backup restored", `${summary.rowCount} records and ${summary.includedFiles} saved files.`);
     } catch (error) { toast.error("Restore failed", error instanceof Error ? error.message : "Please try again."); }
     finally { setRestoreBusy(false); }

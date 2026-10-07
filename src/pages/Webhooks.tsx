@@ -131,8 +131,8 @@ export function WebhooksPage() {
                 <td className="table__actions">
                   {canConfigure && (
                     <>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setDraft({ id: sub._id, name: sub.name, targetUrl: sub.targetUrl, eventTypesText: (sub.eventTypes ?? []).join(", "), status: sub.status })}>Edit</button>
-                      <button className="btn btn--ghost btn--sm btn--icon" aria-label={sub.status === "active" ? "Disable" : "Enable"} title={sub.status === "active" ? "Disable" : "Enable"} onClick={() => toggle(sub)}>
+                      <button className="btn btn--ghost btn--sm" aria-label={`Edit ${sub.name}`} onClick={() => setDraft({ id: sub._id, name: sub.name, targetUrl: sub.targetUrl, eventTypesText: (sub.eventTypes ?? []).join(", "), status: sub.status })}>Edit</button>
+                      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`${sub.status === "active" ? "Disable" : "Enable"} ${sub.name}`} title={sub.status === "active" ? "Disable deliveries" : "Enable deliveries"} onClick={() => toggle(sub)}>
                         <Power size={12} />
                       </button>
                     </>

@@ -97,6 +97,7 @@ import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
+import { NAV_ITEM_LABEL_KEYS } from "../i18n/navLabels";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
@@ -594,115 +595,6 @@ const SIDEBAR_MENU_WIDTH = 220;
 
 const SIDEBAR_MENU_HEIGHT = 116;
 
-const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
-  Dashboard: "nav.dashboard",
-  Society: "nav.society",
-  "Org details": "nav.orgDetails",
-  "Org history": "nav.orgHistory",
-  Timeline: "nav.timeline",
-  Members: "nav.members",
-  Directors: "nav.directors",
-  "Org chart": "nav.orgChart",
-  Committees: "nav.committees",
-  Volunteers: "nav.volunteers",
-  Employees: "nav.employees",
-  Goals: "nav.goals",
-  Tasks: "nav.tasks",
-  Deadlines: "nav.deadlines",
-  Commitments: "nav.commitments",
-  Documents: "nav.documents",
-  Communications: "nav.communications",
-  "Meetings": "nav.meetingsItem",
-  "Meeting templates": "nav.meetingTemplates",
-  "Agendas": "nav.agenda",
-  "Motion library": "nav.motionLibrary",
-  Minutes: "nav.minutes",
-  "Member proposals": "nav.memberProposals",
-  Elections: "nav.elections",
-  "Written resolutions": "nav.writtenResolutions",
-  Proxies: "nav.proxies",
-  "Conflicts of int.": "nav.conflicts",
-  "Director attestations": "nav.attestations",
-  Auditors: "nav.auditors",
-  "Court orders": "nav.courtOrders",
-  "Minute book": "nav.minuteBook",
-  "Bylaw rules": "nav.bylawRules",
-  "Bylaw redline": "nav.bylawRedline",
-  "Bylaws history": "nav.bylawsHistory",
-  Filings: "nav.filings",
-  "Filing pre-fill": "nav.filingPrefill",
-  "Policy registry": "nav.policies",
-  "Records retention": "nav.recordsRetention",
-  "Records inspections": "nav.recordsInspections",
-  "Privacy (PIPA)": "nav.privacy",
-  "PIPA training": "nav.pipaTraining",
-  Insurance: "nav.insurance",
-  "Access custody": "nav.accessCustody",
-  "Public transparency": "nav.transparency",
-  Financials: "nav.financials",
-  "Year-end reports": "nav.yearEndReports",
-  Treasurer: "nav.treasurer",
-  Assets: "nav.assets",
-  Grants: "nav.grants",
-  Reconciliation: "nav.reconciliation",
-  "Donation receipts": "nav.donationReceipts",
-  "Membership & billing": "nav.membership",
-  "Browser apps": "nav.browserConnectors",
-  Workflows: "nav.workflows",
-  "Workflow runs": "nav.workflowRuns",
-  "Workflow packages": "nav.workflowPackages",
-  Notifications: "nav.notifications",
-  "Users & access": "nav.users",
-  "Import sessions": "nav.importSessions",
-  "AI intake": "nav.aiIntake",
-  Settings: "nav.settings",
-  "Audit log": "nav.auditLog",
-  "Data export": "nav.dataExport",
-  "AI agents": "nav.aiAgents",
-  "API keys": "nav.apiKeys",
-  "Accounting": "nav.accounting",
-  "Annual cycle": "nav.annualCycle",
-  "Annual filings": "nav.annualFilings",
-  "Bylaw amendments": "nav.bylawAmendments",
-  "Calendar sync": "nav.calendarSync",
-  "Certificate register": "nav.certificateRegister",
-  "Compliance settings": "nav.complianceSettings",
-  "Corporate history": "nav.corporateHistory",
-  "Custom fields": "nav.customFields",
-  "Dividends": "nav.dividends",
-  "Document catalog": "nav.documentCatalog",
-  "Finance imports": "nav.financeImports",
-  "Formation & annual": "nav.formationAnnual",
-  "Governance registers": "nav.governanceRegisters",
-  "Integrations": "nav.integrations",
-  "Inventory": "nav.inventory",
-  "Library": "nav.library",
-  "Meeting evidence": "nav.meetingEvidence",
-  "Membership classes": "nav.membershipClasses",
-  "Motion backlog": "nav.motionBacklog",
-  "Motions": "nav.motions",
-  "Obligations": "nav.obligations",
-  "Offline preparation": "nav.offlinePreparation",
-  "Outbox": "nav.outbox",
-  "Paperless-ngx": "nav.paperlessNgx",
-  "People and source history": "nav.peopleAndSourceHistory",
-  "People directory": "nav.peopleDirectory",
-  "Point-in-time register": "nav.pointInTimeRegister",
-  "Policies": "nav.policies",
-  "Portfolio": "nav.portfolio",
-  "Post-incorporation": "nav.postIncorporation",
-  "Records archive": "nav.recordsArchive",
-  "Research library": "nav.researchLibrary",
-  "Rights ledger": "nav.rightsLedger",
-  "Role holders": "nav.roleHolders",
-  "Service providers": "nav.serviceProviders",
-  "Share register": "nav.shareRegister",
-  "Significant individuals": "nav.significantIndividuals",
-  "Source model coverage": "nav.sourceModelCoverage",
-  "Coverage & gaps": "nav.coverageGaps",
-  "Template engine": "nav.templateEngine",
-  "Webhooks": "nav.webhooks",
-};
 
 
 type SidebarContextMenu = {
@@ -757,11 +649,7 @@ function renderNavItem(
           <Icon size={14} />
         </TintedIconTile>
         <span className="sidebar__label">{label}</span>
-        {count != null && (
-          <Pill size="sm" className="sidebar__count">
-            {count}
-          </Pill>
-        )}
+        {count != null && <NavCountPill to={item.to} count={count} />}
       </NavLink>
       {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
        * without needing right-click (desktop) or the command palette. A real
@@ -781,14 +669,44 @@ function renderNavItem(
 }
 
 
+/** What a sidebar count means, for its tooltip and screen readers. */
+function getCountDescription(to: string, count: number): string {
+  const n = (one: string, many: string) => `${count.toLocaleString()} ${count === 1 ? one : many}`;
+  switch (to) {
+    case "/app/members": return n("active member", "active members");
+    case "/app/directors": return n("active director", "active directors");
+    case "/app/meetings": return n("meeting this year", "meetings this year");
+    case "/app/filings": return n("overdue filing", "overdue filings");
+    case "/app/deadlines": return n("open deadline", "open deadlines");
+    case "/app/conflicts": return n("open conflict", "open conflicts");
+    case "/app/committees": return n("committee", "committees");
+    case "/app/goals": return n("open goal", "open goals");
+    case "/app/tasks": return n("open task", "open tasks");
+    default: return count.toLocaleString();
+  }
+}
+
+/** Sidebar count badge: the number is visual; the description is announced. */
+function NavCountPill({ to, count }: { to: string; count: number }) {
+  const description = getCountDescription(to, count);
+  return (
+    <Pill size="sm" className="sidebar__count" title={description}>
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">, {description}</span>
+    </Pill>
+  );
+}
+
 function getCount(to: string, counts: any): number | null {
   if (!counts) return null;
   switch (to) {
     case "/app/members": return counts.members;
     case "/app/directors": return counts.directors;
-    case "/app/meetings": return counts.meetingsThisYear;
+    // "Meetings 0" beside a register of 142 past meetings read as an empty
+    // register; the badge only appears when meetings are scheduled this year.
+    case "/app/meetings": return counts.meetingsThisYear || null;
     case "/app/filings": return counts.overdueFilings || null;
-    case "/app/deadlines": return counts.openDeadlines;
+    case "/app/deadlines": return counts.openDeadlines || null;
     case "/app/conflicts": return counts.openConflicts || null;
     case "/app/committees": return counts.committees || null;
     case "/app/goals": return counts.openGoals || null;
@@ -831,6 +749,7 @@ export {
   getSidebarMenuPosition,
   renderNavItem,
   getCount,
+  NavCountPill,
 };
 
 export type {
