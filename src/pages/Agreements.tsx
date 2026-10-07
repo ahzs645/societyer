@@ -115,21 +115,22 @@ export function AgreementsPage() {
     if (!preview?.total) return;
     const ok = await confirm({
       title: "Convert agreement gaps to agreements?",
-      message: `${preview.total} source${preview.total === 1 ? "" : "s"} (${preview.gaps} system gap${preview.gaps === 1 ? "" : "s"}, ${preview.extractions} unreviewed intake extraction${preview.extractions === 1 ? "" : "s"}) become draft agreements marked "Needs review", linked to their source documents. The system gaps are marked resolved. Nothing is marked active; review each draft before relying on it.`,
+      message: `${preview.total} draft agreement${preview.total === 1 ? "" : "s"} marked "Needs review" will be created from ${preview.gaps} system gap${preview.gaps === 1 ? "" : "s"} and ${preview.extractions} unreviewed intake extraction${preview.extractions === 1 ? "" : "s"}${preview.foldedCopies ? ` (${preview.foldedCopies} more cop${preview.foldedCopies === 1 ? "y or version is" : "ies or versions are"} folded into the agreement they belong to)` : ""}, linked to their source documents. The system gaps are marked resolved. Nothing is marked active; review each draft before relying on it.`,
       confirmLabel: "Convert",
     });
     if (!ok) return;
     setConverting(true);
     try {
-      let created = 0, resolved = 0, remaining = preview.total;
+      let created = 0, resolved = 0, sources = 0, remaining = preview.total;
       for (let round = 0; round < 20 && remaining > 0; round += 1) {
         const result = await convert({ societyId: society._id, limit: 100 }) as any;
         created += result.created ?? 0;
         resolved += result.resolvedGaps ?? 0;
+        sources += result.sourceFiles ?? 0;
         remaining = result.remaining ?? 0;
         if (!result.created) break;
       }
-      toast.success(`${created} draft agreement${created === 1 ? "" : "s"} created`, `${resolved} system gap${resolved === 1 ? "" : "s"} resolved. Filter by "Needs review" to go through them.`);
+      toast.success(`${created} draft agreement${created === 1 ? "" : "s"} created`, `From ${sources} source file${sources === 1 ? "" : "s"}; ${resolved} system gap${resolved === 1 ? "" : "s"} resolved. Filter by "Needs review" to go through them.`);
       setQuick("review");
     } catch (error) {
       toast.error("Could not convert the gaps", error instanceof Error ? error.message : "Please try again.");

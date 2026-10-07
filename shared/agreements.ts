@@ -448,7 +448,8 @@ export type AgreementGap = {
 export function agreementGaps(agreements: readonly AgreementLike[], today: string, windowDays = EXPIRING_WINDOW_DAYS): AgreementGap[] {
   const out: AgreementGap[] = [];
   for (const agreement of agreements) {
-    if (agreement.reviewStatus === "Rejected") continue;
+    // Rejected records and drafts nobody has reviewed yet (imports, conversions) have unconfirmed dates.
+    if (agreement.reviewStatus === "Rejected" || agreement.reviewStatus === "NeedsReview") continue;
     const status = deriveAgreementStatus(agreement, today);
     if (status === "terminated" || status === "superseded" || status === "draft" || status === "negotiating") continue;
     const id = String(agreement._id ?? "");
@@ -523,7 +524,8 @@ export function agreementPayloadFromExtraction(
     const iso = typeof value === "string" ? value : value?.iso;
     return isIsoDay(iso) ? iso : undefined;
   };
-  const title = String(val(record.title) ?? options.fileName?.replace(/\.[a-z0-9]+$/i, "") ?? "Agreement").replace(/\s+/g, " ").trim().slice(0, 200) || "Agreement";
+  // A label the extractor kept with the title ("Title: …", "Re: …") is not part of the name.
+  const title = String(val(record.title) ?? options.fileName?.replace(/\.[a-z0-9]+$/i, "") ?? "Agreement").replace(/\s+/g, " ").trim().replace(/^(?:title|re|subject|project title)\s*:\s*/i, "").slice(0, 200) || "Agreement";
   const kind = inferAgreementKind(val(record.kind), `${title} ${options.fileName ?? ""}`);
   const names = (record.parties ?? []).map(val).filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 1);
   const funder = val(record.funder);

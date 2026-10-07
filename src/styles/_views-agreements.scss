@@ -113,3 +113,14 @@
     }
   }
 }
+
+// Quick filters wrap instead of squeezing their labels on narrow screens.
+.agreement-quick-filters .segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+  height: auto;
+}
+
+.agreement-quick-filters .segmented__btn {
+  white-space: nowrap;
+}

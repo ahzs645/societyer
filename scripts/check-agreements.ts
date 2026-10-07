@@ -113,6 +113,7 @@ const gaps = agreementGaps([
   { _id: "a3", title: "Overdue report", status: "active", endDate: day(400), reportingObligations: [{ id: "r1", text: "Annual report", dueDate: day(-3) }] },
   { _id: "a4", title: "Unreviewed draft", status: "draft", endDate: day(10) },
   { _id: "a5", title: "Long expired", status: "active", endDate: day(-400) },
+  { _id: "a6", title: "Unreviewed import", status: "active", endDate: day(20), reviewStatus: "NeedsReview", reportingObligations: [{ id: "r1", text: "Report", dueDate: day(-3) }] },
 ], today);
 assert.deepEqual(gaps.map((gap) => `${gap.agreementId}:${gap.kind}`).sort(), ["a1:agreement_renewal", "a3:funder_report"]);
 
@@ -191,13 +192,18 @@ const db = new MemoryDb({
     ],
     intakeRuns: [{ _id: "run1", societyId: "soc", name: "Archive", sourceKind: "upload", status: "reviewing", createdAtISO: now, updatedAtISO: now }],
     intakeFiles: [
-      { _id: "if1", societyId: "soc", runId: "run1", fileKey: "local:gsa.pdf", name: "gsa.pdf", path: "gsa.pdf", acquisitionStatus: "local", disposition: "extract", createdAtISO: now, updatedAtISO: now },
+      { _id: "if1", societyId: "soc", runId: "run1", fileKey: "local:gsa.pdf", name: "gsa.pdf", path: "gsa.pdf", acquisitionStatus: "local", disposition: "extract", clusterKey: "cluster:gsa", createdAtISO: now, updatedAtISO: now },
       { _id: "if2", societyId: "soc", runId: "run1", fileKey: "local:fund.pdf", name: "fund.pdf", path: "fund.pdf", acquisitionStatus: "local", disposition: "extract", createdAtISO: now, updatedAtISO: now },
       { _id: "if3", societyId: "soc", runId: "run1", fileKey: "local:mou.pdf", name: "mou.pdf", path: "mou.pdf", acquisitionStatus: "local", disposition: "extract", createdAtISO: now, updatedAtISO: now },
+      { _id: "if4", societyId: "soc", runId: "run1", fileKey: "local:gsa signed copy.pdf", name: "gsa signed copy.pdf", path: "gsa signed copy.pdf", acquisitionStatus: "local", disposition: "extract", clusterKey: "cluster:gsa", createdAtISO: now, updatedAtISO: now },
+      { _id: "if5", societyId: "soc", runId: "run1", fileKey: "local:gsa 2027.pdf", name: "gsa 2027.pdf", path: "gsa 2027.pdf", acquisitionStatus: "local", disposition: "extract", clusterKey: "cluster:gsa", createdAtISO: now, updatedAtISO: now },
     ],
+    intakeClusters: [{ _id: "cl1", societyId: "soc", runId: "run1", clusterKey: "cluster:gsa", canonicalFileKey: "local:gsa.pdf", members: [], method: "test", createdAtISO: now }],
     intakeExtractions: [
       { _id: "ex1", societyId: "soc", runId: "run1", fileKey: "local:gsa.pdf", docClass: "agreement", engine: "deterministic", record, unsupported: [{ infoType: "agreement.contract", category: "no_table", description: "GSA", locators: [] }], references: [], status: "pending_review", createdAtISO: now, updatedAtISO: now },
       { _id: "ex2", societyId: "soc", runId: "run1", fileKey: "local:fund.pdf", docClass: "grant", engine: "deterministic", record: run.extractions[1].record, unsupported: [], references: [], status: "pending_review", createdAtISO: now, updatedAtISO: now },
+      { _id: "ex4", societyId: "soc", runId: "run1", fileKey: "local:gsa signed copy.pdf", docClass: "agreement", engine: "deterministic", record, unsupported: [], references: [], status: "pending_review", createdAtISO: now, updatedAtISO: now },
+      { _id: "ex5", societyId: "soc", runId: "run1", fileKey: "local:gsa 2027.pdf", docClass: "agreement", engine: "deterministic", record: { ...record, effective: fv({ iso: "2027-01-01", precision: "day" }), expiry: fv({ iso: "2027-12-31", precision: "day" }) }, unsupported: [], references: [], status: "pending_review", createdAtISO: now, updatedAtISO: now },
       { _id: "ex3", societyId: "soc", runId: "run1", fileKey: "local:mou.pdf", docClass: "agreement", engine: "deterministic", record: { kind: fv("mou"), title: fv("Memorandum of Understanding"), parties: [] }, unsupported: [{ infoType: "agreement.contract", category: "no_table", description: "MOU", locators: [] }], references: [], status: "pending_review", createdAtISO: now, updatedAtISO: now },
     ],
   },
@@ -321,13 +327,13 @@ assert.equal(imported.title, "Storage unit lease (reviewed)", "an unreviewed dra
 /* -------------------------------- conversion -------------------------------- */
 
 const preview = await q("agreements:conversionPreview", { societyId: "soc" });
-assert.deepEqual([preview.gaps, preview.extractions, preview.total], [2, 2, 4], `preview ${JSON.stringify(preview)}`);
+assert.deepEqual([preview.gaps, preview.extractions, preview.total, preview.foldedCopies], [2, 3, 5, 1], `preview ${JSON.stringify(preview)}`);
 await assert.rejects(viewer.runMutation("agreements:convertGaps", { societyId: "soc" }), /Permission agreements:write/);
 const dry = await m("agreements:convertGaps", { societyId: "soc", dryRun: true });
-assert.equal(dry.wouldConvert, 4);
+assert.equal(dry.wouldConvert, 5);
 assert.equal((db.dump("representationGaps") as any[]).filter((row) => row.status === "resolved_native").length, 0, "a dry run changes nothing");
 const converted = await m("agreements:convertGaps", { societyId: "soc" });
-assert.equal(converted.created, 4);
+assert.equal(converted.created, 5, "a copy folds into its agreement; a later term from the same template stays separate");
 assert.equal(converted.resolvedGaps, 2);
 const drafts = (db.dump("agreements") as any[]).filter((row) => /Converted/.test(String(row.importedFrom)));
 assert.ok(drafts.every((row) => row.reviewStatus === "NeedsReview" && row.status !== "active"), "converted agreements are drafts for review, never active");
@@ -337,6 +343,9 @@ assert.equal(fromGap.kind, "lease");
 assert.match(fromGap.notes, /2014-05/);
 const fromExtraction = drafts.find((row) => row.intakeExtractionId === "ex1");
 assert.deepEqual(fromExtraction.representationGapIds, ["gap2"], "the extraction's gap is resolved by its agreement");
+assert.deepEqual(fromExtraction.sourceExternalIds, ["local:gsa.pdf", "local:gsa signed copy.pdf"], "copies of the agreement are its sources");
+assert.match(fromExtraction.notes, /1 other copy or version/);
+assert.ok(drafts.some((row) => (row.sourceExternalIds ?? []).includes("local:gsa 2027.pdf") && row.endDate === "2027-12-31"), "the 2027 term is its own draft");
 assert.equal(fromExtraction.valueCents, 1200000);
 assert.equal(fromExtraction.intakeRunId, "run1");
 const funding = drafts.find((row) => row.intakeExtractionId === "ex2");

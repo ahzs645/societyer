@@ -259,7 +259,11 @@ export function projectAgreement(row: Row, asOf: string, authorities: SigningAut
   const effectiveStatus = deriveAgreementStatus(agreement, asOf);
   const signing = authorities ? signingAuthorityCheck(agreement, authorities, asOf) : null;
   const obligations = [...(row.deliverables ?? []), ...(row.reportingObligations ?? [])];
-  const overdue = CLOSED_AGREEMENT_STATUSES.has(effectiveStatus) && effectiveStatus !== "expired" ? 0 : obligations.filter((item: any) => isIsoDay(item.dueDate) && item.dueDate < asOf && !["submitted", "accepted", "waived"].includes(String(item.status))).length;
+  // Overdue only counts obligations of agreements in force (or ended) whose dates a person confirmed.
+  const tracksObligations = ["active", "expired", "unknown"].includes(effectiveStatus) && row.reviewStatus !== "NeedsReview";
+  const overdue = !tracksObligations ? 0 : obligations.filter((item: any) => isIsoDay(item.dueDate) && item.dueDate < asOf && !["submitted", "accepted", "waived"].includes(String(item.status))).length;
+  const termEnd = currentTermEnd(agreement, asOf);
+  const showRenewal = !CLOSED_AGREEMENT_STATUSES.has(effectiveStatus) && (effectiveStatus === "active" || !termEnd || termEnd >= asOf);
   return {
     ...row,
     effectiveStatus,
@@ -267,7 +271,7 @@ export function projectAgreement(row: Row, asOf: string, authorities: SigningAut
     hasCounterparty: hasCounterparty(agreement.parties),
     currentTermEnd: currentTermEnd(agreement, asOf),
     renewalNoticeDate: renewalNoticeDate(agreement, asOf),
-    renewalDue: CLOSED_AGREEMENT_STATUSES.has(effectiveStatus) ? undefined : renewalDueDate(agreement, asOf),
+    renewalDue: showRenewal ? renewalDueDate(agreement, asOf) : undefined,
     expiringSoon: isExpiringWithin(agreement, asOf),
     renewalDecided: hasRenewalDecision(agreement),
     openObligations: obligations.filter((item: any) => !["submitted", "accepted", "waived"].includes(String(item.status))).length,
@@ -656,8 +660,34 @@ const AGREEMENT_GAP_TYPES = new Set(["agreement", "agreement.contract"]);
 const OPEN_GAP_STATUSES = new Set(["open", "kept_as_text", "schema_change_requested"]);
 
 type ConversionCandidate =
-  | { source: "gap"; gap: Row; extraction?: Row }
-  | { source: "extraction"; extraction: Row };
+  | { source: "gap"; gap: Row; extraction?: Row; copies?: Row[] }
+  | { source: "extraction"; extraction: Row; copies?: Row[] };
+
+const termKey = (row: Row) => `${row.record?.effective?.value?.iso ?? ""}|${row.record?.expiry?.value?.iso ?? ""}`;
+const statedFields = (row: Row) => Object.values(row.record ?? {}).reduce((sum: number, field: any) => sum + (Array.isArray(field) ? field.length : field && field.status !== "not_stated" && field.value !== undefined ? 1 : 0), 0);
+
+/**
+ * Copies and versions of one agreement (the intake run clustered them by
+ * content and name) become one draft whose sources list every file. Members
+ * of a cluster with a different stated term (a later year's contract built
+ * from the same template) stay separate agreements.
+ */
+function foldClusterCopies(extractions: Row[]): Array<{ primary: Row; copies: Row[] }> {
+  const groups: Array<{ cluster: string; term: string; rows: Row[] }> = [];
+  for (const row of extractions) {
+    const cluster = typeof row.clusterKey === "string" && row.clusterKey ? row.clusterKey : `file:${row.fileKey}`;
+    const term = termKey(row);
+    const group = groups.find((candidate) => candidate.cluster === cluster && (candidate.term === term || candidate.term === "|" || term === "|"));
+    if (group) {
+      group.rows.push(row);
+      if (group.term === "|") group.term = term;
+    } else groups.push({ cluster, term, rows: [row] });
+  }
+  return groups.map((group) => {
+    const ordered = [...group.rows].sort((a, b) => Number(Boolean(b.canonical)) - Number(Boolean(a.canonical)) || statedFields(b) - statedFields(a) || String(a.fileKey).localeCompare(String(b.fileKey)));
+    return { primary: ordered[0], copies: ordered.slice(1) };
+  });
+}
 
 async function conversionCandidates(ctx: PortableQueryCtx, societyId: string) {
   const [gaps, existing, extractions] = await Promise.all([
@@ -687,9 +717,18 @@ async function conversionCandidates(ctx: PortableQueryCtx, societyId: string) {
     }
     candidates.push({ source: "gap", gap, extraction });
   }
-  for (const extraction of extractions) {
-    if (claimed.has(String(extraction._id)) || covered.has(`extraction:${extraction._id}`) || covered.has(`ext:${String(extraction.fileKey).toLowerCase()}`)) continue;
-    candidates.push({ source: "extraction", extraction });
+  const open = extractions.filter((extraction) => !(covered.has(`extraction:${extraction._id}`) || covered.has(`ext:${String(extraction.fileKey).toLowerCase()}`)));
+  for (const { primary, copies } of foldClusterCopies(open)) {
+    const members = [primary, ...copies];
+    // A gap already stands for one of these files: its draft takes the other copies too.
+    const gapCandidate = candidates.find((candidate) => candidate.source === "gap" && candidate.extraction && members.some((member) => member._id === candidate.extraction!._id));
+    if (gapCandidate) {
+      const others = members.filter((member) => member._id !== gapCandidate.extraction!._id);
+      if (others.length) gapCandidate.copies = others;
+      continue;
+    }
+    if (members.some((member) => claimed.has(String(member._id)))) continue;
+    candidates.push({ source: "extraction", extraction: primary, ...(copies.length ? { copies } : {}) });
   }
   return { candidates, alreadyLinked, existing };
 }
@@ -700,6 +739,7 @@ async function intakeAgreementExtractions(ctx: PortableQueryCtx, societyId: stri
   const out: Row[] = [];
   for (const run of runs) {
     const rows = await ctx.db.query<Row>("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).collect();
+    let clusters: Map<string, string> | undefined;
     for (const row of rows) {
       if (row.societyId !== societyId || row.parentFileKey) continue;
       // Agreements, plus signed funding agreements classified as grant documents (their grant is linked by source).
@@ -707,7 +747,13 @@ async function intakeAgreementExtractions(ctx: PortableQueryCtx, societyId: stri
       if (row.docClass !== "agreement" && !fundingAgreement) continue;
       if (row.status === "rejected" || row.status === "covered") continue;
       if (row.status === "promoted" && !(row.unsupported ?? []).some((detail: any) => AGREEMENT_GAP_TYPES.has(String(detail?.infoType)))) continue;
-      out.push({ ...row, runName: run.name });
+      const file = await ctx.db.query<Row>("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", run._id).eq("fileKey", row.fileKey)).first();
+      let canonical = false;
+      if (file?.clusterKey) {
+        clusters ??= new Map((await ctx.db.query<Row>("intakeClusters").withIndex("by_run", (q) => q.eq("runId", run._id)).collect()).map((cluster) => [String(cluster.clusterKey), String(cluster.canonicalFileKey)]));
+        canonical = clusters.get(String(file.clusterKey)) === row.fileKey;
+      }
+      out.push({ ...row, runName: run.name, fileName: file?.name, clusterKey: file?.clusterKey, canonical });
     }
   }
   return out;
@@ -722,6 +768,7 @@ export async function conversionPreviewPortable(ctx: PortableQueryCtx, { society
     total: candidates.length,
     alreadyLinked: alreadyLinked.length,
     existingAgreements: existing.length,
+    foldedCopies: candidates.reduce((sum, item) => sum + (item.copies?.length ?? 0), 0),
     examples: candidates.slice(0, 8).map((item) => item.source === "gap" ? String(item.gap.sourceTitle ?? item.gap.title ?? "Agreement") : String(item.extraction.record?.title?.value ?? item.extraction.fileKey)),
   };
 }
@@ -789,36 +836,45 @@ export async function convertGapsPortable(ctx: PortableMutationCtx, { societyId,
   for (const grant of grants) for (const key of grant.sourceExternalIds ?? []) grantBySource.set(String(key).toLowerCase(), grant);
   const grantByDocument = new Map<string, Row>();
   for (const grant of grants) for (const key of grant.sourceDocumentIds ?? []) grantByDocument.set(String(key), grant);
-  let created = 0, resolvedGaps = 0, provenance = 0, linkedDocuments = 0, linkedGrants = 0, deadlines = 0;
+  let created = 0, resolvedGaps = 0, provenance = 0, linkedDocuments = 0, linkedGrants = 0, deadlines = 0, sourceFiles = 0;
   const createdIds: string[] = [];
   for (const candidate of batch) {
     const extraction = candidate.extraction;
     const gap = candidate.source === "gap" ? candidate.gap : undefined;
+    const copies = candidate.copies ?? [];
     const fileKey = String(extraction?.fileKey ?? gap?.sourceExternalId ?? "");
+    const fileKeys = [fileKey, ...copies.map((row) => String(row.fileKey))].filter(Boolean);
+    sourceFiles += Math.max(1, fileKeys.length);
+    const sourceDocumentIds = new Set<string>();
+    if (gap?.sourceDocumentId) sourceDocumentIds.add(String(gap.sourceDocumentId));
     let file: Row | null = null;
-    if (extraction) file = await ctx.db.query<Row>("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", extraction.runId).eq("fileKey", extraction.fileKey)).first();
+    for (const row of [extraction, ...copies].filter(Boolean) as Row[]) {
+      const intakeFile = await ctx.db.query<Row>("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", row.runId).eq("fileKey", row.fileKey)).first();
+      if (row === extraction) file = intakeFile;
+      if (intakeFile?.documentId) sourceDocumentIds.add(String(intakeFile.documentId));
+    }
     const payload: Record<string, any> = extraction
       ? agreementPayloadFromExtraction(extraction.record ?? {}, { fileKey, fileName: file?.name, organizationName: society?.name, asOfISO: asOf })
       : gapPayload(gap!, society?.name);
-    const sourceDocumentIds = new Set<string>();
-    if (gap?.sourceDocumentId) sourceDocumentIds.add(String(gap.sourceDocumentId));
-    if (file?.documentId) sourceDocumentIds.add(String(file.documentId));
-    const resolved = fileKey ? await resolveDocument(fileKey) : undefined;
-    if (resolved) sourceDocumentIds.add(resolved);
+    if (copies.length) payload.notes = [payload.notes, `${copies.length} other cop${copies.length === 1 ? "y or version" : "ies or versions"} of this agreement in the archive ${copies.length === 1 ? "was" : "were"} folded into this draft: ${copies.map((row) => String(row.fileName ?? row.fileKey)).slice(0, 8).join("; ")}.`].filter(Boolean).join(" ");
+    for (const key of fileKeys) {
+      const resolved = await resolveDocument(key);
+      if (resolved) sourceDocumentIds.add(resolved);
+    }
     const ownedDocs: string[] = [];
     for (const documentId of sourceDocumentIds) {
       const doc = await ctx.db.get<Row>(documentId, "documents");
       if (doc && doc.societyId === societyId) ownedDocs.push(documentId);
     }
     linkedDocuments += ownedDocs.length;
-    const grant = (fileKey && grantBySource.get(fileKey.toLowerCase())) || ownedDocs.map((id) => grantByDocument.get(id)).find(Boolean);
+    const grant = fileKeys.map((key) => grantBySource.get(key.toLowerCase())).find(Boolean) || ownedDocs.map((id) => grantByDocument.get(id)).find(Boolean);
     if (grant) linkedGrants += 1;
     const fields = normalizeNested(payload, fileKey || String(gap?._id));
     const id = await ctx.db.insert("agreements", compact({
       ...fields,
       societyId,
       kind: grant && fields.kind === "other" ? "funding" : fields.kind,
-      sourceExternalIds: fileKey ? [fileKey] : undefined,
+      sourceExternalIds: fileKeys.length ? fileKeys : undefined,
       sourceDocumentIds: ownedDocs.length ? ownedDocs : undefined,
       signedDocumentId: ownedDocs.length && payload.status !== "draft" ? ownedDocs[0] : undefined,
       intakeRunId: extraction?.runId,
@@ -846,11 +902,12 @@ export async function convertGapsPortable(ctx: PortableMutationCtx, { societyId,
     }
     // Every gap this source produced is now held natively.
     const gapsForSource = gap ? [gap] : [];
+    const keys = new Set(fileKeys.map((key) => key.toLowerCase()));
     if (extraction) {
       const more = await ctx.db.query<Row>("representationGaps").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-      for (const other of more) if (AGREEMENT_GAP_TYPES.has(String(other.infoType)) && OPEN_GAP_STATUSES.has(String(other.status)) && String(other.sourceExternalId ?? "").toLowerCase() === fileKey.toLowerCase()) gapsForSource.push(other);
+      for (const other of more) if (AGREEMENT_GAP_TYPES.has(String(other.infoType)) && OPEN_GAP_STATUSES.has(String(other.status)) && keys.has(String(other.sourceExternalId ?? "").toLowerCase()) && !gapsForSource.some((row) => row._id === other._id)) gapsForSource.push(other);
     }
-    for (const other of alreadyLinked.filter((row) => fileKey && String(row.sourceExternalId ?? "").toLowerCase() === fileKey.toLowerCase())) if (!gapsForSource.some((row) => row._id === other._id)) gapsForSource.push(other);
+    for (const other of alreadyLinked.filter((row) => keys.has(String(row.sourceExternalId ?? "").toLowerCase()))) if (!gapsForSource.some((row) => row._id === other._id)) gapsForSource.push(other);
     for (const target of gapsForSource) {
       const fresh = await ctx.db.get<Row>(target._id, "representationGaps");
       if (!fresh || !OPEN_GAP_STATUSES.has(String(fresh.status))) continue;
@@ -862,7 +919,7 @@ export async function convertGapsPortable(ctx: PortableMutationCtx, { societyId,
     }
     if (gapsForSource.length > 1 || (gap && extraction)) await ctx.db.patch(id, { representationGapIds: [...new Set(gapsForSource.map((row) => row._id))] });
   }
-  return { dryRun: false, total: candidates.length, created, resolvedGaps, provenance, linkedDocuments, linkedGrants, deadlines, remaining: Math.max(0, candidates.length - batch.length), createdIds: createdIds.slice(0, 50) };
+  return { dryRun: false, total: candidates.length, created, resolvedGaps, provenance, linkedDocuments, linkedGrants, deadlines, sourceFiles, remaining: Math.max(0, candidates.length - batch.length), createdIds: createdIds.slice(0, 50) };
 }
 
 /** A draft from a gap with no extraction behind it: title and kind from the source title, the excerpt as notes. */
