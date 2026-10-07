@@ -19,8 +19,8 @@ import { Select } from "../components/Select";
 import { inspectImportBundle, prepareImportBundle } from "../lib/importBundleIntake";
 import { isActiveImportSession } from "../../shared/importSessionState";
 import { distinguishSessionNames, type SessionLabel } from "../../shared/importSessionLabels";
-import { ImportReviewQueue, DEFAULT_QUEUE_FILTERS, type QueueFilters } from "../features/imports/ImportReviewQueue";
-import { IMPORT_KIND_LABELS, importKindLabel } from "../features/imports/importKindLabels";
+import { ImportReviewQueue, DEFAULT_QUEUE_FILTERS, type QueueFilters } from "../features/importReview/ImportReviewQueue";
+import { IMPORT_KIND_LABELS, importKindLabel } from "../features/importReview/importKindLabels";
 import { formatDate } from "../lib/format";
 import {
   Archive,
