@@ -1,6 +1,7 @@
 /**
- * People-directory person picker (schema A1/B4, ui-meetings motion and
- * attendance editors). The text stays exactly what the minutes say; the
+ * Name-as-written field with an optional people-directory link (schema A1/B4,
+ * motion and attendance editors). For choosing a person by id only, use
+ * PersonPicker in ./PersonPicker.tsx. The text stays exactly what the minutes say; the
  * directory link is a separate, visible choice. Typing a name that matches
  * exactly one directory person (name or alias) links it automatically;
  * picking a suggestion links that person; "Unlink" keeps the text only.
@@ -8,7 +9,7 @@
 import { useMemo } from "react";
 import { Link2, Unlink } from "lucide-react";
 import { NameAutocomplete } from "@/components/NameAutocomplete";
-import { matchDirectoryPerson, normalizePersonKey } from "../../../../shared/meetingAttendanceGrid";
+import { matchDirectoryPerson, normalizePersonKey } from "../../shared/meetingAttendanceGrid";
 
 export type DirectoryPerson = { _id: string; fullName: string; aliases?: string[] | null };
 
@@ -22,7 +23,7 @@ export function usePersonOptions(people: readonly DirectoryPerson[] | undefined)
   }, [people]);
 }
 
-export function PersonPicker({
+export function PersonNameLinkField({
   value,
   onChange,
   people,

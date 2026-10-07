@@ -33,7 +33,7 @@ import {
   type AttendanceGridRow,
   type AttendanceGridStatus,
 } from "../../../../shared/meetingAttendanceGrid";
-import { PersonPicker, type DirectoryPerson } from "./PersonPicker";
+import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 
 const STATUS_OPTIONS = ATTENDANCE_GRID_STATUSES.map((value) => ({ value, label: ATTENDANCE_GRID_STATUS_LABELS[value] }));
@@ -338,7 +338,7 @@ export function MeetingAttendanceGrid({
           return (
             <div key={row.key} className={`attendance-grid__row${suggestion?.kind === "not_person" ? " is-flagged" : ""}`} role="row" data-testid="attendance-row">
               <span role="cell" className="attendance-grid__name">
-                <PersonPicker
+                <PersonNameLinkField
                   value={{ name: row.name, personId: row.personId }}
                   onChange={(next) => patchRow(row.key, { name: next.name, personId: next.personId })}
                   people={people}

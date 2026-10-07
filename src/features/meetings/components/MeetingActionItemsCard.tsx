@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { ACTION_ITEM_STATUSES, ACTION_ITEM_STATUS_LABELS, actionItemStatus, type ActionItemStatus } from "../../../../shared/actionItemStatus";
 import { taskDraftFromActionItem } from "../../../../shared/meetingActionTasks";
-import { PersonPicker, type DirectoryPerson } from "./PersonPicker";
+import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 
 const STATUS_OPTIONS = ACTION_ITEM_STATUSES.map((value) => ({ value, label: ACTION_ITEM_STATUS_LABELS[value] }));
 
@@ -115,7 +115,7 @@ export function MeetingActionItemsCard({
                     />
                   </div>
                   {editing ? (
-                    <PersonPicker
+                    <PersonNameLinkField
                       value={{ name: row.item.assignee ?? "", personId: row.item.assigneePersonId }}
                       people={people}
                       ariaLabel={`Assignee of action: ${row.item.text}`}

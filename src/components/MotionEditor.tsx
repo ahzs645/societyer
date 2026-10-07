@@ -47,7 +47,7 @@ import { Select, type SelectOption } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Modal, useConfirm } from "./Modal";
 import { UnsupportedDetailsBadge } from "./UnsupportedDetailsBadge";
-import { PersonPicker, type DirectoryPerson } from "../features/meetings/components/PersonPicker";
+import { PersonNameLinkField, type DirectoryPerson } from "./PersonNameLinkField";
 import { matchDirectoryPerson } from "../../shared/meetingAttendanceGrid";
 
 export type Motion = {
@@ -124,7 +124,7 @@ function MotionPersonField({
   const personKey = role === "movedBy" ? "movedByPersonId" : "secondedByPersonId";
   if (directoryPeople && directoryPeople.length) {
     return (
-      <PersonPicker
+      <PersonNameLinkField
         value={{ name: motion[role] ?? "", personId: motion[personKey] }}
         people={directoryPeople}
         ariaLabel={ariaLabel}
