@@ -10,9 +10,11 @@ type CheckboxProps = {
   indeterminate?: boolean;
   /** Render just the box (no label row). */
   bare?: boolean;
+  /** Accessible name for a bare box, which has no visible label. */
+  ariaLabel?: string;
 };
 
-export function Checkbox({ checked, onChange, label, hint, disabled, indeterminate, bare }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, hint, disabled, indeterminate, bare, ariaLabel }: CheckboxProps) {
   const box = (
     <span
       className={`check-box${checked ? " is-checked" : ""}${
@@ -30,6 +32,7 @@ export function Checkbox({ checked, onChange, label, hint, disabled, indetermina
         type="button"
         role="checkbox"
         aria-checked={indeterminate ? "mixed" : checked}
+        aria-label={ariaLabel}
         className="check-bare"
         disabled={disabled}
         onClick={() => onChange(!checked)}

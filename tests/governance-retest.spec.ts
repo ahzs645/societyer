@@ -84,7 +84,8 @@ test("an AGM that was already held is recorded as held, without a notice error",
   await calendar.locator(".calendar__cell:not(.is-out)", { hasText: /^15$/ }).first().click();
   await calendar.getByRole("button").last().click();
   await expect(modal).toContainText("recorded as already held");
-  await page.getByRole("button", { name: "Schedule", exact: true }).last().click();
+  await expect(page.getByRole("dialog", { name: "Record a held meeting" })).toBeVisible();
+  await page.getByRole("button", { name: "Record meeting", exact: true }).last().click();
   await expect(page.locator(".toast").filter({ hasText: "Held meeting recorded" })).toBeVisible();
   await page.waitForURL(/\/app\/meetings\/[^/]+$/);
   await expect(page.locator("#main-content")).toContainText(/Held/);

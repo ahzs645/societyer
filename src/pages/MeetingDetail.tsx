@@ -1,6 +1,7 @@
 import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
 import { meetingStatusLabel, meetingStatusTone } from "../../shared/meetingStatus";
 import { formatMeetingDate, meetingCalendarDate } from "../../shared/meetingDates";
+import { todayDateOnly } from "../../shared/dateOnly";
 import { meetingBodyLabel } from "../../shared/meetingBodyPicker";
 import { approvingMeetingCandidates, minutesApprovalIssues } from "../../shared/meetingApproval";
 import { minutesPresentCount } from "../../shared/meetingAttendanceGrid";
@@ -25,7 +26,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, EmptyState, Field } from "../components/ui";
+import { Badge, Banner, Drawer, EmptyState, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
@@ -63,6 +64,7 @@ import {
   hasRecordedMeetingMinutes,
   hasStartedMinutesDraft,
   isCurrentDirector,
+  nextMeetingsForExport,
   quorumPresentCount,
   sanitizeAttachmentFileName,
   slugifyFilePart,
@@ -72,7 +74,8 @@ import { minutesEvidenceOptions } from "../features/meetings/lib/minutesEvidence
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
-import { minuteSectionIndexForAgendaEntry } from "../features/meetings/lib/sourceAgendaNavigation";
+import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../features/meetings/lib/sourceAgendaNavigation";
+import { alignSectionsToAgenda } from "../features/meetings/lib/agendaSectionAlign";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
@@ -86,7 +89,8 @@ import { MinutesDocumentPreview } from "../features/meetings/components/MinutesD
 import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
-import { Modal, useConfirm } from "../components/Modal";
+import { Modal, useConfirm, usePrompt } from "../components/Modal";
+import { isPastMeeting, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -94,8 +98,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   MINUTES_EXPORT_PREF_PREFIX,
   readStoredExportBool,
-  readStoredMinutesStyle,
-} from "../features/meetings/lib/minutesExportPrefs";
+  readStoredMinutesStyle, effectiveSourceFidelity, minutesCorrectedForExport } from "../features/meetings/lib/minutesExportPrefs";
 import {
   addRedactionName,
   getMeetingJoinDetails,
@@ -119,6 +122,7 @@ export function MeetingDetailPage() {
   const { loaded: permissionsLoaded, can } = usePermissions();
   const canMeetingsWrite = can("meetings:write");
   const canMinutesWrite = can("minutes:write");
+  const canMinutesRead = can("minutes:read");
   const canAgendasWrite = can("agendas:write");
   const canMotionsWrite = can("motions:write");
   const canTasksWrite = can("tasks:write");
@@ -239,6 +243,7 @@ export function MeetingDetailPage() {
   );
   const toast = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const motionEditorRef = useRef<MotionEditorHandle | null>(null);
@@ -278,7 +283,8 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [schedulingNext, setSchedulingNext] = useState(false);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [sourceFidelityInExport, setSourceFidelityInExport] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [sourceFidelityChoice, setSourceFidelityChoice] = useState<Record<string, boolean>>({});
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
@@ -483,7 +489,7 @@ export function MeetingDetailPage() {
   }, [minutesExportStyle]);
 
   useEffect(() => {
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(sourceFidelityInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(storedSourceFidelity));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
@@ -491,7 +497,7 @@ export function MeetingDetailPage() {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
-    sourceFidelityInExport,
+    storedSourceFidelity,
     includeActionItemsInExport,
     includeApprovalInExport,
     includeDiscussionSummaryInExport,
@@ -526,9 +532,21 @@ export function MeetingDetailPage() {
     );
   }
 
-  const agendaTree = agendaEntriesFromRecord(minutes?.adoptedAgenda ?? agendaRecord) ?? [];
+  // Adopted minutes show the agenda frozen at adoption; snapshots taken before
+  // it carried items fall back to the live agenda.
+  const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
+  // Until the minutes query answers, counts would read as "none recorded".
+  const minutesLoading = minutes === undefined && canMinutesRead;
+  const sourceFidelityInExport = effectiveSourceFidelity(storedSourceFidelity, sourceFidelityChoice[String(meeting._id)], minutes, meeting);
+  const setSourceFidelityInExport = (value: boolean) => {
+    setSourceFidelityChoice((current) => ({ ...current, [String(meeting._id)]: value }));
+    // Only choices on unreviewed imports change the remembered default.
+    if (!minutesCorrectedForExport(minutes, meeting)) setStoredSourceFidelity(value);
+  };
+  // Adopted minutes are frozen; their motions are reopened with the minutes.
+  const motionsEditable = canMinutesWrite && !(minutes?.approvedAt || (minutes as any)?.adoptedSnapshot);
   const businessMotions = displayMotions.filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
@@ -744,6 +762,18 @@ export function MeetingDetailPage() {
   const markHeld = async () => {
     if (!(canMeetingsWrite)) return;
     try {
+      // A meeting dated in the future has not happened yet: say so before
+      // recording it as held (a meeting that met early needs its date fixed).
+      const meetingDay = meetingCalendarDate(meeting as any);
+      if (meetingDay && meetingDay > todayDateOnly()) {
+        const ok = await confirm({
+          title: "Mark a future meeting held?",
+          message: `This meeting is dated ${formatMeetingDate(meeting, { withTime: false })}, which hasn't happened yet. If it met on another day, change the date with Edit meeting first.`,
+          confirmLabel: "Mark held anyway",
+          tone: "warn",
+        });
+        if (!ok) return;
+      }
       if (calculatedQuorumMet === false) {
         const ok = await confirm({
           title: "Mark meeting held without quorum?",
@@ -773,11 +803,29 @@ export function MeetingDetailPage() {
   const toggleNoticeSent = async () => {
     if (!(canMeetingsWrite)) return;
     const wasSent = Boolean(meeting.noticeSentAt);
+    let noticeSentAt = new Date().toISOString();
+    // A meeting that already happened was not noticed today: ask for the date.
+    if (!wasSent && isPastMeeting(meeting.scheduledAt)) {
+      const typed = await prompt({
+        title: "When was notice sent?",
+        message: "This meeting has already happened. Enter the date the notice went out, as recorded in your files (YYYY-MM-DD).",
+        placeholder: "YYYY-MM-DD",
+        confirmLabel: "Record notice date",
+        required: true,
+      });
+      if (typed == null) return;
+      const parsed = pastNoticeDateValue(typed, meetingCalendarDate(meeting as any) ?? String(meeting.scheduledAt).slice(0, 10));
+      if (!parsed.iso) {
+        toast.error("Notice date not recorded", parsed.error);
+        return;
+      }
+      noticeSentAt = parsed.iso;
+    }
     await updateMeeting({
       id: meeting._id,
       patch: wasSent
         ? { clearNoticeSent: true }
-        : { noticeSentAt: new Date().toISOString() },
+        : { noticeSentAt },
     });
     toast.success(
       wasSent ? "Notice cleared" : "Notice marked sent",
@@ -819,9 +867,16 @@ export function MeetingDetailPage() {
   };
   const clearApproval = async () => {
     if (!minutes || !canApproveMinutes) return;
+    const ok = await confirm({
+      title: "Reopen these minutes?",
+      message: "The recorded approval and the frozen adopted copy are removed, and the minutes become an editable draft again. Record the approval again after correcting them.",
+      confirmLabel: "Reopen minutes",
+      tone: "danger",
+    });
+    if (!ok) return;
     await updateMinutes({ id: minutes._id, patch: { clearApproval: true } });
     setApprovalEdit(null);
-    toast.success("Approval cleared", "These minutes are no longer marked approved.");
+    toast.success("Minutes reopened", "These minutes are an editable draft again.");
   };
 
   // Business motions that were Tabled/Deferred at this meeting — the unfinished
@@ -919,7 +974,7 @@ export function MeetingDetailPage() {
     return hidden;
   };
 
-  const minutesRenderPayload = (redact?: (value: string) => string, publicOnly = false) => {
+  const minutesRenderPayload = (redact?: (value: string) => string, publicOnly = false, hideSourceDump = false) => {
     if (!minutes) return null;
     const tx = (value?: string | null) => (value && redact ? redact(value) : value);
     // When publicOnly is set, drop sections the user has flagged as private.
@@ -929,13 +984,16 @@ export function MeetingDetailPage() {
     // through unchanged.
     const rawSections = (minutes.sections ?? []) as any[];
     const hiddenIndices = publicOnly ? computeHiddenSectionIndices(rawSections) : new Set<number>();
+    // The page hides an untouched "Source notes awaiting agenda mapping" dump;
+    // the minutes export (not the complete source record) hides it too.
+    if (hideSourceDump) rawSections.forEach((section, i) => { if (unchangedSourceDumpSection(section, minutes.sourceMeetingRecord)) hiddenIndices.add(i); });
     const sectionIndexRemap = new Map<number, number>();
     let nextSectionIndex = 0;
     rawSections.forEach((_, i) => {
       if (!hiddenIndices.has(i)) sectionIndexRemap.set(i, nextSectionIndex++);
     });
     const visibleSections = rawSections.filter((_, i) => !hiddenIndices.has(i));
-    const visibleMotions = publicOnly
+    const visibleMotions = hiddenIndices.size
       ? displayMotions.filter((m) => m.sectionIndex == null || !hiddenIndices.has(m.sectionIndex))
       : displayMotions;
     return {
@@ -996,7 +1054,7 @@ export function MeetingDetailPage() {
         text: tx(m.text) ?? "",
         movedBy: tx(motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId })) ?? undefined,
         secondedBy: tx(motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId })) ?? undefined,
-        sectionIndex: publicOnly && m.sectionIndex != null ? sectionIndexRemap.get(m.sectionIndex) : m.sectionIndex,
+        sectionIndex: hiddenIndices.size && m.sectionIndex != null ? sectionIndexRemap.get(m.sectionIndex) : m.sectionIndex,
       })),
       decisions: redact ? minutes.decisions.map(redact) : minutes.decisions,
       actionItems: (minutes.actionItems as any[]).map((a) => ({
@@ -1005,7 +1063,9 @@ export function MeetingDetailPage() {
         assignee: tx(a.assignee),
       })),
       approvedAt: minutes.approvedAt ?? null,
+      sourceReviewStatus: meeting.sourceReviewStatus === "source_reviewed" ? "source_reviewed" : (minutes as any).sourceReviewStatus,
       nextMeetingAt: minutes.nextMeetingAt ?? null,
+      nextMeetings: nextMeetingsForExport((minutes as any).nextMeetings, committees ?? [], tx),
       nextMeetingLocation: tx(minutes.nextMeetingLocation),
       nextMeetingNotes: tx(minutes.nextMeetingNotes),
       sessionSegments: (minutes.sessionSegments ?? []).map((segment: any) => ({
@@ -1079,7 +1139,8 @@ export function MeetingDetailPage() {
 
   const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
     const restrictedCopy = publicOnly || minutesExportStyle === "board-public";
-    const payload = minutesRenderPayload(redact, restrictedCopy);
+    const sourceFidelity = sourceFidelityInExport && !redact && !restrictedCopy;
+    const payload = minutesRenderPayload(redact, restrictedCopy, !sourceFidelity);
     if (!payload || !hasExportableContent) return "";
     if (redact || restrictedCopy) for (const field of ["consentItems", "conditionalDecisions", "decisionRequirements", "attendanceEvents", "quorumCheckpoints", "futureMeetingSuggestions"] as const) payload[field] = [];
     // Link by native item ID or unique title; source reconstruction can change
@@ -1087,6 +1148,7 @@ export function MeetingDetailPage() {
     const hiddenIndices = restrictedCopy && minutes
       ? computeHiddenSectionIndices((minutes.sections ?? []) as any[])
       : new Set<number>();
+    if (!sourceFidelity && minutes) ((minutes.sections ?? []) as any[]).forEach((section, i) => { if (unchangedSourceDumpSection(section, minutes.sourceMeetingRecord)) hiddenIndices.add(i); });
     const visibleAgendaTree = hiddenIndices.size
       ? agendaTree.filter(entry => {
         const index = minuteSectionIndexForAgendaEntry(entry, minutes.sections ?? []);
@@ -1109,12 +1171,13 @@ export function MeetingDetailPage() {
         noticeSentAt: meeting.noticeSentAt ?? null,
         agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
         agendaItemTree: visibleAgendaTree,
+        timeZone: (meeting as any).timeZone ?? null,
         ...(minutes.adoptedMeeting ?? {}),
       },
       minutes: payload,
       styleId: minutesExportStyle,
       options: {
-        sourceFidelity: sourceFidelityInExport && !redact && !restrictedCopy,
+        sourceFidelity,
         publicOnly: restrictedCopy,
         publicCopy: !!redact || restrictedCopy,
         includeTranscript: redact ? false : includeTranscriptInExport,
@@ -1141,8 +1204,12 @@ export function MeetingDetailPage() {
     const safe = (meeting.title || "meeting")
       .replace(/\.(?:docx?|pdf|rtf|odt|txt)\b/gi, "")
       .replace(/^\s*\d{4}-\d{2}-\d{2}\s*/, "")
+      // "Board meeting — 2026-10-06": the date already leads the file name.
+      .replace(/[\s—–-]*\d{4}-\d{2}-\d{2}\s*$/, "")
       .replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
-      .slice(0, 60).replace(/-+$/, "") || "meeting";
+      .slice(0, 60).replace(/-+$/, "")
+      // "…-meeting-minutes" + "-minutes" read as "minutes-minutes".
+      .replace(/-?minutes$/, "") || "meeting";
     const redact = publicCopyMode ? (s: string) => redactText(s, redactOpts()) : undefined;
     const bodyHtml = renderExportBody(redact, publicCopyMode);
     const slug = publicCopyMode ? "public-minutes" : "minutes";
@@ -1464,28 +1531,61 @@ export function MeetingDetailPage() {
       const title = entry.title.trim();
       if (!title) continue;
       const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
-      cleaned.push({ title, depth });
+      cleaned.push({ title, depth, ...(entry._id ? { _id: entry._id } : {}) });
       if (depth === 0) hasRoot = true;
     }
     // Both root and sub-items become real minute sections. Depth is preserved
     // on the section so the editor and exports can render sub-numbering.
     const next = cleaned;
 
+    // Align minutes sections to the edited agenda BEFORE re-syncing it: the
+    // sync matches sections by title, so a renamed item must already carry its
+    // new title (and keep its notes, actions and motions). Sections keep the
+    // agenda item ids that still exist at this point; the sync re-links them.
+    if (minutes && !minutes.approvedAt) {
+      const sectionHasDetails = (section: any) =>
+        !!(
+          section?.discussion ||
+          section?.presenter ||
+          (section?.decisions ?? []).length ||
+          (section?.actionItems ?? []).length ||
+          (section?.linkedTaskIds ?? []).length
+        );
+      const aligned = alignSectionsToAgenda(
+        (minutes.sections ?? []) as any[],
+        next,
+        displayMotions as any[],
+        (title, depth) => buildSectionFromTitle(title, depth),
+        sectionHasDetails,
+      );
+      if (aligned.sectionsChanged || aligned.motionsChanged) {
+        const patch: any = {};
+        if (aligned.sectionsChanged) patch.sections = aligned.sections;
+        if (aligned.motionsChanged) patch.motions = aligned.motions;
+        await updateMinutes({ id: minutes._id, patch });
+      }
+    }
+
     await syncAgendaForMeeting({
       societyId: meeting.societyId,
       meetingId: meeting._id,
       title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
-      items: cleaned.map((entry) => ({
-        title: entry.title,
-        depth: entry.depth,
-        type: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.type ?? inferAgendaSectionType(entry.title),
-        presenter: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.presenter,
-        details: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.details,
-        timeAllottedMinutes: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.timeAllottedMinutes,
-        motionTemplateId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionTemplateId,
-        motionId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionId,
-        motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
-      })),
+      items: cleaned.map((entry) => {
+        // A renamed item keeps its type, presenter, details and motion link.
+        const metadata = (entry._id ? canonicalAgendaItems?.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
+          ?? canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
+        return {
+          title: entry.title,
+          depth: entry.depth,
+          type: metadata?.type ?? inferAgendaSectionType(entry.title),
+          presenter: metadata?.presenter,
+          details: metadata?.details,
+          timeAllottedMinutes: metadata?.timeAllottedMinutes,
+          motionTemplateId: metadata?.motionTemplateId,
+          motionId: metadata?.motionId,
+          motionText: metadata?.motionText,
+        };
+      }),
     });
 
     // Auto-bootstrap the minutes record on first save. This subsumes the old
@@ -1528,90 +1628,6 @@ export function MeetingDetailPage() {
       setAgendaEdit(null);
       toast.success("Agenda saved");
       return;
-    }
-
-    // Keep agenda and minutes.sections in 1-to-1 sync: align section order to
-    // the agenda, reuse existing sections by title, and create empty sections
-    // for new titles. Sections whose titles were dropped from the agenda are
-    // removed only if they have no recorded content; sections with data are
-    // preserved as orphans so we never silently destroy recorded minutes.
-    if (minutes) {
-      const existingSections = ((minutes.sections ?? []) as any[]);
-      const existingMotions = displayMotions;
-      const normalize = (title: string) => title.trim().toLowerCase();
-      const sectionHasDetails = (section: any) =>
-        !!(
-          section?.discussion ||
-          section?.presenter ||
-          (section?.decisions ?? []).length ||
-          (section?.actionItems ?? []).length ||
-          (section?.linkedTaskIds ?? []).length
-        );
-
-      // Queue per-title so each duplicate-titled agenda entry consumes its own
-      // matching section instead of all resolving to the first one (which
-      // would clobber sibling sections' content).
-      const sectionsByTitle = new Map<string, any[]>();
-      for (const section of existingSections) {
-        const key = normalize(section?.title ?? "");
-        if (!key) continue;
-        const queue = sectionsByTitle.get(key) ?? [];
-        queue.push(section);
-        sectionsByTitle.set(key, queue);
-      }
-
-      // Preserve existing section content when titles match; always overwrite
-      // depth from the agenda since the agenda is the source of truth for
-      // hierarchy. Brand-new titles get a fresh empty section at the correct
-      // depth.
-      const aligned = next.map((entry) => {
-        const existing = sectionsByTitle.get(normalize(entry.title))?.shift();
-        return existing
-          ? { ...existing, depth: entry.depth }
-          : buildSectionFromTitle(entry.title, entry.depth);
-      });
-
-      const newTitles = new Set(next.map((entry) => normalize(entry.title)));
-      const orphans = existingSections.filter((section) => {
-        const key = normalize(section?.title ?? "");
-        return !newTitles.has(key) && sectionHasDetails(section);
-      });
-
-      const finalSections = [...aligned, ...orphans];
-
-      const sectionsChanged =
-        finalSections.length !== existingSections.length ||
-        finalSections.some((s, i) => s !== existingSections[i]);
-
-      const titleToNewIndex = new Map<string, number>();
-      finalSections.forEach((section, index) => {
-        const key = normalize(section?.title ?? "");
-        if (key && !titleToNewIndex.has(key)) titleToNewIndex.set(key, index);
-      });
-
-      let motionsChanged = false;
-      const remappedMotions = existingMotions.map((motion) => {
-        if (motion.sectionIndex == null) return motion;
-        const oldSection = existingSections[motion.sectionIndex];
-        if (!oldSection) return motion;
-        const oldKey = normalize(oldSection?.title ?? "");
-        const newIndex = titleToNewIndex.get(oldKey);
-        if (newIndex == null) {
-          const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
-          motionsChanged = true;
-          return rest as Motion;
-        }
-        if (newIndex === motion.sectionIndex) return motion;
-        motionsChanged = true;
-        return { ...motion, sectionIndex: newIndex };
-      });
-
-      if (sectionsChanged || motionsChanged) {
-        const patch: any = {};
-        if (sectionsChanged) patch.sections = finalSections;
-        if (motionsChanged) patch.motions = remappedMotions;
-        await updateMinutes({ id: minutes._id, patch });
-      }
     }
 
     setAgendaEdit(null);
@@ -2093,14 +2109,12 @@ export function MeetingDetailPage() {
         subtitle={
           <>
             <span className="meeting-detail-subtitle" data-testid="meeting-subtitle">
-              {meetingBodyLabel(meeting, committees as any)} · {formatMeetingDate(meeting, { dateStyle: "long" })}
+              {/* The body names the committee; link it rather than repeating the name. */}
+              {meetingCommittee
+                ? <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingBodyLabel(meeting, committees as any)}</Link>
+                : meetingBodyLabel(meeting, committees as any)}
+              {" · "}{formatMeetingDate(meeting, { dateStyle: "long" })}
               {meeting.location ? ` · ${meeting.location}` : meeting.electronic ? " · Online" : ""}
-              {meetingCommittee && (
-                <>
-                  {" · "}
-                  <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingCommittee.name}</Link>
-                </>
-              )}
             </span>
             {sourceHeaderText && (
               <span className="meeting-detail-subtitle__source" title="The meeting header exactly as written in the source document">
@@ -2278,11 +2292,11 @@ export function MeetingDetailPage() {
         </div>
         <div>
           <span>Present</span>
-          <strong>{minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
+          <strong>{minutesLoading ? "…" : minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
         </div>
         <div>
           <span>Motions</span>
-          <strong>{businessMotions.length}</strong>
+          <strong>{minutesLoading ? "…" : businessMotions.length}</strong>
         </div>
       <div>
         <span>Materials</span>
@@ -2337,6 +2351,8 @@ export function MeetingDetailPage() {
                   </Badge>
                 ) : minutes ? (
                   <Badge tone="warn">Not approved</Badge>
+                ) : minutes === undefined && canMinutesRead ? (
+                  <span className="muted">Loading…</span>
                 ) : (
                   <span className="muted">No minutes yet</span>
                 )}
@@ -2455,6 +2471,15 @@ export function MeetingDetailPage() {
 
         {activeTab === "minutes" && (
           <>
+          {minutes?.approvedAt && (
+            <Banner tone="info" title={`Adopted ${formatDate(minutes.approvedAt)} — read-only`} className="meeting-minutes-adopted-banner">
+              Adopted minutes cannot be edited. To correct them, open{" "}
+              {canApproveMinutes
+                ? <button type="button" className="btn-link" onClick={startApprovalEdit}>the approval</button>
+                : "the approval"}{" "}
+              and choose “Clear approval and reopen”, then record the approval again.
+            </Banner>
+          )}
           <MeetingMinutesColumn
             minutes={minutes}
             agenda={agendaTree.map((entry) => entry.title)}
@@ -2538,12 +2563,12 @@ export function MeetingDetailPage() {
               ) : null}
               <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {sourceWordingUpdates.length > 0 && (
-                  <button className="btn-action" type="button" onClick={() => { void acceptSourceOutcomes(); }} disabled={!canMinutesWrite} data-testid="accept-source-outcomes" title="Set each pending motion's outcome from the wording the source records (Passed, Carried, Defeated, Tabled…)">
+                  <button className="btn-action" type="button" onClick={() => { void acceptSourceOutcomes(); }} disabled={!motionsEditable} data-testid="accept-source-outcomes" title="Set each pending motion's outcome from the wording the source records (Passed, Carried, Defeated, Tabled…)">
                     <CheckCircle2 size={12} /> Accept source wording ({sourceWordingUpdates.length})
                   </button>
                 )}
                 {businessMotions.length > 0 && (
-                  <button className="btn-action" type="button" onClick={() => setBulkOutcome({ outcome: "Carried", decidedBy: "", scope: "pending" })} disabled={!canMinutesWrite} data-testid="bulk-outcome">
+                  <button className="btn-action" type="button" onClick={() => setBulkOutcome({ outcome: "Carried", decidedBy: "", scope: "pending" })} disabled={!motionsEditable} data-testid="bulk-outcome">
                     <Gavel size={12} /> Set outcome…
                   </button>
                 )}
@@ -2551,14 +2576,14 @@ export function MeetingDetailPage() {
                   className="btn-action btn-action--primary"
                   type="button"
                   onClick={() => motionEditorRef.current?.startAdding()}
-                 disabled={!canMinutesWrite}>
+                 disabled={!motionsEditable}>
                   <Plus size={12} /> Add motion
                 </button>
               </div>
             </div>
             <div className="card__body">
               <MotionEditor
-                readOnly={!canMinutesWrite}
+                readOnly={!motionsEditable}
                 ref={motionEditorRef}
                 motions={displayMotions}
                 directorNames={directorNames}
@@ -2765,8 +2790,8 @@ export function MeetingDetailPage() {
         footer={
           <>
             {minutes?.approvedAt && (
-              <button className="btn btn--danger" onClick={clearApproval} style={{ marginRight: "auto" }} disabled={!canApproveMinutes}>
-                Clear approval
+              <button className="btn btn--danger" onClick={() => { void clearApproval(); }} style={{ marginRight: "auto" }} disabled={!canApproveMinutes}>
+                Clear approval and reopen
               </button>
             )}
             <button className="btn" onClick={() => setApprovalEdit(null)}>Cancel</button>
@@ -2782,7 +2807,7 @@ export function MeetingDetailPage() {
               Minutes are usually adopted at the next meeting. Record when these minutes were
               approved and, if you like, which meeting adopted them.
             </p>
-            <Field label="Approved at meeting" hint="Later meetings, nearest first. Picking one sets the approval date to that meeting's date.">
+            <Field label="Approved at meeting" hint="Later meetings of the same body first, nearest first. Picking one sets the approval date to that meeting's date.">
               <Select
                 value={approvalEdit.approvedInMeetingId}
                 searchable
@@ -2803,7 +2828,7 @@ export function MeetingDetailPage() {
                 ]}
               />
             </Field>
-            <Field label="Approved on" error={approvalIssues.length ? approvalIssues.join(" ") : undefined}>
+            <Field label="Approved on" error={approvalIssues.length && approvalEdit.approvedAt ? approvalIssues.join(" ") : undefined}>
               <DatePicker
                 value={approvalEdit.approvedAt}
                 onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedAt: value })}

@@ -139,3 +139,114 @@ test("edit meeting, attendance grid and motion person pickers", async ({ page })
 
   expect(errors.filter((message) => !/ResizeObserver/.test(message))).toEqual([]);
 });
+
+// Retest (meetings): a board meeting recorded from scratch through approved
+// minutes — suggested title, mover typed at speed, officers from attendance,
+// action with owner, approval. Synthetic data only.
+test("record a new board meeting from scratch through approved minutes", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/app", { waitUntil: "networkidle" });
+  await page.evaluate(async () => {
+    const clientModule = "/src/lib/localDataClient.ts";
+    const selectionModule = "/src/hooks/useSociety.ts";
+    const { localDataClient: client } = await import(clientModule);
+    const { setStoredSocietyId } = await import(selectionModule);
+    const { societyId } = await client.mutation("society:createWorkspace", { name: "From scratch review", jurisdictionCode: "CA-BC", entityType: "society" });
+    setStoredSocietyId(societyId);
+    const nowISO = new Date().toISOString();
+    for (const fullName of ["Alex Example", "Blair Sample", "Casey Demo"]) await client.mutation("peopleDirectory:upsert", { societyId, fullName, nowISO });
+  });
+
+  // A blank title takes the suggested "<Body> meeting — <date>".
+  await page.goto("/app/meetings");
+  await page.getByRole("button", { name: "New meeting" }).first().click();
+  const modal = page.getByRole("dialog").last();
+  const suggested = await modal.getByLabel("Title").first().getAttribute("placeholder");
+  expect(suggested).toMatch(/^Board meeting — \d{4}-\d{2}-\d{2}$/);
+  await modal.getByRole("button", { name: /^(Schedule|Record meeting)$/ }).last().click();
+  await page.waitForURL(/\/app\/meetings\/[^/?]+$/);
+  await expect(page.getByRole("heading", { name: suggested! })).toBeVisible({ timeout: 60_000 });
+  const meetingId = page.url().split("/").pop()!;
+
+  // A meeting dated in the future asks before it is marked held.
+  await page.getByRole("button", { name: "Mark held" }).click();
+  await expect(page.getByRole("dialog", { name: "Mark a future meeting held?" })).toBeVisible();
+  await page.getByRole("button", { name: "Mark held anyway" }).click();
+
+  // It actually met last month: moving the date moves the dated title too.
+  await page.getByTestId("edit-meeting").click();
+  const drawer = page.getByRole("dialog", { name: "Edit meeting" });
+  await drawer.locator(".date-trigger-wrap button").first().click();
+  await page.getByRole("button", { name: "Previous month" }).click();
+  await page.getByRole("button", { name: /\b15, \d{4}$/ }).click();
+  const retitled = await drawer.getByLabel("Meeting title").inputValue();
+  expect(retitled).toMatch(/^Board meeting — \d{4}-\d{2}-15$/);
+  await drawer.getByTestId("edit-meeting-save").click();
+  await expect(page.getByRole("heading", { name: retitled })).toBeVisible();
+
+  // Attendance with roles.
+  await page.getByRole("tab", { name: /Agenda & minutes/ }).click();
+  await page.getByTestId("attendance-edit").click();
+  const grid = page.getByTestId("attendance-grid");
+  await grid.getByRole("button", { name: /Paste names/ }).click();
+  await grid.getByLabel("Names to add").fill("Alex Example (Chair)\nBlair Sample (Secretary)\nCasey Demo");
+  await grid.getByRole("button", { name: "Add names" }).click();
+  await page.getByTestId("attendance-save").click();
+  await expect(grid).toBeHidden();
+
+  // A motion whose mover is typed at speed keeps every character.
+  await page.getByRole("tab", { name: /^Motions/ }).click();
+  await page.getByRole("button", { name: "Add motion" }).first().click();
+  await page.getByLabel("New motion name").fill("Approve the synthetic work plan");
+  await page.getByLabel("Details", { exact: true }).first().fill("That the board approve the synthetic work plan.");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const named = page.locator(".motion").filter({ has: page.locator('input[value="Approve the synthetic work plan"]') });
+  await named.getByRole("button", { name: "Edit", exact: true }).click();
+  const mover = page.getByLabel(/^Mover for Approve the synthetic work plan/);
+  await mover.pressSequentially("Blair Sample", { delay: 20 });
+  await expect(mover).toHaveValue("Blair Sample");
+  await page.getByRole("radio", { name: "Carried" }).last().click();
+  // No seconder or tally yet: the editor warns before recording the outcome.
+  await page.getByRole("button", { name: "Record incomplete outcome" }).click();
+  await expect.poll(async () => page.evaluate(async (id) => {
+    const { localDataClient: client } = await import("/src/lib/localDataClient.ts");
+    const minutes = await client.query("minutes:getByMeeting", { meetingId: id });
+    const rows = await client.query("motions:listForMinutes", { minutesId: minutes._id });
+    const row = rows.find((motion: any) => (motion.title ?? motion.name) === "Approve the synthetic work plan");
+    return row ? `${row.movedBy}|${row.outcome}` : null;
+  }, meetingId), { timeout: 15_000 }).toBe("Blair Sample|Carried");
+
+  // Minutes details: chair and secretary come from the attendance roles.
+  await page.getByRole("tab", { name: /Agenda & minutes/ }).click();
+  await page.getByTestId("minutes-details-edit").click();
+  await expect(page.getByLabel("Chair", { exact: true })).toHaveValue("Alex Example");
+  await expect(page.getByLabel("Secretary", { exact: true })).toHaveValue("Blair Sample");
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect(page.locator("#main-content")).toContainText("Chair: Alex Example");
+
+  // An action with an owner.
+  const actions = page.getByTestId("action-items-card");
+  await actions.getByTestId("add-action-item").click();
+  const form = actions.getByTestId("add-action-form");
+  await form.locator("input").first().fill("Circulate the approved work plan");
+  await form.getByLabel("Action owner").fill("Casey Demo");
+  await page.keyboard.press("Escape");
+  await form.getByTestId("add-action-save").click();
+  await expect(actions).toContainText("Circulate the approved work plan");
+  await expect(actions).toContainText("Casey Demo");
+
+  // Approve; approved minutes are read-only after a reload.
+  await page.getByRole("tab", { name: /Overview/ }).click();
+  await page.getByRole("button", { name: "Record approval" }).click();
+  const approval = page.getByRole("dialog", { name: "Record minutes approval" });
+  await approval.locator(".date-trigger-wrap button").first().click();
+  await page.getByRole("button", { name: "Today" }).click();
+  await approval.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("#main-content")).toContainText(/Approved \w{3} \d{1,2}, \d{4}/);
+  await page.reload();
+  await page.getByRole("tab", { name: /^Motions/ }).click();
+  await expect(page.getByRole("button", { name: "Add motion" }).first()).toBeDisabled({ timeout: 60_000 });
+
+  expect(errors.filter((message) => !/ResizeObserver/.test(message))).toEqual([]);
+});

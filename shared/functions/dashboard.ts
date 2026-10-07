@@ -833,7 +833,7 @@ export async function summaryPortable(
     readAccess.has("members:read") ? ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
     readAccess.has("directors:read") ? ctx.db.query<any>("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
     readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect() : Promise.resolve([]),
-    readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", nowISO)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
+    readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", upcomingMeetingsFromISO(nowISO, todayKey))).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
     readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", todayKey)).collect() : Promise.resolve([]),
     readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).gte("dueDate", todayKey)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
     readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
@@ -1121,4 +1121,15 @@ function toDashboardGoal(goal: GoalRecord): DashboardGoal {
     progressPercent: goal.progressPercent,
     targetDate: goal.targetDate,
   };
+}
+
+/**
+ * Lower bound for "upcoming" meetings. Date-only meetings are stored at a
+ * noon-UTC placeholder, which is already in the past on a BC evening, so a
+ * meeting later today dropped off the dashboard. Start from the beginning of
+ * the viewer's local day (as a UTC day key) or now, whichever is earlier.
+ */
+export function upcomingMeetingsFromISO(nowISO: string, todayKey: string): string {
+  const startOfToday = `${todayKey}T00:00:00.000Z`;
+  return startOfToday < nowISO ? startOfToday : nowISO;
 }

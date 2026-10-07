@@ -6,8 +6,8 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
-import { isGeneralMeeting, isPastMeeting, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, statusForNewMeeting } from "../lib/noticeWindow";
-import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
+import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, statusForNewMeeting } from "../lib/noticeWindow";
+import { normalizedMeetingTitle, suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 import {
   MeetingFormFields,
   blankMeetingDraft,
@@ -65,7 +65,7 @@ function MeetingCreateModalForm({
 
   const save = async () => {
     if (!open || !canCreate) return;
-    const title = normalizedMeetingTitle(form.title);
+    const title = normalizedMeetingTitle(form.title) || suggestedMeetingTitle(form, data.committees);
     if (!title) {
       toast.error("Enter a meeting title.");
       return;
@@ -109,11 +109,12 @@ function MeetingCreateModalForm({
     }
   };
 
+  const createLabels = meetingCreateLabels(form?.scheduledAt ?? "");
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Schedule meeting"
+      title={createLabels.title}
       size="lg"
       resizeKey="meeting-create"
       footer={
@@ -122,7 +123,7 @@ function MeetingCreateModalForm({
             Cancel
           </button>
           <button className="btn btn--accent" type="button" onClick={save} disabled={!canCreate || saving || hasUnacknowledgedConflict}>
-            {saving ? "Scheduling…" : "Schedule"}
+            {saving ? createLabels.busy : createLabels.action}
           </button>
         </>
       }

@@ -1,3 +1,5 @@
+import { todayDateOnly } from "./dateOnly";
+
 /**
  * Meeting status vocabulary. `meetings.status` is a free string in the schema;
  * these are the values the app writes. Additive: "HeldMinutesMissing" marks a
@@ -22,6 +24,16 @@ export const MEETING_STATUS_OPTIONS = MEETING_STATUSES.map((value) => ({ value, 
 export function meetingStatusLabel(status: string | undefined | null): string {
   if (!status) return "Unknown";
   return MEETING_STATUS_LABELS[status] ?? status;
+}
+
+/**
+ * A meeting evidenced only by its agenda, package or script: the agenda shows
+ * the meeting was called, not that it was held or what was decided. Once its
+ * date has passed it is "Held — minutes missing"; until then it is Scheduled.
+ */
+export function agendaOnlyMeetingStatus(meetingDate: string | undefined | null, today: string = todayDateOnly()): "HeldMinutesMissing" | "Scheduled" {
+  const day = String(meetingDate ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && day < today ? "HeldMinutesMissing" : "Scheduled";
 }
 
 /** A meeting that took place (whether or not its minutes are on file). */

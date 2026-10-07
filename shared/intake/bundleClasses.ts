@@ -8,6 +8,7 @@
  * signing tiers, AGM cadence …). Everything stages as Pending review. */
 import type { IntakeExtractionResult, IntakeRunResult } from "./bundle";
 import { bodyKeyFor } from "./entities";
+import { agendaOnlyMeetingStatus } from "../meetingStatus";
 import { bodyFromText } from "./minutes/extractMinutes";
 import { normalizePersonKey } from "./names";
 import type { Locator } from "./schemas/common";
@@ -147,7 +148,7 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
     const items = agendaItemsOf(record);
     const consentItems = consentEvidence(record, extraction.fileKey);
     if (evidence) {
-      // A meeting shown by its agenda/package with no minutes: staged as held, minutes missing.
+      // A meeting shown by its agenda/package with no minutes: held, minutes missing once its date has passed.
       const slate = (record.electionSlate ?? []).map((entry: any) => val(entry)).filter(Boolean);
       const fs = val(record.financialStatementsPresented);
       const staged: Record<string, any> = {
@@ -155,7 +156,7 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
         meetingTitle: meetingTitle(evidence.bodyKey, record, date),
         meetingType: MEETING_TYPE[evidence.bodyKey] ?? "Board",
         body: evidence.bodyKey,
-        meetingStatus: "Held",
+        meetingStatus: agendaOnlyMeetingStatus(date),
         scheduledAtPrecision: "date",
         ...(val(record.startTime) ? { localStartText: val(record.startTime) } : {}),
         ...(val(record.endTime) ? { localEndText: val(record.endTime) } : {}),

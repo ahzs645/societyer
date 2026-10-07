@@ -433,7 +433,8 @@ function inferAgendaItemType(title: string) {
   if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
   if (lower.includes("report") || lower.includes("financial")) return "report";
   if (lower.includes("break")) return "break";
-  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  // "Executive Director update" or "Executive Committee report" is not an in-camera session.
+  if (/\bin[ -]?camera|executive session|closed session\b/.test(lower)) return "executive_session";
   return "discussion";
 }
 
@@ -494,10 +495,16 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     queue.push(section);
     byTitle.set(key, queue);
   }
-  const nextSections = items.map((item) => {
+  // Where each existing section lands, so motions follow their section when
+  // the agenda is reordered (their sectionIndex was left pointing at whatever
+  // section moved into the old position).
+  const oldIndexOf = new Map<any, number>(existingSections.map((section: any, index: number) => [section, index]));
+  const newIndexOfOld = new Map<number, number>();
+  const nextSections = items.map((item, newIndex) => {
     const existing = byTitle.get(normalizeTitle(item.title))?.shift();
     const base = sectionFromAgendaItem(item);
     if (!existing) return base;
+    newIndexOfOld.set(oldIndexOf.get(existing)!, newIndex);
     const merged: Record<string, unknown> = {
       title: item.title,
       agendaItemId:item._id,
@@ -531,6 +538,7 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     const key = normalizeTitle(section?.title ?? "");
     if (key && nextTitles.has(key)) continue;
     if (sectionHasDetails(section)) {
+      newIndexOfOld.set(oldIndexOf.get(section)!, nextSections.length);
       const preserved=cleanMinutesSection(section);
       if (!items.some(item=>item._id===preserved.agendaItemId)) delete preserved.agendaItemId;
       nextSections.push(preserved);
@@ -556,7 +564,18 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     const key = normalizeTitle(motion?.text ?? "");
     return !agendaMotionKeys.has(key);
   });
-  const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map(cleanMotion)];
+  const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map((motion: any) => {
+    if (motion.sectionIndex == null) return cleanMotion(motion);
+    const newIndex = newIndexOfOld.get(Number(motion.sectionIndex));
+    if (newIndex == null) {
+      // Its section is gone: keep the motion, unassigned, rather than attach
+      // it to whichever section now has that position.
+      const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
+      return cleanMotion(rest);
+    }
+    const title = (nextSections[newIndex] as any)?.title;
+    return cleanMotion({ ...motion, sectionIndex: newIndex, ...(motion.sectionTitle != null && title ? { sectionTitle: title } : {}) });
+  })];
   // Only sections are stored on the minutes row now; motions are materialized
   // into the table by syncMotionsForMinutes (which maintains motionIds). Phase 4C.
   await ctx.db.patch(minutes._id, {
@@ -590,13 +609,17 @@ function cleanMinutesSection(section: any) {
   return clean;
 }
 
+// Every field the minutes action-item validator carries. The agenda re-sync
+// runs after each section save; dropping a field here silently erased the
+// action's status, its people-directory owner and its task link.
+const ACTION_ITEM_KEPT_FIELDS = ["assignee", "assigneePersonId", "dueDate", "status", "sourceStatus", "taskId"] as const;
+
 function cleanActionItem(actionItem: any) {
   const clean: Record<string, unknown> = {
     text: String(actionItem?.text ?? ""),
     done: !!actionItem?.done,
   };
-  if (actionItem?.assignee !== undefined) clean.assignee = actionItem.assignee;
-  if (actionItem?.dueDate !== undefined) clean.dueDate = actionItem.dueDate;
+  for (const key of ACTION_ITEM_KEPT_FIELDS) if (actionItem?.[key] !== undefined) clean[key] = actionItem[key];
   return clean;
 }
 
@@ -622,8 +645,25 @@ function cleanMotion(motion: any) {
   if (motion?.adoptsMinutesId !== undefined) clean.adoptsMinutesId = motion.adoptsMinutesId;
   if (motion?.name !== undefined) clean.name = motion.name;
   if (motion?.decidedBy !== undefined) clean.decidedBy = motion.decidedBy;
+  // Person links, dissent, source wording and override notes (A1/A11/C1/C13/
+  // G-04). syncMotionsForMinutes replaces the motion row with what it is
+  // given, so anything left out here was erased by every section save.
+  for (const key of MOTION_KEPT_FIELDS) if (motion?.[key] !== undefined) clean[key] = motion[key];
   return clean;
 }
+
+const MOTION_KEPT_FIELDS = [
+  "tags",
+  "movedByPersonId",
+  "secondedByPersonId",
+  "abstainedBy",
+  "opposedBy",
+  "dissentDocumentId",
+  "sourceLocator",
+  "sourceOutcomeText",
+  "outcomeOverrideNote",
+  "sourceExternalIds",
+] as const;
 
 function sectionHasDetails(section: any) {
   return !!(

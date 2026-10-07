@@ -124,9 +124,9 @@ export function MergeMeetingDialog({
           ) : (
             <div className="merge-preview" data-testid="merge-preview">
               <div className="merge-preview__pair">
-                <div><span className="muted">Duplicate (deleted)</span><strong>{preview.duplicate.title}</strong><span>{preview.duplicate.date}</span></div>
+                <div><span className="muted">Duplicate (deleted)</span><strong>{preview.duplicate.title}</strong><span>{preview.duplicate.date}</span>{preview.duplicate.sourceTitle && <span className="muted">From {preview.duplicate.sourceTitle}</span>}</div>
                 <ArrowRight size={16} aria-hidden="true" />
-                <div><span className="muted">Kept</span><strong>{preview.target.title}</strong><span>{preview.target.date}</span></div>
+                <div><span className="muted">Kept</span><strong>{preview.target.title}</strong><span>{preview.target.date}</span>{preview.target.sourceTitle && <span className="muted">From {preview.target.sourceTitle}</span>}</div>
               </div>
               {preview.blockers?.map((blocker: string) => <div key={blocker} className="flag flag--err" role="alert">{blocker}</div>)}
               {preview.warnings?.map((warning: string) => <div key={warning} className="flag flag--warn">{warning}</div>)}
@@ -135,7 +135,7 @@ export function MergeMeetingDialog({
                   {preview.moveMinutesWhole
                     ? "The kept meeting has no minutes: the duplicate's minutes move over unchanged."
                     : preview.duplicateHasMinutes
-                      ? <>Duplicate minutes ({preview.duplicateSectionCount} sections) saved as source version <Badge tone={preview.versionStatus === "draft" ? "warn" : "neutral"}>{preview.versionStatus}</Badge> “{preview.versionLabel}”</>
+                      ? <>Duplicate minutes ({preview.duplicateSectionCount} sections) saved as {preview.versionStatus === "draft" ? <>a <Badge tone="warn">draft</Badge> </> : "an "}imported source version “{preview.versionLabel}”</>
                       : "The duplicate has no minutes."}
                 </li>
                 <li>{preview.sourceExternalIdsAdded.length} source file link(s) and {preview.sourceDocumentIdsAdded.length} source document(s) added</li>

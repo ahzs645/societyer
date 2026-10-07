@@ -192,3 +192,23 @@ export function mergedVersionContent(duplicate: MergeMeetingLike & Record<string
     motions: motions.map((motion) => pick(motion, ["_id", "name", "text", "outcome", "status", "movedBy", "secondedBy", "votesFor", "votesAgainst", "abstentions", "sourceOutcomeText"])),
   });
 }
+
+/**
+ * Which copy of a same-day group to keep by default: an approved or final
+ * version over a draft, then minutes already approved in the app, then the
+ * one with the most recorded sections and motions.
+ */
+export function preferredMeetingToKeep<T extends { _id: unknown; sourceTitle?: unknown; title?: unknown }>(
+  meetings: readonly T[],
+  summary: (meeting: T) => { approvedAt?: unknown; sectionCount?: number; motionCount?: number } | undefined,
+): T | undefined {
+  const score = (meeting: T) => {
+    const label = String(meeting.sourceTitle ?? meeting.title ?? "").replace(/_/g, " ");
+    const info = summary(meeting) ?? {};
+    return (/\b(?:approved|final|adopted|signed)\b/i.test(label) ? 1000 : 0)
+      - (/\bdraft\b/i.test(label) ? 500 : 0)
+      + (info.approvedAt ? 2000 : 0)
+      + (info.sectionCount ?? 0) + 2 * (info.motionCount ?? 0);
+  };
+  return [...meetings].sort((a, b) => score(b) - score(a))[0];
+}
