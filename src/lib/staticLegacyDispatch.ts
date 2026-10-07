@@ -1062,7 +1062,10 @@ function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticD
       ok: Boolean(args?.apiKey),
       provider,
       baseUrl: args?.baseUrl ?? (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1"),
-      message: args?.apiKey ? "Static provider key validated." : "API key is required.",
+      // Nothing is contacted in the local/demo runtime: say so instead of
+      // claiming the key was validated.
+      simulated: true,
+      message: args?.apiKey ? "Simulated validation: the key was not checked with the provider in this local workspace." : "API key is required.",
       modelIds: modelCatalog.models.map((model: any) => model.id),
       modelCatalog,
     };

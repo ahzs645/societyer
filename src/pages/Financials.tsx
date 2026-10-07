@@ -495,7 +495,7 @@ export function FinancialsPage() {
         <div className="stat-grid" style={{ marginBottom: 16 }}>
           <Stat label="Total bank balance" value={money(hub.totalBalance)} />
           <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
-          <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} />
+          <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} sub="Bank accounts flagged restricted" />
           <Stat
             label="Last sync"
             value={activeConnection.lastSyncAtISO ? formatDateTime(activeConnection.lastSyncAtISO) : "—"}
@@ -561,7 +561,7 @@ export function FinancialsPage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Restricted funds</h2>
-            <span className="card__subtitle">Earmarked for specific purposes — track separately (CPA guidance).</span>
+            <span className="card__subtitle">Bank accounts flagged as restricted. The fund-by-fund ledger balance is under Accounting; the audited figure is in the year's statements.</span>
           </div>
           <table className="table">
             <thead>

@@ -638,8 +638,8 @@ export function TasksPage() {
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={`Edit task ${record.title}`}
-                    title="Edit task"
+                    aria-label={`${canManage ? "Edit" : "View"} task ${record.title}`}
+                    title={canManage ? "Edit task" : "View task"}
                     onClick={() => openEdit(record)}
                   >
                     <Pencil size={12} />
@@ -883,7 +883,7 @@ function TaskPhoneList({
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon"
                 style={{ marginLeft: "auto" }}
-                aria-label={`Edit task ${task.title}`}
+                aria-label={`${canManage ? "Edit" : "View"} task ${task.title}`}
                 onClick={() => onEdit(task)}
               >
                 <Pencil size={12} />

@@ -296,7 +296,8 @@ export function AiAgentsPage() {
       if (defaultModel?.id && !result.modelCatalog?.models?.some((model: AiModelInfo) => model.id === aiSetup.modelId)) {
         setAiSetup((draft) => ({ ...draft, modelId: defaultModel.id }));
       }
-      toast.success("Provider key validated");
+      if (result.simulated) toast.info("Simulated validation", "The key format was accepted but not checked with the provider. A connected server validates it for real.");
+      else toast.success("Provider key validated");
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't validate AI provider");
     } finally {
@@ -557,8 +558,16 @@ export function AiAgentsPage() {
                   disabled={!canRunLive} value={chatInput}
                   placeholder="Ask the assistant to find records, draft tasks, inspect workflow context, or prepare a filing packet."
                   onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Enter sends; Shift+Enter adds a line (IME composition is left alone).
+                    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      if (canRunLive && !chatBusy && chatInput.trim()) void submitChat();
+                    }
+                  }}
                 />
               </Field>
+              <div className="muted" style={{ fontSize: 12, marginTop: -6 }}>Enter to send · Shift+Enter for a new line</div>
               <button className="btn btn--accent" disabled={!canRunLive || chatBusy || !chatInput.trim()} onClick={submitChat}>
                 <MessageSquare size={12} /> {chatBusy ? "Sending..." : "Send chat message"}
               </button>

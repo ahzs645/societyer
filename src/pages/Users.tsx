@@ -1,3 +1,4 @@
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -176,7 +177,10 @@ export function UsersPage() {
                     className="btn btn--ghost btn--sm"
                     onClick={() => {
                       setStoredUserId(u._id);
-                      toast.success(`Now acting as ${u.displayName}`);
+                      toast.success(
+                        `Now acting as ${u.displayName}`,
+                        isStaticDemoRuntime() ? "Demo preview: this resets to the owner when the page reloads." : undefined,
+                      );
                     }}
                     disabled={auth.mode !== "none"}
                     title="Act as this user"

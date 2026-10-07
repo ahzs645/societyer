@@ -1419,6 +1419,13 @@ const documents = [
 const SAMPLE_BYLAWS_PDF_DATA_URL =
   "data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvTWVkaWFCb3ggWzAgMCAzOTYgMjE2XSAvQ29udGVudHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggODEgPj4Kc3RyZWFtCkJUIC9GMSAxNCBUZiAzNiAxNjAgVGQgKFNvY2lldHllciBzYW1wbGUgZG9jdW1lbnQgcHJldmlldyAtIEN1cnJlbnQgYnlsYXdzKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0MSAwMDAwMCBuIAowMDAwMDAwMzExIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNDQyCiUlRU9G";
 
+/** Decoded byte length of a base64 data URL (not the URL string length). */
+function dataUrlDecodedBytes(dataUrl: string): number {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
+}
+
 const documentVersions = [
   {
     _id: "static_document_version_bylaws_v1",
@@ -1429,7 +1436,7 @@ const documentVersions = [
     storageKey: SAMPLE_BYLAWS_PDF_DATA_URL,
     fileName: "current-bylaws.pdf",
     mimeType: "application/pdf",
-    fileSizeBytes: SAMPLE_BYLAWS_PDF_DATA_URL.length,
+    fileSizeBytes: dataUrlDecodedBytes(SAMPLE_BYLAWS_PDF_DATA_URL),
     uploadedByName: "Societyer",
     uploadedAtISO: "2025-06-25T17:00:00.000Z",
     changeNote: "Initial version.",

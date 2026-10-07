@@ -543,7 +543,10 @@ export function AccountingWorkbenchPage() {
 
       {(restrictedBalances ?? []).length > 0 && (
         <section className="card">
-          <div className="card__head"><h2 className="card__title">Restricted funds</h2></div>
+          <div className="card__head">
+            <h2 className="card__title">Restricted funds</h2>
+            <span className="card__subtitle">Posted journal lines tagged to each fund restriction. This can differ from the restricted bank balance on Financials when restricted money is not held in its own account.</span>
+          </div>
           <div className="accounting-list">
             {(restrictedBalances ?? []).map((row: any) => (
               <div className="accounting-row" key={row._id}>
