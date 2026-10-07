@@ -1,5 +1,6 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -28,6 +29,15 @@ export function PoliciesPage() {
   const adoptionOptions = useQuery(api.policies.adoptionOptions, society ? { societyId: society._id } : "skip");
   const upsert = usePermissionedMutation(api.policies.upsert, canWrite);
   const remove = usePermissionedMutation(api.policies.remove, canWrite);
+  // Global search links to `?record=<id>`: scroll that policy into view and mark it.
+  const [searchParams] = useSearchParams();
+  const linkedPolicyId = searchParams.get("record");
+  useEffect(() => {
+    if (!linkedPolicyId || !policies) return;
+    const row = document.getElementById(`policy-${linkedPolicyId}`);
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  }, [linkedPolicyId, policies]);
   const createReviewTask = usePermissionedMutation(api.policies.createReviewTask, canWrite);
   const createSignerTask = usePermissionedMutation(api.policies.createRequiredSignerTask, canWrite);
   const createTransparencyDraft = usePermissionedMutation(api.policies.createTransparencyDraft, canWrite);
@@ -168,7 +178,13 @@ export function PoliciesPage() {
             </thead>
             <tbody>
               {(policies ?? []).map((row: any) => (
-                <tr key={row._id}>
+                <tr
+                  key={row._id}
+                  id={`policy-${row._id}`}
+                  tabIndex={row._id === linkedPolicyId ? -1 : undefined}
+                  aria-current={row._id === linkedPolicyId ? "true" : undefined}
+                  className={row._id === linkedPolicyId ? "is-linked-record" : undefined}
+                >
                   <td data-label="Policy">
                     <strong>{row.policyName}</strong>
                     {row.policyNumber && <div className="mono muted">{row.policyNumber}</div>}

@@ -477,6 +477,15 @@ select.editable-cell__input {
   }
 }
 
+/* A row opened from global search (`?record=<id>`) on a plain table page. */
+.table tr.is-linked-record > td {
+  background: token('bg-hover');
+}
+.table tr.is-linked-record:focus-visible {
+  outline: 2px solid token('accent');
+  outline-offset: -2px;
+}
+
 /* Calendar periods share the record-view controls and keep overflow inside the view. */
 .calendar-view__head { flex-wrap: wrap; }
 .calendar-view__title { min-width: 0; overflow-wrap: anywhere; }
