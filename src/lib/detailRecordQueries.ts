@@ -22,6 +22,8 @@ export const DETAIL_RECORD_QUERIES: ReadonlySet<string> = new Set([
   "committees:detail",
   "goals:get",
   "elections:get",
+  // A8: the acting user lookup; a stale stored id means "no current user".
+  "users:get",
 ]);
 
 export function isRecordNotFoundError(error: unknown): boolean {
