@@ -314,6 +314,8 @@ export function IntakeReviewPage() {
   if (run === undefined || queue === undefined) return <PageLoading />;
 
   const promotedTotal = (queue ?? []).filter((row) => row.status === "promoted").length;
+  const coveredTotal = (queue ?? []).filter((row) => row.status === "covered").length;
+  const rejectedTotal = (queue ?? []).filter((row) => row.status === "rejected").length;
   const meetingLink = provenance?.find((row) => row.targetTable === "meetings")?.targetId;
   const promotedTargets: Array<{ table: string; id: string; label: string }> = (extraction?.promotion?.targets ?? []).filter((target: any) => target.table !== "meetingMaterials");
   const fileLog = (log ?? []).filter((entry) => !entry.fileKey || entry.fileKey === detail?.file?.fileKey);
@@ -357,7 +359,27 @@ export function IntakeReviewPage() {
 
       {!queue.length && <Banner tone="info">This run has no extracted documents to review{run.status === "running" ? " yet" : ""}. {run.counts?.byDisposition?.catalogue ? `${run.counts.byDisposition.catalogue} files were catalogued only (no minutes extractor for their class).` : ""}</Banner>}
 
-      {queue.length > 0 && (
+      {queue.length > 0 && !visibleQueue.length && (
+        <section className="card intake-done" data-testid="intake-review-done" aria-labelledby="intake-done-title">
+          <div className="card__body col" style={{ gap: 10 }}>
+            <h2 className="card__title" id="intake-done-title">Every document in this run has been reviewed</h2>
+            <p className="muted" style={{ margin: 0 }}>
+              {pluralize(promotedTotal, "document")} promoted
+              {coveredTotal ? `, ${pluralize(coveredTotal, "copy", "copies")} covered by a promoted copy` : ""}
+              {rejectedTotal ? `, ${rejectedTotal} rejected` : ""}.
+              {(run.recordGaps?.length ?? 0) > 0 ? ` The run found ${pluralize(run.recordGaps.length, "record gap")} (missing minutes, AGMs without minutes, unadopted policies) to follow up in Coverage & gaps.` : ""}
+            </p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <Link className="btn btn--accent" to="/app/coverage?tab=record">Open Coverage &amp; gaps</Link>
+              <Link className="btn" to="/app/meetings">Meetings</Link>
+              <button type="button" className="btn" onClick={() => setStatusFilter("all")}>Show all documents</button>
+              <Link className="btn btn--ghost" to="/app/intake">Start another run</Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {visibleQueue.length > 0 && (
         <div className="intake-panes">
           <nav className="intake-pane intake-pane--queue" aria-label="Review queue">
             <div className="intake-pane__head"><h2>Queue</h2><span className="muted" style={{ fontSize: 11 }}>{visibleQueue.length} shown</span></div>

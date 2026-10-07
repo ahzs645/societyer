@@ -153,7 +153,7 @@ export function classRecordGaps(input: {
   for (const meeting of input.evidenced) {
     const label = KIND_LABEL[meeting.kind] ?? meeting.kind.replace(/_/g, " ");
     const shown = withArticle(label);
-    gaps.push({ kind: "meeting_without_minutes", bodyKey: meeting.bodyKey, date: meeting.date, severity: meeting.bodyKey === "agm" ? "statutory" : "practice", explanation: `${shown[0].toUpperCase()}${shown.slice(1)} shows ${withArticle(bodyWords(meeting.bodyKey))} meeting on ${meeting.date}, but no minutes for it were found. Staged as "held, minutes missing".`, evidence: [{ fileId: meeting.fileId }] });
+    gaps.push({ kind: "meeting_without_minutes", bodyKey: meeting.bodyKey, date: meeting.date, severity: meeting.bodyKey === "agm" ? "statutory" : "practice", explanation: `${shown[0].toUpperCase()}${shown.slice(1)} shows ${withArticle(bodyWords(meeting.bodyKey))} meeting on ${meeting.date}, but no minutes for it were found. Promoting the agenda creates the meeting record; confirm it was held and add the minutes.`, evidence: [{ fileId: meeting.fileId }] });
   }
   // References to earlier minutes (packages, AGM material, correspondence) that no meeting satisfies.
   const known = input.meetings.map((meeting) => meeting.meetingKey);

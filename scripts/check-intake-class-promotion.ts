@@ -20,6 +20,7 @@ import { runIntakePipeline } from "../shared/intake/pipeline";
 import { stageRunInWorkspace } from "../shared/intake/stageRun";
 import { orderedVersionFiles } from "../shared/intake/promotion";
 import { clusterFiles, nameDateKey } from "../shared/intake/cluster";
+import { infoTypeDefinition } from "../shared/gapCatalog";
 import { CLASS_PROMOTION } from "../shared/intake/promotionClasses";
 import { promotionReadiness, latestDecisions, requiredFieldsFor, reviewFieldsForRecord, thresholdFor } from "../shared/intake/review";
 import { writeClassFixtures, writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
@@ -42,6 +43,16 @@ const clusterOf = (names: string[]) => clusterFiles(names.map((name) => ({ id: n
 assert.deepEqual(clusterOf(["2021_06_08_Lakeside_Operations_DRAFT Minutes.docx", "2021_07_21_Lakeside_Operations_DRAFT Minutes.docx"]), [], "different dates never form a version family");
 assert.deepEqual(clusterOf(["February 2021 Lakeside Board Meeting_DRAFT Minutes.docx", "February 2021 Lakeside Board Meeting Minutes.docx.pdf"]), [["February 2021 Lakeside Board Meeting Minutes.docx.pdf", "February 2021 Lakeside Board Meeting_DRAFT Minutes.docx"]], "a PDF export (.docx.pdf) and the draft of the same month are one family");
 assert.equal(nameDateKey("08-10-28 - Minutes.doc"), "2008-10-28");
+
+// Every information type the intake extractors report is in the controlled gap catalogue (else "Other" in the backlog).
+{
+  const sources: string[] = [];
+  const walk = (dir: string) => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); if (entry.isDirectory()) walk(full); else if (entry.name.endsWith(".ts")) sources.push(fs.readFileSync(full, "utf8")); } };
+  walk(path.join(process.cwd(), "shared", "intake"));
+  const keys = new Set(sources.flatMap((source) => [...source.matchAll(/infoType: "([a-z_]+\.[a-z_.]+)"/g)].map((match) => match[1])));
+  const unknown = [...keys].filter((key) => infoTypeDefinition(key).area === "other");
+  assert.deepEqual(unknown, [], "intake information types are catalogued");
+}
 
 // ------------------------------------------------------------ workspace
 const society = "society_classes";
