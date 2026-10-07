@@ -859,12 +859,16 @@ export async function applyApprovedSectionRecordsPortable(
     }
   }
   const sourceCatalog = sourceCatalogForRecords(records);
+  // Registers other kinds refer to by name are created first (a committee
+  // before its members and quorum rules, a grant before its reports, people
+  // before the conflicts and proxies that name them).
+  const KIND_PRIORITY: Record<string, number> = { committee: 0, member: 1, director: 1, grant: 1, committeeMember: 2, organizationSeat: 2 };
   const sectionRecords = records.filter(
     (record: any) =>
       SECTION_RECORD_KINDS.includes(record.recordKind) &&
       selected.has(String(record._id)) && record.status === "Approved" &&
       !record.importedTargets?.sections,
-  );
+  ).sort((a: any, b: any) => (KIND_PRIORITY[a.recordKind] ?? 3) - (KIND_PRIORITY[b.recordKind] ?? 3));
 
   await requireSectionPromotionPermissions(ctx, societyId, sectionRecords);
 
