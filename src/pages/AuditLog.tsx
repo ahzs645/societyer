@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Shield, Download } from "lucide-react";
@@ -16,6 +17,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { rowsToCsv } from "@/lib/csv";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Append-only activity log. Migrated to RecordTable so it shares the
@@ -33,8 +35,23 @@ export function AuditLogPage() {
     api.activity.list,
     society ? { societyId: society._id, limit: 500 } : "skip",
   );
+  const permissions = usePermissions();
+  const users = useQuery(
+    api.users.list,
+    society && permissions.loaded && permissions.can("users:read") ? { societyId: society._id } : "skip",
+  );
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  // Older membership entries stored the acting user's row id as `actor`.
+  // Show the person's name instead of a raw id where it can be resolved.
+  const records = useMemo(() => {
+    const nameById = new Map<string, string>(
+      ((users ?? []) as any[]).map((user) => [String(user._id), String(user.displayName || user.email || user._id)]),
+    );
+    return ((activity ?? []) as any[]).map((row) =>
+      nameById.has(String(row.actor)) ? { ...row, actor: nameById.get(String(row.actor)) } : row,
+    );
+  }, [activity, users]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -45,11 +62,10 @@ export function AuditLogPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const records = (activity ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const exportCsv = () => {
-    const rows = activity ?? [];
+    const rows = records;
     const body = rowsToCsv([
       ["Timestamp", "Actor", "Entity", "EntityId", "Action", "Summary"],
       ...rows.map((r) => [
@@ -65,7 +81,7 @@ export function AuditLogPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `societyer-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `societyer-audit-${todayDateOnly()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

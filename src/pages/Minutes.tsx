@@ -1,12 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { minutesMotionsForDisplay } from "../../shared/minutesMotions";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../../shared/minutesQuorum";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, RecordChip } from "../components/ui";
+import { Badge, EmptyState, RecordChip } from "../components/ui";
 import { formatDate } from "../lib/format";
 import { FileText } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -23,7 +22,9 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function MinutesPage() {
   const society = useSociety();
-  const minutes = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip");
+  // Light summaries: counts include section-level action items (F19) and
+  // no minutes text is loaded for the list (F26).
+  const minutes = useQuery(api.minutes.listSummaries, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -51,10 +52,11 @@ export function MinutesPage() {
         meeting: meeting?.title ?? "Deleted meeting",
         meetingType: meeting?.type ?? "",
         notHeldYet,
-        motionCount: minutesMotionsForDisplay(m).length,
-        pendingActions: (m.actionItems ?? []).filter((a: any) => !a.done).length,
+        motionCount: m.motionCount ?? 0,
+        pendingActions: m.openActionItemCount ?? 0,
+        totalActions: m.actionItemCount ?? 0,
         quorum: notHeldYet ? "Not held yet" : minutesQuorumLabel(m),
-        actions: (m.actionItems ?? []).filter((a: any) => !a.done).length > 0 ? "Open" : "Done",
+        actions: (m.openActionItemCount ?? 0) > 0 ? "Open" : (m.actionItemCount ?? 0) > 0 ? "Done" : "None",
         approved: m.approvedAt ? formatDate(m.approvedAt) : notHeldYet ? "—" : "Pending",
       };
     });
@@ -108,6 +110,14 @@ export function MinutesPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || minutes === undefined}
+            emptyState={
+              <EmptyState
+                icon={<FileText size={18} />}
+                title="No minutes yet"
+                description="Minutes are written from their meeting: open the meeting and use its Agenda & minutes tab."
+                action={<Link className="btn btn--accent" to="/app/meetings">Go to meetings</Link>}
+              />
+            }
             renderCell={({ record, field }) => {
               if (field.name === "meeting") {
                 if (record.meetingDeleted) {
@@ -132,7 +142,10 @@ export function MinutesPage() {
                 const quorum = recordedMinutesQuorum(record);
                 return <Badge tone={quorum === null ? "neutral" : quorum ? "success" : "danger"}>{minutesQuorumLabel(record)}</Badge>;
               }
-              if (field.name === "actions") return record.pendingActions > 0 ? <Badge tone="warn">{record.pendingActions} open</Badge> : <Badge tone="success">All done</Badge>;
+              if (field.name === "actions") {
+                if (record.pendingActions > 0) return <Badge tone="warn">{record.pendingActions} open of {record.totalActions}</Badge>;
+                return record.totalActions > 0 ? <Badge tone="success">All {record.totalActions} done</Badge> : <span className="muted">None recorded</span>;
+              }
               if (field.name === "approved") {
                 if (record.approvedAt) return <Badge tone="success">{formatDate(record.approvedAt)}</Badge>;
                 return record.notHeldYet ? <span className="muted">—</span> : <Badge tone="warn">Pending</Badge>;

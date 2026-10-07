@@ -8,43 +8,27 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { convexSiteUrl } from "../lib/convexSite";
 import { CalendarClock, UploadCloud, Rss, Copy, RefreshCw } from "lucide-react";
+import { formatIcsWhen, parseIcs as parseIcsEvents } from "../../shared/icsCalendar";
 
-type ParsedEvent = { summary: string; start?: string; end?: string; location?: string; iCalUID?: string; description?: string };
+const VIEWER_TIME_ZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
+const parseIcs = (text: string) => parseIcsEvents(text, { displayTimeZone: VIEWER_TIME_ZONE });
 
-/** Minimal ICS (RFC 5545) VEVENT parser — enough to stage events for review. */
-function parseIcs(text: string): ParsedEvent[] {
-  // Unfold folded lines (continuation lines begin with a space/tab).
-  const unfolded = text.replace(/\r?\n[ \t]/g, "");
-  const lines = unfolded.split(/\r?\n/);
-  const events: ParsedEvent[] = [];
-  let current: ParsedEvent | null = null;
-  const toIso = (raw: string) => {
-    const m = raw.match(/(\d{4})(\d{2})(\d{2})/);
-    return m ? `${m[1]}-${m[2]}-${m[3]}` : undefined;
-  };
-  for (const line of lines) {
-    const upper = line.toUpperCase();
-    if (upper.startsWith("BEGIN:VEVENT")) current = {} as ParsedEvent;
-    else if (upper.startsWith("END:VEVENT")) {
-      if (current && (current.summary || current.start)) events.push({ ...current, summary: current.summary || "Calendar event" });
-      current = null;
-    } else if (current) {
-      const idx = line.indexOf(":");
-      if (idx === -1) continue;
-      const key = line.slice(0, idx).split(";")[0].toUpperCase();
-      const value = line.slice(idx + 1).trim();
-      if (key === "SUMMARY") current.summary = value;
-      else if (key === "DTSTART") current.start = toIso(value);
-      else if (key === "DTEND") current.end = toIso(value);
-      else if (key === "LOCATION") current.location = value;
-      else if (key === "UID") current.iCalUID = value;
-      else if (key === "DESCRIPTION") current.description = value;
-    }
+/** Explain why pasted text produced no events (L19), or null when it did. */
+function icsProblem(text: string, parsedCount: number): string | null {
+  if (!text.trim() || parsedCount > 0) return null;
+  const upper = text.toUpperCase();
+  if (!upper.includes("BEGIN:VCALENDAR")) {
+    return "This doesn't look like an iCalendar (.ics) file: it has no BEGIN:VCALENDAR line. Export the calendar as .ics and paste or upload that file.";
   }
-  return events;
+  const begins = (upper.match(/BEGIN:VEVENT/g) ?? []).length;
+  const ends = (upper.match(/END:VEVENT/g) ?? []).length;
+  if (begins === 0) return "The calendar has no events (no BEGIN:VEVENT blocks).";
+  if (ends < begins) return `${begins - ends} event block${begins - ends === 1 ? " is" : "s are"} missing END:VEVENT, so the file looks truncated.`;
+  return `${begins} event block${begins === 1 ? "" : "s"} found, but none has a SUMMARY or DTSTART line, so nothing can be staged.`;
 }
 
 export function CalendarSyncPage() {
@@ -55,6 +39,7 @@ export function CalendarSyncPage() {
   const feedAvailable = !isLocalDataRuntime() && Boolean(convexSiteUrl());
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const stage = useMutation(api.calendarSync.stageCalendarEvents);
   const setFeedToken = useMutation(api.calendarFeed.setFeedToken);
   const feedToken = useQuery(api.calendarFeed.getFeedToken, society && canManageFeed ? { societyId: society._id } : "skip");
@@ -65,6 +50,7 @@ export function CalendarSyncPage() {
   const [feedBusy, setFeedBusy] = useState(false);
 
   const parsed = useMemo(() => (icsText.trim() ? parseIcs(icsText) : []), [icsText]);
+  const parseProblem = useMemo(() => icsProblem(icsText, parsed.length), [icsText, parsed.length]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -79,6 +65,12 @@ export function CalendarSyncPage() {
 
   const enableFeed = async () => {
     if (!feedAvailable || !canManageFeed) return;
+    if (feedToken && !(await confirm({
+      title: "Regenerate the calendar feed link?",
+      message: "The current subscribe URL stops working immediately. Every calendar subscribed to it must be re-subscribed with the new link.",
+      confirmLabel: "Regenerate link",
+      tone: "warn",
+    }))) return;
     setFeedBusy(true);
     try {
       // Token is generated client-side (128 bits) and stored by the mutation,
@@ -95,6 +87,12 @@ export function CalendarSyncPage() {
 
   const disableFeed = async () => {
     if (!canManageFeed) return;
+    if (!(await confirm({
+      title: "Disable the calendar feed?",
+      message: "The subscribe URL stops working and subscribed calendars stop receiving these dates. Enabling the feed again creates a new link.",
+      confirmLabel: "Disable feed",
+      tone: "danger",
+    }))) return;
     setFeedBusy(true);
     try {
       await setFeedToken({ societyId: society._id, token: null });
@@ -119,7 +117,7 @@ export function CalendarSyncPage() {
   const submit = async () => {
     if (!canStage) return;
     if (parsed.length === 0) {
-      toast.warn("No calendar events found. Paste an .ics feed or upload a file.");
+      toast.warn("No calendar events found", parseProblem ?? "Paste an .ics feed or upload a file.");
       return;
     }
     setBusy(true);
@@ -128,6 +126,8 @@ export function CalendarSyncPage() {
         summary: e.summary,
         start: e.start,
         end: e.end,
+        ...(e.startTimeZone ? { startTimeZone: e.startTimeZone } : {}),
+        ...(e.allDay !== undefined ? { allDay: e.allDay } : {}),
         location: e.location,
         description: e.description,
         iCalUID: e.iCalUID,
@@ -139,7 +139,9 @@ export function CalendarSyncPage() {
         events,
         name: calendarName.trim() ? `${calendarName.trim()} calendar sync` : undefined,
       } as any);
-      toast.success(`Staged ${events.length} event${events.length === 1 ? "" : "s"} for review`);
+      // The import session also lists the calendar itself as a source record,
+      // so its candidate count is one more than the number of events.
+      toast.success(`Staged ${events.length} event${events.length === 1 ? "" : "s"} for review`, "The import session also includes 1 calendar source record.");
       navigate(`/app/imports?sessionId=${encodeURIComponent(String(sessionId))}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Could not stage calendar events");
@@ -268,13 +270,17 @@ export function CalendarSyncPage() {
             {parsed.slice(0, 100).map((e, i) => (
               <tr key={i}>
                 <td><strong>{e.summary}</strong></td>
-                <td className="mono">{e.start ?? "—"}</td>
-                <td className="mono">{e.end ?? "—"}</td>
+                <td className="mono">{formatIcsWhen(e.start, e.startTimeZone, VIEWER_TIME_ZONE)}</td>
+                <td className="mono">{formatIcsWhen(e.end, e.endTimeZone, VIEWER_TIME_ZONE)}</td>
                 <td className="muted">{e.location ?? "—"}</td>
               </tr>
             ))}
             {parsed.length === 0 && (
-              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>No events parsed yet. Paste or upload an .ics calendar above.</td></tr>
+              <tr>
+                <td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>
+                  {parseProblem ? <span role="alert" style={{ color: "var(--danger)" }}>{parseProblem}</span> : "No events parsed yet. Paste or upload an .ics calendar above."}
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

@@ -1,9 +1,25 @@
 import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
+import { meetingStatusLabel, meetingStatusTone } from "../../shared/meetingStatus";
+import { formatMeetingDate, meetingCalendarDate } from "../../shared/meetingDates";
+import { todayDateOnly } from "../../shared/dateOnly";
+import { meetingBodyLabel } from "../../shared/meetingBodyPicker";
+import { approvingMeetingCandidates, minutesApprovalIssues } from "../../shared/meetingApproval";
+import { minutesPresentCount } from "../../shared/meetingAttendanceGrid";
+import { duplicateIndex } from "../../shared/meetingMerge";
+import { canonicalMotionOutcomeLabel } from "../../shared/motionOutcome";
+import { motionOutcomeConsistencyIssues } from "../../shared/motionValidation";
+import { EditMeetingDrawer } from "../features/meetings/components/EditMeetingDrawer";
+import { MergeMeetingDialog } from "../features/meetings/components/MergeMeetingDialog";
+import { MeetingGapsPanel } from "../features/meetings/components/MeetingGapsPanel";
+import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
+import { RecordNotFound } from "../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
@@ -12,13 +28,13 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, EmptyState, Field } from "../components/ui";
+import { Badge, Banner, Drawer, EmptyState, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, Calendar, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, BookMarked, Calendar, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, Merge, MoreHorizontal, PackageCheck, Pencil, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import { isPostponedOutcome, normalizeMotionOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
@@ -50,6 +66,7 @@ import {
   hasRecordedMeetingMinutes,
   hasStartedMinutesDraft,
   isCurrentDirector,
+  nextMeetingsForExport,
   quorumPresentCount,
   sanitizeAttachmentFileName,
   slugifyFilePart,
@@ -59,7 +76,8 @@ import { minutesEvidenceOptions } from "../features/meetings/lib/minutesEvidence
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
-import { minuteSectionIndexForAgendaEntry } from "../features/meetings/lib/sourceAgendaNavigation";
+import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection, visibleAgendaEntries } from "../features/meetings/lib/sourceAgendaNavigation";
+import { alignSectionsToAgenda } from "../features/meetings/lib/agendaSectionAlign";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
@@ -73,7 +91,8 @@ import { MinutesDocumentPreview } from "../features/meetings/components/MinutesD
 import { SignaturePanel } from "../components/SignaturePanel";
 import { MeetingConflictsCard } from "../features/meetings/components/MeetingConflictsCard";
 import { MeetingProxiesCard } from "../features/meetings/components/MeetingProxiesCard";
-import { Modal, useConfirm } from "../components/Modal";
+import { Modal, useConfirm, usePrompt } from "../components/Modal";
+import { isPastMeeting, meetingNotYetHeld, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -81,8 +100,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
   MINUTES_EXPORT_PREF_PREFIX,
   readStoredExportBool,
-  readStoredMinutesStyle,
-} from "../features/meetings/lib/minutesExportPrefs";
+  readStoredMinutesStyle, effectiveSourceFidelity, minutesCorrectedForExport } from "../features/meetings/lib/minutesExportPrefs";
 import {
   addRedactionName,
   getMeetingJoinDetails,
@@ -106,13 +124,20 @@ export function MeetingDetailPage() {
   const { loaded: permissionsLoaded, can } = usePermissions();
   const canMeetingsWrite = can("meetings:write");
   const canMinutesWrite = can("minutes:write");
+  const canMinutesRead = can("minutes:read");
   const canAgendasWrite = can("agendas:write");
   const canMotionsWrite = can("motions:write");
   const canTasksWrite = can("tasks:write");
   const canDownload = can("exports:download");
   const canApproveMinutes = permissionsLoaded && can("minutes:approve");
-  const meeting = useQuery(api.meetings.get, can("meetings:read") && id ? { id: id as Id<"meetings"> } : "skip");
-  const minutes = useQuery(api.minutes.getByMeeting, can("minutes:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  // A missing, deleted or foreign id reads as null (RecordNotFound below), and
+  // the meeting's own panels wait until it exists instead of failing (FF-2).
+  const meeting = useRecordQuery<any>(api.meetings.get, can("meetings:read") && id ? { id: id as Id<"meetings"> } : "skip");
+  const meetingId = meeting?._id as Id<"meetings"> | undefined;
+  // Lists on this page belong to the meeting's own society (the workspace
+  // selector can point elsewhere, e.g. right after opening a deep link).
+  const meetingSocietyId = (meeting?.societyId ?? society?._id) as string | undefined;
+  const minutes = useQuery(api.minutes.getByMeeting, can("minutes:read") && meetingId ? { meetingId } : "skip");
   const liveMotionRows = useQuery(
     api.motions.listForMinutes,
     can("motions:read") && minutes ? { minutesId: minutes._id } : "skip",
@@ -125,10 +150,10 @@ export function MeetingDetailPage() {
     if (liveMotionRows !== undefined) return (liveMotionRows as any[]).map(motionRowToEmbedded) as Motion[];
     return minutesMotionsForDisplay(minutes) as Motion[];
   }, [minutes, liveMotionRows]);
-  const agendaRecord = useQuery(api.agendas.getForMeeting, can("agendas:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const agendaRecord = useQuery(api.agendas.getForMeeting, can("agendas:read") && meetingId ? { meetingId } : "skip");
   const meetingPackage = useQuery(
     api.meetingMaterials.packageForMeeting,
-    can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("meetings:read") && meetingId ? { meetingId } : "skip",
   );
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
@@ -137,7 +162,7 @@ export function MeetingDetailPage() {
   );
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
-    can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("meetings:read") && meetingId ? { meetingId } : "skip",
   );
   const directors = useQuery(
     api.directors.list,
@@ -153,19 +178,27 @@ export function MeetingDetailPage() {
   );
   const committees = useQuery(
     api.committees.list,
-    can("committees:read") && society && permissionsLoaded && can("committees:read") ? { societyId: society._id } : "skip",
+    can("committees:read") && meetingSocietyId && permissionsLoaded ? { societyId: meetingSocietyId as Id<"societies"> } : "skip",
   );
   const meetingCommitteeDetail = useQuery(
     api.committees.detail,
     can("committees:read") && meeting?.committeeId && permissionsLoaded && can("committees:read") ? { id: meeting.committeeId } : "skip",
   );
-  const allDocuments = useQuery(api.documents.list, can("documents:read") && society ? { societyId: society._id } : "skip");
+  const [materialDraft, setMaterialDraft] = useState<any | null>(null);
+  const allDocuments = useQuery(api.documents.listSummaries, can("documents:read") && society ? { societyId: society._id } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
-  const allMeetings = useQuery(api.meetings.list, can("meetings:read") && society ? { societyId: society._id } : "skip");
+  const allMeetings = useQuery(api.meetings.list, can("meetings:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip");
   // All minutes records: powers the "minutes awaiting adoption" card and the
   // adoption-target picker on motions.
-  const allMinutes = useQuery(api.minutes.list, can("minutes:read") && society ? { societyId: society._id } : "skip");
+  // Light summaries (approval state, counts, action observations) — not every
+  // minutes row with its full source record (ui-meetings F26).
+  const allMinutes = useQuery(api.minutes.listSummaries, can("minutes:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip") as any[] | undefined;
+  const directoryPeople = useQuery(api.peopleDirectory.list, can("members:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip") as any[] | undefined;
+  const [editMeetingOpen, setEditMeetingOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  // Bulk outcome for imported motions (F6): apply one outcome to the selected scope.
+  const [bulkOutcome, setBulkOutcome] = useState<{ outcome: string; decidedBy: string; scope: "pending" | "all" } | null>(null);
   // Captured e-signatures on these minutes — surfaced in the signing panel and
   // rendered into the export's signature block.
   const minutesSignatures = useQuery(
@@ -175,13 +208,13 @@ export function MeetingDetailPage() {
   // Conflict-of-interest / recusal declarations for this meeting.
   const meetingConflicts = useQuery(
     api.conflicts.forMeeting,
-    can("conflicts:read") && id && permissionsLoaded && can("conflicts:read") ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("conflicts:read") && meetingId && permissionsLoaded && can("conflicts:read") ? { meetingId } : "skip",
   );
   // Proxies appointed for this meeting (rendered into the export and used for
   // proxy-inclusive quorum math).
   const meetingProxies = useQuery(
     api.proxies.forMeeting,
-    can("proxies:read") && id && permissionsLoaded && can("proxies:read") ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("proxies:read") && meetingId && permissionsLoaded && can("proxies:read") ? { meetingId } : "skip",
   );
   const motionPeople = personLinkCandidates(members, directors);
   const directorNames = (directors ?? []).flatMap((d: any) => [`${d.firstName} ${d.lastName}`, ...(Array.isArray(d.aliases) ? d.aliases : [])]);
@@ -211,10 +244,11 @@ export function MeetingDetailPage() {
   const runPipeline = useAction(api.transcripts.runPipeline);
   const transcriptionJob = useQuery(
     api.transcripts.jobForMeeting,
-    can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("meetings:read") && meetingId ? { meetingId } : "skip",
   );
   const toast = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const vttInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const motionEditorRef = useRef<MotionEditorHandle | null>(null);
@@ -237,9 +271,8 @@ export function MeetingDetailPage() {
     agendaEditRef.current = value;
     setAgendaEditState(value);
   };
-  const [attendanceEdit, setAttendanceEdit] = useState<{
-    people: { name: string; status: "present" | "absent" }[];
-  } | null>(null);
+  // Attendance grid edit mode (the grid owns its rows; see MeetingAttendanceGrid).
+  const [attendanceEdit, setAttendanceEdit] = useState<boolean | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   // Drawer state for recording minutes approval (date + the meeting at which
@@ -255,7 +288,8 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [schedulingNext, setSchedulingNext] = useState(false);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [sourceFidelityInExport, setSourceFidelityInExport] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [sourceFidelityChoice, setSourceFidelityChoice] = useState<Record<string, boolean>>({});
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
@@ -292,7 +326,7 @@ export function MeetingDetailPage() {
   const isSyntheticFocus = !!focusMotionParam?.startsWith("from-minutes:");
   const focusMotions = useQuery(
     api.motions.listForMeeting,
-    can("motions:read") && id && focusMotionParam && !isSyntheticFocus ? { meetingId: id as Id<"meetings"> } : "skip",
+    can("motions:read") && meetingId && focusMotionParam && !isSyntheticFocus ? { meetingId } : "skip",
   );
   const scrolledMotionParamRef = useRef<string | null>(null);
   useEffect(() => {
@@ -321,7 +355,6 @@ export function MeetingDetailPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, focusMotionParam, isSyntheticFocus, focusMotions, minutes, displayMotions]);
 
-  const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");
   const [packageReviewNote, setPackageReviewNote] = useState("");
@@ -461,7 +494,7 @@ export function MeetingDetailPage() {
   }, [minutesExportStyle]);
 
   useEffect(() => {
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(sourceFidelityInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(storedSourceFidelity));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
@@ -469,7 +502,7 @@ export function MeetingDetailPage() {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
-    sourceFidelityInExport,
+    storedSourceFidelity,
     includeActionItemsInExport,
     includeApprovalInExport,
     includeDiscussionSummaryInExport,
@@ -488,25 +521,24 @@ export function MeetingDetailPage() {
   if (society === null) return <SeedPrompt />;
   if (meeting === undefined) return <PageLoading />;
   if (meeting === null) {
-    return (
-      <div className="page">
-        <EmptyState
-          icon={<Calendar size={18} />}
-          title="Meeting not found"
-          description="This meeting may have been deleted, or the link is out of date."
-          action={
-            <Link className="btn btn--accent" to="/app/meetings">
-              Back to meetings
-            </Link>
-          }
-        />
-      </div>
-    );
+    return <RecordNotFound recordLabel="Meeting" backTo="/app/meetings" backLabel="All meetings" icon={<Calendar size={18} />} />;
   }
 
-  const agendaTree = agendaEntriesFromRecord(minutes?.adoptedAgenda ?? agendaRecord) ?? [];
+  // Adopted minutes show the agenda frozen at adoption; snapshots taken before
+  // it carried items fall back to the live agenda.
+  const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
+  // Until the minutes query answers, counts would read as "none recorded".
+  const minutesLoading = minutes === undefined && canMinutesRead;
+  const sourceFidelityInExport = effectiveSourceFidelity(storedSourceFidelity, sourceFidelityChoice[String(meeting._id)], minutes, meeting);
+  const setSourceFidelityInExport = (value: boolean) => {
+    setSourceFidelityChoice((current) => ({ ...current, [String(meeting._id)]: value }));
+    // Only choices on unreviewed imports change the remembered default.
+    if (!minutesCorrectedForExport(minutes, meeting)) setStoredSourceFidelity(value);
+  };
+  // Adopted minutes are frozen; their motions are reopened with the minutes.
+  const motionsEditable = canMinutesWrite && !(minutes?.approvedAt || (minutes as any)?.adoptedSnapshot);
   const businessMotions = displayMotions.filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
@@ -514,7 +546,7 @@ export function MeetingDetailPage() {
   const minutesDraftMetadata = parseDocumentMetadata(minutesDraftTranscript);
   const minutesDraftIsImportMetadata = isImportTranscriptMetadata(minutesDraftMetadata);
   const transcriptOnFile = transcriptRecord?.text ?? (minutesDraftIsImportMetadata ? "" : minutesDraftTranscript);
-  const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata) : null;
+  const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata, sourceExternalIdsForMinutes(minutes)) : null;
   const transcriptProvider = transcriptOnFile
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
@@ -563,7 +595,7 @@ export function MeetingDetailPage() {
   const adoptionTargets: MotionAdoptionTarget[] = priorMeetingsWithMinutes.map(
     ({ meeting: m, record }: any) => ({
       id: String(record._id),
-      label: `${m.title} — ${formatDate(m.scheduledAt)}${record.approvedAt ? " (approved)" : ""}`,
+      label: `${m.title} — ${formatMeetingDate(m, { withTime: false })}${record.approvedAt ? " (approved)" : ""}`,
     }),
   );
   const quorumLegalGuides = getLegalGuideRules({
@@ -722,6 +754,18 @@ export function MeetingDetailPage() {
   const markHeld = async () => {
     if (!(canMeetingsWrite)) return;
     try {
+      // A meeting dated in the future has not happened yet: say so before
+      // recording it as held (a meeting that met early needs its date fixed).
+      const meetingDay = meetingCalendarDate(meeting as any);
+      if (meetingDay && meetingDay > todayDateOnly()) {
+        const ok = await confirm({
+          title: "Mark a future meeting held?",
+          message: `This meeting is dated ${formatMeetingDate(meeting, { withTime: false })}, which hasn't happened yet. If it met on another day, change the date with Edit meeting first.`,
+          confirmLabel: "Mark held anyway",
+          tone: "warn",
+        });
+        if (!ok) return;
+      }
       if (calculatedQuorumMet === false) {
         const ok = await confirm({
           title: "Mark meeting held without quorum?",
@@ -751,11 +795,29 @@ export function MeetingDetailPage() {
   const toggleNoticeSent = async () => {
     if (!(canMeetingsWrite)) return;
     const wasSent = Boolean(meeting.noticeSentAt);
+    let noticeSentAt = new Date().toISOString();
+    // A meeting that already happened was not noticed today: ask for the date.
+    if (!wasSent && isPastMeeting(meeting.scheduledAt)) {
+      const typed = await prompt({
+        title: "When was notice sent?",
+        message: "This meeting has already happened. Enter the date the notice went out, as recorded in your files (YYYY-MM-DD).",
+        placeholder: "YYYY-MM-DD",
+        confirmLabel: "Record notice date",
+        required: true,
+      });
+      if (typed == null) return;
+      const parsed = pastNoticeDateValue(typed, meetingCalendarDate(meeting as any) ?? String(meeting.scheduledAt).slice(0, 10));
+      if (!parsed.iso) {
+        toast.error("Notice date not recorded", parsed.error);
+        return;
+      }
+      noticeSentAt = parsed.iso;
+    }
     await updateMeeting({
       id: meeting._id,
       patch: wasSent
         ? { clearNoticeSent: true }
-        : { noticeSentAt: new Date().toISOString() },
+        : { noticeSentAt },
     });
     toast.success(
       wasSent ? "Notice cleared" : "Notice marked sent",
@@ -775,7 +837,7 @@ export function MeetingDetailPage() {
       // walks the date back a day for users east of UTC on every edit cycle.
       approvedAt: minutes.approvedAt
         ? toDateTimeLocalValue(new Date(minutes.approvedAt)).slice(0, 10)
-        : toDateTimeLocalValue(new Date()).slice(0, 10),
+        : "",
       approvedInMeetingId: (minutes.approvedInMeetingId as string | undefined) ?? "",
     });
   };
@@ -797,9 +859,16 @@ export function MeetingDetailPage() {
   };
   const clearApproval = async () => {
     if (!minutes || !canApproveMinutes) return;
+    const ok = await confirm({
+      title: "Reopen these minutes?",
+      message: "The recorded approval and the frozen adopted copy are removed, and the minutes become an editable draft again. Record the approval again after correcting them.",
+      confirmLabel: "Reopen minutes",
+      tone: "danger",
+    });
+    if (!ok) return;
     await updateMinutes({ id: minutes._id, patch: { clearApproval: true } });
     setApprovalEdit(null);
-    toast.success("Approval cleared", "These minutes are no longer marked approved.");
+    toast.success("Minutes reopened", "These minutes are an editable draft again.");
   };
 
   // Business motions that were Tabled/Deferred at this meeting — the unfinished
@@ -838,7 +907,7 @@ export function MeetingDetailPage() {
         {
           title: `Approval of minutes — ${meeting.title}`,
           type: "motion",
-          motionText: `BE IT RESOLVED THAT the minutes of ${meeting.title} held ${formatDate(meeting.scheduledAt)} be approved as circulated.`,
+          motionText: `BE IT RESOLVED THAT the minutes of ${meeting.title} held ${formatMeetingDate(meeting, { withTime: false })} be approved as circulated.`,
           adoptsMinutesId: minutes?._id ? String(minutes._id) : undefined,
         },
       ];
@@ -897,7 +966,7 @@ export function MeetingDetailPage() {
     return hidden;
   };
 
-  const minutesRenderPayload = (redact?: (value: string) => string, publicOnly = false) => {
+  const minutesRenderPayload = (redact?: (value: string) => string, publicOnly = false, hideSourceDump = false) => {
     if (!minutes) return null;
     const tx = (value?: string | null) => (value && redact ? redact(value) : value);
     // When publicOnly is set, drop sections the user has flagged as private.
@@ -907,13 +976,16 @@ export function MeetingDetailPage() {
     // through unchanged.
     const rawSections = (minutes.sections ?? []) as any[];
     const hiddenIndices = publicOnly ? computeHiddenSectionIndices(rawSections) : new Set<number>();
+    // The page hides an untouched "Source notes awaiting agenda mapping" dump;
+    // the minutes export (not the complete source record) hides it too.
+    if (hideSourceDump) rawSections.forEach((section, i) => { if (unchangedSourceDumpSection(section, minutes.sourceMeetingRecord)) hiddenIndices.add(i); });
     const sectionIndexRemap = new Map<number, number>();
     let nextSectionIndex = 0;
     rawSections.forEach((_, i) => {
       if (!hiddenIndices.has(i)) sectionIndexRemap.set(i, nextSectionIndex++);
     });
     const visibleSections = rawSections.filter((_, i) => !hiddenIndices.has(i));
-    const visibleMotions = publicOnly
+    const visibleMotions = hiddenIndices.size
       ? displayMotions.filter((m) => m.sectionIndex == null || !hiddenIndices.has(m.sectionIndex))
       : displayMotions;
     return {
@@ -974,7 +1046,7 @@ export function MeetingDetailPage() {
         text: tx(m.text) ?? "",
         movedBy: tx(motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId })) ?? undefined,
         secondedBy: tx(motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId })) ?? undefined,
-        sectionIndex: publicOnly && m.sectionIndex != null ? sectionIndexRemap.get(m.sectionIndex) : m.sectionIndex,
+        sectionIndex: hiddenIndices.size && m.sectionIndex != null ? sectionIndexRemap.get(m.sectionIndex) : m.sectionIndex,
       })),
       decisions: redact ? minutes.decisions.map(redact) : minutes.decisions,
       actionItems: (minutes.actionItems as any[]).map((a) => ({
@@ -983,7 +1055,9 @@ export function MeetingDetailPage() {
         assignee: tx(a.assignee),
       })),
       approvedAt: minutes.approvedAt ?? null,
+      sourceReviewStatus: meeting.sourceReviewStatus === "source_reviewed" ? "source_reviewed" : (minutes as any).sourceReviewStatus,
       nextMeetingAt: minutes.nextMeetingAt ?? null,
+      nextMeetings: nextMeetingsForExport((minutes as any).nextMeetings, committees ?? [], tx),
       nextMeetingLocation: tx(minutes.nextMeetingLocation),
       nextMeetingNotes: tx(minutes.nextMeetingNotes),
       sessionSegments: (minutes.sessionSegments ?? []).map((segment: any) => ({
@@ -1057,7 +1131,8 @@ export function MeetingDetailPage() {
 
   const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
     const restrictedCopy = publicOnly || minutesExportStyle === "board-public";
-    const payload = minutesRenderPayload(redact, restrictedCopy);
+    const sourceFidelity = sourceFidelityInExport && !redact && !restrictedCopy;
+    const payload = minutesRenderPayload(redact, restrictedCopy, !sourceFidelity);
     if (!payload || !hasExportableContent) return "";
     if (redact || restrictedCopy) for (const field of ["consentItems", "conditionalDecisions", "decisionRequirements", "attendanceEvents", "quorumCheckpoints", "futureMeetingSuggestions"] as const) payload[field] = [];
     // Link by native item ID or unique title; source reconstruction can change
@@ -1065,6 +1140,7 @@ export function MeetingDetailPage() {
     const hiddenIndices = restrictedCopy && minutes
       ? computeHiddenSectionIndices((minutes.sections ?? []) as any[])
       : new Set<number>();
+    if (!sourceFidelity && minutes) ((minutes.sections ?? []) as any[]).forEach((section, i) => { if (unchangedSourceDumpSection(section, minutes.sourceMeetingRecord)) hiddenIndices.add(i); });
     const visibleAgendaTree = hiddenIndices.size
       ? agendaTree.filter(entry => {
         const index = minuteSectionIndexForAgendaEntry(entry, minutes.sections ?? []);
@@ -1087,12 +1163,13 @@ export function MeetingDetailPage() {
         noticeSentAt: meeting.noticeSentAt ?? null,
         agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
         agendaItemTree: visibleAgendaTree,
+        timeZone: (meeting as any).timeZone ?? null,
         ...(minutes.adoptedMeeting ?? {}),
       },
       minutes: payload,
       styleId: minutesExportStyle,
       options: {
-        sourceFidelity: sourceFidelityInExport && !redact && !restrictedCopy,
+        sourceFidelity,
         publicOnly: restrictedCopy,
         publicCopy: !!redact || restrictedCopy,
         includeTranscript: redact ? false : includeTranscriptInExport,
@@ -1114,13 +1191,23 @@ export function MeetingDetailPage() {
   // format. Returns null when there's nothing to export.
   const buildExportArgs = (extension: "docx" | "pdf") => {
     if (!meeting || !minutes || !society) return null;
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    // F21: a readable file name — date, then the title without a leading date
+    // or a source file extension ("2013-05-14-executive-meeting-minutes.docx").
+    const safe = (meeting.title || "meeting")
+      .replace(/\.(?:docx?|pdf|rtf|odt|txt)\b/gi, "")
+      .replace(/^\s*\d{4}-\d{2}-\d{2}\s*/, "")
+      // "Board meeting — 2026-10-06": the date already leads the file name.
+      .replace(/[\s—–-]*\d{4}-\d{2}-\d{2}\s*$/, "")
+      .replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
+      .slice(0, 60).replace(/-+$/, "")
+      // "…-meeting-minutes" + "-minutes" read as "minutes-minutes".
+      .replace(/-?minutes$/, "") || "meeting";
     const redact = publicCopyMode ? (s: string) => redactText(s, redactOpts()) : undefined;
     const bodyHtml = renderExportBody(redact, publicCopyMode);
     const slug = publicCopyMode ? "public-minutes" : "minutes";
     const titleSuffix = publicCopyMode ? "Public minutes" : "Minutes";
     return {
-      filename: `${safe}-${slug}-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.${extension}`,
+      filename: `${meetingCalendarDate(meeting) ?? formatDate(minutes.heldAt, "yyyy-MM-dd")}-${safe}-${slug}.${extension}`,
       title: `${meeting.title} — ${titleSuffix}`,
       bodyHtml,
     };
@@ -1307,6 +1394,53 @@ export function MeetingDetailPage() {
     toast.success("Adoption motion added", entry.meetingTitle);
   };
 
+  // Motions whose stored source wording classifies to a decided outcome while
+  // the motion still shows Pending (F6/F11).
+  const sourceWordingUpdates = (displayMotions as any[])
+    .map((motion, index) => {
+      // Stored wording first; else an explicit "(Carried)" / "(Defeated)" marker
+      // the source left inside the motion text.
+      const marker = String(motion.text ?? "").match(/\((carried(?: unanimously)?|passed|approved|adopted|defeated|not carried|tabled|deferred)\)/i)?.[1];
+      const wording = motion.sourceOutcomeText || marker;
+      return { motion, index, outcome: wording ? canonicalMotionOutcomeLabel(wording) : "Pending" };
+    })
+    .filter(({ motion, outcome }) => outcome !== "Pending" && (!motion.outcome || motion.outcome === "Pending"));
+  const acceptSourceOutcomes = async () => {
+    if (!canMinutesWrite || !sourceWordingUpdates.length) return;
+    const byIndex = new Map(sourceWordingUpdates.map((row) => [row.index, row.outcome]));
+    const next = (displayMotions as any[]).map((motion, index) => {
+      const outcome = byIndex.get(index);
+      if (!outcome) return motion;
+      const candidate = { ...motion, outcome };
+      return motionOutcomeConsistencyIssues(candidate).length ? motion : candidate;
+    });
+    const changed = next.filter((motion, index) => motion !== (displayMotions as any[])[index]).length;
+    const ok = await confirm({
+      title: `Accept the source wording for ${changed} motion${changed === 1 ? "" : "s"}?`,
+      message: "Each pending motion takes the outcome its source records (for example “Passed” becomes Carried). Motions whose recorded tally contradicts the wording are left pending for review.",
+      confirmLabel: "Accept source wording",
+    });
+    if (!ok) return;
+    await saveMotions(next as Motion[]);
+    toast.success("Outcomes updated", `${changed} motion${changed === 1 ? "" : "s"} now follow the source wording.`);
+  };
+  const applyBulkOutcome = async () => {
+    if (!bulkOutcome || !canMinutesWrite) return;
+    let skipped = 0;
+    let changed = 0;
+    const next = (displayMotions as any[]).map((motion) => {
+      if (isAdjournmentMotion(motion)) return motion;
+      if (bulkOutcome.scope === "pending" && motion.outcome && motion.outcome !== "Pending") return motion;
+      const candidate = { ...motion, outcome: bulkOutcome.outcome, ...(bulkOutcome.decidedBy ? { decidedBy: bulkOutcome.decidedBy } : {}) };
+      if (motionOutcomeConsistencyIssues(candidate).length) { skipped += 1; return motion; }
+      changed += 1;
+      return candidate;
+    });
+    await saveMotions(next as Motion[]);
+    setBulkOutcome(null);
+    toast.success("Outcomes updated", `${changed} motion${changed === 1 ? "" : "s"} set to ${bulkOutcome.outcome}${skipped ? `; ${skipped} left unchanged because their tally contradicts it` : ""}.`);
+  };
+
   const saveMinuteSections = async (next: any[]) => {
     if (!(canMinutesWrite && canAgendasWrite)) return;
     if (!minutes) return;
@@ -1389,28 +1523,61 @@ export function MeetingDetailPage() {
       const title = entry.title.trim();
       if (!title) continue;
       const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
-      cleaned.push({ title, depth });
+      cleaned.push({ title, depth, ...(entry._id ? { _id: entry._id } : {}) });
       if (depth === 0) hasRoot = true;
     }
     // Both root and sub-items become real minute sections. Depth is preserved
     // on the section so the editor and exports can render sub-numbering.
     const next = cleaned;
 
+    // Align minutes sections to the edited agenda BEFORE re-syncing it: the
+    // sync matches sections by title, so a renamed item must already carry its
+    // new title (and keep its notes, actions and motions). Sections keep the
+    // agenda item ids that still exist at this point; the sync re-links them.
+    if (minutes && !minutes.approvedAt) {
+      const sectionHasDetails = (section: any) =>
+        !!(
+          section?.discussion ||
+          section?.presenter ||
+          (section?.decisions ?? []).length ||
+          (section?.actionItems ?? []).length ||
+          (section?.linkedTaskIds ?? []).length
+        );
+      const aligned = alignSectionsToAgenda(
+        (minutes.sections ?? []) as any[],
+        next,
+        displayMotions as any[],
+        (title, depth) => buildSectionFromTitle(title, depth),
+        sectionHasDetails,
+      );
+      if (aligned.sectionsChanged || aligned.motionsChanged) {
+        const patch: any = {};
+        if (aligned.sectionsChanged) patch.sections = aligned.sections;
+        if (aligned.motionsChanged) patch.motions = aligned.motions;
+        await updateMinutes({ id: minutes._id, patch });
+      }
+    }
+
     await syncAgendaForMeeting({
       societyId: meeting.societyId,
       meetingId: meeting._id,
       title: agendaRecord?.agenda?.title || `${meeting.title} agenda`,
-      items: cleaned.map((entry) => ({
-        title: entry.title,
-        depth: entry.depth,
-        type: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.type ?? inferAgendaSectionType(entry.title),
-        presenter: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.presenter,
-        details: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.details,
-        timeAllottedMinutes: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.timeAllottedMinutes,
-        motionTemplateId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionTemplateId,
-        motionId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionId,
-        motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
-      })),
+      items: cleaned.map((entry) => {
+        // A renamed item keeps its type, presenter, details and motion link.
+        const metadata = (entry._id ? canonicalAgendaItems?.find((item: any) => item._id && String(item._id) === String(entry._id)) : undefined)
+          ?? canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase());
+        return {
+          title: entry.title,
+          depth: entry.depth,
+          type: metadata?.type ?? inferAgendaSectionType(entry.title),
+          presenter: metadata?.presenter,
+          details: metadata?.details,
+          timeAllottedMinutes: metadata?.timeAllottedMinutes,
+          motionTemplateId: metadata?.motionTemplateId,
+          motionId: metadata?.motionId,
+          motionText: metadata?.motionText,
+        };
+      }),
     });
 
     // Auto-bootstrap the minutes record on first save. This subsumes the old
@@ -1455,90 +1622,6 @@ export function MeetingDetailPage() {
       return;
     }
 
-    // Keep agenda and minutes.sections in 1-to-1 sync: align section order to
-    // the agenda, reuse existing sections by title, and create empty sections
-    // for new titles. Sections whose titles were dropped from the agenda are
-    // removed only if they have no recorded content; sections with data are
-    // preserved as orphans so we never silently destroy recorded minutes.
-    if (minutes) {
-      const existingSections = ((minutes.sections ?? []) as any[]);
-      const existingMotions = displayMotions;
-      const normalize = (title: string) => title.trim().toLowerCase();
-      const sectionHasDetails = (section: any) =>
-        !!(
-          section?.discussion ||
-          section?.presenter ||
-          (section?.decisions ?? []).length ||
-          (section?.actionItems ?? []).length ||
-          (section?.linkedTaskIds ?? []).length
-        );
-
-      // Queue per-title so each duplicate-titled agenda entry consumes its own
-      // matching section instead of all resolving to the first one (which
-      // would clobber sibling sections' content).
-      const sectionsByTitle = new Map<string, any[]>();
-      for (const section of existingSections) {
-        const key = normalize(section?.title ?? "");
-        if (!key) continue;
-        const queue = sectionsByTitle.get(key) ?? [];
-        queue.push(section);
-        sectionsByTitle.set(key, queue);
-      }
-
-      // Preserve existing section content when titles match; always overwrite
-      // depth from the agenda since the agenda is the source of truth for
-      // hierarchy. Brand-new titles get a fresh empty section at the correct
-      // depth.
-      const aligned = next.map((entry) => {
-        const existing = sectionsByTitle.get(normalize(entry.title))?.shift();
-        return existing
-          ? { ...existing, depth: entry.depth }
-          : buildSectionFromTitle(entry.title, entry.depth);
-      });
-
-      const newTitles = new Set(next.map((entry) => normalize(entry.title)));
-      const orphans = existingSections.filter((section) => {
-        const key = normalize(section?.title ?? "");
-        return !newTitles.has(key) && sectionHasDetails(section);
-      });
-
-      const finalSections = [...aligned, ...orphans];
-
-      const sectionsChanged =
-        finalSections.length !== existingSections.length ||
-        finalSections.some((s, i) => s !== existingSections[i]);
-
-      const titleToNewIndex = new Map<string, number>();
-      finalSections.forEach((section, index) => {
-        const key = normalize(section?.title ?? "");
-        if (key && !titleToNewIndex.has(key)) titleToNewIndex.set(key, index);
-      });
-
-      let motionsChanged = false;
-      const remappedMotions = existingMotions.map((motion) => {
-        if (motion.sectionIndex == null) return motion;
-        const oldSection = existingSections[motion.sectionIndex];
-        if (!oldSection) return motion;
-        const oldKey = normalize(oldSection?.title ?? "");
-        const newIndex = titleToNewIndex.get(oldKey);
-        if (newIndex == null) {
-          const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
-          motionsChanged = true;
-          return rest as Motion;
-        }
-        if (newIndex === motion.sectionIndex) return motion;
-        motionsChanged = true;
-        return { ...motion, sectionIndex: newIndex };
-      });
-
-      if (sectionsChanged || motionsChanged) {
-        const patch: any = {};
-        if (sectionsChanged) patch.sections = finalSections;
-        if (motionsChanged) patch.motions = remappedMotions;
-        await updateMinutes({ id: minutes._id, patch });
-      }
-    }
-
     setAgendaEdit(null);
     toast.success("Agenda saved");
    } catch (error) {
@@ -1550,95 +1633,14 @@ export function MeetingDetailPage() {
   const startAttendanceEdit = () => {
     if (!(canMinutesWrite && canMeetingsWrite)) return;
     if (!minutes) return;
-    const existing = [
-      ...minutes.attendees.map((name: string) => ({ name, status: "present" as const })),
-      ...minutes.absent.map((name: string) => ({ name, status: "absent" as const })),
-    ];
-    setAttendanceEdit({
-      people: existing,
-    });
+    setAttendanceEdit(true);
   };
 
-  const autofillCurrentDirectors = () => {
-    if (!(canMinutesWrite && canMeetingsWrite)) return;
-    const isCommitteeMeeting = meeting.type === "Committee";
-    const expectedRows = isCommitteeMeeting
-      ? ((meetingCommitteeDetail?.members ?? []) as any[])
-          .map((member) => ({ name: String(member.name ?? "").trim(), status: "present" as const }))
-          .filter((person) => person.name)
-      : attendanceRowsForDirectors(currentDirectors);
-    if (!expectedRows.length) {
-      toast.info(
-        isCommitteeMeeting ? "No committee members found" : "No current directors found",
-        isCommitteeMeeting
-          ? "Link this meeting to a committee with members before filling attendance."
-          : "Directors must be active and not past their end date.",
-      );
-      return;
-    }
-    const existing = attendanceEdit?.people ?? [];
-    const existingNames = new Set(existing.map((person: any) => person.name.trim().toLowerCase()).filter(Boolean));
-    const additions = expectedRows.filter((person) => !existingNames.has(person.name.toLowerCase()));
-    setAttendanceEdit({
-      people: [...existing, ...additions],
-    });
-    const noun = isCommitteeMeeting ? "committee member" : "director";
-    toast.success(
-      isCommitteeMeeting ? "Committee members added" : "Current directors added",
-      `${additions.length} ${noun}${additions.length === 1 ? "" : "s"} added to attendance.`,
-    );
-  };
-
-  const saveAttendance = async () => {
-    if (!(canMinutesWrite && canMeetingsWrite)) return;
-    if (!minutes || !attendanceEdit) return;
-    try {
-      const attendees = attendanceEdit.people
-        .filter((p) => p.status === "present")
-        .map((p) => p.name.trim())
-        .filter(Boolean);
-      const absent = attendanceEdit.people
-        .filter((p) => p.status === "absent")
-        .map((p) => p.name.trim())
-        .filter(Boolean);
-      const required = quorumSnapshot.required ?? meeting.quorumRequired;
-      const quorumMet = computedQuorumMet({
-    requiresLegalRegister: requiresLegalQuorumRegister,
-        presentCount: attendees.length,
-        activeProxyCount,
-        required,
-      });
-      const priorDetailedByName = new Map(
-        ((minutes.detailedAttendance ?? []) as any[]).map((row) => [String(row.name).trim().toLowerCase(), row]),
-      );
-      const detailedAttendance = attendanceEdit.people
-        .map((person) => {
-          const name = person.name.trim();
-          if (!name) return null;
-          const prior = priorDetailedByName.get(name.toLowerCase()) ?? {};
-          return {
-            ...prior,
-            name,
-            status: person.status === "present" ? "present" : "regrets",
-            quorumCounted: person.status === "present",
-          };
-        })
-        .filter(Boolean);
-      await updateMinutes({
-        id: minutes._id,
-        patch: { attendees, absent, detailedAttendance, quorumMet: minutes.quorumStatus ? minutes.quorumStatus === "confirmed" : quorumMet ?? false, quorumStatus: minutes.quorumStatus ?? (quorumMet == null ? "not_recorded" : quorumMet ? "confirmed" : "not_met") },
-      });
-      await updateMeeting({
-        id: meeting._id,
-        patch: { attendeeIds: attendees },
-      });
-      setAttendanceEdit(null);
-      toast.success("Attendance saved");
-    } catch (error) {
-      console.error("[saveAttendance]", error);
-      toast.error("Couldn't save attendance", error instanceof Error ? error.message : String(error));
-    }
-  };
+  // Names offered by the grid's "Add current directors / committee members".
+  const expectedAttendees = (meeting.type === "Committee"
+    ? ((meetingCommitteeDetail?.members ?? []) as any[]).map((member) => String(member.name ?? "").trim())
+    : attendanceRowsForDirectors(currentDirectors).map((row) => row.name)
+  ).filter(Boolean);
 
   const openMaterialDrawer = (agendaLabel?: string, material?: any) => {
     if (!(canMeetingsWrite)) return;
@@ -1822,7 +1824,7 @@ export function MeetingDetailPage() {
     if (!(canDownload)) return;
     if (!meeting || !society) return;
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-    const subject = `${meeting.title} package - ${formatDateTime(meeting.scheduledAt)}`;
+    const subject = `${meeting.title} package - ${formatMeetingDate(meeting)}`;
     const materials = packageMaterials.map((material: any, index: number) => {
       const doc = material.document ?? {};
       return {
@@ -1948,7 +1950,7 @@ export function MeetingDetailPage() {
       files["attachments/download-errors.txt"] = failedDownloads.join("\n");
     }
     downloadStoredZip({
-      filename: `${safe}-outbox-package-${formatDate(meeting.scheduledAt, "yyyy-MM-dd")}.zip`,
+      filename: `${safe}-outbox-package-${meetingCalendarDate(meeting) ?? ""}.zip`,
       files,
     });
     toast.success(
@@ -1979,6 +1981,22 @@ export function MeetingDetailPage() {
       tags: [],
     });
     toast.success("Task created", input.title);
+    return taskId ? String(taskId) : undefined;
+  };
+
+  // "Create task from action" (B6): the task keeps the meeting, committee,
+  // assignee (person link and the name as written) and a status mapped from
+  // the action's status.
+  const createTaskFromAction = async (draft: any): Promise<string | undefined> => {
+    if (!canTasksWrite || !society) return undefined;
+    const taskId = await createTask({
+      societyId: society._id,
+      ...draft,
+      meetingId: meeting._id as Id<"meetings">,
+      committeeId: meeting.committeeId ?? undefined,
+      tags: ["minutes-action"],
+    });
+    toast.success("Task created", draft.title);
     return taskId ? String(taskId) : undefined;
   };
 
@@ -2052,6 +2070,26 @@ export function MeetingDetailPage() {
   const meetingCommittee = (committees ?? []).find(
     (c: any) => String(c._id) === String(meeting.committeeId),
   );
+  // The source header as written, shown under the corrected values (F3).
+  const sourceHeader = minutes?.sourceMeetingRecord?.header;
+  const sourceHeaderText = sourceHeader
+    ? [sourceHeader.dateText, sourceHeader.timeText && !String(sourceHeader.dateText ?? "").includes(sourceHeader.timeText) ? sourceHeader.timeText : "", sourceHeader.locationText]
+      .map((part: any) => String(part ?? "").trim())
+      .filter(Boolean)
+      .join(" · ")
+    : "";
+  const motionDocumentOptions = [
+    ...((sourceDocuments ?? []) as any[]).map((doc) => ({ value: String(doc._id), label: `Source: ${doc.title}` })),
+    ...packageMaterials.filter((material: any) => material.document?._id || material.documentId).map((material: any) => ({ value: String(material.document?._id ?? material.documentId), label: `Material: ${material.label || material.document?.title || "Document"}` })),
+  ].filter((option, index, all) => all.findIndex((row) => row.value === option.value) === index);
+  const approvalIssues = approvalEdit
+    ? minutesApprovalIssues({
+        approvedOn: approvalEdit.approvedAt,
+        meeting,
+        approvingMeeting: approvalEdit.approvedInMeetingId ? (allMeetings ?? []).find((m: any) => String(m._id) === approvalEdit.approvedInMeetingId) : null,
+      })
+    : [];
+  const duplicateIds = duplicateIndex((allMeetings ?? []) as any[], (committees ?? []) as any[]).get(String(meeting._id)) ?? [];
 
   return (
     <div className="page page--wide meeting-detail-page">
@@ -2062,23 +2100,41 @@ export function MeetingDetailPage() {
         title={meeting.title}
         subtitle={
           <>
-            {meeting.type} · {minutes?.sourceMeetingRecord ? (minutes.sourceMeetingRecord.header?.dateText || formatDate(meeting.scheduledAt)) : formatDateTime(meeting.scheduledAt)}
-            {minutes?.sourceMeetingRecord?.header?.timeText ? ` · ${minutes.sourceMeetingRecord.header.timeText}` : ""}
-            {minutes?.sourceMeetingRecord?.header?.locationText || meeting.location ? ` · ${minutes?.sourceMeetingRecord?.header?.locationText || meeting.location}` : ""}
-            {meetingCommittee && (
-              <>
-                {" · "}
-                <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingCommittee.name}</Link>
-              </>
+            <span className="meeting-detail-subtitle" data-testid="meeting-subtitle">
+              {/* The body names the committee; link it rather than repeating the name. */}
+              {meetingCommittee
+                ? <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingBodyLabel(meeting, committees as any)}</Link>
+                : meetingBodyLabel(meeting, committees as any)}
+              {" · "}{formatMeetingDate(meeting, { dateStyle: "long" })}
+              {meeting.location ? ` · ${meeting.location}` : meeting.electronic ? " · Online" : ""}
+            </span>
+            {sourceHeaderText && (
+              <span className="meeting-detail-subtitle__source" title="The meeting header exactly as written in the source document">
+                As written in source: {sourceHeaderText}
+              </span>
             )}
           </>
         }
         actions={
           <>
-            <Badge tone={meeting.status === "Held" ? "success" : meeting.status === "Cancelled" ? "danger" : "warn"}>
-              {meeting.status}
+            <Badge tone={meetingStatusTone(meeting.status) as any}>
+              {meetingStatusLabel(meeting.status)}
             </Badge>
-            {meeting.status !== "Held" && (
+            {sourceReviewStatus === "imported_needs_review" && <Badge tone="warn">Source review pending</Badge>}
+            {sourceReviewStatus === "source_reviewed" && <Badge tone="success">Source reviewed</Badge>}
+            <UnsupportedDetailsBadge table="meetings" id={meeting._id} />
+            {canMeetingsWrite && (
+              <button className="btn-action btn-action--primary" type="button" onClick={() => setEditMeetingOpen(true)} data-testid="edit-meeting">
+                <Pencil size={12} /> Edit meeting
+              </button>
+            )}
+            {sourceReviewStatus === "imported_needs_review" && canMeetingsWrite && (
+              <button className="btn-action" type="button" onClick={() => { void completeSourceReview(); }} data-testid="mark-source-reviewed">
+                <CheckCircle2 size={12} /> Mark source reviewed
+              </button>
+            )}
+            <SourceProvenanceButton table="meetings" id={meeting._id} />
+            {meeting.status !== "Held" && meeting.status !== "Cancelled" && (
               <button className="btn-action" onClick={markHeld} disabled={!canMeetingsWrite}>Mark held</button>
             )}
             {meeting.type === "AGM" && (
@@ -2100,6 +2156,32 @@ export function MeetingDetailPage() {
                 </button>
               }
               sections={[
+                {
+                  id: "edit",
+                  items: [
+                    {
+                      id: "edit-meeting",
+                      label: "Edit meeting",
+                      icon: <Pencil size={12} />,
+                      disabled: !canMeetingsWrite,
+                      onSelect: () => setEditMeetingOpen(true),
+                    },
+                    {
+                      id: "source-review",
+                      label: sourceReviewStatus === "source_reviewed" ? "Reopen source review" : "Mark source reviewed",
+                      icon: <CheckCircle2 size={12} />,
+                      disabled: !canMeetingsWrite || sourceReviewStatus === "not_applicable",
+                      onSelect: sourceReviewStatus === "source_reviewed" ? reopenSourceReview : completeSourceReview,
+                    },
+                    {
+                      id: "merge",
+                      label: duplicateIds.length ? `Merge a duplicate (${duplicateIds.length} found)…` : "Merge a duplicate…",
+                      icon: <Merge size={12} />,
+                      disabled: !canMeetingsWrite || !canMinutesWrite,
+                      onSelect: () => setMergeOpen(true),
+                    },
+                  ],
+                },
                 ...(meeting.status === "Held"
                   ? [
                       {
@@ -2198,15 +2280,15 @@ export function MeetingDetailPage() {
       <div className="meeting-detail-summary">
         <div>
           <span>Agenda topics</span>
-          <strong>{agenda.length}</strong>
+          <strong>{visibleAgendaEntries(agendaTree, (minutes?.sections ?? []) as any[], minutes?.sourceMeetingRecord).length}</strong>
         </div>
         <div>
-          <span>Attendees</span>
-          <strong>{minutes?.attendees.length ?? meeting.attendeeIds?.length ?? 0}</strong>
+          <span>{meetingNotYetHeld(meeting) ? "Expected" : "Present"}</span>
+          <strong>{minutesLoading ? "…" : minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
         </div>
         <div>
           <span>Motions</span>
-          <strong>{businessMotions.length}</strong>
+          <strong>{minutesLoading ? "…" : businessMotions.length}</strong>
         </div>
       <div>
         <span>Materials</span>
@@ -2215,6 +2297,8 @@ export function MeetingDetailPage() {
     </div>
 
       <Tabs<MeetingDetailTab>
+        tabRoles
+        ariaLabel="Meeting sections"
         value={activeTab}
         onChange={setActiveTab}
         items={[
@@ -2259,6 +2343,8 @@ export function MeetingDetailPage() {
                   </Badge>
                 ) : minutes ? (
                   <Badge tone="warn">Not approved</Badge>
+                ) : minutes === undefined && canMinutesRead ? (
+                  <span className="muted">Loading…</span>
                 ) : (
                   <span className="muted">No minutes yet</span>
                 )}
@@ -2296,6 +2382,7 @@ export function MeetingDetailPage() {
                 {...sharedSidebarProps}
                 visiblePanels={meeting.type === "AGM" ? ["details", "agm"] : ["details"]}
               />
+              <MeetingGapsPanel meetingId={meeting._id} minutesId={minutes?._id} />
               {society && can("conflicts:read") && (
                 <div className="meeting-signatures-card">
                   <MeetingConflictsCard
@@ -2322,6 +2409,7 @@ export function MeetingDetailPage() {
                     presentCount={
                       presentCountForQuorum
                     }
+                    notYetHeld={meetingNotYetHeld(meeting)}
                     quorumRequired={
                       quorumSnapshot.required ??
                       meeting.quorumRequired ??
@@ -2376,6 +2464,15 @@ export function MeetingDetailPage() {
 
         {activeTab === "minutes" && (
           <>
+          {minutes?.approvedAt && (
+            <Banner tone="info" title={`Adopted ${formatDate(minutes.approvedAt)} — read-only`} className="meeting-minutes-adopted-banner">
+              Adopted minutes cannot be edited. To correct them, open{" "}
+              {canApproveMinutes
+                ? <button type="button" className="btn-link" onClick={startApprovalEdit}>the approval</button>
+                : "the approval"}{" "}
+              and choose “Clear approval and reopen”, then record the approval again.
+            </Banner>
+          )}
           <MeetingMinutesColumn
             minutes={minutes}
             agenda={agendaTree.map((entry) => entry.title)}
@@ -2386,9 +2483,15 @@ export function MeetingDetailPage() {
             attendanceEdit={attendanceEdit}
             setAttendanceEdit={setAttendanceEdit}
             startAttendanceEdit={startAttendanceEdit}
-            autofillCurrentDirectors={autofillCurrentDirectors}
+            autofillCurrentDirectors={() => undefined}
             attendanceAutofillLabel={meeting.type === "Committee" ? "Add committee members" : "Add current directors"}
-            saveAttendance={saveAttendance}
+            saveAttendance={() => undefined}
+            meeting={meeting}
+            directoryPeople={directoryPeople}
+            expectedAttendees={expectedAttendees}
+            agendaItemRecords={(agendaRecord as any)?.items ?? []}
+            saveTopLevelActionItems={async (items) => { if (minutes && canMinutesWrite) await updateMinutes({ id: minutes._id, patch: { actionItems: items } }); }}
+            createTaskFromAction={canTasksWrite ? createTaskFromAction : undefined}
             quorumSnapshot={quorumSnapshot}
             activeProxyCount={activeProxyCount}
             quorumLegalGuides={quorumLegalGuides}
@@ -2409,8 +2512,8 @@ export function MeetingDetailPage() {
             saveTranscriptEditText={saveTranscriptEditText}
             savingTranscript={savingTranscript}
           />
-          <MeetingEvidenceCard key={minutes?._id ?? "no-evidence"} minutes={minutes} />
-          <MinutesMetadataCard key={minutes?._id ?? "no-minutes"} minutes={minutes} meetingType={meeting.type} />
+          <MeetingEvidenceCard key={`evidence-${minutes?._id ?? "none"}`} minutes={minutes} allMinutes={allMinutes} meetings={allMeetings} />
+          <MinutesMetadataCard key={`metadata-${minutes?._id ?? "none"}`} minutes={minutes} meetingType={meeting.type} committees={committees} people={directoryPeople} />
           </>
         )}
 
@@ -2451,19 +2554,29 @@ export function MeetingDetailPage() {
                   })()}
                 </span>
               ) : null}
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {sourceWordingUpdates.length > 0 && (
+                  <button className="btn-action" type="button" onClick={() => { void acceptSourceOutcomes(); }} disabled={!motionsEditable} data-testid="accept-source-outcomes" title="Set each pending motion's outcome from the wording the source records (Passed, Carried, Defeated, Tabled…)">
+                    <CheckCircle2 size={12} /> Accept source wording ({sourceWordingUpdates.length})
+                  </button>
+                )}
+                {businessMotions.length > 0 && (
+                  <button className="btn-action" type="button" onClick={() => setBulkOutcome({ outcome: "Carried", decidedBy: "", scope: "pending" })} disabled={!motionsEditable} data-testid="bulk-outcome">
+                    <Gavel size={12} /> Set outcome…
+                  </button>
+                )}
                 <button
                   className="btn-action btn-action--primary"
                   type="button"
                   onClick={() => motionEditorRef.current?.startAdding()}
-                 disabled={!canMinutesWrite}>
+                 disabled={!motionsEditable}>
                   <Plus size={12} /> Add motion
                 </button>
               </div>
             </div>
             <div className="card__body">
               <MotionEditor
-                readOnly={!canMinutesWrite}
+                readOnly={!motionsEditable}
                 ref={motionEditorRef}
                 motions={displayMotions}
                 directorNames={directorNames}
@@ -2477,6 +2590,8 @@ export function MeetingDetailPage() {
                 onAddToBacklog={canMotionsWrite ? addMotionToBacklog : undefined}
                 hideInlineAdd
                 adoptionTargets={adoptionTargets}
+                directoryPeople={directoryPeople as any}
+                documentOptions={motionDocumentOptions}
               />
             </div>
           </div>
@@ -2566,6 +2681,24 @@ export function MeetingDetailPage() {
         )}
       </div>
 
+      <EditMeetingDrawer
+        open={editMeetingOpen}
+        onClose={() => setEditMeetingOpen(false)}
+        meeting={meeting}
+        minutes={minutes}
+        committees={committees}
+        recentLocations={[...new Set(((allMeetings ?? []) as any[]).map((m) => String(m.location ?? "").trim()).filter(Boolean))].slice(0, 30)}
+      />
+      {mergeOpen && (
+        <MergeMeetingDialog
+          meeting={meeting}
+          meetings={(allMeetings ?? []) as any[]}
+          committees={(committees ?? []) as any[]}
+          suggestedIds={duplicateIds}
+          onClose={() => setMergeOpen(false)}
+        />
+      )}
+
       <MeetingMaterialDrawer
         materialDraft={materialDraft}
         setMaterialDraft={setMaterialDraft}
@@ -2609,6 +2742,40 @@ export function MeetingDetailPage() {
       </Drawer>
 
       <Modal
+        open={!!bulkOutcome}
+        onClose={() => setBulkOutcome(null)}
+        title="Set outcome for motions"
+        size="sm"
+        footer={
+          <>
+            <button className="btn" onClick={() => setBulkOutcome(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={() => { void applyBulkOutcome(); }} data-testid="bulk-outcome-apply">Apply</button>
+          </>
+        }
+      >
+        {bulkOutcome && (
+          <div>
+            <Field label="Apply to">
+              <Select
+                value={bulkOutcome.scope}
+                onChange={(scope) => setBulkOutcome({ ...bulkOutcome, scope: scope as "pending" | "all" })}
+                options={[
+                  { value: "pending", label: `Pending motions (${businessMotions.filter((motion: any) => !motion.outcome || motion.outcome === "Pending").length})` },
+                  { value: "all", label: `All business motions (${businessMotions.length})` },
+                ]}
+              />
+            </Field>
+            <Field label="Outcome">
+              <Select value={bulkOutcome.outcome} onChange={(outcome) => setBulkOutcome({ ...bulkOutcome, outcome })} options={["Carried", "Defeated", "Tabled", "Deferred", "Pending"].map((value) => ({ value, label: value }))} />
+            </Field>
+            <Field label="Decided by" hint="Consent or a chair's ruling records an outcome with no counted vote.">
+              <Select value={bulkOutcome.decidedBy} onChange={(decidedBy) => setBulkOutcome({ ...bulkOutcome, decidedBy })} options={[{ value: "", label: "Keep as recorded" }, { value: "vote", label: "Recorded vote" }, { value: "consent", label: "General consent" }, { value: "chair_ruling", label: "Chair's ruling" }]} />
+            </Field>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={!!approvalEdit && canApproveMinutes}
         onClose={() => setApprovalEdit(null)}
         title="Record minutes approval"
@@ -2616,12 +2783,12 @@ export function MeetingDetailPage() {
         footer={
           <>
             {minutes?.approvedAt && (
-              <button className="btn btn--danger" onClick={clearApproval} style={{ marginRight: "auto" }} disabled={!canApproveMinutes}>
-                Clear approval
+              <button className="btn btn--danger" onClick={() => { void clearApproval(); }} style={{ marginRight: "auto" }} disabled={!canApproveMinutes}>
+                Clear approval and reopen
               </button>
             )}
             <button className="btn" onClick={() => setApprovalEdit(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveApproval} disabled={!approvalEdit?.approvedAt || !canApproveMinutes}>
+            <button className="btn btn--accent" onClick={saveApproval} disabled={!approvalEdit?.approvedAt || !canApproveMinutes || approvalIssues.length > 0}>
               Save
             </button>
           </>
@@ -2633,25 +2800,31 @@ export function MeetingDetailPage() {
               Minutes are usually adopted at the next meeting. Record when these minutes were
               approved and, if you like, which meeting adopted them.
             </p>
-            <Field label="Approved on">
+            <Field label="Approved at meeting" hint="Later meetings of the same body first, nearest first. Picking one sets the approval date to that meeting's date.">
+              <Select
+                value={approvalEdit.approvedInMeetingId}
+                searchable
+                onChange={(value) => {
+                  const picked = (allMeetings ?? []).find((m: any) => String(m._id) === value);
+                  setApprovalEdit({
+                    ...approvalEdit,
+                    approvedInMeetingId: value,
+                    approvedAt: picked ? meetingCalendarDate(picked) ?? approvalEdit.approvedAt : approvalEdit.approvedAt,
+                  });
+                }}
+                options={[
+                  { value: "", label: "Not specified" },
+                  ...approvingMeetingCandidates(meeting, (allMeetings ?? []) as any[]).map((m: any) => ({
+                    value: m._id as string,
+                    label: `${formatMeetingDate(m, { withTime: false })} · ${m.title}`,
+                  })),
+                ]}
+              />
+            </Field>
+            <Field label="Approved on" error={approvalIssues.length && approvalEdit.approvedAt ? approvalIssues.join(" ") : undefined}>
               <DatePicker
                 value={approvalEdit.approvedAt}
                 onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedAt: value })}
-              />
-            </Field>
-            <Field label="Approved at meeting">
-              <Select
-                value={approvalEdit.approvedInMeetingId}
-                onChange={(value) => setApprovalEdit({ ...approvalEdit, approvedInMeetingId: value })}
-                options={[
-                  { value: "", label: "Not specified" },
-                  ...(allMeetings ?? [])
-                    .filter((m: any) => m._id !== meeting._id)
-                    .map((m: any) => ({
-                      value: m._id as string,
-                      label: `${m.title} · ${formatDate(m.scheduledAt)}`,
-                    })),
-                ]}
               />
             </Field>
           </div>

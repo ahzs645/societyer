@@ -86,7 +86,7 @@ test("exports contain native file controls and handle invalid previews; local we
   const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
   await openApp(page, "exports", "Data export");
   await containedAtWidths(page);
-  await page.getByLabel("Workspace export JSON", { exact: true }).setInputFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{broken") });
+  await page.getByLabel("Workspace backup ZIP or JSON", { exact: true }).setInputFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{broken") });
   await expect(page.locator(".notice--danger")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Data export", exact: true })).toBeVisible();
   const download = page.waitForEvent("download");
@@ -157,7 +157,8 @@ test("manual outbox drafts and custom field definitions persist; AI tabs expose 
   await page.getByLabel("To", { exact: true }).fill("reviewer@example.test");
   await page.getByLabel("Subject", { exact: true }).fill("Interface draft awaiting manual dispatch");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Email queued", { exact: true })).toBeVisible();
+  // A new draft stays a draft (it is never queued for sending on save).
+  await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).last().click();
   await expect(page.getByText("Interface draft awaiting manual dispatch", { exact: true })).toBeVisible();
   await openApp(page, "custom-fields", "Custom fields");

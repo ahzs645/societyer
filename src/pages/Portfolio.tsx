@@ -10,6 +10,7 @@ import { Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPackets";
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type FirmEntity = {
   _id: string;
@@ -74,7 +75,7 @@ export function PortfolioPage() {
       const result: any = await batchGenerate({
         societyIds: selectedIds as any,
         packetKey,
-        effectiveDate: new Date().toISOString().slice(0, 10),
+        effectiveDate: todayDateOnly(),
       });
       const msg = `${result.generated} generated${result.failed ? `, ${result.failed} failed (wrong entity type or unseeded)` : ""}.`;
       if (result.failed && !result.generated) toast.error("Batch generation failed", msg);

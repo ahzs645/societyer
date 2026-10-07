@@ -17,6 +17,7 @@ import { Field } from "../../components/ui";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { Select } from "../../components/Select";
 import { DatePicker } from "../../components/DatePicker";
+import { todayDateOnly } from "../../../shared/dateOnly";
 
 export const COMMITMENT_CATEGORIES = ["Contract", "Grant", "Facility", "Governance", "Privacy", "Funding", "Other"] as const;
 export const COMMITMENT_CADENCES = ["Once", "Monthly", "Quarterly", "Annual", "Every 2 years", "Custom"] as const;
@@ -69,7 +70,7 @@ export function makeCommitmentFormDefaults(initial?: CommitmentFormInitialValues
     sourceLabel: initial?.sourceLabel ?? "",
     counterparty: initial?.counterparty ?? "",
     cadence: initial?.cadence ?? "Annual",
-    nextDueDate: initial?.nextDueDate ?? new Date().toISOString().slice(0, 10),
+    nextDueDate: initial?.nextDueDate ?? todayDateOnly(),
     noticeLeadDays: initial?.noticeLeadDays ?? 30,
     dueDateBasis: initial?.dueDateBasis ?? "",
     owner: initial?.owner ?? "",
@@ -144,7 +145,7 @@ export type CommitmentFormData = {
 export function useCommitmentFormData(societyId: Id<"societies"> | null | undefined): CommitmentFormData {
   const { can } = usePermissions();
   const args = (permission: string) => societyId && can(permission) ? { societyId } : "skip";
-  const documents = useQuery(api.documents.list, args("documents:read"));
+  const documents = useQuery(api.documents.listSummaries, args("documents:read"));
   return { documents };
 }
 
@@ -190,7 +191,7 @@ export function CommitmentFormFields({
             min={0}
             max={100}
             value={value.confidence === "" || value.confidence == null ? "" : Math.round(value.confidence * 100)}
-            onChange={(e) => onChange({ confidence: e.target.value === "" ? "" : Number(e.target.value) / 100 })}
+            onChange={(e) => onChange({ confidence: e.target.value === "" ? "" : Math.min(100, Math.max(0, Number(e.target.value))) / 100 })}
           />
         </Field>
       </div>

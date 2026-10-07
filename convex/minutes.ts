@@ -3,6 +3,7 @@ import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/aut
 import { meetingHistoryFields } from "./validators/meetingHistory";
 import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { detailedAttendanceValidator, minutesActionItemValidator, motionExtensionFields, nextMeetingValidator } from "./validators/meetingModel";
 import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";
 import {
@@ -10,6 +11,7 @@ import {
   transposeSourcesPortable,
   completeSourceRecordsPortable,
   listPortable,
+  listLightPortable,
   getByMeetingPortable,
   createPortable,
   carryForwardActionPortable,
@@ -18,6 +20,9 @@ import {
   backfillMotionPersonLinksPortable,
   backfillQuorumSnapshotPortable,
 } from "../shared/functions/minutes";
+import { repairImportedPortable } from "../shared/functions/minutesRepair";
+import { listSummariesPortable } from "../shared/functions/minutesSummaries";
+import { saveAttendanceGridPortable } from "../shared/functions/minutesAttendance";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const motion = v.object({
@@ -52,14 +57,11 @@ const motion = v.object({
   // Which minutes record this motion adopts; carrying the motion auto-stamps
   // the referenced minutes' approval (see shared/functions/minutes.ts).
   adoptsMinutesId: v.optional(v.id("minutes")),
+  // A1/A11/C1/C13/G-04 extensions, mirrored onto the first-class motion row.
+  ...motionExtensionFields,
 });
 
-const actionItem = v.object({
-  text: v.string(),
-  assignee: v.optional(v.string()),
-  dueDate: v.optional(v.string()),
-  done: v.boolean(),
-});
+const actionItem = minutesActionItemValidator;
 
 const remoteParticipation = v.object({
   url: v.optional(v.string()),
@@ -68,16 +70,7 @@ const remoteParticipation = v.object({
   instructions: v.optional(v.string()),
 });
 
-const detailedAttendance = v.object({
-  name: v.string(),
-  status: v.string(),
-  roleTitle: v.optional(v.string()),
-  affiliation: v.optional(v.string()),
-  memberIdentifier: v.optional(v.string()),
-  proxyFor: v.optional(v.string()),
-  quorumCounted: v.optional(v.boolean()),
-  notes: v.optional(v.string()),
-});
+const detailedAttendance = detailedAttendanceValidator;
 
 const minuteSection = v.object({
   title: v.string(),
@@ -100,6 +93,7 @@ const minuteSection = v.object({
   sourceReviewStatus: v.optional(v.string()),
   sourceKind: v.optional(v.string()),
   sourceEvidence: v.optional(v.any()),
+  sourceTitle: v.optional(v.string()),
 });
 
 const sessionSegment = v.object({
@@ -164,6 +158,7 @@ const structuredMinutesFields = {
   nextMeetingAt: v.optional(v.string()),
   nextMeetingLocation: v.optional(v.string()),
   nextMeetingNotes: v.optional(v.string()),
+  nextMeetings: v.optional(v.array(nextMeetingValidator)),
   sessionSegments: v.optional(v.array(sessionSegment)),
   appendices: v.optional(v.array(appendix)),
   agmDetails: v.optional(agmDetails),
@@ -173,6 +168,47 @@ export const list = authorizedQuery("minutes:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Light per-meeting summaries (counts and review state) for list pages, so
+// they do not load every minutes row with its full source record.
+/** `list` without the heavy imported-source fields — for pickers and adoption flows. */
+export const listLight = authorizedQuery("minutes:listLight", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => listLightPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const listSummaries = authorizedQuery("minutes:listSummaries", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => listSummariesPortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Attendance grid save: detailed rows, derived name lists, meeting attendee ids
+// and the meeting's attendance register in one transaction.
+export const saveAttendanceGrid = authorizedMutation("minutes:saveAttendanceGrid", mutation)({
+  args: {
+    minutesId: v.id("minutes"),
+    rows: v.array(v.object({
+      key: v.optional(v.string()),
+      name: v.string(),
+      status: v.string(),
+      roleTitle: v.optional(v.string()),
+      affiliation: v.optional(v.string()),
+      representedOrganization: v.optional(v.string()),
+      personId: v.optional(v.id("peopleDirectory")),
+      proxyFor: v.optional(v.string()),
+      memberIdentifier: v.optional(v.string()),
+      quorumCounted: v.optional(v.boolean()),
+      notes: v.optional(v.string()),
+      recordId: v.optional(v.id("meetingAttendanceRecords")),
+    })),
+    nonPersons: v.optional(v.array(v.object({ name: v.string(), kind: v.optional(v.string()) }))),
+    quorumStatusIfUnset: v.optional(v.union(v.literal("confirmed"), v.literal("not_met"), v.literal("not_recorded"))),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveAttendanceGridPortable(await toPortableMutationCtx(ctx), args as any),
 });
 
 export const getByMeeting = authorizedQuery("minutes:getByMeeting", query)({
@@ -283,6 +319,28 @@ export const upsertFromDraft = authorizedMutation("minutes:upsertFromDraft", mut
   },
   returns: v.any(),
   handler: async (ctx, args) => upsertFromDraftPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// One-off, idempotent repair of data produced by the earlier rule-based
+// imports (motion outcomes, embedded motions, pipe titles, file-name titles,
+// date precision, stated quorum, non-person attendees). Pass dryRun first.
+export const repairImported = authorizedMutation("minutes:repairImported", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    dryRun: v.optional(v.boolean()),
+    options: v.optional(v.object({
+      motions: v.optional(v.boolean()),
+      embedded: v.optional(v.boolean()),
+      sections: v.optional(v.boolean()),
+      titles: v.optional(v.boolean()),
+      reclassifyBodies: v.optional(v.boolean()),
+      datePrecision: v.optional(v.boolean()),
+      quorum: v.optional(v.boolean()),
+      attendance: v.optional(v.boolean()),
+    })),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => repairImportedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillMotionPersonLinks = authorizedMutation("minutes:backfillMotionPersonLinks", mutation)({

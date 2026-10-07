@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { appRouteHref, appRouteAbsoluteHref } from "../lib/appRouteHref";
+import { PUBLICATION_CATEGORY_LABELS } from "../lib/publicationCategories";
 import { publicationUrl } from "../lib/publicationUrl";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -26,6 +27,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const PUBLICATION_PRESETS = [
   { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
@@ -301,7 +303,7 @@ export function TransparencyPage() {
               merged.reviewStatus = "Approved";
               merged.approvedByUserId = merged.approvedByUserId ?? actingUserId;
               merged.approvedAtISO = merged.approvedAtISO ?? new Date().toISOString();
-              merged.publishedAtISO = merged.publishedAtISO || new Date().toISOString().slice(0, 10);
+              merged.publishedAtISO = merged.publishedAtISO || todayDateOnly();
             }
             await upsertPublication({
               id: recordId as Id<"publications">,
@@ -359,7 +361,7 @@ export function TransparencyPage() {
                     if (!canPublish) return;
                     const ok = await confirm({
                       title: "Remove publication",
-                      message: `"${row.title}" will be removed from the internal publication list and the public page if it is live.`,
+                      message: `"${row.title || "Untitled publication"}" will be removed from the internal publication list and the public page if it is live.`,
                       confirmLabel: "Remove",
                       tone: "danger",
                     });
@@ -437,6 +439,16 @@ export function TransparencyPage() {
               disabled={!canPublish}
               onClick={async () => {
                 if (!canPublish) return;
+                if (!publicationDraft.title?.trim()) {
+                  toast.error("Add a title for this publication");
+                  return;
+                }
+                const documentExists = !publicationDraft.documentId || (documents ?? []).some((document) => document._id === publicationDraft.documentId);
+                if (!documentExists) {
+                  toast.error("The linked document no longer exists", "Choose another document or add a public URL.");
+                  setPublicationDraft({ ...publicationDraft, documentId: "" });
+                  return;
+                }
                 if (publicationDraft.url && !publicationUrl(publicationDraft.url)) {
                   toast.error("Use a valid HTTP or HTTPS public link.");
                   return;
@@ -457,15 +469,23 @@ export function TransparencyPage() {
                   });
                   if (!ok) return;
                 }
+                // Send only the publication's own fields. Spreading the stored
+                // row also sent system fields such as entityId, which the
+                // workspace policy resolves as a record reference and rejected
+                // with "Record not found." (G-09).
                 try { await upsertPublication({
-                  ...publicationDraft,
+                  id: publicationDraft.id || undefined,
+                  title: publicationDraft.title.trim(),
+                  category: publicationDraft.category,
+                  status: publicationDraft.status,
+                  featured: publicationDraft.featured,
                   societyId: society._id,
                   summary: publicationDraft.summary || undefined,
                   documentId: publicationDraft.documentId || undefined,
                   url: publicationDraft.url || undefined,
                   publishedAtISO:
                     publicationDraft.status === "Published"
-                      ? publicationDraft.publishedAtISO || new Date().toISOString().slice(0, 10)
+                      ? publicationDraft.publishedAtISO || todayDateOnly()
                       : publicationDraft.publishedAtISO || undefined,
                   reviewStatus:
                     publicationDraft.status === "Published"
@@ -474,7 +494,7 @@ export function TransparencyPage() {
                   approvedByUserId: publicationDraft.status === "Published" ? actingUserId : undefined,
                   approvedAtISO: publicationDraft.status === "Published" ? new Date().toISOString() : undefined,
                 });
-                toast.success("Publication saved");
+                toast.success(publicationDraft.status === "Published" ? "Published to the public page" : "Publication saved");
                 setPublicationDraft(null);
                 } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save publication"); }
               }}
@@ -491,18 +511,7 @@ export function TransparencyPage() {
               <Select
                 value={publicationDraft.category}
                 onChange={(value) => setPublicationDraft({ ...publicationDraft, category: value })}
-                options={[
-                  { value: "AnnualReport", label: "AnnualReport" },
-                  { value: "Bylaws", label: "Bylaws" },
-                  { value: "AGM", label: "AGM" },
-                  { value: "FinancialSummary", label: "FinancialSummary" },
-                  { value: "Grant", label: "Grant" },
-                  { value: "InspectionInstructions", label: "InspectionInstructions" },
-                  { value: "Policy", label: "Policy" },
-                  { value: "Notice", label: "Notice" },
-                  { value: "Resource", label: "Resource" },
-                  { value: "Custom", label: "Custom" },
-                ]}
+                options={Object.entries(PUBLICATION_CATEGORY_LABELS).map(([value, label]) => ({ value, label }))}
               />
             </Field>
             <Field label="Document">
@@ -535,6 +544,7 @@ export function TransparencyPage() {
     </div>
   );
 }
+
 
 function normalizePublicSlug(value?: string) {
   return String(value ?? "")

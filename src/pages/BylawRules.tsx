@@ -14,8 +14,13 @@ import { Toggle } from "../components/Controls";
 import { ChevronDown, Info, Plus, RefreshCw, Save, Scale, Trash2 } from "lucide-react";
 import { builtInResolutionTypes, RESOLUTION_BASES } from "../lib/motionGovernance";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
+import { bylawRuleContextFor, bylawRuleEffectiveDateProblem, bylawRuleProblems } from "../../shared/bylawGovernance";
 import { formatDate } from "../lib/format";
+import { calendarDateKey } from "../lib/calendarDates";
 import { LegalGuideTrackList } from "../components/LegalGuide";
+import { cleanQuorumRule, describeQuorumRule, quorumRuleProblems, type BodyQuorumRule } from "../../shared/bodyQuorum";
+import { QuorumRuleFields, quorumRuleDraft, quorumRuleFromDraft } from "../features/committees/QuorumRuleFields";
 import {
   getJurisdictionGuidePack,
   getLegalGuideRules,
@@ -33,10 +38,19 @@ export function BylawRulesPage() {
   const upsert = usePermissionedMutation(api.bylawRules.upsertActive, canWrite);
   const reset = usePermissionedMutation(api.bylawRules.resetToDefault, canWrite);
   const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState<any>(null);
 
   useEffect(() => {
-    if (rules && (!form || form.societyId !== rules.societyId || form._id !== rules._id)) setForm({ ...rules });
+    // A saved version is the starting point for the NEXT version, which takes
+    // effect prospectively (today by default), never on the old version's date.
+    if (rules && (!form || form.societyId !== rules.societyId || form._id !== rules._id)) {
+      setForm({
+        ...rules,
+        baseEffectiveFromISO: rules.effectiveFromISO,
+        effectiveFromISO: `${calendarDateKey(new Date())}T00:00:00.000Z`,
+      });
+    }
   }, [form, rules]);
 
   if (society === undefined) return <PageLoading />;
@@ -69,11 +83,57 @@ export function BylawRulesPage() {
     ],
   });
 
+  const nextVersion = Math.max(0, ...(history ?? []).map((row: any) => Number(row.version) || 0)) + 1;
+  const customTypesForSave = (form.resolutionTypes ?? []).map((t: any, i: number) => ({
+    id: slugifyResolutionType(t.label, i),
+    label: String(t.label ?? "").trim(),
+    builtIn: false,
+    base: t.base || "votesCast",
+    thresholdPct: Number(t.thresholdPct),
+    tieBreak: t.tieBreak || "fails",
+    order: i,
+  }));
+  const ruleProblems = bylawRuleProblems(
+    {
+      ...form,
+      generalNoticeMinDays: Number(form.generalNoticeMinDays),
+      generalNoticeMaxDays: Number(form.generalNoticeMaxDays),
+      quorumValue: Number(form.quorumValue),
+      quorumMinimumCount: form.quorumType === "percentage" && form.quorumMinimumCount !== "" && form.quorumMinimumCount != null ? Number(form.quorumMinimumCount) : undefined,
+      ordinaryResolutionThresholdPct: Number(form.ordinaryResolutionThresholdPct),
+      specialResolutionThresholdPct: Number(form.specialResolutionThresholdPct),
+      memberProposalThresholdPct: Number(form.memberProposalThresholdPct),
+      requisitionMeetingThresholdPct: Number(form.requisitionMeetingThresholdPct),
+      annualReportDueDaysAfterMeeting: Number(form.annualReportDueDaysAfterMeeting),
+      proxyLimitPerGrantorPerMeeting: Number(form.proxyLimitPerGrantorPerMeeting),
+      resolutionTypes: customTypesForSave,
+    },
+    bylawRuleContextFor(society),
+  ).concat(bodyQuorumRowProblems(form.bodyQuorumRules));
+
   const save = async () => {
     if (!canWrite) return;
+    if (ruleProblems.length) {
+      toast.error("Fix the rule set before saving", ruleProblems[0]);
+      return;
+    }
+    let allowBackdated = false;
+    const backdated = bylawRuleEffectiveDateProblem(form.effectiveFromISO, history ?? []);
+    if (backdated) {
+      const ok = await confirm({
+        title: "Record a backdated rule version?",
+        message: `${backdated} Held meetings after that date will be checked against this version.`,
+        confirmLabel: "Record historical version",
+        tone: "warn",
+      });
+      if (!ok) return;
+      allowBackdated = true;
+    }
+    try {
     await upsert({
       id: form._id,
       societyId: society._id,
+      allowBackdated: allowBackdated || undefined,
       effectiveFromISO: form.effectiveFromISO || undefined,
       sourceBylawDocumentId: form.sourceBylawDocumentId,
       sourceAmendmentId: form.sourceAmendmentId,
@@ -118,22 +178,18 @@ export function BylawRulesPage() {
       specialResolutionThresholdPct: Number(form.specialResolutionThresholdPct),
       unanimousWrittenSpecialResolution:
         !!form.unanimousWrittenSpecialResolution,
-      // Persist custom resolution types only (built-ins are derived). Drop
-      // blank rows and normalize id/order/defaults.
-      resolutionTypes: (form.resolutionTypes ?? [])
-        .filter((t: any) => String(t?.label ?? "").trim())
-        .map((t: any, i: number) => ({
-          id: slugifyResolutionType(t.label, i),
-          label: String(t.label).trim(),
-          builtIn: false,
-          base: t.base || "votesCast",
-          thresholdPct: Number(t.thresholdPct) || 50,
-          tieBreak: t.tieBreak || "fails",
-          order: i,
-        })),
+      // Persist custom resolution types only (built-ins are derived). Blank or
+      // out-of-range rows are rejected by validation above, never dropped.
+      resolutionTypes: customTypesForSave,
+      // A3: per-body quorum rules carry over to the new version; leaving them
+      // out would silently drop rules recorded earlier (or imported).
+      bodyQuorumRules: bodyQuorumRulesForSave(form.bodyQuorumRules),
     });
     setForm(null);
-    toast.success("Bylaw rule set saved");
+    toast.success(`Bylaw rule set v${nextVersion} saved`);
+    } catch (error) {
+      toast.error("Bylaw rule set not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const updateCustomType = (index: number, patch: Record<string, unknown>) => {
@@ -170,6 +226,13 @@ export function BylawRulesPage() {
               title={corporate ? "Corporation rules must be configured from approved articles and by-laws; the society baseline cannot be adopted here." : undefined}
               onClick={async () => {
                 if (!canWrite || corporate) return;
+                const ok = await confirm({
+                  title: "Reset to the statutory baseline?",
+                  message: `This records a new rule version (v${nextVersion}) using the jurisdiction draft baseline, effective today. The current values${rules?.isFallback ? "" : ` from v${rules?.version}`} stay in the version history but stop applying to meetings from today.`,
+                  confirmLabel: "Reset to defaults",
+                  tone: "warn",
+                });
+                if (!ok) return;
                 await reset({ societyId: society._id });
                 setForm(null);
                 toast.info("Using the jurisdiction draft baseline; governing instruments still require review");
@@ -177,12 +240,24 @@ export function BylawRulesPage() {
             >
               <RefreshCw size={12} /> Reset to defaults
             </button>
-            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite}>
+            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite || ruleProblems.length > 0}>
               <Save size={12} /> Save new version
             </button>
           </>
         }
       />
+
+      {ruleProblems.length > 0 && (
+        <div className="bylaw-rules__notice bylaw-rules__notice--error" role="alert" style={{ marginBottom: 12 }}>
+          <Info size={14} aria-hidden="true" />
+          <div>
+            <strong>This rule set cannot be saved yet:</strong>
+            <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+              {ruleProblems.map((problem) => <li key={problem}>{problem}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
 
       <DecisionAssessmentCard key={String(society._id)} organization={society} />
 
@@ -200,11 +275,12 @@ export function BylawRulesPage() {
           <h2 className="card__title">Rule source timeline</h2>
           <span className="card__subtitle">
             {form.isFallback ? corporate ? "Unreviewed operational defaults" : "Default assumptions" : `Editing from v${form.version}`}
+            {form.baseEffectiveFromISO ? ` · current version effective ${formatDate(String(form.baseEffectiveFromISO).slice(0, 10))}` : ""}
           </span>
         </div>
         <div className="card__body bylaw-rules__body">
           <div className="bylaw-rules__field-grid">
-            <Field label="Effective from">
+            <Field label="New version takes effect">
               <DatePicker
                 disabled={!canWrite}
                 value={toDateInputValue(form.effectiveFromISO)}
@@ -221,10 +297,10 @@ export function BylawRulesPage() {
             <Field label="Current version">
               <div className="row" style={{ minHeight: 36, gap: 6 }}>
                 <Badge tone={form.isFallback ? "warn" : "info"}>
-                  {form.isFallback ? "Fallback" : `v${form.version}`}
+                  {form.isFallback ? (form.status === "Baseline" || (history ?? []).length ? "Statutory baseline" : "Fallback") : `v${form.version}`}
                 </Badge>
                 <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  Saving creates v{Number(form.version ?? 0) + 1}
+                  Saving creates v{nextVersion}
                 </span>
               </div>
             </Field>
@@ -248,7 +324,7 @@ export function BylawRulesPage() {
                   <span>{row.quorumType === "percentage" ? `${row.quorumValue}%` : `${row.quorumValue} present`}</span>
                 </div>
                 <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  Effective {row.effectiveFromISO ? formatDate(row.effectiveFromISO) : "from first use"}
+                  Effective {row.effectiveFromISO ? formatDate(String(row.effectiveFromISO).slice(0, 10)) : "from first use"}
                 </span>
               </div>
             ))}
@@ -363,6 +439,38 @@ export function BylawRulesPage() {
                   label="Allow hybrid meetings"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="card bylaw-rules__card" data-testid="body-quorum-rules">
+            <div className="card__head">
+              <h2 className="card__title">Quorum by body</h2>
+              <span className="card__subtitle">Board and committee meetings</span>
+            </div>
+            <div className="card__body bylaw-rules__body col" style={{ gap: 12 }}>
+              <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+                Bylaws often set a different quorum for board meetings (for example a majority of directors) than for general meetings. A committee's own terms of reference, set on the committee page, take precedence over the committee default here.
+              </p>
+              {(["board", "committee"] as const).map((body) => {
+                const draft = bodyDraftFor(form.bodyQuorumRules, body);
+                return (
+                  <div key={body} className="col" style={{ gap: 4 }}>
+                    <strong style={{ fontSize: "var(--fs-sm)" }}>{body === "board" ? "Board meetings" : "Committee meetings (default)"}</strong>
+                    <QuorumRuleFields
+                      idPrefix={`body-quorum-${body}`}
+                      defaultBasis={body === "board" ? "directors_in_office" : "committee_members"}
+                      disabled={!canWrite}
+                      value={draft}
+                      onChange={(draft) => setForm({ ...form, bodyQuorumRules: setBodyRule(form.bodyQuorumRules, body, draft) })}
+                    />
+                  </div>
+                );
+              })}
+              {(form.bodyQuorumRules ?? []).filter((row: any) => row.committeeId || row.body === "general").map((row: any) => (
+                <div key={`${row.body}:${row.committeeId ?? ""}`} className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  {row.body === "general" ? "General meetings" : row.committeeName ?? "A committee"}: {describeQuorumRule(row, row.body)} (kept from the current version)
+                </div>
+              ))}
             </div>
           </div>
 
@@ -655,7 +763,9 @@ export function BylawRulesPage() {
                   <strong>{t.label}</strong>
                 </div>
                 <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  ≥ {t.thresholdPct}% of votes cast
+                  {t.id === "ordinary" && t.thresholdPct === 50
+                    ? "> 50% of votes cast (simple majority; a tie fails)"
+                    : `≥ ${t.thresholdPct}% of votes cast`}
                 </span>
               </div>
             ))}
@@ -684,7 +794,7 @@ export function BylawRulesPage() {
                 <Plus size={12} /> Add resolution type
               </button>
             )}
-            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite}>
+            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite || ruleProblems.length > 0}>
               <Save size={12} /> Save new version
             </button>
           </div>
@@ -828,4 +938,38 @@ function toDateInputValue(value: unknown) {
     return value.slice(0, 10);
   }
   return date.toISOString().slice(0, 10);
+}
+
+type BodyRuleDraftRow = BodyQuorumRule & { _draft?: ReturnType<typeof quorumRuleDraft> };
+
+function bodyDraftFor(rows: BodyRuleDraftRow[] | undefined, body: "board" | "committee") {
+  const row = (rows ?? []).find((candidate) => candidate.body === body && !candidate.committeeId);
+  return row?._draft ?? quorumRuleDraft(row);
+}
+
+/** Replace (or remove) the generic rule for one body, keeping the typed draft so half-typed numbers survive. */
+function setBodyRule(rows: BodyRuleDraftRow[] | undefined, body: "board" | "committee", draft: ReturnType<typeof quorumRuleDraft>): BodyRuleDraftRow[] {
+  const others = (rows ?? []).filter((candidate) => !(candidate.body === body && !candidate.committeeId));
+  if (!draft.quorumType) return others;
+  const rule = quorumRuleFromDraft(draft)!;
+  return [...others, { ...rule, body, _draft: draft }];
+}
+
+function bodyQuorumRowProblems(rows: BodyRuleDraftRow[] | undefined): string[] {
+  return (rows ?? []).flatMap((row) => {
+    const rule = row._draft ? quorumRuleFromDraft(row._draft) : row;
+    const label = row.body === "board" ? "Board quorum" : row.body === "general" ? "General meeting quorum" : `${row.committeeName ?? "Committee"} quorum`;
+    return quorumRuleProblems(rule).map((problem) => `${label}: ${problem}`);
+  });
+}
+
+function bodyQuorumRulesForSave(rows: BodyRuleDraftRow[] | undefined): BodyQuorumRule[] | undefined {
+  if (!rows) return undefined;
+  return rows.map((row) => {
+    const rule = row._draft ? quorumRuleFromDraft(row._draft)! : row;
+    const out: BodyQuorumRule = { body: row.body, ...cleanQuorumRule(rule) };
+    if (row.committeeId) out.committeeId = row.committeeId;
+    if (row.committeeName) out.committeeName = row.committeeName;
+    return out;
+  });
 }

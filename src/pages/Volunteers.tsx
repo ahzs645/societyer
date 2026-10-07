@@ -23,6 +23,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function VolunteersPage() {
   const society = useSociety();
@@ -154,7 +155,7 @@ export function VolunteersPage() {
                   availability: "",
                   interests: [],
                   screeningRequired: true,
-                  applicationReceivedAtISO: new Date().toISOString().slice(0, 10),
+                  applicationReceivedAtISO: todayDateOnly(),
                   renewalDueAtISO: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
                   trainingStatus: "Pending",
                 })

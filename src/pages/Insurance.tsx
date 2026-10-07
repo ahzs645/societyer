@@ -8,11 +8,12 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { ArrowLeft, FileSearch, Pencil, Plus, Shield, Trash2 } from "lucide-react";
-import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
+import { centsToDollarInput, daysUntilDate, dollarInputToCents, formatDate, money, todayDateOnly } from "../lib/format";
 import { CitationBadge } from "../components/CitationTooltip";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -26,6 +27,10 @@ import {
 } from "@/platform/record-engine";
 import { policyHistory, policyCostChange, estimatePayrollAssessment, policyCoverageChanges } from "../../shared/insuranceHistory";
 import type { Id } from "../../convex/_generated/dataModel";
+import { useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { hasErrors, validateInsurancePolicyInput, type FieldErrors } from "../../shared/recordValidation";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
@@ -38,6 +43,9 @@ export function InsurancePage() {
   const create = useMutation(api.insurance.create);
   const update = useMutation(api.insurance.update);
   const remove = useMutation(api.insurance.remove);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "edit" | "new">("view");
@@ -159,12 +167,41 @@ export function InsurancePage() {
 
   const save = async () => {
     const payload = normalizePolicyDraft(form);
-    if (editingId) {
-      await update({ id: editingId as any, patch: payload });
-    } else {
-      await create({ societyId: society._id, ...payload });
+    const validation = validateInsurancePolicyInput(payload);
+    setErrors(validation);
+    if (hasErrors(validation)) {
+      toast.error("Check the highlighted fields", Object.values(validation)[0]);
+      return;
     }
-    setOpen(false);
+    try {
+      if (editingId) {
+        await update({ id: editingId as any, patch: payload });
+        toast.success("Policy updated");
+      } else {
+        await create({ societyId: society._id, ...payload });
+        toast.success("Policy added");
+      }
+      setOpen(false);
+    } catch (error: any) {
+      toast.error("Could not save policy", error?.data?.message ?? error?.message);
+    }
+  };
+
+  const confirmRemove = async (row: any) => {
+    const label = [row.insurer, row.policyNumber].filter(Boolean).join(" · ") || "this policy";
+    const approved = await confirm({
+      title: "Delete insurance policy?",
+      message: `${label} (${kindLabel(row.kind)}, ${formatDate(row.startDate)} to ${formatDate(row.endDate)}) will be permanently removed, including its coverage items, certificates, claims and review history. To keep the history, set the status to Lapsed or Cancelled instead.`,
+      confirmLabel: "Delete policy",
+      tone: "danger",
+    });
+    if (!approved) return;
+    try {
+      await remove({ id: row._id });
+      toast.success("Policy deleted", label);
+    } catch (error: any) {
+      toast.error("Could not delete policy", error?.message);
+    }
   };
 
   return (
@@ -230,7 +267,7 @@ export function InsurancePage() {
                 <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }} disabled={!canWrite}>
                   <Pencil size={12} /> Edit
                 </button>
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); remove({ id: r._id }); }} disabled={!canWrite}>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); void confirmRemove(r); }} disabled={!canWrite}>
                   <Trash2 size={12} />
                 </button>
               </>
@@ -241,7 +278,7 @@ export function InsurancePage() {
 
       <Drawer
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => { setOpen(false); setErrors({}); }}
         title={drawerMode === "new" ? "New policy" : drawerMode === "edit" ? "Edit policy" : policyDrawerTitle(form)}
         size="wide"
         footer={
@@ -268,7 +305,7 @@ export function InsurancePage() {
           ) : (
           <div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Kind" hint="D&O = Directors & Officers liability">
+              <Field label="Kind" hint="D&O = Directors & Officers liability" required error={errors.kind}>
                 <Select value={form.kind} onChange={(value) => setForm({ ...form, kind: value })}
                   options={KINDS.map((k) => ({ value: k, label: kindLabel(k) }))} />
               </Field>
@@ -277,9 +314,9 @@ export function InsurancePage() {
                   options={STATUSES.map((status) => ({ value: status, label: status }))} />
               </Field>
             </div>
-            <Field label="Insurer"><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
+            <Field label="Insurer" required error={errors.insurer}><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
             <Field label="Broker"><input className="input" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} /></Field>
-            <Field label="Policy number"><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
+            <Field label="Policy number" required error={errors.policyNumber}><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Policy series key" hint="An identifier you choose to link this policy to its future renewals, e.g. the insurer's account number"><input className="input" value={form.policySeriesKey ?? ""} onChange={(e) => setForm({ ...form, policySeriesKey: e.target.value })} /></Field>
               <Field label="Policy term"><input className="input" value={form.policyTermLabel ?? ""} onChange={(e) => setForm({ ...form, policyTermLabel: e.target.value })} /></Field>
@@ -287,13 +324,13 @@ export function InsurancePage() {
             </div>
             <Field label="Renewal of policy number"><input className="input" value={form.renewalOfPolicyNumber ?? ""} onChange={(e) => setForm({ ...form, renewalOfPolicyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Coverage" hint="Dollars, only when explicit"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
-              <Field label="Premium" hint="Dollars, only when explicit"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
-              <Field label="Deductible" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
+              <Field label="Coverage" hint="Dollars, only when explicit" error={errors.coverageCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
+              <Field label="Premium" hint="Dollars, only when explicit" error={errors.premiumCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
+              <Field label="Deductible" hint="Dollars" error={errors.deductibleCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Policy fee" hint="Dollars, from invoice"><input className="input" type="number" min="0" step="0.01" value={form.policyFeeDollars ?? ""} onChange={(e) => setForm({ ...form, policyFeeDollars: e.target.value })} /></Field>
-              <Field label="Total invoiced cost" hint="Dollars, including documented fees/taxes"><input className="input" type="number" min="0" step="0.01" value={form.totalCostDollars ?? ""} onChange={(e) => setForm({ ...form, totalCostDollars: e.target.value })} /></Field>
+              <Field label="Policy fee" hint="Dollars, from invoice" error={errors.policyFeeCents}><input className="input" type="number" min="0" step="0.01" value={form.policyFeeDollars ?? ""} onChange={(e) => setForm({ ...form, policyFeeDollars: e.target.value })} /></Field>
+              <Field label="Total invoiced cost" hint="Dollars, including documented fees/taxes" error={errors.totalCostCents}><input className="input" type="number" min="0" step="0.01" value={form.totalCostDollars ?? ""} onChange={(e) => setForm({ ...form, totalCostDollars: e.target.value })} /></Field>
             </div>
             <Field label="Coverage summary"><MarkdownEditor rows={4} value={form.coverageSummary ?? ""} onChange={(markdown) => setForm({ ...form, coverageSummary: markdown })} /></Field>
             <Field label="Additional insureds" hint="Comma-separated"><input className="input" value={form.additionalInsuredsInput ?? ""} onChange={(e) => setForm({ ...form, additionalInsuredsInput: e.target.value })} /></Field>
@@ -311,9 +348,9 @@ export function InsurancePage() {
             <EvidenceRowsEditor title="Annual insurance reviews" rows={form.annualReviews ?? parseAnnualReviews(form.annualReviewsInput)} columns={INSURANCE_ROW_COLUMNS.annualReviews} onChange={rows => setForm({ ...form, annualReviews: rows })} />
             <EvidenceRowsEditor title="Compliance checks" rows={form.complianceChecks ?? parseComplianceChecks(form.complianceChecksInput)} columns={INSURANCE_ROW_COLUMNS.complianceChecks} onChange={rows => setForm({ ...form, complianceChecks: rows })} />
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Start"><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
-              <Field label="End"><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
-              <Field label="Renewal"><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
+              <Field label="Start" required error={errors.startDate}><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
+              <Field label="End" error={errors.endDate}><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
+              <Field label="Renewal" required error={errors.renewalDate}><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
             </div>
             <Field label="Source external IDs" hint="Comma-separated Paperless or external IDs"><input className="input" value={form.sourceExternalIdsInput ?? ""} onChange={(e) => setForm({ ...form, sourceExternalIdsInput: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
@@ -361,16 +398,7 @@ export function InsurancePolicyDetailPage() {
   const rows = (items ?? []) as any[];
   const policy = rows.find((row) => String(row._id) === String(id));
   if (!policy) {
-    return (
-      <div className="page">
-        <Link to="/app/insurance" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-          <ArrowLeft size={12} /> Insurance policies
-        </Link>
-        <div className="card">
-          <div className="card__body">Policy not found.</div>
-        </div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Insurance policy" backTo="/app/insurance" backLabel="Insurance policies" />;
   }
 
   const versions = policyHistory(policy, rows);
@@ -392,6 +420,7 @@ export function InsurancePolicyDetailPage() {
             <button className="btn-action" disabled={!canWrite} onClick={() => { setRenewalError(""); setRenewal({ policyNumber: "", startDate: dateInput(policy.endDate || policy.renewalDate), endDate: "", premiumDollars: "", policyFeeDollars: "", totalCostDollars: "" }); }}><Plus size={12} /> Record renewal</button>
             <Badge tone={statusTone(policy.status)}>{policy.status}</Badge>
             {policy.sensitivity === "restricted" && <Badge tone="danger">restricted</Badge>}
+            <SourceProvenanceButton table="insurancePolicies" id={policy._id} />
           </>
         }
       />
@@ -900,7 +929,7 @@ function RenewalCell({ date }: { date?: string }) {
 }
 
 function summarizePolicies(rows: any[]) {
-  const current = new Set(currentRenewalPolicies(rows, new Date().toISOString().slice(0,10)).map(row => row._id));
+  const current = new Set(currentRenewalPolicies(rows, todayDateOnly()).map(row => row._id));
   return rows.reduce(
     (summary, row) => {
       const days = daysUntil(row.renewalDate);
@@ -920,9 +949,11 @@ function normalizePolicyDraft(form: any) {
   if (form.confidence === "Review" && !riskFlags.includes("needs review")) riskFlags.push("needs review");
   return {
     kind: form.kind || "Other",
-    insurer: cleanOptional(form.insurer) || "Needs review",
+    // Required fields stay empty when blank so validation can flag them
+    // (they used to be filled with "Needs review", creating blank policies).
+    insurer: cleanOptional(form.insurer) ?? "",
     broker: cleanOptional(form.broker),
-    policyNumber: cleanOptional(form.policyNumber) || "Needs review",
+    policyNumber: cleanOptional(form.policyNumber) ?? "",
     policySeriesKey: cleanOptional(form.policySeriesKey),
     policyTermLabel: cleanOptional(form.policyTermLabel),
     versionType: cleanOptional(form.versionType),
@@ -1308,7 +1339,7 @@ function dateInput(value?: string) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function oneYearFromToday() {
@@ -1316,10 +1347,8 @@ function oneYearFromToday() {
 }
 
 function daysUntil(value?: string) {
-  if (!value) return null;
-  const date = new Date(value).getTime();
-  if (!Number.isFinite(date)) return null;
-  return Math.floor((date - Date.now()) / 86_400_000);
+  // Calendar days in the local calendar; date-only renewals are not shifted by UTC.
+  return daysUntilDate(value);
 }
 
 function kindLabel(kind: string) {

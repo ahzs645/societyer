@@ -44,10 +44,13 @@ export const create = authorizedMutation("tasks:create", mutation)({
     status: v.string(),
     priority: v.string(),
     assignee: v.optional(v.string()),
+    assigneePersonId: v.optional(v.id("peopleDirectory")),
+    sourceAssignee: v.optional(v.string()),
     responsibleUserIds: v.optional(v.array(v.id("users"))),
     dueDate: v.optional(v.string()),
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
+    agendaItemId: v.optional(v.id("agendaItems")),
     goalId: v.optional(v.id("goals")),
     filingId: v.optional(v.id("filings")),
     workflowId: v.optional(v.id("workflows")),
@@ -69,10 +72,15 @@ export const update = authorizedMutation("tasks:update", mutation)({
       status: v.optional(v.string()),
       priority: v.optional(v.string()),
       assignee: v.optional(v.string()),
+      assigneePersonId: v.optional(v.id("peopleDirectory")),
+      clearAssigneePersonId: v.optional(v.boolean()),
+      sourceAssignee: v.optional(v.string()),
       responsibleUserIds: v.optional(v.array(v.id("users"))),
       dueDate: v.optional(v.string()),
       committeeId: v.optional(v.id("committees")),
       meetingId: v.optional(v.id("meetings")),
+      agendaItemId: v.optional(v.id("agendaItems")),
+      clearAgendaItemId: v.optional(v.boolean()),
       goalId: v.optional(v.id("goals")),
       filingId: v.optional(v.id("filings")),
       workflowId: v.optional(v.id("workflows")),
@@ -101,4 +109,16 @@ export const remove = authorizedMutation("tasks:remove", mutation)({
 export const observeAction = authorizedMutation('tasks:observeAction', mutation)({
   args: { societyId: v.id('societies'), registerKey: v.string(), externalActionId: v.string(), title: v.string(), observation: v.any() }, returns: v.any(),
   handler: async (ctx, args) => (await import('../shared/functions/tasks')).observeAction(await toPortableMutationCtx(ctx), args),
+});
+
+export const consolidateHistoricalActions = authorizedMutation("tasks:consolidateHistoricalActions", mutation)({
+  args: { societyId: v.id("societies"), dryRun: v.optional(v.boolean()), options: v.optional(v.object({ dedupe: v.optional(v.boolean()), unknownStatus: v.optional(v.boolean()), assignees: v.optional(v.boolean()), committees: v.optional(v.boolean()) })) },
+  returns: v.any(),
+  handler: async (ctx, args) => (await import("../shared/functions/tasks")).consolidateHistoricalActions(await toPortableMutationCtx(ctx), args),
+});
+
+export const promoteHistoricalAction = authorizedMutation("tasks:promoteHistoricalAction", mutation)({
+  args: { id: v.id("tasks"), title: v.optional(v.string()), dueDate: v.optional(v.string()), responsibleUserIds: v.optional(v.array(v.id("users"))), note: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, args) => (await import("../shared/functions/tasks")).promoteHistoricalAction(await toPortableMutationCtx(ctx), args),
 });

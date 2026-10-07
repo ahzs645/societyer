@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -12,10 +13,12 @@ import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
-import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Database, Link2, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
+import { hasErrors, validateBudgetLineInput, type FieldErrors } from "../../shared/recordValidation";
 import {
   WaveHealthPanel,
   redactWaveHealthResult,
@@ -109,10 +112,12 @@ export function FinancialsPage() {
   const [linkItemId, setLinkItemId] = useState("");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [waveHealthBusy, setWaveHealthBusy] = useState(false);
   const [waveHealth, setWaveHealth] = useState<any>(null);
-  const [budgetForm, setBudgetForm] = useState<{ category: string; planned: string } | null>(null);
+  const [budgetForm, setBudgetForm] = useState<{ id?: string; category: string; planned: string } | null>(null);
+  const [budgetErrors, setBudgetErrors] = useState<FieldErrors>({});
   const [subscriptionForm, setSubscriptionForm] = useState<any>(null);
   const [waveMode, setWaveMode] = useState<"resources" | "structures">("resources");
   const [waveResourceType, setWaveResourceType] = useState("account");
@@ -410,6 +415,7 @@ export function FinancialsPage() {
           )
         }
       />
+      <ImportCandidatesNotice noun="financial statement" targets={["financials", "financialStatements", "financialStatementImports"]} kinds={["financialStatement", "financialStatementImport", "budgetSnapshot", "treasurerReport"]} documentCategory="FinancialStatement" emptyRegister={!(items ?? []).length} also={{ to: "/app/finance-imports", label: "Imported statements and budget snapshots awaiting verification are in Finance imports" }} />
 
       <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
         {[
@@ -491,7 +497,7 @@ export function FinancialsPage() {
         <div className="stat-grid" style={{ marginBottom: 16 }}>
           <Stat label="Total bank balance" value={money(hub.totalBalance)} />
           <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
-          <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} />
+          <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} sub="Bank accounts flagged restricted" />
           <Stat
             label="Last sync"
             value={activeConnection.lastSyncAtISO ? formatDateTime(activeConnection.lastSyncAtISO) : "—"}
@@ -557,7 +563,7 @@ export function FinancialsPage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Restricted funds</h2>
-            <span className="card__subtitle">Earmarked for specific purposes — track separately (CPA guidance).</span>
+            <span className="card__subtitle">Bank accounts flagged as restricted. The fund-by-fund ledger balance is under Accounting; the audited figure is in the year's statements.</span>
           </div>
           <table className="table">
             <thead>
@@ -584,7 +590,7 @@ export function FinancialsPage() {
             <div style={{ marginLeft: "auto" }}>
               <button
                 className="btn-action"
-                onClick={() => setBudgetForm({ category: "", planned: "" })} disabled={!canWrite}
+                onClick={() => { setBudgetErrors({}); setBudgetForm({ category: "", planned: "" }); }} disabled={!canWrite}
               >
                 <PlusCircle size={12} /> Add budget line
               </button>
@@ -614,11 +620,35 @@ export function FinancialsPage() {
                     >
                       {money(variance)}
                     </td>
-                    <td style={{ textAlign: "right" }}>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
-                        aria-label={`Delete budget ${b.name}`}
-                        onClick={() => removeBudget({ id: b._id })} disabled={!canWrite}
+                        aria-label={`Edit budget ${b.category}`}
+                        title="Edit planned amount"
+                        onClick={() => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); }}
+                        disabled={!canWrite}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        className="btn btn--ghost btn--sm btn--icon"
+                        aria-label={`Delete budget ${b.category}`}
+                        onClick={async () => {
+                          const approved = await confirm({
+                            title: "Delete budget line?",
+                            message: `The FY ${fiscalYear} "${b.category}" budget of ${money(b.plannedCents)} will be removed. Actual transactions are not affected.`,
+                            confirmLabel: "Delete budget line",
+                            tone: "danger",
+                          });
+                          if (!approved) return;
+                          try {
+                            await removeBudget({ id: b._id });
+                            toast.success("Budget line deleted", b.category);
+                          } catch (error: any) {
+                            toast.error("Could not delete budget line", error?.message);
+                          }
+                        }}
+                        disabled={!canWrite}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -638,18 +668,21 @@ export function FinancialsPage() {
 
           {budgetForm && (
             <div className="card__body" style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <Field label="Category">
+              <Field label="Category" required error={budgetErrors.category}>
                 <input
                   className="input"
                   value={budgetForm.category}
+                  disabled={Boolean(budgetForm.id)}
                   onChange={(e) => setBudgetForm({ ...budgetForm, category: e.target.value })}
                   placeholder="e.g. Program supplies"
                 />
               </Field>
-              <Field label="Planned (CAD)">
+              <Field label="Planned (CAD)" required error={budgetErrors.plannedCents}>
                 <input
                   className="input"
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={budgetForm.planned}
                   onChange={(e) => setBudgetForm({ ...budgetForm, planned: e.target.value })}
                   placeholder="12000"
@@ -658,15 +691,18 @@ export function FinancialsPage() {
               <button
                 className="btn btn--accent"
                 onClick={async () => {
-                  if (!budgetForm.category || !budgetForm.planned) return;
-                  await upsertBudget({
-                    societyId: society._id,
-                    fiscalYear,
-                    category: budgetForm.category,
-                    plannedCents: Math.round(Number(budgetForm.planned) * 100),
-                  });
-                  setBudgetForm(null);
-                  toast.success("Budget saved");
+                  const plannedCents = budgetForm.planned.trim() === "" ? Number.NaN : Math.round(Number(budgetForm.planned) * 100);
+                  const payload = { fiscalYear, category: budgetForm.category.trim(), plannedCents };
+                  const errors = validateBudgetLineInput(payload, hub?.budgetRows ?? [], budgetForm.id);
+                  setBudgetErrors(errors);
+                  if (hasErrors(errors)) return;
+                  try {
+                    await upsertBudget({ id: budgetForm.id as any, societyId: society._id, ...payload });
+                    setBudgetForm(null);
+                    toast.success(budgetForm.id ? "Budget updated" : "Budget saved");
+                  } catch (error: any) {
+                    toast.error("Could not save budget line", error?.data?.message ?? error?.message);
+                  }
                 }}
               >
                 Save

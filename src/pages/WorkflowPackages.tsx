@@ -29,6 +29,7 @@ export function WorkflowPackagesPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [activeTab, setActiveTab] = useState("packages");
+  const [nameError, setNameError] = useState("");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
 
@@ -57,6 +58,11 @@ export function WorkflowPackagesPage() {
 
   const save = async () => {
     if (!canManage || !draft) return;
+    if (!String(draft.packageName ?? "").trim()) {
+      setNameError("Name the package so it can be tracked.");
+      return;
+    }
+    setNameError("");
     await upsert({
       id: draft._id,
       societyId: society._id,
@@ -65,7 +71,7 @@ export function WorkflowPackagesPage() {
       eventType: draft.eventType || "custom.event",
       effectiveDate: draft.effectiveDate || undefined,
       status: draft.status || "draft",
-      packageName: draft.packageName || "Untitled package",
+      packageName: String(draft.packageName).trim(),
       parts: csv(draft.partsText ?? draft.parts),
       notes: draft.notes || undefined,
       supportingDocumentIds: draft.supportingDocumentId ? [draft.supportingDocumentId] : draft.supportingDocumentIds ?? [],
@@ -230,7 +236,7 @@ export function WorkflowPackagesPage() {
       >
         {draft && (
           <>
-            <Field label="Package name"><input className="input" value={draft.packageName ?? ""} onChange={(e) => setDraft({ ...draft, packageName: e.target.value })} /></Field>
+            <Field label="Package name" required error={nameError || undefined}><input className="input" value={draft.packageName ?? ""} onChange={(e) => setDraft({ ...draft, packageName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <OptionSelect label="Event type" setName="eventTypes" value={draft.eventType ?? ""} onChange={(value) => setDraft({ ...draft, eventType: value })} />
               <OptionSelect label="Status" setName="workflowPackageStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />

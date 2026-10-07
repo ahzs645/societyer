@@ -1,5 +1,7 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { quorumRuleValidator, signingAuthorityTierValidator } from "../validators/meetingModel";
+import { cadenceRuleValidator, committeeMandateVersionValidator } from "../validators/gaps";
 
 /**
  * People & governance tables (members, directors, board role assignments/changes, signing authorities, committees, committee members, org-chart assignments), extracted from convex/schema.ts. Spread back into defineSchema; byte-identical.
@@ -28,6 +30,10 @@ export const peopleTables = {
     leftAt: v.optional(v.string()),
     votingRights: v.boolean(),
     notes: v.optional(v.string()),
+    // A2: an organization can hold membership and appoint representatives
+    // (organizationSeats.memberId + representative terms). Absent = individual.
+    memberKind: v.optional(v.string()), // individual | organization
+    organizationName: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"]),
@@ -106,6 +112,9 @@ export const peopleTables = {
     institutionName: v.optional(v.string()),
     accountLabel: v.optional(v.string()),
     authorityType: v.string(), // signing | banking | card | online-banking | other
+    // A17: amount tiers ("one signature up to $5,000; two above").
+    tiers: v.optional(v.array(signingAuthorityTierValidator)),
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
     effectiveDate: v.string(),
     endDate: v.optional(v.string()),
     status: v.string(),
@@ -125,8 +134,18 @@ export const peopleTables = {
     mission: v.optional(v.string()),
     cadence: v.string(),
     cadenceNotes: v.optional(v.string()),
+    // A4: structured body model. `cadence` stays as the display label.
+    kind: v.optional(v.string()), // standing | ad_hoc | working_group | executive | advisory
+    parentBody: v.optional(v.string()), // board | members | committee
+    parentCommitteeId: v.optional(v.id("committees")),
+    cadenceRule: v.optional(cadenceRuleValidator),
+    mandateVersions: v.optional(v.array(committeeMandateVersionValidator)),
     nextMeetingAt: v.optional(v.string()),
     chairDirectorId: v.optional(v.id("directors")),
+    // A3: the committee's own quorum rule (e.g. "all 5 members").
+    quorumRule: v.optional(quorumRuleValidator),
+    // Normalized body key used to match imported meetings ("executive").
+    bodyKey: v.optional(v.string()),
     color: v.string(),
     status: v.string(),
     createdAtISO: v.string(),
@@ -142,8 +161,19 @@ export const peopleTables = {
     role: v.string(),
     directorId: v.optional(v.id("directors")),
     memberId: v.optional(v.id("members")),
+    // A1: people-directory link for members who are not directors/members.
+    personId: v.optional(v.id("peopleDirectory")),
+    // Organization the committee member represents (seat).
+    representedOrganization: v.optional(v.string()),
     joinedAt: v.string(),
     leftAt: v.optional(v.string()),
+    // P15: roster rows built from a source roster sheet stay pending until a
+    // person confirms them; the seat observation they came from is kept.
+    reviewStatus: v.optional(v.string()), // pending | verified
+    sourceSeatId: v.optional(v.id("organizationSeats")),
+    sourceObservationId: v.optional(v.string()),
+    observedDate: v.optional(v.string()),
+    sourceReference: v.optional(v.string()),
   })
     .index("by_committee", ["committeeId"])
     .index("by_society", ["societyId"]),

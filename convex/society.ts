@@ -38,6 +38,7 @@ import {
   assertWorkspaceCreator,
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
+import { createWorkspacePortable } from "../shared/functions/societyCreate";
 import { buildConvexCapabilities } from "./providers/capabilities";
 import { getOwned, requireAuthenticated, requireSocietyMembership } from "../shared/functions/access";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../shared/portable/define";
@@ -327,147 +328,12 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
     workflowId: v.id("workflows"),
     taskIds: v.array(v.id("tasks")),
   }),
-  handler: async (ctx, args) => {
-    await assertWorkspaceCreator(await toPortableMutationCtx(ctx), args.actingUserId);
-    readOnboardingAnswersJson(args.onboardingAnswersJson, args);
-    if (args.onboardingAnswersJson) validateInitialOrganizationProfile(args);
-    const name = args.name.trim();
-    if (!name) throw new Error("Society name is required.");
-    if (args.fiscalYearEnd && !/^\d{2}-\d{2}$/.test(args.fiscalYearEnd)) {
-      throw new Error("Fiscal year end must use MM-DD format.");
-    }
-    validateEntitySetup(args);
-    validateFormationEvidence(args);
-    validateWorkspaceLegalIdentity({ ...args, jurisdictionCode: args.jurisdictionCode ?? args.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE });
-    assertAllowedOption("entityTypes", args.entityType, "Entity type");
-    assertAllowedOption("actsFormedUnder", args.actFormedUnder, "Act formed under");
-    assertAllowedOption("organizationStatuses", args.organizationStatus, "Organization status");
-
-    const now = new Date().toISOString();
-    const jurisdictionCode = args.jurisdictionCode ?? args.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
-    const homeJurisdictionCode = args.homeJurisdictionCode ?? jurisdictionCode;
-    const anniversaryDate = blankToUndefined(args.anniversaryDate) ?? blankToUndefined(args.incorporationDate);
-
-    const societyId = await ctx.db.insert("societies", {
-      name,
-      onboardingAnswersJson: args.onboardingAnswersJson,
-      incorporationNumber: blankToUndefined(args.incorporationNumber),
-      incorporationDate: blankToUndefined(args.incorporationDate),
-      fiscalYearEnd: blankToUndefined(args.fiscalYearEnd),
-      jurisdictionCode,
-      homeJurisdictionCode,
-      anniversaryDate,
-      corporationKeyVaultItemId: args.corporationKeyVaultItemId,
-      continuanceDate: blankToUndefined(args.continuanceDate),
-      amalgamationDate: blankToUndefined(args.amalgamationDate),
-      ...entitySetupFields(args),
-      formationStatus: args.formationStatus || "preparing",
-      entityType: blankToUndefined(args.entityType),
-      actFormedUnder: blankToUndefined(args.actFormedUnder),
-      officialEmail: blankToUndefined(args.officialEmail),
-      numbered: args.numbered,
-      distributing: args.distributing,
-      solicitingPublicBenefit: args.solicitingPublicBenefit,
-      organizationStatus: args.organizationStatus ?? "active",
-      registeredOfficeAddress: normalizeAddressText(args.registeredOfficeAddress),
-      mailingAddress: normalizeAddressText(args.mailingAddress),
-      purposes: blankToUndefined(args.purposes),
-      privacyOfficerName: blankToUndefined(args.privacyOfficerName),
-      privacyOfficerEmail: blankToUndefined(args.privacyOfficerEmail),
-      isCharity: args.isCharity ?? false,
-      isMemberFunded: args.isMemberFunded ?? false,
-      updatedAt: Date.now(),
-    });
-    if (args.corporationKeyVaultItemId) {
-      await getOwned(
-        await toPortableMutationCtx(ctx),
-        "secretVaultItems",
-        args.corporationKeyVaultItemId,
-        societyId,
-      );
-    }
-    const homeRegistrationId = await ctx.db.insert("organizationRegistrations", {
-      societyId,
-      registrationType: "home",
-      jurisdiction: homeJurisdictionCode,
-      homeJurisdiction: homeJurisdictionCode,
-      registrationNumber: blankToUndefined(args.incorporationNumber),
-      registrationDate: blankToUndefined(args.incorporationDate),
-      officialEmail: blankToUndefined(args.officialEmail),
-      representativeIds: [],
-      status: args.organizationStatus === "pre_incorporation" ? "pending" : "active",
-      notes: args.organizationStatus === "pre_incorporation" ? "Planned home jurisdiction; incorporation has not been confirmed." : "Created automatically from the workspace home jurisdiction.",
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    await ctx.db.patch(societyId, { primaryRegistrationId: homeRegistrationId });
-    await seedSociety(ctx, societyId);
-    // Seed the entity's document packet catalog (corporation vs society by kind)
-    // unless the caller opts out (isolation tests that assert seed counts).
-    if (args.seedDocumentPackets !== false) {
-      await seedDocumentPacketsForEntityHelper(ctx, societyId);
-    }
-
-    // A hosted verified creator becomes the initial Owner immediately. Local
-    // trusted-workspace callers retain the placeholder behavior.
-    const ownerEmail = blankToUndefined(args.officialEmail) ?? blankToUndefined(args.privacyOfficerEmail) ?? `owner@${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
-    const ownerUserId = await seedNewSocietyOwnerPortable(await toPortableMutationCtx(ctx), {
-      societyId,
-      placeholderEmail: ownerEmail,
-      placeholderDisplayName: blankToUndefined(args.privacyOfficerName) ?? "Owner",
-      createdAtISO: now,
-    });
-
-    const workflowId = await ctx.db.insert("workflows", {
-      societyId,
-      recipe: "workspace_onboarding",
-      name: "Workspace onboarding",
-      status: "active",
-      provider: "internal",
-      nodePreview: buildWorkspaceOnboardingNodes(args),
-      trigger: { kind: "manual" },
-      config: workspaceOnboardingWorkflowConfig(args ?? {}),
-      createdByUserId: ownerUserId,
-    });
-
-    const taskIds = [];
-    for (const task of buildWorkspaceOnboardingTasks(args)) {
-      taskIds.push(await ctx.db.insert("tasks", {
-        societyId,
-        workflowId,
-        ...task,
-        status: "Todo",
-        priority: task.priority,
-        tags: ["workspace-onboarding", ...task.tags],
-        createdAtISO: now,
-      }));
-    }
-
-    await ctx.db.insert("activity", {
-      societyId,
-      actor: "You",
-      entityType: "society",
-      subjectId: societyId,
-      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
-      entityId: societyId,
-      action: "created",
-      summary: `Created workspace for ${name}`,
-      createdAtISO: now,
-    });
-    await ctx.db.insert("activity", {
-      societyId,
-      actor: "System",
-      entityType: "workflow",
-      subjectId: workflowId,
-      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
-      entityId: workflowId,
-      action: "created",
-      summary: "Created workspace onboarding workflow",
-      createdAtISO: now,
-    });
-
-    return { societyId, workflowId, taskIds };
-  },
+  // One handler for hosted Convex and the local runtime (A4); record-table
+  // metadata definitions live here, so the wrapper seeds them.
+  handler: async (ctx, args) =>
+    createWorkspacePortable(await toPortableMutationCtx(ctx), args, {
+      seedRecordTableMetadata: (societyId) => seedSociety(ctx, societyId),
+    }),
 });
 
 export const updateModules = authorizedMutation("society:updateModules", mutation)({

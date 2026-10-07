@@ -86,7 +86,15 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "pipaTraining") return cleanText(payload?.participantName) || cleanText(payload?.title) || "PIPA training";
   if (recordKind === "employee") return cleanText(payload?.name) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Employee";
   if (recordKind === "volunteer") return cleanText(payload?.name) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Volunteer";
-  return cleanText(payload?.title) || cleanText(payload?.id) || "Document candidate";
+  if (recordKind === "committee") return cleanText(payload?.name) || cleanText(payload?.committeeName) || "Committee";
+  if (["committeeMember", "member", "director", "conflict"].includes(recordKind)) return cleanText(payload?.fullName) || cleanText(payload?.name) || cleanText(payload?.personName) || [payload?.firstName, payload?.lastName].map(cleanText).filter(Boolean).join(" ") || "Person";
+  if (recordKind === "fundingSource") return cleanText(payload?.name) || "Funding source";
+  if (recordKind === "organizationSeat") return cleanText(payload?.organizationName) || cleanText(payload?.seatKey) || "Organization seat";
+  if (recordKind === "proxy") return [cleanText(payload?.grantorName), cleanText(payload?.proxyHolderName)].filter(Boolean).join(" → ") || "Proxy";
+  if (recordKind === "bylawRuleSet") return cleanText(payload?.title) || `Bylaw rules${cleanText(payload?.effectiveFrom) ? ` from ${cleanText(payload?.effectiveFrom)}` : ""}`;
+  if (recordKind === "operatingBudget") return cleanText(payload?.title) || [cleanText(payload?.fiscalYear), cleanText(payload?.category)].filter(Boolean).join(" ") || "Budget";
+  if (recordKind === "meetingMaterial") return cleanText(payload?.label) || cleanText(payload?.title) || "Meeting material";
+  return cleanText(payload?.title) || cleanText(payload?.text) || cleanText(payload?.id) || "Document candidate";
 }
 
 function descriptionForRecord(recordKind: string, payload: any) {
@@ -152,6 +160,32 @@ function summarizeRecords(records: any[]) {
     documentsApplied,
     sectionsApplied,
     approvedUnapplied,
+  };
+}
+
+/**
+ * Applied records removed by "Compact applied records" (or an intake run's compaction) are summarized on
+ * the session (`compactedRecords.summary`) so its counts still include them.
+ */
+function withCompactedRecords(summary: ReturnType<typeof summarizeRecords>, session: any) {
+  const compacted = session?.compactedRecords?.summary;
+  if (!compacted || typeof compacted !== "object") return summary;
+  const add = (target: Record<string, number>, extra: unknown) => {
+    const out = { ...target };
+    if (extra && typeof extra === "object") for (const [key, value] of Object.entries(extra as Record<string, unknown>)) out[key] = (out[key] ?? 0) + (Number(value) || 0);
+    return out;
+  };
+  return {
+    ...summary,
+    total: summary.total + (Number(compacted.total) || 0),
+    byKind: add(summary.byKind, compacted.byKind),
+    byStatus: add(summary.byStatus, compacted.byStatus),
+    byTarget: add(summary.byTarget, compacted.byTarget),
+    riskCount: summary.riskCount + (Number(compacted.riskCount) || 0),
+    orgHistoryApplied: summary.orgHistoryApplied + (Number(compacted.orgHistoryApplied) || 0),
+    meetingsApplied: summary.meetingsApplied + (Number(compacted.meetingsApplied) || 0),
+    documentsApplied: summary.documentsApplied + (Number(compacted.documentsApplied) || 0),
+    sectionsApplied: summary.sectionsApplied + (Number(compacted.sectionsApplied) || 0),
   };
 }
 
@@ -333,6 +367,7 @@ export {
   descriptionForRecord,
   titleForHistoryItem,
   summarizeRecords,
+  withCompactedRecords,
   summaryForSession,
   isPlainObject,
   summarizeFromSessionMetadata,

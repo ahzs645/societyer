@@ -1,3 +1,4 @@
+import { formatMeetingDate } from "../../shared/meetingDates";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -292,7 +293,10 @@ export function AgendaBuilderPage() {
             </div>
             <div className="card__body col" style={{ gap: 4 }}>
               {(agendas ?? []).length === 0 && <div className="muted">No agendas yet.</div>}
-              {(agendas ?? []).map((a: any) => {
+              {[...(agendas ?? [])]
+                // Newest meeting first, like the meetings list.
+                .sort((x: any, y: any) => String(meetingById.get(y.meetingId)?.scheduledAt ?? "").localeCompare(String(meetingById.get(x.meetingId)?.scheduledAt ?? "")))
+                .map((a: any) => {
                 const meeting = meetingById.get(a.meetingId);
                 const active = a._id === selectedAgendaId;
                 return (
@@ -306,7 +310,7 @@ export function AgendaBuilderPage() {
                   >
                     <span className="agenda-builder__agenda-copy">
                       <strong className="agenda-builder__agenda-title">{a.title}</strong>
-                      {meeting && <span className="muted agenda-builder__agenda-date">{formatDate(meeting.scheduledAt)}</span>}
+                      {meeting && <span className="muted agenda-builder__agenda-date">{formatMeetingDate(meeting, { withTime: false })}</span>}
                     </span>
                     <span className="muted agenda-builder__agenda-status">{a.status}</span>
                   </button>

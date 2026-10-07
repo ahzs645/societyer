@@ -1,5 +1,5 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -13,6 +13,14 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
+import { todayDateOnly } from "../../shared/dateOnly";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
+import {
+  EVIDENCE_REVIEW_STATUSES,
+  evidenceReviewStatusLabel,
+  evidenceReviewStatusTone,
+  normalizeEvidenceReviewStatus,
+} from "../../shared/documentReviewStatus";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
@@ -24,6 +32,10 @@ export function GovernanceRegistersPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [addForm, setAddForm] = useState<any>(null);
+  const directors = useQuery(
+    api.directors.list,
+    society && permissions.can("directors:read") ? { societyId: society._id } : "skip",
+  ) as any[] | undefined;
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
@@ -45,19 +57,37 @@ export function GovernanceRegistersPage() {
 
   const promoteRole = async (row: any) => {
     if (!canPromote) return;
+    const sourced = (row.sourceDocumentIds?.length ?? 0) > 0 || (row.sourceExternalIds?.length ?? 0) > 0 || Boolean(row.importedFrom);
+    const samePosition = (directors ?? []).filter((director: any) =>
+      director.status === "Active" && !director.resignedAt &&
+      String(director.position ?? "").trim().toLowerCase() === String(row.roleTitle ?? "").trim().toLowerCase() &&
+      !/^director$/i.test(String(row.roleTitle ?? "")));
     const ok = await confirm({
       title: "Promote to director register?",
-      message: `${row.personName} will be added to the current directors register using this source-backed role assignment.`,
-      confirmLabel: "Promote",
+      message: [
+        `${row.personName} will be added to the current directors register as ${row.roleTitle || "Director"}.`,
+        sourced
+          ? "The role assignment has source evidence; review it before relying on the register."
+          : "This role assignment has NO source document. It will be promoted as unverified; attach the appointment minutes or resolution afterwards.",
+        samePosition.length
+          ? `Conflict: ${samePosition.map((director: any) => `${director.firstName} ${director.lastName}`.trim()).join(", ")} already holds ${row.roleTitle} on the register. Resign or update them if this replaces them.`
+          : "",
+      ].filter(Boolean).join(" "),
+      confirmLabel: sourced && !samePosition.length ? "Promote" : "Promote anyway",
+      tone: sourced && !samePosition.length ? undefined : "warn",
     });
     if (!ok) return;
-    await promoteBoardRole({
-      assignmentId: row._id,
-      position: row.roleTitle,
-      status: "Active",
-      notes: "Promoted from governance register review.",
-    });
-    toast.success("Director register updated", row.personName);
+    try {
+      await promoteBoardRole({
+        assignmentId: row._id,
+        position: row.roleTitle,
+        status: "Active",
+        notes: "Promoted from governance register review.",
+      });
+      toast.success("Director register updated", row.personName);
+    } catch (error) {
+      toast.error("Could not promote", error instanceof Error ? error.message : String(error));
+    }
   };
 
   return (
@@ -70,7 +100,7 @@ export function GovernanceRegistersPage() {
         subtitle="Source-backed director/officer timeline, board role changes, and signing authority records."
         actions={
           <>
-            <button className="btn-action" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: new Date().toISOString().slice(0, 10), notes: "" })}>
+            <button className="btn-action" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: todayDateOnly(), notes: "" })}>
               <Plus size={12} /> Add record
             </button>
             <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
@@ -191,10 +221,24 @@ export function GovernanceRegistersPage() {
 
 export function MeetingEvidencePage() {
   const { society, data, people } = useRegisters();
+  const { can } = usePermissions();
+  const meetings = useQuery(api.meetings.list, society && can("meetings:read") ? { societyId: society._id } : "skip") as any[] | undefined;
+  // P18: one row per person, meeting and status (imports read the same minutes
+  // twice), labelled with the meeting's current title rather than a file name.
+  const attendance = useMemo(() => {
+    const titles = new Map((meetings ?? []).map((m: any) => [String(m._id), m.title]));
+    const groups = new Map<string, any>();
+    for (const row of (data?.meetingAttendanceRecords ?? []) as any[]) {
+      const key = [row.meetingId ?? row.meetingTitle ?? row.sourceTitle, String(row.directoryPersonId ?? row.personName ?? "").trim().toLocaleLowerCase(), String(row.attendanceStatus ?? "").toLocaleLowerCase()].join("|");
+      const existing = groups.get(key);
+      if (existing) { existing.duplicateCount += 1; continue; }
+      groups.set(key, { ...row, meetingTitle: (row.meetingId && titles.get(String(row.meetingId))) || row.meetingTitle, duplicateCount: 1 });
+    }
+    return [...groups.values()];
+  }, [data, meetings]);
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const attendance = data?.meetingAttendanceRecords ?? [];
   const motions = data?.motionEvidence ?? [];
 
   return (
@@ -207,6 +251,7 @@ export function MeetingEvidencePage() {
         subtitle="Attendance, quorum evidence, and source-backed motions extracted from minutes."
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
+      <ImportCandidatesNotice noun="meeting evidence" kinds={["meetingAttendance", "motionEvidence", "motion", "meetingMinutes"]} emptyRegister={!attendance.length && !motions.length} />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Attendance rows" value={data?.restrictedResources?.includes("meetings") ? "Restricted" : attendance.length} />
         <Stat label="Motion evidence" value={data?.restrictedResources?.includes("motions") ? "Restricted" : motions.length} />
@@ -227,7 +272,7 @@ export function MeetingEvidencePage() {
           </>
         }
         columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
-        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
+        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, <span key="a">{!row.attendanceStatus || /^unknown$/i.test(row.attendanceStatus) ? "Not stated" : row.attendanceStatus}{row.duplicateCount > 1 ? <span className="muted" title="The same person, meeting and status appeared more than once in the imported evidence"> · recorded {row.duplicateCount}×</span> : null}</span>, <Confidence key="c" value={row.confidence} />]}
       />
       <RegisterTable
         title="Motion evidence"
@@ -265,9 +310,10 @@ export function FinanceImportsPage() {
         title="Finance imports"
         icon={<Banknote size={16} />}
         iconColor="green"
-        subtitle="Paperless-derived budget snapshots, financial statements, treasurer reports, and transaction candidates."
+        subtitle="Imported budget snapshots, financial statements, treasurer reports, and transaction candidates awaiting verification."
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
+      <ImportCandidatesNotice noun="finance" targets={["financialStatementImports", "budgetSnapshots"]} kinds={["financialStatementImport", "budgetSnapshot", "treasurerReport", "transactionCandidate"]} documentCategory="FinancialStatement" emptyRegister={!budgets.length && !statements.length} />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Budgets" value={data?.restrictedResources?.includes("financials") ? "Restricted" : budgets.length} />
         <Stat label="Statements" value={data?.restrictedResources?.includes("financials") ? "Restricted" : statements.length} />
@@ -352,11 +398,47 @@ export function FinanceImportsPage() {
 
 export function RecordsArchivePage() {
   const { society, data } = useRegisters();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
+  const updateReview = usePermissionedMutation(api.evidenceRegisters.updateReview, canEdit);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const accessions = data?.archiveAccessions ?? [];
   const evidence = data?.sourceEvidence ?? [];
+  const statusCounts = EVIDENCE_REVIEW_STATUSES.map((status) => [status, evidence.filter((row: any) => normalizeEvidenceReviewStatus(row.status) === status).length] as const);
+  const evidenceShown = statusFilter === "all" ? evidence : evidence.filter((row: any) => normalizeEvidenceReviewStatus(row.status) === statusFilter);
+  const setStatus = async (row: any, status: string) => {
+    try {
+      await updateReview({ table: "sourceEvidence", id: row._id, status });
+      toast.success("Evidence status updated", evidenceReviewStatusLabel(status));
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not update evidence status");
+    }
+  };
+  const bulkStatus = async (rows: any[], status: string) => {
+    const targets = rows.filter((row) => normalizeEvidenceReviewStatus(row.status) !== status);
+    if (!targets.length) return;
+    const ok = await confirm({
+      title: `Mark ${targets.length} evidence link${targets.length === 1 ? "" : "s"} ${evidenceReviewStatusLabel(status).toLowerCase()}?`,
+      message: `${targets.length} source evidence row${targets.length === 1 ? "" : "s"} on this page will change status. Linked records and documents are not changed.`,
+      confirmLabel: `Mark ${targets.length}`,
+    });
+    if (!ok) return;
+    let updated = 0;
+    for (const row of targets) {
+      try {
+        await updateReview({ table: "sourceEvidence", id: row._id, status });
+        updated += 1;
+      } catch {
+        // Keep going; the toast reports the count that changed.
+      }
+    }
+    toast.success(`${updated} evidence link${updated === 1 ? "" : "s"} updated`);
+  };
 
   return (
     <div className="page">
@@ -383,13 +465,37 @@ export function RecordsArchivePage() {
         columns={["Received", "Title", "Container", "Location", "Status"]}
         render={(row) => [row.dateReceived ? formatDate(row.dateReceived) : "-", row.title, row.containerType, row.location, <Status key="s" value={row.status} />]}
       />
+      <div className="documents-facets__row evidence-status-filter" role="group" aria-label="Evidence status">
+        <button type="button" className={`chip${statusFilter === "all" ? " is-active" : ""}`} aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>All <span className="chip__count">{evidence.length}</span></button>
+        {statusCounts.map(([status, count]) => (
+          <button key={status} type="button" className={`chip${statusFilter === status ? " is-active" : ""}`} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)}>
+            {evidenceReviewStatusLabel(status)} <span className="chip__count">{count}</span>
+          </button>
+        ))}
+      </div>
       <RegisterTable
         title="Source evidence and provenance"
         restricted={data?.restrictedResources?.includes("documents")}
-        rows={evidence}
-        empty="Approved section imports automatically create source evidence links here."
+        rows={evidenceShown}
+        empty={statusFilter === "all" ? "Approved section imports automatically create source evidence links here." : "No evidence links have this status."}
         columns={["Source", "Kind", "Model destination", "Access", "Status"]}
-        render={(row) => [row.sourceDocumentId ? <Link to={`/app/documents/${row.sourceDocumentId}`}>{row.sourceTitle}</Link> : row.sourceTitle, row.evidenceKind, row.targetTable ?? "-", <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>, <Status key="s" value={row.status} />]}
+        pageActions={(pageRows) => canEdit && pageRows.length > 0 ? (
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn-action" onClick={() => { void bulkStatus(pageRows, "Verified"); }}>Mark {pageRows.length} shown verified</button>
+            <button className="btn-action" onClick={() => { void bulkStatus(pageRows, "Linked"); }}>Mark {pageRows.length} shown linked</button>
+          </div>
+        ) : null}
+        render={(row) => [
+          <EvidenceSourceCell key="src" row={row} />,
+          row.evidenceKind,
+          row.targetTable ?? "-",
+          <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>,
+          canEdit ? (
+            <select key="s" className="input input--sm evidence-status-select" aria-label={`Status for ${row.sourceTitle}`} value={normalizeEvidenceReviewStatus(row.status)} onChange={(event) => { void setStatus(row, event.target.value); }}>
+              {EVIDENCE_REVIEW_STATUSES.map((status) => <option key={status} value={status}>{evidenceReviewStatusLabel(status)}</option>)}
+            </select>
+          ) : <Status key="s" value={row.status} />,
+        ]}
       />
     </div>
   );
@@ -411,6 +517,7 @@ function RegisterTable({
   render,
   empty,
   restricted,
+  pageActions,
 }: {
   title: string;
   rows: any[];
@@ -418,9 +525,13 @@ function RegisterTable({
   render: (row: any) => any[];
   empty: ReactNode;
   restricted?: boolean;
+  /** Actions over the rows currently shown on this page (bulk review). */
+  pageActions?: (pageRows: any[]) => ReactNode;
 }) {
   const [page,setPage]=useState(0);const [search,setSearch]=useState("");
   const filtered=rows.filter(row=>[row.sourceTitle,row.personName,row.meetingTitle,row.title,row.motionText,row.targetTable,row.summary,row.notes].join(" ").toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const safePage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 25) - 1));
+  const pageRows = filtered.slice(safePage*25,safePage*25+25);
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
@@ -428,6 +539,7 @@ function RegisterTable({
         <span className="card__subtitle">{restricted ? "Access limited" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}</span>
       </div>
       {rows.length>25&&<div className="card__body"><input className="input" aria-label={`Search ${title}`} placeholder="Search this evidence register" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></div>}
+      {pageActions && pageRows.length > 0 && <div className="card__body" style={{ paddingTop: 0 }}>{pageActions(pageRows)}</div>}
       {rows.length === 0 ? (
         <div className="card__body muted">{restricted ? "This section requires additional access." : empty}</div>
       ) : (
@@ -436,7 +548,7 @@ function RegisterTable({
             <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
           </thead>
           <tbody>
-            {filtered.slice(page*25,page*25+25).map((row) => (
+            {pageRows.map((row) => (
               <tr key={row._id}>
                 {render(row).map((cell, index) => <td key={index}>{cell}</td>)}
               </tr>
@@ -444,7 +556,7 @@ function RegisterTable({
           </tbody>
         </table>
       )}
-      {filtered.length>25&&<div className="card__body row" style={{gap:12}}><button className="btn" disabled={!page} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(page+1)*25>=filtered.length} onClick={()=>setPage(page+1)}>Next</button></div>}
+      {filtered.length>25&&<div className="card__body row" style={{gap:12,flexWrap:"wrap"}}><button className="btn" disabled={!safePage} onClick={()=>setPage(safePage-1)}>Previous</button><span>Page {safePage+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(safePage+1)*25>=filtered.length} onClick={()=>setPage(safePage+1)}>Next</button></div>}
     </div>
   );
 }
@@ -459,8 +571,23 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
 }
 
 function Status({ value }: { value?: string }) {
-  const tone = value === "Verified" || value === "Linked" ? "success" : value === "Rejected" ? "danger" : "warn";
-  return <Badge tone={tone}>{value ?? "NeedsReview"}</Badge>;
+  // Register rows use their own vocabularies (Observed, Draft, Filed…); only
+  // review states are relabelled, anything else is shown as stored.
+  const reviewState = !value || /^(needs ?review|needsreview|linked|verified|rejected)$/i.test(value);
+  if (!reviewState) return <Badge tone="info">{value}</Badge>;
+  return <Badge tone={evidenceReviewStatusTone(value)}>{evidenceReviewStatusLabel(value)}</Badge>;
+}
+
+/** Source link that prefers the canonical document over a staged import candidate (D-20). */
+function EvidenceSourceCell({ row }: { row: any }) {
+  if (!row.sourceDocumentId) return <span>{row.sourceTitle}</span>;
+  if (row.sourceDocumentKind === "candidate") {
+    return row.canonicalDocumentId
+      ? <span className="col" style={{ gap: 2 }}><Link to={`/app/documents/${row.canonicalDocumentId}`}>{row.sourceTitle}</Link><span className="muted" style={{ fontSize: "var(--fs-xs)" }}>cited the staged import copy; showing the document</span></span>
+      : <span className="col" style={{ gap: 2 }}><span>{row.sourceTitle}</span><Link className="muted" style={{ fontSize: "var(--fs-xs)" }} to="/app/imports">still a staged import candidate</Link></span>;
+  }
+  if (row.sourceDocumentKind === "missing") return <span>{row.sourceTitle} <span className="muted">(document removed)</span></span>;
+  return <Link to={`/app/documents/${row.sourceDocumentId}`}>{row.sourceTitle}</Link>;
 }
 
 function PromoteAction({ row, onPromote, disabled }: { row: any; onPromote: () => void; disabled?: boolean }) {

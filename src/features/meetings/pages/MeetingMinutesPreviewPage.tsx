@@ -3,6 +3,8 @@ import { usePermissions } from "../../../hooks/usePermissions";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
+import { useRecordQuery } from "../../../hooks/useRecordQuery";
+import { RecordNotFound } from "../../../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ArrowLeft, FileDown, FileText, Printer } from "lucide-react";
@@ -18,23 +20,24 @@ import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../../../share
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
 import { motionPersonDisplayName } from "../../../components/MotionEditor";
-import { agendaEntriesFromRecord, formalMinutesExportBlockers } from "../lib/meetingDetailHelpers";
+import { agendaEntriesFromRecord, formalMinutesExportBlockers, nextMeetingsForExport } from "../lib/meetingDetailHelpers";
 import { useToast } from "../../../components/Toast";
 import { readStoredAgendaNumberingMode } from "../lib/agendaNumbering";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
   MINUTES_EXPORT_PREF_PREFIX,
   readStoredExportBool,
-  readStoredMinutesStyle,
-} from "../lib/minutesExportPrefs";
-import { minuteSectionIndexForAgendaEntry } from "../lib/sourceAgendaNavigation";
+  readStoredMinutesStyle, effectiveSourceFidelity, minutesCorrectedForExport } from "../lib/minutesExportPrefs";
+import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../lib/sourceAgendaNavigation";
 
 export function MeetingMinutesPreviewPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const { loaded, can } = usePermissions();
-  const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
-  const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  // Missing ids read as null; the meeting's panels wait until it exists (FF-2).
+  const meeting = useRecordQuery<any>(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
+  const meetingId = meeting?._id as Id<"meetings"> | undefined;
+  const minutes = useQuery(api.minutes.getByMeeting, meetingId ? { meetingId } : "skip");
   const liveMotionRows = useQuery(api.motions.listForMinutes, minutes ? { minutesId: minutes._id } : "skip");
   const displayMotions = useMemo(() => {
     if (!minutes) return [] as any[];
@@ -43,17 +46,24 @@ export function MeetingMinutesPreviewPage() {
       ? minutesMotionsForDisplay(minutes) as any[]
       : (liveMotionRows as any[]).map(motionRowToEmbedded);
   }, [minutes, liveMotionRows]);
-  const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const agendaRecord = useQuery(api.agendas.getForMeeting, meetingId ? { meetingId } : "skip");
   // Needed to resolve ID-linked movers/seconders to display names, so this
   // page's exports match the meeting-detail Export tab output.
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const directors = useQuery(api.directors.list, society && loaded && can("directors:read") ? { societyId: society._id } : "skip");
   const minutesSignatures = useQuery(api.signatures.listForEntity, loaded && can("documents:read") && minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip");
-  const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
-  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && meetingId ? { meetingId } : "skip");
+  const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && meetingId ? { meetingId } : "skip");
+  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && meetingId ? { meetingId } : "skip");
+  const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip") as any[] | undefined;
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [sourceFidelityInExport, setSourceFidelityInExport] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [sourceFidelityChoice, setSourceFidelityChoice] = useState<boolean | undefined>(undefined);
+  const sourceFidelityInExport = effectiveSourceFidelity(storedSourceFidelity, sourceFidelityChoice, minutes, meeting);
+  const setSourceFidelityInExport = (value: boolean) => {
+    setSourceFidelityChoice(value);
+    if (!minutesCorrectedForExport(minutes, meeting)) setStoredSourceFidelity(value);
+  };
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
@@ -67,7 +77,7 @@ export function MeetingMinutesPreviewPage() {
   }, [minutesExportStyle]);
 
   useEffect(() => {
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(sourceFidelityInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(storedSourceFidelity));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
@@ -75,7 +85,7 @@ export function MeetingMinutesPreviewPage() {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
-    sourceFidelityInExport,
+    storedSourceFidelity,
     includeActionItemsInExport,
     includeApprovalInExport,
     includeDiscussionSummaryInExport,
@@ -84,19 +94,13 @@ export function MeetingMinutesPreviewPage() {
     includeTranscriptInExport,
   ]);
 
-  if (society === undefined || meeting === undefined || minutes === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined || meeting === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
-  if (meeting === null) {
-    return (
-      <div className="page">
-        Meeting not found — it may have been deleted.{" "}
-        <Link to="/app/meetings">Back to meetings</Link>
-      </div>
-    );
-  }
+  if (meeting === null) return <RecordNotFound recordLabel="Meeting" backTo="/app/meetings" backLabel="All meetings" />;
+  if (minutes === undefined) return <div className="page">Loading…</div>;
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
-  const agendaTree = agendaEntriesFromRecord(minutes?.adoptedAgenda ?? agendaRecord) ?? [];
+  const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const motionPeople = personLinkCandidates(members, directors);
   const selectedMinutesExportStyle =
@@ -116,6 +120,10 @@ export function MeetingMinutesPreviewPage() {
     if (section.publicVisible !== false) return;
     hiddenSections.add(index);
     if ((section.depth ?? 0) === 0) for (let child = index + 1; child < rawSections.length && rawSections[child].depth === 1; child++) hiddenSections.add(child);
+  });
+  // Like the meeting page: an untouched source-notes dump is not part of the minutes.
+  if (!(sourceFidelityInExport && !publicCopy)) rawSections.forEach((section: any, index: number) => {
+    if (unchangedSourceDumpSection(section, minutes.sourceMeetingRecord)) hiddenSections.add(index);
   });
   const visibleSections = rawSections.filter((_: any, index: number) => !hiddenSections.has(index));
   const visibleAgendaTree = agendaTree.filter(entry => {
@@ -142,6 +150,7 @@ export function MeetingMinutesPreviewPage() {
       noticeSentAt: meeting.noticeSentAt ?? null,
       agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
       agendaItemTree: visibleAgendaTree,
+      timeZone: (meeting as any).timeZone ?? null,
       ...(minutes.adoptedMeeting ?? {}),
     },
     minutes: {
@@ -175,12 +184,14 @@ export function MeetingMinutesPreviewPage() {
         ...m,
         movedBy: motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId }),
         secondedBy: motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId }),
-        sectionIndex: publicCopy && m.sectionIndex != null ? indexRemap.get(m.sectionIndex) : m.sectionIndex,
+        sectionIndex: hiddenSections.size && m.sectionIndex != null ? indexRemap.get(m.sectionIndex) : m.sectionIndex,
       })) as any,
       decisions: minutes.decisions,
       actionItems: minutes.actionItems as any,
       approvedAt: minutes.approvedAt ?? null,
+      sourceReviewStatus: (meeting as any).sourceReviewStatus === "source_reviewed" ? "source_reviewed" : (minutes as any).sourceReviewStatus,
       nextMeetingAt: minutes.nextMeetingAt ?? null,
+      nextMeetings: nextMeetingsForExport((minutes as any).nextMeetings, committees ?? []),
       nextMeetingLocation: minutes.nextMeetingLocation ?? null,
       nextMeetingNotes: minutes.nextMeetingNotes ?? null,
       sessionSegments: minutes.sessionSegments ?? null,

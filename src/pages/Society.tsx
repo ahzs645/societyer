@@ -58,7 +58,7 @@ export function SocietyNewPage() {
   const canRestore = isLocalDataRuntime() && !isStaticDemoRuntime() && localWorkspaceRestoreSupported();
   const restoreCard = canRestore ? <RestoreBackupCard
     onRestored={(summary) => {
-      const restoredSocietyId = summary.societies[0]?._id;
+      const restoredSocietyId = summary.preferredSocietyId;
       if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       toast.success("Backup restored", `${summary.rowCount} records across ${summary.tableCount} tables.`);
       navigate("/app");
@@ -302,6 +302,7 @@ export function SocietyPage() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
+      toast.success("Organization profile saved");
     } catch (error: any) {
       toast.error("Could not save organization", error?.message ?? String(error));
     } finally {
@@ -665,7 +666,6 @@ export function SocietyPage() {
                     <DocTableRow label={governance.formationDocumentLabel} present={!!society.constitutionDocId} />
                     <DocTableRow label="Bylaws" present={!!society.bylawsDocId} />
                     <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} present={!!society.privacyPolicyDocId} />
-                    <DocTableRow label="Hyperpolicy" present={false} />
                   </tbody>
                 </table>
               </div>

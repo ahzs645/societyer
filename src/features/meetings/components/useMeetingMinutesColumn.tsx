@@ -63,6 +63,8 @@ import type {
   AttendancePerson,
 } from "./MeetingMinutesColumn.internal";
 
+import { minutesPresentCount } from "../../../../shared/meetingAttendanceGrid";
+
 export type MeetingMinutesColumnProps = {
   minutes: any;
   agenda: string[];
@@ -97,7 +99,19 @@ export type MeetingMinutesColumnProps = {
   /** Prior meetings' minutes offered by the "Adopts minutes of" picker on the
    *  section editor's embedded motion editor. */
   adoptionTargets?: MotionAdoptionTarget[];
-};
+  /** The meeting row (attendance grid, agenda item details). */
+  meeting?: any;
+  /** People-directory rows for person pickers. */
+  directoryPeople?: Array<{ _id: string; fullName: string; aliases?: string[] | null }>;
+  /** Names offered by "Add current directors / committee members". */
+  expectedAttendees?: string[];
+  /** Save the minutes' top-level action items (status, assignee, task link). */
+  saveTopLevelActionItems?: (items: any[]) => Promise<void>;
+  /** Create a task from an action item; returns the new task id. */
+  createTaskFromAction?: (draft: any) => Promise<string | undefined>;
+  /** Agenda item rows (with ids and A9 fields) for the details editor. */
+  agendaItemRecords?: any[];
+}; 
 
 export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -134,7 +148,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   adoptionTargets,
   } = props;
   const { can } = usePermissions();
-  const canEditMinutes = can("minutes:write");
+  // Adopted minutes are frozen on the server ("Start an amendment…"); offering
+  // edit controls only produced errors. Reopen them from the approval dialog.
+  const minutesFrozen = !!(minutes?.approvedAt || minutes?.adoptedSnapshot);
+  const canEditMinutes = can("minutes:write") && !minutesFrozen;
   // These callbacks save both records; gate both before the first write.
   const canEditAgenda = canEditMinutes && can("agendas:write");
   const canEditSections = canEditAgenda;
@@ -223,9 +240,8 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const sectionContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [sectionEditorTab, setSectionEditorTab] = useState<SectionEditorTab>("notes");
   const confirm = useConfirm();
-  const attendancePresentCount = attendanceEdit
-    ? attendanceEdit.people.filter((person: AttendancePerson) => person.status === "present").length
-    : minutes?.attendees.length;
+  // The attendance grid owns its edit rows; the column reports what is saved.
+  const attendancePresentCount = minutesPresentCount(minutes);
   const [newAgendaIndices, setNewAgendaIndices] = useState<Set<number>>(() => new Set());
   const agendaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocusIndex = useRef<number | null>(null);
@@ -329,24 +345,21 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     next.splice(index, removeCount);
     await saveMinuteSections(next);
 
-    // Motions live on minutes.motions, not inside the section, so we have to
-    // clean them up explicitly: drop motions assigned to a removed section
-    // and shift sectionIndex down for motions on later sections.
-    const cleanedMotions = motions
-      .filter((motion) => {
-        if (motion.sectionIndex != null && removedIndexSet.has(motion.sectionIndex)) return false;
-        if (
-          motion.sectionTitle &&
-          removedTitleSet.has(String(motion.sectionTitle).trim().toLowerCase()) &&
-          (motion.sectionIndex == null || removedIndexSet.has(motion.sectionIndex))
-        ) return false;
-        return true;
-      })
-      .map((motion) =>
-        motion.sectionIndex != null && motion.sectionIndex >= index + removeCount
-          ? { ...motion, sectionIndex: motion.sectionIndex - removeCount }
-          : motion,
-      );
+    // Motions live on minutes.motions, not inside the section. A motion on a
+    // removed section stays in the minutes, unassigned (deleting a section
+    // used to delete its motions without saying so); motions on later
+    // sections shift down.
+    const cleanedMotions = motions.map((motion) => {
+      const onRemoved = (motion.sectionIndex != null && removedIndexSet.has(motion.sectionIndex))
+        || (motion.sectionIndex == null && motion.sectionTitle && removedTitleSet.has(String(motion.sectionTitle).trim().toLowerCase()));
+      if (onRemoved) {
+        const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
+        return rest as Motion;
+      }
+      return motion.sectionIndex != null && motion.sectionIndex >= index + removeCount
+        ? { ...motion, sectionIndex: motion.sectionIndex - removeCount }
+        : motion;
+    });
     const motionsChanged =
       cleanedMotions.length !== motions.length ||
       cleanedMotions.some((m, i) => m !== motions[i]);
@@ -476,6 +489,23 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       if (next[target].depth !== 1) return;
       [next[index], next[target]] = [next[target], next[index]];
       pendingFocusIndex.current = target;
+    }
+    writeAgendaItems(next);
+  };
+
+  // Reordering an imported agenda one step at a time took dozens of clicks:
+  // move a top-level item (with its sub-items) straight to the top or bottom.
+  const moveAgendaItemToEdge = (index: number, edge: "top" | "bottom") => {
+    const item = agendaItems[index];
+    if (!item || item.depth !== 0) return;
+    const next = agendaItems.slice();
+    const group = next.splice(index, groupSizeAt(index, agendaItems));
+    if (edge === "top") {
+      next.splice(0, 0, ...group);
+      pendingFocusIndex.current = 0;
+    } else {
+      next.push(...group);
+      pendingFocusIndex.current = next.length - group.length;
     }
     writeAgendaItems(next);
   };
@@ -685,10 +715,26 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     if (left + menuWidth > window.innerWidth - margin) {
       left = window.innerWidth - menuWidth - margin;
     }
-    setAgendaItemMenu({ index, top: rect.bottom + gap, left });
+    // Open upwards when the menu would run past the bottom of the window
+    // (items near the end of a long agenda left it unreachable).
+    const estimatedHeight = 300;
+    let top = rect.bottom + gap;
+    if (top + estimatedHeight > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - gap - estimatedHeight);
+    }
+    setAgendaItemMenu({ index, top, left });
   };
 
-  const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
+  // F22: open the sections that carry substance (discussion, decisions,
+  // actions), not just the first two (usually 'Call to order' boilerplate).
+  const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => {
+    const substantive = ((minutes?.sections ?? []) as any[])
+      .map((section, index) => ({ index, weight: String(section?.discussion ?? '').trim().length + 80 * ((section?.decisions ?? []).length + (section?.actionItems ?? []).length) }))
+      .filter((row) => row.weight > 120)
+      .slice(0, 4)
+      .map((row) => row.index);
+    return new Set(substantive.length ? substantive : [0, 1]);
+  });
   const sourceDumpSectionIndexes = useMemo(() => new Set<number>(sections.flatMap((section: any, index: number) =>
     sectionEditIndex !== index && unchangedSourceDumpSection(section, minutes?.sourceMeetingRecord) ? [index] : [])), [sections, minutes?.sourceMeetingRecord, sectionEditIndex]);
   const visibleAgendaTree = useMemo(() => agendaTree.filter(entry => {
@@ -934,16 +980,27 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       void removeSection(index);
       return;
     }
-    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty;
+    // Compare against what is stored: an unchanged open editor is not "unsaved".
+    const liveDiscussion = isEditingThis ? (sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft?.discussion ?? "") : "";
+    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty && (
+      String(sectionDraft?.title ?? "").trim() !== String(section.title ?? "").trim()
+      || String(sectionDraft?.presenter ?? "").trim() !== String(section.presenter ?? "").trim()
+      || String(liveDiscussion).trim() !== String(section.discussion ?? "").trim()
+      || JSON.stringify((sectionDraft?.decisions ?? []).map((line) => line.trim()).filter(Boolean)) !== JSON.stringify(section.decisions ?? [])
+      || JSON.stringify(sectionDraft?.linkedTaskIds ?? []) !== JSON.stringify(section.linkedTaskIds ?? [])
+      || Object.keys(sectionDraft?.taskUpdates ?? {}).length > 0
+    );
     const titleForPrompt = (isEditingThis ? sectionDraft?.title : section.title) || "Untitled section";
     const childWarning = childIndexes.length
       ? ` Its ${childIndexes.length} sub-item${childIndexes.length === 1 ? "" : "s"} will be removed too${childrenWithContent.length ? ", including recorded content" : ""}.`
       : "";
+    const motionCount = [index, ...childIndexes].reduce((sum, i) => sum + (motionMatchesBySection[i]?.length ?? 0), 0);
+    const motionNote = motionCount ? ` ${motionCount} motion${motionCount === 1 ? "" : "s"} on it stay${motionCount === 1 ? "s" : ""} in the minutes, no longer assigned to an agenda item.` : "";
     const ok = await confirm({
       title: `Delete "${titleForPrompt}"?`,
       message: hasUnsavedDraftChanges
-        ? `This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items.${childWarning}`
-        : `Notes, decisions, and action items in this section will be removed.${childWarning}`,
+        ? `This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items.${childWarning}${motionNote}`
+        : `Notes, decisions, and action items in this section will be removed.${childWarning}${motionNote}`,
       confirmLabel: "Delete section",
       tone: "danger",
     });
@@ -1071,14 +1128,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       sourceEvidence: existing.sourceEvidence,
       agendaItemId: existing.agendaItemId,
       decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
-      actionItems: sectionDraft.actionItems
-        .map((item) => ({
-          text: item.text.trim(),
-          assignee: cleanOptional(item.assignee),
-          dueDate: cleanOptional(item.dueDate),
-          done: !!item.done,
-        }))
-        .filter((item) => item.text),
+      // Action items are edited in the Action items card (status, assignee,
+      // task link); the section editor keeps them exactly as stored so A12
+      // status, person links and task ids are never stripped.
+      actionItems: Array.isArray(existing.actionItems) ? existing.actionItems : [],
+      sourceTitle: existing.sourceTitle,
       linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
       publicVisible: sectionDraft.publicVisible ? undefined : false,
     };
@@ -1098,6 +1152,41 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const cancelSectionEdit = () => {
     setSectionEditIndex(null);
     setSectionDraft(null);
+  };
+
+  // Escape in the inline title editor used to drop every unsaved change in the
+  // section without a word (MA-4). Close straight away only when nothing
+  // changed; otherwise ask first, naming the section.
+  const sectionDraftIsDirty = () => {
+    if (sectionEditIndex == null || !sectionDraft) return false;
+    const section = sections[sectionEditIndex] ?? {};
+    const discussion = sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
+    const same = (a: unknown, b: unknown) => String(a ?? "").trim() === String(b ?? "").trim();
+    return !same(sectionDraft.title, section.title)
+      || !same(sectionDraft.type, section.type ?? "discussion")
+      || !same(sectionDraft.presenter, section.presenter)
+      || !same(discussion, section.discussion)
+      || JSON.stringify(sectionDraft.decisions.map((d) => d.trim()).filter(Boolean)) !== JSON.stringify((Array.isArray(section.decisions) ? section.decisions : []).map((d: string) => String(d).trim()).filter(Boolean))
+      || JSON.stringify(sectionDraft.linkedTaskIds) !== JSON.stringify(Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [])
+      || Object.keys(sectionDraft.taskUpdates).length > 0
+      || sectionDraft.publicVisible !== (section.publicVisible !== false)
+      || hasPendingSectionMotion;
+  };
+  const requestCancelSectionEdit = async () => {
+    if (!sectionDraftIsDirty()) {
+      cancelSectionEdit();
+      return;
+    }
+    const title = (sections[sectionEditIndex ?? -1]?.title || sectionDraft?.title || "this section").trim();
+    const ok = await confirm({
+      title: "Discard changes to this section?",
+      message: `Your unsaved edits to “${title}” will be lost.`,
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      tone: "danger",
+    });
+    if (ok) cancelSectionEdit();
+    else sectionTitleRef.current?.focus();
   };
 
   // Belt-and-suspenders: even though MotionEditor fires onPendingDraftChange
@@ -1315,7 +1404,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 rows={8}
                 value={sectionDraft.discussion}
                 onChange={(markdown) => setSectionDraft({ ...sectionDraft, discussion: markdown })}
-                placeholder="Expenses incurred by Ahmad: $80.00 for notary signing, $33.01 for posters. Receipts are recorded on Teams under Expenses."
+                placeholder="What was discussed or reported, e.g. The treasurer reported a surplus of $3,400 for the quarter."
               />
             </Field>
             <Field label="Decisions">
@@ -1345,6 +1434,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               directorNames={assigneeOptions}
               people={motionPeople}
               adoptionTargets={adoptionTargets}
+              directoryPeople={props.directoryPeople as any}
               agendaSections={sections.map((section: any) => ({
                 title: section.title || "Untitled section",
                 discussion: section.discussion ?? "",
@@ -1541,6 +1631,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     detailedSectionTitles,
     sectionEditIndex,
     setSectionEditIndex,
+    requestCancelSectionEdit,
     sectionDraft,
     setSectionDraft,
     agendaNumberingMode,
@@ -1568,6 +1659,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     indentAgendaItem,
     outdentAgendaItem,
     moveAgendaItem,
+    moveAgendaItemToEdge,
     agendaDragSourceRef,
     agendaDragIndex,
     agendaDropIndex,

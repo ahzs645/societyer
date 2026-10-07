@@ -7,6 +7,7 @@
  * oracle. `setRole` is role-gated through the portable `requireRolePortable`.
  */
 
+import { assertValid, validateWorkspaceUserInput } from "../recordValidation";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
@@ -68,7 +69,11 @@ export async function requireMembershipManager(ctx: PortableQueryCtx, societyId:
 }
 
 async function recordMembershipChange(ctx: PortableMutationCtx, societyId: string, actorId: string, targetId: string, action: string, detail?: string) {
-  await ctx.db.insert("activity", { societyId, actor: actorId, entityType: "user", subjectId: targetId,
+  // The audit log shows `actor` verbatim, so store the person's name, not a row id.
+  const localOwner = actorId.startsWith("local-workspace-owner:");
+  const actorRow: any = localOwner ? null : await ctx.db.get(actorId, "users").catch(() => null);
+  const actor = String(actorRow?.displayName || actorRow?.email || (localOwner ? "Workspace owner" : actorId));
+  await ctx.db.insert("activity", { societyId, actor, entityType: "user", subjectId: targetId,
     entityId: targetId, action, summary: detail || `Workspace membership ${action}`, createdAtISO: new Date().toISOString() });
 }
 
@@ -88,6 +93,9 @@ export async function upsertUserPortable(ctx: PortableMutationCtx, args: {
   assertRoleAndStatus(args.role, args.status);
   const target = args.id ? await getOwned(ctx, "users", args.id, args.societyId) : undefined;
   const actor = await requireMembershipManager(ctx, args.societyId, target?.role, args.role, args.actingUserId);
+  const roster = await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  assertValid(validateWorkspaceUserInput(args, roster as any, target?._id));
+  args = { ...args, email: args.email.trim(), displayName: args.displayName.trim() };
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
   const fields = {
@@ -134,19 +142,33 @@ export async function securityDisableUserPortable(ctx: PortableMutationCtx, { id
   await recordMembershipChange(ctx, target.societyId, actor._id, id, "security-disabled", `Security incident: ${reason.trim().slice(0, 1000)}`);
 }
 
+/**
+ * Name shown for a workspace user. Workspaces created locally without a
+ * privacy-officer name stored an empty displayName, which left the sidebar
+ * user button, the Users table and per-row labels ("Role for ") blank.
+ */
+export function userDisplayName(row: { displayName?: unknown; email?: unknown } | Record<string, unknown>): string {
+  return String(row.displayName ?? "").trim() || String(row.email ?? "").trim() || "Unnamed user";
+}
+
+function withDisplayName<T extends object>(row: T): T & { displayName: string } {
+  return { ...row, displayName: userDisplayName(row as Record<string, unknown>) };
+}
+
 export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  return ctx.db
+  const rows = await ctx.db
     .query("users")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  return rows.map(withDisplayName);
 }
 
 export async function userGet(ctx: PortableQueryCtx, { id }: { id: string }) {
   const target = await requireOwnedRow(ctx, "users", id);
   const actor = await requireSocietyMembership(ctx, target.societyId);
   if (actor._id !== target._id) await requirePermissionPortable(ctx, target.societyId, "users:read");
-  return target;
+  return withDisplayName(target);
 }
 
 export async function userGetByEmail(ctx: PortableQueryCtx, { email }: { email: string }) {

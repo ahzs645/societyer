@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
+import { useRecordQuery } from "../hooks/useRecordQuery";
+import { RecordNotFound } from "../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -14,7 +16,8 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock, Plus, Users } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
-import { toDateTimeLocalValue } from "../lib/format";
+import { formatDateTime, toDateTimeLocalValue } from "../lib/format";
+import { useConfirm } from "../components/Modal";
 import { validateElectionQuestion } from "../../shared/electionValidation";
 
 export function ElectionDetailPage() {
@@ -24,27 +27,22 @@ export function ElectionDetailPage() {
   const canManage = loaded && can("elections:write");
   const canPublishResults = canManage && can("elections:tally");
   const actingUserId = useCurrentUserId() ?? undefined;
-  const electionBundle = useQuery(
+  // A missing or foreign id reads as null and shows the not-found state; the
+  // tally and nominations wait until the election exists (FF-2).
+  const electionBundle = useRecordQuery<any>(
     api.elections.get,
     id
       ? { id: id as Id<"elections"> }
       : "skip",
   );
+  const electionId = electionBundle?.election?._id as Id<"elections"> | undefined;
   const tally = useQuery(
     api.elections.tally,
-    id
-      ? {
-          electionId: id as Id<"elections">,
-      }
-      : "skip",
+    electionId ? { electionId } : "skip",
   );
   const nominations = useQuery(
     api.elections.listNominations,
-    id
-      ? {
-          electionId: id as Id<"elections">,
-        }
-      : "skip",
+    electionId ? { electionId } : "skip",
   );
   const users = useQuery(
     api.users.list,
@@ -66,8 +64,10 @@ export function ElectionDetailPage() {
   const publishNominationToBallot = usePermissionedMutation(api.elections.publishNominationToBallot, canManage);
   const updateSettings = usePermissionedMutation(api.elections.updateSettings, canManage);
   const addQuestion = usePermissionedMutation(api.elections.addQuestion, canManage);
+  const removeQuestion = usePermissionedMutation(api.elections.removeQuestion, canManage);
   const snapshotEligibleVoters = usePermissionedMutation(api.elections.snapshotEligibleVoters, canManage);
   const toast = useToast();
+  const confirm = useConfirm();
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [nominationDraft, setNominationDraft] = useState({
     nomineeName: "",
@@ -113,7 +113,7 @@ export function ElectionDetailPage() {
   }, [election]);
 
   if (electionBundle === undefined) return <PageLoading />;
-  if (electionBundle === null || !election) return <SeedPrompt />;
+  if (electionBundle === null || !election) return <RecordNotFound recordLabel="Election" backTo="/app/elections" backLabel="All elections" />;
 
   const canVote =
     isAuthenticatedAuthMode() &&
@@ -122,6 +122,19 @@ export function ElectionDetailPage() {
     !!currentUser?.memberId &&
     myEligibility &&
     myEligibility.status !== "Voted";
+  // Explain exactly why this viewer cannot vote (G-16: everyone who could not
+  // vote was told their vote was "already recorded").
+  const votingUnavailableReason = !isAuthenticatedAuthMode()
+    ? "Ballots can only be cast by signed-in members. This workspace is not using member sign-in, so you can review the ballot but not vote here."
+    : !isWindowOpen(election.opensAtISO, election.closesAtISO)
+      ? `Voting is open from ${formatDateTime(election.opensAtISO)} to ${formatDateTime(election.closesAtISO)}.`
+      : !currentUser?.memberId
+        ? "Your user account is not linked to a member record, so you cannot vote."
+        : !myEligibility
+          ? "Voting is limited to confirmed members on the eligibility list."
+          : myEligibility.status === "Voted"
+            ? "You can review the ballot, but your vote is already recorded."
+            : "You cannot vote in this election.";
   const tallyRows = tally ?? [];
   const nominationRows = nominations ?? [];
   const scrutineers = (users ?? []).filter((user) =>
@@ -238,9 +251,7 @@ export function ElectionDetailPage() {
         title={election.title}
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={`${new Date(election.opensAtISO).toLocaleString()} → ${new Date(
-          election.closesAtISO,
-        ).toLocaleString()} · ${electionBundle.ballotCount} ballot${electionBundle.ballotCount === 1 ? "" : "s"} recorded`}
+        subtitle={`${formatDateTime(election.opensAtISO)} → ${formatDateTime(election.closesAtISO)} · ${electionBundle.ballotCount} ballot${electionBundle.ballotCount === 1 ? "" : "s"} recorded`}
         actions={
           canManage ? (
             <div className="row" style={{ gap: 8 }}>
@@ -248,10 +259,20 @@ export function ElectionDetailPage() {
                 <button
                   className="btn-action"
                   onClick={async () => {
-                    await closeElection({
-                      electionId: election._id,
+                    const early = Date.parse(election.closesAtISO) > Date.now();
+                    const ok = await confirm({
+                      title: "Close voting?",
+                      message: `${early ? `Voting is scheduled to stay open until ${formatDateTime(election.closesAtISO)}. ` : ""}Closing stops all further ballots; ${electionBundle.ballotCount} of ${electionBundle.eligible?.length ?? "the eligible"} voters have voted. This cannot be reopened.`,
+                      confirmLabel: early ? "Close early" : "Close voting",
+                      tone: early ? "danger" : "warn",
                     });
-                    toast.info("Election closed");
+                    if (!ok) return;
+                    try {
+                      await closeElection({ electionId: election._id });
+                      toast.info("Election closed");
+                    } catch (error) {
+                      toast.error("Could not close the election", error instanceof Error ? error.message : String(error));
+                    }
                   }}
                 >
                   <Lock size={12} /> Close election
@@ -261,12 +282,26 @@ export function ElectionDetailPage() {
                 <button
                   className="btn-action btn-action--primary"
                   onClick={async () => {
-                    await tallyElection({
-                      electionId: election._id,
-                      resultsSummary: adminDraft?.resultsSummary || undefined,
-                      evidenceDocumentId: adminDraft?.evidenceDocumentId || undefined,
+                    const ballots = electionBundle.ballotCount ?? 0;
+                    const ok = await confirm({
+                      title: ballots === 0 ? "Publish results with no ballots?" : "Publish results?",
+                      message: ballots === 0
+                        ? "No ballots were recorded, so every tally is zero. Publishing records a final result that no one voted on. Check quorum and whether the vote should be re-run before publishing."
+                        : `${ballots} ballot${ballots === 1 ? "" : "s"} will be tallied and the results recorded as final.`,
+                      confirmLabel: "Publish results",
+                      tone: ballots === 0 ? "danger" : "warn",
                     });
-                    toast.success("Results published");
+                    if (!ok) return;
+                    try {
+                      await tallyElection({
+                        electionId: election._id,
+                        resultsSummary: adminDraft?.resultsSummary || undefined,
+                        evidenceDocumentId: adminDraft?.evidenceDocumentId || undefined,
+                      });
+                      toast.success("Results published");
+                    } catch (error) {
+                      toast.error("Could not publish results", error instanceof Error ? error.message : String(error));
+                    }
                   }}
                 >
                   <CheckCircle2 size={12} /> Publish results
@@ -292,7 +327,32 @@ export function ElectionDetailPage() {
               {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
               {electionBundle.questions.map((question: any) => (
                 <div key={question._id} className="panel" style={{ padding: 12 }}>
-                  <strong>{question.title}</strong>
+                  <div className="row" style={{ justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                    <strong>{question.title}</strong>
+                    {canManage && election.status === "Draft" && (
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        aria-label={`Remove ballot question ${question.title}`}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Remove ballot question?",
+                            message: `"${question.title}" and its ${question.options?.length ?? 0} option(s) will be removed from this draft ballot.`,
+                            confirmLabel: "Remove question",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          try {
+                            await removeQuestion({ questionId: question._id });
+                            toast.success("Ballot question removed");
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Could not remove the question.");
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                   {question.description && (
                     <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
                       {question.description}
@@ -349,9 +409,7 @@ export function ElectionDetailPage() {
               )}
               {!canVote && election.status === "Open" && (
                 <div className="muted" style={{ fontSize: 13 }}>
-                  {myEligibility
-                    ? "You can review the ballot, but your vote is already recorded."
-                    : "Voting is limited to confirmed members on the eligibility list."}
+                  {votingUnavailableReason}
                 </div>
               )}
             </div>
@@ -362,9 +420,7 @@ export function ElectionDetailPage() {
               <h2 className="card__title">Nominations</h2>
               <span className="card__subtitle">
                 {election.nominationsOpenAtISO
-                  ? `${new Date(election.nominationsOpenAtISO).toLocaleString()} → ${new Date(
-                      election.nominationsCloseAtISO ?? election.closesAtISO,
-                    ).toLocaleString()}`
+                  ? `${formatDateTime(election.nominationsOpenAtISO)} → ${formatDateTime(election.nominationsCloseAtISO ?? election.closesAtISO)}`
                   : "No nomination window configured"}
               </span>
             </div>
@@ -678,7 +734,7 @@ export function ElectionDetailPage() {
                   <div key={event._id} className="muted" style={{ fontSize: 13 }}>
                     <strong>{event.actorName}</strong> {event.action}
                     {event.detail ? ` — ${event.detail}` : ""} ·{" "}
-                    {new Date(event.createdAtISO).toLocaleString()}
+                    {formatDateTime(event.createdAtISO)}
                   </div>
                 ))
               ) : (

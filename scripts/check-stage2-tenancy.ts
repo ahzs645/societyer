@@ -6,6 +6,8 @@ import { makeCapabilities } from "../shared/portable/capabilities.ts";
 import type { PortableDoc, PortablePrincipal } from "../shared/portable/ctx.ts";
 import { PortableRuntime } from "../shared/portable/define.ts";
 import { MemoryDb } from "../shared/portable/memoryDb.ts";
+import { writeTrackedReport } from "./lib/writeTrackedReport.mjs";
+import { HISTORICAL_ACTION_TAG } from "../shared/taskStatus.ts";
 import {
   buildFunctionInventory,
   inventoryForSnapshot,
@@ -128,10 +130,24 @@ function genericRow(table: string, tenant: Tenant, mappings: Map<string, string>
   return row;
 }
 
-function fixtureSeed(tables: string[], mappings: Map<string, string>): Record<string, PortableDoc[]> {
+// Probe fixtures that must satisfy a handler's own validation before it can
+// reach the tenancy check. Without these the probe stops at "Joined date is
+// required" or "already a current task" and the foreign-id path is untested.
+const PROBE_ROW_OVERRIDES: Record<string, Record<string, Partial<PortableDoc>>> = {
+  "tasks:promoteHistoricalAction": { tasks: { tags: [HISTORICAL_ACTION_TAG], status: "Unknown" } },
+};
+const PROBE_ARG_OVERRIDES: Record<string, Record<string, unknown>> = {
+  "memberGovernance:saveOrganizationMember": { joinedAt: "2020-01-01" },
+  "tasks:create": { status: "Todo" },
+  "continuity:markPeriod": { status: "waived", reason: "Stage 2 probe", periodKey: "2025", expectationKey: "xref:minutes" },
+  "representationGaps:bulkSetStatus": { status: "kept_as_text" },
+};
+
+function fixtureSeed(tables: string[], mappings: Map<string, string>, functionName?: string): Record<string, PortableDoc[]> {
+  const overrides = functionName ? PROBE_ROW_OVERRIDES[functionName] ?? {} : {};
   return Object.fromEntries(tables.map((table) => [
     table,
-    [genericRow(table, "A", mappings), genericRow(table, "B", mappings)],
+    [genericRow(table, "A", mappings), genericRow(table, "B", mappings)].map((row) => ({ ...row, ...overrides[table] })),
   ]));
 }
 
@@ -203,6 +219,7 @@ function argsFor(
   // Use a real recognized role so the history probe reaches tenant authority
   // rather than stopping at validation of the generic string fixture.
   if (entry.name === "registerHistory:roleHoldersAsOfDate") args.roleType = "director";
+  Object.assign(args, PROBE_ARG_OVERRIDES[entry.name] ?? {});
   if (target && targetTenant) setPath(args, target, targetTenant);
   return args;
 }
@@ -237,7 +254,7 @@ async function executeAttempt(options: {
   tables: string[];
   mappings: Map<string, string>;
 }): Promise<Finding> {
-  const db = new MemoryDb({ seed: fixtureSeed(options.tables, options.mappings), now: () => 3 });
+  const db = new MemoryDb({ seed: fixtureSeed(options.tables, options.mappings, options.entry.name), now: () => 3 });
   const runtime = new PortableRuntime({
     db,
     capabilities: caps,
@@ -464,7 +481,7 @@ const observedLeakSet = new Set(observedLeaks);
 const newLeaks = observedLeaks.filter((key) => !baselineLeaks.has(key));
 const resolvedLeaks = baseline.leaks.filter((key) => !observedLeakSet.has(key));
 if (process.env.SOCIETYER_STAGE2_TENANCY_SKIP_REPORT !== "1") {
-  writeFileSync(reportPath, renderReport(inventory, findings, newLeaks, resolvedLeaks, inventoryMatches));
+  writeTrackedReport(reportPath, renderReport(inventory, findings, newLeaks, resolvedLeaks, inventoryMatches));
 }
 
 const outcomes: Outcome[] = ["blocked", "leaked-read", "leaked-write", "error", "not-applicable"];

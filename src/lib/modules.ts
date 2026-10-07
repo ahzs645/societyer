@@ -2,6 +2,7 @@ export const MODULE_DEFAULTS = {
   communications: true,
   volunteers: true,
   grants: true,
+  agreements: true,
   voting: true,
   auditors: true,
   attestations: true,
@@ -74,6 +75,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Engagement",
     description: "Grant pipeline, applications, reports, and public funding intake.",
     includes: ["Grants", "Grant apply page", "Portal funding intake"],
+  },
+  {
+    key: "agreements",
+    label: "Agreements register",
+    category: "Finance",
+    description: "Contracts, funding agreements, leases and MOUs with their term, renewal, deliverables, reports and signing authority.",
+    includes: ["Agreements", "Renewal and report deadlines", "Agreements expiring card"],
   },
   {
     key: "voting",
@@ -235,7 +243,7 @@ export function getDisabledModuleKeys(source?: StoredModuleSource): ModuleKey[] 
   const legacy = getLegacyModuleSettings(source);
   if (!legacy) return [];
 
-  return MODULE_KEYS.filter((key) => legacy[key] === false);
+  return MODULE_KEYS.filter((key) => (legacy as Record<string, unknown>)[key] === false);
 }
 
 export function settingsToDisabledModules(settings: ModuleSettings): ModuleKey[] {

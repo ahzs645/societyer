@@ -1,10 +1,13 @@
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Menu } from "../components/Menu";
 import { DatePicker } from "../components/DatePicker";
@@ -27,6 +30,15 @@ export function PoliciesPage() {
   const adoptionOptions = useQuery(api.policies.adoptionOptions, society ? { societyId: society._id } : "skip");
   const upsert = usePermissionedMutation(api.policies.upsert, canWrite);
   const remove = usePermissionedMutation(api.policies.remove, canWrite);
+  // Global search links to `?record=<id>`: scroll that policy into view and mark it.
+  const [searchParams] = useSearchParams();
+  const linkedPolicyId = searchParams.get("record");
+  useEffect(() => {
+    if (!linkedPolicyId || !policies) return;
+    const row = document.getElementById(`policy-${linkedPolicyId}`);
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  }, [linkedPolicyId, policies]);
   const createReviewTask = usePermissionedMutation(api.policies.createReviewTask, canWrite);
   const createSignerTask = usePermissionedMutation(api.policies.createRequiredSignerTask, canWrite);
   const createTransparencyDraft = usePermissionedMutation(api.policies.createTransparencyDraft, canWrite);
@@ -67,10 +79,15 @@ export function PoliciesPage() {
   const save = async () => {
     if (!canWrite) return;
     if (!draft) return;
+    if (!String(draft.policyName ?? "").trim()) {
+      toast.error("Policy not saved", "Enter the policy name.");
+      return;
+    }
+    try {
     await upsert({
       id: draft._id,
       societyId: society._id,
-      policyName: draft.policyName || "Untitled policy",
+      policyName: draft.policyName.trim(),
       policyNumber: draft.policyNumber || undefined,
       owner: draft.owner || undefined,
       effectiveDate: draft.effectiveDate || undefined,
@@ -92,13 +109,18 @@ export function PoliciesPage() {
     setOpen(false);
     setDraft(null);
     toast.success("Policy saved");
+    } catch (error) {
+      toast.error("Policy not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const confirmDelete = async (row: any) => {
     if (!canWrite) return;
+    const openTasks = (row.lifecycle?.openTaskCount ?? 0) as number;
+    const drafts = (row.lifecycle?.draftPublicationCount ?? 0) as number;
     const ok = await confirm({
       title: "Delete policy?",
-      message: `"${row.policyName}" will be removed from the policy registry.`,
+      message: `"${row.policyName}" will be removed from the policy registry, together with ${openTasks} open review/signature task(s) and ${drafts} unpublished transparency draft(s). Published items and completed tasks are kept.`,
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -133,6 +155,7 @@ export function PoliciesPage() {
           </button>
         }
       />
+      <ImportCandidatesNotice noun="policy" targets={["policies"]} kinds={["policy"]} documentCategory="Policy" emptyRegister={!(policies ?? []).length} />
 
       <div className="card">
         <div className="card__head">
@@ -140,7 +163,7 @@ export function PoliciesPage() {
           <Badge>{policies?.length ?? 0}</Badge>
         </div>
         <div className="table-wrap">
-          <table className="table">
+          <table className="table table--stack-mobile policies-table">
             <thead>
               <tr>
                 <th>Policy</th>
@@ -149,41 +172,53 @@ export function PoliciesPage() {
                 <th>Documents</th>
                 <th>Adoption</th>
                 <th>Signers</th>
-                <th>Lifecycle</th>
                 <th>Status</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {(policies ?? []).map((row: any) => (
-                <tr key={row._id}>
-                  <td>
+                <tr
+                  key={row._id}
+                  id={`policy-${row._id}`}
+                  tabIndex={row._id === linkedPolicyId ? -1 : undefined}
+                  aria-current={row._id === linkedPolicyId ? "true" : undefined}
+                  className={row._id === linkedPolicyId ? "is-linked-record" : undefined}
+                >
+                  <td data-label="Policy">
                     <strong>{row.policyName}</strong>
                     {row.policyNumber && <div className="mono muted">{row.policyNumber}</div>}
+                    <SourceProvenanceButton table="policies" id={row._id} />
                   </td>
-                  <td>{row.owner || "-"}</td>
-                  <td>
+                  <td data-label="Owner">{row.owner || "-"}</td>
+                  <td data-label="Dates">
                     <div>{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</div>
                     <div className={row.lifecycle?.reviewState === "overdue" ? "" : "muted"} style={row.lifecycle?.reviewState === "overdue" ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
                       {row.reviewDate ? `Review ${formatDate(row.reviewDate)}${row.lifecycle?.reviewState === "overdue" ? " · Overdue" : ""}` : "No review date"}
                     </div>
                   </td>
-                  <td>
+                  <td data-label="Documents">
                     <div>{row.docxDocumentId ? docById.get(row.docxDocumentId)?.title ?? "DOCX linked" : "No DOCX"}</div>
                     <div className="muted">{row.pdfDocumentId ? docById.get(row.pdfDocumentId)?.title ?? "PDF linked" : "No PDF"}</div>
                   </td>
-                  <td><AdoptionCell row={row} maps={adoptionMaps} /></td>
-                  <td>
+                  <td data-label="Adoption"><AdoptionCell row={row} maps={adoptionMaps} /></td>
+                  <td data-label="Signers">
                     {row.signatureRequired ? (
-                      <Badge tone="warn">{(row.requiredSigners ?? []).map((value: string) => optionLabel("requiredSigners", value)).join(", ") || "Needs review"}</Badge>
+                      <div className="row policies-table__badges">
+                        {(row.requiredSigners ?? []).length
+                          ? (row.requiredSigners ?? []).map((value: string) => <Badge key={value} tone="warn">{optionLabel("requiredSigners", value)}</Badge>)
+                          : <Badge tone="warn">Needs review</Badge>}
+                      </div>
                     ) : (
                       <span className="muted">Not required</span>
                     )}
                   </td>
-                  <td>
-                    <LifecycleBadges lifecycle={row.lifecycle} />
+                  <td data-label="Status">
+                    <div className="row policies-table__badges">
+                      <Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status) || row.status}</Badge>
+                      <LifecycleBadges lifecycle={row.lifecycle} />
+                    </div>
                   </td>
-                  <td><Badge tone={toneForStatus(row.status)}>{row.status}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
                       <Menu
@@ -213,7 +248,7 @@ export function PoliciesPage() {
                 </tr>
               ))}
               {(policies ?? []).length === 0 && (
-                <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No policies yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -245,7 +280,7 @@ export function PoliciesPage() {
             </div>
             <div className="row" style={{ gap: 12 }}>
               <OptionSelect label="Status" setName="policyStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
-              <OptionMultiSelect label="Jurisdictions" setName="entityJurisdictions" values={listValues(draft.jurisdictions)} onChange={(values) => setDraft({ ...draft, jurisdictions: values })} />
+              <OptionMultiSelect label="Jurisdictions" setName="entityJurisdictions" hideValues={["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA"]} values={listValues(draft.jurisdictions)} onChange={(values) => setDraft({ ...draft, jurisdictions: values })} />
               <OptionMultiSelect label="Entity types" setName="entityTypes" values={listValues(draft.entityTypes)} onChange={(values) => setDraft({ ...draft, entityTypes: values })} rows={3} />
             </div>
             <Field label="DOCX document">
@@ -338,24 +373,25 @@ function AdoptionCell({ row, maps }: { row: any; maps: any }) {
   );
 }
 
+/**
+ * Lifecycle facts not already shown in their own column (review state is in
+ * Dates, signers in Signers, adoption in Adoption): publication, versions and
+ * open tasks. Kept compact so the table fits a 1440 px window (X-02).
+ */
 function LifecycleBadges({ lifecycle }: { lifecycle?: any }) {
-  if (!lifecycle) return <span className="muted">-</span>;
+  if (!lifecycle) return null;
+  const published = lifecycle.publicationStatus === "Published";
   return (
-    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-      <Badge tone={lifecycle.reviewState === "overdue" ? "danger" : lifecycle.reviewState === "due_soon" || lifecycle.reviewState === "missing_review_date" ? "warn" : "success"}>
-        {labelize(lifecycle.reviewState)}
-      </Badge>
-      <Badge tone={lifecycle.publicationId ? "success" : "neutral"}>{lifecycle.publicationStatus ?? "not published"}</Badge>
-      <Badge tone={lifecycle.signatureState === "missing_signers" ? "danger" : lifecycle.signatureState === "required" ? "warn" : "neutral"}>
-        {labelize(lifecycle.signatureState)}
-      </Badge>
-      <Badge tone={lifecycle.adoptionState === "linked" ? "success" : lifecycle.adoptionState === "missing_adoption_record" ? "warn" : "neutral"}>
-        {labelize(lifecycle.adoptionState)}
-      </Badge>
-      <Badge>{lifecycle.versionCount ?? 0} versions</Badge>
-      <Badge>{lifecycle.taskCount ?? 0} tasks</Badge>
-    </div>
+    <>
+      <Badge tone={published ? "success" : "neutral"}>{published ? "Published" : lifecycle.publicationStatus ? `Publication ${String(lifecycle.publicationStatus).toLowerCase()}` : "Not published"}</Badge>
+      {lifecycle.signatureState === "missing_signers" && <Badge tone="danger">{labelize(lifecycle.signatureState)}</Badge>}
+      <span className="muted policies-table__counts">{pluralizeCount(lifecycle.versionCount ?? 0, "version")} · {pluralizeCount(lifecycle.taskCount ?? 0, "task")}</span>
+    </>
   );
+}
+
+function pluralizeCount(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function toneForStatus(status?: string) {
@@ -366,8 +402,23 @@ function toneForStatus(status?: string) {
   return "neutral" as const;
 }
 
+const LIFECYCLE_LABELS: Record<string, string> = {
+  overdue: "Review overdue",
+  due_soon: "Review due soon",
+  scheduled: "Review scheduled",
+  missing_review_date: "No review date",
+  required: "Signatures required",
+  missing_signers: "Signers missing",
+  not_required: "No signatures needed",
+  linked: "Adoption linked",
+  missing_adoption_record: "Adoption not recorded",
+  not_linked: "Adoption n/a",
+};
+
 function labelize(value?: string) {
-  return String(value ?? "-").replace(/_/g, " ");
+  if (value && LIFECYCLE_LABELS[value]) return LIFECYCLE_LABELS[value];
+  const text = String(value ?? "-").replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function shortText(value: unknown, max: number) {

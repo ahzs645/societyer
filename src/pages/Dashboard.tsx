@@ -1,3 +1,4 @@
+import { JURISDICTION_WORKSPACE_CONFIGS } from "../../shared/jurisdictionWorkspace";
 import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -6,7 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
-import { formatDate, formatDateTime, relative } from "../lib/format";
+import { formatDate, formatDateTime, isPastDue, relative } from "../lib/format";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import {
@@ -32,6 +33,9 @@ import {
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { Tooltip } from "../components/Tooltip";
+import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
+import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -398,6 +402,10 @@ export function Dashboard() {
             </div>
           </div>
 
+          <ContinuityChecksCard societyId={society._id} />
+
+          <AgreementsExpiringCard societyId={society._id} />
+
           {canRead("filings:read") && (
           <div className="card">
             <div className="card__head">
@@ -469,7 +477,7 @@ export function Dashboard() {
                     <Badge tone={m.type === "AGM" ? "accent" : "info"}>{m.type}</Badge>
                     <strong>{m.title}</strong>
                   </div>
-                  <div className="muted">{formatDateTime(m.scheduledAt)} · {relative(m.scheduledAt)}</div>
+                  <div className="muted">{formatMeetingDate(m)} · {relative(m.scheduledAt)}</div>
                   <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{m.location}</div>
                 </Link>
               ))}
@@ -689,7 +697,7 @@ function getOnboardingSteps({
       id: "timing",
       title: "Confirm fiscal year and AGM timing",
       description: hasAgmTiming ? "Fiscal year and the next AGM are visible." : "Set the fiscal year end and schedule the next AGM.",
-      to: "/app/meetings",
+      to: "/app/compliance-settings",
       complete: hasAgmTiming,
       icon: CalendarClock,
     },
@@ -777,9 +785,10 @@ function Stat({
 }
 
 function renderFilingRow(f: any) {
+  // Each row opens that filing (G-24: rows were not clickable).
   return (
     <tr key={f._id}>
-      <td>{kindLabel(f.kind)}</td>
+      <td><Link to={`/app/filings?filing=${encodeURIComponent(String(f._id))}`}>{kindLabel(f.kind)}</Link></td>
       <td className="table__cell--muted">{f.periodLabel ?? "—"}</td>
       <td className="table__cell--mono">{formatDate(f.dueDate)}</td>
       <td>{renderFilingStatus(f)}</td>
@@ -808,12 +817,17 @@ export function kindLabel(k: string) {
     case "GSTHST":
       return "GST/HST return";
     default:
-      return k;
+      return ALL_FILING_KIND_LABELS.get(k) ?? k;
   }
 }
 
+/** Every jurisdiction's filing kind code -> human label (e.g. BCSocietyAnnualReport). */
+const ALL_FILING_KIND_LABELS = new Map(
+  JURISDICTION_WORKSPACE_CONFIGS.flatMap((config) => config.module.filingKinds.map((definition) => [definition.kind, definition.label] as const)),
+);
+
 export function renderFilingStatus(f: any) {
   if (f.status === "Filed") return <Badge tone="success">Filed</Badge>;
-  const overdue = new Date(f.dueDate).getTime() < Date.now();
+  const overdue = isPastDue(f.dueDate);
   return overdue ? <Badge tone="danger">Overdue</Badge> : <Badge tone="info">Upcoming</Badge>;
 }

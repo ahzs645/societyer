@@ -63,7 +63,13 @@ test("AGM steps fit a narrow phone and local delivery actions remain honest", as
   const errors = monitor(page);
   await page.goto("/demo/app/meetings/static_meeting_agm_2025/agm");
   await expect(page.getByRole("heading", { name: "AGM workflow · 2025 annual general meeting", exact: true })).toBeVisible();
-  await expect(page.getByText("Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.", { exact: true })).toBeVisible();
+  // The 2025 AGM was already held: its notice step is complete, so the page
+  // does not offer to send notices (and the "needs a server" note is only
+  // shown for meetings that have not happened yet; meetings retest 9406573).
+  const steps = page.locator(".card").filter({ has: page.getByRole("heading", { name: "Steps", exact: true }) });
+  await expect(steps.getByText("Send notice", { exact: true })).toBeVisible();
+  await expect(steps.getByText("Completed").first()).toBeVisible();
+  await expect(page.getByText("Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.", { exact: true })).toHaveCount(0);
   await fitsPage(page);
   await page.goto("/demo/app/notifications");
   await expect(page.getByRole("button", { name: "Send digest", exact: true })).toBeDisabled();
@@ -105,11 +111,13 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await expect(memberForm).toHaveCount(0);
   await expect(page.getByText("Audit", { exact: true }).first()).toBeVisible();
   await page.goto("/app/users");
+  // Guided setup leaves contacts blank; the seeded Owner still has a name.
+  await expect(page.getByRole("button", { name: "Role for Owner", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add user", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill("Interface Member");
   await page.getByLabel("Email", { exact: true }).fill("interface-member@example.test");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await expect(page.getByText("User added", { exact: true })).toBeVisible();
   const picker = page.getByTitle("Switch acting user", { exact: true });
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
@@ -139,7 +147,7 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await expect(page.locator(".record-table__cell--editable")).toHaveCount(0);
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
-  await page.getByText("Owner", { exact: true }).click();
+  await page.getByRole("listbox", { name: "Acting user", exact: true }).getByRole("option").filter({ hasText: "Owner" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "New meeting", exact: true })).toBeEnabled();
   expect(errors).toEqual([]);

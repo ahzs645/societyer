@@ -48,6 +48,16 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
+import { RecordNotFound } from "../components/RecordNotFound";
+import {
+  hasErrors,
+  validateAssetDisposalInput,
+  validateAssetEventInput,
+  validateAssetMaintenanceInput,
+  type FieldErrors,
+} from "../../shared/recordValidation";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
 import { AssetScanner } from "../features/assets/AssetScanner";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
@@ -80,6 +90,7 @@ import {
 } from "../features/assets/assetUtils";
 
 export function AssetsPage() {
+  const confirm = useConfirm();
   const { canWrite, canExport } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
@@ -322,9 +333,13 @@ export function AssetsPage() {
 
   const removeAsset = async (row: any) => {
     if (saving) return;
-    if (!window.confirm(`Delete asset ${row.assetTag} — ${row.name}? This also removes its custody, maintenance, verification, and receipt-link history. This cannot be undone.`)) {
-      return;
-    }
+    const approved = await confirm({
+      title: `Delete asset ${row.assetTag}?`,
+      message: `${row.assetTag} — ${row.name} will be permanently deleted, together with its custody, maintenance, verification and receipt-link history. To keep the history, use Dispose instead. This cannot be undone.`,
+      confirmLabel: "Delete asset",
+      tone: "danger",
+    });
+    if (!approved) return;
     setSaving(true);
     try {
       await remove({ id: row._id });
@@ -639,7 +654,7 @@ export function AssetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const bundle = useQuery(api.assets.bundle, id ? { id: id as any } : "skip");
+  const bundle = useRecordQuery<any>(api.assets.bundle, id ? { id: id as any } : "skip");
   const society = useSociety();
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
@@ -661,13 +676,14 @@ export function AssetDetailPage() {
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });
   const [disposalForm, setDisposalForm] = useState<any>({ disposedAt: todayDate(), disposalMethod: "sold", disposalReason: "", disposalValue: "", notes: "" });
   const [labelType, setLabelType] = useState("qr");
+  const [formErrors, setFormErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     if (bundle?.asset) setLabelType(bundle.asset.preferredLabelType ?? "qr");
   }, [bundle?.asset?._id, bundle?.asset?.preferredLabelType]);
 
   if (bundle === undefined) return <PageLoading />;
-  if (bundle === null) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
+  if (bundle === null) return <RecordNotFound recordLabel="Asset" backTo="/app/assets" backLabel="All assets" />;
   // `assets.bundle` resolves to `{ asset, events, maintenance, ... }`. Some
   // runtimes hand back a transient placeholder (e.g. an empty array) before the
   // real bundle loads — treat any asset-less, non-null shape as still loading
@@ -718,15 +734,35 @@ export function AssetDetailPage() {
     }
   };
 
+  const openDrawer = (next: "custody" | "maintenance" | "disposal") => {
+    setFormErrors({});
+    setDrawer(next);
+  };
+
   const saveEvent = async () => {
-    await runSave("Could not record custody event", () => recordEvent({ assetId: asset._id, event: cleanEvent(eventForm) }), "Custody event recorded");
+    const event = cleanEvent(eventForm);
+    const errors = validateAssetEventInput(event);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    await runSave("Could not record custody event", () => recordEvent({ assetId: asset._id, event }), "Custody event recorded");
   };
 
   const saveMaintenance = async () => {
-    await runSave("Could not schedule maintenance", () => scheduleMaintenance({ assetId: asset._id, ...maintenanceForm }), "Maintenance scheduled");
+    const errors = validateAssetMaintenanceInput(maintenanceForm);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    await runSave("Could not schedule maintenance", () => scheduleMaintenance({ assetId: asset._id, ...maintenanceForm, title: String(maintenanceForm.title ?? "").trim() }), "Maintenance scheduled");
   };
 
   const saveDisposal = async () => {
+    const errors = validateAssetDisposalInput({
+      disposedAt: disposalForm.disposedAt,
+      disposalMethod: disposalForm.disposalMethod,
+      disposalReason: disposalForm.disposalReason,
+      disposalValueCents: inputToCents(disposalForm.disposalValue),
+    });
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
     await runSave(
       "Could not dispose asset",
       () => dispose({
@@ -756,9 +792,11 @@ export function AssetDetailPage() {
           ) : (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-              <button className="btn-action" onClick={() => setDrawer("custody")} disabled={!canWrite}><Repeat2 size={12} /> Log custody change</button>
-              {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")} disabled={!canWrite}><Wrench size={12} /> Schedule</button>}
-              <button className="btn-action" onClick={() => setDrawer("disposal")} disabled={!canWrite}><Trash2 size={12} /> Dispose</button>
+              {asset.status !== "Disposed" && <button className="btn-action" onClick={() => openDrawer("custody")} disabled={!canWrite}><Repeat2 size={12} /> Log custody change</button>}
+              {serviceable && asset.status !== "Disposed" && <button className="btn-action" onClick={() => openDrawer("maintenance")} disabled={!canWrite}><Wrench size={12} /> Schedule</button>}
+              {asset.status === "Disposed"
+                ? <Badge tone="neutral">Disposed{asset.disposedAt ? ` ${formatDate(asset.disposedAt)}` : ""}</Badge>
+                : <button className="btn-action" onClick={() => openDrawer("disposal")} disabled={!canWrite}><Trash2 size={12} /> Dispose</button>}
               <button className="btn-action btn-action--primary" onClick={openEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
             </div>
           )
@@ -947,13 +985,13 @@ export function AssetDetailPage() {
       )}
 
       <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Record"}</button></>}>
-        <CustodyForm form={eventForm} setForm={setEventForm} />
+        <CustodyForm form={eventForm} setForm={setEventForm} errors={formErrors} />
       </Drawer>
       <Drawer open={drawer === "maintenance"} onClose={() => setDrawer(null)} title="Schedule maintenance" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveMaintenance} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Schedule"}</button></>}>
-        <MaintenanceForm form={maintenanceForm} setForm={setMaintenanceForm} />
+        <MaintenanceForm form={maintenanceForm} setForm={setMaintenanceForm} errors={formErrors} />
       </Drawer>
       <Drawer open={drawer === "disposal"} onClose={() => setDrawer(null)} title="Dispose asset" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--danger" onClick={saveDisposal} disabled={!canWrite || (saving)}>{saving ? "Disposing…" : "Dispose"}</button></>}>
-        <DisposalForm form={disposalForm} setForm={setDisposalForm} />
+        <DisposalForm form={disposalForm} setForm={setDisposalForm} errors={formErrors} />
       </Drawer>
     </div>
   );
@@ -1013,7 +1051,7 @@ export function AssetVerificationPage() {
 
   if (society === undefined || (society && (runs === undefined || assets === undefined))) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!run) return <div className="page"><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><p>Physical inventory run not found.</p></div>;
+  if (!run) return <RecordNotFound recordLabel="Physical inventory run" backTo="/app/assets" backLabel="All assets" />;
   if (items === undefined) return <PageLoading />;
 
   const finishRun = async () => {
@@ -1143,14 +1181,15 @@ function ReceiptLineLinkForm({
     </div>
   );
 }
-function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function CustodyForm({ form, setForm, errors = {} }: { form: any; setForm: (form: any) => void; errors?: FieldErrors }) {
+  const needsCustodian = form.eventType === "checkout" || form.eventType === "transfer";
   return (
     <div className="form-grid">
       <Field label="Event"><Select value={form.eventType} options={["checkout", "checkin", "transfer", "note"]} onChange={(eventType) => setForm({ ...form, eventType })} /></Field>
       <Field label="Custodian type"><Select value={form.toCustodianType} options={CUSTODIAN_TYPES} onChange={(toCustodianType) => setForm({ ...form, toCustodianType })} /></Field>
-      <Field label="Custodian"><input className="input" value={form.toCustodianName} onChange={(event) => setForm({ ...form, toCustodianName: event.target.value })} /></Field>
+      <Field label="Custodian" required={needsCustodian} error={errors.toCustodianName}><input className="input" value={form.toCustodianName} onChange={(event) => setForm({ ...form, toCustodianName: event.target.value })} /></Field>
       <Field label="Responsible person"><input className="input" value={form.responsiblePersonName} onChange={(event) => setForm({ ...form, responsiblePersonName: event.target.value })} /></Field>
-      <Field label="Location"><input className="input" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
+      <Field label="Location" required={form.eventType === "checkin"} error={errors.location}><input className="input" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
       <Field label="Condition"><Select value={form.condition} options={ASSET_CONDITIONS} onChange={(condition) => setForm({ ...form, condition })} /></Field>
       <Field label="Expected return"><DatePicker value={form.expectedReturnDate} onChange={(value) => setForm({ ...form, expectedReturnDate: value })} /></Field>
       <Field label="Acceptance signature"><input className="input" value={form.acceptanceSignature} onChange={(event) => setForm({ ...form, acceptanceSignature: event.target.value })} /></Field>
@@ -1159,25 +1198,25 @@ function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => voi
   );
 }
 
-function MaintenanceForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function MaintenanceForm({ form, setForm, errors = {} }: { form: any; setForm: (form: any) => void; errors?: FieldErrors }) {
   return (
     <div className="form-grid">
-      <Field label="Title"><input className="input" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
-      <Field label="Kind"><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
-      <Field label="Due date"><DatePicker value={form.dueDate} onChange={(value) => setForm({ ...form, dueDate: value })} /></Field>
+      <Field label="Title" required error={errors.title}><input className="input" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
+      <Field label="Kind" required error={errors.kind}><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
+      <Field label="Due date" required error={errors.dueDate}><DatePicker value={form.dueDate} onChange={(value) => setForm({ ...form, dueDate: value })} /></Field>
       <Field label="Create task"><label className="checkbox"><input type="checkbox" checked={Boolean(form.createTask)} onChange={(event) => setForm({ ...form, createTask: event.target.checked })} /> Add to Tasks</label></Field>
       <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
 
-function DisposalForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function DisposalForm({ form, setForm, errors = {} }: { form: any; setForm: (form: any) => void; errors?: FieldErrors }) {
   return (
     <div className="form-grid">
-      <Field label="Disposed at"><DatePicker value={form.disposedAt} onChange={(value) => setForm({ ...form, disposedAt: value })} /></Field>
-      <Field label="Method"><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
-      <Field label="Disposal value"><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
-      <Field label="Reason"><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>
+      <Field label="Disposed at" required error={errors.disposedAt}><DatePicker value={form.disposedAt} onChange={(value) => setForm({ ...form, disposedAt: value })} /></Field>
+      <Field label="Method" required error={errors.disposalMethod}><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
+      <Field label="Disposal value" error={errors.disposalValueCents}><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
+      <Field label="Reason" required error={errors.disposalReason}><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>
       <Field label="Notes"><MarkdownEditor rows={3} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );

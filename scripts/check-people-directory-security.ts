@@ -60,6 +60,7 @@ await t.run(async (ctx) => {
   portable.principal = { kind: "user", runtime: "browser-local", assurance: "trusted-workspace", subject: "local-owner", societyId: fixture.a, userId: fixture.users["owner-a"] };
   const rows = await listPortable(portable);
   assert.ok(rows.some((row) => row._id === fixture.unlinked), "Trusted local directory preserves reusable legacy records");
+  assert.ok(!rows.some((row) => row._id === foreignOwned), "Trusted local directory never lists another workspace's people (P12)");
   const created = await upsertPortable(portable, { fullName: "Reusable local contact", nowISO });
   assert.equal((await ctx.db.get(created as any))?.societyId, undefined);
 });

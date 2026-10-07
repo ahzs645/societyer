@@ -1,3 +1,4 @@
+import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useConvex, useQuery } from "convex/react";
@@ -15,6 +16,7 @@ import { triggerBlobDownload } from "../lib/zip";
 import { localWorkspaceRestoreSupported, restoreLocalWorkspaceBackup } from "../lib/localWorkspaceExport";
 import { useConfirm } from "../components/Modal";
 import { setStoredSocietyId } from "../hooks/useSociety";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type TableSummary = {
   name: string;
@@ -263,11 +265,18 @@ export function ExportsPage() {
   };
 
   const restorePreview = async () => {
-    if (!restoreFile || !await confirm({ title: "Restore this backup?", message: `Replace this device's current local workspace with "${restoreFile.name}"? Export its current records first if you need to keep them.`, confirmLabel: "Restore", tone: "danger" })) return;
+    if (!restoreFile) return;
+    try {
+      await preflightWorkspaceBackupFile(restoreFile);
+    } catch (error) {
+      toast.error("This file can't be restored", error instanceof Error ? error.message : "Choose a Societyer ZIP or JSON backup.");
+      return;
+    }
+    if (!await confirm({ title: "Restore this backup?", message: `Replace this device's current local workspace with "${restoreFile.name}"? Export its current records first if you need to keep them.`, confirmLabel: "Restore", tone: "danger" })) return;
     setRestoreBusy(true);
     try {
       const summary = await restoreLocalWorkspaceBackup(restoreFile);
-      if (summary.societies[0]?._id) setStoredSocietyId(summary.societies[0]._id as any);
+      if (summary.preferredSocietyId) setStoredSocietyId(summary.preferredSocietyId as any);
       toast.success("Backup restored", `${summary.rowCount} records and ${summary.includedFiles} saved files.`);
     } catch (error) { toast.error("Restore failed", error instanceof Error ? error.message : "Please try again."); }
     finally { setRestoreBusy(false); }
@@ -548,7 +557,7 @@ function slug(value: string) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function formatNumber(value: number) {

@@ -22,6 +22,9 @@ import { useConfirm } from "./Modal";
 import { useInspectorPanel } from "./InspectorPanel";
 import { CitationBadge } from "./CitationTooltip";
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
+import { useTranslation } from "react-i18next";
+import { translateNavLabel } from "../i18n/navLabels";
+import { useDocumentTitle } from "../lib/documentTitle";
 
 export type Breadcrumb = {
   label: ReactNode;
@@ -193,17 +196,18 @@ type PillProps = {
   tone?: ToneVariant;
   size?: "sm" | "md";
   className?: string;
+  title?: string;
   children: ReactNode;
 };
 
 export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
-  { tone = "neutral", size = "md", className, children },
+  { tone = "neutral", size = "md", className, title, children },
   ref,
 ) {
   const classes = ["pill", `pill--${size}`];
   if (tone !== "neutral") classes.push(`pill--${tone}`);
   if (className) classes.push(className);
-  return <span ref={ref} className={classes.join(" ")}>{children}</span>;
+  return <span ref={ref} className={classes.join(" ")} title={title}>{children}</span>;
 });
 
 /** Twenty-style chip with leftComponent / rightComponent slots.
@@ -384,6 +388,9 @@ export function SettingsShell({
     ? createElement(identity.icon, { size: 16 })
     : icon;
   const resolvedTone: IconTone = identity?.color ?? iconColor ?? "gray";
+  const { t } = useTranslation();
+  const displayTitle = typeof title === "string" ? translateNavLabel(t, title) : title;
+  useDocumentTitle(typeof displayTitle === "string" ? displayTitle : identity ? translateNavLabel(t, identity.label) : null);
 
   return (
     <div className="settings-shell">
@@ -395,7 +402,7 @@ export function SettingsShell({
                 {resolvedIcon}
               </TintedIconTile>
             )}
-            <span className="settings-shell__title-text">{title}</span>
+            <span className="settings-shell__title-text">{displayTitle}</span>
           </h1>
           {description && <div className="settings-shell__description">{description}</div>}
         </div>
@@ -805,7 +812,8 @@ export function Field({
     <div className={`field${className ? ` ${className}` : ""}`}>
       <label className="field__label" htmlFor={fieldId}>
         {label}
-        {required && <span className="field__required" aria-hidden="true"> *</span>}
+        {/* The asterisk is CSS-generated so the label's text stays the field name. */}
+        {required && <span className="field__required" aria-hidden="true" />}
       </label>
       {enhanceFieldChildren(children, fieldId, describedBy, Boolean(error))}
       {hint && <div className="field__hint" id={hintId}>{hint}</div>}

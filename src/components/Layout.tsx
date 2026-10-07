@@ -90,6 +90,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
+import { useLocalWorkspaceReady } from "../hooks/useLocalWorkspaceReady";
 import { getDialogFocusables } from "../lib/useDialogFocus";
 import { UserPicker } from "./UserPicker";
 import { RouteAccessGate } from "./RouteAccessGate";
@@ -146,6 +147,8 @@ import {
   getSidebarMenuPosition,
   renderNavItem,
   getCount,
+  NavCountLoadingPill,
+  NavCountPill,
 } from "./Layout.internal";
 import type {
   NavItem,
@@ -153,6 +156,7 @@ import type {
   FavoriteRef,
   SidebarContextMenu,
 } from "./Layout.internal";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -284,8 +288,8 @@ export function Layout() {
           });
       } else if (action === "export-workspace") {
         import("../lib/localWorkspaceExport")
-          .then(({ downloadLocalWorkspaceSnapshot }) => {
-            downloadLocalWorkspaceSnapshot(`societyer-workspace-${new Date().toISOString().slice(0, 10)}.json`);
+          .then(async ({ downloadLocalWorkspaceSnapshot }) => {
+            await downloadLocalWorkspaceSnapshot(`societyer-workspace-${todayDateOnly()}.json`);
             toast.success("Workspace export started");
           })
           .catch((error) => {
@@ -606,7 +610,12 @@ export function Layout() {
     };
   }, [operationsDeskMenu]);
 
-  const counts = useQuery(api.dashboard.navCounts, society ? { societyId: society._id } : "skip");
+  const rawCounts = useQuery(api.dashboard.navCounts, society ? { societyId: society._id } : "skip");
+  // Before the local workspace is read back from IndexedDB, queries answer
+  // from the bundled seed: a restored workspace's counts read 0 (A5). Treat
+  // them as loading until the workspace is ready.
+  const localWorkspaceReady = useLocalWorkspaceReady();
+  const counts = localWorkspaceReady ? rawCounts : undefined;
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
   const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
@@ -1140,7 +1149,7 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.openTasks")}</span>
-                    <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
+                    <Pill size="sm">{counts ? counts.openTasks : <span aria-label="Loading" className="muted">…</span>}</Pill>
                   </NavLink>
                   <NavLink
                     to="/app/deadlines"
@@ -1149,7 +1158,17 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.upcomingDeadlines")}</span>
-                    <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
+                    {/* P20: "0" looked healthy for an unconfigured workspace;
+                        say that deadlines are not computed yet instead. */}
+                    {!counts ? (
+                      <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>
+                    ) : counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
+                      <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end (Society profile) and record held AGMs to compute statutory deadlines.">
+                        <Pill size="sm" tone="warn">Set up</Pill>
+                      </span>
+                    ) : (
+                      <Pill size="sm">{counts.openDeadlines}</Pill>
+                    )}
                   </NavLink>
                 </>
               )}
@@ -1219,11 +1238,7 @@ export function Layout() {
                         <Icon size={14} />
                       </TintedIconTile>
                       <span className="sidebar__label">{label}</span>
-                      {count != null && (
-                        <Pill size="sm" className="sidebar__count">
-                          {count}
-                        </Pill>
-                      )}
+                      {count != null ? <NavCountPill to={item.to} count={count} /> : counts === undefined ? <NavCountLoadingPill to={item.to} /> : null}
                     </div>
                     {renderFavoriteControls(ref, index)}
                   </div>

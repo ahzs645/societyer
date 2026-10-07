@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   RecordTableStoreContext,
   createRecordTableStore,
@@ -11,6 +12,9 @@ import {
 import type { HydratedView, ObjectMetadata } from "../../types";
 import { RecordTableSidePanel } from "./RecordTableSidePanel";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
+
+/** Query parameter that opens a record's side panel, e.g. `/app/tasks?record=<id>`. */
+export const RECORD_DEEP_LINK_PARAM = "record";
 
 /**
  * Sets up both the per-instance zustand store *and* the metadata context
@@ -67,9 +71,33 @@ export function RecordTableScope({
     record: any;
   } | null>(null);
 
+  const handledRequestRef = useRef<string | null>(null);
   useEffect(() => {
     setSidePanelRecord(null);
+    // A new scope (or StrictMode's effect replay) may re-apply a `?record=` deep link.
+    handledRequestRef.current = null;
   }, [scopeIdentity]);
+
+  // Deep link: `?record=<id>` (used by global search hits) opens that record's
+  // side panel once it is among this table's records. Closing the panel drops
+  // the parameter so a reload or Back does not reopen it unexpectedly.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedRecordId = searchParams.get(RECORD_DEEP_LINK_PARAM);
+  useEffect(() => {
+    if (!requestedRecordId || handledRequestRef.current === `${scopeIdentity}:${requestedRecordId}`) return;
+    const match = records.find((record) => String(record?._id) === requestedRecordId);
+    if (!match) return;
+    handledRequestRef.current = `${scopeIdentity}:${requestedRecordId}`;
+    setSidePanelRecord({ scopeIdentity, recordId: requestedRecordId, record: match });
+  }, [records, requestedRecordId, scopeIdentity]);
+  const closeSidePanel = useCallback(() => {
+    setSidePanelRecord(null);
+    if (searchParams.has(RECORD_DEEP_LINK_PARAM)) {
+      const next = new URLSearchParams(searchParams);
+      next.delete(RECORD_DEEP_LINK_PARAM);
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Pipe view + records into the store when they change.
   useEffect(() => {
@@ -124,7 +152,7 @@ export function RecordTableScope({
             open
             record={currentSidePanelRecord}
             objectMetadata={objectMetadata}
-            onClose={() => setSidePanelRecord(null)}
+            onClose={closeSidePanel}
             onUpdate={onUpdate}
             onOpenRecord={() =>
               handleRecordClick(activeSidePanelRecord.recordId, currentSidePanelRecord, {

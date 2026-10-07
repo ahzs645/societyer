@@ -1,3 +1,5 @@
+import { nextBcSocietyAgmDeadline } from "./agmEvidence";
+
 /**
  * CORPORATION SETTINGS → COMPLIANCE DEADLINES (pure logic).
  *
@@ -23,6 +25,13 @@ export interface ComplianceSettings {
   jurisdictionCode?: string;
   entityType?: string;
   annualMeetingDate?: string;
+  /**
+   * Calendar years in which an AGM is evidenced (held AGM meeting records or the
+   * profile's AGM fields). When supplied, the AGM deadline is cycle-aware: a
+   * year without a held AGM is not skipped just because its planned month/day
+   * passed (G-03). When omitted, the legacy "next month/day" behaviour applies.
+   */
+  heldAgmYears?: number[];
 }
 
 export interface DerivedDeadline {
@@ -30,6 +39,10 @@ export interface DerivedDeadline {
   title: string;
   dueDate: string;
   category: string;
+  /** The Deadlines register category (Governance/Tax/Payroll/Privacy/Other). */
+  deadlineCategory: "Governance" | "Tax" | "Payroll" | "Privacy" | "Other";
+  /** Short explanation of how the date was derived. */
+  basis?: string;
 }
 
 // --- date helpers (operate on 'YYYY-MM-DD' string prefixes) ---------------
@@ -134,7 +147,23 @@ export function nextAgmDate(settings: ComplianceSettings, fromISO: string): stri
   if (settings.agmMonth < 1 || settings.agmMonth > 12) return null;
   const from = parseISODate(fromISO);
   if (!from) return null;
+  if (settings.heldAgmYears) {
+    const today = formatISODate(from.year, from.month, from.day);
+    if (isBcSocietySettings(settings)) {
+      // BC Societies Act s.71: an AGM is due in every calendar year. A year
+      // with no held AGM stays due until Dec 31 even after the planned date.
+      return nextBcSocietyAgmDeadline(settings.heldAgmYears, today, { month: settings.agmMonth, day: settings.agmDay }).dueDate;
+    }
+    // Other entities: the current year's planned AGM stays due (and overdue)
+    // until an AGM is evidenced for that year.
+    const targetYear = settings.heldAgmYears.includes(from.year) ? from.year + 1 : from.year;
+    return formatISODate(targetYear, settings.agmMonth, clampDay(targetYear, settings.agmMonth, settings.agmDay));
+  }
   return nextMonthDayOnOrAfter(settings.agmMonth, settings.agmDay, from);
+}
+
+function isBcSocietySettings(settings: ComplianceSettings): boolean {
+  return settings.entityType !== "corporation__business_" && (settings.jurisdictionCode ?? "CA-BC") === "CA-BC";
 }
 
 /**
@@ -198,6 +227,10 @@ export function deriveComplianceDeadlines(
       title: "Annual General Meeting",
       dueDate: agmDate,
       category: "agm",
+      deadlineCategory: "Governance",
+      basis: settings.heldAgmYears
+        ? `Next AGM due; ${settings.heldAgmYears.includes(Number(fromISO.slice(0, 4))) ? "this year's AGM is on record" : "no AGM is on record for this calendar year yet"}.`
+        : "Next planned AGM date.",
     });
   }
 
@@ -208,17 +241,29 @@ export function deriveComplianceDeadlines(
       title: "Fiscal Year End",
       dueDate: fyEnd,
       category: "financial",
+      deadlineCategory: "Governance",
+      basis: "Close the books and prepare financial statements for the AGM.",
     });
   }
 
   {
-    const annualReport = nextAnnualReportDueDate(settings, fromISO);
+    let annualReport = nextAnnualReportDueDate(settings, fromISO);
+    let reportBasis = "Registry annual report due date.";
+    // A past due date (the report for an AGM already held) is not the NEXT
+    // deadline: the next report is due 30 days after the next AGM (BC Societies
+    // Act s.73). Only applied when AGM history is known (cycle-aware mode).
+    if (annualReport && settings.heldAgmYears && annualReport < fromISO.slice(0, 10) && agmDate && settings.entityType !== "corporation__business_") {
+      annualReport = offsetDate(agmDate, 0, 30);
+      reportBasis = "Due 30 days after the next AGM.";
+    }
     if (annualReport) {
       deadlines.push({
         key: "annual-report",
         title: "Annual Report",
         dueDate: annualReport,
         category: "annual-report",
+        deadlineCategory: "Governance",
+        basis: reportBasis,
       });
     }
   }

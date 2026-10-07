@@ -283,3 +283,43 @@
 .action-item__due { font-size: token('fs-sm'); color: token('text-tertiary'); font-family: token('font-mono'); }
 
 /* Workflow canvas */
+
+// Records "Apply sections" could not apply (BlockedRecordsPanel).
+.blocked-records__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.blocked-records__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.blocked-records__main {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.blocked-records__title {
+  font-weight: 600;
+}
+
+.blocked-records__issues {
+  font-size: var(--fs-sm);
+}
+
+.blocked-records__actions {
+  flex-wrap: wrap;
+}

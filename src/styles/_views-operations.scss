@@ -1,0 +1,116 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// Finance, operations and admin views (WP-F).
+
+// Users & access roster: a plain table on wide screens, stacked cards on
+// phones so emails and names stop wrapping one character per line.
+.users-table td.mono {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .users-table,
+  .users-table tbody,
+  .users-table tr,
+  .users-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .users-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .users-table tr {
+    border: 1px solid token('border-color-light');
+    border-radius: token('r-sm');
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+
+  .table.users-table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table.users-table tbody td {
+    height: auto;
+    border: 0;
+    padding: 4px 0;
+    background: transparent;
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .users-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    color: token('text-tertiary');
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+
+  .table.users-table tbody td:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 8px;
+  }
+}
+
+// Accounting backfill review.
+.backfill-review__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.backfill-review__table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.backfill-review__table table {
+  min-width: 560px;
+}
+
+.backfill-review__row--excluded td {
+  color: token('text-tertiary');
+}
+
+.backfill-review__categories table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.backfill-review__categories th:nth-child(2),
+.backfill-review__categories td:nth-child(2) {
+  width: 92px;
+}
+
+.backfill-review__categories th:nth-child(3),
+.backfill-review__categories td:nth-child(3) {
+  width: 46%;
+}
+
+.backfill-review__account {
+  min-width: 0;
+
+  > * {
+    max-width: 100%;
+  }
+
+  button {
+    max-width: 100%;
+    min-width: 0;
+  }
+}

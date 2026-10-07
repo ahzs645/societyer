@@ -13,14 +13,16 @@ export const STATIC_DEMO_SEED: StaticDemoSeed = {
 export class StaticDemoDexieStore {
   private rowsStore: LocalDexieRowStore;
 
-  constructor(seed: StaticDemoSeed, options?: { databaseName?: string }) {
+  constructor(seed: StaticDemoSeed, options?: { databaseName?: string; projectionNamespace?: string }) {
     this.rowsStore = new LocalDexieRowStore(seed, {
       databaseName: options?.databaseName ?? "societyer-static-demo",
       logLabel: "societyer-demo",
+      projectionNamespace: options?.projectionNamespace,
     });
   }
 
-  onUpdate(listener: () => void) {
+  /** `changed` lists the tables a write touched; undefined means "anything may have changed". */
+  onUpdate(listener: (changed?: ReadonlySet<string>) => void) {
     return this.rowsStore.onUpdate(listener);
   }
 
@@ -74,6 +76,7 @@ export class StaticDemoDexieStore {
   }
 
   exportAttachmentReferences() { return this.rowsStore.exportAttachmentReferences(); }
+  saveFile(blob: Blob, sha256: string, references: string[] = []) { return this.rowsStore.saveFile(blob, sha256, references); }
 
   transaction<T>(mutate: () => T): T {
     return this.rowsStore.transaction(mutate);
@@ -83,8 +86,19 @@ export class StaticDemoDexieStore {
     return this.rowsStore.transactionAsync(mutate);
   }
 
+  /** Full snapshot, heavy fields included (they are read back from IndexedDB). */
   exportSnapshot() {
     return this.rowsStore.exportSnapshot();
+  }
+
+  /** The snapshot as table-by-table batches (streaming backups). */
+  exportSnapshotSource(batchSize?: number) {
+    return this.rowsStore.exportSnapshotSource(batchSize);
+  }
+
+  /** Synchronous snapshot; only valid while every row is fully in memory. */
+  exportSnapshotSync() {
+    return this.rowsStore.exportSnapshotSync();
   }
 
   upsertAttachment(attachment: Parameters<LocalDexieRowStore["upsertAttachment"]>[0]) {

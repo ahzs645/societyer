@@ -25,6 +25,14 @@ export type ComplianceFacts = {
   commencedBusinessDate?: string;
   annualMeetingDate?: string;
   annualMeetingYear?: number;
+  /** Calendar years with an evidenced AGM (profile + held AGM meeting records). */
+  agmYears?: number[];
+  /** Earliest held meeting on record; proves an existing, operating organization
+   *  when the incorporation date has not been captured (imported workspaces). */
+  operatingSinceDate?: string;
+  /** Formation status was relaxed to "unverified" because meeting records show
+   *  an operating organization while the profile still says pre-formation. */
+  formationInferredFromRecords?: boolean;
   agmExtensionDate?: string;
   agmExtensionEvidence?: string;
   annualReferenceDate?: string;
@@ -157,21 +165,29 @@ function computeWindowDates(schedule: Extract<ComplianceObligationSchedule, { ki
   return { windowStartDate, dueDate };
 }
 
+/** An AGM is evidenced for `year` by the profile's AGM year/date or by any held
+ *  AGM meeting record (facts.agmYears), not only by the latest AGM. */
+function agmEvidencedForYear(facts: ComplianceFacts, year: number): boolean {
+  if (facts.agmYears?.includes(year)) return true;
+  const fulfilledYear = facts.annualMeetingYear ?? Number(facts.annualMeetingDate?.slice(0, 4));
+  return fulfilledYear === year;
+}
+
 function computeRuleDates(rule: ComplianceRule, facts: ComplianceFacts, asOfDate: string): { dueDate: string; windowStartDate?: string } | undefined {
   const schedule = rule.schedule;
   if (rule.ruleId === "compliance-ca-bc-societies-agm-planning") {
     const year = Number(asOfDate.slice(0, 4));
-    if (!facts.incorporationDate || Number(facts.incorporationDate.slice(0, 4)) >= year) return undefined;
-    const fulfilledYear = facts.annualMeetingYear ?? Number(facts.annualMeetingDate?.slice(0, 4));
-    if (fulfilledYear === year) return undefined;
+    const existedSince = facts.incorporationDate ?? facts.operatingSinceDate;
+    if (!existedSince || Number(existedSince.slice(0, 4)) >= year) return undefined;
+    if (agmEvidencedForYear(facts, year)) return undefined;
     return { dueDate: facts.agmExtensionDate && facts.agmExtensionEvidence && Number(facts.agmExtensionDate.slice(0, 4)) - 1 === year ? facts.agmExtensionDate : `${year}-12-31` };
   }
   if (rule.ruleId === "compliance-ca-bc-societies-no-agm-annual-report") {
     const suppliedYearEnd = facts.eventDates?.noAgmCalendarYearEnd;
     const year = suppliedYearEnd ? Number(suppliedYearEnd.slice(0, 4)) : Number(asOfDate.slice(0, 4)) - 1;
-    if (!facts.incorporationDate || Number(facts.incorporationDate.slice(0, 4)) >= year) return undefined;
-    const fulfilledYear = facts.annualMeetingYear ?? Number(facts.annualMeetingDate?.slice(0, 4));
-    if (fulfilledYear === year) return undefined;
+    const existedSince = facts.incorporationDate ?? facts.operatingSinceDate;
+    if (!existedSince || Number(existedSince.slice(0, 4)) >= year) return undefined;
+    if (agmEvidencedForYear(facts, year)) return undefined;
     if (facts.agmExtensionDate && facts.agmExtensionEvidence && Number(facts.agmExtensionDate.slice(0, 4)) - 1 === year) {
       return { dueDate: addComplianceDateOffset(facts.agmExtensionDate, { days: 30 }) };
     }

@@ -11,6 +11,7 @@ import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { streamChatMessage, isChatStreamUnavailable } from "../lib/aiChatStream";
 
 type AgentDefinition = {
@@ -106,6 +107,7 @@ export function AiAgentsPage() {
   const approveToolDraft = usePermissionedMutation(api.aiAgents.approveToolDraft, canWriteTasks);
   const rejectToolDraft = usePermissionedMutation(api.aiAgents.rejectToolDraft, canWriteTasks);
   const toast = useToast();
+  const confirm = useConfirm();
 
   const [selectedKey, setSelectedKey] = useState("compliance_analyst");
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
@@ -296,7 +298,8 @@ export function AiAgentsPage() {
       if (defaultModel?.id && !result.modelCatalog?.models?.some((model: AiModelInfo) => model.id === aiSetup.modelId)) {
         setAiSetup((draft) => ({ ...draft, modelId: defaultModel.id }));
       }
-      toast.success("Provider key validated");
+      if (result.simulated) toast.info("Simulated validation", "The key format was accepted but not checked with the provider. A connected server validates it for real.");
+      else toast.success("Provider key validated");
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't validate AI provider");
     } finally {
@@ -557,8 +560,16 @@ export function AiAgentsPage() {
                   disabled={!canRunLive} value={chatInput}
                   placeholder="Ask the assistant to find records, draft tasks, inspect workflow context, or prepare a filing packet."
                   onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Enter sends; Shift+Enter adds a line (IME composition is left alone).
+                    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      if (canRunLive && !chatBusy && chatInput.trim()) void submitChat();
+                    }
+                  }}
                 />
               </Field>
+              <div className="muted" style={{ fontSize: 12, marginTop: -6 }}>Enter to send · Shift+Enter for a new line</div>
               <button className="btn btn--accent" disabled={!canRunLive || chatBusy || !chatInput.trim()} onClick={submitChat}>
                 <MessageSquare size={12} /> {chatBusy ? "Sending..." : "Send chat message"}
               </button>
@@ -844,7 +855,23 @@ export function AiAgentsPage() {
                       <button
                         className="btn btn--ghost btn--sm"
                         disabled={!canWriteTasks}
-                        onClick={() => canWriteTasks && skill._id && removeSkill({ societyId: society._id, id: skill._id as any })}
+                        onClick={async () => {
+                          if (!canWriteTasks || !skill._id) return;
+                          const ok = await confirm({
+                            title: `Delete the skill "${skill.name}"?`,
+                            message: "Agents stop using its instructions. The skill's text is deleted and cannot be recovered; deactivate it instead to keep it.",
+                            confirmLabel: "Delete skill",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          try {
+                            await removeSkill({ societyId: society._id, id: skill._id as any });
+                            toast.success("Skill deleted", skill.name);
+                          } catch (error: any) {
+                            toast.error("Could not delete the skill", error?.message ?? "Please try again.");
+                          }
+                        }}
+                        aria-label={`Delete skill ${skill.name}`}
                       >
                         <Trash2 size={12} /> Delete
                       </button>

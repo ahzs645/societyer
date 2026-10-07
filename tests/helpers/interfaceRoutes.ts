@@ -126,6 +126,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/people-history",
+    "path": "/demo/app/people-history",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/people-directory/:id",
+    "path": "/demo/app/people-directory/interface-audit-missing",
+    "kind": "app",
+    "fixture": "missing-record"
+  },
+  {
     "pattern": "/app/dividends",
     "path": "/demo/app/dividends",
     "kind": "app",
@@ -228,6 +240,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/intake",
+    "path": "/demo/app/intake",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/intake/:runId/review",
+    "path": "/demo/app/intake/interface-audit-missing/review",
+    "kind": "app",
+    "fixture": "missing-record"
+  },
+  {
     "pattern": "/app/members",
     "path": "/demo/app/members",
     "kind": "app",
@@ -324,6 +348,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/coverage",
+    "path": "/demo/app/coverage",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/source-model-coverage",
+    "path": "/demo/app/source-model-coverage",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/documents",
     "path": "/demo/app/documents",
     "kind": "app",
@@ -385,7 +421,7 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
   },
   {
     "pattern": "/app/financials/fy/:fiscalYear",
-    "path": "/demo/app/financials/fy/2026",
+    "path": "/demo/app/financials/fy/2025-2026",
     "kind": "app",
     "fixture": "seeded"
   },
@@ -428,6 +464,18 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
   {
     "pattern": "/app/grants/:id",
     "path": "/demo/app/grants/static_grant",
+    "kind": "app",
+    "fixture": "seeded"
+  },
+  {
+    "pattern": "/app/agreements",
+    "path": "/demo/app/agreements",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/agreements/:id",
+    "path": "/demo/app/agreements/static_agreement_lease",
     "kind": "app",
     "fixture": "seeded"
   },

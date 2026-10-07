@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
 import {
   MOTION_OUTCOMES,
@@ -17,6 +17,7 @@ import {
 } from "../lib/motionGovernance";
 import { usePermissions } from "../hooks/usePermissions";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { hasOutcomeOverride, motionOutcomeConsistencyIssues, motionVoteIssues } from "../../shared/motionValidation";
 // Re-export the pure governance helpers so existing importers can keep pulling
 // them from MotionEditor; the implementations now live in lib/motionGovernance.
 export { isAdjournmentMotion, thresholdFor, motionMeetsThreshold };
@@ -40,11 +41,14 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
   );
 }
 import { Badge, Field } from "./ui";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Modal, useConfirm } from "./Modal";
+import { UnsupportedDetailsBadge } from "./UnsupportedDetailsBadge";
+import { PersonNameLinkField, type DirectoryPerson } from "./PersonNameLinkField";
+import { matchDirectoryPerson } from "../../shared/meetingAttendanceGrid";
 
 export type Motion = {
   /** Stable id of the backing `motions` table row, back-linked into the display
@@ -64,6 +68,8 @@ export type Motion = {
   votesFor?: number;
   votesAgainst?: number;
   abstentions?: number;
+  /** G-04: why a recorded outcome stands despite the tally (consensus, chair ruling). */
+  outcomeOverrideNote?: string;
   resolutionType?: "Ordinary" | "Special" | "Unanimous" | string;
   /** How the motion was decided. Procedural motions (adjournment,
    *  approve-minutes) default to "consent" — carried without a recorded tally. */
@@ -77,7 +83,116 @@ export type Motion = {
   /** Which minutes record this motion adopts. When the motion carries, the
    *  referenced minutes are automatically stamped approved (backend). */
   adoptsMinutesId?: string;
+  /** A1: mover / seconder as people-directory persons. */
+  movedByPersonId?: string;
+  secondedByPersonId?: string;
+  /** A11: named abstainers and dissenters, and a retained dissent report. */
+  abstainedBy?: NamedMotionPerson[];
+  opposedBy?: NamedMotionPerson[];
+  dissentDocumentId?: string;
+  /** C1: the outcome exactly as the source worded it. */
+  sourceOutcomeText?: string;
+  sourceLocator?: { voteSummary?: string; pageRef?: string; evidenceText?: string; sectionReference?: string; quote?: string; sourceExternalIds?: string[] };
 };
+
+export type NamedMotionPerson = { name: string; personId?: string; notes?: string };
+
+/** People-directory rows and document choices for the motion editors (A1/A11). */
+type MotionEditorExtras = { directoryPeople?: DirectoryPerson[]; documentOptions?: Array<{ value: string; label: string }> };
+const MotionEditorExtrasContext = createContext<MotionEditorExtras>({});
+
+/** Mover / seconder field: a people-directory picker when the directory is
+ *  available, the plain name autocomplete otherwise. */
+function MotionPersonField({
+  role,
+  motion,
+  nameOptions,
+  people,
+  ariaLabel,
+  placeholder,
+  onPatch,
+}: {
+  role: "movedBy" | "secondedBy";
+  motion: Motion;
+  nameOptions: string[];
+  people: MotionPerson[];
+  ariaLabel: string;
+  placeholder?: string;
+  onPatch: (patch: Partial<Motion>) => void;
+}) {
+  const { directoryPeople } = useContext(MotionEditorExtrasContext);
+  const personKey = role === "movedBy" ? "movedByPersonId" : "secondedByPersonId";
+  if (directoryPeople && directoryPeople.length) {
+    return (
+      <PersonNameLinkField
+        value={{ name: motion[role] ?? "", personId: motion[personKey] }}
+        people={directoryPeople}
+        ariaLabel={ariaLabel}
+        placeholder={placeholder ?? "Name as written"}
+        onChange={(next) => onPatch({ [role]: next.name, [personKey]: next.personId, ...motionPersonPatch(role, resolveMotionPerson(next.name, people)) } as Partial<Motion>)}
+      />
+    );
+  }
+  return (
+    <NameInput
+      nameOptions={nameOptions}
+      value={motion[role]}
+      onChange={(v) => onPatch({ [role]: v, ...motionPersonPatch(role, resolveMotionPerson(v, people)) } as Partial<Motion>)}
+      placeholder={placeholder}
+      ariaLabel={ariaLabel}
+    />
+  );
+}
+
+/** A11: named abstainers / dissenters with people-directory links. */
+function NamedPeopleField({
+  label,
+  value,
+  onChange,
+  nameOptions,
+}: {
+  label: string;
+  value: NamedMotionPerson[] | undefined;
+  onChange: (next: NamedMotionPerson[] | undefined) => void;
+  nameOptions: string[];
+}) {
+  const { directoryPeople } = useContext(MotionEditorExtrasContext);
+  const [draft, setDraft] = useState("");
+  const rows = value ?? [];
+  const options = useMemo(() => [...new Set([...nameOptions, ...(directoryPeople ?? []).map((person) => person.fullName)])].filter(Boolean).sort(), [nameOptions, directoryPeople]);
+  const add = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || rows.some((row) => row.name.toLowerCase() === trimmed.toLowerCase())) { setDraft(""); return; }
+    const match = matchDirectoryPerson(trimmed, directoryPeople ?? []);
+    onChange([...rows, { name: trimmed, ...(match ? { personId: String(match._id) } : {}) }]);
+    setDraft("");
+  };
+  return (
+    <Field label={label}>
+      <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+        {rows.map((row) => (
+          <Badge key={row.name} tone={row.personId ? "info" : "neutral"}>
+            <span className="row" style={{ gap: 2, alignItems: "center" }} title={row.personId ? "Linked to the people directory" : "Not linked"}>
+              {row.name}
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon"
+                style={{ padding: 0, height: 14 }}
+                aria-label={`Remove ${row.name} from ${label.toLowerCase()}`}
+                onClick={() => { const next = rows.filter((candidate) => candidate.name !== row.name); onChange(next.length ? next : undefined); }}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          </Badge>
+        ))}
+        <div style={{ minWidth: 160, flex: "1 1 160px" }}>
+          <NameAutocomplete value={draft} onChange={setDraft} options={options} onCommit={add} placeholder="Add a name…" ariaLabel={`Add to ${label.toLowerCase()}`} />
+        </div>
+      </div>
+    </Field>
+  );
+}
 
 export type MotionAdoptionTarget = {
   id: string;
@@ -118,7 +233,7 @@ function ResolutionTypeSelect({
     opts.push({ value: "Procedural", label: "Procedural" });
     return opts;
   }, [rules]);
-  return <Select value={value} onChange={onChange} options={options} size={size} />;
+  return <Select value={value} onChange={onChange} options={options} size={size} aria-label="Resolution type" />;
 }
 
 /** Director/member name autocomplete. Uses the shared NameAutocomplete so the
@@ -146,6 +261,15 @@ function NameInput({
     />
   );
 }
+
+/** Pause after the last keystroke before a motion text edit is saved (MA-10). */
+const MOTION_TEXT_SAVE_DELAY_MS = 600;
+/** Motion fields edited by typing; a patch touching only these is debounced. */
+const MOTION_TEXT_KEYS = new Set([
+  "name", "text", "movedBy", "secondedBy", "outcomeOverrideNote",
+  "movedByMemberId", "movedByDirectorId", "movedByPersonId",
+  "secondedByMemberId", "secondedByDirectorId", "secondedByPersonId",
+]);
 
 function OutcomePicker({
   value,
@@ -273,10 +397,51 @@ function DecidedByPicker({
           options={DECIDED_BY_VALUES.map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))}
         />
         <Tooltip content={kind.citation}>
-          <Badge tone="neutral">{kind.label}</Badge>
+          <span style={{ display: "inline-flex" }}><Badge tone="neutral">{kind.label}</Badge></span>
         </Tooltip>
       </div>
     </Field>
+  );
+}
+
+/** G-04: an outcome that contradicts the recorded tally can only be recorded
+ *  as a consensus / unanimous-consent / chair's-ruling decision with a note. */
+function OutcomeOverridePanel({
+  motion,
+  outcome,
+  onApply,
+  onCancel,
+}: {
+  motion: Motion;
+  outcome: string;
+  onApply: (patch: Partial<Motion>) => void;
+  onCancel: () => void;
+}) {
+  const [decidedBy, setDecidedBy] = useState<string>(motion.decidedBy && motion.decidedBy !== "vote" ? motion.decidedBy : "consent");
+  const [note, setNote] = useState(motion.outcomeOverrideNote ?? "");
+  const issues = motionOutcomeConsistencyIssues({ ...motion, outcome });
+  return (
+    <div className="motion-override" role="alert" data-testid="motion-outcome-override">
+      {issues.map((issue) => <p key={issue} className="field__error" style={{ margin: "4px 0" }}>{issue}</p>)}
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <Field label="Decided by">
+          <Select
+            value={decidedBy}
+            onChange={(value) => setDecidedBy(value)}
+            options={(["consent", "chair_ruling"] as DecidedBy[]).map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))}
+          />
+        </Field>
+        <Field label="Override note" required className="field--grow">
+          <input className="input" value={note} placeholder="e.g. Decided by consensus before the vote was counted" onChange={(event) => setNote(event.target.value)} />
+        </Field>
+      </div>
+      <div className="row" style={{ gap: 6, marginTop: 6 }}>
+        <button type="button" className="btn-action btn-action--primary" disabled={!note.trim()} onClick={() => onApply({ outcome, decidedBy: decidedBy as DecidedBy, outcomeOverrideNote: note.trim() })}>
+          Record {outcome} with override
+        </button>
+        <button type="button" className="btn-action" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
   );
 }
 
@@ -313,8 +478,12 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
    * get an "Adopts minutes of" picker; a carried adoption motion auto-stamps
    * the referenced minutes approved. */
   adoptionTargets?: MotionAdoptionTarget[];
+  /** People-directory rows: mover/seconder/abstainer pickers link to them (A1). */
+  directoryPeople?: DirectoryPerson[];
+  /** Documents that can be linked as a retained dissent report (A11). */
+  documentOptions?: Array<{ value: string; label: string }>;
 }>(function MotionEditor({
-  motions,
+  motions: motionsProp,
   readOnly = false,
   onChange: onChangeProp,
   directorNames,
@@ -325,14 +494,59 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   sectionScope,
   onPendingDraftChange,
   adoptionTargets = [],
+  directoryPeople,
+  documentOptions,
 }, ref) {
   const { can } = usePermissions();
+  // Every keystroke in a motion field saves the whole list. Until the saves
+  // settle, show the latest local edit: rendering each save's echo would put
+  // an older value back into the input and drop the characters typed since.
+  const [pendingMotions, setPendingMotions] = useState<Motion[] | null>(null);
+  useEffect(() => {
+    if (!pendingMotions) return;
+    const timer = window.setTimeout(() => setPendingMotions(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [pendingMotions]);
+  const motions = pendingMotions ?? motionsProp;
+  // MA-10: typing in a motion's text fields used to save the whole motions
+  // list on every keystroke. Free-text edits now wait for a pause in typing
+  // (or for focus to leave the editor, or for the editor to unmount) and go
+  // out as one save; structural changes (add, remove, outcome, tallies) save
+  // at once and carry any typed text with them. The local echo above keeps
+  // what is on screen correct in the meantime.
+  const onChangePropRef = useRef(onChangeProp);
+  onChangePropRef.current = onChangeProp;
+  const queuedSave = useRef<{ next: Motion[]; timer: number } | null>(null);
+  const flushQueuedSave = useCallback(() => {
+    const queued = queuedSave.current;
+    if (!queued) return;
+    window.clearTimeout(queued.timer);
+    queuedSave.current = null;
+    // Restart the echo window from the moment the save actually goes out.
+    setPendingMotions(queued.next);
+    onChangePropRef.current(queued.next);
+  }, []);
+  useEffect(() => {
+    window.addEventListener("pagehide", flushQueuedSave);
+    return () => {
+      window.removeEventListener("pagehide", flushQueuedSave);
+      flushQueuedSave();
+    };
+  }, [flushQueuedSave]);
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
   authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
-  const onChange = (next: Motion[]) => {
+  const onChange = (next: Motion[], options: { debounce?: boolean } = {}) => {
     if (authority.current.readOnly) return false;
     const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
     if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
+    setPendingMotions(next);
+    if (queuedSave.current) window.clearTimeout(queuedSave.current.timer);
+    if (options.debounce) {
+      queuedSave.current = { next, timer: window.setTimeout(flushQueuedSave, MOTION_TEXT_SAVE_DELAY_MS) };
+      return true;
+    }
+    // This save carries every queued text edit, so the queue is spent.
+    queuedSave.current = null;
     onChangeProp(next);
     return true;
   };
@@ -346,7 +560,9 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const isAdjournmentScope = sectionScope != null && isAdjournmentSectionTitle(scopedSectionTitle);
   const sectionPatchForScope = (): Partial<Motion> =>
     sectionScope != null ? motionSectionPatch(String(sectionScope), agendaSections) : {};
-  const makeDraft = (): Motion => ({ text: "", outcome: "Pending", ...sectionPatchForScope() });
+  // The resolution type select shows "Ordinary" by default; store it so the
+  // saved motion says what the form showed (MA-5).
+  const makeDraft = (): Motion => ({ text: "", outcome: "Pending", resolutionType: "Ordinary", ...sectionPatchForScope() });
   const [adding, setAdding] = useState(false);
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Motion>(makeDraft);
@@ -362,29 +578,19 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     if (sectionScope != null) setDraft((current) => ({ ...current, ...sectionPatchForScope() }));
     setAdding(true);
   };
-  // While true, votesFor auto-tracks (movedBy ? 1 : 0) + (secondedBy ? 1 : 0).
-  // The user breaks this binding the moment they edit votesFor manually.
-  const [votesAutoFill, setVotesAutoFill] = useState(true);
-
+  // Tallies start empty ("no votes recorded"). Filling in a mover and
+  // seconder says nothing about how anyone voted, so it must not count as
+  // two votes For (MA-1).
   const updateDraftPerson = (
     key: "movedBy" | "secondedBy",
     value: string,
     extra: Partial<Motion> = {},
   ) => {
-    setDraft((current) => {
-      const next = { ...current, [key]: value, ...extra };
-      if (votesAutoFill) {
-        const moved = (key === "movedBy" ? value : current.movedBy ?? "").trim();
-        const seconded = (key === "secondedBy" ? value : current.secondedBy ?? "").trim();
-        next.votesFor = (moved ? 1 : 0) + (seconded ? 1 : 0);
-      }
-      return next;
-    });
+    setDraft((current) => ({ ...current, [key]: value, ...extra }));
   };
 
   const resetDraft = () => {
     setDraft(makeDraft());
-    setVotesAutoFill(true);
   };
 
   const nameOptions = useMemo(
@@ -403,9 +609,11 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const businessMotionRows = motionRows.filter(({ motion }) => !isAdjournmentMotion(motion));
   const adjournmentRows = motionRows.filter(({ motion }) => isAdjournmentMotion(motion));
 
+  const draftIssues = motionVoteIssues(draft);
   const saveDraft = async () => {
     if (authority.current.readOnly) return;
     if (!draft.text.trim()) return;
+    if (draftIssues.length) return;
     const gaps = motionCompletionGaps(draft);
     if (gaps.length) {
       const ok = await confirm({
@@ -450,12 +658,25 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
 
   const patch = (idx: number, diff: Partial<Motion>) => {
     if (authority.current.readOnly) return;
+    if ("outcome" in diff) setVoteNotice((notice) => (notice?.index === idx ? null : notice));
     const next = motions.map((m, i) => (i === idx ? { ...m, ...diff } : m));
-    onChange(next);
+    onChange(next, { debounce: Object.keys(diff).every((key) => MOTION_TEXT_KEYS.has(key)) });
   };
 
+  // When a tally change contradicts the recorded outcome, the outcome goes
+  // back to Pending (the vote must be re-recorded) rather than silently
+  // standing against the count — the server rejects that combination (G-04).
+  const [voteNotice, setVoteNotice] = useState<{ index: number; text: string } | null>(null);
   const setVote = (idx: number, key: "votesFor" | "votesAgainst" | "abstentions", next: number) => {
-    patch(idx, { [key]: Math.max(0, next) } as Partial<Motion>);
+    const current = motions[idx];
+    if (!current) return;
+    const diff: Partial<Motion> = { [key]: Math.max(0, Math.round(next)) } as Partial<Motion>;
+    const candidate = { ...current, ...diff };
+    const reset = motionOutcomeConsistencyIssues(candidate).length > 0 && !hasOutcomeOverride(candidate);
+    if (reset) diff.outcome = "Pending";
+    patch(idx, diff);
+    // Set after patch(): patch() clears a notice whenever the outcome changes.
+    if (reset) setVoteNotice({ index: idx, text: `Outcome reset to Pending: the recorded votes no longer support “${current.outcome}”. Record the outcome again.` });
   };
 
   // Remove the motion at index `i`. editingIndex is an index into `motions`, so
@@ -493,8 +714,10 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdjournmentScope, adjournmentRows.length]);
 
+  const extras = useMemo(() => ({ directoryPeople, documentOptions }), [directoryPeople, documentOptions]);
   return (
-    <div>
+    <MotionEditorExtrasContext.Provider value={extras}>
+    <div onBlur={flushQueuedSave}>
       {businessMotionRows.length === 0 && !adding && (
         <div className="muted">
           {isAdjournmentScope
@@ -521,6 +744,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           onSetExpanded={(next) => setEditingIndex(next ? i : null)}
           onPatch={(diff) => patch(i, diff)}
           onSetVote={(k, n) => setVote(i, k, n)}
+            voteNotice={voteNotice?.index === i ? voteNotice.text : undefined}
           onDelete={() => deleteMotionAt(i)}
           onAddToBacklog={onAddToBacklog ? () => onAddToBacklog(m, i) : undefined}
         />
@@ -545,7 +769,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
                 <X size={12} /> Cancel
               </button>
-              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim() || (!!draft.adoptsMinutesId && draft.outcome === "Carried" && !can("minutes:approve"))}>
+              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim() || draftIssues.length > 0 || (!!draft.adoptsMinutesId && draft.outcome === "Carried" && !can("minutes:approve"))}>
                 <Check size={12} /> Add
               </button>
             </div>
@@ -573,23 +797,23 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             <summary className="motion-draft__details-summary">Details</summary>
             <div className="motion-draft__grid">
               <Field label="Moved by">
-              <NameInput
+              <MotionPersonField
+                role="movedBy"
+                motion={draft}
                 nameOptions={nameOptions}
-                value={draft.movedBy}
-                onChange={(v) =>
-                  updateDraftPerson("movedBy", v, motionPersonPatch("movedBy", resolveMotionPerson(v, people)))
-                }
+                people={people}
+                onPatch={(diff) => updateDraftPerson("movedBy", String(diff.movedBy ?? ""), diff)}
                 placeholder="Start typing…"
                 ariaLabel="New motion mover"
               />
             </Field>
             <Field label="Seconded by">
-              <NameInput
+              <MotionPersonField
+                role="secondedBy"
+                motion={draft}
                 nameOptions={nameOptions}
-                value={draft.secondedBy}
-                onChange={(v) =>
-                  updateDraftPerson("secondedBy", v, motionPersonPatch("secondedBy", resolveMotionPerson(v, people)))
-                }
+                people={people}
+                onPatch={(diff) => updateDraftPerson("secondedBy", String(diff.secondedBy ?? ""), diff)}
                 placeholder="Optional"
                 ariaLabel="New motion seconder"
               />
@@ -626,16 +850,33 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             )}
 
             <OutcomePicker stretch canCarry={!draft.adoptsMinutesId || can("minutes:approve")} value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
+            {draftIssues.length > 0 && (
+              <div role="alert" data-testid="motion-draft-vote-issues">
+                {draftIssues.map((issue) => <p key={issue} className="field__error" style={{ margin: "4px 0" }}>{issue}</p>)}
+                {motionOutcomeConsistencyIssues(draft).length > 0 && (
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <Field label="Decided by">
+                      <Select
+                        value={draft.decidedBy && draft.decidedBy !== "vote" ? draft.decidedBy : ""}
+                        onChange={(value) => setDraft({ ...draft, decidedBy: (value || undefined) as DecidedBy | undefined })}
+                        options={[{ value: "", label: "Recorded vote" }, ...(["consent", "chair_ruling"] as DecidedBy[]).map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))]}
+                        size="sm"
+                      />
+                    </Field>
+                    <Field label="Override note" className="field--grow">
+                      <input className="input" value={draft.outcomeOverrideNote ?? ""} onChange={(event) => setDraft({ ...draft, outcomeOverrideNote: event.target.value })} />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="motion-draft__votes">
               <div className="motion-draft__vote-row">
                 <VoteStepper
                   label="For"
                   value={draft.votesFor ?? 0}
-                  onChange={(n) => {
-                    setVotesAutoFill(false);
-                    setDraft((current) => ({ ...current, votesFor: n }));
-                  }}
+                  onChange={(n) => setDraft((current) => ({ ...current, votesFor: n }))}
                   tone="success"
                 />
                 <VoteStepper
@@ -685,14 +926,66 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             onSetExpanded={(next) => setEditingIndex(next ? i : null)}
             onPatch={(diff) => patch(i, diff)}
             onSetVote={(k, n) => setVote(i, k, n)}
+            voteNotice={voteNotice?.index === i ? voteNotice.text : undefined}
             onDelete={() => deleteMotionAt(i)}
           />
         ))}
       </div>
       )}
     </div>
+    </MotionEditorExtrasContext.Provider>
   );
 });
+
+/** A11: link a retained dissent report from the documents offered to the editor. */
+function DissentDocumentField({ value, onChange }: { value?: string; onChange: (value: string | undefined) => void }) {
+  const { documentOptions } = useContext(MotionEditorExtrasContext);
+  if (!documentOptions?.length && !value) return null;
+  const options = [
+    { value: "", label: "None" },
+    ...(documentOptions ?? []),
+    ...(value && !(documentOptions ?? []).some((option) => option.value === value) ? [{ value, label: "Linked document" }] : []),
+  ];
+  return (
+    <Field label="Dissent report" hint="A dissenting director's written statement, if one is kept on file.">
+      <Select value={value ?? ""} onChange={(next) => onChange(next || undefined)} options={options} searchable aria-label="Dissent report document" />
+    </Field>
+  );
+}
+
+/**
+ * One- or two-line summary under a collapsed motion (MA-3): a named motion
+ * still shows its wording, and every motion shows who moved and seconded it,
+ * so the collapsed card says what was decided without opening it.
+ */
+function motionMoverSummary(motion: Pick<Motion, "movedBy" | "secondedBy" | "movedByMemberId" | "movedByDirectorId" | "secondedByMemberId" | "secondedByDirectorId">, people: MotionPerson[] = []): string {
+  const parts: string[] = [];
+  if (motion.movedBy?.trim()) parts.push(`Moved by ${motionPersonDisplayName(motion.movedBy, people, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}`);
+  if (motion.secondedBy?.trim()) parts.push(`seconded by ${motionPersonDisplayName(motion.secondedBy, people, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}`);
+  if (!parts.length) return "";
+  const joined = parts.join(", ");
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+function MotionCollapsedSummary({ motion, people, showWording }: { motion: Motion; people: MotionPerson[]; showWording: boolean }) {
+  const wording = showWording ? plainMotionWording(motion.text) : "";
+  const movers = motionMoverSummary(motion, people);
+  if (!wording && !movers) return null;
+  return (
+    <div className="motion__summary" data-testid="motion-collapsed-summary">
+      {wording && <p className="motion__summary-wording">{wording}</p>}
+      {movers && <p className="motion__summary-movers muted">{movers}</p>}
+    </div>
+  );
+}
+
+function plainMotionWording(text: string | undefined) {
+  return String(text ?? "")
+    .replace(/[*_`#>]+/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function MotionRow({
   motion,
@@ -711,6 +1004,7 @@ function MotionRow({
   onDelete,
   onAddToBacklog,
   anchorId,
+  voteNotice,
 }: {
   motion: Motion;
   readOnly?: boolean;
@@ -729,9 +1023,20 @@ function MotionRow({
   onAddToBacklog?: () => void | Promise<void>;
   /** DOM id for scroll-to deep-linking (e.g. from the Motions master page). */
   anchorId?: string;
+  /** Shown when a tally change reset the recorded outcome (G-04). */
+  voteNotice?: string;
 }) {
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [pendingOverrideOutcome, setPendingOverrideOutcome] = useState<string | null>(null);
   const confirm = useConfirm();
+  // The rich editor reports changes after a short delay; "Done" right after
+  // typing used to close it first and drop the last edit.
+  const detailsRef = useRef<MarkdownEditorHandle | null>(null);
+  const finishEditing = () => {
+    const latest = (detailsRef.current?.getMarkdown() ?? motion.text ?? "").trimEnd();
+    if (latest !== motion.text) onPatch({ text: latest });
+    onSetExpanded?.(false);
+  };
 
   const tone =
     motion.outcome === "Carried" ? "success" :
@@ -750,7 +1055,10 @@ function MotionRow({
   // long, the fallback renders as a wrapping, tap-to-edit heading rather than
   // the single-line name input (which would clip on narrow screens).
   const hasName = !!motion.name?.trim();
-  const showTextHeadline = !expanded && !hasName && !!motion.text?.trim();
+  // Keep the name input while it has focus: clearing the name to retype it
+  // used to swap the input for the wording headline mid-edit.
+  const [nameFocused, setNameFocused] = useState(false);
+  const showTextHeadline = !expanded && !hasName && !nameFocused && !!motion.text?.trim();
   const titleText = hasName ? motion.name! : (motion.text ?? "");
   const isLongTitle =
     titleText.length > 80 ||
@@ -788,6 +1096,13 @@ function MotionRow({
   };
 
   const setOutcomeWithReview = async (outcome: Motion["outcome"]) => {
+    // G-04: an outcome that contradicts the recorded tally needs an explicit
+    // consensus / chair's-ruling override with a note.
+    if (motionOutcomeConsistencyIssues({ ...motion, outcome }).length && !hasOutcomeOverride({ ...motion, outcome })) {
+      setPendingOverrideOutcome(outcome);
+      return;
+    }
+    setPendingOverrideOutcome(null);
     const gaps = motionCompletionGaps({ ...motion, outcome });
     if (gaps.length) {
       const ok = await confirm({
@@ -817,9 +1132,14 @@ function MotionRow({
             {motion.decidedBy && <p>Decided by {DECIDED_BY_LABELS[motion.decidedBy]}</p>}
             {assignedAgendaLabel && <p>Agenda item: {assignedAgendaLabel}</p>}
             {motion.adoptsMinutesId && <p>Adopts minutes of: {adoptionTargets.find(target => target.id === motion.adoptsMinutesId)?.label || motion.adoptsMinutesId}</p>}
+            {(motion.abstainedBy ?? []).length > 0 && <p>Abstained: {motion.abstainedBy!.map((row) => row.name).join(", ")}</p>}
+            {(motion.opposedBy ?? []).length > 0 && <p>Opposed / dissent: {motion.opposedBy!.map((row) => row.name).join(", ")}</p>}
+            {motion.sourceOutcomeText && <p>Outcome as written in the source: “{motion.sourceOutcomeText}”</p>}
+            {motion.outcomeOverrideNote && <p>Outcome override: {motion.outcomeOverrideNote}</p>}
             {(motion.tags ?? []).length > 0 && <p>Tags: {motion.tags!.join(", ")}</p>}
           </div>
         </details>
+        {!expanded && <MotionCollapsedSummary motion={motion} people={people} showWording={hasName} />}
         <VoteProgress motion={motion} />
       </div>
     );
@@ -854,12 +1174,15 @@ function MotionRow({
               className="motion__name-input"
               value={motion.name ?? ""}
               onChange={(event) => onPatch({ name: event.target.value })}
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
               placeholder="Motion name"
               aria-label={`Motion name for ${titleText.trim() || "untitled motion"}`}
             />
           )}
           <div className="motion__meta motion__meta--inline">
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
+            {motion.motionId && <UnsupportedDetailsBadge table="motions" id={motion.motionId} />}
           </div>
         </div>
         <div className="motion__actions">
@@ -931,27 +1254,33 @@ function MotionRow({
         </div>
       </div>
 
+      {!expanded && <MotionCollapsedSummary motion={motion} people={people} showWording={hasName} />}
+
       <VoteProgress motion={motion} />
 
       {expanded && (
         <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
           <Field label="Details">
-            <MarkdownEditor rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
+            <MarkdownEditor ref={detailsRef} rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
           </Field>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Moved by">
-              <NameInput
+              <MotionPersonField
+                role="movedBy"
+                motion={motion}
                 nameOptions={nameOptions}
-                value={motion.movedBy}
-                onChange={(v) => onPatch({ movedBy: v, ...motionPersonPatch("movedBy", resolveMotionPerson(v, people)) })}
+                people={people}
+                onPatch={onPatch}
                 ariaLabel={`Mover for ${titleText.trim() || "untitled motion"}`}
               />
             </Field>
             <Field label="Seconded by">
-              <NameInput
+              <MotionPersonField
+                role="secondedBy"
+                motion={motion}
                 nameOptions={nameOptions}
-                value={motion.secondedBy}
-                onChange={(v) => onPatch({ secondedBy: v, ...motionPersonPatch("secondedBy", resolveMotionPerson(v, people)) })}
+                people={people}
+                onPatch={onPatch}
                 ariaLabel={`Seconder for ${titleText.trim() || "untitled motion"}`}
               />
             </Field>
@@ -997,7 +1326,29 @@ function MotionRow({
               />
             </Field>
           )}
+          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+            <NamedPeopleField label="Abstained (named)" value={motion.abstainedBy} onChange={(abstainedBy) => onPatch({ abstainedBy })} nameOptions={nameOptions} />
+            <NamedPeopleField label="Opposed / dissent recorded" value={motion.opposedBy} onChange={(opposedBy) => onPatch({ opposedBy })} nameOptions={nameOptions} />
+          </div>
+          <DissentDocumentField value={motion.dissentDocumentId} onChange={(dissentDocumentId) => onPatch({ dissentDocumentId })} />
+          {motion.sourceOutcomeText && (
+            <p className="muted" style={{ margin: "4px 0", fontSize: 12 }} data-testid="motion-source-outcome">
+              Outcome as written in the source: “{motion.sourceOutcomeText}”
+            </p>
+          )}
           <OutcomePicker stretch canCarry={!motion.adoptsMinutesId || canApproveAdoption} value={motion.outcome} onChange={(v) => { void setOutcomeWithReview(v); }} />
+          {pendingOverrideOutcome && (
+            <OutcomeOverridePanel
+              motion={motion}
+              outcome={pendingOverrideOutcome}
+              onApply={(diff) => { setPendingOverrideOutcome(null); onPatch(diff); }}
+              onCancel={() => setPendingOverrideOutcome(null)}
+            />
+          )}
+          {voteNotice && <p className="field__error" role="status" data-testid="motion-vote-notice" style={{ margin: "4px 0" }}>{voteNotice}</p>}
+          {motion.outcomeOverrideNote && !pendingOverrideOutcome && (
+            <p className="muted" style={{ margin: "4px 0", fontSize: 12 }}>Outcome override ({DECIDED_BY_LABELS[(motion.decidedBy as DecidedBy) ?? "consent"] ?? motion.decidedBy}): {motion.outcomeOverrideNote}</p>
+          )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onChange={(n) => onSetVote("votesFor", n)} tone="success" />
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />
@@ -1038,7 +1389,7 @@ function MotionRow({
             </div>
           </Field>
           <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 10 }}>
-            <button className="btn-action btn-action--primary" onClick={() => onSetExpanded?.(false)}>
+            <button className="btn-action btn-action--primary" onClick={finishEditing}>
               <Check size={12} /> Done
             </button>
           </div>

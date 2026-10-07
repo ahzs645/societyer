@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { COMMITTEE_KIND_OPTIONS } from "../features/committees/CommitteeStructureCard";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { Plus, Users, UsersRound as UsersIcon } from "lucide-react";
@@ -22,6 +23,9 @@ import { ColorPicker } from "../components/ColorPicker";
 import { formatDateTime } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { isOpenOperationalTask } from "../../shared/taskStatus";
+import { BuildRostersButton } from "../features/committees/BuildRostersButton";
+import { useToast } from "../components/Toast";
 
 const CADENCES = ["Weekly", "Biweekly", "Monthly", "Quarterly", "Ad-hoc"];
 const COLORS = ["#3b5bdb", "#0a8f4e", "#a86400", "#c9264a", "#6f42c1", "#0e7490"];
@@ -33,6 +37,7 @@ type CommitteeForm = {
   cadence: string;
   cadenceNotes?: string;
   color: string;
+  kind?: string;
 };
 
 type CommitteeRecord = Doc<"committees"> & {
@@ -63,8 +68,11 @@ export function CommitteesPage() {
     society ? { societyId: society._id } : "skip",
   ) as Doc<"goals">[] | undefined;
   const create = usePermissionedMutation(api.committees.create, canWrite);
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<CommitteeForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Doc<"views">["_id"] | undefined>();
   const [filterOpen, setFilterOpen] = useState(false);
   const tableData = useObjectRecordTableData({
@@ -80,7 +88,7 @@ export function CommitteesPage() {
       goalCount: (allGoals ?? []).filter((goal) => goal.committeeId === committee._id).length,
       memberCount: committee.memberCount,
       openTaskCount: (allTasks ?? []).filter(
-        (task) => task.committeeId === committee._id && task.status !== "Done",
+        (task) => task.committeeId === committee._id && isOpenOperationalTask(task),
       ).length,
     }));
   }, [allGoals, allTasks, committees]);
@@ -91,13 +99,33 @@ export function CommitteesPage() {
   const openNew = () => {
     if (!canWrite) return;
     setForm({ name: "", description: "", cadence: "Monthly", color: COLORS[0] });
+    setNameError(null);
     setOpen(true);
   };
 
   const save = async () => {
-    if (!canWrite || !form) return;
-    await create({ societyId: society._id, ...form });
-    setOpen(false);
+    if (!canWrite || !form || saving) return;
+    const name = form.name.trim();
+    if (!name) {
+      setNameError("Give the committee a name.");
+      return;
+    }
+    const sameName = (committees ?? []).find((committee) => committee.name.trim().toLowerCase() === name.toLowerCase());
+    if (sameName) {
+      setNameError(`A committee named “${sameName.name}” already exists.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const id = await create({ societyId: society._id, ...form, name });
+      setOpen(false);
+      toast.success("Committee created", "Set its quorum, cadence and terms of reference under Body, cadence and mandate.");
+      if (id) navigate(`/app/committees/${id}`);
+    } catch (error) {
+      toast.error("Could not create the committee", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -108,9 +136,12 @@ export function CommitteesPage() {
         iconColor="pink"
         subtitle="Standing and ad-hoc committees — each with its own cadence, roster, tasks, and goals."
         actions={
-          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
-            <Plus size={12} /> New committee
-          </button>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <BuildRostersButton societyId={society._id} disabled={!canWrite} />
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
+              <Plus size={12} /> New committee
+            </button>
+          </div>
         }
       />
 
@@ -196,18 +227,18 @@ export function CommitteesPage() {
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" disabled={!canWrite} onClick={save}>Create</button>
+            <button className="btn btn--accent" disabled={!canWrite || saving} onClick={save}>{saving ? "Creating…" : "Create"}</button>
           </>
         }
       >
         {form && (
           <div>
-            <Field label="Name">
+            <Field label="Name" required error={nameError ?? undefined}>
               <input
                 disabled={!canWrite}
                 className="input"
                 value={form.name}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                onChange={(event) => { setForm({ ...form, name: event.target.value }); setNameError(null); }}
               />
             </Field>
             <Field label="Mission">
@@ -224,6 +255,16 @@ export function CommitteesPage() {
                 rows={4}
                 value={form.description}
                 onChange={(markdown) => setForm({ ...form, description: markdown })}
+              />
+            </Field>
+            <Field label="Kind">
+              <Select
+                disabled={!canWrite}
+                value={form.kind ?? ""}
+                onChange={(value) => setForm({ ...form, kind: value || undefined })}
+                options={COMMITTEE_KIND_OPTIONS}
+                placeholder="Not set"
+                clearable
               />
             </Field>
             <Field label="Cadence">

@@ -133,22 +133,28 @@ export async function readLocalWorkspaceSnapshot() {
   return await snapshotBridge.readLocalWorkspaceSnapshot();
 }
 
-export async function openDocumentDownloadTarget(target: DocumentDownloadTarget) {
+/**
+ * Open or download a document version. Resolves `false` when there was nothing
+ * to open (no stored file, no URL, or a simulated demo URL) so callers can tell
+ * the person instead of failing silently.
+ */
+export async function openDocumentDownloadTarget(target: DocumentDownloadTarget): Promise<boolean> {
   const restored = await getRestoredFile({ provider: target.provider, storageKey: target.key });
-  if (restored) { triggerBlobDownload(restored, target.fileName ?? "document"); return; }
+  if (restored) { triggerBlobDownload(restored, target.fileName ?? "document"); return true; }
   if (target.kind === "local-filesystem") {
     await requireDesktopBridge().openDocumentVersion({ key: target.key });
-    return;
+    return true;
   }
-  if (!target.url) return;
-  if (target.url.startsWith("demo://")) return;
+  if (!target.url) return false;
+  if (target.url.startsWith("demo://")) return false;
   if (isAuthenticatedDocumentUrl(target.url)) {
     const response = await fetchDocumentDownload(target.url);
     if (!response.ok) throw new Error(`Couldn't download the file (HTTP ${response.status}).`);
     triggerBlobDownload(await response.blob(), target.fileName ?? "document");
-    return;
+    return true;
   }
   window.open(target.url, "_blank");
+  return true;
 }
 
 export function isSimulatedDownloadTarget(target: DocumentDownloadTarget | null | undefined) {

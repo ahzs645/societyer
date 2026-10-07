@@ -306,6 +306,24 @@
   width: 40px;
   height: 40px;
 }
+.calendar__typed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.calendar__typed-input {
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 28px;
+  font-size: token('fs-sm');
+}
+.calendar__typed-error {
+  flex-basis: 100%;
+  color: token('danger');
+  font-size: token('fs-xs');
+}
 .calendar__head {
   @include flex-between;
   margin-bottom: 8px;
@@ -660,4 +678,17 @@ body.modal-resizing {
   display: flex;
   gap: 12px;
   align-items: flex-start;
+}
+
+/* Touch: the 16px clear-date "x" grows to a 32px hit area (ui-operations L10). */
+@media (pointer: coarse) {
+  .date-trigger-wrap.has-clear .date-trigger {
+    padding-right: 40px;
+  }
+  .date-trigger__clear,
+  .select-trigger--sm + .date-trigger__clear {
+    width: 32px;
+    height: 32px;
+    right: 2px;
+  }
 }

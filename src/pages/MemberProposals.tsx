@@ -21,6 +21,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function MemberProposalsPage() {
   const society = useSociety();
@@ -55,7 +56,7 @@ export function MemberProposalsPage() {
       title: "",
       text: "",
       submittedByName: "",
-      submittedAtISO: new Date().toISOString().slice(0, 10),
+      submittedAtISO: todayDateOnly(),
       signatureCount: 1,
       thresholdPercent: rules?.memberProposalThresholdPct ?? 5,
       eligibleVotersAtSubmission: eligibleVoters,

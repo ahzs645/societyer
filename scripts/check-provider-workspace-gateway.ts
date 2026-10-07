@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import express from "express";
 import { createServer } from "node:http";
 import { generateKeyPairSync, sign, randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { ConvexHttpClient } from "convex/browser";
 import { createFixture, fixtureIssuer } from "../experiments/offline-convex/fixture";
+import { writeTrackedReport } from "./lib/writeTrackedReport.mjs";
 
+await mkdir(path.join(process.cwd(), "tmp"), { recursive: true });
 const privateRoot = await mkdtemp(path.join(process.cwd(), "tmp/provider-gateway-"));
 const envNames = ["AUTH_MODE", "VITE_AUTH_MODE", "AUTH_DB_PATH", "BETTER_AUTH_SECRET", "CLERK_JWT_KEY", "CLERK_JWT_ISSUER_DOMAIN", "CLERK_AUTHORIZED_PARTIES", "CONNECTOR_RUNNER_BASE_URL", "CONNECTOR_RUNNER_SECRET", "SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON", "NODE_ENV"];
 const previous = new Map(envNames.map(name => [name, process.env[name]]));
@@ -73,8 +75,7 @@ try {
   const direct = await send({ applyDirect: true }); assert.equal(direct.status, 200, await direct.text());
   const afterDirect = await counts(); assert.equal(afterDirect.imports, 1); assert.equal(afterDirect.runs, 2); assert.equal(afterDirect.accounts, 1); assert.equal(afterDirect.transactions, 1);
   pass("bound direct Wave import reaches actual native provider binding and transaction handler");
-  await mkdir("artifacts/offline", { recursive: true });
-  await writeFile("artifacts/offline/provider-workspace-gateway.json", JSON.stringify({ sourceBaseline: "66b8dcd", executedAt: new Date().toISOString(), fixtureOnly: true, actualGatewayHttp: true, nativeHandlers: true, externallyHostedProviderContacted: false, cases, count: cases.length }, null, 2) + "\n");
+  writeTrackedReport("artifacts/offline/provider-workspace-gateway.json", JSON.stringify({ sourceBaseline: "66b8dcd", executedAt: new Date().toISOString(), fixtureOnly: true, actualGatewayHttp: true, nativeHandlers: true, externallyHostedProviderContacted: false, cases, count: cases.length }, null, 2) + "\n");
 } finally {
   ConvexHttpClient.prototype.query = originalQuery; ConvexHttpClient.prototype.mutation = originalMutation; ConvexHttpClient.prototype.setAuth = originalSetAuth; ConvexHttpClient.prototype.clearAuth = originalClearAuth;
   if (gateway) await new Promise<void>(resolve => gateway!.close(() => resolve()));

@@ -14,8 +14,10 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
+import { todayDateOnly } from "../dateOnly";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
 
@@ -95,24 +97,12 @@ async function computeRequiredQuorum(
   args: {
     societyId: string;
     meetingType?: string;
+    committeeId?: string;
   },
 ) {
-  if ((rules as any).quorumRequiresLegalRegister || (rules as any).governanceAutomationBlocked) return undefined;
-  if (rules.quorumType === "fixed") {
-    return rules.quorumValue;
-  }
-  if (rules.quorumType === "percentage" && isGeneralMeeting(args.meetingType)) {
-    const members = await ctx.db
-      .query("members")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const eligible = members.filter(
-      (member) => member.status === "Active" && member.votingRights,
-    ).length;
-    const percentageQuorum = Math.ceil(eligible * (rules.quorumValue / 100));
-    return Math.max(rules.quorumMinimumCount ?? 1, percentageQuorum);
-  }
-  return undefined;
+  // A3: per-body rules (general / board / each committee) with the legacy
+  // society rule as the fallback. See shared/bodyQuorum.ts.
+  return (await requiredQuorumForMeeting(ctx, rules, args)).required;
 }
 
 function quorumSourceLabel(
@@ -153,8 +143,23 @@ function timestampOrNegativeInfinity(value?: string) {
   return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
 }
 
-function isGeneralMeeting(type?: string) {
-  return type === "AGM" || type === "SGM";
+
+/** A13/A18 field checks shared by create and update. */
+export const MEETING_DATE_PRECISIONS = ["date", "datetime"] as const;
+export const MEETING_HOST_BODIES = ["own", "external"] as const;
+function assertMeetingExtension(fields: { scheduledAtPrecision?: string; hostBody?: string; externalOrganization?: string; timeZone?: string }) {
+  if (fields.scheduledAtPrecision !== undefined && !(MEETING_DATE_PRECISIONS as readonly string[]).includes(fields.scheduledAtPrecision)) {
+    throw new Error("Meeting date precision must be date or datetime.");
+  }
+  if (fields.hostBody !== undefined && !(MEETING_HOST_BODIES as readonly string[]).includes(fields.hostBody)) {
+    throw new Error("Meeting host body must be own or external.");
+  }
+  if (fields.hostBody === "external" && !String(fields.externalOrganization ?? "").trim()) {
+    throw new Error("Name the external organization that held this meeting.");
+  }
+  if (fields.timeZone) {
+    try { new Intl.DateTimeFormat("en", { timeZone: fields.timeZone }); } catch { throw new Error(`Unknown time zone: ${fields.timeZone}`); }
+  }
 }
 
 /* ------------------------------ Template helpers ------------------------------ */
@@ -344,8 +349,14 @@ async function buildTemplateContext(
   }
   return {
     context: {
-      previousMeetingTitle: (previous as any)?.title ?? "previous meeting",
+      previousMeetingTitle: (previous as any)?.title ?? "the previous meeting",
       previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
+      // "{{previousMeetingTitle}} of {{previousMeetingDate}}" with no earlier
+      // meeting on record reads "the previous meeting", not "previous meeting
+      // of the previous meeting date".
+      previousMeetingReference: previous
+        ? `${(previous as any).title ?? "the previous meeting"}${previous.scheduledAt ? ` of ${formatLongDate(previous.scheduledAt)}` : ""}`
+        : "the previous meeting",
       calledToOrderTime: "[time]",
       adjournedAt: "[time]",
     },
@@ -355,7 +366,9 @@ async function buildTemplateContext(
 
 function resolveTemplateText(value: string | undefined, context: Record<string, string>) {
   if (!value) return "";
-  return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => context[key] ?? "");
+  return value
+    .replace(/\{\{\s*previousMeetingTitle\s*\}\}\s+(?:of|on|held(?:\s+on)?)\s+\{\{\s*previousMeetingDate\s*\}\}/g, "{{previousMeetingReference}}")
+    .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => context[key] ?? "");
 }
 
 function formatLongDate(value: string) {
@@ -428,8 +441,17 @@ export async function createPortable(
     packageReviewedAtISO?: string;
     packageReviewedByUserId?: string;
     notes?: string;
+    scheduledAtPrecision?: string;
+    localStartText?: string;
+    localEndText?: string;
+    timeZone?: string;
+    hostBody?: string;
+    externalOrganization?: string;
+    sourceTitle?: string;
+    special?: boolean;
   },
 ) {
+  assertMeetingExtension(args);
   await requireSocietyMembership(ctx, args.societyId);
   await Promise.all([
     args.committeeId ? getOwned(ctx, "committees", args.committeeId, args.societyId) : Promise.resolve(),
@@ -584,7 +606,7 @@ export async function createPortable(
       .query("directors")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
       .collect();
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const todayISO = todayDateOnly();
     attendees = allDirectors
       .filter((d) => {
         const status = String(d.status ?? "").toLowerCase();
@@ -830,10 +852,19 @@ export async function updatePortable(
       notes?: string;
       clearNoticeSent?: boolean;
       clearCommitteeId?: boolean;
+      scheduledAtPrecision?: string;
+      localStartText?: string;
+      localEndText?: string;
+      timeZone?: string;
+      hostBody?: string;
+      externalOrganization?: string;
+      sourceTitle?: string;
+      special?: boolean;
     };
   },
 ) {
   const authorizedRow = await requireOwnedRow(ctx, "meetings", id);
+  assertMeetingExtension({ ...authorizedRow, ...patch });
   const societyId = String(authorizedRow.societyId);
   await Promise.all([
     patch.committeeId ? getOwned(ctx, "committees", patch.committeeId, societyId) : Promise.resolve(),
@@ -992,6 +1023,7 @@ export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, {
     societyId: String(meeting.societyId),
     meetingDateISO: meeting.scheduledAt,
     meetingType: meeting.type,
+    committeeId: meeting.committeeId,
     quorumRequiredOverride: meeting.quorumRequired,
   });
   const patch: any = {};

@@ -1,5 +1,6 @@
 import { parseCsv, rowsToCsv } from "@/lib/csv";
 import { appBasePath } from "@/lib/staticRuntime";
+import { todayDateOnly } from "../../../shared/dateOnly";
 
 export const ASSET_CATEGORIES = ["IT", "Program equipment", "Consumable", "Furniture", "Vehicle", "Facilities", "Software/license", "Other"];
 export const ASSET_CONDITIONS = ["New", "Good", "Fair", "Needs repair", "Damaged", "Lost"];
@@ -89,7 +90,7 @@ export function assetCategoryFromTransaction(transaction: any) {
 }
 
 export function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 export function oneYearFromToday() {

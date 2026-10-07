@@ -13,6 +13,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { IncorporationPreparation } from "../components/IncorporationPreparation";
 import { PathwayPipelineCard } from "../components/PathwayPipelineCard";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const CATEGORY_LABEL: Record<string, string> = {
   organize: "Prepare and organize the entity",
@@ -61,7 +62,7 @@ export function PostIncorporationChecklistPage() {
     if (!canWrite) return;
     setBusy(packetKey);
     try {
-      await generate({ societyId: society._id, packetKey, effectiveDate: new Date().toISOString().slice(0, 10) });
+      await generate({ societyId: society._id, packetKey, effectiveDate: todayDateOnly() });
       toast.success("Packet staged", "The editable draft is ready in the Template Engine.");
     } catch (err: any) {
       toast.error("Could not generate", err?.message ?? String(err));

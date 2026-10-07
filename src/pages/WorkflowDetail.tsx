@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { useDocumentTitle } from "../lib/documentTitle";
 import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -23,6 +24,8 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import {
   ArrowLeft,
   Bot,
@@ -100,8 +103,8 @@ export function WorkflowDetailPage() {
   const { id } = useParams();
   const society = useSociety();
   const canManage = usePermissions().can("tasks:write");
-  const workflow = useQuery(api.workflows.get, id ? { id: id as any } : "skip");
-  const runs = useQuery(api.workflows.runsForWorkflow, id ? { workflowId: id as any } : "skip");
+  const workflow = useRecordQuery<any>(api.workflows.get, id ? { id: id as any } : "skip");
+  const runs = useQuery(api.workflows.runsForWorkflow, id && workflow ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
   const nodeTypeCatalog = useQuery(api.workflows.listNodeTypes, {});
   const documents = useQuery(
@@ -131,18 +134,12 @@ export function WorkflowDetailPage() {
   const latestRun = runs?.[0];
 
   const graph = useMemo(() => buildGraph(preview), [preview]);
+  useDocumentTitle(workflow?.name ? `${workflow.name} · Workflows` : null);
 
   if (society === undefined || workflow === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!workflow) {
-    return (
-      <div className="page workflow-detail">
-        <Link className="btn btn--ghost" to="/app/workflows">
-          <ArrowLeft size={12} /> Back to workflows
-        </Link>
-        <div className="empty-state">Workflow not found.</div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Workflow" backTo="/app/workflows" backLabel="All workflows" />;
   }
 
   const providerConfig = workflow.providerConfig ?? {};
@@ -184,7 +181,7 @@ export function WorkflowDetailPage() {
     <div className="workflow-detail">
       <div className="workflow-topbar">
         <div className="workflow-topbar__title">
-          <Link to="/app/workflows" className="workflow-topbar__back">
+          <Link to="/app/workflows" className="workflow-topbar__back" aria-label="Back to workflows" title="Back to workflows">
             <ArrowLeft size={14} />
           </Link>
           <div className="workflow-topbar__icon">
@@ -192,7 +189,7 @@ export function WorkflowDetailPage() {
           </div>
           <span>Workflows</span>
           <span className="muted">/</span>
-          <strong>{workflow.name}</strong>
+          <h1 className="workflow-topbar__heading"><strong>{workflow.name}</strong></h1>
           <Badge tone={workflow.status === "active" ? "success" : workflow.status === "paused" ? "warn" : "neutral"}>
             {workflow.status}
           </Badge>

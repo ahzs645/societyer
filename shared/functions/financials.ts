@@ -108,19 +108,34 @@ export interface FinancialPatch {
   auditorName?: string;
   approvedByBoardAt?: string;
   presentedAtMeetingId?: string;
+  statementsDocId?: string;
   remunerationDisclosures?: Array<{ role: string; amountCents: number }>;
 }
 
+/** Link fields that an update may clear (Convex patches cannot carry null). */
+export const FINANCIAL_CLEARABLE_FIELDS = ["presentedAtMeetingId", "statementsDocId", "approvedByBoardAt"] as const;
+
 export async function financialUpdate(
   ctx: PortableMutationCtx,
-  { id, patch }: { id: string; patch: FinancialPatch },
+  { id, patch, clear }: { id: string; patch: FinancialPatch; clear?: string[] },
 ): Promise<void> {
   const authorizedRow = await requireOwnedRow(ctx, "financials", id);
   const societyId = String(authorizedRow.societyId);
   if (patch.presentedAtMeetingId) {
     await getOwned(ctx, "meetings", patch.presentedAtMeetingId, societyId);
   }
-  await ctx.db.patch(id, patch);
+  if (patch.statementsDocId) {
+    await getOwned(ctx, "documents", patch.statementsDocId, societyId);
+  }
+  if (patch.approvedByBoardAt && !/^\d{4}-\d{2}-\d{2}/.test(patch.approvedByBoardAt)) {
+    throw new Error("Enter a valid board approval date.");
+  }
+  const cleared: Record<string, undefined> = {};
+  for (const field of clear ?? []) {
+    if (!(FINANCIAL_CLEARABLE_FIELDS as readonly string[]).includes(field)) throw new Error(`Field ${field} cannot be cleared.`);
+    if (!(field in patch)) cleared[field] = undefined;
+  }
+  await ctx.db.patch(id, { ...patch, ...cleared });
 }
 
 export async function financialRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {

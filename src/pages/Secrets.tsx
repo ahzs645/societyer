@@ -1,3 +1,4 @@
+import { hasErrors, validateAccessCustodyInput, type FieldErrors } from "../../shared/recordValidation";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
@@ -27,6 +28,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import {
   RecordTable,
   RecordTableScope,
@@ -72,6 +75,9 @@ export function SecretsPage() {
   const [revealedSecret, setRevealedSecret] = useState("");
   const [showRevealedSecret, setShowRevealedSecret] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const toast = useToast();
+  const confirm = useConfirm();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const selectedRecord = items?.find((item: any) => item._id === editingId);
@@ -182,12 +188,19 @@ export function SecretsPage() {
     try {
       setError("");
       const payload = normalizeDraft(form);
+      const validation = validateAccessCustodyInput(payload, { partial: Boolean(editingId) });
+      setFieldErrors(validation);
+      if (hasErrors(validation)) {
+        setError("Check the highlighted fields.");
+        return;
+      }
       if (editingId) {
         await update({ id: editingId as any, patch: payload });
       } else {
         await create({ societyId: society._id, ...payload });
       }
       setOpen(false);
+      toast.success(editingId ? "Access record updated" : "Access record saved", String(payload.name ?? ""));
     } catch (err: any) {
       setError(err?.data?.message ?? err?.message ?? "Could not save this access record.");
     }
@@ -311,9 +324,22 @@ export function SecretsPage() {
                   className="btn btn--ghost btn--sm btn--icon"
                   disabled={!canWrite}
                   aria-label={`Delete access custody record ${r.name}`}
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (canWrite) void remove({ id: r._id });
+                    if (!canWrite) return;
+                    const approved = await confirm({
+                      title: "Delete access record?",
+                      message: `"${r.name}" (${r.service}) will be permanently removed${r.hasSecretValue ? ", including its stored encrypted value" : ""}. Custody history for this credential will no longer be available here.`,
+                      confirmLabel: "Delete record",
+                      tone: "danger",
+                    });
+                    if (!approved) return;
+                    try {
+                      await remove({ id: r._id });
+                      toast.success("Access record deleted", r.name);
+                    } catch (error: any) {
+                      toast.error("Could not delete access record", error?.message);
+                    }
                   }}
                 >
                   <Trash2 size={12} />
@@ -344,10 +370,10 @@ export function SecretsPage() {
               <div>Stored values stay hidden until an authorized user explicitly reveals them.</div>
             </div>
 
-            <Field label="Record name"><input disabled={!canWrite} className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Service"><input disabled={!canWrite} className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></Field>
+            <Field label="Record name" required error={fieldErrors.name}><input disabled={!canWrite} className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label="Service" required error={fieldErrors.service}><input disabled={!canWrite} className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Credential type">
+              <Field label="Credential type" required error={fieldErrors.credentialType}>
                 <Select disabled={!canWrite}
                   value={form.credentialType}
                   onChange={(value) => setForm({ ...form, credentialType: value })}
@@ -380,10 +406,10 @@ export function SecretsPage() {
                   />
                 </Field>
                 <Field label="Primary custodian"><input disabled={!canWriteSensitive} className="input" value={form.custodianPersonName ?? ""} onChange={(e) => setForm({ ...form, custodianUserId: "", custodianPersonName: e.target.value })} /></Field>
-                <Field label="Custodian email"><input disabled={!canWrite} className="input" type="email" value={form.custodianEmail ?? ""} onChange={(e) => setForm({ ...form, custodianEmail: e.target.value })} /></Field>
+                <Field label="Custodian email" error={fieldErrors.custodianEmail}><input disabled={!canWrite} className="input" type="email" value={form.custodianEmail ?? ""} onChange={(e) => setForm({ ...form, custodianEmail: e.target.value })} /></Field>
                 <Field label="Role"><input disabled={!canWrite} className="input" value={form.ownerRole ?? ""} onChange={(e) => setForm({ ...form, ownerRole: e.target.value })} /></Field>
                 <Field label="Backup custodian"><input disabled={!canWrite} className="input" value={form.backupCustodianName ?? ""} onChange={(e) => setForm({ ...form, backupCustodianName: e.target.value })} /></Field>
-                <Field label="Backup email"><input disabled={!canWrite} className="input" type="email" value={form.backupCustodianEmail ?? ""} onChange={(e) => setForm({ ...form, backupCustodianEmail: e.target.value })} /></Field>
+                <Field label="Backup email" error={fieldErrors.backupCustodianEmail}><input disabled={!canWrite} className="input" type="email" value={form.backupCustodianEmail ?? ""} onChange={(e) => setForm({ ...form, backupCustodianEmail: e.target.value })} /></Field>
               </div>
             </div>
 

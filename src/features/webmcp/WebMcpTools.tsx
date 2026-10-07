@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "@/hooks/useSociety";
 import { useToast } from "@/components/Toast";
+import { localDateKey } from "../../../shared/dateOnly";
 
 const VIEW_ROUTES = {
   dashboard: "/app",
@@ -133,7 +134,7 @@ function buildSnapshot(data: LiveWorkspaceData, input: unknown) {
   const horizonDays = boundedInteger(args.horizonDays, 45, 1, 365, "horizonDays");
   const maxItems = boundedInteger(args.maxItems, 8, 1, 20, "maxItems");
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = localDateKey(now);
   const horizon = new Date(now.getTime() + horizonDays * 86_400_000).toISOString().slice(0, 10);
   const deadlines = data.deadlines ?? [];
   const filings = data.filings ?? [];

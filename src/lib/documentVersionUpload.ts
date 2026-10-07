@@ -1,10 +1,21 @@
 import { validateUploadMetadata } from "../../shared/storage/uploadVerification";
 import { isDemoMode } from "./demoMode";
 import { writeLocalDocumentVersion } from "./documentStorage";
-import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "./runtimeMode";
+import { getDocumentStorageProvider, getRuntimeMode, isNativeFileStorageEnabled } from "./runtimeMode";
+import { isLocalDataRuntime } from "./staticRuntime";
+import { hashBytes } from "./workspaceArchive";
 
 export const NATIVE_FILE_STORAGE_DISABLED_MESSAGE =
   "Native file storage is disabled on this deployment. Use a document connector (e.g. Paperless) as the source instead of uploading.";
+
+/** The browser local workspace (local-indexeddb runtime or a browser workspace chosen at
+ * first run) keeps uploaded bytes in its own IndexedDB file store. Demo and desktop
+ * runtimes keep their own storage. */
+export function usesBrowserWorkspaceFileStore(): boolean {
+  if (!isLocalDataRuntime() || isDemoMode()) return false;
+  if (getRuntimeMode() === "electron-local" || getDocumentStorageProvider() === "local-filesystem") return false;
+  return isNativeFileStorageEnabled();
+}
 
 export async function uploadDocumentVersion({
   societyId,
@@ -47,6 +58,30 @@ export async function uploadDocumentVersion({
       changeNote: changeNote || undefined,
     });
     return { versionId: recorded.versionId, version: recorded.version, provider: ref.provider };
+  }
+
+  // Browser local workspace: keep the bytes on this device (IndexedDB) so the
+  // file opens offline and travels in ZIP backups.
+  if (usesBrowserWorkspaceFileStore()) {
+    const { localDataClient } = await import("./localDataClient");
+    const save = (localDataClient as { saveLocalWorkspaceFile?: (blob: Blob, sha256: string, references?: string[]) => Promise<void> }).saveLocalWorkspaceFile;
+    if (save) {
+      const sha256 = await hashBytes(new Uint8Array(await file.arrayBuffer()));
+      await save.call(localDataClient, file, sha256);
+      const recorded = await recordUploadedVersion({
+        societyId,
+        documentId,
+        storageProvider: "local-indexeddb",
+        storageKey: `local-indexeddb:${sha256}:${documentId}`,
+        fileName: file.name,
+        mimeType: file.type || undefined,
+        fileSizeBytes: file.size,
+        sha256,
+        changeNote: changeNote || undefined,
+      });
+      await save.call(localDataClient, file, sha256, [`version:${recorded.versionId}`, `document:${documentId}`]);
+      return { versionId: recorded.versionId, version: recorded.version, provider: "local-indexeddb" };
+    }
   }
 
   if (isDemoMode()) {

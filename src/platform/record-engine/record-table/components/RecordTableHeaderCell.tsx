@@ -12,6 +12,7 @@ import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../ty
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useIsMobile } from "../../../../lib/useIsMobile";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 
 /**
  * One header cell. Click = cycle sort (asc → desc → off). Drag the right
@@ -57,9 +58,7 @@ export function RecordTableHeaderCell({
     if (!menuOpen) return;
 
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (menuRef.current?.contains(target)) return;
+      if (!isOutsidePointerEvent(event, menuRef)) return;
       setMenuOpen(false);
     };
 

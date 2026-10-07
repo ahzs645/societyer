@@ -90,7 +90,7 @@ assert.deepEqual(sanitized.roleHolders, snapshot.roleHolders);
 assert.equal(snapshot.users[0].authIssuer, issuerA, "sanitization must not mutate the original backup");
 const restoreStore = new LocalDexieRowStore({ seed: {}, persistKey: "hosted-identity-restore-test" });
 await restoreStore.importSnapshot({ tables: snapshot });
-const restored = restoreStore.exportSnapshot();
+const restored = await restoreStore.exportSnapshot();
 assert.equal(restored.tables.externalIdentities, undefined);
 assert.equal(restored.tables.users[0].authSubject, undefined);
 assert.equal(restored.tables.users[0]._id, "retained-user-id");

@@ -20,6 +20,14 @@
   margin-top: 2px;
   color: token('accent');
 }
+.bylaw-rules__notice--error {
+  border-color: token('danger');
+  background: token('danger-soft');
+  color: token('text-primary');
+}
+.bylaw-rules__notice--error svg {
+  color: token('danger');
+}
 .bylaw-rules__layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -237,4 +245,116 @@
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+// Elections list: keep columns readable on phones by scrolling the table
+// horizontally instead of squeezing the title to one character per line (G-30).
+.elections-table {
+  min-width: 600px;
+}
+.elections-table td:first-child {
+  min-width: 180px;
+}
+
+// Obligations: wrap the long citation/source column so the Action column
+// stays on screen at desktop widths.
+.obligations__source {
+  max-width: 320px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+// Governance tables that turn into labelled cards on phones (G-30): the
+// obligations, policy registry and minute-book connected-records tables cut
+// their right-hand columns at 390px. Each cell carries a data-label.
+@media (max-width: 760px) {
+  .table--stack-mobile thead {
+    display: none;
+  }
+  .table--stack-mobile,
+  .table--stack-mobile tbody,
+  .table--stack-mobile tr,
+  .table--stack-mobile td {
+    display: block;
+    width: 100%;
+  }
+  // `.table-wrap > .table` (phone horizontal scrolling for wide tables) sets
+  // display: table and width: max-content with higher specificity; stacked
+  // card tables must win, or they spill out of the now non-scrolling wrap.
+  .table-wrap > .table.table--stack-mobile {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .table--stack-mobile tr {
+    padding: token('s-2') 0;
+    border-bottom: 1px solid token('border');
+  }
+  .table.table--stack-mobile tbody td {
+    position: static;
+    left: auto;
+    height: auto;
+    max-width: none;
+    min-width: 0;
+    padding: 4px token('s-3');
+    border: 0;
+    box-shadow: none;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table-wrap:has(> .table--stack-mobile) {
+    overflow-x: visible;
+  }
+  .table--stack-mobile td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: token('text-tertiary');
+    font-size: token('fs-xs');
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .table--stack-mobile .table__actions-inner {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    width: auto;
+  }
+  .table.table--stack-mobile tbody td.table__actions {
+    width: auto;
+    right: auto;
+  }
+  .table--stack-mobile td .row {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .table--stack-mobile td .badge {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+// Policies register (X-02): badge groups wrap inside a bounded cell so the
+// table fits a 1440 px window without horizontal scroll.
+.policies-table__badges {
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 240px;
+}
+
+.policies-table__counts {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (min-width: 761px) {
+  .table-wrap > .table.policies-table {
+    width: 100%;
+  }
+  .table.policies-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
 }

@@ -1,14 +1,22 @@
 import { EVIDENCE_FIELDS, mergeImportedEvidence, normalizeImportedEvidence } from "../../evidenceReview";
 import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHistory";
-import { assertMeetingHistoryReferences } from "../minutes";
+import { assertMeetingHistoryReferences, syncMotionsForMinutes, resolveMinutesMotions } from "../minutes";
+import { directoryPersonId, importedMeetingStatus, sourceVersionsCover, importedAgendaRows, importedMotionFromPayload, importedSectionsWithLinks, importedSourceVersionFor, linkActionItem, loadDirectoryIndex, screenImportedAttendance, type DirectoryIndex } from "./importMeetingApply";
+import { normalizeSigningAuthorityTiers } from "../../signingAuthorityTiers";
+import { normalizeDocumentCategory } from "../../documentCategories";
+import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../../documentVersioning";
+import { EXTRA_SECTION_RECORD_HANDLERS, resolveMeetingReference } from "./importSectionHandlersExtra";
+import { AGREEMENT_SECTION_RECORD_HANDLERS } from "./importAgreementApply";
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
 import { transposeSourcePortable } from "../minutes";
 import { validateFiledFacts } from "../filings";
 import { requirePermissionPortable } from "../permissions";
+import { insertRepresentationGapFromImport } from "../representationGaps";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
 import { reconcileDividend } from "../../dividends";
+import { meetingCalendarDate } from "../../meetingDates";
 import {
   HISTORY_ITEM_CATEGORY,
   HISTORY_ITEM_TAG,
@@ -65,6 +73,7 @@ import {
   parseJson,
   sourceNoteFor,
   summarizeRecords,
+  withCompactedRecords,
   titleForHistoryItem,
 } from "./importSessionMetadata";
 import {
@@ -85,19 +94,37 @@ async function mergeExistingMeetingImport(
   sourceExternalIds: string[],
   sourceDocumentIds: any[],
   sessionId: any,
+  options: { directory?: DirectoryIndex; bodyKey?: string; identityKey?: string } = {},
 ) {
   const meeting = await ctx.db.get(target.meetingId);
   const minutesRow = await ctx.db.get(target.minutesId);
   if (!meeting || !minutesRow || minutesRow.approvedAt || minutesRow.adoptedSnapshot || Array.isArray(minutesRow.motionSnapshots)) return;
-  const historyPatch = mergeMeetingHistory(minutesRow, normalizeMeetingHistory(payload));
+  const societyId = String(session.societyId);
+  const directory = options.directory ?? await loadDirectoryIndex(ctx, societyId);
+  // Fold this source file into the meeting as an imported source version
+  // (draft / approved / copy variants are one meeting, not several).
+  const version = importedSourceVersionFor(payload, sourceExternalIds, options.identityKey);
+  const incomingHistory = normalizeMeetingHistory(payload);
+  if (version && !sourceVersionsCover(incomingHistory.importedSourceVersions, version.sourceExternalIds)
+    && !sourceVersionsCover(normalizeMeetingHistory(minutesRow).importedSourceVersions, version.sourceExternalIds)) {
+    incomingHistory.importedSourceVersions = [...(incomingHistory.importedSourceVersions ?? []), version as any];
+  }
+  const historyPatch = mergeMeetingHistory(minutesRow, incomingHistory);
   await assertMeetingHistoryReferences(ctx, String(session.societyId), historyPatch, String(minutesRow._id));
 
   const currentAgenda = await meetingAgendaItemTitles(ctx, meeting._id);
-  const nextAgenda = arrayOf(payload.agendaItems).map(String).map(cleanText).filter((s): s is string => Boolean(s));
+  const nextAgenda = importedAgendaRows(arrayOf(payload.agendaItems));
+  const screened = screenImportedAttendance(payload, directory);
   const meetingPatch: any = {};
-  if ((!Array.isArray(meeting.attendeeIds) || meeting.attendeeIds.length === 0) && arrayOf(payload.attendees).length > 0) {
-    meetingPatch.attendeeIds = arrayOf(payload.attendees).map(String).map(cleanText).filter(Boolean);
+  if ((!Array.isArray(meeting.attendeeIds) || meeting.attendeeIds.length === 0) && screened.attendees.length > 0) {
+    meetingPatch.attendeeIds = screened.attendees;
   }
+  if (!meeting.location && cleanText(payload.location)) meetingPatch.location = cleanText(payload.location);
+  if (!meeting.electronic && payload.electronic === true) meetingPatch.electronic = true;
+  if (!meeting.localStartText && cleanText(payload.localStartText)) meetingPatch.localStartText = cleanText(payload.localStartText);
+  if (!meeting.localEndText && cleanText(payload.localEndText)) meetingPatch.localEndText = cleanText(payload.localEndText);
+  // Minutes merged into a meeting only an agenda or package evidenced ("Held — minutes missing"): it has minutes now.
+  if (meeting.status === "HeldMinutesMissing" && !cleanText(payload.meetingStatus) && importedMeetingStatus(payload) === "Held") meetingPatch.status = "Held";
   // Agenda lives in the relational agendas/agendaItems store. Only overwrite the
   // existing items when the current agenda is just the generic imported
   // scaffold (so we don't clobber a reviewed agenda).
@@ -120,9 +147,8 @@ async function mergeExistingMeetingImport(
   if (Object.keys(meetingPatch).length > 0) await ctx.db.patch(meeting._id, meetingPatch);
 
   const minutesPatch: Record<string, unknown> = { ...historyPatch, ...mergeImportedEvidence(minutesRow, normalizeImportedEvidence(payload)) };
-  const attendees = arrayOf(payload.attendees).map(String).map(cleanText).filter(Boolean);
-  const absent = arrayOf(payload.absent).map(String).map(cleanText).filter(Boolean);
-  const motions = arrayOf(payload.motions).map(minutesMotionFromPayload);
+  const attendees = screened.attendees;
+  const absent = screened.absent;
   if ((!Array.isArray(minutesRow.attendees) || minutesRow.attendees.length === 0) && attendees.length > 0) minutesPatch.attendees = attendees;
   if ((!Array.isArray(minutesRow.absent) || minutesRow.absent.length === 0) && absent.length > 0) minutesPatch.absent = absent;
   // Fill an unknown observation only; conflicting known findings require review.
@@ -130,8 +156,11 @@ async function mergeExistingMeetingImport(
     Object.assign(minutesPatch, normalizeMeetingQuorum(payload));
   }
   if (isGenericImportedDiscussion(minutesRow.discussion) && cleanText(payload.discussion)) minutesPatch.discussion = cleanText(payload.discussion);
-  if ((!Array.isArray(minutesRow.motions) || minutesRow.motions.length === 0) && motions.length > 0) minutesPatch.motions = motions;
-  const structuredPatch = structuredMinutesPatchFromPayload(payload);
+  const structuredPatch: Record<string, unknown> = {
+    ...structuredMinutesPatchFromPayload(payload),
+    ...(screened.detailedAttendance ? { detailedAttendance: screened.detailedAttendance } : {}),
+  };
+  if (Array.isArray(structuredPatch.sections)) structuredPatch.sections = importedSectionsWithLinks(structuredPatch.sections as any[], [], directory);
   for (const [key, value] of Object.entries(structuredPatch)) {
     if (EVIDENCE_FIELDS.some(field => field === key)) continue;
     if (key === "quorumStatus" && !minutesRow.quorumStatus && minutesRow.quorumMet) continue;
@@ -151,8 +180,27 @@ async function mergeExistingMeetingImport(
     minutesPatch.sourceReviewNotes = "Merged imported meeting-minute data. Verify against source minutes before relying on it as official.";
   }
 
+  // C2: motions merged into existing minutes go through the motions table
+  // (syncMotionsForMinutes), never the retired embedded minutes.motions[].
+  // Existing motion rows are kept; only motions whose wording is not already
+  // recorded are appended, so a draft and its approved copy do not double.
+  const existingMotions: any[] = await resolveMinutesMotions(ctx, minutesRow);
+  const legacyEmbedded = !existingMotions.length && Array.isArray(minutesRow.motions) ? minutesRow.motions : [];
+  const known = new Set([...existingMotions, ...legacyEmbedded].map((motion: any) => motionWordingKey(motion.text)));
+  const appended: any[] = [];
+  for (const motion of arrayOf(payload.motions)) {
+    const converted = await importedMotionFromPayload(ctx, societyId, motion, { dateKey: String(minutesRow.heldAt ?? "").slice(0, 10), bodyKey: options.bodyKey ?? "board", directory, sourceExternalIds });
+    const key = motionWordingKey(converted?.text);
+    if (!converted || known.has(key)) continue;
+    known.add(key);
+    appended.push(converted);
+  }
+  const motionsToAppend = [...legacyEmbedded.filter((motion: any) => !motion.motionId), ...appended];
+  if (legacyEmbedded.length) minutesPatch.motions = undefined;
+
   minutesPatch.draftTranscript = JSON.stringify({
     ...parseJson(minutesRow.draftTranscript),
+    nonPersonAttendance: [...arrayOf(parseJson(minutesRow.draftTranscript)?.nonPersonAttendance), ...screened.rejected.map(row => ({ name: row.original, kind: row.kind, list: row.list }))],
     lastImportSessionId: sessionId,
     sourceExternalIds: mergedSourceExternalIds,
     sourceDocumentIds: mergedSourceDocumentIds,
@@ -173,9 +221,20 @@ async function mergeExistingMeetingImport(
   });
 
   await ctx.db.patch(minutesRow._id, minutesPatch);
+  if (motionsToAppend.length) {
+    await syncMotionsForMinutes(ctx, { societyId: session.societyId, minutesId: minutesRow._id, meetingId: meeting._id, motions: motionsToAppend, mode: "append" });
+  }
   await transposeSourcePortable(ctx,{id:minutesRow._id});
 }
 
+/** Wording identity for de-duplicating the same motion across draft/approved copies. */
+function motionWordingKey(text: unknown) {
+  return String(text ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 120);
+}
+
+/** Minimal embedded motion (legacy shape). Import paths use
+ *  importedMotionFromPayload, which also resolves people, adoption links and
+ *  the source locator. */
 function minutesMotionFromPayload(motion: any) {
   return {
     text: cleanText(motion.motionText) || "Imported motion",
@@ -186,6 +245,9 @@ function minutesMotionFromPayload(motion: any) {
     votesAgainst: numberOrUndefined(motion.votesAgainst),
     abstentions: numberOrUndefined(motion.abstentions),
     resolutionType: cleanText(motion.resolutionType),
+    decidedBy: cleanText(motion.decidedBy),
+    sectionIndex: numberOrUndefined(motion.sectionIndex),
+    sectionTitle: cleanText(motion.sectionTitle),
   };
 }
 
@@ -265,10 +327,13 @@ async function ensureImportSourceDocuments(
     const externalSystem = cleanText(source?.externalSystem) || sourceSystemFromExternalId(externalId);
     const title = cleanText(source?.title) || fallbackSourceTitle(externalId);
     const sourceCategory = cleanText(source?.category) || category;
+    const sourceVersionStatus = normalizeSourceVersionStatus(source?.sourceVersionStatus) ?? detectSourceVersionStatus(source?.fileName, title);
     const id = await ctx.db.insert("documents", {
       societyId,
       title,
-      category: sourceCategory,
+      category: normalizeDocumentCategory(sourceCategory),
+      ...(cleanText(source?.versionGroupKey) ? { versionGroupKey: cleanText(source?.versionGroupKey)!.slice(0, 160) } : {}),
+      ...(sourceVersionStatus ? { sourceVersionStatus } : {}),
       fileName: cleanText(source?.fileName),
       mimeType: cleanText(source?.mimeType),
       fileSizeBytes: numberOrUndefined(source?.fileSizeBytes),
@@ -462,6 +527,8 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       auditStatus: cleanText(payload.auditStatus) || "NeedsReview",
       auditorName: cleanText(payload.auditorName),
       approvedByBoardAt: cleanDate(payload.approvedByBoardAt),
+      // C12: the meeting the statements were presented at.
+      presentedAtMeetingId: (await resolveMeetingReference(ctx, societyId, payload.presentedAtMeeting ?? payload.presentedAtMeetingDate))?.meetingId,
       remunerationDisclosures: arrayOf(payload.remunerationDisclosures),
       statementsDocId: firstSourceDocumentId,
     });
@@ -527,6 +594,8 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       startDate: cleanDate(payload.startDate),
       endDate: cleanDate(payload.endDate),
       nextReportDueAtISO: cleanDate(payload.nextReportDueAtISO),
+      // C10: requirements, use of funds, timeline, key facts and contacts.
+      ...importedGrantDetails(payload),
       sourceDocumentIds,
       sourceExternalIds,
       confidence: confidenceFor(payload),
@@ -624,6 +693,7 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       institutionName: cleanText(payload.institutionName) || cleanText(payload.bankName),
       accountLabel: cleanText(payload.accountLabel),
       authorityType: cleanText(payload.authorityType) || "signing",
+      tiers: normalizeSigningAuthorityTiers(payload.tiers),
       effectiveDate: cleanDate(payload.effectiveDate) || cleanDate(payload.sourceDate) || todayDate(),
       endDate: cleanDate(payload.endDate),
       status: cleanText(payload.status) || "NeedsReview",
@@ -649,6 +719,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       memberId: personLinks.memberId,
       directorId: personLinks.directorId,
       roleTitle: cleanText(payload.roleTitle),
+      affiliation: cleanText(payload.affiliation),
+      representedOrganization: cleanText(payload.representedOrganization),
+      directoryPersonId: directoryPersonId(await loadDirectoryIndex(ctx, societyId), personName),
       attendanceStatus: cleanText(payload.attendanceStatus) || "needs_review",
       quorumCounted: payload.quorumCounted == null ? undefined : Boolean(payload.quorumCounted),
       confidence: confidenceFor(payload),
@@ -857,11 +930,15 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       policyName: cleanText(payload.policyName) || cleanText(payload.name) || record.title || "Imported policy",
       policyNumber: cleanText(payload.policyNumber),
       owner: cleanText(payload.owner),
-      effectiveDate: cleanDate(payload.effectiveDate),
+      effectiveDate: policyEffectiveDate(payload),
       reviewDate: cleanDate(payload.reviewDate),
       ceasedDate: cleanDate(payload.ceasedDate),
-      docxDocumentId: cleanText(payload.docxDocumentId) as any,
-      pdfDocumentId: cleanText(payload.pdfDocumentId) as any,
+      // Document links come from this import's own source documents, never
+      // from IDs written in the payload.
+      docxDocumentId: undefined,
+      pdfDocumentId: firstSourceDocumentId,
+      // C9: the meeting / minutes that adopted the policy.
+      ...(await policyAdoptionLinks(ctx, societyId, payload)),
       html: cleanText(payload.html),
       requiredSigners: arrayOf(payload.requiredSigners).map(String).map(cleanText).filter(Boolean),
       signatureRequired: Boolean(payload.signatureRequired),
@@ -1456,6 +1533,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
     });
   },
 
+  representationGap: async ({ ctx, societyId, record, payload, firstSourceDocumentId }: SectionRecordContext) =>
+    insertRepresentationGapFromImport(ctx, societyId, payload, { importRecordId: record._id, importSessionId: record.sessionId, sourceDocumentId: firstSourceDocumentId }),
+
   sourceEvidence: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     const externalId = cleanText(payload.externalId) || cleanText(payload.sourceExternalIds?.[0]);
     return await ctx.db.insert("sourceEvidence", {
@@ -1566,12 +1646,72 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
   },
 };
 
+/**
+ * X-02: a policy takes effect when it is adopted unless the source states a
+ * separate effective date. Without an explicit effective date, a stated
+ * adoption date (or the adopting meeting's date) becomes the effective date;
+ * only a full day counts, so "May 2022" never becomes a made-up day.
+ */
+export function policyEffectiveDate(payload: any): string | undefined {
+  const explicit = cleanDate(payload?.effectiveDate);
+  if (explicit) return explicit;
+  const fullDay = (value: unknown) => {
+    const date = cleanDate(typeof value === "object" && value ? (value as any).meetingDate ?? (value as any).date : value);
+    return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
+  };
+  return fullDay(payload?.adoptedDate) ?? fullDay(payload?.adoptedAtISO) ?? fullDay(payload?.adoptedAtMeetingDate) ?? fullDay(payload?.adoptedAtMeeting);
+}
+
+/** C9: resolve "adopted at the May 2022 Board meeting" to native links. */
+async function policyAdoptionLinks(ctx: any, societyId: string, payload: any) {
+  const meeting = await resolveMeetingReference(ctx, societyId, payload.adoptedAtMeeting ?? payload.adoptedAtMeetingDate ?? payload.adoptedAt);
+  if (!meeting) return {};
+  return { adoptedAtMeetingId: meeting.meetingId, ...(meeting.minutesId ? { adoptedInMinutesId: meeting.minutesId } : {}) };
+}
+
+/** C10: the rich grant fields, validated to the native shapes. */
+function importedGrantDetails(payload: any) {
+  const out: Record<string, unknown> = {};
+  const requirements = arrayOf(payload.requirements).map((row: any, index: number) => ({
+    id: cleanText(row?.id) || `import-${index + 1}`,
+    category: cleanText(row?.category) || "Other",
+    label: cleanText(row?.label) || cleanText(row?.title) || "Requirement",
+    status: cleanText(row?.status) || "Needed",
+    ...(cleanDate(row?.dueDate) ? { dueDate: cleanDate(row?.dueDate) } : {}),
+    ...(cleanText(row?.notes) ? { notes: cleanText(row?.notes) } : {}),
+    ...(cleanText(row?.sourceUrl) ? { sourceUrl: cleanText(row?.sourceUrl) } : {}),
+    ...(cleanText(row?.formNumber) ? { formNumber: cleanText(row?.formNumber) } : {}),
+  }));
+  if (requirements.length) out.requirements = requirements;
+  const keyFacts = arrayOf(payload.keyFacts).map(String).map(cleanText).filter(Boolean);
+  if (keyFacts.length) out.keyFacts = keyFacts;
+  const useOfFunds = arrayOf(payload.useOfFunds).map((row: any) => ({
+    label: cleanText(row?.label) || "Use of funds",
+    ...(numberOrUndefined(row?.amountCents) != null ? { amountCents: numberOrUndefined(row?.amountCents) } : {}),
+    ...(cleanText(row?.notes) ? { notes: cleanText(row?.notes) } : {}),
+  }));
+  if (useOfFunds.length) out.useOfFunds = useOfFunds;
+  const timelineEvents = arrayOf(payload.timelineEvents).filter((row: any) => cleanDate(row?.date)).map((row: any) => ({
+    label: cleanText(row?.label) || "Milestone",
+    date: cleanDate(row?.date)!,
+    ...(cleanText(row?.status) ? { status: cleanText(row?.status) } : {}),
+    ...(cleanText(row?.notes) ? { notes: cleanText(row?.notes) } : {}),
+  }));
+  if (timelineEvents.length) out.timelineEvents = timelineEvents;
+  const contacts = arrayOf(payload.contacts).map((row: any) => ({
+    role: cleanText(row?.role) || "Contact",
+    ...Object.fromEntries(["name", "organization", "email", "phone", "notes"].map((key) => [key, cleanText(row?.[key])]).filter(([, value]) => value)),
+  }));
+  if (contacts.length) out.contacts = contacts;
+  return out;
+}
+
 async function insertSectionRecord(ctx: any, societyId: string, record: any, sourceDocumentIds: any[]) {
   const payload = normalizePayload(record.recordKind, record.payload ?? {});
   const firstSourceDocumentId = sourceDocumentIds[0];
   const sourceNote = sourceNoteFor(record, sourceDocumentIds);
 
-  const handler = SECTION_RECORD_HANDLERS[record.recordKind];
+  const handler = SECTION_RECORD_HANDLERS[record.recordKind] ?? EXTRA_SECTION_RECORD_HANDLERS[record.recordKind] ?? AGREEMENT_SECTION_RECORD_HANDLERS[record.recordKind];
   if (!handler) {
     throw new Error(`Unsupported section record kind: ${record.recordKind}`);
   }
@@ -1611,7 +1751,7 @@ async function findExistingMeetingImport(
     .collect();
   const existing = meetings.find(
     (meeting: any) =>
-      String(meeting.scheduledAt ?? "").slice(0, 10) === dateKey &&
+      (meetingCalendarDate(meeting) ?? "") === dateKey &&
       cleanText(meeting.title)?.toLowerCase() === normalizedTitle &&
       meeting.minutesId,
   );
@@ -1640,7 +1780,7 @@ async function resolveMeetingTargetForEvidence(ctx: any, societyId: string, payl
     .collect();
   const matches = meetings.filter(
     (meeting: any) =>
-      String(meeting.scheduledAt ?? "").slice(0, 10) === meetingDate &&
+      (meetingCalendarDate(meeting) ?? "") === meetingDate &&
       normalizeLookupText(meeting.title) === titleKey &&
       meeting.minutesId,
   );
@@ -1698,7 +1838,8 @@ function inferImportedAgendaItemType(title: string) {
   if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
   if (lower.includes("report") || lower.includes("financial")) return "report";
   if (lower.includes("break")) return "break";
-  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  // Only an explicit closed/in-camera session; "Executive Director update" is not one.
+  if (/\bin[ -]?camera|executive session|closed session\b/.test(lower)) return "executive_session";
   return "discussion";
 }
 
@@ -1725,8 +1866,8 @@ async function meetingAgendaItemTitles(ctx: any, meetingId: any): Promise<string
 // Replace (or seed) the agenda items for a meeting from a list of ordered
 // titles. Creates the agenda row if one does not yet exist, then rewrites its
 // items so the relational store reflects the imported agenda.
-async function setMeetingAgendaItems(ctx: any, meeting: any, titles: string[]) {
-  const cleaned = (titles ?? []).map((t) => String(t ?? "").trim()).filter(Boolean);
+async function setMeetingAgendaItems(ctx: any, meeting: any, titles: Array<string | Record<string, any>>) {
+  const cleaned = importedAgendaRows(titles ?? []);
   if (cleaned.length === 0) return;
   const now = new Date().toISOString();
   const agendas = await ctx.db
@@ -1753,14 +1894,23 @@ async function setMeetingAgendaItems(ctx: any, meeting: any, titles: string[]) {
     await ctx.db.patch(agendaId, { updatedAtISO: now });
   }
   for (let order = 0; order < cleaned.length; order += 1) {
-    const title = cleaned[order];
+    const item = cleaned[order];
+    const title = item.title;
+    const requestedAction = cleanText(item.requestedAction)?.toLowerCase();
     await ctx.db.insert("agendaItems", {
       societyId: meeting.societyId,
       agendaId,
       order,
-      type: inferImportedAgendaItemType(title),
+      type: cleanText(item.type) || (requestedAction === "approve" || requestedAction === "decide" ? "motion" : inferImportedAgendaItemType(title)),
       title,
-      depth: 0,
+      depth: item.depth === 1 ? 1 : 0,
+      ...(cleanText(item.details) ? { details: cleanText(item.details) } : {}),
+      ...(cleanText(item.presenter) ? { presenter: cleanText(item.presenter) } : {}),
+      ...(typeof item.timeAllottedMinutes === "number" && item.timeAllottedMinutes >= 0 ? { timeAllottedMinutes: item.timeAllottedMinutes } : {}),
+      ...(cleanText(item.itemNumber) ? { itemNumber: cleanText(item.itemNumber) } : {}),
+      ...(requestedAction && ["approve", "receive", "discuss", "decide", "information", "none"].includes(requestedAction) ? { requestedAction } : {}),
+      ...(cleanText(item.scheduledTimeText) ? { scheduledTimeText: cleanText(item.scheduledTimeText) } : {}),
+      ...(typeof item.consent === "boolean" ? { consent: item.consent } : {}),
       createdAtISO: now,
     });
   }
@@ -1787,7 +1937,7 @@ async function sessionRecords(ctx: any, societyId: string, sessionId: string) {
   return docs
     .filter(isImportRecord)
     .map(hydrateRecord)
-    .filter((record) => record.sessionId === sessionId);
+    .filter((record: any) => record.sessionId === sessionId);
 }
 
 async function recordsForSession(ctx: any, sessionId: string) {
@@ -1822,7 +1972,7 @@ async function upsertHistorySources(ctx: any, societyId: string, sourceRecords: 
     let sourceId = null;
     if (source.externalId) {
       const existing = existingSources.find(
-        (candidate) =>
+        (candidate: any) =>
           candidate.externalId === source.externalId &&
           (candidate.externalSystem ?? "paperless") === (source.externalSystem ?? "paperless"),
       );
@@ -1889,12 +2039,16 @@ async function insertHistoryItem(ctx: any, societyId: string, kind: string, payl
 }
 
 async function patchRecordImportTarget(ctx: any, record: any, target: string, value: any) {
+  // An applied record is no longer blocked (see BlockedImportRecord in importSessions.ts).
+  const { blocked, ...rest } = record;
+  const tags = blocked ? ((await ctx.db.get(record._id))?.tags ?? []).filter((tag: string) => tag !== "promotion-blocked" && tag !== "promotion-waiting") : undefined;
   await ctx.db.patch(record._id, {
     content: JSON.stringify({
-      ...record,
+      ...rest,
       importedTargets: { ...(record.importedTargets ?? {}), [target]: value },
       updatedAtISO: new Date().toISOString(),
     }),
+    ...(tags ? { tags } : {}),
   });
 }
 
@@ -1927,8 +2081,8 @@ async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
   const records = (await recordsForSession(ctx, sessionId))
     .filter(isImportRecord)
     .map(hydrateRecord)
-    .filter((record) => record.sessionId === sessionId);
-  const summary = summarizeRecords(records);
+    .filter((record: any) => record.sessionId === sessionId);
+  const summary = withCompactedRecords(summarizeRecords(records), payload);
   await ctx.db.patch(sessionId, {
     content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),
   });

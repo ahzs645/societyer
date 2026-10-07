@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { meetingExtensionFields } from "./validators/meetingModel";
 import {
   listPortable,
   getPortable,
@@ -12,6 +13,8 @@ import {
   removePortable,
   backfillQuorumSnapshotPortable,
 } from "../shared/functions/meetings";
+import { mergePortable, mergePreviewPortable } from "../shared/functions/meetingMerge";
+import { attendanceRecordsForMeetingPortable } from "../shared/functions/minutesAttendance";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("meetings:list", query)({
@@ -58,6 +61,7 @@ export const create = authorizedMutation("meetings:create", mutation)({
     packageReviewedAtISO: v.optional(v.string()),
     packageReviewedByUserId: v.optional(v.id("users")),
     notes: v.optional(v.string()),
+    ...meetingExtensionFields,
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
@@ -119,6 +123,7 @@ export const update = authorizedMutation("meetings:update", mutation)({
       // wire, so the client can't unset a field by sending `field: undefined`.
       clearNoticeSent: v.optional(v.boolean()),
       clearCommitteeId: v.optional(v.boolean()),
+      ...meetingExtensionFields,
     }),
   },
   returns: v.any(),
@@ -157,4 +162,25 @@ export const remove = authorizedMutation("meetings:remove", mutation)({
   args: { id: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// The meeting's attendance register rows, edited through the attendance grid.
+export const attendanceRecords = authorizedQuery("meetings:attendanceRecords", query)({
+  args: { meetingId: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, args) => attendanceRecordsForMeetingPortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Duplicate meetings (same body, same day): preview, then fold the duplicate
+// into the kept meeting as an imported source version.
+export const mergePreview = authorizedQuery("meetings:mergePreview", query)({
+  args: { targetId: v.id("meetings"), duplicateId: v.id("meetings"), addMissingAttendees: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, args) => mergePreviewPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const merge = authorizedMutation("meetings:merge", mutation)({
+  args: { targetId: v.id("meetings"), duplicateId: v.id("meetings"), addMissingAttendees: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, args) => mergePortable(await toPortableMutationCtx(ctx), args),
 });

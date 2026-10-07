@@ -52,27 +52,17 @@
 }
 
 @media (max-width: 760px) {
+  /* F29: phone tabs scroll horizontally but keep their labels and counts. */
   .meeting-detail-page .tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .meeting-detail-page .tab {
-    width: 36px;
-    min-width: 36px;
-    height: 34px;
-    justify-content: center;
-    padding: 0;
-    gap: 0;
-  }
-
-  .meeting-detail-page .tab__label,
-  .meeting-detail-page .tab__count {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: var(--fs-sm);
     white-space: nowrap;
   }
 }

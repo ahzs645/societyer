@@ -83,7 +83,8 @@ test("corporation MVP flow renders obligations, share register, registration, an
 
   await navigate("/app/filings");
   await expect(page.getByRole("heading", { name: "Filings" })).toBeVisible();
-  await expect(page.getByText("FederalAnnualReturn")).toBeVisible();
+  // The filings table shows the readable kind label, not the stored code.
+  await expect(page.getByRole("button", { name: "Federal annual return", exact: true }).first()).toBeVisible();
 
   await navigate("/app/template-engine");
   await expect(page.getByRole("heading", { name: "Template Engine" })).toBeVisible();

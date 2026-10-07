@@ -3,9 +3,10 @@ import { archiveDatabaseSnapshot, buildWorkspaceArchive, readWorkspaceArchiveFil
 import { archiveFileRows, collectWorkspaceFiles, type AttachmentDownload } from "./workspaceArchiveFiles";
 import { triggerBlobDownload } from "./zip";
 import { isLocalDataRuntime } from "./staticRuntime";
+import { preferredRestoredSocietyId } from "./restoredSociety";
 
 type LocalExportCapableClient = {
-  exportLocalWorkspaceSnapshot?: () => unknown;
+  exportLocalWorkspaceSnapshotAsync?: () => Promise<unknown>;
   importLocalWorkspaceSnapshot?: (snapshot: any, files?: ReturnType<typeof archiveFileRows>) => Promise<unknown> | unknown;
 };
 
@@ -18,16 +19,35 @@ export type WorkspaceBackupSummary = {
   unavailableFiles: number;
   externalFiles: number;
   societies: Array<{ _id: string; name: string }>;
+  /**
+   * Organization to open after the restore: the one that was active when the
+   * backup was made, else the first organization that is not the bundled demo.
+   */
+  preferredSocietyId: string | null;
 };
 
-export function getLocalWorkspaceSnapshot() {
+/** Selected-organization key written by `setStoredSocietyId` (hooks/useSociety). */
+const SELECTED_SOCIETY_KEY = "societyer.currentSocietyId";
+
+function readSelectedSocietyId(): string | null {
+  try { return localStorage.getItem(SELECTED_SOCIETY_KEY); } catch { return null; }
+}
+
+export { preferredRestoredSocietyId };
+
+/** Full snapshot of the local workspace, heavy fields included (read back from IndexedDB). */
+export async function getLocalWorkspaceSnapshot(): Promise<any> {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return client.exportLocalWorkspaceSnapshot?.() ?? null;
+  const snapshot: any = (await client.exportLocalWorkspaceSnapshotAsync?.()) ?? null;
+  // Remember which organization was open so a restore reopens it.
+  const activeSocietyId = readSelectedSocietyId();
+  if (snapshot && activeSocietyId) snapshot.activeSocietyId = activeSocietyId;
+  return snapshot;
 }
 
 export function localWorkspaceBackupSupported() {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return isLocalDataRuntime() && typeof client.exportLocalWorkspaceSnapshot === "function";
+  return isLocalDataRuntime() && typeof client.exportLocalWorkspaceSnapshotAsync === "function";
 }
 
 export function localWorkspaceRestoreSupported() {
@@ -35,8 +55,8 @@ export function localWorkspaceRestoreSupported() {
   return isLocalDataRuntime() && typeof client.importLocalWorkspaceSnapshot === "function";
 }
 
-export function downloadLocalWorkspaceSnapshot(filename = defaultBackupFilename()) {
-  const snapshot = getLocalWorkspaceSnapshot();
+export async function downloadLocalWorkspaceSnapshot(filename = defaultBackupFilename()) {
+  const snapshot = await getLocalWorkspaceSnapshot();
   if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -54,28 +74,64 @@ export function defaultBackupFilename(now = new Date()) {
   return `societyer-backup-${stamp}.json`;
 }
 
+/**
+ * The rows `collectWorkspaceFiles` needs to find saved files (document and version ids, saved originals of
+ * minutes, intake source files), kept while the records stream into the archive instead of the whole workspace.
+ */
+export function workspaceFileIndex() {
+  const tables: Record<string, any[]> = { societies: [], documents: [], documentVersions: [], minutes: [], intakeFiles: [] };
+  const observe = (table: string, rows: any[]) => {
+    if (table === "societies") for (const row of rows) tables.societies.push({ _id: row._id, name: row.name });
+    else if (table === "documents") for (const row of rows) tables.documents.push({ _id: row._id });
+    else if (table === "documentVersions") for (const row of rows) tables.documentVersions.push({ _id: row._id });
+    else if (table === "minutes") {
+      for (const row of rows) {
+        const documents = (row.sourceMeetingRecord?.documents ?? []).filter((source: any) => source?.originalDownload?.sha256).map((source: any) => ({ documentId: source.documentId, originalDownload: source.originalDownload }));
+        if (documents.length) tables.minutes.push({ _id: row._id, sourceMeetingRecord: { documents } });
+      }
+    } else if (table === "intakeFiles") {
+      for (const row of rows) if (row?.sha256) tables.intakeFiles.push({ _id: row._id, sha256: row.sha256, name: row.name, mimeType: row.mimeType, documentId: row.documentId, sizeBytes: row.sizeBytes, disposition: row.disposition });
+    }
+  };
+  return { tables, observe };
+}
+
+type StreamingExportClient = { exportLocalWorkspaceSnapshotSource?: (batchSize?: number) => Promise<{ meta: Record<string, unknown>; tables: Array<{ name: string; rows: () => AsyncIterable<any[]> }> }> };
+
 export async function downloadLocalWorkspaceZip(onProgress?: (message: string) => void) {
   await localDataClient.whenLocalWorkspaceReady?.();
-  const snapshot: any = getLocalWorkspaceSnapshot();
-  if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
-  const attachments: AttachmentDownload[] = [];
-  for (const society of snapshot.tables.societies ?? []) {
-    for (const source of ["documentVersions", "documents"] as const) {
-      let cursor: string | null = null;
-      const seen = new Set<string>();
-      do {
-        const result: any = await localDataClient.query("exports:exportAttachmentPage", { societyId: society._id, source, paginationOpts: { cursor, numItems: 100 } });
-        attachments.push(...result.page);
-        cursor = result.isDone ? null : result.continueCursor;
-        if (cursor && seen.has(cursor)) throw new Error("The file listing did not advance.");
-        if (cursor) seen.add(cursor);
-      } while (cursor);
-    }
+  const streaming = (localDataClient as unknown as StreamingExportClient).exportLocalWorkspaceSnapshotSource;
+  // Records stream into the archive a batch at a time; only the rows that locate saved files are kept.
+  const source = streaming ? await streaming.call(localDataClient) : null;
+  const snapshot: any = source ? null : await getLocalWorkspaceSnapshot();
+  if (!source && !snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
+  if (source) {
+    const activeSocietyId = readSelectedSocietyId();
+    if (activeSocietyId) source.meta.activeSocietyId = activeSocietyId;
   }
-  // Physical local backups also retain detached attachment references.
-  const keys = new Set(attachments.map(file => JSON.stringify([file.storageProvider, file.storageKey])));
-  for (const ref of snapshot.attachments ?? []) if (!keys.has(JSON.stringify([ref.provider, ref.storageKey]))) attachments.push({ ...ref, storageProvider: ref.provider, id: ref.versionId });
-  const result = await buildWorkspaceArchive(snapshot, add => collectWorkspaceFiles(snapshot.tables, attachments, add, (done, total, name) => onProgress?.(`Files ${done} of ${total}: ${name}`)), percent => onProgress?.(`Creating ZIP: ${Math.round(percent)}%`));
+  const index = workspaceFileIndex();
+  const meta: any = source ? source.meta : snapshot;
+  const result = await buildWorkspaceArchive(source ?? snapshot, async (add) => {
+    const tables = source ? index.tables : snapshot.tables;
+    const attachments: AttachmentDownload[] = [];
+    for (const society of tables.societies ?? []) {
+      for (const kind of ["documentVersions", "documents"] as const) {
+        let cursor: string | null = null;
+        const seen = new Set<string>();
+        do {
+          const page: any = await localDataClient.query("exports:exportAttachmentPage", { societyId: society._id, source: kind, paginationOpts: { cursor, numItems: 100 } });
+          attachments.push(...page.page);
+          cursor = page.isDone ? null : page.continueCursor;
+          if (cursor && seen.has(cursor)) throw new Error("The file listing did not advance.");
+          if (cursor) seen.add(cursor);
+        } while (cursor);
+      }
+    }
+    // Physical local backups also retain detached attachment references.
+    const keys = new Set(attachments.map(file => JSON.stringify([file.storageProvider, file.storageKey])));
+    for (const ref of meta.attachments ?? []) if (!keys.has(JSON.stringify([ref.provider, ref.storageKey]))) attachments.push({ ...ref, storageProvider: ref.provider, id: ref.versionId });
+    await collectWorkspaceFiles(tables, attachments, add, (done, total, name) => onProgress?.(`Files ${done} of ${total}: ${name}`));
+  }, percent => onProgress?.(`Creating ZIP: ${Math.round(percent)}%`), { onRows: source ? index.observe : undefined, onStatus: onProgress });
   const filename = defaultBackupFilename().replace(/\.json$/, result.manifest.completeStoredFiles ? ".zip" : "-incomplete.zip");
   triggerBlobDownload(result.blob, filename);
   return { filename, manifest: result.manifest };
@@ -120,6 +176,7 @@ export function summarizeWorkspaceBackup(snapshot: any): WorkspaceBackupSummary 
     societies: societies
       .filter((row) => typeof row?._id === "string")
       .map((row) => ({ _id: String(row._id), name: String(row.name ?? "Untitled organization") })),
+    preferredSocietyId: preferredRestoredSocietyId(snapshot),
   };
 }
 

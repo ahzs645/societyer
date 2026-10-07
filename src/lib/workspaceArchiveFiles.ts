@@ -52,7 +52,26 @@ export async function collectWorkspaceFiles(tables: Record<string, any[]>, attac
     if (source.originalDownload?.sha256) { originals.set(source.originalDownload.sha256, { original: source.originalDownload, documentId: source.documentId }); if (source.documentId) sourceIds.add(source.documentId); }
   }
   const candidates = [...originals.values()];
-  let done = 0; const total = candidates.length + attachments.length;
+  // AI intake source files (browser-only runtime: kept in this device's intake cache, not a file store).
+  // Each goes into the backup once, linked to the source document promotion created for it.
+  const intakeFiles = new Map<string, { fileName: string; mimeType?: string; documentId?: string; sha256: string; bytes?: number }>();
+  for (const row of tables.intakeFiles ?? []) {
+    if (!row?.sha256 || originals.has(row.sha256) || row.disposition === "junk" || row.disposition === "excluded") continue;
+    const current = intakeFiles.get(row.sha256);
+    if (!current || (!current.documentId && row.documentId)) intakeFiles.set(row.sha256, { fileName: row.name, mimeType: row.mimeType, documentId: row.documentId ? String(row.documentId) : undefined, sha256: row.sha256, bytes: row.sizeBytes });
+  }
+  let done = 0; const total = candidates.length + attachments.length + intakeFiles.size;
+  if (intakeFiles.size) {
+    // The intake cache, else the files a ZIP restore brought back: a restored workspace exports its originals again.
+    const { getOriginal } = await import("../features/intake/originalsCache");
+    for (const entry of intakeFiles.values()) {
+      progress?.(done++, total, entry.fileName);
+      const file: ArchiveFile = { fileName: entry.fileName, mimeType: entry.mimeType, documentId: entry.documentId, sha256: entry.sha256, bytes: entry.bytes, status: "included" };
+      const cached = await getOriginal(entry.sha256).catch(() => undefined);
+      if (cached) await add(file, cached.blob);
+      else await add({ ...file, status: "unavailable", reason: "The intake source file is not cached on this device (the browser cleared it, or the run was made on another device)." });
+    }
+  }
   for (const { original, documentId } of candidates) {
     progress?.(done, total, original.fileName);
     const file: ArchiveFile = { fileName: original.fileName, mimeType: original.mimeType, documentId, sha256: original.sha256, bytes: original.parts.reduce((sum, p) => sum + p.bytes, 0), status: "included" };

@@ -1,4 +1,7 @@
 import { format, formatDistanceToNowStrict, parseISO, isValid } from "date-fns";
+import { isDateOnly, relativeDateOnly } from "../../shared/dateOnly";
+
+export { isPastDue, todayDateOnly, daysUntilDate, relativeDateOnly, toDateOnly } from "../../shared/dateOnly";
 
 type DateInput = string | number | Date | null | undefined;
 
@@ -16,15 +19,31 @@ export function formatDate(value?: DateInput, pattern = "MMM d, yyyy") {
   return format(d, pattern);
 }
 
+/**
+ * Action/task due dates are free text: an ISO calendar day ("2026-10-20") is
+ * shown with the app's date format, anything else ("next meeting", "ASAP",
+ * "end of June") is kept exactly as written (MA-7).
+ */
+export function formatDueDate(value?: string | null, pattern = "MMM d, yyyy") {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const d = parseISO(text);
+  return isValid(d) ? format(d, pattern) : text;
+}
+
 export function formatDateTime(value?: DateInput) {
   return formatDate(value, "MMM d, yyyy · h:mma");
 }
 
 export function relative(value?: DateInput) {
+  // A date-only value is a calendar day: "today"/"in 2 days", never "19 hours ago".
+  if (isDateOnly(value)) return relativeDateOnly(value);
   const d = parseDateInput(value);
   if (!d) return "—";
   if (!isValid(d)) return "—";
   const diff = d.getTime() - Date.now();
+  if (Math.abs(diff) < 45_000) return "just now";
   const suffix = diff >= 0 ? "from now" : "ago";
   return `${formatDistanceToNowStrict(d)} ${suffix}`;
 }
@@ -50,6 +69,11 @@ export function dollarInputToCents(value: string | number | undefined | null) {
   const amount = typeof value === "number" ? value : Number(String(value).replace(/[$,\s]/g, ""));
   if (!Number.isFinite(amount)) return undefined;
   return Math.round(amount * 100);
+}
+
+/** "1 record", "3 records", "1 policy" → `pluralize(n, "policy", "policies")`. Numbers use the en-CA grouping. */
+export function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${new Intl.NumberFormat("en-CA").format(count)} ${Math.abs(count) === 1 ? singular : plural}`;
 }
 
 export function initials(first?: string, last?: string) {

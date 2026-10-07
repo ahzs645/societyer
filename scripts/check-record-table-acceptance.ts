@@ -65,7 +65,7 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/RecordTableFieldLab.tsx": 1,
   "src/pages/Retention.tsx": 1,
   "src/pages/Secrets.tsx": 1,
-  "src/pages/Tasks.tsx": 1,
+  "src/pages/Tasks.tsx": 2,
   "src/pages/Transparency.tsx": 1,
   "src/pages/Volunteers.tsx": 3,
   "src/pages/WorkflowRuns.tsx": 1,

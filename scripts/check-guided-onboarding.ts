@@ -45,7 +45,15 @@ assert.equal(snapshot.tables.workflows[0].config.initialSetupAnswers.governanceS
 assert.equal((snapshot.tables.rightsholdingTransfers ?? []).length, 0);
 assert.equal((snapshot.tables.roleHolders ?? []).length, 0);
 validateSetupBackup(snapshot);
-const before = snapshot.tables.societies.length;
+// Guided setup submits blank optional contacts; the local Owner must still get a
+// name and address (convex/society.createWorkspace treats blanks as missing).
+const blankContacts = await client.mutation("society:createWorkspace", {
+  ...organization, name: "Blank Contact Example Inc.", officialEmail: "", privacyOfficerName: "", privacyOfficerEmail: "",
+}) as any;
+const blankOwner = client.exportLocalWorkspaceSnapshot().tables.users.find((row: any) => row.societyId === blankContacts.societyId && row.role === "Owner");
+assert.equal(blankOwner?.displayName, "Owner", "blank privacy officer name falls back to Owner");
+assert.equal(blankOwner?.email, "owner@blank-contact-example-inc-.local", "blank emails fall back to the workspace placeholder");
+const before = client.exportLocalWorkspaceSnapshot().tables.societies.length;
 await assert.rejects(() => client.mutation("society:createWorkspace", { ...organization, formationStatus: "incorporated" }), /certificate verification/);
 assert.equal(client.exportLocalWorkspaceSnapshot().tables.societies.length, before);
 

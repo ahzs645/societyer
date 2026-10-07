@@ -19,6 +19,8 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
 import { getOwned } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
+import { isHistoricalSourceAction } from "../taskStatus";
+import { todayDateOnly } from "../dateOnly";
 
 /* ----------------------- compliance rules (inlined) ---------------------- */
 
@@ -245,8 +247,8 @@ const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack = {
       citation: "Societies Act s.42 director consent requirements",
       evidenceRequired: ["Active director register", "Written consent or meeting-attendance/non-refusal evidence"],
       remediationActions: [
-        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors" },
-        { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents" },
+        { id: "open-directors", label: "Update consent", intent: "navigate", to: "/app/directors?intent=consent" },
+        { id: "upload-evidence", label: "Upload evidence", intent: "navigate", to: "/app/documents?intent=new&category=Governance&title=Director%20consent" },
         { id: "assign-review", label: "Assign review", intent: "createComplianceReviewTask" },
       ],
       passFail(context) {
@@ -582,10 +584,17 @@ async function getActiveBylawRuleSet(ctx: PortableQueryCtx, societyId: string) {
   return getBylawRuleSetForDate(ctx, societyId, new Date().toISOString());
 }
 
+// Versions are effective from a calendar day. "Reset to defaults" stamps the
+// click instant while "Save new version" stamps midnight of the chosen day, so
+// two versions effective the same day are ordered by version, not by time.
 function compareRuleSetsDesc(a: any, b: any) {
-  const byEffective = effectiveTimestamp(b) - effectiveTimestamp(a);
-  if (byEffective !== 0) return byEffective;
-  return b.version - a.version;
+  const byDay = effectiveDay(b).localeCompare(effectiveDay(a));
+  if (byDay !== 0) return byDay;
+  return (Number(b.version) || 0) - (Number(a.version) || 0);
+}
+
+function effectiveDay(row: any) {
+  return typeof row.effectiveFromISO === "string" ? row.effectiveFromISO.slice(0, 10) : "";
 }
 
 function effectiveTimestamp(row: any) {
@@ -749,6 +758,8 @@ export async function navCountsPortable(
   const readAccess = await dashboardReadAccess(ctx, societyId);
   const nowDate = new Date();
   const nowISO = nowDate.toISOString();
+  // Date-only due dates compare against the local calendar day: a filing due today is not overdue.
+  const todayKey = todayDateOnly(nowDate);
   const year = nowDate.getFullYear();
   const yearStartISO = `${year}-01-01T00:00:00.000Z`;
   const nextYearStartISO = `${year + 1}-01-01T00:00:00.000Z`;
@@ -767,7 +778,7 @@ export async function navCountsPortable(
     readAccess.has("members:read") ? ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
     readAccess.has("directors:read") ? ctx.db.query("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
     readAccess.has("meetings:read") ? ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect() : Promise.resolve([]),
-    readAccess.has("filings:read") ? ctx.db.query("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect() : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", todayKey)).collect() : Promise.resolve([]),
     readAccess.has("deadlines:read") ? ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect() : Promise.resolve([]),
     readAccess.has("conflicts:read") ? ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect() : Promise.resolve([]),
     readAccess.has("committees:read") ? ctx.db.query("committees").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
@@ -784,7 +795,7 @@ export async function navCountsPortable(
     openConflicts: openConflicts.length,
     committees: activeCommittees.length,
     openGoals: goals.length,
-    openTasks: tasks.length,
+    openTasks: tasks.filter((task) => !isHistoricalSourceAction(task as any)).length,
   };
 }
 
@@ -795,6 +806,8 @@ export async function summaryPortable(
   const readAccess = await dashboardReadAccess(ctx, societyId);
   const nowDate = new Date();
   const nowISO = nowDate.toISOString();
+  // Date-only due dates compare against the local calendar day: a filing due today is not overdue.
+  const todayKey = todayDateOnly(nowDate);
   const year = nowDate.getFullYear();
   const yearStartISO = `${year}-01-01T00:00:00.000Z`;
   const nextYearStartISO = `${year + 1}-01-01T00:00:00.000Z`;
@@ -820,9 +833,9 @@ export async function summaryPortable(
     readAccess.has("members:read") ? ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
     readAccess.has("directors:read") ? ctx.db.query<any>("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
     readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect() : Promise.resolve([]),
-    readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", nowISO)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
-    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect() : Promise.resolve([]),
-    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).gte("dueDate", nowISO)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
+    readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", upcomingMeetingsFromISO(nowISO, todayKey))).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", todayKey)).collect() : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).gte("dueDate", todayKey)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
     readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
     readAccess.has("deadlines:read") ? ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect() : Promise.resolve([]),
     readAccess.has("conflicts:read") ? ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect() : Promise.resolve([]),
@@ -864,7 +877,7 @@ export async function summaryPortable(
   const goalPreview = goals
     .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
     .slice(0, 4);
-  const openTaskPreview = tasks
+  const openTaskPreview = tasks.filter((task) => !isHistoricalSourceAction(task as any))
     .sort((a, b) => compareOptionalDates(a.dueDate, b.dueDate))
     .slice(0, 6);
   const canReadEvidence = ["filings:read", "documents:read", "users:read", "audit:read"].every(permission => readAccess.has(permission as Permission));
@@ -921,7 +934,7 @@ export async function summaryPortable(
       openConflicts: openConflicts.length,
       committees: activeCommittees.length,
       openGoals: goals.length,
-      openTasks: tasks.length,
+      openTasks: tasks.filter((task) => !isHistoricalSourceAction(task as any)).length,
     },
     board,
     upcomingMeetings: upcomingMeetings.slice(0, 3).map(toDashboardMeeting),
@@ -1108,4 +1121,15 @@ function toDashboardGoal(goal: GoalRecord): DashboardGoal {
     progressPercent: goal.progressPercent,
     targetDate: goal.targetDate,
   };
+}
+
+/**
+ * Lower bound for "upcoming" meetings. Date-only meetings are stored at a
+ * noon-UTC placeholder, which is already in the past on a BC evening, so a
+ * meeting later today dropped off the dashboard. Start from the beginning of
+ * the viewer's local day (as a UTC day key) or now, whichever is earlier.
+ */
+export function upcomingMeetingsFromISO(nowISO: string, todayKey: string): string {
+  const startOfToday = `${todayKey}T00:00:00.000Z`;
+  return startOfToday < nowISO ? startOfToday : nowISO;
 }

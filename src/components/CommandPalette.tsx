@@ -48,6 +48,7 @@ import {
   Workflow,
   Plug,
   Pin,
+  FileSignature,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
 import { useSociety, useSocieties, setStoredSocietyId } from "../hooks/useSociety";
@@ -57,7 +58,7 @@ import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useDialogFocus } from "../lib/useDialogFocus";
-import { ROUTE_IDENTITY, groupToneCssVar, type RouteGroup } from "../lib/routeIdentity";
+import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 
 type CommandCategory =
@@ -87,6 +88,26 @@ type CommandItem = {
   group?: RouteGroup;
   /** Extra search terms. Lets "logo" surface Settings, etc. */
   keywords?: string[];
+  /** Right-hand context (record type, date) shown instead of "Navigate". */
+  hint?: string;
+};
+
+/** How global-search hits are labelled in the palette (see shared/functions/firm.ts searchPortable). */
+const SEARCH_KIND_PRESENTATION: Record<string, { label: string; icon: any }> = {
+  deadline: { label: "Deadline", icon: CalendarClock },
+  document: { label: "Document", icon: FileText },
+  person: { label: "Person", icon: Users },
+  member: { label: "Member", icon: UserCheck },
+  meeting: { label: "Meeting", icon: Calendar },
+  minutes: { label: "Minutes", icon: BookOpen },
+  motion: { label: "Motion", icon: Gavel },
+  task: { label: "Task", icon: ListTodo },
+  committee: { label: "Committee", icon: UsersRound },
+  grant: { label: "Grant", icon: BadgeDollarSign },
+  policy: { label: "Policy", icon: Shield },
+  insurance: { label: "Insurance", icon: Shield },
+  filing: { label: "Filing", icon: FileCog },
+  agreement: { label: "Agreement", icon: FileSignature },
 };
 
 /**
@@ -444,12 +465,12 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
   const societies = useSocieties();
   const staticCommands = useStaticCommands();
   const searchTerm = q.trim();
-  // Cross-entity full-text search (deadlines/documents/people across every
+  // Cross-entity search (records, meetings, minutes, people, ... across every
   // entity). Reactive: streams in as the user types; skipped under 2 chars.
   const crossEntityResults = useQuery(
     api.firm.search,
     open && can("society:read") && searchTerm.length >= 2 ? { query: searchTerm } : "skip",
-  ) as Array<{ kind: string; id: string; title: string; societyId: string | null; societyName: string | null; to: string }> | undefined;
+  ) as Array<{ kind: string; id: string; title: string; subtitle?: string; societyId: string | null; societyName: string | null; to: string }> | undefined;
 
   const actions = useMemo<CommandItem[]>(
     () =>
@@ -634,16 +655,28 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
 
     // Cross-entity search hits come pre-matched by the server, so they bypass
     // the local scoreMatch and lead the list as their own group while searching.
-    const crossEntityItems: CommandItem[] = (crossEntityResults ?? []).map((r) => ({
-      id: `search:${r.kind}:${r.id}`,
-      label: r.societyName ? `${r.title} · ${r.societyName}` : r.title,
-      icon: r.kind === "document" ? FileText : r.kind === "person" ? Users : CalendarClock,
-      category: "Across entities" as const,
-      run: () => {
-        if (r.societyId) setStoredSocietyId(r.societyId as any);
-        navigate(r.to);
-      },
-    }));
+    const crossEntityItems: CommandItem[] = (crossEntityResults ?? [])
+      .filter((r) => {
+        // Hits in a disabled module stay hidden, like that module's navigation.
+        const module = resolveRouteIdentity(r.to.split("?")[0])?.module;
+        if (!module) return true;
+        const owner = (societies ?? []).find((row: any) => String(row._id) === r.societyId) ?? society;
+        return isModuleEnabled(owner, module);
+      })
+      .map((r) => {
+        const kind = SEARCH_KIND_PRESENTATION[r.kind] ?? { label: "Record", icon: CalendarClock };
+        return {
+          id: `search:${r.kind}:${r.id}`,
+          label: r.societyName ? `${r.title} · ${r.societyName}` : r.title,
+          icon: kind.icon,
+          category: "Across entities" as const,
+          hint: [kind.label, r.subtitle].filter(Boolean).join(" · "),
+          run: () => {
+            if (r.societyId) setStoredSocietyId(r.societyId as any);
+            navigate(r.to);
+          },
+        };
+      });
 
     const flat: CommandItem[] = [];
     const groups: Array<{ category: CommandCategory; items: CommandItem[] }> = [];
@@ -770,7 +803,7 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
                             <span className="kbar__kbd">{item.shortcut}</span>
                           </span>
                         ) : (
-                          <span className="kbar__hint">{item.run ? "Action" : "Navigate"}</span>
+                          <span className="kbar__hint">{item.hint ?? (item.run ? "Action" : "Navigate")}</span>
                         )}
                       </button>
                       {canPin && (

@@ -97,6 +97,7 @@ import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
+import { NAV_ITEM_LABEL_KEYS } from "../i18n/navLabels";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
@@ -321,7 +322,6 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/deadlines"),
       navItem("/app/commitments"),
       navItem("/app/documents"),
-      navItem("/app/source-model-coverage"),
       navItem("/app/document-catalog"),
       navItem("/app/post-incorporation"),
       navItem("/app/library"),
@@ -376,6 +376,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/research-library"),
       navItem("/app/filings/prefill"),
       navItem("/app/annual-cycle"),
+      navItem("/app/coverage"),
       navItem("/app/formation-maintenance"),
       navItem("/app/policies"),
       navItem("/app/retention"),
@@ -434,6 +435,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/users"),
       navItem("/app/custom-fields"),
       navItem("/app/imports"),
+      navItem("/app/intake"),
       navItem("/app/settings"),
       navItem("/app/settings/api-keys"),
       navItem("/app/webhooks"),
@@ -593,70 +595,6 @@ const SIDEBAR_MENU_WIDTH = 220;
 
 const SIDEBAR_MENU_HEIGHT = 116;
 
-const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
-  Dashboard: "nav.dashboard",
-  Society: "nav.society",
-  "Org details": "nav.orgDetails",
-  "Org history": "nav.orgHistory",
-  Timeline: "nav.timeline",
-  Members: "nav.members",
-  Directors: "nav.directors",
-  "Org chart": "nav.orgChart",
-  Committees: "nav.committees",
-  Volunteers: "nav.volunteers",
-  Employees: "nav.employees",
-  Goals: "nav.goals",
-  Tasks: "nav.tasks",
-  Deadlines: "nav.deadlines",
-  Commitments: "nav.commitments",
-  Documents: "nav.documents",
-  Communications: "nav.communications",
-  "Meetings": "nav.meetingsItem",
-  "Meeting templates": "nav.meetingTemplates",
-  "Agendas": "nav.agenda",
-  "Motion library": "nav.motionLibrary",
-  Minutes: "nav.minutes",
-  "Member proposals": "nav.memberProposals",
-  Elections: "nav.elections",
-  "Written resolutions": "nav.writtenResolutions",
-  Proxies: "nav.proxies",
-  "Conflicts of int.": "nav.conflicts",
-  "Director attestations": "nav.attestations",
-  Auditors: "nav.auditors",
-  "Court orders": "nav.courtOrders",
-  "Minute book": "nav.minuteBook",
-  "Bylaw rules": "nav.bylawRules",
-  "Bylaw redline": "nav.bylawRedline",
-  "Bylaws history": "nav.bylawsHistory",
-  Filings: "nav.filings",
-  "Filing pre-fill": "nav.filingPrefill",
-  "Policy registry": "nav.policies",
-  "Records retention": "nav.recordsRetention",
-  "Records inspections": "nav.recordsInspections",
-  "Privacy (PIPA)": "nav.privacy",
-  "PIPA training": "nav.pipaTraining",
-  Insurance: "nav.insurance",
-  "Access custody": "nav.accessCustody",
-  "Public transparency": "nav.transparency",
-  Financials: "nav.financials",
-  "Year-end reports": "nav.yearEndReports",
-  Treasurer: "nav.treasurer",
-  Assets: "nav.assets",
-  Grants: "nav.grants",
-  Reconciliation: "nav.reconciliation",
-  "Donation receipts": "nav.donationReceipts",
-  "Membership & billing": "nav.membership",
-  "Browser apps": "nav.browserConnectors",
-  Workflows: "nav.workflows",
-  "Workflow runs": "nav.workflowRuns",
-  "Workflow packages": "nav.workflowPackages",
-  Notifications: "nav.notifications",
-  "Users & access": "nav.users",
-  "Import sessions": "nav.importSessions",
-  Settings: "nav.settings",
-  "Audit log": "nav.auditLog",
-  "Data export": "nav.dataExport",
-};
 
 
 type SidebarContextMenu = {
@@ -711,11 +649,7 @@ function renderNavItem(
           <Icon size={14} />
         </TintedIconTile>
         <span className="sidebar__label">{label}</span>
-        {count != null && (
-          <Pill size="sm" className="sidebar__count">
-            {count}
-          </Pill>
-        )}
+        {count != null ? <NavCountPill to={item.to} count={count} /> : counts === undefined ? <NavCountLoadingPill to={item.to} /> : null}
       </NavLink>
       {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
        * without needing right-click (desktop) or the command palette. A real
@@ -735,14 +669,64 @@ function renderNavItem(
 }
 
 
+/** What a sidebar count means, for its tooltip and screen readers. */
+function getCountDescription(to: string, count: number): string {
+  const n = (one: string, many: string) => `${count.toLocaleString()} ${count === 1 ? one : many}`;
+  switch (to) {
+    case "/app/members": return n("active member", "active members");
+    case "/app/directors": return n("active director", "active directors");
+    case "/app/meetings": return n("meeting this year", "meetings this year");
+    case "/app/filings": return n("overdue filing", "overdue filings");
+    case "/app/deadlines": return n("open deadline", "open deadlines");
+    case "/app/conflicts": return n("open conflict", "open conflicts");
+    case "/app/committees": return n("committee", "committees");
+    case "/app/goals": return n("open goal", "open goals");
+    case "/app/tasks": return n("open task", "open tasks");
+    default: return count.toLocaleString();
+  }
+}
+
+/** Sidebar count badge: the number is visual; the description is announced. */
+function NavCountPill({ to, count }: { to: string; count: number }) {
+  const description = getCountDescription(to, count);
+  return (
+    <Pill size="sm" className="sidebar__count" title={description}>
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">, {description}</span>
+    </Pill>
+  );
+}
+
+/** Routes whose sidebar entry carries a count badge. */
+const COUNTED_NAV_ROUTES = new Set([
+  "/app/members", "/app/directors", "/app/meetings", "/app/filings", "/app/deadlines",
+  "/app/conflicts", "/app/committees", "/app/goals", "/app/tasks",
+]);
+
+/**
+ * Placeholder while the counts load (A5): "0" before the workspace is read
+ * back looked like an empty register.
+ */
+function NavCountLoadingPill({ to }: { to: string }) {
+  if (!COUNTED_NAV_ROUTES.has(to)) return null;
+  return (
+    <Pill size="sm" className="sidebar__count sidebar__count--loading" title="Loading count">
+      <span aria-hidden="true">…</span>
+      <span className="sr-only">, loading count</span>
+    </Pill>
+  );
+}
+
 function getCount(to: string, counts: any): number | null {
   if (!counts) return null;
   switch (to) {
     case "/app/members": return counts.members;
     case "/app/directors": return counts.directors;
-    case "/app/meetings": return counts.meetingsThisYear;
+    // "Meetings 0" beside a register of 142 past meetings read as an empty
+    // register; the badge only appears when meetings are scheduled this year.
+    case "/app/meetings": return counts.meetingsThisYear || null;
     case "/app/filings": return counts.overdueFilings || null;
-    case "/app/deadlines": return counts.openDeadlines;
+    case "/app/deadlines": return counts.openDeadlines || null;
     case "/app/conflicts": return counts.openConflicts || null;
     case "/app/committees": return counts.committees || null;
     case "/app/goals": return counts.openGoals || null;
@@ -753,6 +737,7 @@ function getCount(to: string, counts: any): number | null {
 
 
 export {
+  NavCountLoadingPill,
   NotificationBellSafe,
   UserPickerSafe,
   THEME_OPTIONS,
@@ -785,6 +770,7 @@ export {
   getSidebarMenuPosition,
   renderNavItem,
   getCount,
+  NavCountPill,
 };
 
 export type {

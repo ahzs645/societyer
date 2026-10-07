@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { bodyQuorumRuleValidator } from "../validators/meetingModel";
 
 export const policyTables = {
   policies: defineTable({
@@ -31,7 +32,10 @@ export const policyTables = {
 
   conflicts: defineTable({
     societyId: v.id("societies"),
-    directorId: v.id("directors"),
+    // A1: optional so representatives who are not `directors` rows can declare.
+    directorId: v.optional(v.id("directors")),
+    personId: v.optional(v.id("peopleDirectory")),
+    personName: v.optional(v.string()),
     declaredAt: v.string(),
     contractOrMatter: v.string(),
     natureOfInterest: v.string(),
@@ -49,6 +53,8 @@ export const policyTables = {
     // showing the snapshot rather than attributing the recusal to the wrong
     // motion (this is a legal record).
     motionText: v.optional(v.string()),
+    // Stable link to the first-class motion (supersedes motionIndex).
+    motionId: v.optional(v.id("motions")),
   })
     .index("by_society", ["societyId"])
     .index("by_society_resolved", ["societyId", "resolvedAt"])
@@ -91,6 +97,10 @@ export const policyTables = {
     quorumType: v.string(), // fixed | percentage
     quorumValue: v.number(),
     quorumMinimumCount: v.optional(v.number()),
+    // A3: per-body quorum (general meetings, board, each committee). When a
+    // body has no rule here the society-wide quorumType/quorumValue applies to
+    // general meetings only, as before.
+    bodyQuorumRules: v.optional(v.array(bodyQuorumRuleValidator)),
     memberProposalThresholdPct: v.number(),
     memberProposalMinSignatures: v.number(),
     memberProposalLeadDays: v.number(),
@@ -177,10 +187,18 @@ export const policyTables = {
     status: v.string(),
     priority: v.string(),
     assignee: v.optional(v.string()),
+    // A1: the person responsible (people directory) and the assignee exactly
+    // as the source wrote it ("TG", "Gail / Deanna").
+    assigneePersonId: v.optional(v.id("peopleDirectory")),
+    sourceAssignee: v.optional(v.string()),
     responsibleUserIds: v.optional(v.array(v.id("users"))),
     dueDate: v.optional(v.string()),
     committeeId: v.optional(v.id("committees")),
     meetingId: v.optional(v.id("meetings")),
+    // B6: the agenda item the action came from.
+    agendaItemId: v.optional(v.id("agendaItems")),
+    // P5: external action ids of carried-forward duplicates folded into this task.
+    mergedExternalActionIds: v.optional(v.array(v.string())),
     goalId: v.optional(v.id("goals")),
     filingId: v.optional(v.id("filings")),
     workflowId: v.optional(v.id("workflows")),

@@ -17,6 +17,9 @@ import type { StaticArgs } from "./staticConvexFixtures";
 
 const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
+const LEGACY_UNTRACKED_READ_ID = "__societyer_legacy_dispatch_reads_every_table__";
+/** Queries whose `collectProjected` memos are rebuilt in the background after a restore. */
+const PROJECTION_WARMUP_QUERIES = ["documents:browse", "importSessions:pendingByTarget", "minutes:listSummaries"] as const;
 
 export type LocalActorChoice = {
   _id: string;
@@ -45,7 +48,43 @@ function warnLegacyFallback(
     );
     return;
   }
-  console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+  // Functions the portable manifest classifies as `static-fallback` are served
+  // by the local mirror on purpose (documented in the manifest); only an
+  // unclassified name is a real gap worth a console warning.
+  void knownStaticFallbacks().then((known) => {
+    if (known.has(name)) {
+      console.debug(`[societyer-local] "${name}" served by its local mirror (classified static-fallback in the portable manifest)`);
+    } else {
+      console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+    }
+  });
+}
+
+let staticFallbackNames: Promise<Set<string>> | null = null;
+/** Names classified `static-fallback`; the manifest is loaded only on the first fallback. */
+export function knownStaticFallbacks(): Promise<Set<string>> {
+  staticFallbackNames ??= import("../../shared/functions/portable-manifest.json")
+    .then((module: any) => {
+      const manifest = module.default ?? module;
+      return new Set<string>(
+        (manifest.functions ?? [])
+          .filter((entry: any) => entry?.classification === "static-fallback")
+          .map((entry: any) => String(entry.name)),
+      );
+    })
+    .catch(() => new Set<string>());
+  return staticFallbackNames;
+}
+
+/**
+ * Persisted `collectProjected` memos are reused only by the build that wrote
+ * them. In production this module's chunk URL carries a content hash that also
+ * changes whenever any statically imported chunk (the handler registry) does.
+ * Development (unhashed URLs, live edits) keeps memos in memory only.
+ */
+function projectionMemoNamespace() {
+  const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
+  return env?.PROD ? import.meta.url : undefined;
 }
 
 /** Local ConvexReactClient-compatible protocol shim. */
@@ -66,7 +105,7 @@ export class StaticConvexClient {
     principalProvider?: () => PortablePrincipal | Promise<PortablePrincipal>;
     trustedWorkspacePrincipal?: { runtime: RuntimeKind; subject: string };
   }) {
-    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
+    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, { ...options, projectionNamespace: projectionMemoNamespace() });
     this.clientUrl = options?.url ?? "static://societyer-demo";
     this.portable = new PortableRuntime({
       db: new LocalStoreDb(this.store.rowStore),
@@ -142,14 +181,45 @@ export class StaticConvexClient {
   /** Fire-and-forget metadata seed for every society in the demo store. */
   private async ensureRecordTableMetadata() {
     try {
+      // Wait for persisted rows: a restored or existing workspace is not in the
+      // store until hydration, and its field options (new status values, labels)
+      // would otherwise never be reconciled.
+      await this.store.whenHydrated();
       const societies = this.store.listRows("societies") ?? [];
       for (const society of societies as any[]) {
-        await this.seedRecordTableMetadataFor(society._id);
+        try {
+          await this.seedRecordTableMetadataFor(society._id);
+        } catch (error) {
+          // Previewing a role without settings:write (or a workspace the acting
+          // user is not in) is expected to skip; the next Owner/Admin load seeds it.
+          const message = error instanceof Error ? error.message : String(error);
+          if (/Permission [\w:]+ required|not a member|FORBIDDEN|Not authorized/i.test(message)) {
+            console.debug("[societyer-local] metadata auto-seed deferred for", society._id, "-", message);
+          } else {
+            console.warn("[societyer-local] metadata auto-seed skipped a workspace", society._id, error);
+          }
+        }
       }
       this.portableQueries.emit();
     } catch (error) {
       console.warn("[societyer-local] metadata auto-seed failed", error);
     }
+  }
+
+  /**
+   * convex/society.createWorkspace seeds the record-table metadata for the new
+   * society; offline, the definitions are bundled here, so seed right after the
+   * portable handler. Without it every record page in a freshly created
+   * workspace shows "Metadata not seeded".
+   */
+  private async afterCreateWorkspace<T>(value: T): Promise<T> {
+    try {
+      await this.seedRecordTableMetadataFor((value as any)?.societyId);
+      this.portableQueries.emit();
+    } catch (error) {
+      console.warn("[societyer-local] record-table metadata seed failed for the new workspace", error);
+    }
+    return value;
   }
 
   private async seedRecordTableMetadataFor(societyId: string) {
@@ -167,7 +237,11 @@ export class StaticConvexClient {
   private registerLegacyQuery(name: string) {
     if (this.portable.has(name)) throw new Error(`Function ${name} is not a query.`);
     this.portable.register(definePortableQuery({ name, applicationPolicy: true,
-      handler: async (_ctx, args) => {
+      handler: async (ctx, args) => {
+        // The legacy dispatcher reads the store directly, outside ctx.db, so the
+        // query cache cannot know its tables. Looking up an id that exists in
+        // no table marks the read set unbounded: it refreshes on every write.
+        await ctx.db.get(LEGACY_UNTRACKED_READ_ID);
         const { mutableQueryResult } = await import("./staticLegacyDispatch");
         return mutableQueryResult(name, args, this.store);
       },
@@ -218,29 +292,15 @@ export class StaticConvexClient {
         name === "seedRecordTableMetadata:ensureForSociety" && !(args as any)?.objects
           ? { ...(args ?? {}), objects: RECORD_TABLE_OBJECTS }
           : args ?? {};
-      return this.portable.runMutation(name, enriched);
+      const ran = this.portable.runMutation(name, enriched);
+      if (name === "society:createWorkspace") return ran.then((value) => this.afterCreateWorkspace(value));
+      return ran;
     }
     warnLegacyFallback(name, kind, "mutation");
     const result = this.portable.authorizeFunction(name, "mutation", args ?? {}).then(async () => {
       const { mutationResult } = await import("./staticLegacyDispatch");
       return mutationResult(name, args, this.store);
     });
-    if (name === "society:createWorkspace") {
-      // convex/society.createWorkspace seeds the record-table metadata for the
-      // new society (seedSociety). The offline mirror doesn't, and the one-shot
-      // seed in the constructor only covers societies that already existed — so
-      // without this every record page in a freshly created workspace shows
-      // "Metadata not seeded", which is the first thing setup hands the operator.
-      return result.then(async (value) => {
-        try {
-          await this.seedRecordTableMetadataFor((value as any)?.societyId);
-          this.portableQueries.emit();
-        } catch (error) {
-          console.warn("[societyer-local] record-table metadata seed failed for the new workspace", error);
-        }
-        return value;
-      });
-    }
     return result;
   }
 
@@ -306,7 +366,7 @@ export class StaticConvexClient {
       .filter((row: any) => row.societyId === societyId)
       .map((row: any) => ({
         _id: row._id,
-        displayName: row.displayName,
+        displayName: String(row.displayName ?? "").trim() || String(row.email ?? "").trim() || "Unnamed user",
         email: row.email,
         role: row.role,
         status: row.status,
@@ -324,12 +384,61 @@ export class StaticConvexClient {
     return () => { subscribed = false; unsubscribe(); };
   }
 
+  /**
+   * Synchronous snapshot for in-memory runtimes (Node scripts, tests). In the
+   * browser, heavy fields live in IndexedDB and this throws rather than return
+   * an incomplete backup: use `exportLocalWorkspaceSnapshotAsync()`.
+   */
   exportLocalWorkspaceSnapshot() {
+    return this.store.exportSnapshotSync();
+  }
+
+  /** Full workspace snapshot, heavy fields included (read back from IndexedDB). */
+  exportLocalWorkspaceSnapshotAsync() {
     return this.store.exportSnapshot();
   }
 
-  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
-    return this.store.importSnapshot(snapshot, files);
+  /** The workspace as table-by-table row batches, heavy fields loaded per batch (streaming ZIP backups). */
+  exportLocalWorkspaceSnapshotSource(batchSize?: number) {
+    return this.store.exportSnapshotSource(batchSize);
+  }
+
+  async importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
+    await this.store.importSnapshot(snapshot, files);
+    this.scheduleProjectionWarmup();
+  }
+
+  /**
+   * After a restore every memoized projection is stale. Rebuild the expensive
+   * ones (parsed document provenance, import-candidate queue items) in the
+   * background, a society at a time, so the first visit to Documents or Imports
+   * reads persisted memos instead of loading and parsing every document's
+   * content on the critical path. Failures (e.g. no access yet) are harmless.
+   */
+  private scheduleProjectionWarmup() {
+    if (typeof window === "undefined") return;
+    // Observable by the perf gate (scripts/check-local-workspace-perf.mjs).
+    const status = globalThis as { __SOCIETYER_PROJECTION_WARMUP__?: string };
+    status.__SOCIETYER_PROJECTION_WARMUP__ = "scheduled";
+    const run = async () => {
+      status.__SOCIETYER_PROJECTION_WARMUP__ = "running";
+      // Restored societies also need their record-table metadata; seed it now
+      // rather than during the first page load of the next session.
+      await this.ensureRecordTableMetadata();
+      for (const society of (this.store.listRows("societies") ?? []) as any[]) {
+        for (const name of PROJECTION_WARMUP_QUERIES) {
+          try {
+            await this.portable.runQuery(name, { societyId: society._id });
+          } catch {
+            // Warm-up only; the page computes on demand if this could not.
+          }
+        }
+      }
+      await this.store.rowStore.flushProjections();
+      status.__SOCIETYER_PROJECTION_WARMUP__ = "done";
+    };
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(() => void run(), { timeout: 5_000 });
+    else setTimeout(() => void run(), 1_000);
   }
 
   readRestoredWorkspaceFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {
@@ -337,6 +446,9 @@ export class StaticConvexClient {
   }
 
   getLocalWorkspaceAttachmentReferences() { return this.store.exportAttachmentReferences(); }
+
+  /** Browser workspace file store (local-indexeddb runtime): bytes saved on this device and exported in ZIP backups. */
+  saveLocalWorkspaceFile(blob: Blob, sha256: string, references: string[] = []) { return this.store.saveFile(blob, sha256, references); }
 
   /** In-place record migrations retain already saved binary files. */
   replaceLocalWorkspaceRecords(snapshot: LocalWorkspaceSnapshot) { return this.store.importSnapshot(snapshot, undefined, true); }

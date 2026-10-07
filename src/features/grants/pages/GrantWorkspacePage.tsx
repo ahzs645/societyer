@@ -8,6 +8,9 @@ import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { useCurrentUserId } from "../../../hooks/useCurrentUser";
 import { useSociety } from "../../../hooks/useSociety";
 import { useToast } from "../../../components/Toast";
+import { RecordNotFound } from "../../../components/RecordNotFound";
+import { useRecordQuery } from "../../../hooks/useRecordQuery";
+import { hasErrors, validateGrantInput, type FieldErrors } from "../../../../shared/recordValidation";
 import {
   buildGrantPayload,
   grantToDraft,
@@ -17,6 +20,7 @@ import {
   GrantReadPanel,
 } from "../components/GrantPanels";
 import { buildCsjOrientationEmailBody } from "../lib/csjOrientationEmail";
+import { LinkedAgreementsCard } from "../../agreements/LinkedAgreementsCard";
 
 export function GrantDetailPage() {
   return <GrantWorkspacePage />;
@@ -33,14 +37,14 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
-  const grant = useQuery(api.grants.get, id ? { id } : "skip");
+  const grant = useRecordQuery<any>(api.grants.get, id ? { id } : "skip");
   const reports = useQuery(api.grants.reports, society ? { societyId: society._id } : "skip");
   const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip");
   const users = useQuery(api.users.list, society && loaded && can("users:read") ? { societyId: society._id } : "skip");
   const accounts = useQuery(api.financialHub.accounts, society && loaded && can("financials:read") ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const employees = useQuery(api.employees.list, society && loaded && can("employees:read") ? { societyId: society._id } : "skip");
-  const employeeLinks = useQuery(api.grants.employeeLinks, society ? { societyId: society._id, grantId: id } : "skip");
+  const employeeLinks = useQuery(api.grants.employeeLinks, society && grant ? { societyId: society._id, grantId: id } : "skip");
   const secretVaultItems = useQuery(api.secrets.list, society && loaded && can("settings:read") ? { societyId: society._id } : "skip");
   const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
@@ -51,6 +55,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
   const [editing, setEditing] = useState(initialEditing);
   const [grantDraft, setGrantDraft] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     if (!grant) return;
@@ -61,19 +66,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
   if (society === null) return <SeedPrompt />;
   if (grant === undefined) return <div className="page">Loading…</div>;
   if (!grant || grant.societyId !== society._id) {
-    return (
-      <div className="page">
-        <Link to="/app/grants" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-          <ArrowLeft size={12} /> All grants
-        </Link>
-        <PageHeader
-          title="Grant not found"
-          icon={<BadgeDollarSign size={16} />}
-          iconColor="green"
-          subtitle="The grant could not be found in the current society."
-        />
-      </div>
-    );
+    return <RecordNotFound recordLabel="Grant" backTo="/app/grants" backLabel="All grants" icon={<BadgeDollarSign size={16} />} />;
   }
 
   const committee = (committees ?? []).find((row) => String(row._id) === String(grant.committeeId));
@@ -93,9 +86,16 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
 
   const saveGrant = async () => {
     if (!canWrite || !grantDraft) return;
+    const payload = buildGrantPayload(grantDraft, society._id, actingUserId);
+    const validation = validateGrantInput(payload);
+    setErrors(validation);
+    if (hasErrors(validation)) {
+      toast.error("Check the highlighted fields", Object.values(validation)[0]);
+      return;
+    }
     setSaving(true);
     try {
-      await upsertGrant(buildGrantPayload(grantDraft, society._id, actingUserId));
+      await upsertGrant(payload);
       toast.success("Grant saved");
       setEditing(false);
     } catch (error: any) {
@@ -224,6 +224,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
             <GrantEditorForm
               grantDraft={grantDraft}
               setGrantDraft={setGrantDraft}
+              errors={errors}
               committees={committees ?? []}
               users={users ?? []}
               accounts={accounts ?? []}
@@ -237,6 +238,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
       ) : (
         <GrantReadPanel key="read" {...sharedReadPanelProps} grant={grant} />
       )}
+      {!editing && <LinkedAgreementsCard table="grants" recordId={grant._id} title="Funding agreements" />}
     </div>
   );
 }

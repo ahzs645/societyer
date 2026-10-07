@@ -1,4 +1,7 @@
-import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
+import { resolveSourceMeetingRecord, changedSourceMinuteSections, splitPipeTables, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
+import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
+import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
+import { screenAttendanceName } from "../../../../shared/attendanceNames";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 import type { QuorumCheckpoint } from "../../../../shared/evidenceReview";
 import type { ActionObservation, ImportedSourceVersion } from "../../../../shared/meetingHistory";
@@ -9,6 +12,7 @@ import type { ActionObservation, ImportedSourceVersion } from "../../../../share
 // docx or PDF — it only emits HTML.
 
 import { escapeHtml } from "../../../lib/html";
+import { formatDueDate } from "../../../lib/format";
 import { renderMarkdownInline } from "../../../lib/markdown";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExportStyles";
 import { agendaSequenceLabel } from "./agendaNumbering";
@@ -83,6 +87,28 @@ type MinutesActionItem = {
   done: boolean;
 };
 
+/**
+ * People counted toward quorum: the attendance grid's present rows that count
+ * (staff, guests and regrets never do); plain attendee lists count everyone.
+ */
+function quorumPresentForExport(minutes: { attendees: string[]; detailedAttendance?: DetailedAttendance[] | null }): number {
+  const detailed = minutes.detailedAttendance ?? [];
+  if (detailed.length) return detailed.filter((row) => row?.status === "present" && row?.quorumCounted !== false).length;
+  return minutes.attendees.length;
+}
+
+/** Comparable motion wording: no "BE IT RESOLVED THAT", markup, case or spacing. */
+function motionWordingKey(text: unknown): string {
+  return String(text ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, " ")
+    .replace(/^\s*(?:be it (?:therefore )?resolved,?|resolved,?|moved|motion:?)\s*(?:that\s+)?/i, "")
+    .replace(/^\s*that\s+/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9$%]+/g, " ")
+    .trim();
+}
+
 type DetailedAttendance = {
   name: string;
   status: string;
@@ -114,8 +140,12 @@ export type MinutesRenderArgs = {
     // `agendaItems` continues to represent root titles only — sub-items never
     // become their own minute section, table row, or executive heading.
     agendaItemTree?: { title: string; depth: 0 | 1 }[];
+    /** IANA zone the meeting was held in; times render in it, not the viewer's. */
+    timeZone?: string | null;
   };
   minutes: {
+    /** "source_reviewed" once a reviewer checked an import against its source. */
+    sourceReviewStatus?: string | null;
     sourceMeetingRecord?: SourceMeetingRecord | null;
     sourceTransposition?: any;
     linkedTasks?: any[];
@@ -179,6 +209,8 @@ export type MinutesRenderArgs = {
     actionItems: MinutesActionItem[];
     approvedAt?: string | null;
     nextMeetingAt?: string | null;
+    /** A16: structured next meetings (board, committees…), each as recorded. */
+    nextMeetings?: Array<{ at?: string | null; dateText?: string | null; precision?: string | null; bodyLabel?: string | null; location?: string | null; notes?: string | null }> | null;
     nextMeetingLocation?: string | null;
     nextMeetingNotes?: string | null;
     sessionSegments?: {
@@ -242,7 +274,46 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
 };
 
 /** Build the body HTML for a meeting-minutes export. */
+// Rendering is synchronous; formatters read the meeting's zone from here.
+let renderTimeZone: string | undefined;
+function zoneOption(): { timeZone?: string } {
+  if (!renderTimeZone) return {};
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: renderTimeZone });
+    return { timeZone: renderTimeZone };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Once the minutes are reviewed against the source or adopted, the
+ * transposition's "Reported decision (source review pending):" labels are no
+ * longer true and must not print in the record. Stray source bullets go too.
+ */
+const PENDING_LABEL = /^\s*reported (?:decision|action) \(source review pending\)\s*:\s*/i;
+const SOURCE_BULLET = /^\s*[●•○▪]\s*/;
+function withoutPendingLabels(minutes: MinutesRenderArgs["minutes"]): MinutesRenderArgs["minutes"] {
+  const clean = (text: unknown) => String(text ?? "").replace(PENDING_LABEL, "").replace(SOURCE_BULLET, "");
+  const cleanItems = (items: any[] | undefined) => Array.isArray(items) ? items.map((item) => item && typeof item === "object" ? { ...item, text: clean(item.text) } : item) : items;
+  return {
+    ...minutes,
+    decisions: Array.isArray(minutes.decisions) ? minutes.decisions.map(clean) : minutes.decisions,
+    actionItems: cleanItems(minutes.actionItems as any[]) as any,
+    sections: Array.isArray(minutes.sections)
+      ? minutes.sections.map((section: any) => ({
+        ...section,
+        ...(Array.isArray(section.decisions) ? { decisions: section.decisions.map(clean) } : {}),
+        ...(Array.isArray(section.actionItems) ? { actionItems: cleanItems(section.actionItems) } : {}),
+      }))
+      : minutes.sections,
+  };
+}
+
 export function renderMinutesHtml(args: MinutesRenderArgs): string {
+  renderTimeZone = args.meeting?.timeZone || undefined;
+  const reviewedOrAdopted = Boolean(args.minutes.approvedAt) || (args.minutes as { sourceReviewStatus?: string }).sourceReviewStatus === "source_reviewed";
+  if (reviewedOrAdopted) args = { ...args, minutes: withoutPendingLabels(args.minutes) };
   if (isImportMetadataTranscript(args.minutes.draftTranscript)) args = {...args,minutes:{...args.minutes,draftTranscript:null}};
   const styleId = normalizeMinutesStyleId(args.styleId);
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
@@ -313,7 +384,9 @@ export function getMinutesStyleGaps({
       !!motion.secondedBy,
   );
   const common: MinutesDataGap[] = [
-    gap("Attendance list", minutes.attendees.length > 0, "Present attendees are structured.", "No present attendees are recorded."),
+    // F15: role words, organizations and headings ("Members", "Public Member")
+    // do not make an attendance list ready.
+    gap("Attendance list", minutes.attendees.some((name) => screenAttendanceName(name).kind === "person"), "Present attendees are structured.", minutes.attendees.length ? "Only role words, organizations or headings are listed as present — correct the attendance grid." : "No present attendees are recorded."),
     gap("Agenda items", agendaItems.length > 0, "Agenda headings can drive styled sections.", "Agenda items are not recorded on this meeting."),
     gap("Motions and outcomes", businessMotions.length > 0, "Motions can be rendered as resolutions or vote blocks.", "No structured motions are recorded."),
     gap(
@@ -385,7 +458,7 @@ export function getMinutesStyleGaps({
       ...common,
       gap("Meeting location and time range", hasAny(meeting.location, minutes.calledToOrderAt, minutes.adjournedAt), "The export can fill the sample-style Date / Time / Location line.", "Location or call-to-order/adjournment times are not fully recorded."),
       gap("Motion first/second details", motionHasVoteLanguage, "Motion blocks can render First and Second lines.", "Motions are missing mover/first or seconder details."),
-      gap("Next meeting details", hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes), "Next meeting details can render at the end of the minutes.", "No next meeting details are recorded."),
+      gap("Next meeting details", hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes) || Boolean(minutes.nextMeetings?.length), "Next meeting details can render at the end of the minutes.", "No next meeting details are recorded."),
     ];
   }
 
@@ -436,10 +509,7 @@ function renderStandardMinutes({
   minutes,
 }: MinutesRenderArgs, options: Required<MinutesExportOptions>): string {
   const eh = escapeHtml;
-  const held = new Date(minutes.heldAt).toLocaleString("en-CA", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
+  const held = formatLongDateTime(minutes.heldAt);
   const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
 
   const motionRow = (m: typeof minutes.motions[number]) => {
@@ -476,7 +546,7 @@ function renderStandardMinutes({
     <h2>Attendance</h2>
     ${renderAttendance(minutes)}
     <p>Quorum: ${minutesQuorumLabel(minutes)}${
-      minutes.quorumRequired != null ? ` · ${minutes.attendees.length} present / ${minutes.quorumRequired} required` : ""
+      minutes.quorumRequired != null ? ` · ${quorumPresentForExport(minutes)} present / ${minutes.quorumRequired} required` : ""
     }${minutes.quorumSourceLabel ? ` · Rule: ${eh(minutes.quorumSourceLabel)}` : ""}</p>
 
     ${renderMinuteSections(minutes.sections, options)}
@@ -515,7 +585,7 @@ function renderFormalAgmMinutes({
   const meetingKind = meeting.type === "AGM" ? "Annual General Meeting" : `${meeting.type} Meeting`;
   const chair = minutes.chairName ?? placeholder("Chair", options);
   const secretary = minutes.secretaryName ?? minutes.recorderName ?? placeholder("Secretary", options);
-  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
   const adjournedAt = displayDateOrText(minutes.adjournedAt);
   const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
   const nonAdjournmentMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
@@ -574,7 +644,7 @@ function renderExecutiveAgendaMinutes({
   // been recorded yet.
   const sectionRecords: Array<NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string }> =
     (minutes.sections ?? []).length ? (minutes.sections ?? []) : agenda.map((title) => ({ title }));
-  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
   const adjournedAt = displayDateOrText(minutes.adjournedAt);
   // Motions that no section claims still need to appear somewhere.
   const unplacedMotions = minutes.motions.filter(
@@ -637,11 +707,13 @@ function renderNumberedAgendaMinutes({
         (section, originalIndex) => ({ section: section as any, originalIndex }),
       );
   const date = formatLongDate(minutes.heldAt || meeting.scheduledAt);
-  const startTime = minutes.calledToOrderAt ? formatTime(minutes.calledToOrderAt) : formatTime(minutes.heldAt || meeting.scheduledAt);
+  const startTime = minutes.calledToOrderAt ? formatTime(minutes.calledToOrderAt) : timeOrUnrecorded(minutes.heldAt || meeting.scheduledAt);
   const endTime = minutes.adjournedAt ? formatTime(minutes.adjournedAt) : "";
   const timeRange = endTime ? `${startTime} - ${endTime}` : startTime;
   const location = meeting.location || minutes.nextMeetingLocation || placeholder("location", options);
-  const presentLine = minutes.attendees.length ? minutes.attendees.join(", ") : placeholder("attendees", options);
+  const alsoPresent = alsoPresentNames(minutes);
+  const presentNames = presentNamesWithRoles(minutes).filter((name) => !alsoPresent.includes(name));
+  const presentLine = presentNames.length ? presentNames.join(", ") : placeholder("attendees", options);
   const absentLine = minutes.absent.length ? minutes.absent.join(", ") : "";
   const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
   const topicMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
@@ -660,14 +732,19 @@ function renderNumberedAgendaMinutes({
     ),
   );
 
+  const lastSection = sections[sections.length - 1]?.section;
+  const closingAdjournmentPosition = lastSection && (lastSection.depth ?? 0) === 0 && /^\s*(?:\d+[.)]\s*)?adjourn/i.test(String(lastSection.title ?? "")) ? sections.length - 1 : -1;
+  const adjournmentBody = `${adjournmentMotion ? renderSampleMotion(adjournmentMotion) : ""}
+    ${minutes.adjournedAt || options.includePlaceholders ? `<p>The meeting was adjourned at ${eh(minutes.adjournedAt ? formatTime(minutes.adjournedAt) : placeholder("adjournment time", options))}.</p>` : "<p>There being no further business, the meeting was adjourned.</p>"}`;
   return `
     <h1>${eh(minutesTitleForSampleStyle(society.name, meeting))}</h1>
     <p><strong>Date:</strong> ${eh(date)} · <strong>Time:</strong> ${eh(timeRange)} · <strong>Location:</strong> ${eh(location)}</p>
 
     <h2>Attendees:</h2>
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
+    ${alsoPresent.length ? `<p><strong>Also present:</strong> ${eh(alsoPresent.join(", "))}</p>` : ""}
     ${absentLine ? `<p><strong>Absent / Regrets:</strong> ${eh(absentLine)}</p>` : ""}
-    <p>Quorum: ${minutesQuorumLabel(minutes)}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
+    <p>Quorum: ${minutesQuorumLabel(minutes)}${minutes.quorumRequired != null ? ` (${quorumPresentForExport(minutes)} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
     ${renderOfficialLine(minutes, options)}
     ${renderRemoteParticipation(minutes.remoteParticipation)}
 
@@ -681,7 +758,7 @@ function renderNumberedAgendaMinutes({
       // render under their parent with letter-numbered headings.
       let rootCount = 0;
       let childCount = 0;
-      return sections.map(({ section, originalIndex }) => {
+      return sections.map(({ section, originalIndex }, position) => {
         const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
         if (depth === 0 || rootCount === 0) {
           rootCount += 1;
@@ -690,15 +767,19 @@ function renderNumberedAgendaMinutes({
           childCount += 1;
         }
         const label = agendaSequenceLabel(rootCount, childCount, options.agendaNumberingMode);
-        return renderNumberedAgendaSection(label, originalIndex, section, minutes, topicMotions, options, depth);
+        const rendered = renderNumberedAgendaSection(label, originalIndex, section, minutes, topicMotions, options, depth);
+        // The agenda's own closing "Adjournment" item carries the adjournment
+        // record instead of a second, unnumbered "Adjournment" heading.
+        if (position !== closingAdjournmentPosition) return rendered;
+        // The section's own notes may already say when it adjourned.
+        const notesSayAdjourned = /\badjourn/i.test(String(section.discussion ?? ""));
+        return rendered + (notesSayAdjourned ? (adjournmentMotion ? renderSampleMotion(adjournmentMotion) : "") : adjournmentBody);
       }).join("");
     })()}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
     ${unplacedTopicMotions.length ? `<h2>Other Motions</h2>${unplacedTopicMotions.map(renderSampleMotion).join("")}` : ""}
 
-    <h2>Adjournment</h2>
-    ${adjournmentMotion ? renderSampleMotion(adjournmentMotion) : ""}
-    ${minutes.adjournedAt || options.includePlaceholders ? `<p>The meeting was adjourned at ${eh(minutes.adjournedAt ? formatTime(minutes.adjournedAt) : placeholder("adjournment time", options))}.</p>` : "<p>There being no further business, the meeting was adjourned.</p>"}
+    ${closingAdjournmentPosition < 0 ? `<h2>Adjournment</h2>${adjournmentBody}` : ""}
 
     ${options.includeDiscussionSummary ? renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
@@ -772,7 +853,7 @@ function renderBoardPublicMinutes({
       : ((meeting.agendaItems ?? []).length
           ? (meeting.agendaItems ?? []).map((title) => ({ title }))
           : ["Call to order", "Approval of the Agenda", "Minutes", "Reports", "Other Business", "Adjournment"].map((title) => ({ title })));
-  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
   const callToOrderSentence = `<p>${eh(minutes.chairName ?? placeholder("presiding officer", options))} called the meeting to order at ${eh(callTime)}.</p>`;
   // Attach the call-to-order line to the section actually about it, not
   // blindly to whichever section renders first.
@@ -792,7 +873,7 @@ function renderBoardPublicMinutes({
   return `
     <h1>${eh(meeting.title)}</h1>
     <p><strong>Public Session Minutes</strong></p>
-    <p class="meta">${eh(formatLongDate(minutes.heldAt))} · ${eh(formatTime(minutes.heldAt))}${meeting.location ? ` · ${eh(meeting.location)}` : ""}</p>
+    <p class="meta">${eh(formatLongDate(minutes.heldAt))}${formatTime(minutes.heldAt) ? ` · ${eh(formatTime(minutes.heldAt))}` : ""}${meeting.location ? ` · ${eh(meeting.location)}` : ""}</p>
     <p class="meta">${eh(society.name)}${society.incorporationNumber ? ` · ${eh(society.incorporationNumber)}` : ""}</p>
     ${renderSessionSegments(minutes.sessionSegments)}
     ${callToOrderIndex === -1 ? callToOrderSentence : ""}
@@ -844,7 +925,7 @@ function renderBoardPublicSection(
     decisions.length ? `<ul>${decisions.map((decision) => `<li>${eh(decision)}</li>`).join("")}</ul>` : "",
     matchingMotions.map(renderBoardMotion).join(""),
     options.includeActionItems && actionItems.length
-      ? `<p><strong>Action Items:</strong></p><ul>${actionItems.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>`
+      ? `<p><strong>Action Items:</strong></p><ul>${actionItems.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(exportDue(item.dueDate))})` : ""}</li>`).join("")}</ul>`
       : "",
   ].filter(Boolean).join("");
   return `
@@ -891,11 +972,13 @@ function renderExecutiveSection(
   const sectionActions = "actionItems" in section ? section.actionItems ?? [] : [];
   const bullets = [
     ...(presenter ? [`Presenter: ${presenter}`] : []),
-    ...(discussion ? [discussion] : []),
+    // One bullet per written line: the whole discussion as a single bullet
+    // ran every point together once HTML collapsed the newlines.
+    ...minutesTextForDisplay(discussion).split("\n").map((line) => line.replace(/^\s*(?:[-*+•●○]|\d+[.)])\s+/, "").trim()).filter(Boolean),
     ...decisions.map((decision) => `Decision: ${decision}`),
     ...matchingMotions.map(executiveMotionBullet),
     ...(options.includeActionItems
-      ? sectionActions.map((item) => `Action Item: ${item.assignee ? `${item.assignee} to ` : ""}${item.text}${item.dueDate ? ` by ${item.dueDate}` : ""}.`)
+      ? sectionActions.map((item) => `Action Item: ${item.assignee ? `${item.assignee} to ` : ""}${item.text}${item.dueDate ? ` by ${exportDue(item.dueDate)}` : ""}.`)
       : []),
   ];
   return `
@@ -927,7 +1010,7 @@ function renderNumberedAgendaSection(
     discussion ? renderMinutesMarkdownHtml(discussion) : "",
     decisions.length ? `<ul>${decisions.map((decision) => `<li>${eh(decision)}</li>`).join("")}</ul>` : "",
     matchingMotions.map(renderSampleMotion).join(""),
-    options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>` : "",
+    options.includeActionItems && matchingActions.length ? `<p><strong>Action Items:</strong></p><ul>${matchingActions.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(exportDue(item.dueDate))})` : ""}</li>`).join("")}</ul>` : "",
   ].filter(Boolean).join("");
 
   // Sub-sections drop down to <h3> so screen readers and Word's outline view
@@ -943,7 +1026,7 @@ function renderSampleMotion(motion: MinutesRenderArgs["minutes"]["motions"][numb
   const eh = escapeHtml;
   const normalizedOutcome = motion.outcome ? humanizeLabel(motion.outcome) : "Recorded";
   return `
-    <p><strong>Motion:</strong> ${eh(stripMotionLeadIn(motion.text))}</p>
+    <p><strong>Motion:</strong> ${eh(sampleMotionWording(motion.text))}</p>
     ${motion.movedBy ? `<p><strong>First:</strong> ${eh(motion.movedBy)}</p>` : ""}
     ${motion.secondedBy ? `<p><strong>Second:</strong> ${eh(motion.secondedBy)}</p>` : ""}
     <p><strong>Motion ${eh(normalizedOutcome)}</strong>${voteSummary(motion) ? ` (${eh(voteSummary(motion))})` : ""}</p>
@@ -963,12 +1046,51 @@ function renderSampleActionItems(actionItems: MinutesActionItem[], options: Requ
     <h2>Action Items</h2>
     ${Array.from(grouped.entries()).map(([assignee, items]) => `
       <p><strong>${escapeHtml(assignee)}:</strong></p>
-      <ul>${items.map((item) => `<li>${escapeHtml(item.text)}${item.dueDate ? ` (${escapeHtml(item.dueDate)})` : ""}${item.done ? " - Done" : ""}</li>`).join("")}</ul>
+      <ul>${items.map((item) => `<li>${escapeHtml(item.text)}${item.dueDate ? ` (${escapeHtml(exportDue(item.dueDate))})` : ""}${item.done ? " - Done" : ""}</li>`).join("")}</ul>
     `).join("")}
   `;
 }
 
+/** Present attendees as "Name (Role)" when the attendance grid records a role. */
+function presentNamesWithRoles(minutes: MinutesRenderArgs["minutes"]): string[] {
+  const roles = new Map<string, string>();
+  for (const row of minutes.detailedAttendance ?? []) {
+    if (row?.name && row.roleTitle) roles.set(String(row.name).trim().toLowerCase(), String(row.roleTitle).trim());
+  }
+  return minutes.attendees.map((name) => {
+    const role = roles.get(String(name).trim().toLowerCase());
+    return role ? `${name} (${role})` : name;
+  });
+}
+
+/** Staff and guests from the attendance grid, listed apart from the members present. */
+function alsoPresentNames(minutes: MinutesRenderArgs["minutes"]): string[] {
+  const rows = (minutes.detailedAttendance ?? []).filter((row) => row?.name && ["staff", "guest"].includes(String(row.status)));
+  const names = new Set(minutes.attendees.map((name) => String(name).trim().toLowerCase()));
+  return rows
+    .filter((row) => names.has(String(row.name).trim().toLowerCase()))
+    .map((row) => (row.roleTitle ? `${row.name} (${row.roleTitle})` : row.name));
+}
+
+/** One line per structured next meeting: when (as written), body, place, notes. */
+function nextMeetingLines(minutes: MinutesRenderArgs["minutes"]): string[] {
+  return (minutes.nextMeetings ?? []).map((row) => {
+    const when = row.dateText?.trim()
+      ? (row.at ? `${displayDateOrText(row.at) ?? row.at} (${row.dateText.trim()})` : row.dateText.trim())
+      : row.at ? displayDateOrText(row.at) ?? row.at : "Date not stated";
+    return [when, row.bodyLabel, row.location].filter((part) => hasText(part)).join(" · ") + (hasText(row.notes) ? ` — ${row.notes}` : "");
+  }).filter(Boolean);
+}
+
 function renderSampleNextMeeting(minutes: MinutesRenderArgs["minutes"], options: Required<MinutesExportOptions>) {
+  const structured = nextMeetingLines(minutes);
+  if (structured.length) {
+    return `
+    <h2>Next Meeting${structured.length > 1 ? "s" : ""}</h2>
+    <ul>${structured.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+    ${minutes.nextMeetingNotes ? `<p>${escapeHtml(minutes.nextMeetingNotes)}</p>` : ""}
+  `;
+  }
   if (!hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes)) {
     return options.includePlaceholders ? `<h2>Next Meeting</h2>${placeholderParagraph("next meeting details", options)}` : "";
   }
@@ -1008,7 +1130,7 @@ function renderActionTableCell(
   const eh = escapeHtml;
   if (index === 0) {
     return [
-      `Meeting started at ${eh(formatTime(minutes.heldAt))}`,
+      `Meeting started at ${eh(timeOrUnrecorded(minutes.heldAt))}`,
       `Quorum: ${minutesQuorumLabel(minutes)}`,
     ].join("<br/>");
   }
@@ -1205,8 +1327,20 @@ function renderMinuteSections(sections: MinutesRenderArgs["minutes"]["sections"]
     .join("");
 }
 
-function renderMinutesMarkdownHtml(value: string | undefined | null) {
-  const text = String(value ?? "").trim();
+/** Section text; pipe-table rows written by older imports ("Item | Discussion | Action") become a table. */
+function renderMinutesMarkdownHtml(value: string | undefined | null): string {
+  const segments = splitPipeTables(minutesTextForDisplay(value));
+  if (!segments.some((segment) => segment.kind === "table")) return renderMinutesProseHtml(value);
+  return segments.map((segment) => {
+    if (segment.kind === "text") return renderMinutesProseHtml(segment.text);
+    const head = segment.header ? `<thead><tr>${segment.rows[0].map((cell) => `<th>${renderMarkdownInline(cell)}</th>`).join("")}</tr></thead>` : "";
+    const body = (segment.header ? segment.rows.slice(1) : segment.rows).map((row) => `<tr>${row.map((cell) => `<td>${renderMarkdownInline(cell)}</td>`).join("")}</tr>`).join("");
+    return `<table class="source-table">${head}<tbody>${body}</tbody></table>`;
+  }).join("");
+}
+
+function renderMinutesProseHtml(value: string | undefined | null) {
+  const text = minutesTextForDisplay(value).trim();
   if (!text) return "";
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const hasMarkdownList = lines.some((line) => /^\s*(?:[-*+]|[o○●]|\d+[.)])\s+/.test(line));
@@ -1358,6 +1492,14 @@ function renderAgmDetails(agm: MinutesRenderArgs["minutes"]["agmDetails"], optio
 }
 
 function renderNextMeeting(minutes: MinutesRenderArgs["minutes"], options: Required<MinutesExportOptions>) {
+  const structured = nextMeetingLines(minutes);
+  if (structured.length) {
+    return `
+    <h2>Next Meeting${structured.length > 1 ? "s" : ""}</h2>
+    <ul>${structured.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+    ${minutes.nextMeetingNotes ? `<p>${escapeHtml(minutes.nextMeetingNotes)}</p>` : ""}
+  `;
+  }
   if (!hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes)) {
     return options.includePlaceholders ? renderOptionalSection("Next Meeting", placeholderParagraph("next meeting date and time", options), true, options) : "";
   }
@@ -1420,7 +1562,7 @@ function renderActionItemsTable(
           <tr>
             <td>${eh(a.text)}</td>
             <td>${eh(a.assignee ?? "—")}</td>
-            <td>${eh(a.dueDate ?? "—")}</td>
+            <td>${eh(a.dueDate ? exportDue(a.dueDate) : "—")}</td>
             <td>${a.done ? "Done" : "Open"}</td>
           </tr>
         `).join("")}
@@ -1642,6 +1784,7 @@ function displayDateOrText(value: string | null | undefined) {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      ...zoneOption(),
     });
   }
   return text;
@@ -1657,6 +1800,13 @@ function placeholderSentence(label: string, options: Required<MinutesExportOptio
 
 function placeholderParagraph(label: string, options: Required<MinutesExportOptions>) {
   return options.includePlaceholders ? `<p class="muted">[${escapeHtml(label)} not recorded]</p>` : "";
+}
+
+/** "BE IT RESOLVED THAT the agenda…" reads "That the agenda…" after "Motion:". */
+function sampleMotionWording(text: string) {
+  const stripped = stripMotionLeadIn(text);
+  if (/^\s*(?:be it\s+)?resolved,?\s+that\b/i.test(text) && /^[a-z]/.test(stripped)) return `That ${stripped}`;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
 function stripMotionLeadIn(text: string) {
@@ -1747,7 +1897,19 @@ function voteSummary(motion: MinutesRenderArgs["minutes"]["motions"][number]) {
   return `For ${motion.votesFor ?? 0} · Against ${motion.votesAgainst ?? 0} · Abstain ${motion.abstentions ?? 0}`;
 }
 
+/** A stored instant that only carries a calendar day (A13): the noon-UTC
+ *  placeholder or a bare YYYY-MM-DD. Never shown with a clock time. */
+function isDateOnlyValue(value: string | null | undefined) {
+  return isDateOnlyPlaceholder(value) || /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? "").trim());
+}
+
+/** Due dates in exports: ISO days read as "October 20, 2026"; text stays as written. */
+function exportDue(value: string) {
+  return formatDueDate(value, "MMMM d, yyyy");
+}
+
 function formatLongDateTime(value: string) {
+  if (isDateOnlyValue(value)) return formatLongDate(value);
   return new Date(value).toLocaleString("en-CA", {
     weekday: "long",
     year: "numeric",
@@ -1755,23 +1917,40 @@ function formatLongDateTime(value: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...zoneOption(),
   });
 }
 
 function formatLongDate(value: string) {
+  if (isDateOnlyValue(value)) {
+    // Format the calendar day itself; a time zone must not move it.
+    return new Date(`${String(value).slice(0, 10)}T12:00:00.000Z`).toLocaleDateString("en-CA", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
+    });
+  }
   return new Date(value).toLocaleDateString("en-CA", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
+    ...zoneOption(),
   });
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-CA", {
+  // Date-only meetings have no time; free text ("3:04 PM") is kept as written.
+  if (!value || isDateOnlyValue(value)) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).trim();
+  return date.toLocaleTimeString("en-CA", {
     hour: "numeric",
     minute: "2-digit",
+    ...zoneOption(),
   });
+}
+
+function timeOrUnrecorded(value: string) {
+  return formatTime(value) || "a time not recorded in the source";
 }
 
 function renderSourceDecisionEvidence(minutes: MinutesRenderArgs["minutes"], quorumOnly = false) {
@@ -1805,18 +1984,54 @@ function renderLiteralSourceText(text:string,links:Array<{text:string;url:string
  }
  pieces.push(escapeHtml(text.slice(cursor)));return pieces.join('').replace(/\n/g,'<br/>');
 }
+/** A block taken from the original's page header or footer (word/header1.xml …). */
+function isSourceHeaderFooterBlock(block:SourceMeetingBlock):boolean {
+ return /word\/(?:header|footer)\d*\.xml/i.test(String((block as any).sourceReference??''));
+}
+/** Source table column widths as percentages. Importers record OOXML twips
+ *  (e.g. [460, 2049, 7097, …]); rendering those as "%" overflowed the page and
+ *  collapsed continuation rows to one-character columns (F20). */
+export function sourceTableWidthPercents(widths:unknown):number[]|undefined {
+ if(!Array.isArray(widths)||!widths.length)return undefined;
+ const values=widths.map(value=>Number(value));
+ if(values.some(value=>!Number.isFinite(value)||value<0))return undefined;
+ const total=values.reduce((sum,value)=>sum+value,0);
+ if(total<=0)return undefined;
+ if(total<=100.5)return values;
+ return values.map(value=>Math.round(value/total*1000)/10);
+}
+/** Width for a source image: leading letterhead logos stay logo-sized and an
+ *  implausible page-wide width (a mis-read extent) never stretches it (F21). */
+function sourceImageWidthStyle(block:Extract<SourceMeetingBlock,{kind:'image'}>,leading:boolean):string {
+ const width=Number((block as any).width);
+ if(leading)return `width:${Number.isFinite(width)&&width>0&&width<=192?Math.max(1,width):168}px;`;
+ if(!Number.isFinite(width)||width<=0)return '';
+ return `width:${Math.min(Math.max(1,width),576)}px;`;
+}
 export function renderSourceMeetingBlocks(blocks:SourceMeetingBlock[]):string {
- return blocks.map(block=>{
+ const firstTextIndex=blocks.findIndex(block=>(block.kind==='paragraph'||block.kind==='heading')&&!isSourceHeaderFooterBlock(block)&&String((block as any).text??'').trim());
+ // Page-header text (a "DRAFT" watermark repeated in header1/2/3.xml) is shown
+ // once as a watermark marker, not as repeated body headings (F21).
+ const seenHeaderText=new Set<string>();
+ return blocks.map((block,blockIndex)=>{
   if(block.kind==='page_break')return '<div style="page-break-before:always; break-before:page;"></div>';
+  if((block.kind==='heading'||block.kind==='paragraph')&&isSourceHeaderFooterBlock(block)){
+   const text=String((block as any).text??'').trim();
+   if(!text||seenHeaderText.has(text.toLowerCase()))return '';
+   seenHeaderText.add(text.toLowerCase());
+   return `<p class="source-watermark" data-source-watermark="true" style="text-align:center;color:#b3b3b3;font-size:16pt;font-weight:bold;letter-spacing:6pt;margin:0 0 6pt;" title="Page header or watermark in the original">${escapeHtml(text)}</p>`;
+  }
   if(block.kind==='image'){
-   const url=sourceImageUrl(block.dataUrl??block.url);const description=[block.alt,block.caption].filter(Boolean).join(' · ');
-   return `<figure>${url?`<img src="${escapeHtml(url)}" alt="${escapeHtml(block.alt??'Source image')}" style="max-width:100%;height:auto;${block.width?`width:${Math.max(1,block.width)}px;`:''}" />`:''}${description?`<p class="meta">${escapeHtml(description)}</p>`:''}${!url?'<p class="meta">Source image is retained with the original document.</p>':''}</figure>`;
+   const url=sourceImageUrl(block.dataUrl??block.url);const description=[block.caption].filter(Boolean).join(' · ');
+   const leading=firstTextIndex<0||blockIndex<firstTextIndex;
+   return `<figure>${url?`<img src="${escapeHtml(url)}" alt="${escapeHtml(block.alt??'Source image')}" style="max-width:100%;height:auto;${sourceImageWidthStyle(block,leading)}" />`:''}${description?`<p class="meta">${escapeHtml(description)}</p>`:''}${!url?'<p class="meta">Source image is retained with the original document.</p>':''}</figure>`;
   }
   if(block.kind==='table'){
+   const percents=sourceTableWidthPercents(block.widths);
    return `<table data-variant="source" style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody>${block.rows.map(row=>`<tr>${row.cells.map((cell,index)=>{
     const tag=cell.header?'th':'td';const paragraphs=cell.paragraphs?.length?cell.paragraphs:[cell.text];
     const contents=cell.blocks?.length?renderSourceMeetingBlocks(cell.blocks):paragraphs.map(text=>`<p style="white-space:pre-wrap;margin:0 0 3pt;">${escapeHtml(text).replace(/\n/g,'<br/>')}</p>`).join('');
-    return `<${tag}${cell.colSpan&&cell.colSpan>1?` colspan="${cell.colSpan}"`:''}${cell.rowSpan&&cell.rowSpan>1?` rowspan="${cell.rowSpan}"`:''} style="vertical-align:top;border:1px solid #777;padding:4pt;${block.widths?.[index]?`width:${block.widths[index]}%;`:''}">${contents}</${tag}>`;
+    return `<${tag}${cell.colSpan&&cell.colSpan>1?` colspan="${cell.colSpan}"`:''}${cell.rowSpan&&cell.rowSpan>1?` rowspan="${cell.rowSpan}"`:''} style="vertical-align:top;border:1px solid #777;padding:4pt;${percents?.[index]?`width:${percents[index]}%;`:''}">${contents}</${tag}>`;
    }).join('')}</tr>`).join('')}</tbody></table>`;
   }
   if(block.kind==='heading'){const level=Math.max(1,Math.min(6,block.level??2));return `<h${level}>${renderLiteralSourceText(block.text,block.links)}</h${level}>`;}
@@ -1845,7 +2060,7 @@ function renderSourceFidelityMinutes(args:MinutesRenderArgs,record:SourceMeeting
  const supplements=changed.length?`<section class="current-minute-additions"><h2>Current minute additions and edits</h2><p class="meta">These editable records supplement the retained source wording.</p>${renderMinuteSections(changed,{...options,includeActionItems:true})}${renderUnrepresentedSectionDetails({...args.minutes,sections:changed},renderMinuteSections(changed,{...options,includeActionItems:true}),options)}</section>`:'';
  const structuredExtras=renderNewStructuredMinuteInformation(args.minutes,record,options);
  return `<article data-minutes-style="${escapeHtml(styleId)}" data-source-fidelity="true" class="source-fidelity source-fidelity-${escapeHtml(styleId)}">
-  <p class="meta">${escapeHtml(record.sourceKind==='recorded_minutes'?'Source recreation · imported minutes pending review':'Source recreation · proposed script, agenda or template wording')}${args.minutes.approvedAt?' · Adoption is recorded separately.':' · No approval is inferred.'}</p>
+  <p class="meta">${escapeHtml(record.sourceKind==='recorded_minutes'?((args.minutes as { sourceReviewStatus?: string }).sourceReviewStatus==='source_reviewed'?'Source recreation · imported minutes, reviewed against the source':'Source recreation · imported minutes pending review'):'Source recreation · proposed script, agenda or template wording')}${args.minutes.approvedAt?' · Adoption is recorded separately.':' · No approval is inferred.'}</p>
   ${sourceDocuments}${supplements}${structuredExtras}${renderMeetingHistory(args.minutes, options)}
   ${options.includeApprovalBlock?renderApprovalBlock(args.minutes,options):''}
   ${options.includeSignatures&&options.signatures.length?renderSignatureBlock(options.signatures):''}
@@ -1855,10 +2070,13 @@ function renderSourceFidelityMinutes(args:MinutesRenderArgs,record:SourceMeeting
 function renderUnrepresentedSectionDetails(minutes:MinutesRenderArgs['minutes'],existingHtml:string,options:Required<MinutesExportOptions>):string {
  const content=(minutes.sections??[]).map(section=>{
   const parts:string[]=[];
-  if(section.motionText&&!existingHtml.includes(escapeHtml(section.motionText)))parts.push(`<p><strong>${section.sourceKind&&section.sourceKind!=='recorded_minutes'?'Proposed motion wording':'Motion wording'}:</strong> ${escapeHtml(section.motionText)}</p>`);
+  // A section's motion wording already rendered as a motion (often with its
+  // "BE IT RESOLVED THAT" trimmed) is not repeated after the signatures.
+  const wordingShown=!!section.motionText&&(existingHtml.includes(escapeHtml(section.motionText))||(motionWordingKey(section.motionText).length>0&&motionWordingKey(existingHtml).includes(motionWordingKey(section.motionText))));
+  if(section.motionText&&!wordingShown)parts.push(`<p><strong>${section.sourceKind&&section.sourceKind!=='recorded_minutes'?'Proposed motion wording':'Motion wording'}:</strong> ${escapeHtml(section.motionText)}</p>`);
   const tasks=(section.linkedTaskIds??[]).map(id=>{
    const task=minutes.linkedTasks?.find(row=>row._id===id||row.id===id);
-   return `<li>${escapeHtml(task?.title??id)}${task?.description?` — ${escapeHtml(task.description)}`:''}${task?.dueDate?` · Due ${escapeHtml(task.dueDate)}`:''}${task?.status?` · ${escapeHtml(task.status)}`:''}</li>`;
+   return `<li>${escapeHtml(task?.title??id)}${task?.description?` — ${escapeHtml(task.description)}`:''}${task?.dueDate?` · Due ${escapeHtml(exportDue(task.dueDate))}`:''}${task?.status?` · ${escapeHtml(task.status)}`:''}</li>`;
   });
   if(tasks.length)parts.push(`<h3>Linked actions</h3><ul>${tasks.join('')}</ul>`);
   if(!parts.length)return '';
@@ -1867,6 +2085,51 @@ function renderUnrepresentedSectionDetails(minutes:MinutesRenderArgs['minutes'],
  }).filter(Boolean);
  return content.join('');
 }
+const CHANGE_FIELD_LABELS: Record<string, string> = {
+ detailedAttendance: 'Attendance details', attendees: 'Present', absent: 'Regrets / absent', chairName: 'Chair',
+ secretaryName: 'Secretary', recorderName: 'Recorder', calledToOrderAt: 'Called to order', adjournedAt: 'Adjourned',
+ remoteParticipation: 'Remote participation', nextMeetingAt: 'Next meeting', nextMeetingLocation: 'Next meeting location',
+ nextMeetingNotes: 'Next meeting notes', sessionSegments: 'Session segments', appendices: 'Appendices', quorumStatus: 'Quorum',
+};
+/** Reader-facing label for a corrected field ("detailedAttendance" → "Attendance details"). */
+function changeFieldLabel(field: string): string {
+ return CHANGE_FIELD_LABELS[field] ?? humanizeLabel(field.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
+}
+/** One-line, human-readable description of a corrected field. */
+function describeFieldChange(field: string, before: any, after: any): string {
+ const blank = (value: any) => value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+ const text = (value: any) => blank(value) ? '(blank)' : typeof value === 'string' ? value : String(value);
+ const nameOf = (row: any) => typeof row === 'string' ? row : String(row?.name ?? row?.title ?? '').trim();
+ if (Array.isArray(before) || Array.isArray(after)) {
+  const beforeRows = Array.isArray(before) ? before : [];
+  const afterRows = Array.isArray(after) ? after : [];
+  const beforeNames = beforeRows.map(nameOf).filter(Boolean);
+  const afterNames = afterRows.map(nameOf).filter(Boolean);
+  const key = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+  const beforeKeys = new Set(beforeNames.map(key));
+  const afterKeys = new Set(afterNames.map(key));
+  const added = afterNames.filter((name) => !beforeKeys.has(key(name)));
+  const removed = beforeNames.filter((name) => !afterKeys.has(key(name)));
+  const parts: string[] = [];
+  if (added.length) parts.push(`added ${added.join(', ')}`);
+  if (removed.length) parts.push(`removed ${removed.join(', ')}`);
+  if (!parts.length) {
+   const statusChanges = afterRows.filter((row: any) => {
+    const prior = beforeRows.find((candidate: any) => key(nameOf(candidate)) === key(nameOf(row)));
+    return prior && typeof prior === 'object' && typeof row === 'object' && JSON.stringify(prior) !== JSON.stringify(row);
+   }).length;
+   parts.push(statusChanges ? `${statusChanges} entr${statusChanges === 1 ? 'y' : 'ies'} updated (status, role or affiliation)` : 'reordered or reformatted');
+  }
+  return `${parts.join('; ')} (now ${afterRows.length}, was ${beforeRows.length})`;
+ }
+ if ((before && typeof before === 'object') || (after && typeof after === 'object')) {
+  const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])];
+  const changed = keys.filter((k) => JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after?.[k] ?? null) && !(blank(before?.[k]) && blank(after?.[k])));
+  return changed.length ? changed.map((k) => `${humanizeLabel(k)} ${text(before?.[k])} → ${text(after?.[k])}`).join('; ') : 'reformatted';
+ }
+ return `${text(before)} → ${text(after)}`;
+}
+
 function renderNewStructuredMinuteInformation(minutes:MinutesRenderArgs['minutes'],record:SourceMeetingRecord,options:Required<MinutesExportOptions>):string {
  const source=record.documents.map(document=>document.fullText).join('\n');
  const normalized=(value:string)=>value.replace(/\s+/g,' ').trim();
@@ -1885,8 +2148,11 @@ function renderNewStructuredMinuteInformation(minutes:MinutesRenderArgs['minutes
  const listFields=new Set(['detailedAttendance','attendees','absent','sessionSegments','appendices']);
  const comparableField=(field:string,value:any)=>listFields.has(field)&&(value==null||(Array.isArray(value)&&value.length===0))?null:value??null;
  const revisedFields=baseline?Object.keys(baseline.details).filter(field=>JSON.stringify(comparableField(field,(minutes as any)[field]))!==JSON.stringify(comparableField(field,baseline.details[field]))):[];
- const displayField=(value:any):string=>typeof value==='string'?value:value===null||value===undefined?'Cleared':Array.isArray(value)?value.map(displayField).join('; '):typeof value==='object'?Object.entries(value).map(([key,item])=>`${humanizeLabel(key)}: ${displayField(item)}`).join('; '):String(value);
- const fieldChanges=revisedFields.length?`<h2>Current record changes</h2><table>${revisedFields.map(field=>`<tr><th>${escapeHtml(humanizeLabel(field))}</th><td>${escapeHtml(displayField((minutes as any)[field]))}</td></tr>`).join('')}</table>`:'';
+ // Human-readable "changes since import" (F21): what changed, not a dump of
+ // every nested field. Internal copies only; public copies never carry it.
+ const fieldChanges=revisedFields.length&&!options.publicCopy&&!options.publicOnly
+  ?`<h2>Changes since import</h2><p class="meta">Corrections made in Societyer after the source was imported. The source wording is retained above.</p><ul>${revisedFields.map(field=>`<li><strong>${escapeHtml(changeFieldLabel(field))}:</strong> ${escapeHtml(describeFieldChange(field,baseline!.details[field],(minutes as any)[field]))}</li>`).join('')}</ul>`
+  :'';
  const extras=[fieldChanges,removals.length?`<h2>Items changed or removed from the editable record</h2><p class="meta">The original source wording remains retained above.</p>${renderList(removals)}`:'',extraDecisions.length?`<h2>Current decisions</h2>${renderDecisionsList(extraDecisions,options)}`:'',extraActions.length?`<h2>Current actions</h2>${renderActionItemsTable(extraActions,options)}`:'',extraMotions.length?`<h2>Current motions</h2>${extraMotions.map(renderSampleMotion).join('')}`:'',renderSourceDecisionEvidence(minutes)];
  return extras.filter(Boolean).join('');
 }
@@ -1908,7 +2174,7 @@ function renderMeetingHistory(minutes: MinutesRenderArgs["minutes"], options: Re
     ${minutes.actionObservations.map((row) => `<div class="historical-action">
       <h3>${eh(row.text)}</h3>
       <p><strong>Status:</strong> ${eh(actionLabels[row.status] ?? "Unknown")} · <strong>As of:</strong> ${unknown(row.statusAsOf)}</p>
-      <p><strong>Assignee:</strong> ${unknown(row.assignee)} · <strong>Assigned:</strong> ${unknown(row.dateAssigned)} · <strong>Due:</strong> ${unknown(row.dueDate)}</p>
+      <p><strong>Assignee:</strong> ${unknown(row.assignee)} · <strong>Assigned:</strong> ${unknown(row.dateAssigned)} · <strong>Due:</strong> ${unknown(row.dueDate ? exportDue(row.dueDate) : row.dueDate)}</p>
       ${paragraph("Source action reference", row.sourceActionId)}
       <p class="meta"><strong>Action identity:</strong> ${eh(row.actionKey)} · <strong>Observation:</strong> ${eh(row.entryId)}</p>
       ${paragraph("Source status wording", row.sourceStatus)}

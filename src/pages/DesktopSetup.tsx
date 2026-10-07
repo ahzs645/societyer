@@ -31,9 +31,11 @@ import {
   downloadLocalWorkspaceZip,
   getLocalWorkspaceSnapshot,
   importLocalWorkspaceSnapshotFile,
+  preferredRestoredSocietyId,
 } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { setStoredSocietyId } from "../hooks/useSociety";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
 const WORKSPACE_CHANGED_KEY = "societyer.desktop.workspaceChanged";
@@ -96,7 +98,7 @@ export function DesktopSetupPage() {
     setBusy("workspace");
     setWorkspaceSnapshotOffer(null);
     try {
-      const snapshot = getLocalWorkspaceSnapshot();
+      const snapshot = await getLocalWorkspaceSnapshot();
       if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
       await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));
       const selected = await bridge.chooseWorkspaceDirectory();
@@ -141,7 +143,9 @@ export function DesktopSetupPage() {
     if (!file) return;
     setBusy("import");
     try {
-      await importLocalWorkspaceSnapshotFile(file);
+      const snapshot = await importLocalWorkspaceSnapshotFile(file);
+      const restoredSocietyId = preferredRestoredSocietyId(snapshot);
+      if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       setStatusMessage("Local workspace data import completed.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Local data import failed.");
@@ -159,7 +163,9 @@ export function DesktopSetupPage() {
         "records-snapshot.json",
         { type: "application/json" },
       );
-      await importLocalWorkspaceSnapshotFile(file);
+      const snapshot = await importLocalWorkspaceSnapshotFile(file);
+      const restoredSocietyId = preferredRestoredSocietyId(snapshot);
+      if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       setWorkspaceSnapshotOffer(null);
       setStatusMessage("Records from the workspace snapshot were imported.");
     } catch (error) {

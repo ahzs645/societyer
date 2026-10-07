@@ -17,6 +17,7 @@ import { incorporationPreparationForOrganization } from "../../shared/incorporat
 import { incorporationWorksheetText, incorporationWorksheetFileName } from "../../shared/incorporationWorksheet";
 import { isCorporation } from "../../shared/organizationDomain";
 import { triggerBlobDownload } from "../lib/zip";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -122,7 +123,7 @@ export function DocumentCatalogPage() {
     setBusyKey(t._id);
     setGenerationError(null);
     try {
-      await generate({ societyId: society._id, packetKey: key, effectiveDate: new Date().toISOString().slice(0, 10) });
+      await generate({ societyId: society._id, packetKey: key, effectiveDate: todayDateOnly() });
       setDoneKey(t._id);
       setTimeout(() => setDoneKey(null), 4000);
     } catch (error: any) {

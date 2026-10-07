@@ -30,6 +30,8 @@ const MeetingEvidencePage = React.lazy(() => import("./pages/EvidenceRegisters")
 const FinanceImportsPage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.FinanceImportsPage })));
 const RecordsArchivePage = React.lazy(() => import("./pages/EvidenceRegisters").then((m) => ({ default: m.RecordsArchivePage })));
 const ImportSessionsPage = React.lazy(() => import("./pages/ImportSessions").then((m) => ({ default: m.ImportSessionsPage })));
+const IntakeRunsPage = React.lazy(() => import("./pages/IntakeRuns").then((m) => ({ default: m.IntakeRunsPage })));
+const IntakeReviewPage = React.lazy(() => import("./pages/IntakeReview").then((m) => ({ default: m.IntakeReviewPage })));
 const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ default: m.MembersPage })));
 const MemberDetailPage = React.lazy(() => import("./pages/MemberDetail").then((m) => ({ default: m.MemberDetailPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
@@ -88,6 +90,8 @@ const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) =>
 const InspectionsPage = React.lazy(() => import("./pages/Inspections").then((m) => ({ default: m.InspectionsPage })));
 const AttestationsPage = React.lazy(() => import("./pages/Attestations").then((m) => ({ default: m.AttestationsPage })));
 const RetentionPage = React.lazy(() => import("./pages/Retention").then((m) => ({ default: m.RetentionPage })));
+const AgreementsPage = React.lazy(() => import("./pages/Agreements").then((m) => ({ default: m.AgreementsPage })));
+const AgreementDetailPage = React.lazy(() => import("./pages/AgreementDetail").then((m) => ({ default: m.AgreementDetailPage })));
 const InsurancePage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePage })));
 const InsurancePolicyDetailPage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePolicyDetailPage })));
 const SecretsPage = React.lazy(() => import("./pages/Secrets").then((m) => ({ default: m.SecretsPage })));
@@ -132,7 +136,7 @@ const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages")
 const RoleHoldersPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RoleHoldersPage })));
 const PointInTimeRegisterPage = React.lazy(() => import("./pages/PointInTimeRegister").then((m) => ({ default: m.PointInTimeRegisterPage })));
 const SignificantIndividualsPage = React.lazy(() => import("./pages/SignificantIndividuals").then((m) => ({ default: m.SignificantIndividualsPage })));
-const SourceModelCoveragePage = React.lazy(()=>import("./pages/SourceModelCoverage").then(m=>({default:m.SourceModelCoveragePage})));
+const CoverageGapsPage = React.lazy(() => import("./pages/CoverageGaps").then((m) => ({ default: m.CoverageGapsPage })));
 const PersonReviewPage = React.lazy(() => import("./pages/PersonHistory").then(m => ({default:m.PersonReviewPage})));
 const PersonProfilePage = React.lazy(() => import("./pages/PersonHistory").then(m => ({default:m.PersonProfilePage})));
 const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").then((m) => ({ default: m.PeopleDirectoryPage })));
@@ -394,7 +398,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="significant-individuals" element={<SignificantIndividualsPage />} />
             <Route path="people-directory" element={<PeopleDirectoryPage />} />
             <Route path="people-history" element={<PersonReviewPage />} />
-            <Route path="source-model-coverage" element={<SourceModelCoveragePage />} />
+            <Route path="source-model-coverage" element={<Navigate to="/app/coverage?tab=system" replace />} />
+            <Route path="coverage" element={<CoverageGapsPage />} />
             <Route path="people-directory/:id" element={<PersonProfilePage />} />
             <Route path="dividends" element={<DividendsPage />} />
             <Route path="service-providers" element={<ServiceProvidersPage />} />
@@ -413,6 +418,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="finance-imports" element={<FinanceImportsPage />} />
             <Route path="records-archive" element={<RecordsArchivePage />} />
             <Route path="imports" element={<ImportSessionsPage />} />
+            <Route path="intake" element={<IntakeRunsPage />} />
+            <Route path="intake/:runId/review" element={<IntakeReviewPage />} />
             <Route path="members" element={<MembersPage />} />
             <Route path="members/:id" element={<MemberDetailPage />} />
             <Route path="directors" element={<DirectorsPage />} />
@@ -529,6 +536,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="insurance/:id"
               element={withModule("insurance", <InsurancePolicyDetailPage />)}
+            />
+            <Route
+              path="agreements"
+              element={withModule("agreements", <AgreementsPage />)}
+            />
+            <Route
+              path="agreements/:id"
+              element={withModule("agreements", <AgreementDetailPage />)}
             />
             <Route
               path="access-custody"
