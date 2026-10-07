@@ -105,6 +105,8 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await expect(memberForm).toHaveCount(0);
   await expect(page.getByText("Audit", { exact: true }).first()).toBeVisible();
   await page.goto("/app/users");
+  // Guided setup leaves contacts blank; the seeded Owner still has a name.
+  await expect(page.getByRole("button", { name: "Role for Owner", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add user", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill("Interface Member");
   await page.getByLabel("Email", { exact: true }).fill("interface-member@example.test");
