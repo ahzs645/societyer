@@ -14,6 +14,7 @@
  * Convex-coupled access modules. Logic preserved exactly.
  */
 
+import { assertValid, validateDocumentInput } from "../recordValidation";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
   getOwned,
@@ -391,8 +392,10 @@ export async function createPortable(
   if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
   if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   if (args.agendaItemId) await getOwned(ctx, "agendaItems", args.agendaItemId, args.societyId);
+  assertValid(validateDocumentInput(args));
   return ctx.db.insert("documents", {
     ...args,
+    title: args.title.trim(),
     tags: uniqueStrings(args.tags),
     createdAtISO: new Date().toISOString(),
     flaggedForDeletion: false,

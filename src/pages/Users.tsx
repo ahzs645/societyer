@@ -13,6 +13,7 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
 import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
+import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 
@@ -37,6 +38,7 @@ export function UsersPage() {
   const assignableRoles = myRole === "Owner" ? ROLES : ROLES.filter((role) => !["Owner", "Admin"].includes(role));
   const [draft, setDraft] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [draftErrors, setDraftErrors] = useState<FieldErrors>({});
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -114,7 +116,7 @@ export function UsersPage() {
         </div>
         {!permissionsLoaded && <p role="status" className="muted">Checking workspace access…</p>}
         {permissionsLoaded && !canViewRoster && <p role="status" className="muted">Your role does not permit viewing the workspace roster. Your own access is shown above.</p>}
-        {canViewRoster && <table className="table">
+        {canViewRoster && <table className="table users-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -133,11 +135,11 @@ export function UsersPage() {
               const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
               return (
               <tr key={u._id}>
-                <td>
+                <td data-label="Name">
                   <strong>{u.displayName}</strong>
                 </td>
-                <td className="mono">{u.email}</td>
-                <td title={isLastOwner ? lastOwnerHint : undefined}>
+                <td className="mono" data-label="Email">{u.email}</td>
+                <td data-label="Role" title={isLastOwner ? lastOwnerHint : undefined}>
                   <Select
                     value={u.role}
                     disabled={isLastOwner || !mayManage}
@@ -160,12 +162,12 @@ export function UsersPage() {
                     options={assignableRoles.map((r) => ({ value: r, label: r }))}
                   />
                 </td>
-                <td>
+                <td data-label="Status">
                   <Badge tone={u.status === "Active" ? "success" : u.status === "Invited" ? "warn" : "neutral"}>
                     {u.status ?? "Active"}
                   </Badge>
                 </td>
-                <td className="mono">{u.lastLoginAtISO ?? "—"}</td>
+                <td className="mono" data-label="Last login">{u.lastLoginAtISO ?? "—"}</td>
                 <td>
                   {canManageUsers && <button className="btn btn--ghost btn--sm" aria-label={`View access for ${u.displayName}`} aria-pressed={selectedUserId === u._id} onClick={() => setSelectedUserId(u._id)}><ShieldCheck size={12} /> Access</button>}
                   {mayManage && <button className="btn btn--ghost btn--sm" onClick={() => setDraft(u)}>Edit access</button>}
@@ -246,7 +248,7 @@ export function UsersPage() {
 
       <Drawer
         open={!!draft}
-        onClose={() => setDraft(null)}
+        onClose={() => { setDraft(null); setDraftErrors({}); }}
         title={draft?._id ? "Edit user" : "Add user"}
         footer={
           <>
@@ -256,19 +258,22 @@ export function UsersPage() {
               disabled={saving}
               onClick={async () => {
                 if (saving) return;
+                const validation = validateWorkspaceUserInput(draft, users ?? [], draft._id);
+                setDraftErrors(validation);
+                if (hasErrors(validation)) return;
                 setSaving(true);
                 try {
                   await upsert({
                     id: draft._id,
                     societyId: society._id,
-                    email: draft.email,
-                    displayName: draft.displayName,
+                    email: String(draft.email ?? "").trim(),
+                    displayName: String(draft.displayName ?? "").trim(),
                     role: draft.role,
                     status: draft.status,
                     memberId: draft.memberId,
                     directorId: draft.directorId,
                   });
-                  toast.success("Saved");
+                  toast.success(draft._id ? "User updated" : "User added", String(draft.displayName ?? "").trim());
                   setDraft(null);
                 } catch (error) {
                   console.error("[users.upsert]", error);
@@ -285,16 +290,18 @@ export function UsersPage() {
       >
         {draft && (
           <div>
-            <Field label="Display name">
+            <Field label="Display name" required error={draftErrors.displayName}>
               <input
                 className="input"
                 value={draft.displayName}
                 onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
               />
             </Field>
-            <Field label="Email">
+            <Field label="Email" required error={draftErrors.email}>
               <input
                 className="input"
+                type="email"
+                autoComplete="off"
                 value={draft.email}
                 onChange={(e) => setDraft({ ...draft, email: e.target.value })}
               />

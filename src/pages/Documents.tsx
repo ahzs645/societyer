@@ -1,3 +1,4 @@
+import { hasErrors, validateDocumentInput, type FieldErrors } from "../../shared/recordValidation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -61,6 +62,7 @@ export function DocumentsPage() {
   const [form, setForm] = useState<any>(null);
   const [versionsFor, setVersionsFor] = useState<{ id: any; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const nativeStorage = isNativeFileStorageEnabled();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -109,9 +111,15 @@ export function DocumentsPage() {
 
   const save = async () => {
     if (!canEdit || busy) return;
+    const payload = documentPayload(form);
+    // An attached file names an otherwise untitled document.
+    if (!String(payload.title ?? "").trim() && form._file?.name) payload.title = form._file.name;
+    const validation = validateDocumentInput(payload);
+    setFormErrors(validation);
+    if (hasErrors(validation)) return;
     setBusy(true);
     try {
-      const newDocId = await create({ societyId: society._id, ...documentPayload(form) });
+      const newDocId = await create({ societyId: society._id, ...payload });
       if (form._file) {
         await uploadFile(newDocId, form._file);
       }
@@ -333,7 +341,7 @@ export function DocumentsPage() {
       >
         {form && (
           <div>
-            <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+            <Field label="Title" required error={formErrors.title}><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Category">
               <Select
                 value={form.category}

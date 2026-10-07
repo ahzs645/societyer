@@ -1,3 +1,4 @@
+import { assertValid, validateAccessCustodyInput } from "../shared/recordValidation";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { internalQuery, query, mutation } from "./lib/untypedServer";
 import { v, ConvexError } from "convex/values";
@@ -159,6 +160,7 @@ export const create = authorizedMutation("secrets:create", mutation)({
   handler: async (ctx, args) => {
     const portableCtx = await toPortableMutationCtx(ctx);
     const { user } = await assertVaultWrite(ctx, args.societyId, args.actingUserId);
+    assertValid(validateAccessCustodyInput(args));
     await Promise.all([
       args.custodianUserId
         ? getOwned(portableCtx, "users", args.custodianUserId, args.societyId)
@@ -231,6 +233,7 @@ export const update = authorizedMutation("secrets:update", mutation)({
     const existing = await requireOwnedRow(portableCtx, "secretVaultItems", id);
     const societyId = existing.societyId;
     const { user } = await assertVaultWrite(ctx, societyId, actingUserId);
+    assertValid(validateAccessCustodyInput(patch, { partial: true }));
     // Administrative custody edits must not turn an Owner-only value into
     // one the administrator can decrypt, or replace its protected value.
     const changesProtectedAccess =

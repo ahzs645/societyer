@@ -7,6 +7,7 @@
  * oracle. `setRole` is role-gated through the portable `requireRolePortable`.
  */
 
+import { assertValid, validateWorkspaceUserInput } from "../recordValidation";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
@@ -68,7 +69,11 @@ export async function requireMembershipManager(ctx: PortableQueryCtx, societyId:
 }
 
 async function recordMembershipChange(ctx: PortableMutationCtx, societyId: string, actorId: string, targetId: string, action: string, detail?: string) {
-  await ctx.db.insert("activity", { societyId, actor: actorId, entityType: "user", subjectId: targetId,
+  // The audit log shows `actor` verbatim, so store the person's name, not a row id.
+  const localOwner = actorId.startsWith("local-workspace-owner:");
+  const actorRow: any = localOwner ? null : await ctx.db.get(actorId, "users").catch(() => null);
+  const actor = String(actorRow?.displayName || actorRow?.email || (localOwner ? "Workspace owner" : actorId));
+  await ctx.db.insert("activity", { societyId, actor, entityType: "user", subjectId: targetId,
     entityId: targetId, action, summary: detail || `Workspace membership ${action}`, createdAtISO: new Date().toISOString() });
 }
 
@@ -88,6 +93,9 @@ export async function upsertUserPortable(ctx: PortableMutationCtx, args: {
   assertRoleAndStatus(args.role, args.status);
   const target = args.id ? await getOwned(ctx, "users", args.id, args.societyId) : undefined;
   const actor = await requireMembershipManager(ctx, args.societyId, target?.role, args.role, args.actingUserId);
+  const roster = await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  assertValid(validateWorkspaceUserInput(args, roster as any, target?._id));
+  args = { ...args, email: args.email.trim(), displayName: args.displayName.trim() };
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
   const fields = {
