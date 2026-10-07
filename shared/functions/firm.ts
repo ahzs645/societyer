@@ -94,31 +94,145 @@ export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { to
   };
 }
 
-export async function searchPortable(ctx: PortableQueryCtx, { query: term }: { query: string }) {
+export type GlobalSearchKind =
+  | "deadline" | "document" | "person" | "member" | "meeting" | "minutes" | "motion" | "task"
+  | "committee" | "grant" | "policy" | "insurance" | "filing";
+
+export type GlobalSearchResult = {
+  kind: GlobalSearchKind;
+  id: string;
+  title: string;
+  /** Short context shown under the title (date, type, status). */
+  subtitle?: string;
+  societyId: string | null;
+  societyName: string | null;
+  /** In-app route that opens the record itself (detail page or `?record=` side panel). */
+  to: string;
+};
+
+/** Per-kind cap so one busy table cannot crowd every other kind out. */
+const SEARCH_LIMIT_PER_KIND = 8;
+
+/** Lower-cased, accent-folded text for substring matching. */
+export function searchFold(value: unknown): string {
+  return String(value ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Every whitespace-separated term of the query must appear somewhere in the fields. */
+export function searchMatches(query: string, fields: unknown[]): boolean {
+  const terms = searchFold(query).split(/\s+/).filter(Boolean);
+  if (!terms.length) return false;
+  const haystack = fields.map((field) => (Array.isArray(field) ? field.map(searchFold).join(" ") : searchFold(field))).join(" \u0000 ");
+  return terms.every((term) => haystack.includes(term));
+}
+
+function minutesSearchFields(row: any): unknown[] {
+  const sections = Array.isArray(row.sections) ? row.sections : [];
+  return [
+    row.discussion,
+    row.chairName,
+    row.secretaryName,
+    sections.map((section: any) => [section?.title, section?.discussion, section?.motionText, ...(Array.isArray(section?.decisions) ? section.decisions : [])].filter(Boolean).join(" ")),
+    Array.isArray(row.motions) ? row.motions.map((motion: any) => motion?.text ?? "") : [],
+  ];
+}
+
+/** Scans one society-scoped table and keeps the first matches (records are already permission-checked). */
+async function scanSociety(ctx: PortableQueryCtx, table: string, societyId: string, query: string, fields: (row: any) => unknown[]) {
+  const rows = await ctx.db.query(table as any).withIndex("by_society" as any, (q: any) => q.eq("societyId", societyId)).collect();
+  const hits: any[] = [];
+  for (const row of rows) {
+    if (searchMatches(query, fields(row))) hits.push(row);
+    if (hits.length >= SEARCH_LIMIT_PER_KIND) break;
+  }
+  return hits;
+}
+
+function shortDate(value: unknown) {
+  return typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : undefined;
+}
+
+export async function searchPortable(ctx: PortableQueryCtx, { query: term }: { query: string }): Promise<GlobalSearchResult[]> {
   const q = String(term ?? "").trim();
   if (q.length < 2) return [];
   const societies = await listAuthorizedSocietyRows(ctx);
-  const results: any[] = [];
+  const results: GlobalSearchResult[] = [];
   const directory = new Map<string, any>();
   for (const society of societies) {
     const societyId = String(society._id);
     const societyName = organizationLabel(society as any);
+    const push = (row: Omit<GlobalSearchResult, "societyId" | "societyName">) => results.push({ ...row, societyId, societyName });
     if (await permits(ctx, societyId, "deadlines:read")) {
       const deadlines = await ctx.db.query("deadlines").withSearchIndex("search_title", s => s.search("title", q).eq("societyId", societyId)).take(12);
-      for (const row of deadlines) results.push({ kind: "deadline", id: String(row._id), title: row.title, societyId, societyName, to: "/app/deadlines" });
+      for (const row of deadlines) push({ kind: "deadline", id: String(row._id), title: row.title, subtitle: shortDate(row.dueDate), to: `/app/deadlines?record=${encodeURIComponent(String(row._id))}` });
     }
     if (await permits(ctx, societyId, "documents:read")) {
       const allows = await documentAccessPredicate(ctx, societyId);
       const documents = await ctx.db.query("documents").withSearchIndex("search_title", s => s.search("title", q).eq("societyId", societyId)).filter(allows).take(12);
-      for (const row of documents) results.push({ kind: "document", id: String(row._id), title: row.title, societyId, societyName, to: "/app/documents" });
+      for (const row of documents) push({ kind: "document", id: String(row._id), title: row.title, subtitle: row.category, to: `/app/documents/${encodeURIComponent(String(row._id))}` });
+      for (const row of await scanSociety(ctx, "policies", societyId, q, (r) => [r.policyName, r.policyNumber, r.owner])) {
+        push({ kind: "policy", id: String(row._id), title: row.policyName, subtitle: row.reviewDate ? `Review ${row.reviewDate}` : row.policyNumber, to: "/app/policies" });
+      }
     }
     if (await permits(ctx, societyId, "members:read")) {
       for (const row of await visibleDirectoryRows(ctx, societyId)) directory.set(String(row._id), row);
+      for (const row of await scanSociety(ctx, "members", societyId, q, (r) => [`${r.firstName ?? ""} ${r.lastName ?? ""}`, r.email, r.membershipClass])) {
+        push({ kind: "member", id: String(row._id), title: `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || String(row.email ?? "Member"), subtitle: row.status, to: `/app/members/${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    const meetingTitles = new Map<string, any>();
+    if (await permits(ctx, societyId, "meetings:read")) {
+      const meetings = await ctx.db.query("meetings").withIndex("by_society", (s: any) => s.eq("societyId", societyId)).collect();
+      for (const meeting of meetings) meetingTitles.set(String(meeting._id), meeting);
+      let count = 0;
+      for (const row of meetings) {
+        if (count >= SEARCH_LIMIT_PER_KIND) break;
+        if (!searchMatches(q, [row.title, row.type, row.location])) continue;
+        count += 1;
+        push({ kind: "meeting", id: String(row._id), title: row.title, subtitle: [row.type, shortDate(row.scheduledAt)].filter(Boolean).join(" · "), to: `/app/meetings/${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "minutes:read")) {
+      for (const row of await scanSociety(ctx, "minutes", societyId, q, minutesSearchFields)) {
+        const meeting = meetingTitles.get(String(row.meetingId));
+        push({ kind: "minutes", id: String(row._id), title: `Minutes: ${meeting?.title ?? "meeting"}`, subtitle: shortDate(row.heldAt ?? meeting?.scheduledAt), to: `/app/meetings/${encodeURIComponent(String(row.meetingId))}?tab=minutes` });
+      }
+    }
+    if (await permits(ctx, societyId, "motions:read")) {
+      for (const row of await scanSociety(ctx, "motions", societyId, q, (r) => [r.title, r.text, r.movedBy, r.secondedBy])) {
+        const text = String(row.title || row.text || "Motion");
+        push({ kind: "motion", id: String(row._id), title: text.length > 90 ? `${text.slice(0, 87)}…` : text, subtitle: row.outcome ?? row.status, to: `/app/motions?record=${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "tasks:read")) {
+      for (const row of await scanSociety(ctx, "tasks", societyId, q, (r) => [r.title, r.description, r.assignee])) {
+        push({ kind: "task", id: String(row._id), title: row.title, subtitle: [row.status, row.dueDate ? `due ${shortDate(row.dueDate)}` : ""].filter(Boolean).join(" · "), to: `/app/tasks?record=${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "committees:read")) {
+      for (const row of await scanSociety(ctx, "committees", societyId, q, (r) => [r.name, r.description, r.mission])) {
+        push({ kind: "committee", id: String(row._id), title: row.name, subtitle: row.cadence, to: `/app/committees/${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "grants:read")) {
+      for (const row of await scanSociety(ctx, "grants", societyId, q, (r) => [r.title, r.funder, r.program, r.opportunityType])) {
+        push({ kind: "grant", id: String(row._id), title: row.title, subtitle: [row.funder, row.status].filter(Boolean).join(" · "), to: `/app/grants/${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "financials:read")) {
+      for (const row of await scanSociety(ctx, "insurancePolicies", societyId, q, (r) => [r.insurer, r.broker, r.policyNumber, r.kind, r.policyTermLabel])) {
+        push({ kind: "insurance", id: String(row._id), title: `${row.insurer} · ${row.policyNumber}`, subtitle: [row.kind, row.renewalDate ? `renews ${row.renewalDate}` : ""].filter(Boolean).join(" · "), to: `/app/insurance/${encodeURIComponent(String(row._id))}` });
+      }
+    }
+    if (await permits(ctx, societyId, "filings:read")) {
+      for (const row of await scanSociety(ctx, "filings", societyId, q, (r) => [r.kind, r.periodLabel, r.notes, r.confirmationNumber])) {
+        push({ kind: "filing", id: String(row._id), title: [row.kind, row.periodLabel].filter(Boolean).join(" · "), subtitle: [row.status, row.dueDate ? `due ${row.dueDate}` : ""].filter(Boolean).join(" · "), to: `/app/filings?record=${encodeURIComponent(String(row._id))}` });
+      }
     }
   }
   // Preserve the full-text match behavior while filtering the complete result
   // set before limiting; foreign hits must neither leak nor hide owned hits.
   const people = await ctx.db.query("peopleDirectory").withSearchIndex("search_full_name", s => s.search("fullName", q)).filter(row => directory.has(String(row._id))).take(12);
-  for (const person of people) results.push({ kind: "person", id: String(person._id), title: person.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
+  for (const person of people) results.push({ kind: "person", id: String(person._id), title: person.fullName, societyId: null, societyName: null, to: `/app/people-directory/${encodeURIComponent(String(person._id))}` });
   return results;
 }
