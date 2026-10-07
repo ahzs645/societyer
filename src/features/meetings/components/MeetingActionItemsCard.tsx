@@ -19,6 +19,7 @@ import { ACTION_ITEM_STATUSES, ACTION_ITEM_STATUS_LABELS, actionItemStatus, type
 import { taskDraftFromActionItem } from "../../../../shared/meetingActionTasks";
 import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 import { matchDirectoryPerson } from "../../../../shared/meetingAttendanceGrid";
+import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../lib/actionItemTidy";
 
 const STATUS_OPTIONS = ACTION_ITEM_STATUSES.map((value) => ({ value, label: ACTION_ITEM_STATUS_LABELS[value] }));
 
@@ -74,7 +75,7 @@ export function MeetingActionItemsCard({
   const [ownerDraft, setOwnerDraft] = useState<{ name: string; personId?: string }>({ name: "" });
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [adding, setAdding] = useState<ActionDraft | null>(null);
-  const [rewording, setRewording] = useState<{ key: string; text: string; dueDate: string } | null>(null);
+  const [rewording, setRewording] = useState<{ key: string; text: string; dueDate: string; section: string } | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const confirm = useConfirm();
   const rows: Row[] = [
@@ -120,6 +121,39 @@ export function MeetingActionItemsCard({
     if (linkableOwners.some((row) => row.sectionIndex != null)) {
       await saveSections(sections.map((section: any) => Array.isArray(section?.actionItems) ? { ...section, actionItems: section.actionItems.map(link) } : section));
     }
+  };
+
+  // Imported wording: "Reported action (source review pending): ACTION: …"
+  // labels, cut-off duplicates from a source read twice, owners left in the text.
+  const duplicates = duplicateActionRows(rows.map((row) => ({ ...row, text: String(row.item.text ?? "") })));
+  const isDuplicate = (row: Row) => duplicates.some((dup) => dup.sectionIndex === row.sectionIndex && dup.actionIndex === row.actionIndex);
+  const relabel = rows.filter((row) => !isDuplicate(row) && (plainActionWording(row.item.text) !== String(row.item.text ?? "").trim() || (!row.item.assignee && suggestedActionOwner(row.item.text))));
+  const tidyCount = duplicates.length + relabel.length;
+  const tidyImported = async () => {
+    const ok = await confirm({
+      title: "Tidy imported action items?",
+      message: [
+        duplicates.length ? `${duplicates.length} cut-off or repeated cop${duplicates.length === 1 ? "y is" : "ies are"} removed (the full wording is kept).` : "",
+        relabel.length ? "“Reported action … ACTION:” labels are dropped, and owners named at the start (“Mike to revise…”) are filled in where none is set." : "",
+        "Statuses, due dates and task links are kept.",
+      ].filter(Boolean).join(" "),
+      confirmLabel: "Tidy actions",
+    });
+    if (!ok) return;
+    const dropKey = new Set(duplicates.map((row) => `${row.sectionIndex ?? "top"}-${row.actionIndex}`));
+    const clean = (item: any, sectionIndex: number | null, actionIndex: number) => {
+      if (dropKey.has(`${sectionIndex ?? "top"}-${actionIndex}`)) return null;
+      const text = plainActionWording(item.text) || String(item.text ?? "");
+      const owner = item.assignee || suggestedActionOwner(item.text);
+      const match = !item.assigneePersonId && owner ? matchDirectoryPerson(owner, people) : undefined;
+      return { ...item, text, ...(owner ? { assignee: owner } : {}), ...(match ? { assigneePersonId: String(match._id) } : {}) };
+    };
+    if (saveTopLevel && topLevelItems.length) {
+      await saveTopLevel(topLevelItems.map((item, index) => clean(item, null, index)).filter(Boolean));
+    }
+    await saveSections(sections.map((section: any, sectionIndex: number) => Array.isArray(section?.actionItems) && section.actionItems.length
+      ? { ...section, actionItems: section.actionItems.map((item: any, index: number) => clean(item, sectionIndex, index)).filter(Boolean) }
+      : section));
   };
 
   const addAction = async () => {
@@ -173,7 +207,27 @@ export function MeetingActionItemsCard({
 
   const saveRewording = async (row: Row) => {
     if (!rewording || !rewording.text.trim()) return;
-    await patchItem(row, { text: rewording.text.trim(), dueDate: rewording.dueDate.trim() || undefined });
+    const from = row.sectionIndex == null ? GENERAL : String(row.sectionIndex);
+    const nextItem = { ...row.item, text: rewording.text.trim(), dueDate: rewording.dueDate.trim() || undefined };
+    if (rewording.section === from) {
+      await patchItem(row, { text: nextItem.text, dueDate: nextItem.dueDate });
+    } else {
+      // Move the action to another agenda item (imports often file it under
+      // the wrong one), keeping its status, owner and task link.
+      const target = rewording.section;
+      if ((target === GENERAL || from === GENERAL) && !saveTopLevel) return;
+      if (from === GENERAL || target === GENERAL) {
+        await saveTopLevel!(target === GENERAL
+          ? [...topLevelItems, nextItem]
+          : topLevelItems.filter((_item, index) => index !== row.actionIndex));
+      }
+      await saveSections(sections.map((section: any, index: number) => {
+        let items = Array.isArray(section?.actionItems) ? section.actionItems : [];
+        if (String(index) === from) items = items.filter((_item: any, actionIndex: number) => actionIndex !== row.actionIndex);
+        if (String(index) === target) items = [...items, nextItem];
+        return items === section?.actionItems ? section : { ...section, actionItems: items };
+      }));
+    }
     setRewording(null);
   };
 
@@ -193,13 +247,18 @@ export function MeetingActionItemsCard({
       <div className="card__head">
         <h2 className="card__title"><ListChecks size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Action items</h2>
         <span className="card__subtitle">{rows.length ? `${open} open · ${rows.length} total` : "None recorded"}</span>
+        {canEdit && tidyCount > 0 && (
+          <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => { void tidyImported(); }} data-testid="tidy-action-items" title="Remove cut-off duplicates and import labels, and fill in owners named in the wording">
+            Tidy {tidyCount} imported
+          </button>
+        )}
         {canEdit && linkableOwners.length > 0 && (
-          <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => { void linkAllOwners(); }} data-testid="link-action-owners" title="Link owners whose name matches exactly one person in the people directory">
+          <button type="button" className="btn-action" style={tidyCount ? undefined : { marginLeft: "auto" }} onClick={() => { void linkAllOwners(); }} data-testid="link-action-owners" title="Link owners whose name matches exactly one person in the people directory">
             Link {linkableOwners.length} owner{linkableOwners.length === 1 ? "" : "s"} to the directory
           </button>
         )}
         {canEdit && !adding && (
-          <button type="button" className="btn-action" style={linkableOwners.length ? undefined : { marginLeft: "auto" }} onClick={() => setAdding(emptyDraft(sections.length ? "0" : GENERAL))} data-testid="add-action-item">
+          <button type="button" className="btn-action" style={linkableOwners.length || tidyCount ? undefined : { marginLeft: "auto" }} onClick={() => setAdding(emptyDraft(sections.length ? "0" : GENERAL))} data-testid="add-action-item">
             <Plus size={12} /> Add action
           </button>
         )}
@@ -268,6 +327,9 @@ export function MeetingActionItemsCard({
                       <input className="input input--sm" style={{ flex: "1 1 220px" }} value={rewording.text} onChange={(event) => setRewording({ ...rewording, text: event.target.value })} aria-label="Action wording" autoFocus
                         onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void saveRewording(row); } if (event.key === "Escape") setRewording(null); }} />
                       <input className="input input--sm" style={{ width: 130 }} value={rewording.dueDate} onChange={(event) => setRewording({ ...rewording, dueDate: event.target.value })} aria-label="Action due date" placeholder="Due" />
+                      <span style={{ minWidth: 180, flex: "1 1 180px" }}>
+                        <Select value={rewording.section} onChange={(section) => setRewording({ ...rewording, section })} options={sectionOptions} size="sm" aria-label="Agenda item for the action" />
+                      </span>
                       <button type="button" className="btn-action btn-action--primary" disabled={!rewording.text.trim()} onClick={() => { void saveRewording(row); }}>Save</button>
                       <button type="button" className="btn-action" onClick={() => setRewording(null)}>Cancel</button>
                     </span>
@@ -339,7 +401,7 @@ export function MeetingActionItemsCard({
                   ) : null}
                   {canEdit && rewording?.key !== key && (
                     <>
-                      <button type="button" className="btn-action btn-action--icon" title="Edit wording and due date" aria-label={`Edit action: ${row.item.text}`} onClick={() => setRewording({ key, text: String(row.item.text ?? ""), dueDate: String(row.item.dueDate ?? "") })}>
+                      <button type="button" className="btn-action btn-action--icon" title="Edit wording, due date or agenda item" aria-label={`Edit action: ${row.item.text}`} onClick={() => setRewording({ key, text: String(row.item.text ?? ""), dueDate: String(row.item.dueDate ?? ""), section: row.sectionIndex == null ? GENERAL : String(row.sectionIndex) })}>
                         <Pencil size={12} />
                       </button>
                       <button type="button" className="btn-action btn-action--icon" title="Remove action" aria-label={`Remove action: ${row.item.text}`} onClick={() => { void removeAction(row); }}>

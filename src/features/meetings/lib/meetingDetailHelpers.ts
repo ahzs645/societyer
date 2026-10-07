@@ -106,7 +106,12 @@ export function formalMinutesExportBlockers({
   for (const row of minutes?.conditionalDecisions ?? []) if (row.outcome === 'Carried' && decisionReadiness(row, minutes.decisionRequirements ?? [], minutes.quorumCheckpoints ?? []) !== 'Effective') blockers.push(`Review conditional decision ${row.title ?? row.id} before formal export.`);
   if (meeting?.status !== "Held") blockers.push("Mark the meeting held.");
   if (!minutes) return [...blockers, "Create or record the minutes."];
-  if (minutes.quorumStatus && recordedMinutesQuorum(minutes) !== true && motions.some(motion =>
+  // Imported minutes that a reviewer has checked against the source record
+  // what the source says. A mover, seconder, tally or quorum statement the
+  // source never recorded cannot be "completed" without inventing it, so it
+  // must not block the export of the adopted record.
+  const sourceReviewedImport = minutes.sourceReviewStatus === "source_reviewed" || meeting?.sourceReviewStatus === "source_reviewed";
+  if (!sourceReviewedImport && minutes.quorumStatus && recordedMinutesQuorum(minutes) !== true && motions.some(motion =>
     String(motion.outcome).toLowerCase() === "carried" && String(motion.resolutionType).toLowerCase() !== "procedural" && !/\badjourn/i.test(String(motion.text)),
   )) blockers.push("Review carried business motions against the source quorum evidence before final export.");
   if ((minutes.attendees?.length ?? 0) === 0) blockers.push("Record at least one attendee present.");
@@ -116,7 +121,7 @@ export function formalMinutesExportBlockers({
   if (![minutes.chairName, minutes.secretaryName, minutes.recorderName].some((value) => String(value ?? "").trim())) {
     blockers.push("Record a chair, secretary, or minute-taker.");
   }
-  motions.forEach((motion, index) => {
+  if (!sourceReviewedImport) motions.forEach((motion, index) => {
     const gaps = motionCompletionGaps(motion);
     if (!gaps.length) return;
     const label = String(motion.name || motion.text || `Motion ${index + 1}`).trim();

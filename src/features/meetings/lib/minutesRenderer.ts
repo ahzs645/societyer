@@ -117,8 +117,12 @@ export type MinutesRenderArgs = {
     // `agendaItems` continues to represent root titles only — sub-items never
     // become their own minute section, table row, or executive heading.
     agendaItemTree?: { title: string; depth: 0 | 1 }[];
+    /** IANA zone the meeting was held in; times render in it, not the viewer's. */
+    timeZone?: string | null;
   };
   minutes: {
+    /** "source_reviewed" once a reviewer checked an import against its source. */
+    sourceReviewStatus?: string | null;
     sourceMeetingRecord?: SourceMeetingRecord | null;
     sourceTransposition?: any;
     linkedTasks?: any[];
@@ -247,7 +251,46 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
 };
 
 /** Build the body HTML for a meeting-minutes export. */
+// Rendering is synchronous; formatters read the meeting's zone from here.
+let renderTimeZone: string | undefined;
+function zoneOption(): { timeZone?: string } {
+  if (!renderTimeZone) return {};
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: renderTimeZone });
+    return { timeZone: renderTimeZone };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Once the minutes are reviewed against the source or adopted, the
+ * transposition's "Reported decision (source review pending):" labels are no
+ * longer true and must not print in the record. Stray source bullets go too.
+ */
+const PENDING_LABEL = /^\s*reported (?:decision|action) \(source review pending\)\s*:\s*/i;
+const SOURCE_BULLET = /^\s*[●•○▪]\s*/;
+function withoutPendingLabels(minutes: MinutesRenderArgs["minutes"]): MinutesRenderArgs["minutes"] {
+  const clean = (text: unknown) => String(text ?? "").replace(PENDING_LABEL, "").replace(SOURCE_BULLET, "");
+  const cleanItems = (items: any[] | undefined) => Array.isArray(items) ? items.map((item) => item && typeof item === "object" ? { ...item, text: clean(item.text) } : item) : items;
+  return {
+    ...minutes,
+    decisions: Array.isArray(minutes.decisions) ? minutes.decisions.map(clean) : minutes.decisions,
+    actionItems: cleanItems(minutes.actionItems as any[]) as any,
+    sections: Array.isArray(minutes.sections)
+      ? minutes.sections.map((section: any) => ({
+        ...section,
+        ...(Array.isArray(section.decisions) ? { decisions: section.decisions.map(clean) } : {}),
+        ...(Array.isArray(section.actionItems) ? { actionItems: cleanItems(section.actionItems) } : {}),
+      }))
+      : minutes.sections,
+  };
+}
+
 export function renderMinutesHtml(args: MinutesRenderArgs): string {
+  renderTimeZone = args.meeting?.timeZone || undefined;
+  const reviewedOrAdopted = Boolean(args.minutes.approvedAt) || (args.minutes as { sourceReviewStatus?: string }).sourceReviewStatus === "source_reviewed";
+  if (reviewedOrAdopted) args = { ...args, minutes: withoutPendingLabels(args.minutes) };
   if (isImportMetadataTranscript(args.minutes.draftTranscript)) args = {...args,minutes:{...args.minutes,draftTranscript:null}};
   const styleId = normalizeMinutesStyleId(args.styleId);
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
@@ -1686,6 +1729,7 @@ function displayDateOrText(value: string | null | undefined) {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      ...zoneOption(),
     });
   }
   return text;
@@ -1806,6 +1850,7 @@ function formatLongDateTime(value: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...zoneOption(),
   });
 }
 
@@ -1821,6 +1866,7 @@ function formatLongDate(value: string) {
     year: "numeric",
     month: "long",
     day: "numeric",
+    ...zoneOption(),
   });
 }
 
@@ -1832,6 +1878,7 @@ function formatTime(value: string) {
   return date.toLocaleTimeString("en-CA", {
     hour: "numeric",
     minute: "2-digit",
+    ...zoneOption(),
   });
 }
 

@@ -13,6 +13,8 @@ import { defaultNewMeetingStart, meetingCreateLabels } from "../src/features/mee
 import { minutesApprovalIssues } from "../shared/meetingApproval";
 import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
 import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectionAlign";
+import { formalMinutesExportBlockers } from "../src/features/meetings/lib/meetingDetailHelpers";
+import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../src/features/meetings/lib/actionItemTidy";
 
 // ---------- rich-editor markdown is shown without escapes ---------------------
 // What the rich editor saves after a no-change round trip of imported text.
@@ -164,6 +166,46 @@ assert.match(numbered, /\(May 29 \(5:30-7:30 PM\)\) · Board — Discuss draft w
 assert.match(numbered, /Second Tuesday of the month · Executive Committee/);
 console.log("✓ numbered style: attendee roles and every structured next meeting");
 
+// ---------- export dates in the meeting's zone ---------------------------------
+const evening = renderMinutesHtml({
+  society: { name: "Retest Society" } as any,
+  meeting: { title: "Board meeting", scheduledAt: "2021-02-24T01:00:00.000Z", scheduledAtPrecision: "datetime", timeZone: "America/Vancouver", type: "Board" } as any,
+  minutes: { heldAt: "2021-02-24T01:00:00.000Z", attendees: ["Alex Example"], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [], motions: [], sections: [{ title: "Welcome", discussion: "Opened." }] } as any,
+  styleId: "numbered-agenda",
+  options: { sourceFidelity: false },
+} as any);
+assert.match(evening, /Tuesday, February 23, 2021/, "a 5 PM Pacific meeting is not dated the next (UTC) day");
+assert.match(evening, /5:00/);
+console.log("✓ exports: dates and times in the meeting's time zone");
+
+const labelled = (approvedAt: string | null) => renderMinutesHtml({
+  society: { name: "Retest Society" } as any,
+  meeting: { title: "Board meeting", scheduledAt: "2021-02-23T12:00:00.000Z", type: "Board" } as any,
+  minutes: { approvedAt, heldAt: "2021-02-23T12:00:00.000Z", attendees: ["Alex Example"], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [], motions: [],
+    sections: [{ title: "Budget", decisions: ["Reported decision (source review pending): ● 2021 draft budget approved."] }] } as any,
+  styleId: "numbered-agenda",
+  options: { sourceFidelity: false },
+} as any);
+assert.match(labelled(null), /Reported decision \(source review pending\)/, "unreviewed drafts keep the review label");
+assert.doesNotMatch(labelled("2021-05-18"), /source review pending|●/, "adopted minutes print the decision only");
+assert.match(labelled("2021-05-18"), /2021 draft budget approved\./);
+console.log("✓ exports: review-pending labels dropped once adopted");
+
+// ---------- reviewed imports are not blocked on details the source never recorded
+assert.deepEqual(formalMinutesExportBlockers({
+  meeting: { status: "Held", sourceReviewStatus: "source_reviewed" },
+  minutes: { approvedAt: "2021-05-18", attendees: ["Alex Example"], sections: [{ title: "Budget" }], chairName: "Alex Example", quorumStatus: "not_recorded" },
+  agendaItemCount: 1,
+  motions: [{ text: "To approve the budget", outcome: "Carried" }],
+}), []);
+assert.ok(formalMinutesExportBlockers({
+  meeting: { status: "Held" },
+  minutes: { approvedAt: "2021-05-18", attendees: ["Alex Example"], sections: [{ title: "Budget" }], chairName: "Alex Example" },
+  agendaItemCount: 1,
+  motions: [{ text: "To approve the budget", outcome: "Carried" }],
+}).some((line) => /mover/.test(line)), "native minutes still need mover/seconder/tally");
+console.log("✓ formal export: reviewed imports export as recorded; native minutes keep completeness checks");
+
 // ---------- export default after review / approval ----------------------------
 assert.equal(effectiveSourceFidelity(true, undefined, { sourceReviewStatus: "imported_needs_review" }), true, "unreviewed imports export the source record");
 assert.equal(effectiveSourceFidelity(true, undefined, { approvedAt: "2012-05-29" }), false, "approved minutes export the corrected minutes");
@@ -195,6 +237,22 @@ console.log("✓ export default: corrected minutes once reviewed or approved");
   assert.equal(result.sectionsChanged, true);
 }
 console.log("✓ agenda editor: renamed and reordered items keep their notes and motions");
+
+// ---------- tidy imported action items -----------------------------------------
+{
+  const rows = [
+    { sectionIndex: 1, actionIndex: 0, text: "Reported action (source review pending): ACTION: Office to explore opportunities for" },
+    { sectionIndex: 2, actionIndex: 0, text: "Reported action (source review pending): ACTION: Office to explore opportunities for training." },
+    { sectionIndex: 2, actionIndex: 1, text: "ACTION: Alex Example to revise the plan." },
+    { sectionIndex: 3, actionIndex: 0, text: "ACTION: Alex Example to revise the plan." },
+    { sectionIndex: 3, actionIndex: 1, text: "Send it" },
+  ];
+  assert.deepEqual(duplicateActionRows(rows).map((row) => [row.sectionIndex, row.actionIndex]), [[1, 0], [3, 0]]);
+  assert.equal(plainActionWording(rows[1].text), "Office to explore opportunities for training.");
+  assert.equal(suggestedActionOwner(rows[2].text), "Alex Example");
+  assert.equal(suggestedActionOwner("Send it"), undefined);
+}
+console.log("✓ action tidy: cut-off duplicates, import labels and named owners");
 
 // ---------- governance retest items O-5..O-7 ----------------------------------
 const defaultStart = defaultNewMeetingStart(14, new Date(2026, 9, 7, 4, 16));

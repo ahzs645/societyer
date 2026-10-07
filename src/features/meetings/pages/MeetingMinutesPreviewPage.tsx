@@ -152,6 +152,7 @@ export function MeetingMinutesPreviewPage() {
       noticeSentAt: meeting.noticeSentAt ?? null,
       agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
       agendaItemTree: visibleAgendaTree,
+      timeZone: (meeting as any).timeZone ?? null,
       ...(minutes.adoptedMeeting ?? {}),
     },
     minutes: {
@@ -190,6 +191,7 @@ export function MeetingMinutesPreviewPage() {
       decisions: minutes.decisions,
       actionItems: minutes.actionItems as any,
       approvedAt: minutes.approvedAt ?? null,
+      sourceReviewStatus: (meeting as any).sourceReviewStatus === "source_reviewed" ? "source_reviewed" : (minutes as any).sourceReviewStatus,
       nextMeetingAt: minutes.nextMeetingAt ?? null,
       nextMeetings: nextMeetingsForExport((minutes as any).nextMeetings, committees ?? []),
       nextMeetingLocation: minutes.nextMeetingLocation ?? null,
