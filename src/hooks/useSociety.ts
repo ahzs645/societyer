@@ -11,7 +11,26 @@ import { useLocalWorkspaceReady } from "./useLocalWorkspaceReady";
 
 const KEY = "societyer.currentSocietyId";
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";
-let staticSocietyId = STATIC_DEMO_SOCIETY_ID as Id<"societies"> | null;
+/** The demo keeps its workspace choice for this tab only (sessionStorage), so a
+ * reload stays on a workspace the visitor just created instead of snapping back
+ * to the seeded society, while a new visit still starts on the demo society. */
+const DEMO_SESSION_KEY = "societyer.demoSocietyId";
+function readDemoSessionSocietyId(): Id<"societies"> | null {
+  try {
+    return (window.sessionStorage.getItem(DEMO_SESSION_KEY) as Id<"societies"> | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+function writeDemoSessionSocietyId(id: Id<"societies"> | null) {
+  try {
+    if (id) window.sessionStorage.setItem(DEMO_SESSION_KEY, id);
+    else window.sessionStorage.removeItem(DEMO_SESSION_KEY);
+  } catch {
+    // Storage blocked: the choice lasts until reload, as before.
+  }
+}
+let staticSocietyId = (typeof window !== "undefined" && readDemoSessionSocietyId()) || (STATIC_DEMO_SOCIETY_ID as Id<"societies"> | null);
 let membershipUserIds: Map<Id<"societies">, Id<"users">> | null = null;
 
 type SocietyView = Doc<"societies"> & {
@@ -56,6 +75,7 @@ export function setStoredSocietyId(id: Id<"societies"> | null) {
 
   if (isStaticDemoRuntime()) {
     staticSocietyId = id;
+    writeDemoSessionSocietyId(id);
   } else if (id) {
     localStorage.setItem(KEY, id);
   } else {
