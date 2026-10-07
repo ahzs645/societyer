@@ -66,10 +66,10 @@ export interface LocalRowStore {
   /** The table holding an id, if any. */
   tableOf?(id: string): string | undefined;
   /**
-   * Rows whose top-level `field` strictly equals `value` (an equality index).
-   * May return `undefined` when the store has no index for that field.
+   * Candidate rows whose top-level `fields` equal `values` (a compound equality
+   * index). May return a superset; `undefined` means "no index, scan instead".
    */
-  rowsWhere?(table: string, field: string, value: unknown): PortableDoc[] | undefined;
+  rowsWhere?(table: string, fields: readonly string[], values: readonly unknown[]): PortableDoc[] | undefined;
   /** Top-level fields of this row that live outside the cached row (lazy heavy fields). */
   externalFields?(table: string, id: string): readonly string[] | undefined;
   /** Load the externalized fields of these rows: id → { field: value }. */
@@ -222,11 +222,14 @@ export class LocalStoreDb implements PortableDbWriter {
     const over = this.activeOverlay?.get(table);
     let base: PortableDoc[] | undefined;
     if (this.store.rowsWhere) {
+      const fields: string[] = [];
+      const values: unknown[] = [];
       for (const constraint of constraints) {
-        if (constraint.op !== "eq") continue;
-        base = this.store.rowsWhere(table, constraint.field, constraint.value);
-        if (base) break;
+        if (constraint.op !== "eq" || fields.includes(constraint.field)) continue;
+        fields.push(constraint.field);
+        values.push(constraint.value);
       }
+      if (fields.length) base = this.store.rowsWhere(table, fields, values);
     }
     base ??= this.store.rows(table);
     if (!over || over.size === 0) return base;
@@ -507,7 +510,7 @@ export class MemoryRowStore implements LocalRowStore {
   private readonly policy: HeavyFieldPolicy | null;
   getRow?: (table: string, id: string) => PortableDoc | undefined;
   tableOf?: (id: string) => string | undefined;
-  rowsWhere?: (table: string, field: string, value: unknown) => PortableDoc[] | undefined;
+  rowsWhere?: (table: string, fields: readonly string[], values: readonly unknown[]) => PortableDoc[] | undefined;
   externalFields?: (table: string, id: string) => readonly string[] | undefined;
   loadExternalFields?: (table: string, ids: string[]) => Promise<Map<string, Record<string, unknown>>>;
   /** Number of rows whose heavy fields were loaded (test observability). */
@@ -527,9 +530,11 @@ export class MemoryRowStore implements LocalRowStore {
         for (const [table, rows] of this.tables) if (rows.has(id)) return table;
         return undefined;
       };
-      this.rowsWhere = (table, field, value) => {
+      this.rowsWhere = (table, fields, values) => {
         const out: PortableDoc[] = [];
-        for (const row of this.tables.get(table)?.values() ?? []) if (row[field] === value) out.push(clone(row));
+        for (const row of this.tables.get(table)?.values() ?? []) {
+          if (fields.every((field, index) => row[field] === values[index])) out.push(clone(row));
+        }
         return out;
       };
     }
@@ -570,6 +575,11 @@ export class MemoryRowStore implements LocalRowStore {
 
   rows(table: string): PortableDoc[] {
     return [...(this.tables.get(table)?.values() ?? [])].map(clone);
+  }
+
+  /** Complete rows, externalized heavy fields included (test/debug helper). */
+  fullRows(table: string): PortableDoc[] {
+    return [...(this.tables.get(table)?.values() ?? [])].map((row) => clone({ ...row, ...(this.heavy.get(table)?.get(row._id) ?? {}) }));
   }
 
   tableNames(): string[] {

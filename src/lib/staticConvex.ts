@@ -4,8 +4,16 @@ export type { StaticDemoSeed } from "./staticDemoStore";
 
 import { StaticConvexClient } from "./staticConvexClient";
 
-export const staticConvex = new StaticConvexClient();
+// Created on first use only. Importing this barrel used to construct a demo
+// client eagerly, which opened and hydrated a second IndexedDB vault (and ran
+// its metadata seed) on every boot of every local workspace.
+let demoClient: StaticConvexClient | null = null;
+
+export function getStaticConvex() {
+  demoClient ??= new StaticConvexClient();
+  return demoClient;
+}
 
 export function reseedStaticDemoData() {
-  return staticConvex.reseedStaticDemo();
+  return getStaticConvex().reseedStaticDemo();
 }

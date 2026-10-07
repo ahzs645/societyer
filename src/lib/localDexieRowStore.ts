@@ -308,23 +308,28 @@ export class LocalDexieRowStore implements LocalRowStore {
     return this.idTables.get(id);
   }
 
-  rowsWhere(table: string, field: string, value: unknown) {
-    if (value === null || (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")) return undefined;
+  /**
+   * Compound equality index over primitive field values, built on first use
+   * and dropped when the table changes. Non-primitive values fall back to a scan.
+   */
+  rowsWhere(table: string, fields: readonly string[], values: readonly unknown[]) {
+    if (!values.every(isIndexableValue)) return undefined;
     const state = this.tableState(table);
     if (!state) return [];
-    let index = state.indexes.get(field);
+    const indexName = fields.join("\u0000");
+    let index = state.indexes.get(indexName);
     if (!index) {
       index = new Map();
       for (const row of state.rows.values()) {
-        const key = row[field];
-        if (key === undefined || key === null || typeof key === "object") continue;
+        const key = indexKey(fields.map((field) => row[field]));
+        if (key === undefined) continue;
         const bucket = index.get(key);
         if (bucket) bucket.push(row);
         else index.set(key, [row]);
       }
-      state.indexes.set(field, index);
+      state.indexes.set(indexName, index);
     }
-    return index.get(value) ?? [];
+    return index.get(indexKey(values)) ?? [];
   }
 
   externalFields(table: string, id: string) {
@@ -723,6 +728,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   private async hydrate(seed: LocalSeed) {
     if (!this.db) return;
     const db = this.db;
+    const started = now();
 
     await db.open();
     if ((await db.records.count()) === 0) {
@@ -745,6 +751,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       await this.prunePersistedChangesIfNeeded();
     });
 
+    const readStarted = now();
     // Boot reads LIGHT rows only: heavy fields stay in `recordFields`.
     const [localRecords, attachments, changes, workspaceMeta] = await Promise.all([
       db.records.toArray(),
@@ -820,6 +827,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     this.attachmentsCache = cloneLocalRows(attachments);
     this.changesCache = changes;
     this.workspaceMeta = hydratedWorkspaceMeta;
+    recordBootTiming({ totalMs: now() - started, readMs: now() - readStarted, records: localRecords.length });
     this.notify(null);
   }
 
@@ -953,6 +961,38 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
     this.notify(new Set(tables));
   }
+}
+
+function now() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+/**
+ * Boot diagnostics for the perf scripts (scripts/perf/): how long the vault
+ * took to read and how many light records it held. Read via
+ * `globalThis.__SOCIETYER_LOCAL_BOOT__`; nothing else depends on it.
+ */
+function recordBootTiming(timing: { totalMs: number; readMs: number; records: number }) {
+  (globalThis as { __SOCIETYER_LOCAL_BOOT__?: unknown }).__SOCIETYER_LOCAL_BOOT__ = {
+    totalMs: Math.round(timing.totalMs),
+    readMs: Math.round(timing.readMs),
+    records: timing.records,
+  };
+}
+
+function isIndexableValue(value: unknown) {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+/** Index key for a tuple of primitive values; undefined when a value is not indexable. */
+function indexKey(values: readonly unknown[]): unknown {
+  if (values.length === 1) return isIndexableValue(values[0]) ? values[0] : undefined;
+  let key = "";
+  for (const value of values) {
+    if (!isIndexableValue(value)) return undefined;
+    key += `${typeof value}:${String(value).length}:${String(value)}|`;
+  }
+  return key;
 }
 
 /** Split seed/snapshot tables into light records, side records and the external map. */

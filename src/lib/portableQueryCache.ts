@@ -62,6 +62,17 @@ type TrackingRuntime = PortableRuntime & {
   runQueryTracked?: (name: string, args: Record<string, any>) => Promise<{ result: unknown; tables: ReadSet }>;
 };
 
+/**
+ * Opt-in diagnostics: when `globalThis.__SOCIETYER_QUERY_PROFILE__` is an
+ * object, each local query run adds its wall time there (name → runs/total/max).
+ * The perf scripts set it before the app boots; nothing is recorded otherwise.
+ */
+type QueryProfile = Record<string, { runs: number; totalMs: number; maxMs: number }>;
+function queryProfile(): QueryProfile | null {
+  const profile = (globalThis as { __SOCIETYER_QUERY_PROFILE__?: unknown }).__SOCIETYER_QUERY_PROFILE__;
+  return profile && typeof profile === "object" ? (profile as QueryProfile) : null;
+}
+
 /** Every query's authority comes from the current user row. */
 const ALWAYS_READ = ["users"];
 
@@ -154,23 +165,38 @@ export class PortableQueryCache {
     return false;
   }
 
-  /** A completed, still-valid result whose re-run would be wasted work. */
+  /**
+   * Whether re-running this query now would be wasted work: a run is already in
+   * flight (any later relevant store change starts a newer one), or the cached
+   * result is complete and none of the tables it read changed since. React
+   * subscribes the same query many times while a page mounts (StrictMode, one
+   * component per row); without this each subscription re-ran it.
+   */
   private isFresh(cacheKey: string) {
-    return (
-      !this.portablePending.has(cacheKey) &&
-      this.portableCache.get(cacheKey) !== undefined &&
-      Boolean(this.portableReadSets.get(cacheKey))
-    );
+    if (this.portablePending.has(cacheKey)) return true;
+    return this.portableCache.get(cacheKey) !== undefined && Boolean(this.portableReadSets.get(cacheKey));
   }
 
   private async runTracked(name: string, args: StaticArgs | undefined): Promise<{ result: unknown; tables: ReadSet }> {
-    const runtime = this.portable as TrackingRuntime;
-    if (typeof runtime.runQueryTracked !== "function") {
-      return { result: await this.portable.runQuery(name, args ?? {}), tables: null };
+    const profile = queryProfile();
+    const started = profile ? performance.now() : 0;
+    try {
+      const runtime = this.portable as TrackingRuntime;
+      if (typeof runtime.runQueryTracked !== "function") {
+        return { result: await this.portable.runQuery(name, args ?? {}), tables: null };
+      }
+      const tracked = await runtime.runQueryTracked(name, args ?? {});
+      if (!tracked.tables) return tracked;
+      return { result: tracked.result, tables: new Set([...tracked.tables, ...ALWAYS_READ]) };
+    } finally {
+      if (profile) {
+        const entry = (profile[name] ??= { runs: 0, totalMs: 0, maxMs: 0 });
+        const elapsed = performance.now() - started;
+        entry.runs += 1;
+        entry.totalMs += elapsed;
+        entry.maxMs = Math.max(entry.maxMs, elapsed);
+      }
     }
-    const tracked = await runtime.runQueryTracked(name, args ?? {});
-    if (!tracked.tables) return tracked;
-    return { result: tracked.result, tables: new Set([...tracked.tables, ...ALWAYS_READ]) };
   }
 
   emit() {
@@ -283,6 +309,7 @@ export class PortableQueryCache {
             // recomputes to refresh the retained value.
             this.portableWatchSpecs.delete(cacheKey);
             this.portableRunTokens.delete(cacheKey);
+            this.portablePending.delete(cacheKey);
           }
         };
       },

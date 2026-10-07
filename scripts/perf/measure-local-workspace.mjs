@@ -177,6 +177,10 @@ export async function measureRoute({ base, profile, route, timeoutMs, resolvedPa
     args: ["--enable-precise-memory-info", "--js-flags=--expose-gc"],
   });
   const page = ctx.pages()[0] ?? (await ctx.newPage());
+  // Per-query wall time recorded by src/lib/portableQueryCache.ts.
+  await page.addInitScript(() => {
+    globalThis.__SOCIETYER_QUERY_PROFILE__ = {};
+  });
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error.message).slice(0, 200)));
   let crashed = false;
@@ -194,8 +198,21 @@ export async function measureRoute({ base, profile, route, timeoutMs, resolvedPa
   }
   let metrics = {};
   let latencyMs = null;
+  let queries;
+  let boot;
   if (!crashed) {
     try {
+      boot = await withTimeout(page.evaluate(() => globalThis.__SOCIETYER_LOCAL_BOOT__ ?? null), 30_000, "boot timing");
+      queries = await withTimeout(
+        page.evaluate(() =>
+          Object.entries(globalThis.__SOCIETYER_QUERY_PROFILE__ ?? {})
+            .map(([name, entry]) => ({ name, runs: entry.runs, totalMs: Math.round(entry.totalMs), maxMs: Math.round(entry.maxMs) }))
+            .sort((a, b) => b.totalMs - a.totalMs)
+            .slice(0, 12),
+        ),
+        30_000,
+        "query profile",
+      );
       latencyMs = await withTimeout(frameLatency(page), 60_000, "frame latency");
       metrics = await withTimeout(heapMetrics(page), 60_000, "heap metrics");
     } catch (error) {
@@ -218,7 +235,7 @@ export async function measureRoute({ base, profile, route, timeoutMs, resolvedPa
       /* nothing left to kill */
     }
   });
-  return { route, path, readyMs, latencyMs, ...metrics, failure, errors: errors.slice(0, 3), discovered };
+  return { route, path, readyMs, latencyMs, ...metrics, failure, errors: errors.slice(0, 3), boot, queries, discovered };
 }
 
 export async function measureAll(options) {
@@ -244,7 +261,7 @@ export async function measureAll(options) {
       results.push({ ...result, run });
       options.onResult?.(results);
       console.log(
-        `${route.padEnd(24)} ready=${result.readyMs ?? "-"}ms heap=${result.heapUsedMB ?? "-"}MB (after GC ${result.heapUsedAfterGcMB ?? "-"}MB) nodes=${result.nodes ?? "-"} ${result.failure ? "FAIL " + result.failure : ""}`,
+        `${route.padEnd(24)} ready=${result.readyMs ?? "-"}ms heap=${result.heapUsedMB ?? "-"}MB (after GC ${result.heapUsedAfterGcMB ?? "-"}MB) nodes=${result.nodes ?? "-"} boot=${result.boot ? `${result.boot.totalMs}ms/${result.boot.records} rows` : "-"} ${result.failure ? "FAIL " + result.failure : ""}`,
       );
     }
   }

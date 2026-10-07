@@ -51,6 +51,7 @@ import {
   type PortablePrincipal,
 } from "../shared/portable/index";
 import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
+import { DEFAULT_HEAVY_FIELD_POLICY } from "../shared/portable/heavyFields";
 import { runPortable as seedDemoSociety } from "../shared/functions/seed";
 import { PERMISSIONS } from "../shared/functions/permissions";
 import { buildLocalCapabilities } from "../src/lib/localCapabilities";
@@ -110,9 +111,17 @@ function memState(db: MemoryDb): Record<string, PortableDoc[]> {
 }
 function localState(store: MemoryRowStore): Record<string, PortableDoc[]> {
   const s: Record<string, PortableDoc[]> = {};
-  for (const t of store.tableNames()) s[t] = store.rows(t);
+  for (const t of store.tableNames()) s[t] = store.fullRows(t);
   return normalize(s);
 }
+
+// Third engine: the same LocalStoreDb over a store that behaves like the
+// browser vault at scale — every non-empty heavy field (documents.content,
+// minutes source records, …) lives outside the row cache and is loaded lazily,
+// and lookups go through the id map and equality indexes. It must agree with
+// MemoryDb exactly; minLength 0 externalizes even the small seeded values.
+const lazyStore = (fixture: Fixture) =>
+  new MemoryRowStore(clone(fixture), { heavyFields: { ...DEFAULT_HEAVY_FIELD_POLICY, minLength: 0 }, indexed: true });
 
 type Outcome = { threw: boolean; value?: unknown; error?: unknown };
 function errorValue(error: unknown): unknown {
@@ -137,6 +146,8 @@ const queryMem = new MemoryDb({ seed: clone(fixture), mintId: makeMintId(), now:
 const queryLocal = new LocalStoreDb(new MemoryRowStore(clone(fixture)), { mintId: makeMintId(), now: fixedNow });
 const queryMemRt = new PortableRuntime({ db: queryMem, capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
 const queryLocalRt = new PortableRuntime({ db: queryLocal, capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
+const queryLazyStore = lazyStore(fixture);
+const queryLazyRt = new PortableRuntime({ db: new LocalStoreDb(queryLazyStore, { mintId: makeMintId(), now: fixedNow }), capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
 assert.equal(principal.kind, "user");
 for (const runtime of [queryMemRt, queryLocalRt]) {
   const authority = await runtime.runQuery<{ role: string; permissions: string[] }>("permissions:myPermissions", { societyId, userId: principal.kind === "user" ? principal.userId : undefined });
@@ -183,6 +194,8 @@ for (const def of PORTABLE_FUNCTIONS) {
       const mem = await settle(() => queryMemRt.runQuery(def.name, args));
       const loc = await settle(() => queryLocalRt.runQuery(def.name, args));
       cells.push(compare(def.name, args, mem, loc));
+      const lazy = await settle(() => queryLazyRt.runQuery(def.name, args));
+      cells.push(compare(`${def.name} [lazy heavy fields]`, args, mem, lazy));
     }
     record("query", def.name, cells);
   } else {
@@ -197,6 +210,10 @@ for (const def of PORTABLE_FUNCTIONS) {
       const mem = await settle(() => memRt.runMutation(def.name, args));
       const loc = await settle(() => locRt.runMutation(def.name, args));
       cells.push(compare(def.name, args, mem, loc, { memory: memState(memDb), local: localState(locStore) }));
+      const lazyRowStore = lazyStore(fixture);
+      const lazyRt = new PortableRuntime({ db: new LocalStoreDb(lazyRowStore, { mintId: makeMintId(), now: fixedNow }), capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
+      const lazy = await settle(() => lazyRt.runMutation(def.name, args));
+      cells.push(compare(`${def.name} [lazy heavy fields]`, args, mem, lazy, { memory: memState(memDb), local: localState(lazyRowStore) }));
     }
     record("mutation", def.name, cells);
   }
@@ -218,4 +235,5 @@ if (divergences.length) {
 }
 
 console.log(`  elapsed: ${((performance.now() - startedAt) / 1000).toFixed(2)}s`);
-console.log("\n✓ MemoryDb and LocalStoreDb agree across the entire portable surface.");
+console.log(`  lazy heavy-field loads: ${queryLazyStore.externalLoads} (query engine)`);
+console.log("\n✓ MemoryDb and LocalStoreDb (eager, and lazy/indexed) agree across the entire portable surface.");
