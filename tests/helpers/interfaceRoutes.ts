@@ -385,7 +385,7 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
   },
   {
     "pattern": "/app/financials/fy/:fiscalYear",
-    "path": "/demo/app/financials/fy/2026",
+    "path": "/demo/app/financials/fy/2025-2026",
     "kind": "app",
     "fixture": "seeded"
   },
