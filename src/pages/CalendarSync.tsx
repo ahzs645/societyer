@@ -12,41 +12,10 @@ import { useConfirm } from "../components/Modal";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { convexSiteUrl } from "../lib/convexSite";
 import { CalendarClock, UploadCloud, Rss, Copy, RefreshCw } from "lucide-react";
+import { formatIcsWhen, parseIcs as parseIcsEvents } from "../../shared/icsCalendar";
 
-type ParsedEvent = { summary: string; start?: string; end?: string; location?: string; iCalUID?: string; description?: string };
-
-/** Minimal ICS (RFC 5545) VEVENT parser — enough to stage events for review. */
-function parseIcs(text: string): ParsedEvent[] {
-  // Unfold folded lines (continuation lines begin with a space/tab).
-  const unfolded = text.replace(/\r?\n[ \t]/g, "");
-  const lines = unfolded.split(/\r?\n/);
-  const events: ParsedEvent[] = [];
-  let current: ParsedEvent | null = null;
-  const toIso = (raw: string) => {
-    const m = raw.match(/(\d{4})(\d{2})(\d{2})/);
-    return m ? `${m[1]}-${m[2]}-${m[3]}` : undefined;
-  };
-  for (const line of lines) {
-    const upper = line.toUpperCase();
-    if (upper.startsWith("BEGIN:VEVENT")) current = {} as ParsedEvent;
-    else if (upper.startsWith("END:VEVENT")) {
-      if (current && (current.summary || current.start)) events.push({ ...current, summary: current.summary || "Calendar event" });
-      current = null;
-    } else if (current) {
-      const idx = line.indexOf(":");
-      if (idx === -1) continue;
-      const key = line.slice(0, idx).split(";")[0].toUpperCase();
-      const value = line.slice(idx + 1).trim();
-      if (key === "SUMMARY") current.summary = value;
-      else if (key === "DTSTART") current.start = toIso(value);
-      else if (key === "DTEND") current.end = toIso(value);
-      else if (key === "LOCATION") current.location = value;
-      else if (key === "UID") current.iCalUID = value;
-      else if (key === "DESCRIPTION") current.description = value;
-    }
-  }
-  return events;
-}
+const VIEWER_TIME_ZONE = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } })();
+const parseIcs = (text: string) => parseIcsEvents(text, { displayTimeZone: VIEWER_TIME_ZONE });
 
 /** Explain why pasted text produced no events (L19), or null when it did. */
 function icsProblem(text: string, parsedCount: number): string | null {
@@ -157,6 +126,8 @@ export function CalendarSyncPage() {
         summary: e.summary,
         start: e.start,
         end: e.end,
+        ...(e.startTimeZone ? { startTimeZone: e.startTimeZone } : {}),
+        ...(e.allDay !== undefined ? { allDay: e.allDay } : {}),
         location: e.location,
         description: e.description,
         iCalUID: e.iCalUID,
@@ -299,8 +270,8 @@ export function CalendarSyncPage() {
             {parsed.slice(0, 100).map((e, i) => (
               <tr key={i}>
                 <td><strong>{e.summary}</strong></td>
-                <td className="mono">{e.start ?? "—"}</td>
-                <td className="mono">{e.end ?? "—"}</td>
+                <td className="mono">{formatIcsWhen(e.start, e.startTimeZone, VIEWER_TIME_ZONE)}</td>
+                <td className="mono">{formatIcsWhen(e.end, e.endTimeZone, VIEWER_TIME_ZONE)}</td>
                 <td className="muted">{e.location ?? "—"}</td>
               </tr>
             ))}
