@@ -2,6 +2,7 @@ import { EVIDENCE_FIELDS, validateGenericEvidence } from "../evidenceReview";
 import { buildSourceMinuteSections, hasRecordedMinuteSectionContent, attachSourceMinuteSectionLinks } from "../sourceMinutesTransposition";
 import { buildSourceMeetingRecord, preflightSourceMeetingRecord, type SourceMeetingDocumentInput } from "../sourceMeetingRecord";
 import { requireDocumentAccess, documentAccessPredicate } from "./documents";
+import { visibleDirectoryRows } from "./peopleDirectory";
 import { minutesEvidenceOptions } from "../minutesExportEvidence";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 import { normalizeMeetingHistory, assertMeetingHistoryMutable, MEETING_HISTORY_FIELDS, type MeetingHistory, type ActionObservation } from "../meetingHistory";
@@ -1034,9 +1035,14 @@ function minutesSnapshotFields(
 }
 
 async function assertMotionPersonLinksBelongToSociety(ctx: PortableMutationCtx, societyId: string, motions: any[]) {
+  // Directory links may point at this workspace's rows or at shared/local
+  // directory rows without an owner — whatever the people directory shows it.
+  let visible: Set<string> | null = null;
   for (const motion of motions ?? []) {
     for (const personId of [motion.movedByPersonId, motion.secondedByPersonId, ...[...(motion.abstainedBy ?? []), ...(motion.opposedBy ?? [])].map((row: any) => row?.personId)]) {
-      if (personId) await getOwned(ctx, "peopleDirectory", personId, societyId);
+      if (!personId) continue;
+      visible ??= new Set((await visibleDirectoryRows(ctx, societyId)).map((person) => String(person._id)));
+      if (!visible.has(String(personId))) throw new Error("Directory person not found.");
     }
     if (motion.dissentDocumentId) await getOwned(ctx, "documents", motion.dissentDocumentId, societyId);
     await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.movedByMemberId, "movedByMemberId");

@@ -22,6 +22,7 @@ import {
   type AttendanceGridRow,
 } from "../meetingAttendanceGrid";
 import { meetingCalendarDate } from "../meetingDates";
+import { visibleDirectoryRows } from "./peopleDirectory";
 
 export type SaveAttendanceGridArgs = {
   minutesId: string;
@@ -51,8 +52,13 @@ export async function saveAttendanceGridPortable(ctx: PortableMutationCtx, args:
   if (!Array.isArray(args.rows) || args.rows.length > MAX_ROWS) throw new Error(`Attendance can hold at most ${MAX_ROWS} rows.`);
   const meeting: any = await getOwned(ctx, "meetings", String(minutes.meetingId), societyId);
   const rows = args.rows.map((row) => ({ ...row, key: row.key ?? "", status: normalizeAttendanceStatus(row.status) })) as AttendanceGridRow[];
-  for (const row of rows) {
-    if (row.personId) await getOwned(ctx, "peopleDirectory", String(row.personId), societyId);
+  // Person links must point at a directory person this workspace can see
+  // (its own rows, or shared/local directory rows without an owner).
+  if (rows.some((row) => row.personId)) {
+    const visible = new Set((await visibleDirectoryRows(ctx, societyId)).map((person) => String(person._id)));
+    for (const row of rows) {
+      if (row.personId && !visible.has(String(row.personId))) throw new Error("Directory person not found.");
+    }
   }
   const patch = attendancePatchFromRows(rows);
   const now = new Date().toISOString();

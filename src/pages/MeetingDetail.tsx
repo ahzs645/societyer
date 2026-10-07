@@ -124,6 +124,9 @@ export function MeetingDetailPage() {
   const canDownload = can("exports:download");
   const canApproveMinutes = permissionsLoaded && can("minutes:approve");
   const meeting = useQuery(api.meetings.get, can("meetings:read") && id ? { id: id as Id<"meetings"> } : "skip");
+  // Lists on this page belong to the meeting's own society (the workspace
+  // selector can point elsewhere, e.g. right after opening a deep link).
+  const meetingSocietyId = (meeting?.societyId ?? society?._id) as string | undefined;
   const minutes = useQuery(api.minutes.getByMeeting, can("minutes:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
   const liveMotionRows = useQuery(
     api.motions.listForMinutes,
@@ -165,7 +168,7 @@ export function MeetingDetailPage() {
   );
   const committees = useQuery(
     api.committees.list,
-    can("committees:read") && society && permissionsLoaded && can("committees:read") ? { societyId: society._id } : "skip",
+    can("committees:read") && meetingSocietyId && permissionsLoaded ? { societyId: meetingSocietyId as Id<"societies"> } : "skip",
   );
   const meetingCommitteeDetail = useQuery(
     api.committees.detail,
@@ -177,13 +180,13 @@ export function MeetingDetailPage() {
   const allDocuments = useQuery(api.documents.list, can("documents:read") && society && materialDraft ? { societyId: society._id } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
-  const allMeetings = useQuery(api.meetings.list, can("meetings:read") && society ? { societyId: society._id } : "skip");
+  const allMeetings = useQuery(api.meetings.list, can("meetings:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip");
   // All minutes records: powers the "minutes awaiting adoption" card and the
   // adoption-target picker on motions.
   // Light summaries (approval state, counts, action observations) — not every
   // minutes row with its full source record (ui-meetings F26).
-  const allMinutes = useQuery(api.minutes.listSummaries, can("minutes:read") && society ? { societyId: society._id } : "skip") as any[] | undefined;
-  const directoryPeople = useQuery(api.peopleDirectory.list, can("members:read") && society ? { societyId: society._id } : "skip") as any[] | undefined;
+  const allMinutes = useQuery(api.minutes.listSummaries, can("minutes:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip") as any[] | undefined;
+  const directoryPeople = useQuery(api.peopleDirectory.list, can("members:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip") as any[] | undefined;
   const [editMeetingOpen, setEditMeetingOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   // Bulk outcome for imported motions (F6): apply one outcome to the selected scope.
