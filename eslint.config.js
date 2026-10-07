@@ -6,6 +6,7 @@ export default [
   {
     ignores: [
       "dist/**",
+      ".claude/**",
       "node_modules/**",
       "convex/_generated/**",
     ],
