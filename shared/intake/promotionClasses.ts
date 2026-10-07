@@ -28,7 +28,7 @@ export const CLASS_PROMOTION: Record<string, { noun: string; creates: string }> 
   budget: { noun: "budget", creates: "a budget snapshot with its lines" },
   insurance: { noun: "insurance document", creates: "an insurance policy (Lapsed or Needs review, never Active)" },
   grant: { noun: "grant", creates: "a grant with its reporting requirements" },
-  agreement: { noun: "agreement", creates: "reporting deadlines; the agreement itself becomes a system gap (no agreements register yet)" },
+  agreement: { noun: "agreement", creates: "a draft agreement with its parties, term, value, deliverables and reports (their dates become deadlines)" },
   correspondence: { noun: "correspondence", creates: "restricted source evidence for each decision or commitment" },
   invoice: { noun: "invoice", creates: "a restricted transaction candidate" },
 };
@@ -37,14 +37,14 @@ export const CLASS_PROMOTION: Record<string, { noun: string; creates: string }> 
 export const RECORD_KIND_TABLE: Record<string, string> = {
   policy: "policies", bylawRuleSet: "bylawRuleSets", committee: "committees", director: "directors", organizationSeat: "organizationSeats", proxy: "proxies",
   financialStatementImport: "financialStatementImports", budgetSnapshot: "budgetSnapshots", insurancePolicy: "insurancePolicies", grant: "grants", deadline: "deadlines",
-  filing: "filings", sourceEvidence: "sourceEvidence", transactionCandidate: "transactionCandidates", meetingMaterial: "meetingMaterials",
+  filing: "filings", sourceEvidence: "sourceEvidence", transactionCandidate: "transactionCandidates", meetingMaterial: "meetingMaterials", agreement: "agreements",
 };
 
 /** Bundle collection → import record kind. */
 const COLLECTION_KIND: Record<string, string> = {
   policies: "policy", bylawRuleSets: "bylawRuleSet", committees: "committee", directors: "director", organizationSeats: "organizationSeat", proxies: "proxy",
   financialStatementImports: "financialStatementImport", budgetSnapshots: "budgetSnapshot", insurancePolicies: "insurancePolicy", grants: "grant", deadlines: "deadline",
-  filings: "filing", sourceEvidence: "sourceEvidence", transactionCandidates: "transactionCandidate", meetingMaterials: "meetingMaterial",
+  filings: "filing", sourceEvidence: "sourceEvidence", transactionCandidates: "transactionCandidate", meetingMaterials: "meetingMaterial", agreements: "agreement",
 };
 
 export type ClassPromotionContext = {
@@ -190,7 +190,7 @@ export function buildClassPromotionBundle(input: PromotionInput & { context: Cla
     return undefined;
   })();
   const gaps: Array<Record<string, unknown>> = [
-    ...(extraction.unsupported ?? []).map((detail: any) => ({
+    ...(extraction.unsupported ?? []).filter((detail: any) => detail?.infoType !== "agreement.contract").map((detail: any) => ({
       infoType: detail.infoType ?? "other", category: detail.category, description: detail.description, locators: detail.locators, suggestedTarget: detail.suggestedTarget,
       affectedTable: AFFECTED_TABLE[docClass] ?? "documents", ...(observed ? { observedDate: observed } : {}),
     })),
@@ -234,12 +234,13 @@ const NATIVE_FIELD: Record<string, Record<string, string>> = {
   grant: { title: "title", funder: "funder", program: "program", amount: "amountAwardedCents", amountRequested: "amountRequestedCents", purpose: "restrictedPurpose", effective: "startDate", expiry: "endDate" },
   invoice: { date: "transactionDate", amount: "amountCents", vendor: "counterparty", invoiceNumber: "comment", direction: "debitCredit" },
   correspondence: { subject: "sourceTitle", date: "sourceDate", from: "summary" },
+  agreement: { title: "title", kind: "kind", parties: "parties", effective: "effectiveDate", expiry: "endDate", amount: "valueCents", agreementNumber: "agreementNumber", status: "status", deliverables: "deliverables", reportingRequirements: "reportingObligations", reportingDue: "reportingObligations", signatories: "ourSignatories", paymentSchedule: "paymentSchedule", purpose: "summary", funder: "parties" },
 };
 
 /** Main table per class (where header fields land). */
 const MAIN_TABLE: Record<string, string[]> = {
   policy: ["policies", "committees"], bylaws: ["policies", "bylawRuleSets"], insurance: ["insurancePolicies"], financialStatement: ["financialStatementImports"], budget: ["budgetSnapshots"],
-  registryFiling: ["filings", "directors"], grant: ["grants"], agreement: ["deadlines"], invoice: ["transactionCandidates"], correspondence: ["sourceEvidence"],
+  registryFiling: ["filings", "directors"], grant: ["grants"], agreement: ["agreements"], invoice: ["transactionCandidates"], correspondence: ["sourceEvidence"],
   directorConsent: ["directors", "proxies", "organizationSeats"], roster: ["directors", "organizationSeats"], proxy: ["proxies", "organizationSeats", "directors"],
   agenda: ["meetings", "meetingMaterials"], meetingPackage: ["meetings", "meetingMaterials"], agmMaterial: ["meetings", "meetingMaterials"],
 };
@@ -289,10 +290,12 @@ export function classProvenanceTargets(docClass: string, record: Record<string, 
       const evidence = byTable("sourceEvidence")[index] ?? byTable("sourceEvidence")[0];
       if (evidence) { rows.push({ targetTable: "sourceEvidence", targetId: evidence.id, fieldPath: "summary", sourceFieldPath: path }); continue; }
     }
-    if (docClass === "agreement" && top === "reportingRequirements") {
+    if (docClass === "agreement" && /^(?:reportingRequirements|deliverables|paymentSchedule|parties|signatories)$/.test(top)) {
+      const agreement = byTable("agreements")[0];
       const index = Number(/\[(\d+)\]/.exec(path)?.[1] ?? 0);
-      const deadline = byTable("deadlines")[index];
-      if (deadline) { rows.push({ targetTable: "deadlines", targetId: deadline.id, fieldPath: pattern.endsWith(".due") ? "dueDate" : "title", sourceFieldPath: path }); continue; }
+      const list = top === "reportingRequirements" ? "reportingObligations" : top === "signatories" ? "ourSignatories" : top;
+      const leaf = pattern.endsWith(".due") ? "dueDate" : pattern.endsWith(".amount") ? "amountCents" : top === "paymentSchedule" ? "label" : top === "parties" || top === "signatories" ? "name" : "text";
+      if (agreement) { rows.push({ targetTable: "agreements", targetId: agreement.id, fieldPath: `${list}[${index}].${leaf}`, sourceFieldPath: path }); continue; }
     }
     if (!main) { notLanded.push(path); continue; }
     const field = NATIVE_FIELD[docClass]?.[pattern] ?? NATIVE_FIELD[docClass]?.[top];

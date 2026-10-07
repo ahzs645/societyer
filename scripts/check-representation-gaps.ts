@@ -88,15 +88,16 @@ assert.equal(opsDraft.bodyKey, "committee:c-ops");
 
 const bundle = {
   sources: [{ externalSystem: "gdrive", externalId: "gdrive:1", title: "Minutes" }],
-  agreements: [{ title: "Example service agreement", parties: ["Example Org"] }],
+  correspondence: [{ title: "Example letter", from: "Example Org" }],
   meetingMinutes: [{ sourceExternalIds: ["gdrive:1"], motions: [{ motionText: "Motion", dissentReport: "Two directors dissent" }] }],
 };
 const issues = importBundlePreflightIssues(bundle);
 const preflightGaps = importBundlePreflightGaps(bundle);
 assert.equal(preflightGaps.length, issues.length, "each loss becomes one gap");
-// `members` gained a bundle key (WP-B); agreements still have none.
-const agreementGap = preflightGaps.find((gap) => gap.location === "agreements")!;
-assert.deepEqual([agreementGap.infoType, agreementGap.reason], ["agreement", "no_import_key"]);
+// `members` gained a bundle key (WP-B) and `agreements` one with the agreements register (A5); correspondence still has none.
+const correspondenceGap = preflightGaps.find((gap) => gap.location === "correspondence")!;
+assert.deepEqual([correspondenceGap.infoType, correspondenceGap.reason], ["correspondence", "no_import_key"]);
+assert.deepEqual(importBundlePreflightIssues({ agreements: [{ title: "Example service agreement", parties: ["Example Org"] }] }), [], "agreements are a supported bundle key");
 const dissentGap = preflightGaps.find((gap) => gap.location.endsWith("dissentReport"))!;
 assert.deepEqual([dissentGap.infoType, dissentGap.reason, dissentGap.proposedField, dissentGap.proposedValue, dissentGap.sourceExternalId], ["motion.dissent", "import_dropped", "dissentReport", "Two directors dissent", "gdrive:1"]);
 assert.equal(importBundlePreflightGaps({ sources: {} }).length, 0, "structural errors are not gaps");

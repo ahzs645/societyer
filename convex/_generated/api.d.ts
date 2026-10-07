@@ -12,6 +12,7 @@ import type * as accounting from "../accounting.js";
 import type * as activity from "../activity.js";
 import type * as agendas from "../agendas.js";
 import type * as agm from "../agm.js";
+import type * as agreements from "../agreements.js";
 import type * as aiAgents from "../aiAgents.js";
 import type * as aiChat from "../aiChat.js";
 import type * as aiChatActions from "../aiChatActions.js";
@@ -208,6 +209,7 @@ declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   agendas: typeof agendas;
   agm: typeof agm;
+  agreements: typeof agreements;
   aiAgents: typeof aiAgents;
   aiChat: typeof aiChat;
   aiChatActions: typeof aiChatActions;

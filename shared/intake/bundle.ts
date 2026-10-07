@@ -301,7 +301,8 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
     const observed = (val<any>(record.date) ?? val<any>(record.meetingDate) ?? val<any>(record.periodEnd) ?? val<any>(record.effectiveDate) ?? val<any>(record.filedDate))?.iso;
     const sourceKey = extraction.parentFileKey ?? extraction.fileKey;
     const sha = byKey.get(sourceKey)?.sha256;
-    for (const detail of extraction.unsupported) representationGaps.push(representationGapRow(detail, sourceKey, typeof observed === "string" && /^\d{4}(?:-\d{2}){0,2}$/.test(observed) ? observed : undefined, sha, AFFECTED_TABLE[extraction.docClass] ?? "meetings"));
+    // Agreements are native now (A5): the legacy whole-record `agreement.contract` gap of older extractions is not a gap.
+    for (const detail of extraction.unsupported) if (detail.infoType !== "agreement.contract") representationGaps.push(representationGapRow(detail, sourceKey, typeof observed === "string" && /^\d{4}(?:-\d{2}){0,2}$/.test(observed) ? observed : undefined, sha, AFFECTED_TABLE[extraction.docClass] ?? "meetings"));
   }
   representationGaps.push(...classes.gaps);
   for (const skipped of minutesSkipped.filter((item) => !/canonical/.test(item.reason))) {

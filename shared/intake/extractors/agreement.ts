@@ -1,8 +1,8 @@
 /** Agreements, contracts, funding letters and grant applications/awards
  * (design §4.3). Parties, type, effective/expiry dates, amounts, payment
- * schedule, deliverables, reporting due dates and signatories. There is no
- * native agreements table: agreements become representation gaps plus
- * deadlines; grants become `grants` with the rich C10 fields. */
+ * schedule, deliverables, reporting due dates and signatories. Agreements
+ * become native draft agreements (the agreements register, A5) whose dates
+ * generate deadlines; grants become `grants` with the rich C10 fields. */
 import { versionMarker } from "../cluster";
 import { looksLikePersonName } from "../names";
 import { findDates, findMoney } from "../parse";
@@ -169,10 +169,7 @@ export function extractAgreement(input: ClassExtractorInput): ExtractionEnvelope
   const funder = funderLabel && funderLabel.value.length < 120 ? at(clean(funderLabel.value.split(/\t/)[0]), funderLabel.line, funderLabel.value.split(/\t/)[0], 0.65) : funderFrom ? at(clean(funderFrom[1]), fundingFrom!, funderFrom[1], 0.55) : letterhead ? guessAt(clean(letterhead.text), letterhead, undefined, 0.55, "Funder named in the letterhead.") : addressee ? guessAt(clean(addressee.text), addressee, undefined, 0.5, "Addressee of a funding request.") : undefined;
   const program = labelled(lines.slice(0, 60), /program(?: name)?|project (?:title|name)|initiative/i);
   const purpose = labelled(lines.slice(0, 80), /purpose|objective|project description/i);
-  // An agreement has no native target: record a representation gap (grants are native).
-  if (input.docClass === "agreement" && kind !== "grant") {
-    unsupported.push({ description: `${titleText}${parties.length ? ` between ${parties.map((party) => party.value).join(" and ")}` : ""}${effective?.value ? `, ${effective.value.iso}` : ""}${expiry?.value ? ` to ${expiry.value.iso}` : ""}${amount?.value ? `, ${amount.value.text}` : ""}.`, locators: titleCandidate ? [loc(titleCandidate)] : [fileLoc(fileName)], suggestedTarget: "agreements.record", category: "no_table", infoType: "agreement.contract" });
-  }
+  // Agreements are native (agreements register, A5); no whole-record gap is recorded any more.
   const motionRef = lines.find((line) => /\b(?:board|directors) (?:approved|resolution|motion)\b/i.test(line.text) && findDates(line.text)[0]);
   if (motionRef) references.push({ kind: "meeting", text: clean(motionRef.text).slice(0, 300), date: findDates(motionRef.text)[0].iso, locators: [loc(motionRef)] });
   if (/funder report|report/i.test(fileName) && agreementNumber?.value) references.push({ kind: "agreement", text: `Report under agreement ${agreementNumber.value}`, locators: agreementNumber.locators });

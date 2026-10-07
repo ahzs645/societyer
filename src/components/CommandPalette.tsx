@@ -48,6 +48,7 @@ import {
   Workflow,
   Plug,
   Pin,
+  FileSignature,
 } from "lucide-react";
 import { api } from "../lib/convexApi";
 import { useSociety, useSocieties, setStoredSocietyId } from "../hooks/useSociety";
@@ -106,6 +107,7 @@ const SEARCH_KIND_PRESENTATION: Record<string, { label: string; icon: any }> = {
   policy: { label: "Policy", icon: Shield },
   insurance: { label: "Insurance", icon: Shield },
   filing: { label: "Filing", icon: FileCog },
+  agreement: { label: "Agreement", icon: FileSignature },
 };
 
 /**

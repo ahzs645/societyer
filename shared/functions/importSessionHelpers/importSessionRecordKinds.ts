@@ -106,6 +106,7 @@ function recordsFromBundle(bundle: any) {
   for (const budget of arrayOf(bundle?.operatingBudgets)) records.push(makeRecord("operatingBudget", "budgets", budget));
   for (const doc of arrayOf(bundle?.documentMap)) records.push(makeRecord("documentCandidate", firstSection(doc), doc));
   for (const gap of arrayOf(bundle?.representationGaps)) records.push(makeRecord("representationGap", "representationGaps", gap));
+  for (const agreement of arrayOf(bundle?.agreements)) records.push(makeRecord("agreement", "agreements", agreement));
   return records;
 }
 
@@ -193,6 +194,7 @@ function targetTableForRecordKind(kind: string) {
     bylawRuleSet: "bylawRuleSets",
     operatingBudget: "budgets",
     representationGap: "representationGaps",
+    agreement: "agreements",
   } as Record<string, string>)[kind] ?? kind;
 }
 

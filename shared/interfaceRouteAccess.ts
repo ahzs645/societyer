@@ -60,6 +60,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/assets": "financials:read",
   "/app/inventory": "financials:read",
   "/app/insurance": "financials:read",
+  "/app/agreements": "agreements:read",
   "/app/dividends": "financials:read",
   "/app/elections": "elections:read",
   "/app/grants": "grants:read",

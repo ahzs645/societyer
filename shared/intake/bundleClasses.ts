@@ -3,14 +3,15 @@
  * meetingMaterials, policies (+ versions), bylawRuleSets (Draft), committees
  * (terms of reference), directors with term intervals, organizationSeats,
  * proxies, financialStatementImports, budgetSnapshots, insurancePolicies,
- * grants, deadlines, filings, sourceEvidence and transactionCandidates.
- * Facts without a native home stay in representationGaps (agreements,
- * signing tiers, AGM cadence …). Everything stages as Pending review. */
+ * grants, agreements (native register, A5), deadlines, filings, sourceEvidence
+ * and transactionCandidates. Facts without a native home stay in representationGaps
+ * (signing tiers, AGM cadence …). Everything stages as Pending review. */
 import type { IntakeExtractionResult, IntakeRunResult } from "./bundle";
 import { bodyKeyFor } from "./entities";
 import { agendaOnlyMeetingStatus } from "../meetingStatus";
 import { bodyFromText } from "./minutes/extractMinutes";
 import { normalizePersonKey } from "./names";
+import { agreementPayloadFromExtraction } from "../agreements";
 import type { Locator } from "./schemas/common";
 
 const val = (field: any) => (field && (field.status === "stated" || field.status === "inferred" || field.status === "conflicting") ? field.value : undefined);
@@ -499,20 +500,24 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
     }, [extraction.fileKey]);
   }
 
-  // 6. Grants (rich C10 fields) and agreements (representation gap + reporting deadlines).
+  // 6. Grants (rich C10 fields) and agreements (native agreements register, A5).
   const GRANT_STATUS = (stage: string, expired: boolean) => stage === "application" || stage === "proposal" ? "Submitted" : stage === "report" ? (expired ? "Closed" : "Active") : stage === "award" || stage === "agreement" ? (expired ? "Closed" : "Active") : "Drafting";
   for (const extraction of byClass(["agreement", "grant"])) {
     const record: any = extraction.record;
+    // An agreement is a native draft agreement; its deliverable, report, renewal and end
+    // dates become deadlines when the agreement is applied (shared/agreements.ts).
+    const fundingAgreement = extraction.docClass === "grant" && (val(record.grantStage) === "agreement" || ["agreement", "contract", "mou"].includes(String(val(record.kind))));
+    if ((extraction.docClass !== "grant" && val(record.kind) !== "grant") || fundingAgreement) {
+      push(bundle, "agreements", agreementPayloadFromExtraction(record, { fileKey: extraction.fileKey, fileName: fileName(extraction.fileKey), organizationName: run.organizationName, asOfISO: asOf }), [extraction.fileKey]);
+      if (!fundingAgreement) continue; // a signed funding agreement is also the grant's record below
+    }
     const title = String(val(record.title) ?? fileName(extraction.fileKey)).slice(0, 200);
     const expiry = dayIso(record.expiry);
     const reporting = (record.reportingRequirements ?? []).filter((item: any) => dayIso(item.due));
     for (const item of reporting) {
       push(bundle, "deadlines", { title: `Report due — ${title}`.slice(0, 200), dueDate: dayIso(item.due), category: extraction.docClass === "grant" ? "Grant reporting" : "Agreement reporting", done: false, sourceExternalIds: [extraction.fileKey], confidence: "Review", notes: `${String(val(item.text) ?? "").slice(0, 300)}${dayIso(item.due)! < asOf ? " (historical date: confirm whether the report was submitted)" : ""}` }, [extraction.fileKey]);
     }
-    if (extraction.docClass !== "grant" && val(record.kind) !== "grant") {
-      if (expiry && !reporting.length && expiry >= asOf) push(bundle, "deadlines", { title: `Agreement ends — ${title}`.slice(0, 200), dueDate: expiry, category: "Agreement", done: false, sourceExternalIds: [extraction.fileKey], confidence: "Review" }, [extraction.fileKey]);
-      continue; // the agreement itself is a representation gap (from the extractor's unsupported[]).
-    }
+
     const parties = (record.parties ?? []).map(val).filter(Boolean) as string[];
     const org = run.organizationName?.toLowerCase().slice(0, 20);
     const funder = val(record.funder) ?? parties.find((party) => !org || !party.toLowerCase().includes(org)) ?? "Needs review";

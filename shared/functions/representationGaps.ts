@@ -576,7 +576,7 @@ const COVERAGE_AREAS: Record<string, CoverageSource[]> = {
     { table: "commitments", label: "Commitments", permission: "commitments:read" },
   ],
   assets: [{ table: "assets", label: "Assets", permission: "financials:read" }],
-  agreements: [],
+  agreements: [{ table: "agreements", label: "Agreements", permission: "agreements:read" }],
   documents: [],
   other: [],
 };

@@ -8,6 +8,7 @@ import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { usePermissions } from "../../hooks/usePermissions";
 import type { ContinuityRow, CrossReferenceGap, RecordGap } from "../../../shared/continuity";
 import { CROSS_REFERENCE_EXPECTATION_KEY } from "../../../shared/continuity";
+import type { AgreementGap } from "../../../shared/agreements";
 import { SEVERITY_LABELS, SEVERITY_TONE, STATUS_META } from "./statusMeta";
 import type { HeatmapSelect } from "./ContinuityHeatmap";
 
@@ -16,12 +17,15 @@ export function RecordGapsPanel({
   societyId,
   recordGaps,
   crossReferences,
+  agreementGaps,
   rows,
   onOpen,
 }: {
   societyId: string;
   recordGaps: RecordGap[];
   crossReferences: CrossReferenceGap[];
+  /** Agreements register: expiring without a renewal decision, overdue reports (null when not readable). */
+  agreementGaps?: AgreementGap[] | null;
   rows: ContinuityRow[];
   onOpen: HeatmapSelect;
 }) {
@@ -161,6 +165,33 @@ export function RecordGapsPanel({
           })}
         </div>
       </section>
+      {agreementGaps && (
+        <section className="card" data-testid="agreement-gaps">
+          <div className="card__head">
+            <h2 className="card__title">Agreement renewals and reports</h2>
+            <span className="card__subtitle">Expiring agreements without a renewal decision and overdue reports · {agreementGaps.length} open</span>
+          </div>
+          <div className="card__body">
+            {!agreementGaps.length && <div className="muted">Every agreement ending soon has a renewal decision and no report is overdue.</div>}
+            {agreementGaps.map((gap) => (
+              <div key={gap.key} className="coverage-gap-row">
+                <div>
+                  <strong><Link to={`/app/agreements/${gap.agreementId}`}>{gap.agreementTitle}</Link>: {gap.title}</strong>
+                  <div className="coverage-gap-row__meta">
+                    <Badge tone={gap.kind === "funder_report" ? "danger" : "warn"}>{gap.kind === "funder_report" ? "Report overdue" : "Renewal decision"}</Badge>
+                    <Badge tone={SEVERITY_TONE[gap.severity] ?? "neutral"}>{SEVERITY_LABELS[gap.severity] ?? gap.severity}</Badge>
+                    <span className="muted">due {gap.dueDate}</span>
+                  </div>
+                  <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{gap.note}</div>
+                </div>
+                <div className="coverage-actions" style={{ marginTop: 0 }}>
+                  <Link className="btn btn--sm" to={`/app/agreements/${gap.agreementId}`}>Open agreement</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -23,11 +23,12 @@ export type ExpectationKind =
   | "role_term"
   | "insurance_term"
   | "policy_review"
-  | "funder_report";
+  | "funder_report"
+  | "agreement_renewal";
 
 export const EXPECTATION_KINDS: readonly ExpectationKind[] = [
   "meeting", "agm", "annual_filing", "financial_statement", "director_consent", "director_count",
-  "role_term", "insurance_term", "policy_review", "funder_report",
+  "role_term", "insurance_term", "policy_review", "funder_report", "agreement_renewal",
 ];
 
 export const EXPECTATION_KIND_LABELS: Record<ExpectationKind, string> = {
@@ -41,6 +42,7 @@ export const EXPECTATION_KIND_LABELS: Record<ExpectationKind, string> = {
   insurance_term: "Insurance in force",
   policy_review: "Policy reviewed",
   funder_report: "Funder report submitted",
+  agreement_renewal: "Agreement renewal decided",
 };
 
 export type BodyKind = "members" | "board" | "committee" | "organization";
