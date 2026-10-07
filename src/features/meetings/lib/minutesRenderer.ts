@@ -688,7 +688,9 @@ function renderNumberedAgendaMinutes({
   const endTime = minutes.adjournedAt ? formatTime(minutes.adjournedAt) : "";
   const timeRange = endTime ? `${startTime} - ${endTime}` : startTime;
   const location = meeting.location || minutes.nextMeetingLocation || placeholder("location", options);
-  const presentLine = minutes.attendees.length ? presentNamesWithRoles(minutes).join(", ") : placeholder("attendees", options);
+  const alsoPresent = alsoPresentNames(minutes);
+  const presentNames = presentNamesWithRoles(minutes).filter((name) => !alsoPresent.includes(name));
+  const presentLine = presentNames.length ? presentNames.join(", ") : placeholder("attendees", options);
   const absentLine = minutes.absent.length ? minutes.absent.join(", ") : "";
   const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
   const topicMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
@@ -713,6 +715,7 @@ function renderNumberedAgendaMinutes({
 
     <h2>Attendees:</h2>
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
+    ${alsoPresent.length ? `<p><strong>Also present:</strong> ${eh(alsoPresent.join(", "))}</p>` : ""}
     ${absentLine ? `<p><strong>Absent / Regrets:</strong> ${eh(absentLine)}</p>` : ""}
     <p>Quorum: ${minutesQuorumLabel(minutes)}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
     ${renderOfficialLine(minutes, options)}
@@ -1027,6 +1030,15 @@ function presentNamesWithRoles(minutes: MinutesRenderArgs["minutes"]): string[] 
     const role = roles.get(String(name).trim().toLowerCase());
     return role ? `${name} (${role})` : name;
   });
+}
+
+/** Staff and guests from the attendance grid, listed apart from the members present. */
+function alsoPresentNames(minutes: MinutesRenderArgs["minutes"]): string[] {
+  const rows = (minutes.detailedAttendance ?? []).filter((row) => row?.name && ["staff", "guest"].includes(String(row.status)));
+  const names = new Set(minutes.attendees.map((name) => String(name).trim().toLowerCase()));
+  return rows
+    .filter((row) => names.has(String(row.name).trim().toLowerCase()))
+    .map((row) => (row.roleTitle ? `${row.name} (${row.roleTitle})` : row.name));
 }
 
 /** One line per structured next meeting: when (as written), body, place, notes. */

@@ -59,10 +59,16 @@ export function minutesApprovalIssues(input: ApprovalCheckInput): string[] {
 }
 
 /** Meetings that could have approved these minutes: later ones, nearest first. */
-export function approvingMeetingCandidates<T extends MeetingDateLike & { _id?: string; status?: string }>(meeting: MeetingDateLike & { _id?: string }, meetings: readonly T[]): T[] {
+export function approvingMeetingCandidates<T extends MeetingDateLike & { _id?: string; status?: string; type?: string; committeeId?: unknown }>(meeting: MeetingDateLike & { _id?: string; type?: string; committeeId?: unknown }, meetings: readonly T[]): T[] {
   const meetingDay = meetingCalendarDate(meeting) ?? "";
+  // Minutes are adopted by the same body: AGM minutes at the next AGM, a
+  // committee's at its next meeting. Those come first, nearest first; other
+  // later meetings follow.
+  const sameBody = (row: T) => String(row.type ?? "") === String(meeting.type ?? "")
+    && String(row.committeeId ?? "") === String(meeting.committeeId ?? "");
   return meetings
     .filter((row) => String(row._id) !== String(meeting._id) && row.status !== "Cancelled")
     .filter((row) => (meetingCalendarDate(row) ?? "") > meetingDay)
-    .sort((a, b) => String(meetingCalendarDate(a)).localeCompare(String(meetingCalendarDate(b))));
+    .sort((a, b) => (sameBody(a) === sameBody(b) ? 0 : sameBody(a) ? -1 : 1)
+      || String(meetingCalendarDate(a)).localeCompare(String(meetingCalendarDate(b))));
 }

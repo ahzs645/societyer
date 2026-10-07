@@ -10,7 +10,7 @@ import { attendanceRowsFromPaste, blankAttendanceRow, mergeAttendanceRows } from
 import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
 import { effectiveSourceFidelity } from "../src/features/meetings/lib/minutesExportPrefs";
 import { defaultNewMeetingStart, meetingCreateLabels, pastNoticeDateValue } from "../src/features/meetings/lib/noticeWindow";
-import { minutesApprovalIssues } from "../shared/meetingApproval";
+import { approvingMeetingCandidates, minutesApprovalIssues } from "../shared/meetingApproval";
 import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
 import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectionAlign";
 import { formalMinutesExportBlockers } from "../src/features/meetings/lib/meetingDetailHelpers";
@@ -272,3 +272,26 @@ assert.match(String(pastNoticeDateValue("2019-06-01", "2019-05-28").error), /on 
 assert.match(String(pastNoticeDateValue("2019-02-30", "2019-05-28").error), /real calendar date/);
 assert.match(String(pastNoticeDateValue("May 1", "2019-05-28").error), /YYYY-MM-DD/);
 console.log("✓ past meetings: notice is recorded with its real date, never 'sent today'");
+
+const candidates = approvingMeetingCandidates(
+  { _id: "agm19", type: "AGM", scheduledAt: "2019-05-28T12:00:00.000Z" },
+  [
+    { _id: "b1", type: "Board", scheduledAt: "2019-09-17T12:00:00.000Z" },
+    { _id: "agm20", type: "AGM", scheduledAt: "2020-06-23T12:00:00.000Z" },
+    { _id: "old", type: "AGM", scheduledAt: "2018-11-28T12:00:00.000Z" },
+  ],
+);
+assert.deepEqual(candidates.map((row) => row._id), ["agm20", "b1"], "the next AGM is offered first for AGM minutes");
+
+const withStaff = renderMinutesHtml({
+  society: { name: "Retest Society" } as any,
+  meeting: { title: "Board meeting", scheduledAt: "2021-02-23T12:00:00.000Z", type: "Board" } as any,
+  minutes: { heldAt: "2021-02-23T12:00:00.000Z", attendees: ["Alex Example", "Casey Demo"], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [], motions: [],
+    detailedAttendance: [{ name: "Alex Example", status: "present" }, { name: "Casey Demo", status: "staff", roleTitle: "Note-taker" }],
+    sections: [{ title: "Welcome", discussion: "Opened." }] } as any,
+  styleId: "numbered-agenda",
+  options: { sourceFidelity: false },
+} as any);
+assert.match(withStaff, /<strong>Present:<\/strong> Alex Example<\/p>/);
+assert.match(withStaff, /<strong>Also present:<\/strong> Casey Demo \(Note-taker\)/);
+console.log("✓ approval candidates by body; staff listed as also present");

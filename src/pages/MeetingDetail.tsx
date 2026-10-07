@@ -1192,7 +1192,9 @@ export function MeetingDetailPage() {
       .replace(/\.(?:docx?|pdf|rtf|odt|txt)\b/gi, "")
       .replace(/^\s*\d{4}-\d{2}-\d{2}\s*/, "")
       .replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
-      .slice(0, 60).replace(/-+$/, "") || "meeting";
+      .slice(0, 60).replace(/-+$/, "")
+      // "…-meeting-minutes" + "-minutes" read as "minutes-minutes".
+      .replace(/-?minutes$/, "") || "meeting";
     const redact = publicCopyMode ? (s: string) => redactText(s, redactOpts()) : undefined;
     const bodyHtml = renderExportBody(redact, publicCopyMode);
     const slug = publicCopyMode ? "public-minutes" : "minutes";
@@ -2790,7 +2792,7 @@ export function MeetingDetailPage() {
               Minutes are usually adopted at the next meeting. Record when these minutes were
               approved and, if you like, which meeting adopted them.
             </p>
-            <Field label="Approved at meeting" hint="Later meetings, nearest first. Picking one sets the approval date to that meeting's date.">
+            <Field label="Approved at meeting" hint="Later meetings of the same body first, nearest first. Picking one sets the approval date to that meeting's date.">
               <Select
                 value={approvalEdit.approvedInMeetingId}
                 searchable
