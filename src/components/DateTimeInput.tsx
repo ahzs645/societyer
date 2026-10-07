@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
 type Props = {
   /** ISO-ish "YYYY-MM-DDTHH:mm" (matches native datetime-local). Empty string for no value. */
@@ -191,6 +192,30 @@ export function DateTimeInput({
   }, [view]);
 
   const pickDay = (d: Date) => onChange(toISO(d, hh, mm));
+  // Typed date (O-9): meetings recorded from old minutes would otherwise need
+  // one click per month back to the meeting. Keeps the chosen time.
+  const [typed, setTyped] = useState("");
+  const [typedError, setTypedError] = useState<string | null>(null);
+  const typedInputId = useMemo(() => `datetime-typed-${Math.random().toString(36).slice(2, 9)}`, []);
+  useEffect(() => {
+    if (!open) {
+      setTyped("");
+      setTypedError(null);
+    }
+  }, [open]);
+  const applyTyped = () => {
+    const result = parseTypedDate(typed);
+    if (!result.ok) {
+      setTypedError(result.error);
+      return;
+    }
+    const [year, month, day] = result.value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    setTypedError(null);
+    setTyped("");
+    setView(new Date(year, month - 1, 1));
+    pickDay(date);
+  };
   const setTime = (nextHH: number, nextMM: number) => {
     setHH(nextHH);
     setMM(nextMM);
@@ -281,6 +306,37 @@ export function DateTimeInput({
               className={`calendar calendar--with-time${isBottomSheet ? " calendar--sheet" : ""}`}
               style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
             >
+              <div className="calendar__typed">
+                <label htmlFor={typedInputId} className="sr-only">Type a date</label>
+                <input
+                  id={typedInputId}
+                  className="input calendar__typed-input"
+                  value={typed}
+                  placeholder={TYPED_DATE_HINT}
+                  autoComplete="off"
+                  aria-invalid={typedError ? true : undefined}
+                  aria-describedby={typedError ? `${typedInputId}-error` : undefined}
+                  onChange={(event) => {
+                    setTyped(event.target.value);
+                    if (typedError) setTypedError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      applyTyped();
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn--ghost btn--sm" onClick={applyTyped} disabled={!typed.trim()}>
+                  Set
+                </button>
+                {typedError && (
+                  <div id={`${typedInputId}-error`} className="calendar__typed-error" role="alert">
+                    {typedError}
+                  </div>
+                )}
+              </div>
               <div className="calendar__head">
                 <button type="button" className="calendar__nav" aria-label="Previous month" onClick={() => setView((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
                   <ChevronLeft size={14} />

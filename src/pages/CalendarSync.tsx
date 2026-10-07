@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { convexSiteUrl } from "../lib/convexSite";
 import { CalendarClock, UploadCloud, Rss, Copy, RefreshCw } from "lucide-react";
@@ -69,6 +70,7 @@ export function CalendarSyncPage() {
   const feedAvailable = !isLocalDataRuntime() && Boolean(convexSiteUrl());
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const stage = useMutation(api.calendarSync.stageCalendarEvents);
   const setFeedToken = useMutation(api.calendarFeed.setFeedToken);
   const feedToken = useQuery(api.calendarFeed.getFeedToken, society && canManageFeed ? { societyId: society._id } : "skip");
@@ -94,6 +96,12 @@ export function CalendarSyncPage() {
 
   const enableFeed = async () => {
     if (!feedAvailable || !canManageFeed) return;
+    if (feedToken && !(await confirm({
+      title: "Regenerate the calendar feed link?",
+      message: "The current subscribe URL stops working immediately. Every calendar subscribed to it must be re-subscribed with the new link.",
+      confirmLabel: "Regenerate link",
+      tone: "warn",
+    }))) return;
     setFeedBusy(true);
     try {
       // Token is generated client-side (128 bits) and stored by the mutation,
@@ -110,6 +118,12 @@ export function CalendarSyncPage() {
 
   const disableFeed = async () => {
     if (!canManageFeed) return;
+    if (!(await confirm({
+      title: "Disable the calendar feed?",
+      message: "The subscribe URL stops working and subscribed calendars stop receiving these dates. Enabling the feed again creates a new link.",
+      confirmLabel: "Disable feed",
+      tone: "danger",
+    }))) return;
     setFeedBusy(true);
     try {
       await setFeedToken({ societyId: society._id, token: null });

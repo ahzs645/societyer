@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
 type Props = {
   value: string; // "YYYY-MM-DD" or ""
@@ -82,6 +83,11 @@ export function DatePicker({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [quick, setQuick] = useState<"month" | "year" | null>(null);
+  // Typed entry (O-9): reaching a date years back by clicking is slow, so the
+  // popover also takes a typed date, validated before it is applied.
+  const [typed, setTyped] = useState("");
+  const [typedError, setTypedError] = useState<string | null>(null);
+  const typedInputId = useMemo(() => `date-typed-${Math.random().toString(36).slice(2, 9)}`, []);
   const [focusDate, setFocusDate] = useState<Date | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".calendar__cell.is-active:not(:disabled)");
@@ -112,6 +118,8 @@ export function DatePicker({
     if (!open) {
       setQuick(null);
       setFocusDate(null);
+      setTyped("");
+      setTypedError(null);
     } else {
       setFocusDate(selected ?? new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1));
     }
@@ -212,6 +220,18 @@ export function DatePicker({
     if (minD && d < minD) return;
     if (maxD && d > maxD) return;
     onChange(toISO(d));
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+
+  const applyTyped = () => {
+    const result = parseTypedDate(typed, { min, max });
+    if (!result.ok) {
+      setTypedError(result.error);
+      return;
+    }
+    setTypedError(null);
+    onChange(result.value);
     setOpen(false);
     triggerRef.current?.focus({ preventScroll: true });
   };
@@ -357,6 +377,38 @@ export function DatePicker({
               onKeyDown={onPopoverKey}
               style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
             >
+              <div className="calendar__typed">
+                <label htmlFor={typedInputId} className="sr-only">Type a date</label>
+                <input
+                  id={typedInputId}
+                  className="input calendar__typed-input"
+                  value={typed}
+                  placeholder={TYPED_DATE_HINT}
+                  autoComplete="off"
+                  inputMode="text"
+                  aria-invalid={typedError ? true : undefined}
+                  aria-describedby={typedError ? `${typedInputId}-error` : undefined}
+                  onChange={(event) => {
+                    setTyped(event.target.value);
+                    if (typedError) setTypedError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      applyTyped();
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn--ghost btn--sm" onClick={applyTyped} disabled={!typed.trim()}>
+                  Set
+                </button>
+                {typedError && (
+                  <div id={`${typedInputId}-error`} className="calendar__typed-error" role="alert">
+                    {typedError}
+                  </div>
+                )}
+              </div>
               <div className="calendar__head">
                 <button
                   type="button"

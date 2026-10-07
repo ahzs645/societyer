@@ -396,9 +396,6 @@ export function AccountingWorkbenchPage() {
         actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>}
       />
 
-      <FinancialVersionCard societyId={society._id} />
-      <AccountingStatementsCard societyId={society._id} />
-
       <div className="accounting-action-panel">
         <div className="accounting-action-panel__heading">
           <strong>Accounting tools</strong>
@@ -435,6 +432,11 @@ export function AccountingWorkbenchPage() {
         <div className="stat"><div className="stat__label">Debit total</div><div className="stat__value">{money(totalDebit)}</div></div>
         <div className="stat"><div className="stat__label">Credit total</div><div className="stat__value">{money(totalCredit)}</div></div>
       </div>
+
+      {/* Reports follow the tools and totals: the posting actions used to sit
+          below a full balance sheet, income statement and budget form. */}
+      <AccountingStatementsCard societyId={society._id} />
+      <FinancialVersionCard societyId={society._id} />
 
       <div className="accounting-grid">
         <section className="card">
