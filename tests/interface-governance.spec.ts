@@ -73,7 +73,9 @@ test("AGM steps fit a narrow phone and local delivery actions remain honest", as
   await fitsPage(page);
   await page.goto("/demo/app/notifications");
   await expect(page.getByRole("button", { name: "Send digest", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "About Notifications", exact: true }).click();
   await expect(page.getByText("Email and SMS digests require a connected server. In-app notifications and reminders remain available here.", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Mark all read", exact: true }).click();
   await expect(page.getByText("Marked all read", { exact: true })).toBeVisible();
   await fitsPage(page);

@@ -78,7 +78,8 @@ test("corporation MVP flow renders obligations, share register, registration, an
   const annualReturnRow = page.locator("tr", { hasText: "Annual return filing window" }).first();
   await annualReturnRow.getByRole("button", { name: "Track" }).click();
   await expect(page.getByText("Filing created")).toBeVisible();
-  await annualReturnRow.getByRole("button", { name: "Packet" }).click();
+  await annualReturnRow.getByRole("button", { name: /^More actions for / }).click();
+  await page.getByRole("menuitem", { name: "Stage document packet" }).click();
   await expect(page.getByText("Packet staged").last()).toBeVisible();
 
   await navigate("/app/filings");

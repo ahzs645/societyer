@@ -26,6 +26,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { InfoPopover } from "../components/InfoPopover";
 import { Badge, Banner, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal, useConfirm } from "../components/Modal";
@@ -37,7 +38,6 @@ import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { formatDate } from "../lib/format";
 import {
-  LEGAL_COPY_REVIEWED,
   PIPA_POLICY_REQUIREMENTS,
   PIPA_TEMPLATE_RESOURCES,
   RECORDS_INSPECTION_GUIDANCE,
@@ -352,7 +352,11 @@ export function PrivacyPage() {
         title="Privacy (PIPA)"
         icon={<Shield size={16} />}
         iconColor="green"
-        subtitle={`A practical setup checklist for privacy policies, complaint handling, member-data access, consent, and training. ${LEGAL_COPY_REVIEWED}.`}
+        subtitle="Set up privacy policies, complaints, member-data access and training."
+        info={<>
+          <p>A practical setup checklist for privacy policies, complaint handling, member-data access, consent, and training.</p>
+          <p><strong>Treat this as a setup workflow, not a public-registry filing.</strong> PIPA requires the society to adopt and follow privacy policies, practices, and a complaint process. A missing linked document in Societyer is an evidence gap; it is not normally a requirement to file a public registry privacy policy.</p>
+        </>}
         actions={
           <>
             <button className="btn-action btn-action--primary" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
@@ -368,12 +372,6 @@ export function PrivacyPage() {
         }
       />
 
-      <Banner tone="info" title="Treat this as a setup workflow, not a public-registry filing">
-        PIPA requires the society to adopt and follow privacy policies, practices, and a complaint process.
-        A missing linked document in Societyer is an evidence gap; it is not normally a requirement to file a
-        public registry privacy policy.
-      </Banner>
-
       <div className="two-col privacy-layout">
         <div className="col privacy-main-col">
           <div className="card privacy-create-card">
@@ -382,10 +380,10 @@ export function PrivacyPage() {
                 <h2 className="card__title">
                   <FileText size={14} />
                   Create the policy document
+                  <InfoPopover label="About the policy document">
+                    <p>Start with a Societyer draft, edit it here, then link the final approved version as evidence.</p>
+                  </InfoPopover>
                 </h2>
-                <p className="card__subtitle">
-                  Start with a Societyer draft, edit it here, then link the final approved version as evidence.
-                </p>
               </div>
             </div>
             <div className="card__body">
@@ -400,20 +398,14 @@ export function PrivacyPage() {
                   </strong>
                   <span>
                     {adoptedPolicyDocument
-                      ? policyDraft
-                        ? `${adoptedPolicyDocument.title} is linked as the adopted privacy policy evidence. Open the draft, tailor it to the society, and link it as evidence only after approval.`
-                        : `${adoptedPolicyDocument.title} is linked as the adopted privacy policy evidence. Create a new draft only if you are planning to update the adopted policy.`
+                      ? `${adoptedPolicyDocument.title} is the adopted policy.`
                       : policyDraft
-                        ? "Open the draft, tailor it to the society, and link it as evidence only after approval."
-                        : "Create a Markdown draft populated with this society's name, privacy officer fields, member-data status, and PIPA baseline sections."}
+                        ? "Tailor the draft, then link it as evidence after approval."
+                        : "Use the header button to start a draft filled in with your society's details."}
                   </span>
                 </div>
                 <div className="privacy-document-path__actions">
-                  <button className="btn btn--accent btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
-                    {policyDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
-                    {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
-                  </button>
-                  <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
+                  <button className="btn btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
                     {memberDataMemoDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {memberDataMemoDraft ? canWriteDocuments ? "Edit data memo" : "View data memo" : "Create data memo"}
                   </button>
@@ -428,29 +420,28 @@ export function PrivacyPage() {
                 <h2 className="card__title">
                   <ClipboardList size={14} />
                   Setup motions backlog
+                  <InfoPopover label="About setup motions">
+                    <p>Keep draft motions separate until you are ready to place them on a future agenda and seed them into minutes.</p>
+                    <p>Seed motions for designating the privacy officer, adopting the policy and complaint process, documenting member-data access, and setting the training review cycle.</p>
+                  </InfoPopover>
                 </h2>
-                <p className="card__subtitle">
-                  Keep draft motions separate until you are ready to place them on a future agenda and seed them into minutes.
-                </p>
               </div>
             </div>
             <div className="card__body">
               <div className="privacy-document-path">
                 <div className="privacy-document-path__copy">
                   <strong>{pipaSetupMotionCount ? `${pipaSetupMotionCount} PIPA setup motions in backlog` : "No PIPA setup motions in backlog"}</strong>
-                  <span>
-                    Seed motions for designating the privacy officer, adopting the policy and complaint process, documenting member-data access, and setting the training review cycle.
-                  </span>
+                  <span>Officer, policy, member-data access and training motions.</span>
                 </div>
                 <div className="privacy-document-path__actions">
                   <button className="btn btn--accent btn--sm" disabled={!canWriteMotions} onClick={addPipaSetupMotions}>
                     <Plus size={12} />
                     Add setup motions
                   </button>
-                  <Link className="btn btn--ghost btn--sm" to="/app/motion-backlog">
+                  <Link className="btn btn--sm" to="/app/motion-backlog">
                     <ClipboardList size={12} /> Backlog
                   </Link>
-                  <Link className="btn btn--ghost btn--sm" to="/app/agendas">
+                  <Link className="btn btn--sm" to="/app/agendas">
                     <CalendarPlus size={12} /> Agendas
                   </Link>
                 </div>
@@ -464,12 +455,12 @@ export function PrivacyPage() {
                 <h2 className="card__title">
                   <Shield size={14} />
                   Privacy operations record
+                  <InfoPopover label="About the privacy operations record">
+                    <p>Internal PIPA setup state, including member-data custody notes.</p>
+                  </InfoPopover>
                 </h2>
-                <p className="card__subtitle">
-                  Internal PIPA setup state, including student-newspaper member-data custody notes.
-                </p>
               </div>
-              <button className="btn btn--accent btn--sm" disabled={!canWriteSociety || privacySaving} onClick={savePrivacyOperations}>
+              <button className="btn btn--accent btn--sm" style={{ marginLeft: "auto" }} disabled={!canWriteSociety || privacySaving} onClick={savePrivacyOperations}>
                 {privacySaving ? "Saving..." : "Save record"}
               </button>
             </div>
@@ -551,7 +542,7 @@ export function PrivacyPage() {
                   Privacy setup checklist
                 </h2>
                 <p className="card__subtitle">
-                  {completedSetupCount}/5 baseline items are ready. Work through these before marking the program documented.
+                  {completedSetupCount}/5 ready
                 </p>
               </div>
             </div>
@@ -562,7 +553,7 @@ export function PrivacyPage() {
               status={hasOfficer ? "Ready" : "Needed"}
               tone={hasOfficer ? "success" : "warn"}
               citationIds={["PIPA-OFFICER"]}
-              actions={<Link className="btn btn--ghost btn--sm" to="/app/society"><UserRound size={12} /> Society</Link>}
+              actions={<Link className="btn btn--sm" to="/app/society"><UserRound size={12} /> Society</Link>}
             >
               {hasOfficer ? (
                 <>
@@ -585,7 +576,7 @@ export function PrivacyPage() {
                     {policyDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
                   </button>
-                  <a className="btn btn--ghost btn--sm" href="#privacy-operations"><FileText size={12} /> Program status</a>
+                  <a className="btn btn--sm" href="#privacy-operations"><FileText size={12} /> Program status</a>
                 </>
               )}
             >
@@ -608,11 +599,11 @@ export function PrivacyPage() {
               actions={(
                 <>
                   {policyDraft && (
-                    <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
+                    <button className="btn btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
                       <PenLine size={12} /> Review draft
                     </button>
                   )}
-                  <Link className="btn btn--ghost btn--sm" to="/app/documents"><FileCheck2 size={12} /> Documents</Link>
+                  <Link className="btn btn--sm" to="/app/documents"><FileCheck2 size={12} /> Documents</Link>
                 </>
               )}
             >
@@ -629,11 +620,11 @@ export function PrivacyPage() {
               citationIds={["PIPA-POLICY", "BC-SOC-RECORDS"]}
               actions={(
                 <>
-                  <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
+                  <button className="btn btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
                     {memberDataMemoDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {memberDataMemoDraft ? canWriteDocuments ? "Edit memo" : "View memo" : "Create memo"}
                   </button>
-                  <a className="btn btn--ghost btn--sm" href="#privacy-operations"><UsersRound size={12} /> Data access</a>
+                  <a className="btn btn--sm" href="#privacy-operations"><UsersRound size={12} /> Data access</a>
                 </>
               )}
             >
@@ -649,10 +640,10 @@ export function PrivacyPage() {
               actions={(
                 <>
                   {communicationsEnabled && (
-                    <Link className="btn btn--ghost btn--sm" to="/app/communications"><MailCheck size={12} /> Consent</Link>
+                    <Link className="btn btn--sm" to="/app/communications"><MailCheck size={12} /> Consent</Link>
                   )}
                   {trainingEnabled && (
-                    <Link className="btn btn--ghost btn--sm" to="/app/pipa-training"><GraduationCap size={12} /> Training</Link>
+                    <Link className="btn btn--sm" to="/app/pipa-training"><GraduationCap size={12} /> Training</Link>
                   )}
                 </>
               )}
@@ -676,12 +667,12 @@ export function PrivacyPage() {
               <h2 className="card__title">
                 <Shield size={14} />
                 Template and source material
+                <InfoPopover label="About templates and sources">
+                  <p>Societyer can provide a starter policy draft. BC OIPC provides the BC-specific guidance; the federal OPC tool is only a drafting aid.</p>
+                </InfoPopover>
               </h2>
             </div>
             <div className="card__body privacy-resource-list">
-              <p className="privacy-note">
-                Societyer can provide a starter policy draft. BC OIPC provides the BC-specific guidance; the federal OPC tool is only a drafting aid.
-              </p>
               {PIPA_TEMPLATE_RESOURCES.map((resource) => (
                 <ResourceRow
                   key={resource.title}
@@ -888,8 +879,10 @@ function ResourceRow({
   return (
     <div className="privacy-resource">
       <div className="privacy-resource__main">
-        <strong>{resource.title}</strong>
-        <div>{resource.body}</div>
+        <strong className="privacy-resource__title">
+          {resource.title}
+          <InfoPopover label={`About ${resource.title}`}><p>{resource.body}</p></InfoPopover>
+        </strong>
         <div className="privacy-resource__citations">
           {resource.citationIds.map((citationId) => (
             <CitationBadge key={citationId} citationId={citationId} label={privacyCitationLabel(citationId)} />

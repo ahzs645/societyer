@@ -9,7 +9,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
 import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
-import { DIRECTOR_ATTESTATION_COPY, LEGAL_COPY_REVIEWED } from "../lib/legalCopy";
+import { DIRECTOR_ATTESTATION_COPY } from "../lib/legalCopy";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -122,7 +122,8 @@ export function AttestationsPage() {
         title={`Director attestations · ${year}`}
         icon={<ShieldCheck size={16} />}
         iconColor="red"
-        subtitle={`${DIRECTOR_ATTESTATION_COPY.subtitle} ${LEGAL_COPY_REVIEWED}.`}
+        subtitle={DIRECTOR_ATTESTATION_COPY.subtitle}
+        info={<p>{DIRECTOR_ATTESTATION_COPY.info}</p>}
       />
 
       {missing && missing.length > 0 && (

@@ -18,6 +18,13 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { rowsToCsv } from "@/lib/csv";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { formatDateTime } from "../lib/format";
+
+/** "written_resolution" / "opened" → "Written resolution" / "Opened". */
+function sentenceLabel(value: unknown) {
+  const text = String(value ?? "").replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1).toLowerCase() : "";
+}
 
 /**
  * Append-only activity log. Migrated to RecordTable so it shares the
@@ -48,9 +55,10 @@ export function AuditLogPage() {
     const nameById = new Map<string, string>(
       ((users ?? []) as any[]).map((user) => [String(user._id), String(user.displayName || user.email || user._id)]),
     );
-    return ((activity ?? []) as any[]).map((row) =>
-      nameById.has(String(row.actor)) ? { ...row, actor: nameById.get(String(row.actor)) } : row,
-    );
+    return ((activity ?? []) as any[])
+      .map((row) => nameById.has(String(row.actor)) ? { ...row, actor: nameById.get(String(row.actor)) } : row)
+      // Newest first: a log is read from the latest entry down.
+      .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
   }, [activity, users]);
 
   const tableData = useObjectRecordTableData({
@@ -92,7 +100,8 @@ export function AuditLogPage() {
         title="Audit log"
         icon={<Shield size={16} />}
         iconColor="red"
-        subtitle="Every create, update, signature and bot run is recorded here. Use for compliance evidence and incident review."
+        subtitle="Every change, signature and bot run, newest first."
+        info={<p>Every create, update, signature and bot run is recorded here. Use it for compliance evidence and incident review.</p>}
         actions={
           <button className="btn-action" onClick={exportCsv}>
             <Download size={12} /> Export CSV
@@ -126,10 +135,16 @@ export function AuditLogPage() {
               // look. Everything else falls through to the default
               // metadata-driven display.
               if (field.name === "entityType") {
-                return value ? <Badge>{String(value)}</Badge> : null;
+                return value ? <Badge>{sentenceLabel(value)}</Badge> : null;
+              }
+              if (field.name === "action") {
+                return <span>{sentenceLabel(value)}</span>;
+              }
+              if (field.name === "createdAtISO") {
+                return value ? <span style={{ whiteSpace: "nowrap" }}>{formatDateTime(String(value))}</span> : null;
               }
               if (field.name === "summary") {
-                return <span className="muted">{String(value ?? "")}</span>;
+                return <span>{String(value ?? "")}</span>;
               }
               return undefined;
             }}

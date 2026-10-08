@@ -5,7 +5,8 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { BookOpen, Calendar, FileText, FolderOpen } from "lucide-react";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatDate, pluralize } from "../lib/format";
+import { documentCategoryLabel } from "../../shared/documentCategories";
 import { formatMeetingDate } from "../../shared/meetingDates";
 
 const SECTION_LABELS: Record<string, string> = {
@@ -29,29 +30,17 @@ export function LibraryPage() {
         title="Library"
         icon={<BookOpen size={16} />}
         iconColor="purple"
-        subtitle="Board handbooks, policy references, governance documents, and meeting material packets."
+        subtitle="Handbooks, policies, governance documents and meeting packets."
         actions={<Link className="btn-action" to="/app/documents"><FolderOpen size={12} /> All documents</Link>}
       />
 
       <RelatedDocumentViews current="/app/library" />
 
-      <div className="stat-grid">
-        <div className="stat">
-          <div className="stat__label">Reference docs</div>
-          <div className="stat__value">{data?.counts?.referenceDocuments ?? 0}</div>
-          <div className="stat__sub">library, policy, governance</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Meeting packets</div>
-          <div className="stat__value">{data?.counts?.meetingPackets ?? 0}</div>
-          <div className="stat__sub">grouped by meeting</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Packet materials</div>
-          <div className="stat__value">{data?.counts?.meetingMaterials ?? 0}</div>
-          <div className="stat__sub">agenda-linked documents</div>
-        </div>
-      </div>
+      {data?.counts && (
+        <p className="muted library-summary">
+          {pluralize(data.counts.referenceDocuments ?? 0, "reference document")} · {pluralize(data.counts.meetingPackets ?? 0, "meeting packet")} · {pluralize(data.counts.meetingMaterials ?? 0, "packet material")}
+        </p>
+      )}
 
       <div className="two-col">
         <div className="col" style={{ gap: 16 }}>
@@ -59,7 +48,7 @@ export function LibraryPage() {
             <div className="card" key={section.section}>
               <div className="card__head">
                 <h2 className="card__title">{SECTION_LABELS[section.section] ?? section.section}</h2>
-                <span className="card__subtitle">{section.documents.length} document{section.documents.length === 1 ? "" : "s"}</span>
+                <Badge>{section.documents.length}</Badge>
               </div>
               <div className="card__body col" style={{ gap: 8 }}>
                 {section.documents.map((document: any) => (
@@ -82,11 +71,10 @@ export function LibraryPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Meeting packets</h2>
-              <span className="card__subtitle">Board materials by meeting</span>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
               {(data?.meetingPackets ?? []).map((packet: any) => (
-                <div className="panel" key={packet.meeting._id} style={{ padding: 12, borderRadius: 8 }}>
+                <div className="panel library-packet" key={packet.meeting._id} style={{ padding: 12, borderRadius: 8 }}>
                   <div className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
                       <Link to={`/app/meetings/${packet.meeting._id}`}><strong>{packet.meeting.title}</strong></Link>
@@ -94,7 +82,7 @@ export function LibraryPage() {
                         <Calendar size={12} style={{ verticalAlign: -2 }} /> {formatMeetingDate(packet.meeting)}
                       </div>
                     </div>
-                    <Badge tone="info">{packet.materials.length} docs</Badge>
+                    <Badge tone="info">{pluralize(packet.materials.length, "document")}</Badge>
                   </div>
                   <div className="col" style={{ gap: 6, marginTop: 10 }}>
                     {packet.materials.slice(0, 4).map((material: any) => (
@@ -143,17 +131,14 @@ function materialTone(material: any) {
 
 function LibraryDocumentRow({ document }: { document: any }) {
   return (
-    <Link to={`/app/documents/${document._id}`} className="row" style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6, gap: 10 }}>
-      <FileText size={14} />
-      <div style={{ flex: 1 }}>
+    <Link to={`/app/documents/${document._id}`} className="row library-doc-row" style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6, gap: 10, flexWrap: "nowrap" }}>
+      <FileText size={14} style={{ flex: "none" }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
         <strong>{document.title}</strong>
         <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          {document.fileName ?? document.category} · {formatDate(document.createdAtISO)}
+          {documentCategoryLabel(document.category)} · {formatDate(document.createdAtISO)}
         </div>
       </div>
-      <Badge tone={document.reviewStatus === "approved" ? "success" : document.reviewStatus === "needs_signature" ? "warn" : "neutral"}>
-        {document.category}
-      </Badge>
     </Link>
   );
 }
