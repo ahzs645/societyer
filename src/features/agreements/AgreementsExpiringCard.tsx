@@ -34,7 +34,7 @@ export function AgreementsExpiringCard({ societyId }: { societyId: string }) {
         {data && !rows.length && <div className="muted">No agreement ends in the next 90 days.{data.overdueObligations ? ` ${data.overdueObligations} deliverable or report obligation(s) are overdue.` : ""}</div>}
         {rows.slice(0, 6).map((row) => (
           <div key={row._id} className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "space-between" }}>
-            <div>
+            <div style={{ flex: "1 1 220px", minWidth: 0, overflowWrap: "anywhere" }}>
               <Link to={`/app/agreements/${row._id}`}><strong>{row.title}</strong></Link>
               {row.counterparties?.length > 0 && <span className="muted"> · {row.counterparties.join("; ")}</span>}
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>

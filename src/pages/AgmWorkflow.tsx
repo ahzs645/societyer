@@ -312,7 +312,7 @@ export function AgmWorkflowPage() {
               }}>
                 <div style={{ marginTop: 2 }}>
                   {done
-                    ? <CheckCircle2 size={18} style={{ color: "var(--success)" }} />
+                    ? <CheckCircle2 size={18} role="img" aria-label="Completed" style={{ color: "var(--success)" }} />
                     : <Circle size={18} style={{ color: "var(--text-tertiary)" }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

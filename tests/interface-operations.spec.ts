@@ -138,7 +138,7 @@ test("insurance policy save opens the corresponding detail without losing entere
   await page.getByText("Operations Audit Mutual", { exact: true }).first().click();
   await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
   await expect(page).toHaveURL(/insurance\//);
-  await expect(page.getByText("Policy OPS-AUDIT-001", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("OPS-AUDIT-001", { exact: false }).first()).toBeVisible();
   await expect(page.getByText("$100,000", { exact: true }).first()).toBeVisible();
   await fits(page);
   await page.reload();
@@ -387,7 +387,8 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await expect(page.getByRole("main").getByRole("button", { name: "Place / move", exact: true, includeHidden: true }).first()).toBeDisabled();
     await navigate("assets");
     await expect(page.getByRole("button", { name: "New asset", exact: true })).toBeDisabled();
-    await expect(page.getByRole("main").getByRole("button", { name: "Edit", exact: true, includeHidden: true }).first()).toBeDisabled();
+    // Row edits sit in each asset's menu; none of them may be enabled.
+    await expect(page.getByRole("main").locator("button:enabled", { hasText: /^Edit$/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Scan", exact: true })).toBeEnabled();
     await navigate("dividends");
     await expect(page.getByRole("button", { name: "New declaration", exact: true })).toBeDisabled();

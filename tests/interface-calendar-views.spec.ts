@@ -188,7 +188,7 @@ test("approved minutes download a valid searchable PDF after loading the deferre
   await page.goto("/demo/app/meetings/static_meeting_agm_2025");
   await expect(page.getByRole("heading", { name: "2025 annual general meeting", exact: true })).toBeVisible();
   expect(vectorLoads).toEqual([]);
-  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("button", { name: /^(Actions|Meeting actions)$/ }).click();
   const ready = page.waitForEvent("download");
   await page.getByRole("menuitem", { name: "Download PDF", exact: true }).click();
   const download = await ready;

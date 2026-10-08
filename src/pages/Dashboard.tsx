@@ -470,7 +470,7 @@ export function Dashboard() {
                 View all <ArrowRight size={12} />
               </Link>
             </div>
-            <table className="table">
+            <div className="table-wrap"><table className="table">
               <thead>
                 <tr>
                   <th>Kind</th>
@@ -504,7 +504,7 @@ export function Dashboard() {
                   </tr>
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
           )}
         </div>
@@ -660,7 +660,7 @@ export function Dashboard() {
               All tasks <ArrowRight size={12} />
             </Link>
           </div>
-          <table className="table">
+          <div className="table-wrap"><table className="table">
             <thead>
               <tr>
                 <th scope="col" className="table__icon-col">
@@ -690,7 +690,7 @@ export function Dashboard() {
                 </tr>
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
           )}
       </div>

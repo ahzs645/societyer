@@ -54,7 +54,8 @@ test("fresh local workspace inventory photo persists with its saved item", async
   await dialog.getByRole("button", { name: "Create item", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await page.reload();
-  await page.locator("tr", { hasText: title }).getByRole("button", { name: "Edit", exact: true }).click();
+  await page.locator("tr", { hasText: title }).getByRole("button", { name: `Actions for ${title}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await expectPersistedInlineImage(page.getByRole("dialog").locator("img").first());
   await expectFits(page);
   await testInfo.attach("local-inventory-photo-after-reload", { body: await page.screenshot(), contentType: "image/png" });
