@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { ListChecks, ExternalLink } from "lucide-react";
+import { ListChecks, ExternalLink, MoreHorizontal, ClipboardCheck, FileText } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { Menu } from "../components/Menu";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Select } from "../components/Select";
 import { entityPreparationDecision } from "../../shared/entitySetup";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Banner, Drawer, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { IncorporationPreparation } from "../components/IncorporationPreparation";
 import { PathwayPipelineCard } from "../components/PathwayPipelineCard";
@@ -45,6 +47,7 @@ export function PostIncorporationChecklistPage() {
   const recordEvidence = usePermissionedMutation(api.postIncorporation.recordEvidence, canWrite);
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const toast = useToast();
+  const navigate = useNavigate();
   const [evidenceDraft, setEvidenceDraft] = useState<any>(null);
   const [savingEvidence, setSavingEvidence] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,6 +74,10 @@ export function PostIncorporationChecklistPage() {
     }
   };
 
+  const openEvidence = (step: any, recorded: any) => {
+    if (canWrite) setEvidenceDraft({ stepKey: step.key, title: step.title, stage: "preparing", documentId: "", confirmationNumber: "", notes: "", ...recorded });
+  };
+
   const saveEvidence = async () => {
     if (!canWrite || !evidenceDraft) return;
     setSavingEvidence(true);
@@ -88,21 +95,27 @@ export function PostIncorporationChecklistPage() {
         title="Post-incorporation checklist"
         icon={<ListChecks size={16} />}
         iconColor="green"
-        subtitle="Prepare, organize and maintain your entity, with separate records for drafts, execution and official registry evidence."
+        subtitle="What to do after incorporating, step by step."
+        info={<>
+          <p>Prepare, organize and maintain your entity, with separate records for drafts, execution and official registry evidence.</p>
+          {preparation.allowed && <p>{preparation.message}</p>}
+          <p>Generating a packet starts preparation. Signed documents, filing receipts and certified registry documents each require their own evidence. Filing and payment take place in the official registry workflow.</p>
+        </>}
+        actions={
+          <MoreActionsMenu
+            items={[
+              { id: "society", label: "Edit entity and tax account facts", onSelect: () => navigate("/app/society") },
+              { id: "documents", label: "Upload evidence in Documents", onSelect: () => navigate("/app/documents") },
+              { id: "filings", label: "Registry filings", onSelect: () => navigate("/app/filings") },
+            ]}
+          />
+        }
       />
-      <IncorporationPreparation organization={society} />
-      <PathwayPipelineCard societyId={society._id} />
-      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
-        <Badge tone={preparation.allowed ? "info" : "warn"}>{preparation.allowed ? "Preparation route" : "Review required"}</Badge>
-        <p style={{ margin: "8px 0" }}>{preparation.message}</p>
-        <p className="muted" style={{ margin: 0 }}>Generating a packet starts preparation. Signed documents, filing receipts and certified registry documents each require their own evidence. Filing and payment take place in the official registry workflow.</p>
-        <Link to="/app/society">Edit entity and tax account facts</Link>{" · "}<Link to="/app/documents">Upload evidence in Documents</Link>{" · "}<Link to="/app/filings">Registry filings</Link>
-      </div>
+      {!preparation.allowed && <Banner tone="warn">Review required. {preparation.message}</Banner>}
       {data === undefined ? <PageLoading /> : steps.length === 0 ? (
         <div className="card" style={{ padding: 16 }}>
-          <p className="muted" style={{ margin: 0 }}>
-            No post-incorporation flow is defined for this entity's jurisdiction/type yet.
-            BC ordinary/member-funded societies, ordinary private BC companies and federal CBCA corporations have preparation flows. Confirm the entity route or arrange specialist review.
+          <p className="muted" style={{ margin: 0 }} title="BC ordinary/member-funded societies, ordinary private BC companies and federal CBCA corporations have preparation flows. Confirm the entity route or arrange specialist review.">
+            No post-incorporation steps for this kind of entity yet.
           </p>
         </div>
       ) : (
@@ -127,12 +140,25 @@ export function PostIncorporationChecklistPage() {
                             {recorded && <Badge tone={recorded.stage === "preparing" ? "info" : "success"}>{({ preparing: "Preparing", executed: "Executed evidence", filed: "Filing receipt recorded", certified: "Certified registry evidence" } as Record<string, string>)[recorded.stage]}</Badge>}
                           </div>
                         </div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><button className="btn btn--sm" disabled={!canWrite} onClick={() => { if (canWrite) setEvidenceDraft({ stepKey: step.key, title: step.title, stage: "preparing", documentId: "", confirmationNumber: "", notes: "", ...recorded }); }}>Record evidence</button>
-                        {step.packetKey && (
-                          <button className="btn btn--sm" disabled={!canWrite || busy === step.packetKey} onClick={() => onGenerate(step.packetKey)}>
-                            {busy === step.packetKey ? "Generating…" : started ? "Regenerate" : "Generate packet"}
-                          </button>
-                        )}</div>
+                        <div className="row" style={{ gap: 6, flexWrap: "nowrap", flex: "none" }}>
+                          {step.packetKey ? (
+                            <>
+                              <button className="btn btn--sm" disabled={!canWrite || busy === step.packetKey} onClick={() => onGenerate(step.packetKey)}>
+                                {busy === step.packetKey ? "Generating…" : started ? "Regenerate" : "Generate packet"}
+                              </button>
+                              <Menu
+                                align="right"
+                                trigger={<button className="btn btn--sm btn--icon" aria-label={`More actions for ${step.title}`}><MoreHorizontal size={14} /></button>}
+                                sections={[{ id: "step", items: [
+                                  { id: "evidence", label: "Record evidence", icon: <ClipboardCheck size={14} />, disabled: !canWrite, onSelect: () => openEvidence(step, recorded) },
+                                  ...(started ? [{ id: "open-packet", label: "Open in Template Engine", icon: <FileText size={14} />, onSelect: () => navigate("/app/template-engine") }] : []),
+                                ] }]}
+                              />
+                            </>
+                          ) : (
+                            <button className="btn btn--sm" disabled={!canWrite} onClick={() => openEvidence(step, recorded)}>Record evidence</button>
+                          )}
+                        </div>
                       </div>
                       <p style={{ margin: "8px 0 6px" }}>{step.summary}</p>
                       <div className="muted" style={{ fontSize: 13 }}>
@@ -143,7 +169,7 @@ export function PostIncorporationChecklistPage() {
                             official page <ExternalLink size={11} style={{ verticalAlign: "middle" }} />
                           </a>
                         </div>
-                        {step.obligation?.filingKind && <div><strong>Recurring filing:</strong> {step.obligation.filingKind}</div>}
+                        {step.obligation?.filingKind && <div><strong>Recurring filing:</strong> {filingKindLabel(step.obligation.filingKind)}</div>}
                         {recorded && <div style={{ marginTop: 4 }}><strong>Evidence:</strong> {documents?.find((document) => document._id === recorded.documentId)?.title ?? (recorded.documentId ? "Attached document" : "Preparation record")}{recorded.confirmationNumber ? ` · ${recorded.confirmationNumber}` : ""}{recorded.notes ? ` — ${recorded.notes}` : ""}</div>}
                         {step.caveat && <div style={{ marginTop: 4, fontStyle: "italic" }}>{step.caveat}</div>}
                       </div>
@@ -155,6 +181,11 @@ export function PostIncorporationChecklistPage() {
           );
         })
       )}
+      <PathwayPipelineCard societyId={society._id} />
+      <details className="doc-catalog-prep">
+        <summary>Incorporation preparation guide</summary>
+        <IncorporationPreparation organization={society} />
+      </details>
       <Drawer open={!!evidenceDraft} onClose={() => setEvidenceDraft(null)} title={evidenceDraft?.title ?? "Checklist evidence"} footer={<><button className="btn" onClick={() => setEvidenceDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || savingEvidence} onClick={saveEvidence}>{savingEvidence ? "Saving…" : "Save evidence"}</button></>}>
         {evidenceDraft && <>
           <Field label="Evidence stage"><Select disabled={!canWrite} value={evidenceDraft.stage} onChange={(value) => setEvidenceDraft({ ...evidenceDraft, stage: value })} options={[{ value: "preparing", label: "Preparing — draft only" }, { value: "executed", label: "Executed — signed internal document" }, { value: "filed", label: "Filed — official submission receipt" }, { value: "certified", label: "Certified — official registry document" }]} /></Field>
@@ -166,6 +197,12 @@ export function PostIncorporationChecklistPage() {
       </Drawer>
     </div>
   );
+}
+
+/** "BCSocietyAnnualReport" -> "BC society annual report"; acronyms keep their case. */
+function filingKindLabel(kind: string) {
+  const words = kind.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").split(" ");
+  return words.map((word, index) => (index > 0 && /^[A-Z][a-z]+$/.test(word) ? word.toLowerCase() : word)).join(" ");
 }
 
 export default PostIncorporationChecklistPage;

@@ -221,10 +221,111 @@ details.exports-tables {
   }
 }
 
+// Annual cycle.
+.annual-cycle-evidence {
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+
+  > summary { cursor: pointer; }
+
+  ul {
+    margin: token('s-1') 0 0;
+    padding-left: token('s-5');
+  }
+}
+
+@media (max-width: 760px) {
+  // Full-width hero; the next action is a section of it, not a card inside it.
+  .onboarding-flow.annual-cycle-hero {
+    margin-inline: calc(-1 * #{token('s-4')});
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding-inline: token('s-4');
+
+    .onboarding-flow__next {
+      border: 0;
+      border-top: 1px solid token('border-color-light');
+      border-radius: 0;
+      background: transparent;
+      padding: token('s-3') 0 0;
+    }
+  }
+
+  .annual-cycle-stats > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+// Documents: show + category facets in one row (scrolls sideways on phones).
+.documents-facets.documents-facets--single {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
+
+  .documents-facets__row {
+    flex-wrap: nowrap;
+    flex: none;
+  }
+
+  .chip { flex: none; white-space: nowrap; }
+}
+
+.documents-facets__divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: token('border');
+}
+
+@media (max-width: 760px) {
+  // Document workbench: the viewer fills its section instead of sitting in a second box.
+  .document-workbench-page .document-preview-pane {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  // Library: documents and packets are rows of their section on phones.
+  .library-doc-row,
+  .panel.library-packet {
+    border: 0 !important;
+    border-bottom: 1px solid token('border-color-light') !important;
+    border-radius: 0 !important;
+    padding: token('s-2') 0 !important;
+    background: transparent;
+  }
+
+  // Queue entries are rows of the section, not cards inside it.
+  .document-queue-card .document-queue-link {
+    border: 0;
+    border-bottom: 1px solid token('border-color-light');
+    border-radius: 0;
+    padding: token('s-2') 0;
+  }
+}
+
 .review-kv__list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
   gap: token('s-1');
+}
+
+.library-summary {
+  margin: 0 0 token('s-3');
+  font-size: token('fs-sm');
+}
+
+.library-doc-row,
+.library-doc-row > div {
+  text-align: left !important; // a phone rule right-aligns a row's last column
+  justify-content: flex-start;
 }

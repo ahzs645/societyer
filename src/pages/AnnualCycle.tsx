@@ -20,6 +20,7 @@ import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
 import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { InfoPopover } from "../components/InfoPopover";
 import { formatDate, relative } from "../lib/format";
 
 type CycleItem = {
@@ -101,7 +102,8 @@ export function AnnualCyclePage() {
         title="Annual Cycle"
         icon={<ListChecks size={16} />}
         iconColor="orange"
-        subtitle="A guided compliance view that pulls AGM, filings, financials, records, and ongoing governance into one workflow."
+        subtitle="This year's AGM, filings and records in one checklist."
+        info={<p>A guided compliance view that pulls AGM, filings, financials, records, and ongoing governance into one workflow.</p>}
         actions={
           <Select
             value={String(year)}
@@ -111,7 +113,7 @@ export function AnnualCyclePage() {
         }
       />
 
-      <section className="onboarding-flow" aria-labelledby="annual-cycle-title">
+      <section className="onboarding-flow annual-cycle-hero" aria-labelledby="annual-cycle-title">
         <div className="onboarding-flow__story">
           <div>
             <h2 id="annual-cycle-title">{data.society?.name ?? "Society"} annual compliance cycle</h2>
@@ -134,7 +136,7 @@ export function AnnualCyclePage() {
           <div>
             <span className="onboarding-flow__eyebrow">Next action</span>
             <strong>{nextItem?.title ?? "No next action"}</strong>
-            <span>{nextItem?.detail ?? "No annual-cycle evidence checks are available yet."}</span>
+            <span>{nextItem?.detail ? humanDates(nextItem.detail) : "No annual-cycle evidence checks are available yet."}</span>
           </div>
           {nextItem && (
             <Link to={appPath(nextItem.to)} className="btn-action btn-action--primary">
@@ -144,8 +146,7 @@ export function AnnualCyclePage() {
         </div>
       </section>
 
-      <div className="stat-grid">
-        <Stat label="Stage" value={data.currentStage ?? "Unknown"} icon={<Clock size={14} />} />
+      <div className="stat-grid stat-grid--3 annual-cycle-stats">
         <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />
         <Stat label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
         <Stat
@@ -169,13 +170,15 @@ export function AnnualCyclePage() {
                 <div className="row" style={{ gap: 8 }}>
                   <Icon size={16} style={{ color: "var(--accent)" }} />
                   <div>
-                    <h2 className="card__title">{phase.title}</h2>
+                    <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+                      <h2 className="card__title">{phase.title}</h2>
+                      <InfoPopover label={`About ${phase.title}`}><p>{phase.subtitle}</p></InfoPopover>
+                    </div>
                     <div className="card__subtitle">{complete}/{items.length} complete</div>
                   </div>
                 </div>
               </div>
               <div className="card__body col" style={{ gap: 10 }}>
-                <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>{phase.subtitle}</p>
                 {items.map((item) => <CycleCard key={item.id} item={item} />)}
               </div>
             </section>
@@ -248,18 +251,19 @@ function CycleCard({ item }: { item: CycleItem }) {
               <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
             </span>
           </div>
-          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{item.detail}</div>
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{humanDates(item.detail)}</div>
           {item.dueDate && (
-            <div className="mono muted" style={{ fontSize: "var(--fs-xs)" }}>
+            <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
               Due {formatDate(item.dueDate)} · {relative(item.dueDate)}
             </div>
           )}
           {item.evidence.length > 0 && (
-            <div className="muted" style={{ fontSize: "var(--fs-xs)", lineHeight: 1.5 }}>
-              <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Evidence:</span>{" "}
-              {item.evidence.slice(0, 3).join(" · ")}
-              {item.evidence.length > 3 && ` · +${item.evidence.length - 3} more`}
-            </div>
+            <details className="annual-cycle-evidence">
+              <summary>Evidence ({item.evidence.length})</summary>
+              <ul>
+                {item.evidence.map((evidence) => <li key={evidence}>{humanDates(evidence)}</li>)}
+              </ul>
+            </details>
           )}
           <Link to={appPath(item.to)} className="btn-action" style={{ alignSelf: "flex-start" }}>
             {item.actionLabel} <ArrowRight size={12} />
@@ -289,6 +293,11 @@ function Stat({
       </div>
     </div>
   );
+}
+
+/** Server-written details cite ISO days ("due 2027-01-31"); show the app's date format. */
+function humanDates(text: string) {
+  return text.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => formatDate(iso));
 }
 
 function appPath(to: string) {

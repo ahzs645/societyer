@@ -207,7 +207,6 @@ export function DocumentWorkbenchPage() {
         actions={
           <>
             <UnsupportedDetailsBadge table="documents" id={document._id} />
-            <Badge tone={documentReviewStatusTone(reviewStatus)}>{documentReviewStatusLabel(reviewStatus)}</Badge>
             <PaperlessDocumentAction societyId={society._id} documentId={document._id} disabled={!canEdit || !downloadAvailable} />
             <button className="btn-action" disabled={!downloadAvailable} onClick={() => { void openFile().catch((error: any) => toast.error("Could not open document", error?.message ?? String(error))); }}>
               {savedOriginal || latest ? <Download size={12} /> : <ExternalLink size={12} />}
@@ -686,6 +685,24 @@ function humanTable(table: string) {
 
 /* ------------------------------- preview pane -------------------------------- */
 
+/**
+ * The browser's PDF viewer titles its toolbar with the PDF's Title metadata,
+ * falling back to the blob: URL's random id. Give it the file name instead.
+ * Best effort: large, encrypted or unreadable PDFs keep their original bytes.
+ */
+async function withPdfTitle(bytes: ArrayBuffer, title?: string | null): Promise<ArrayBuffer | Uint8Array> {
+  if (!title || bytes.byteLength > 20 * 1024 * 1024) return bytes;
+  try {
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(bytes, { updateMetadata: false });
+    if (pdf.getTitle()) return bytes;
+    pdf.setTitle(title, { showInWindowTitleBar: true });
+    return await pdf.save({ useObjectStreams: false });
+  } catch {
+    return bytes;
+  }
+}
+
 type PreviewStatus = "loading" | "pdf" | "docx" | "xlsx" | "image" | "text" | "legacy" | "unsupported" | "not-a-file" | "unavailable" | "error";
 
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -820,7 +837,9 @@ function DocumentPreviewPane({
         // scripts with the app's privileges. Classify by the bytes and re-type
         // every blob explicitly.
         if (hasPdfSignature(bytes)) {
-          createdBlobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+          const titled = await withPdfTitle(bytes, fileName);
+          if (cancelled) return;
+          createdBlobUrl = URL.createObjectURL(new Blob([titled], { type: "application/pdf" }));
           setBlobUrl(createdBlobUrl);
           setStatus("pdf");
           return;
