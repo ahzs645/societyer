@@ -734,3 +734,20 @@
     right: 4px;
   }
 }
+
+/* ----- Phone (<= 560px): sections, not boxes. Page-level cards drop their
+ * side borders, radius and shadow and run to the screen edges, so their
+ * content gets the width the box chrome and double gutters used to take.
+ * Only top-level cards — a card inside a card keeps its box. */
+@media (max-width: 560px) {
+  .app-shell.is-mobile .page {
+    --page-gutter: #{token('s-4')};
+    padding-inline: var(--page-gutter);
+  }
+  .app-shell.is-mobile .page :is(.card, .stat-grid, .onboarding-compact, .record-show__summary):not(.card *):not(.card--boxed) {
+    margin-inline: calc(-1 * var(--page-gutter));
+    border-inline-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

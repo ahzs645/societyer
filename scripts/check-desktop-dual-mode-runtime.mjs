@@ -161,13 +161,11 @@ try {
   assert.deepEqual(await capture(local), { allowed: true, kinds: ["video"] });
   assert.equal((await capture(local, { video: true, audio: true })).allowed, false);
   await local.evaluate(() => { location.hash = "#/app/society/new"; });
-  await local.getByRole("button", { name: "This is my first workspace", exact: true }).click();
   await local.getByRole("button", { name: "No, prepare a new incorporation", exact: true }).click();
   await local.getByLabel("Act you plan to incorporate under", { exact: true }).click();
   await local.getByRole("option", { name: /^BC society \(nonprofit\)/ }).click();
   await local.getByRole("button", { name: "Continue", exact: true }).click();
   await local.getByRole("textbox", { name: "Proposed name / working name", exact: true }).fill("Disposable camera qualification society");
-  await local.getByRole("button", { name: "Continue", exact: true }).click();
   await local.getByRole("button", { name: "Continue", exact: true }).click();
   await local.getByRole("button", { name: "Create workspace", exact: true }).click();
   await local.waitForURL(/\/app\/workflows\//);

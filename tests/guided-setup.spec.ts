@@ -41,8 +41,6 @@ async function exportedBackup(page: Page) {
 test("existing company collects its Act, addresses and share planning without fabricated certificates or securities", async ({ page }, info) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await start(page);
-  await page.getByRole("button", { name: "I've used Societyer before", exact: true }).click();
-  await page.getByRole("button", { name: "Continue without a backup", exact: true }).click();
   await page.getByRole("button", { name: "Yes, set up an existing organization", exact: true }).click();
   await page.getByLabel("Act the organization was formed under", { exact: true }).click();
   await page.getByRole("option", { name: /BC business corporation \(provincial\)/ }).click();
@@ -53,6 +51,8 @@ test("existing company collects its Act, addresses and share planning without fa
   await page.getByLabel("Incorporation date", { exact: true }).fill("2023-05-10");
   await page.getByRole("textbox", { name: "Official email", exact: true }).fill("records@example.test");
   await page.getByRole("textbox", { name: "Fiscal year end", exact: true }).fill("12-31");
+  // Addresses are optional at creation; open that section to add them now.
+  await page.getByText("Add the registered office and mailing address now", { exact: false }).click();
   const office = page.getByRole("group", { name: "Registered office address", exact: true });
   await office.getByLabel("Street #", { exact: true }).fill("123");
   await office.getByLabel("Street name", { exact: true }).fill("Example Road");
@@ -62,11 +62,12 @@ test("existing company collects its Act, addresses and share planning without fa
   await page.getByRole("group", { name: "Mailing address", exact: true }).getByLabel("Country", { exact: true }).fill("New Zealand");
   await fits(page);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Review and create", exact: true })).toBeVisible();
+  await page.getByText("Add governance notes now", { exact: false }).click();
   await page.getByLabel("Shareholder / share class structure", { exact: true }).click();
   await page.getByRole("option", { name: "Multiple share classes", exact: true }).click();
   await page.getByLabel("Share class names and rights to review", { exact: true }).fill("Class A voting common; Class B non-voting preferred.");
   await page.getByLabel("Where will the organization operate?", { exact: true }).fill("British Columbia and Alberta");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await fits(page);
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
   await page.waitForURL(/\/app\/workflows\//);
@@ -84,7 +85,7 @@ test("existing company collects its Act, addresses and share planning without fa
   expect(organization.mailingAddress).toBe("\n\nNew Zealand");
   expect(organization.certificateEvidenceDocumentId).toBeUndefined();
   const answers = JSON.parse(organization.onboardingAnswersJson);
-  expect(answers.previousUse).toBe("returning"); expect(answers.governanceStructure).toBe("multiple_classes");
+  expect(answers.previousUse).toBe("new"); expect(answers.governanceStructure).toBe("multiple_classes");
   expect(saved.tables.tasks.some((task: any) => task.description.includes("Class A voting common"))).toBe(true);
   expect(saved.tables.rightsholdingTransfers ?? []).toHaveLength(0);
   expect(saved.tables.roleHolders ?? []).toHaveLength(0);

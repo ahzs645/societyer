@@ -400,6 +400,20 @@
   width: 240px;
   max-width: 100%;
 }
+/* Phones: both filters share one row; the count sits under them. */
+@media (max-width: 560px) {
+  .meetings-review-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 8px;
+  }
+  .meetings-review-toolbar__select {
+    width: auto;
+  }
+  .meetings-review-toolbar > :not(.meetings-review-toolbar__select) {
+    grid-column: 1 / -1;
+  }
+}
 .meetings-review-toolbar__chip {
   display: inline-flex;
   align-items: center;

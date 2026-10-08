@@ -2432,10 +2432,23 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* Touch selection is opt-in; the ordinary phone table keeps its frozen name column. */
 @media (max-width: 760px) {
+  /* A quiet right-aligned toggle rather than a full row with a 44px button. */
   .record-table__mobile-selection-controls {
     display: flex;
-    padding: 8px 0;
-    .btn { min-height: 44px; }
+    justify-content: flex-end;
+    padding: 2px 0 6px;
+    .btn {
+      min-height: 32px;
+      border-color: transparent;
+      background: transparent;
+      color: token('accent');
+      font-weight: 500;
+    }
+    .btn[aria-pressed="true"] {
+      border-color: token('border');
+      background: token('bg-panel');
+      color: token('text-primary');
+    }
   }
   .record-table__mobile-selection-checkbox {
     position: absolute;
@@ -2521,5 +2534,20 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__header-menu button,
   .record-table__aggregate-menu button {
     min-height: 40px;
+  }
+}
+
+/* Phones: segmented view switch + Filter + Sort + Options fit one line at
+ * 390px instead of dropping "Options" onto a row of its own. */
+@media (max-width: 560px) {
+  .record-table__toolbar-right {
+    gap: 2px;
+  }
+  .record-table__toolbar .record-table__toolbar-button {
+    padding: 0 6px;
+    gap: 4px;
+  }
+  .record-table__segmented button {
+    min-width: 34px;
   }
 }

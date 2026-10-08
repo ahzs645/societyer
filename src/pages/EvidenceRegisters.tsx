@@ -164,15 +164,7 @@ export function GovernanceRegistersPage() {
         title="People and director timeline"
         restricted={data?.restrictedResources?.includes("directors")}
         rows={roles}
-        empty={
-          <>
-            No role-assignment snapshots imported yet. This register captures verified,
-            source-backed evidence of who has held which role over time — your current
-            director and role data is tracked live on <Link to="/app/directors">Directors</Link>{" "}
-            and <Link to="/app/role-holders">Role holders</Link>. Approve board role
-            assignment imports to build this timeline.
-          </>
-        }
+        empty={<EmptyRegister kind="role-assignment" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
         columns={["Person", "Role", "Group", "Start", "Status", "Actions"]}
         render={(row) => [
           <PersonCell key="p" row={row} name={row.personName} people={people} />,
@@ -187,15 +179,7 @@ export function GovernanceRegistersPage() {
         title="Board role changes"
         restricted={data?.restrictedResources?.includes("directors")}
         rows={changes}
-        empty={
-          <>
-            No role-change evidence imported yet. This tracks appointments, removals,
-            vacancies, and renamed positions as they're confirmed from source documents —
-            for the current picture, see <Link to="/app/directors">Directors</Link> and{" "}
-            <Link to="/app/role-holders">Role holders</Link>. Approve role-change imports to
-            populate this history.
-          </>
-        }
+        empty={<EmptyRegister kind="role-change" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
         columns={["Effective", "Change", "Role", "Person", "Status"]}
         render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, <PersonCell key="p" row={row} name={row.personName} people={people} />, <Status key="s" value={row.status} />]}
       />
@@ -203,15 +187,7 @@ export function GovernanceRegistersPage() {
         title="Signing authorities"
         restricted={data?.restrictedResources?.includes("documents")}
         rows={signing}
-        empty={
-          <>
-            No signing-authority evidence imported yet. This register holds source-verified
-            records of who is authorized to sign for the society over time — current role
-            holders are on <Link to="/app/directors">Directors</Link> and{" "}
-            <Link to="/app/role-holders">Role holders</Link>. Approve signing-authority
-            imports after source review.
-          </>
-        }
+        empty={<EmptyRegister kind="signing-authority" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
         columns={["Effective", "Person", "Institution", "Authority", "Status"]}
         render={(row) => [formatDate(row.effectiveDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.institutionName ?? "-", row.authorityType, <Status key="s" value={row.status} />]}
       />
@@ -262,15 +238,7 @@ export function MeetingEvidencePage() {
         title="Attendance"
         restricted={data?.restrictedResources?.includes("meetings")}
         rows={attendance}
-        empty={
-          <>
-            No attendance evidence imported yet. This register captures verified,
-            source-backed attendance and quorum evidence extracted from minutes — the
-            underlying meeting and minutes data already lives on{" "}
-            <Link to="/app/meetings">Meetings</Link> and <Link to="/app/minutes">Minutes</Link>.
-            Approve attendance imports to populate this register.
-          </>
-        }
+        empty={<EmptyRegister kind="attendance" links={[["Meetings", "/app/meetings"], ["Minutes", "/app/minutes"]]} />}
         columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
         render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, <span key="a">{!row.attendanceStatus || /^unknown$/i.test(row.attendanceStatus) ? "Not stated" : row.attendanceStatus}{row.duplicateCount > 1 ? <span className="muted" title="The same person, meeting and status appeared more than once in the imported evidence"> · recorded {row.duplicateCount}×</span> : null}</span>, <Confidence key="c" value={row.confidence} />]}
       />
@@ -278,14 +246,7 @@ export function MeetingEvidencePage() {
         title="Motion evidence"
         restricted={data?.restrictedResources?.includes("motions")}
         rows={motions}
-        empty={
-          <>
-            No motion evidence imported yet. This builds a source-backed motion trail
-            extracted from minutes — the actual meetings and minutes are already on{" "}
-            <Link to="/app/meetings">Meetings</Link> and <Link to="/app/minutes">Minutes</Link>.
-            Approve motion-evidence imports to build this trail.
-          </>
-        }
+        empty={<EmptyRegister kind="motion-evidence" links={[["Meetings", "/app/meetings"], ["Minutes", "/app/minutes"]]} />}
         columns={["Meeting", "Date", "Motion", "Outcome", "Status"]}
         render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), truncate(row.motionText, 100), row.outcome, <Status key="s" value={row.status} />]}
       />
@@ -324,15 +285,7 @@ export function FinanceImportsPage() {
         title="Budget snapshots"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={budgets}
-        empty={
-          <>
-            No budget snapshots imported yet. This register holds verified, source-backed
-            budget snapshots from imported documents — the society's live financial data is
-            on <Link to="/app/financials">Financials</Link> and{" "}
-            <Link to="/app/treasurer">Treasurer</Link>. Approve budget snapshot imports after
-            checking OCR amounts.
-          </>
-        }
+        empty={<EmptyRegister kind="budget snapshot" links={[["Financials", "/app/financials"], ["Treasurer", "/app/treasurer"]]} />}
         columns={["Fiscal year", "Title", "Income", "Expense", "Status"]}
         render={(row) => [row.fiscalYear, row.title, formatMoney(row.totalIncomeCents), formatMoney(row.totalExpenseCents), <Status key="s" value={row.status} />]}
       />
@@ -340,15 +293,7 @@ export function FinanceImportsPage() {
         title="Financial statement imports"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={statements}
-        empty={
-          <>
-            No financial statement imports yet. This is a verified evidence layer for
-            imported statements, not the primary ledger — current financials live on{" "}
-            <Link to="/app/financials">Financials</Link> and{" "}
-            <Link to="/app/treasurer">Treasurer</Link>. Approve financial statement imports
-            only after verifying totals.
-          </>
-        }
+        empty={<EmptyRegister kind="financial statement" links={[["Financials", "/app/financials"], ["Treasurer", "/app/treasurer"]]} />}
         columns={["Period end", "Type", "Revenue", "Expenses", "Status"]}
         render={(row) => [formatDate(row.periodEnd), row.statementType, formatMoney(row.revenueCents), formatMoney(row.expensesCents), <Status key="s" value={row.status} />]}
       />
@@ -356,15 +301,7 @@ export function FinanceImportsPage() {
         title="Treasurer reports"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={reports}
-        empty={
-          <>
-            No treasurer report imports yet. This builds verified report history from
-            imported documents — current treasurer reporting lives on{" "}
-            <Link to="/app/treasurer">Treasurer</Link> and{" "}
-            <Link to="/app/financials">Financials</Link>. Approve treasurer report imports to
-            build this history.
-          </>
-        }
+        empty={<EmptyRegister kind="treasurer report" links={[["Treasurer", "/app/treasurer"], ["Financials", "/app/financials"]]} />}
         columns={["Date", "Title", "Cash", "Highlights", "Status"]}
         render={(row) => [formatDate(row.reportDate), row.title, formatMoney(row.cashBalanceCents), row.highlights?.length ?? 0, <Status key="s" value={row.status} />]}
       />
@@ -372,15 +309,7 @@ export function FinanceImportsPage() {
         title="Transaction candidates"
         restricted={data?.restrictedResources?.includes("financials")}
         rows={transactions}
-        empty={
-          <>
-            No transaction candidates imported yet. This holds bank/transaction batches
-            pending restricted finance review — actual transactions are already tracked on{" "}
-            <Link to="/app/financials">Financials</Link> and{" "}
-            <Link to="/app/treasurer">Treasurer</Link>. Approve transaction candidates only
-            inside a restricted finance review.
-          </>
-        }
+        empty={<EmptyRegister kind="transaction" links={[["Financials", "/app/financials"], ["Treasurer", "/app/treasurer"]]} />}
         columns={["Date", "Description", "Debit/Credit", "Amount", "Cheque/ref", "Balance", "Status"]}
         render={(row) => [
           formatDate(row.transactionDate),
@@ -508,6 +437,21 @@ function useRegisters() {
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const directors = useQuery(api.directors.list, society && loaded && can("directors:read") ? { societyId: society._id } : "skip");
   return { society, data, people: personLinkCandidates(members, directors) };
+}
+
+/** One-line empty state: what will appear and where today's live data is. */
+function EmptyRegister({ kind, links }: { kind: string; links: [string, string][] }) {
+  return (
+    <>
+      Nothing imported yet. Approved {kind} imports appear here. Current data:{" "}
+      {links.map(([label, to], index) => (
+        <span key={to}>
+          {index > 0 && " · "}
+          <Link to={to}>{label}</Link>
+        </span>
+      ))}
+    </>
+  );
 }
 
 function RegisterTable({
