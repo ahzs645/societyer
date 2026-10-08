@@ -83,15 +83,7 @@ export function DateTimeInput({
   const [mm, setMM] = useState(parsed.mm);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
-  // On phones, land on the calendar rather than the typed-date field, so
-  // opening the sheet doesn't throw the keyboard up over it.
-  const popRef = useDialogFocus<HTMLDivElement>(
-    open,
-    () => setOpen(false),
-    typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches
-      ? ".calendar__cell.is-selected, .calendar__cell.is-today, .calendar__cell:not(.is-out)"
-      : undefined,
-  );
+  const popRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false));
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   // Phones render the calendar as a viewport-pinned bottom sheet (same pattern
   // as Select/Menu/DatePicker) instead of an anchor-positioned popover.
