@@ -726,8 +726,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       name: "All pending emails",
       columns: [
         { fieldName: "subject", size: 280 },
+        { fieldName: "to", size: 240 },
         { fieldName: "fromEmail", size: 190 },
-        { fieldName: "to", size: 220 },
         { fieldName: "status", size: 110 },
         { fieldName: "createdAtISO", size: 180 },
         { fieldName: "sentAtISO", size: 180 },
@@ -1165,8 +1165,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     defaultView: {
       name: "All workflows",
       columns: [
-        { fieldName: "name", size: 220 },
-        { fieldName: "recipeLabel", size: 200 },
+        { fieldName: "name", size: 240 },
         { fieldName: "triggerLabel", size: 180 },
         { fieldName: "provider", size: 120 },
         { fieldName: "status", size: 110 },
