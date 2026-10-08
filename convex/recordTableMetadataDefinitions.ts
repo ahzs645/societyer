@@ -129,7 +129,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "votingRights", label: "Voting rights", fieldType: FIELD_TYPES.BOOLEAN, icon: "Vote" },
+      { name: "votingRights", label: "Voting", fieldType: FIELD_TYPES.BOOLEAN, icon: "Vote" },
       { name: "joinedAt", label: "Joined", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "leftAt", label: "Left", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "notes", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
@@ -1748,7 +1748,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "feeCents", label: "Inspection fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
+      { name: "feeCents", label: "Fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
       { name: "copies", label: "Copies", fieldType: FIELD_TYPES.TEXT, icon: "Copy", isReadOnly: true },
     ],
     defaultView: {
