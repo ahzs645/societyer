@@ -285,7 +285,7 @@ export function Dashboard() {
           <div className="onboarding-compact__actions">
             <button
               type="button"
-              className="onboarding-flow__dismiss"
+              className="onboarding-compact__icon"
               onClick={() => setOnboardingExpandedOverride(true)}
               aria-expanded={false}
               aria-label="Show steps"
@@ -295,7 +295,7 @@ export function Dashboard() {
             </button>
             <button
               type="button"
-              className="onboarding-flow__dismiss"
+              className="onboarding-compact__icon"
               onClick={hideOnboardingFlow}
               title="Hide setup guide"
               aria-label="Hide setup guide"

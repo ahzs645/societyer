@@ -317,6 +317,22 @@
   display: flex;
   gap: 2px;
 }
+.onboarding-compact__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.onboarding-compact__icon:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
 @media (max-width: 760px) {
   .onboarding-compact__next-desc {
     display: none;
