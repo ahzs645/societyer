@@ -6,14 +6,13 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
-import { Badge } from "../components/ui";
 import { RecordShowPage } from "../components/RecordShowPage";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { ActivityTimeline } from "../components/ActivityTimeline";
 import { MemberHistoryPanel } from "../components/MemberHistoryPanel";
 import { useTrackRecentRecord } from "../hooks/useTrackRecentRecord";
-import { ArrowLeft, Users, MessageSquare, Activity, Sparkles } from "lucide-react";
+import { ArrowLeft, Users, MessageSquare, Activity, Sparkles, ExternalLink } from "lucide-react";
 import { formatDate } from "../lib/format";
 
 export function MemberDetailPage() {
@@ -89,13 +88,6 @@ export function MemberDetailPage() {
         icon={<Users size={16} />}
         iconColor="blue"
         subtitle={member.email ?? undefined}
-        chips={
-          <>
-            <Badge tone={member.status === "Active" ? "success" : "warn"}>{member.status}</Badge>
-            <Badge>{member.membershipClass}</Badge>
-            {member.votingRights && <Badge tone="info">Voting</Badge>}
-          </>
-        }
         summary={[
           { label: "Class", value: member.membershipClass ?? "—" },
           { label: "Status", value: member.status ?? "—" },
@@ -104,7 +96,7 @@ export function MemberDetailPage() {
         ]}
         actions={
           <Link className="btn-action" to="/app/members">
-            Open in register
+            <ExternalLink size={12} /> Open in register
           </Link>
         }
         tabs={[

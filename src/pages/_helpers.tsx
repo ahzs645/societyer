@@ -197,7 +197,8 @@ function usePhoneHeaderActionsFit(
         lastWidth = -1;
         return;
       }
-      const width = header.clientWidth;
+      const style = getComputedStyle(header);
+      const width = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       if (!force && width === lastWidth) return;
       lastWidth = width;
       const fits = () => actions.scrollWidth + 8 + PHONE_HEADER_MIN_TITLE <= width;

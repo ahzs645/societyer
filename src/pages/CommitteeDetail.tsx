@@ -406,13 +406,9 @@ export function CommitteeDetailPage() {
             <Trash2 size={12} /> Delete
           </button>
         }
-        chips={
-          <>
-            <Badge>{cadenceLabel(committee.cadence)}</Badge>
-            <Badge tone={committee.status === "Active" ? "success" : "warn"}>{committeeStatusLabel(committee.status)}</Badge>
-            <UnsupportedDetailsBadge table="committees" id={committee._id} />
-          </>
-        }
+        // Cadence and status already lead the summary; only keep chips that
+        // add something.
+        chips={<UnsupportedDetailsBadge table="committees" id={committee._id} />}
         summary={[
           { label: "Cadence", value: cadenceLabel(committee.cadence) },
           { label: "Status", value: committeeStatusLabel(committee.status) },

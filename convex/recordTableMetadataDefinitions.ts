@@ -225,6 +225,14 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "consentOnFile", size: 120 },
       ],
     },
+    // Opened by default: the current register, with former directors one
+    // filter (or the "All directors" view) away.
+    extraViews: [
+      {
+        name: "Current directors",
+        filters: [{ fieldName: "status", operator: "in", value: ["Active", "NeedsReview"] }],
+      },
+    ],
   },
   {
     nameSingular: "roleHolder",

@@ -76,6 +76,7 @@
 }
 .record-show__main { display: flex; flex-direction: column; gap: token('s-4'); min-width: 0; }
 .record-show__actions { display: flex; align-items: center; justify-content: flex-end; gap: token('s-2'); flex-wrap: wrap; }
+.record-show__chips:empty { display: none; }
 .record-show__chips { display: flex; flex-wrap: wrap; gap: token('s-2'); margin-top: calc(token('s-2') * -1); }
 .record-show__summary {
   display: grid;

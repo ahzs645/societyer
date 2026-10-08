@@ -751,3 +751,41 @@
     box-shadow: none;
   }
 }
+
+/* ----- Phones: detail pages' "← All members"-style back link becomes an
+ * arrow button in the title row, left of the page icon, without the label
+ * (it stays the accessible name). Header actions share one 36px height. */
+@media (max-width: 760px) {
+  .app-shell.is-mobile .page:has(> a.row.muted:first-child) {
+    position: relative;
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child {
+    position: absolute;
+    z-index: 1;
+    top: calc(#{token('s-5')} + 2px);
+    left: calc(var(--page-gutter, #{token('s-5')}) - 6px);
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    margin: 0 !important;
+    padding: 0;
+    border-radius: token('r-sm');
+    font-size: 0 !important;
+    color: token('text-secondary');
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child:active {
+    background: token('bg-hover');
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child svg {
+    width: 18px;
+    height: 18px;
+  }
+  .app-shell.is-mobile .page:has(> a.row.muted:first-child) .page__header {
+    padding-left: 30px;
+  }
+  .page__header[data-actions-fit] .page__actions :is(.btn, .btn-action) {
+    min-height: 36px;
+  }
+}
