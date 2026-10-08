@@ -1372,8 +1372,8 @@ function MotionRow({
                 </Badge>
               ))}
               <input
-                className="input"
-                style={{ width: 120, height: 24, fontSize: 12 }}
+                className="input input--compact"
+                style={{ width: 120, height: 24 }}
                 placeholder="Add label…"
                 aria-label="Add label"
                 onKeyDown={(event) => {

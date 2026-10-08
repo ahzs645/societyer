@@ -52,18 +52,36 @@
 }
 
 @media (max-width: 760px) {
-  /* F29: phone tabs scroll horizontally but keep their labels and counts. */
-  .meeting-detail-page .tabs {
+  /* F29: phone tabs scroll horizontally but keep their labels and counts.
+   * Applies to every tab bar — wrapping produced a ragged multi-row grid on
+   * record pages. The right edge fades to hint at off-screen tabs. */
+  .tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: token('s-4');
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    /* Lets the last tab scroll clear of the fade. */
+    padding-inline-end: 28px;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
-  .meeting-detail-page .tab {
+  .tab {
     flex: 0 0 auto;
     padding: 6px 10px;
+    min-height: 34px;
     font-size: var(--fs-sm);
     white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .tabs__trailing {
+    flex: 0 0 auto;
   }
 }
 

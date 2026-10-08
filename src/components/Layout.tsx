@@ -157,6 +157,7 @@ import type {
   SidebarContextMenu,
 } from "./Layout.internal";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { BottomNavIndicator } from "./BottomNavIndicator";
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -1743,6 +1744,7 @@ export function Layout() {
              * at 4 so it stays <= 5 with "More"; extra pins live in the More
              * drawer. Pinned *commands* are actions, not destinations, so they're
              * excluded from the nav bar. */}
+            <BottomNavIndicator activeKey={loc.pathname} />
             {visiblePinnedNav.slice(0, 4).map((item) => {
               const Icon = item.icon;
               return (

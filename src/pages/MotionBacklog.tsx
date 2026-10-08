@@ -204,8 +204,8 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                         </Badge>
                       ))}
                       <input
-                        className="input"
-                        style={{ width: 120, height: 28, fontSize: 12 }}
+                        className="input input--compact"
+                        style={{ width: 120, height: 28 }}
                         value={tagDraft}
                         onChange={(event) => setTagDraft(event.target.value)}
                         onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addComposerTag(); } }}

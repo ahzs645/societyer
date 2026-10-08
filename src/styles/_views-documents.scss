@@ -197,6 +197,38 @@
   }
 }
 
+/* Org chart page: canvas beside a 280px detail rail. Below the phone
+ * breakpoint the rail would squeeze the canvas to a sliver, so stack them. */
+.org-chart-layout {
+  display: flex;
+  gap: token('s-4');
+  align-items: stretch;
+}
+.org-chart-layout__canvas {
+  flex: 1;
+  min-width: 0;
+  height: 620px;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  overflow: hidden;
+}
+.org-chart-layout__aside {
+  width: 280px;
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .org-chart-layout {
+    flex-direction: column;
+  }
+  .org-chart-layout__canvas {
+    flex: none;
+    height: min(520px, 62dvh);
+  }
+  .org-chart-layout__aside {
+    width: auto;
+  }
+}
+
 .source-document {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);

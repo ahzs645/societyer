@@ -252,6 +252,11 @@
      * the sidebar from the render tree entirely while the translate still
      * animates smoothly. */
     visibility: hidden;
+    /* Landscape notch / home indicator: keep drawer content inside the
+     * safe area (all zero on devices without insets). */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
 
   .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
@@ -413,14 +418,35 @@
     padding: 8px 10px;
   }
 
-  /* Inspector becomes a full-screen sheet on phones (twenty's drawer pattern). */
+  /* Inspector becomes a page sheet on phones: it rises from the bottom,
+   * leaves a sliver of the page above it (so it reads as dismissable), and
+   * closes by pulling its header down (useSheetDrag in InspectorHost). */
   .app-shell.is-mobile .inspector {
-    top: 0;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
     right: 0;
     bottom: 0;
     width: 100vw;
     border: 0;
-    border-radius: 0;
+    border-top: 1px solid token('border');
+    border-radius: token('r-lg') token('r-lg') 0 0;
+    box-shadow: token('shadow-strong');
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translate3d(0, 100%, 0);
+    transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .app-shell.is-mobile .inspector-host.is-open .inspector {
+    transform: translate3d(0, 0, 0);
+  }
+  .app-shell.is-mobile .inspector::before {
+    content: "";
+    flex: none;
+    align-self: center;
+    width: 36px;
+    height: 5px;
+    margin: 8px 0 2px;
+    border-radius: token('r-pill');
+    background: token('border-strong');
+    opacity: 0.7;
   }
 }
 
@@ -482,8 +508,12 @@
     z-index: token('z-bottom-nav');
     /* Twenty uses a compact 48px bar (theme spacing[12]); we keep 52px as a
      * balance between their density and the five items Societyer pins. */
-    height: 52px;
-    padding: 0 token('s-2') env(safe-area-inset-bottom, 0);
+    /* The home-indicator inset sits BELOW the 52px bar rather than eating
+     * into it (box-sizing is border-box, so a fixed 52px height + inset
+     * padding squeezed the tab row to ~18px on Face ID iPhones). */
+    height: calc(52px + env(safe-area-inset-bottom, 0px));
+    padding: 0 max(token('s-2'), env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px)
+      max(token('s-2'), env(safe-area-inset-left, 0px));
     background: token('bg-primary');
     border-top: 1px solid token('border-color-light');
     align-items: stretch;
@@ -516,9 +546,45 @@
   .bottom-nav__item.is-active {
     /* Twenty signals active state with a subtle neutral fill + primary text
      * color, not a saturated brand color — keeps the bar from competing with
-     * page content. */
-    background: token('bg-transparent-light');
+     * page content. The fill itself is the shared sliding indicator below. */
     color: token('text-primary');
+  }
+  .bottom-nav__item {
+    position: relative;
+    z-index: 1;
+  }
+  .bottom-nav__item.is-active svg {
+    animation: bottomNavIconPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes bottomNavIconPop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.18) translateY(-1px); }
+    100% { transform: scale(1); }
+  }
+  /* One pill that glides to the active tab (BottomNavIndicator). Sits on
+   * the same 6px inset as the items so it reads as their background. */
+  .bottom-nav__indicator {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    height: 40px;
+    border-radius: token('r-sm');
+    background: token('bg-transparent-light');
+    opacity: 0;
+    pointer-events: none;
+  }
+  .bottom-nav__indicator.is-visible {
+    opacity: 1;
+  }
+  .bottom-nav__indicator.is-animated {
+    transition:
+      transform 0.38s cubic-bezier(0.34, 1.3, 0.64, 1),
+      width 0.38s cubic-bezier(0.34, 1.3, 0.64, 1),
+      opacity 0.2s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bottom-nav__indicator.is-animated { transition: opacity 0.2s ease; }
+    .bottom-nav__item.is-active svg { animation: none; }
   }
   .bottom-nav__item svg {
     /* 16px at stroke-width 2 matches twenty's icon.size.md default. */
@@ -563,7 +629,8 @@
     right: 0;
     z-index: token('z-bottom-nav');
     height: calc(52px + env(safe-area-inset-top, 0));
-    padding: env(safe-area-inset-top, 0) token('s-3') 0;
+    padding: env(safe-area-inset-top, 0px) max(token('s-3'), env(safe-area-inset-right, 0px)) 0
+      max(token('s-3'), env(safe-area-inset-left, 0px));
     background: token('bg-primary');
     border-bottom: 1px solid token('border-color-light');
   }
@@ -587,5 +654,22 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* The sidebar's 22px icon button is far below a thumb-sized target; in
+   * the top bar the bell gets a full 40px hit area (and room for its badge,
+   * which was clipped against the screen edge). */
+  .mobile-topbar .notif-bell {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: token('r-md');
+  }
+  .mobile-topbar .notif-bell svg {
+    width: 18px;
+    height: 18px;
+  }
+  .mobile-topbar .notif-bell__badge {
+    top: 4px;
+    right: 4px;
   }
 }

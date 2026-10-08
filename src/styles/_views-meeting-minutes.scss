@@ -1243,7 +1243,7 @@
   }
   .meeting-minutes-section-editor--mobile .meeting-minutes-section-editor__tabs {
     position: sticky;
-    top: 52px;
+    top: calc(52px + env(safe-area-inset-top, 0px));
     z-index: 1;
     width: calc(100% + (2 * token('s-3')));
     margin-inline: calc(-1 * token('s-3'));

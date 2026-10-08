@@ -102,7 +102,7 @@ export function PointInTimeRegisterPage() {
         subtitle="Reconstruct who held each role on any past date from the role-holder term history — the statutory 'who were the directors on date X?' view."
         actions={
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
+            <span style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
             <DatePicker
               value={asOf}
               onChange={(value) => setAsOf(value)}

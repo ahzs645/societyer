@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { MenuRow, MenuSectionLabel } from "./ui";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useSheetDrag } from "../lib/useSheetDrag";
 
 export type MenuItem = {
   id: string;
@@ -48,6 +49,8 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   const [isBottomSheet, setIsBottomSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
+
+  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
 
   const flat = useMemo(() => sections.flatMap((s) => s.items.filter((i) => !i.disabled)), [sections]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -241,6 +244,7 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
                       }
                 }
               >
+                {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
                 {renderSections()}
               </div>
             </>,

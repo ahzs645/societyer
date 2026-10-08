@@ -168,7 +168,7 @@ export function NotificationsPage() {
               >
                 {n.kind}
               </Badge>
-              <div style={{ flex: 1 }}>
+              <div className="notif-row__main">
                 <div style={{ fontWeight: 500 }}>
                   {n.linkHref ? <Link to={n.linkHref}>{n.title}</Link> : n.title}
                   {!n.readAt && (
@@ -188,7 +188,7 @@ export function NotificationsPage() {
                 </div>
                 {n.body && <div className="muted" style={{ fontSize: 13 }}>{n.body}</div>}
               </div>
-              <span className="muted mono" style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span className="muted mono notif-row__meta" style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {n.dismissedAt && <Badge tone="neutral">Cleared</Badge>}
                 {formatDateTime(n.createdAtISO)}
               </span>

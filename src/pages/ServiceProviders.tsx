@@ -141,8 +141,9 @@ export function ServiceProvidersPage() {
                   className="row"
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
                     alignItems: "center",
-                    gap: 12,
+                    gap: "4px 12px",
                     padding: "8px 0",
                     borderBottom: "1px solid var(--border)",
                     cursor: "pointer",
@@ -164,7 +165,7 @@ export function ServiceProvidersPage() {
                   <span style={{ minWidth: 140, color: "var(--text-secondary)" }}>
                     {labelFor(row.function)}
                   </span>
-                  <span style={{ flex: 1, fontWeight: 500 }}>{row.firmName}</span>
+                  <span style={{ flex: "1 1 160px", minWidth: 0, fontWeight: 500 }}>{row.firmName}</span>
                   {row.contactName ? (
                     <span style={{ color: "var(--text-secondary)" }}>{row.contactName}</span>
                   ) : null}

@@ -134,17 +134,11 @@ export function CertificateRegisterPage() {
         actions={
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
+              <span style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
               <DatePicker
                 value={asOf}
                 onChange={(value) => setAsOf(value)}
               />
-      {!isCorporation(society) && (
-        <p className="muted" role="status">
-          Share certificates apply to companies with shares. {society.name} is a society, which has members rather than shareholders, so
-          this register is optional here and is not a statutory requirement.
-        </p>
-      )}
             </label>
             <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
               <Plus size={12} /> Issue certificate
@@ -152,6 +146,13 @@ export function CertificateRegisterPage() {
           </div>
         }
       />
+
+      {!isCorporation(society) && (
+        <p className="muted" role="status">
+          Share certificates apply to companies with shares. {society.name} is a society, which has members rather than shareholders, so
+          this register is optional here and is not a statutory requirement.
+        </p>
+      )}
 
       {Object.keys(outstanding).length > 0 && (
         <p style={{ color: "var(--text-secondary)" }}>

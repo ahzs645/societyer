@@ -200,8 +200,8 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
                   </span>
                 ))}
                 <input
-                  className="input"
-                  style={{ width: 120, height: 28, fontSize: 13 }}
+                  className="input input--compact"
+                  style={{ width: 120, height: 28 }}
                   value={tagDraft}
                   onChange={(e) => setTagDraft(e.target.value)}
                   onKeyDown={(e) => {

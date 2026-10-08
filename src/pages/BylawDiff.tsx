@@ -462,8 +462,8 @@ export function BylawDiffPage() {
           <div className="two-col">
             <Field label="Current bylaws">
               <textarea
-                className="textarea"
-                style={{ minHeight: 240, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
+                className="textarea textarea--mono"
+                style={{ minHeight: 240 }}
                 value={oldText}
                 disabled={!canWrite || (selected != null && !isDraft)}
                 onChange={(e) => { setOldText(e.target.value); setDirty(true); }}
@@ -472,8 +472,8 @@ export function BylawDiffPage() {
             </Field>
             <Field label="Proposed bylaws">
               <textarea
-                className="textarea"
-                style={{ minHeight: 240, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
+                className="textarea textarea--mono"
+                style={{ minHeight: 240 }}
                 value={newText}
                 disabled={!canWrite || (selected != null && !isDraft)}
                 onChange={(e) => { setNewText(e.target.value); setDirty(true); }}

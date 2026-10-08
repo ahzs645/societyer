@@ -1028,12 +1028,12 @@ export function BrowserConnectorsPage() {
             </div>
             <Field label="GCOS export JSON" hint="Paste the Chrome extension output, or choose its downloaded JSON/ZIP file.">
               <textarea
-                className="input"
+                className="input input--compact"
                 value={gcosExportJson}
                 onChange={(event) => setGcosExportJson(event.target.value)}
                 placeholder='{"source":"societyer-gcos-chrome-extension", ...}'
                 rows={5}
-                style={{ resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}
+                style={{ resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
               />
             </Field>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>

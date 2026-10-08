@@ -295,8 +295,23 @@ export function Tabs<T extends string>({
   tabRoles?: boolean;
   ariaLabel?: string;
 }) {
+  // Phones scroll the tab row horizontally; keep the active tab in view
+  // (without touching the page's vertical scroll position).
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    const active = list?.querySelector<HTMLElement>(".tab.is-active");
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return;
+    const listRect = list.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const left = activeRect.left - listRect.left + list.scrollLeft;
+    const right = left + activeRect.width;
+    if (left < list.scrollLeft + 24 || right > list.scrollLeft + list.clientWidth - 24) {
+      list.scrollTo({ left: Math.max(0, left - 24), behavior: "smooth" });
+    }
+  }, [value]);
   return (
-    <div className="tabs" role={tabRoles ? "tablist" : undefined} aria-label={ariaLabel}>
+    <div ref={listRef} className="tabs" role={tabRoles ? "tablist" : undefined} aria-label={ariaLabel}>
       {items.map((it) => (
         <button
           key={it.id}

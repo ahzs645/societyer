@@ -270,7 +270,7 @@ export function OrgChartPage() {
         subtitle="A live, draggable map of directors, employees, and volunteers and their reporting lines. Drag to rearrange, zoom to explore, and use “As of” to see a past structure."
         actions={
           <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the org chart at a past date">
-            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
             <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
             {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Live</button>}
           </label>
@@ -286,8 +286,8 @@ export function OrgChartPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
-        <div style={{ flex: 1, height: 620, border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
+      <div className="org-chart-layout">
+        <div className="org-chart-layout__canvas">
           <ReactFlow
             colorMode={resolvedTheme}
             nodes={nodes}
@@ -304,7 +304,7 @@ export function OrgChartPage() {
           </ReactFlow>
         </div>
 
-        <aside style={{ width: 280, flexShrink: 0 }}>
+        <aside className="org-chart-layout__aside">
           <div className="card">
             <div className="card__head"><h2 className="card__title">{selectedPerson ? "Reporting line" : "Select a person"}</h2></div>
             <div className="card__body col" style={{ gap: 12 }}>

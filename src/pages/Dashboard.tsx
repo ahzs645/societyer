@@ -36,6 +36,7 @@ import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
+import { RollingNumber } from "../components/RollingNumber";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -778,7 +779,7 @@ function Stat({
         className="stat__value"
         style={{ color: tone === "danger" ? "var(--danger)" : undefined }}
       >
-        {value}
+        <RollingNumber value={value} />
       </div>
     </div>
   );

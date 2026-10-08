@@ -4,6 +4,7 @@ import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useSheetDrag } from "../lib/useSheetDrag";
 import { getDialogFocusables } from "../lib/useDialogFocus";
 import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
 
@@ -96,7 +97,8 @@ export function Select<T extends string>({
   // Keeps the bottom sheet above the on-screen keyboard: iOS overlays the
   // keyboard on the layout viewport, so a `bottom: 0` sheet disappears
   // behind it the moment the search input is focused.
-  const keyboardInset = useVisualViewportBottomInset();
+  const keyboardInset = useVisualViewportBottomInset(open && isBottomSheet);
+  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
   const wasOpenRef = useRef(defaultOpen);
@@ -380,6 +382,7 @@ export function Select<T extends string>({
                         }
                 }
               >
+                {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
                 {renderedSearchable && (
                   <div className="menu__search">
                     <Search size={12} />

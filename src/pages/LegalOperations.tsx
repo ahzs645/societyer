@@ -641,7 +641,7 @@ export function RightsLedgerPage() {
         actions={
           <div className="row" style={{ alignItems: "center", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the register at a past date">
-              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
               <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
               {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")} title="Back to live">Live</button>}
             </label>

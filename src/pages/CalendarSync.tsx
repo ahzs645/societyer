@@ -190,11 +190,11 @@ export function CalendarSyncPage() {
               <Field label="Subscribe URL">
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                   <input
-                    className="input mono"
+                    className="input mono input--compact"
                     readOnly
                     aria-label="Subscribe URL"
                     value={feedUrl ?? ""}
-                    style={{ flex: "1 1 180px", minWidth: 0, fontSize: 12 }}
+                    style={{ flex: "1 1 180px", minWidth: 0 }}
                     onFocus={(e) => e.currentTarget.select()}
                   />
                   <button className="btn" onClick={copyFeed}><Copy size={12} /> Copy</button>
@@ -248,12 +248,12 @@ export function CalendarSyncPage() {
           </Field>
           <Field label="…or paste .ics content">
             <textarea
-              className="input"
+              className="input input--compact"
               rows={8}
               value={icsText}
               onChange={(e) => setIcsText(e.target.value)}
               placeholder="BEGIN:VCALENDAR…"
-              style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+              style={{ fontFamily: "var(--font-mono)" }}
             />
           </Field>
         </div>

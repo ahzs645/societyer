@@ -10,6 +10,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft } from "lucide-react";
+import { mobileMediaQuery } from "../lib/breakpoints";
+import { useMediaQuery, useSheetDrag } from "../lib/useSheetDrag";
 
 type HistoryEntry = { id: string; restore: () => void };
 
@@ -36,26 +38,28 @@ export function InspectorProvider({ children }: { children: ReactNode }) {
   const [portalTarget, setPortalTarget] = useState<HTMLDivElement | null>(null);
   const [headerTarget, setHeaderTarget] = useState<HTMLDivElement | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const activeCloseRef = useRef<(() => void) | null>(null);
+  // Tracked synchronously (not inside a state updater): a panel whose
+  // onClose identity changes re-runs deactivate → activate in one commit,
+  // and clearing the handler from a deferred updater wiped out the handler
+  // activate had just installed — leaving backdrop taps, swipe-to-dismiss
+  // and Escape-via-host as silent no-ops.
+  const activeCloseRef = useRef<{ id: string; onClose: () => void } | null>(null);
 
   const activate = useCallback((id: string, onClose: () => void) => {
-    activeCloseRef.current = onClose;
+    activeCloseRef.current = { id, onClose };
     setActivePanelId((current) => (current === id ? current : id));
   }, []);
 
   const deactivate = useCallback((id: string) => {
-    setActivePanelId((current) => {
-      if (current !== id) return current;
-      activeCloseRef.current = null;
-      return null;
-    });
+    if (activeCloseRef.current?.id === id) activeCloseRef.current = null;
+    setActivePanelId((current) => (current === id ? null : current));
     // A full close drops any pending history — users don't expect Back to
     // survive an Escape/backdrop dismissal.
     setHistory([]);
   }, []);
 
   const closeActive = useCallback(() => {
-    activeCloseRef.current?.();
+    activeCloseRef.current?.onClose();
   }, []);
 
   const pushHistory = useCallback((entry: HistoryEntry) => {
@@ -144,6 +148,14 @@ export function InspectorHost({ onOpenChange }: { onOpenChange?: (isOpen: boolea
     () => readStoredInspectorWidth() ?? INSPECTOR_DEFAULT_WIDTH,
   );
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  // Phones: the inspector is a page sheet; pulling its header down closes it.
+  const sheetRef = useRef<HTMLElement>(null);
+  const isPhone = useMediaQuery(mobileMediaQuery);
+  useSheetDrag(sheetRef, {
+    enabled: isOpen && isPhone,
+    onDismiss: () => inspector?.closeActive(),
+    handle: ".inspector__header, .drawer__head, [data-sheet-handle]",
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -229,7 +241,7 @@ export function InspectorHost({ onOpenChange }: { onOpenChange?: (isOpen: boolea
         * when a descendant has focus (e.g. closing the inspector while the user
         * is typing in an input inside it). `inert` removes the element from the
         * a11y tree AND prevents focus, which is the correct semantics here. */}
-      <aside className="inspector" {...(!isOpen ? { inert: "" } : {})}>
+      <aside ref={sheetRef} className="inspector" {...(!isOpen ? { inert: "" } : {})}>
         {isOpen && (
           <div
             className="inspector__resizer"

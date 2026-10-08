@@ -1,6 +1,9 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
+// iOS sheet curve — keep in sync with SHEET_EASING in lib/useSheetDrag.ts.
+$sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
 /* ============================================================
    Empty-state — shared placeholder for "no rows", "no notifications",
    "no matches". Prefer this over inline padding on .muted blocks.
@@ -137,20 +140,30 @@
   inset: auto 0 0;
   width: 100%;
   min-width: 0;
-  max-height: 60vh;
-  max-height: 60dvh;
-  padding: 4px max(4px, env(safe-area-inset-right))
-    calc(4px + env(safe-area-inset-bottom))
-    max(4px, env(safe-area-inset-left));
+  max-height: 70vh;
+  max-height: 70dvh;
+  padding: 0 max(8px, env(safe-area-inset-right))
+    calc(8px + env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  border-width: 1px 0 0;
   border-radius: token('r-lg') token('r-lg') 0 0;
   box-shadow: token('shadow-strong');
   overscroll-behavior-y: contain;
   overflow: hidden auto;
-  animation-name: menuSheetIn;
+  animation: sheetIn 0.3s $sheet-ease;
 }
-@keyframes menuSheetIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Sheet rows are thumb-sized: 44px min, body-size type. */
+.menu.menu--sheet .menu__item {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: token('fs-lg');
+}
+.menu.menu--sheet .menu__item-icon svg { width: 16px; height: 16px; }
+.menu.menu--sheet .menu__search {
+  padding: 8px 10px;
+}
+.menu.menu--sheet .menu__search-input {
+  font-size: 16px;
 }
 .menu__search {
   @include flex-center;
@@ -290,13 +303,14 @@
   width: 100%;
   max-height: 85dvh;
   overflow-y: auto;
-  padding: 10px max(10px, env(safe-area-inset-right))
-    calc(10px + env(safe-area-inset-bottom))
-    max(10px, env(safe-area-inset-left));
+  padding: 0 max(12px, env(safe-area-inset-right))
+    calc(12px + env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  border-width: 1px 0 0;
   border-radius: token('r-lg') token('r-lg') 0 0;
   box-shadow: token('shadow-strong');
   overscroll-behavior-y: contain;
-  animation-name: menuSheetIn;
+  animation: sheetIn 0.3s $sheet-ease;
 }
 .calendar.calendar--sheet .calendar__cell,
 .calendar.calendar--sheet .calendar__quick-cell {
@@ -640,38 +654,92 @@ body.modal-resizing {
   border-bottom-right-radius: token('r-lg');
 }
 
+/* Phone: dialogs become edge-to-edge bottom sheets — grabber, top-rounded
+ * corners, iOS sheet curve, home-indicator padding — and can be swiped down
+ * to dismiss (useSheetDrag). */
 @media (max-width: 560px) {
   .modal-backdrop {
-    background: rgba(0, 0, 0, 0.28);
+    background: rgba(0, 0, 0, 0.32);
+    animation-duration: 0.24s;
   }
 
   .modal {
     top: auto;
-    left: max(8px, env(safe-area-inset-left));
-    right: max(8px, env(safe-area-inset-right));
-    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: auto;
     max-width: none !important;
-    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top) + 12px));
     transform: none;
-    border-radius: token('r-md');
-    animation-name: modalInMobile;
+    border-width: 1px 0 0;
+    border-radius: token('r-lg') token('r-lg') 0 0;
+    box-shadow: token('shadow-strong');
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    animation: sheetIn 0.34s $sheet-ease;
   }
 
-  @keyframes modalInMobile {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+  .modal__head {
+    padding-top: 4px;
+    border-bottom-color: token('border-color-light');
+  }
+
+  .modal__title {
+    font-size: token('fs-lg');
+  }
+
+  .modal__body:last-child {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
   .modal__foot {
     flex-wrap: wrap;
     justify-content: stretch;
-    border-bottom-left-radius: token('r-md');
-    border-bottom-right-radius: token('r-md');
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    border-radius: 0;
   }
 
   .modal__foot > * {
     flex: 1 1 140px;
+    min-height: 40px;
+  }
+}
+
+@keyframes sheetIn {
+  from { transform: translate3d(0, 100%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+/* Grabber pill at the top of every bottom sheet. Only rendered in sheet
+ * mode; the whole sheet is draggable, the pill is the visual cue. */
+.sheet-grabber {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 6px;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet-grabber::before {
+  content: "";
+  width: 36px;
+  height: 5px;
+  border-radius: token('r-pill');
+  background: token('border-strong');
+  opacity: 0.7;
+}
+.is-sheet-dragging {
+  animation: none !important;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .menu.menu--sheet,
+  .calendar.calendar--sheet,
+  .notif-panel--sheet {
+    animation: fadeIn 0.12s ease-out !important;
   }
 }
 .confirm-body {

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
@@ -82,13 +83,22 @@ export function DateTimeInput({
   const [mm, setMM] = useState(parsed.mm);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false));
+  // On phones, land on the calendar rather than the typed-date field, so
+  // opening the sheet doesn't throw the keyboard up over it.
+  const popRef = useDialogFocus<HTMLDivElement>(
+    open,
+    () => setOpen(false),
+    typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches
+      ? ".calendar__cell.is-selected, .calendar__cell.is-today, .calendar__cell:not(.is-out)"
+      : undefined,
+  );
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   // Phones render the calendar as a viewport-pinned bottom sheet (same pattern
   // as Select/Menu/DatePicker) instead of an anchor-positioned popover.
   const [isBottomSheet, setIsBottomSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
+  useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -306,6 +316,7 @@ export function DateTimeInput({
               className={`calendar calendar--with-time${isBottomSheet ? " calendar--sheet" : ""}`}
               style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
             >
+              {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
               <div className="calendar__typed">
                 <label htmlFor={typedInputId} className="sr-only">Type a date</label>
                 <input

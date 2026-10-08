@@ -6,6 +6,25 @@ export const THEME_STORAGE_KEY = "societyer:theme";
 const THEME_CLASSES: ResolvedTheme[] = ["light", "dark"];
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 
+// Browser / PWA chrome colour per theme — matches --bg-primary (slate-1) so
+// the status bar and Android toolbar blend into the app canvas instead of
+// painting a dark band over the light UI.
+const THEME_CHROME_COLORS: Record<ResolvedTheme, string> = {
+  light: "#fcfcfd",
+  dark: "#111113",
+};
+
+function syncThemeColorMeta(resolvedTheme: ResolvedTheme) {
+  const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  metas.forEach((meta, index) => {
+    // index.html ships one tag per prefers-color-scheme; once the app has
+    // resolved an explicit theme the stored preference wins over the OS.
+    meta.removeAttribute("media");
+    if (index === 0) meta.content = THEME_CHROME_COLORS[resolvedTheme];
+    else meta.remove();
+  });
+}
+
 export function isThemePreference(value: unknown): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system";
 }
@@ -48,6 +67,7 @@ export function applyThemePreference(preference = getStoredThemePreference()): R
     root.classList.remove(...THEME_CLASSES);
     root.classList.add(resolvedTheme);
     root.style.colorScheme = resolvedTheme;
+    syncThemeColorMeta(resolvedTheme);
   }
 
   return resolvedTheme;
@@ -59,6 +79,7 @@ export function applyResolvedTheme(resolvedTheme: ResolvedTheme): ResolvedTheme 
     root.classList.remove(...THEME_CLASSES);
     root.classList.add(resolvedTheme);
     root.style.colorScheme = resolvedTheme;
+    syncThemeColorMeta(resolvedTheme);
   }
   return resolvedTheme;
 }

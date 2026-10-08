@@ -329,8 +329,8 @@ function MotionsTableTab() {
                       </Badge>
                     ))}
                     <input
-                      className="input"
-                      style={{ width: 90, height: 24, fontSize: 12 }}
+                      className="input input--compact"
+                      style={{ width: 90, height: 24 }}
                       value={tagDraft[String(row._id)] ?? ""}
                       onChange={(e) => setTagDraft({ ...tagDraft, [String(row._id)]: e.target.value })}
                       onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
