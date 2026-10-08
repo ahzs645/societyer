@@ -69,7 +69,7 @@ export function PaperlessDocumentAction({
       {sync && !paperlessUrl && (
         <span title={sync.lastError ?? `Paperless status: ${sync.status}`}>
           <Badge tone={sync.status === "failed" ? "danger" : "info"}>
-            {sync.status}
+            {sync.status ? sync.status.charAt(0).toUpperCase() + sync.status.slice(1) : sync.status}
           </Badge>
         </span>
       )}

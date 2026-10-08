@@ -516,7 +516,9 @@
   /* "New …" actions are always a bare + on phones, whatever the fit, so the
    * create button looks the same on every page. */
   .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child),
-  .settings-shell__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child) {
+  .page__header .page__actions .btn:has(> .btn__icon:first-child > svg.lucide-plus),
+  .settings-shell__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child),
+  .settings-shell__actions .btn:has(> .btn__icon:first-child > svg.lucide-plus) {
     justify-content: center;
     width: 36px;
     min-width: 36px;

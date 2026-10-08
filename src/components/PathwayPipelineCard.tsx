@@ -30,7 +30,7 @@ export function PathwayPipelineCard({ societyId }: { societyId: string }) {
   };
   return <section className="card" style={{ padding: 16, marginBottom: 20 }} aria-label="Saved incorporation pathway">
     <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-      <div><h2 style={{ fontSize: 16, margin: "0 0 6px" }}>Saved incorporation pathway</h2><div className="muted">{pathway?.title ?? "No supported pathway"}{pathway?.version ? ` · version ${pathway.version}` : ""}</div></div>
+      <div><h2 style={{ fontSize: 16, margin: "0 0 6px" }}>Saved incorporation pathway</h2><div className="muted">{pathway?.title ?? "No supported pathway"}</div></div>
       {data.canStart && <button className="btn btn--sm" disabled={busy} onClick={startRun}>{busy ? "Starting…" : runs.length ? "Start new pathway run" : "Start pathway"}</button>}
     </div>
     <p className="muted">{pathway?.message ?? data.message ?? "Confirm the entity route on the organization profile before starting."}</p>
@@ -68,7 +68,7 @@ function PipelineRun({ run, data, societyId }: { run: any; data: any; societyId:
   };
   const evidenceOptions = [{ value: "", label: "Select a workspace document" }, ...(documents ?? []).map((document) => ({ value: document._id, label: document.title }))];
   return <div data-testid="pathway-run">
-    <p className="muted">Run version {run.pathwayVersion} · {run.status}. Starting or completing this preparation does not confirm incorporation.</p>
+    <p className="muted" title={`Pathway version ${run.pathwayVersion}`}>Status: {run.status}. Completing this preparation doesn't confirm incorporation.</p>
     {run.message && <p role="status">{run.message}</p>}
     <details open>
       <summary style={{ cursor: "pointer", fontWeight: 600 }}>Pathway inputs {run.inputsFrozen ? "— saved and frozen" : "— save before completing a step"}</summary>
