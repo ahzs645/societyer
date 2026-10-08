@@ -273,7 +273,10 @@ export function YearEndReportsPage() {
         title="Year-end reports"
         icon={<PiggyBank size={16} />}
         iconColor="green"
-        subtitle="Assemble and export the society's year-end financial reports — annual statement, restricted funds, the BC Community Gaming Grants program actuals & budget, and a readiness checklist."
+        subtitle="Assemble and export the year-end financial reports."
+        info={
+          <p>Covers the annual statement, restricted funds, BC Community Gaming Grants actuals and budget, and a readiness checklist.</p>
+        }
         actions={
           <Link className="btn-action" to="/app/financials">
             <ArrowLeft size={12} /> Financials

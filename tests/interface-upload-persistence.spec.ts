@@ -42,7 +42,8 @@ test("fresh local workspace organization logo retains its bytes after reload", a
 test("fresh local workspace inventory photo persists with its saved item", async ({ page }, testInfo) => {
   await createLocalWorkspace(page);
   await page.goto("/app/inventory");
-  await page.getByRole("button", { name: "New item", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Item", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New item", exact: true });
   await expect(dialog.locator("button").filter({ hasText: "Upload" })).toBeVisible();
   await dialog.locator('input[type="file"]').setInputFiles(image());

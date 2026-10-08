@@ -50,7 +50,9 @@ test("existing company collects its Act, addresses and share planning without fa
   await page.getByRole("textbox", { name: "Incorporation #", exact: true }).fill("BC1234567");
   await page.getByLabel("Incorporation date", { exact: true }).fill("2023-05-10");
   await page.getByRole("textbox", { name: "Official email", exact: true }).fill("records@example.test");
-  await page.getByRole("textbox", { name: "Fiscal year end", exact: true }).fill("12-31");
+  await page.getByLabel("Fiscal year end month", { exact: true }).click();
+  await page.getByRole("option", { name: "Dec", exact: true }).click();
+  await expect(page.getByLabel("Fiscal year end day", { exact: true })).toContainText("31");
   // Addresses are optional at creation; open that section to add them now.
   await page.getByText("Add the registered office and mailing address now", { exact: false }).click();
   const office = page.getByRole("group", { name: "Registered office address", exact: true });

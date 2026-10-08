@@ -959,3 +959,108 @@
   gap: token('s-2');
   font-size: token('fs-sm');
 }
+
+/* Compliance settings: grouped settings beside a live preview of the
+ * deadlines they produce. */
+.settings-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: token(s-4);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .settings-split { grid-template-columns: minmax(0, 560px) minmax(300px, 1fr); }
+  .settings-split__aside { position: sticky; top: token(s-4); }
+}
+.settings-split__main {
+  display: flex;
+  flex-direction: column;
+  gap: token(s-4);
+  min-width: 0;
+  > .card { margin: 0; }
+}
+.settings-split__aside { margin: 0; }
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: token(s-3);
+  .field { margin: 0; }
+}
+.settings-section__title {
+  margin: 0;
+  font-size: token(fs-md);
+  font-weight: 600;
+}
+.settings-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token(s-2);
+}
+.settings-section__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token(s-3);
+}
+.settings-section__row--action {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.settings-section__hint {
+  margin: 0;
+  color: token(text-tertiary);
+  font-size: token(fs-sm);
+}
+.settings-section__fact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px token(s-3);
+  font-size: token(fs-sm);
+}
+.settings-section__fact-label {
+  color: token(text-secondary);
+  font-weight: 500;
+}
+.settings-section__fact-link { font-size: token(fs-sm); }
+.settings-section--collapsible {
+  > summary {
+    cursor: pointer;
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+    &::after { content: "＋"; float: right; color: token(text-tertiary); font-weight: 400; }
+  }
+  &[open] > summary::after { content: "－"; }
+}
+.settings-deadlines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-deadlines__item {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px token(s-3);
+  padding: token(s-2) 0;
+  border-top: 1px solid token(border);
+  font-size: token(fs-sm);
+  &:first-child { border-top: 0; }
+}
+.settings-deadlines__date {
+  color: token(text-primary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.settings-deadlines__basis {
+  grid-column: 2;
+  color: token(text-tertiary);
+  font-size: token(fs-xs);
+}
+.settings-deadlines__added { color: token(text-tertiary); }
+@media (max-width: 560px) {
+  .settings-section__row:not(.settings-section__row--pair) { grid-template-columns: minmax(0, 1fr); }
+  .settings-section__row--action { grid-template-columns: minmax(0, 1fr) auto; }
+}

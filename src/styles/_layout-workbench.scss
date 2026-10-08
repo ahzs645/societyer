@@ -529,6 +529,8 @@
       width: 16px;
       height: 16px;
     }
+
+    > .create-menu__caret { display: none; }
   }
 
   /* Compact: icon buttons drop their visible text (it stays in the DOM, so
@@ -789,3 +791,71 @@
     min-height: 36px;
   }
 }
+
+.create-menu__caret {
+  margin-left: -2px;
+  opacity: 0.75;
+}
+
+/* ⓘ background popover (PageHeader `info`, section heads). */
+.info-popover__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: token(text-tertiary);
+  cursor: pointer;
+  vertical-align: middle;
+  &:hover, &[aria-expanded="true"] { color: token(text-primary); background: token(bg-hover); }
+  &:focus-visible { outline: 2px solid token(accent); outline-offset: 1px; }
+}
+.info-popover {
+  z-index: token(z-dropdown);
+  width: min(340px, calc(100vw - 16px));
+  padding: 12px 14px;
+  background: token(bg-panel);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  box-shadow: token(shadow-strong);
+  color: token(text-secondary);
+  font-size: token(fs-sm);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  p { margin: 0; }
+  p + p { margin-top: 8px; }
+}
+
+/* "As of" strip above a dated register (certificates, share register). */
+.register-asof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-2) token(s-4);
+  margin: 0 0 token(s-3);
+  color: token(text-secondary);
+  font-size: token(fs-sm);
+}
+.register-asof__date {
+  display: inline-flex;
+  align-items: center;
+  gap: token(s-2);
+  white-space: nowrap;
+}
+.register-asof__totals { color: token(text-primary); font-variant-numeric: tabular-nums; }
+.page__title-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  > .page__title { min-width: 0; }
+}
+.annual-filings__note { margin: 0 0 token(s-3); font-size: token(fs-sm); }

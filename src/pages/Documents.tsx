@@ -260,7 +260,10 @@ export function DocumentsPage() {
         title="Documents"
         icon={<FolderOpen size={16} />}
         iconColor="gray"
-        subtitle="Every record and source file the organization keeps — constitution, bylaws, minutes, statements, policies and imported sources. Records ≥ 10 years (CRA: 7 years financial)."
+        subtitle="Every record and source file the organization keeps."
+        info={
+          <p>Constitution, bylaws, minutes, statements, policies and imported sources. Keep records at least 10 years; financial records 7 years (CRA).</p>
+        }
         actions={
           <>
             {nativeStorage && (

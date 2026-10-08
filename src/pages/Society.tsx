@@ -1,4 +1,5 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
+import { MonthDayPicker } from "../components/MonthDayPicker";
 import { formatAddressText } from "../../shared/structuredAddress";
 import { EntitySetupFields } from "../components/EntitySetupFields";
 import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
@@ -538,15 +539,14 @@ export function SocietyPage() {
                 </LockedField>
                 <LockedField
                   label="Fiscal year end"
-                  hint="MM-DD"
                   reason="Changing the fiscal year end can require a bylaw amendment and notification to the CRA. Affects every filing deadline downstream."
                 >
                   {(locked) => (
-                    <input
-                      className="input"
+                    <MonthDayPicker
+                      ariaLabel="Fiscal year end"
                       disabled={locked}
-                      value={form.fiscalYearEnd ?? ""}
-                      onChange={(e) => set("fiscalYearEnd", e.target.value)}
+                      value={form.fiscalYearEnd}
+                      onChange={(value) => set("fiscalYearEnd", value)}
                     />
                   )}
                 </LockedField>

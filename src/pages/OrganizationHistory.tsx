@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { CreateMenu } from "../components/CreateMenu";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
@@ -91,6 +92,11 @@ function newSourceForm() {
     notes: "",
     url: "",
   };
+}
+
+/** The current section's record type first, so "+ Add" reads as the obvious next step. */
+function orderCreateItems<T extends { id: string }>(section: string, items: T[]): T[] {
+  return [...items.filter((item) => item.id === section), ...items.filter((item) => item.id !== section)];
 }
 
 function newFactForm() {
@@ -421,9 +427,18 @@ export function OrganizationHistoryPage() {
             <button className="btn-action" onClick={() => setImportOpen(true)} disabled={!canWrite}>
               <Upload size={12} /> Import JSON
             </button>
-            <button className="btn-action btn-action--primary" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add source
-            </button>
+            <CreateMenu
+              label="Add"
+              disabled={!canWrite}
+              items={orderCreateItems(section, [
+                { id: "sources", label: "Source", onSelect: () => setSourceForm(newSourceForm()) },
+                { id: "facts", label: "Fact", onSelect: () => setFactForm(newFactForm()) },
+                { id: "people", label: "Board term", onSelect: () => setBoardTermForm(newBoardTermForm()) },
+                { id: "motions", label: "Motion", onSelect: () => setMotionForm(newMotionForm()) },
+                { id: "budgets", label: "Budget snapshot", onSelect: () => setBudgetForm(newBudgetForm()) },
+                { id: "timeline", label: "Timeline event", onSelect: () => setEventForm(newEventForm()) },
+              ])}
+            />
           </>
         }
       />
@@ -458,9 +473,6 @@ export function OrganizationHistoryPage() {
             <div className="row" style={{ gap: 8 }}>
               <button className="btn-action" onClick={() => setWorkflowOpen(true)} disabled={!canWrite}>
                 <BookOpen size={12} /> Workflow
-              </button>
-              <button className="btn-action" onClick={() => setFactForm(newFactForm())} disabled={!canWrite}>
-                <Plus size={12} /> Add fact
               </button>
             </div>
           </div>
@@ -551,11 +563,6 @@ export function OrganizationHistoryPage() {
                     : "Editable service terms with linked source documents"}
                 </span>
               </div>
-              {peopleSection === "terms" && (
-                <button className="btn-action" onClick={() => setBoardTermForm(newBoardTermForm())} disabled={!canWrite}>
-                  <Plus size={12} /> Add term
-                </button>
-              )}
             </div>
 
             <div className="org-history__inline-tabs" role="tablist" aria-label="People history views">
@@ -659,9 +666,6 @@ export function OrganizationHistoryPage() {
               <h2 className="card__title">Converted motions</h2>
               <span className="card__subtitle">Paperless minute motions merged with editable org-history records</span>
             </div>
-            <button className="btn-action" onClick={() => setMotionForm(newMotionForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add motion
-            </button>
           </div>
           <DataTable<any>
             label="Converted motions"
@@ -741,9 +745,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Budget snapshots</h2>
-            <button className="btn-action" onClick={() => setBudgetForm(newBudgetForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add budget
-            </button>
           </div>
           <TableScroll>
             <table className="table">
@@ -812,9 +813,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">History timeline</h2>
-            <button className="btn-action" onClick={() => setEventForm(newEventForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add event
-            </button>
           </div>
           <div className="card__body">
             {events.length > 0 ? (
@@ -858,9 +856,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Source records</h2>
-            <button className="btn-action" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add source
-            </button>
           </div>
           {sources.length > 0 ? (
             <TableScroll>

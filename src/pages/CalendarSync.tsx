@@ -156,7 +156,10 @@ export function CalendarSyncPage() {
         title="Calendar sync"
         icon={<CalendarClock size={16} />}
         iconColor="purple"
-        subtitle="Import events from an external calendar (Google, Outlook, or any .ics feed) into a reviewable import session. Events become candidate deadlines and source evidence you can apply to governance records."
+        subtitle="Import events from Google, Outlook or any .ics feed for review."
+        info={
+          <p>Imported events land in a reviewable import session as candidate deadlines and source evidence you can apply to governance records.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canStage || busy || parsed.length === 0} onClick={submit}>
             <UploadCloud size={12} /> Stage {parsed.length || ""} event{parsed.length === 1 ? "" : "s"}

@@ -255,7 +255,10 @@ export function CommitmentsPage() {
         title="Commitments"
         icon={<ClipboardList size={16} />}
         iconColor="green"
-        subtitle="Promises made to external parties, like grant conditions, MOUs, and vendor or landlord obligations. For internal work items, use Tasks; for dates set by law or regulation, use Deadlines."
+        subtitle="Promises to funders, partners, vendors and landlords."
+        info={
+          <p>Grant conditions, MOUs and vendor or landlord obligations. Internal work items belong in Tasks; dates set by law or regulation belong in Deadlines.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New commitment

@@ -1,4 +1,5 @@
 import { JURISDICTION_WORKSPACE_CONFIGS } from "../../shared/jurisdictionWorkspace";
+import { formatMonthDay } from "../components/MonthDayPicker";
 import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -517,7 +518,7 @@ export function Dashboard() {
             <div className="card__body col">
               <div><strong>{society.name}</strong></div>
               <div className="muted mono">{society.incorporationNumber}</div>
-              <div className="muted">Fiscal year end: {society.fiscalYearEnd ?? "—"}</div>
+              <div className="muted">Fiscal year end: {society.fiscalYearEnd ? formatMonthDay(society.fiscalYearEnd) : "—"}</div>
               <div className="muted">{society.registeredOfficeAddress}</div>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                 {society.isCharity && <Badge tone="accent">CRA charity</Badge>}

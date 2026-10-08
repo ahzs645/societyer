@@ -396,23 +396,22 @@
   align-items: center;
   margin: 0 0 12px;
 }
-.meetings-review-toolbar__select {
-  width: 240px;
-  max-width: 100%;
-}
-/* Phones: both filters share one row; the count sits under them. */
-@media (max-width: 560px) {
-  .meetings-review-toolbar {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px 8px;
-  }
-  .meetings-review-toolbar__select {
-    width: auto;
-  }
-  .meetings-review-toolbar > :not(.meetings-review-toolbar__select) {
-    grid-column: 1 / -1;
-  }
+/* Review queues: each count switches the table to its seeded view. */
+.meetings-review-toolbar__queue {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid token('border');
+  border-radius: 999px;
+  background: token('bg-panel');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  cursor: pointer;
+  strong { color: token('text-primary'); font-weight: 600; }
+  &:hover:not(:disabled) { background: token('bg-hover'); }
+  &.is-active { border-color: token('accent'); color: token('accent'); strong { color: inherit; } }
+  &:disabled { cursor: default; opacity: 0.6; }
 }
 .meetings-review-toolbar__chip {
   display: inline-flex;

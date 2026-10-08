@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import { InfoPopover } from "../components/InfoPopover";
 import { ReactNode, useState, createElement, useLayoutEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
@@ -106,9 +107,12 @@ export function PageHeader({
   iconColor,
   routeKey,
   actions,
+  info,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
+  /** Background that would otherwise be a paragraph under the header; shown from an ⓘ beside the title. */
+  info?: ReactNode;
   /** Fallback icon when the registry has no entry for this route. */
   icon?: ReactNode;
   /** Fallback color when the registry has no entry for this route. */
@@ -150,7 +154,22 @@ export function PageHeader({
     <div className="page__header" ref={headerRef}>
       <div className="page__header-main">
         <div className="page__intro">
-          <h1 className="page__title">
+          {info ? (
+            // The ⓘ sits beside the heading, not inside it, so the heading's
+            // accessible name stays the page title.
+            <div className="page__title-row">
+              <h1 className="page__title">
+              {resolvedIcon && (
+                <TintedIconTile tone={resolvedTone} size="md" className="page__icon">
+                  {resolvedIcon}
+                </TintedIconTile>
+              )}
+              <span className="page__title-text">{displayTitle}</span>
+            </h1>
+              <InfoPopover label={`About ${typeof displayTitle === "string" ? displayTitle : "this page"}`}>{info}</InfoPopover>
+            </div>
+          ) : (
+            <h1 className="page__title">
             {resolvedIcon && (
               <TintedIconTile tone={resolvedTone} size="md" className="page__icon">
                 {resolvedIcon}
@@ -158,6 +177,7 @@ export function PageHeader({
             )}
             <span className="page__title-text">{displayTitle}</span>
           </h1>
+          )}
           {subtitle && <p className="page__subtitle">{subtitle}</p>}
         </div>
       </div>

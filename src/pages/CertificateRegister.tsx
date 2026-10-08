@@ -130,45 +130,47 @@ export function CertificateRegisterPage() {
         title="Certificate register"
         icon={<ScrollText size={16} />}
         iconColor="purple"
-        subtitle="Register of physical share certificates — holder, class, shares and issue date — with outstanding shares by class as of a chosen date."
+        subtitle="Physical share certificates issued, with outstanding shares by class on any date."
+        info={
+          <p>
+            Each certificate records its holder, class, shares and issue date. Cancel a certificate when it's returned;
+            a replacement records the number it supersedes.
+            {!isCorporation(society) && ` Optional for ${society.name}: a society has members, not shareholders.`}
+          </p>
+        }
         actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
-              <DatePicker
-                value={asOf}
-                onChange={(value) => setAsOf(value)}
-              />
-            </label>
-            <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
-              <Plus size={12} /> Issue certificate
-            </button>
-          </div>
+          <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
+            <Plus size={12} /> Issue certificate
+          </button>
         }
       />
 
-      {!isCorporation(society) && (
-        <p className="muted" role="status">
-          Share certificates apply to companies with shares. {society.name} is a society, which has members rather than shareholders, so
-          this register is optional here and is not a statutory requirement.
-        </p>
-      )}
-
-      {Object.keys(outstanding).length > 0 && (
-        <p style={{ color: "var(--text-secondary)" }}>
-          Outstanding by class:{" "}
-          {Object.entries(outstanding)
-            .map(([cls, shares]) => `${cls} ${shares.toLocaleString()}`)
-            .join(" · ")}
-        </p>
+      {list !== undefined && list.length > 0 && (
+        <div className="register-asof">
+          <label className="register-asof__date">
+            <span>Outstanding as of</span>
+            <DatePicker value={asOf} onChange={(value) => setAsOf(value)} />
+          </label>
+          <span className="register-asof__totals">
+            {Object.keys(outstanding).length > 0
+              ? Object.entries(outstanding)
+                  .map(([cls, shares]) => `${cls} ${shares.toLocaleString()}`)
+                  .join(" · ")
+              : "No shares outstanding on this date"}
+          </span>
+        </div>
       )}
 
       <div className="card">
         {list === undefined ? (
           <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
         ) : list.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>No certificates issued yet.</p>
+          <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
+            No certificates issued yet.
+            {!isCorporation(society) && " Optional for societies, which have members rather than shareholders."}
+          </p>
         ) : (
+          <div className="table-scroll" role="region" aria-label="Share certificates" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
@@ -224,6 +226,7 @@ export function CertificateRegisterPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

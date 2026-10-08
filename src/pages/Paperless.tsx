@@ -89,7 +89,10 @@ export function PaperlessPage() {
         title="Paperless-ngx"
         icon={<Database size={16} />}
         iconColor="gray"
-        subtitle="Technical setup area. Connects Societyer to an external document archive that automatically scans (OCR) and tags uploaded files so they're searchable — typically configured once by an administrator, not a page a board member needs to visit."
+        subtitle="Connect a Paperless-ngx archive for OCR and tagging."
+        info={
+          <p>An administrator usually sets this up once. Paperless scans (OCR) and tags uploaded files so they're searchable from Societyer.</p>
+        }
         actions={
           <>
             <button className="btn-action" disabled={busy || !canConfigure} onClick={runTest}>

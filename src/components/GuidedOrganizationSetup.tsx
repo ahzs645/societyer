@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { MonthDayPicker } from "./MonthDayPicker";
 import { Link } from "react-router-dom";
 import { Building2, CheckCircle2, ChevronLeft } from "lucide-react";
 import { Field } from "./ui";
@@ -155,7 +156,7 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
               <Field label={stage === "preparing" ? "Proposed name / working name" : "Recorded legal name"}><input required maxLength={300} className="input" value={form.name} onChange={(event) => set("name", event.target.value)} autoComplete="organization" /></Field>
               {corporate && stage === "preparing" && <label className="checkbox"><input type="checkbox" checked={form.numbered} onChange={(event) => set("numbered", event.target.checked)} /> Use a registry-assigned numbered company name</label>}
               {stage === "existing" && <div className="society-field-grid"><Field label="Incorporation #" hint="Optional"><input className="input" value={form.incorporationNumber} onChange={(event) => set("incorporationNumber", event.target.value)} /></Field><Field label="Incorporation date"><input className="input" type="date" value={form.incorporationDate} onChange={(event) => set("incorporationDate", event.target.value)} /></Field></div>}
-              <div className="society-field-grid"><Field label="Official email"><input className="input" type="email" value={form.officialEmail} onChange={(event) => set("officialEmail", event.target.value)} /></Field><Field label="Fiscal year end" hint="MM-DD, optional"><input className="input" placeholder="03-31" value={form.fiscalYearEnd} onChange={(event) => set("fiscalYearEnd", event.target.value)} /></Field></div>
+              <div className="society-field-grid"><Field label="Official email"><input className="input" type="email" value={form.officialEmail} onChange={(event) => set("officialEmail", event.target.value)} /></Field><Field label="Fiscal year end" hint="Optional"><MonthDayPicker ariaLabel="Fiscal year end" value={form.fiscalYearEnd} onChange={(value) => set("fiscalYearEnd", value)} /></Field></div>
               <OptionalAddresses form={form} set={set} sameMailing={sameMailing} setSameMailing={setSameMailing} />
             </>}
 

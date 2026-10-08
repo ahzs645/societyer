@@ -25,7 +25,8 @@ const surfaces: Surface[] = [
   { path: "/app/pipa-training", actions: [{ name: /^Log training$/, permission: "attestations:write" }], rows: [{ name: /^Delete training record/, permission: "attestations:write" }] },
   { path: "/app/retention", actions: [], rows: [{ name: /^(?:Keep record|Flag for purge review|Archive )/, permission: "documents:write" }] },
   { path: "/app/privacy", actions: [{ name: /^(?:Create|Edit) policy draft$/, permission: "documents:write" }, { name: /^Save record$/, permission: "society:write" }, { name: /^Add setup motions$/, permission: "motions:write" }] },
-  { path: "/app/corporate-history", actions: [{ name: /^Add name$/, permission: "settings:write" }, { name: /^Add event$/, permission: "documents:write" }] },
+  // One "+ Add" menu: name changes need settings:write, constating events documents:write; the trigger opens for either.
+  { path: "/app/corporate-history", actions: [{ name: /^Add$/, permission: "documents:write" }] },
   { path: "/app/auditors", actions: [{ name: /^New appointment$/, permission: "auditors:write" }], rows: [{ name: /^Create portal$/, permission: "communications:write" }] },
   { path: "/app/proposals", actions: [{ name: /^New proposal$/, permission: "motions:write" }], rows: [{ name: /^(?:Include|Reject|Delete proposal )/, permission: "motions:write" }] },
   { path: "/app/written-resolutions", actions: [{ name: /^New resolution$/, permission: "motions:write" }], rows: [{ name: /^(?:Mark failed|Delete written resolution )/, permission: "motions:write" }] },
@@ -35,13 +36,13 @@ const surfaces: Surface[] = [
   { path: "/app/proxies", actions: [{ name: /^New proxy$/, permission: "proxies:write", blockedByText: /disables proxy voting|proxies disabled/ }], rows: [{ name: /^Delete proxy/, permission: "proxies:write" }] },
   { path: "/app/court-orders", actions: [{ name: /^Record order$/, permission: "courtOrders:write" }], rows: [{ name: /^Delete court order/, permission: "courtOrders:write" }] },
   { path: "/app/inspections", actions: [{ name: /^Log inspection$/, permission: "documents:write" }], rows: [{ name: /^Delete inspection/, permission: "documents:write" }] },
-  { path: "/app/membership", actions: [{ name: /^New plan$/, permission: "settings:write" }, { name: /^Add period$/, permission: "settings:write" }], rows: [{ name: /^Delete (?:membership plan|fee period)/, permission: "settings:write" }] },
+  { path: "/app/membership", actions: [{ name: /^New$/, permission: "settings:write" }, { name: /^Add period$/, permission: "settings:write" }], rows: [{ name: /^Delete (?:membership plan|fee period)/, permission: "settings:write" }] },
   { path: "/app/committees", actions: [{ name: /^New committee$/, permission: "committees:write" }] },
   { path: "/app/service-providers", actions: [{ name: /^New provider$/, permission: "settings:write" }] },
   { path: "/app/significant-individuals", actions: [{ name: /^Record step$/, permission: "deadlines:write" }] },
   { path: "/app/access-custody", actions: [{ name: /^New access record$/, permission: "settings:write" }] },
   { path: "/app/post-incorporation", actions: [], rows: [{ name: /^(?:Generate packet|Regenerate)$/, permission: "documents:write" }] },
-  { path: "/app/org-history", actions: [{ name: /^Add source$/, permission: "society:write" }, { name: /^Add fact$/, permission: "society:write" }] },
+  { path: "/app/org-history", actions: [{ name: /^Add$/, permission: "society:write" }] },
 ];
 
 async function deniedControl(control: Locator) {

@@ -98,7 +98,10 @@ export function MotionsPage() {
         title="Motions"
         icon={<Gavel size={16} />}
         iconColor="orange"
-        subtitle="Motions recorded as first-class records, with their meetings and outcomes. Motions that exist only inside minutes text appear once they are extracted or reviewed."
+        subtitle="Motions with their meetings and outcomes."
+        info={
+          <p>Motions that exist only inside minutes text appear here once they are extracted or reviewed.</p>
+        }
       />
       <Tabs<MotionsTab>
         value={tab}

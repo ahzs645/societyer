@@ -80,7 +80,10 @@ export function WrittenResolutionsPage() {
         title="Written resolutions"
         icon={<PenLine size={16} />}
         iconColor="purple"
-        subtitle="Members' resolutions in lieu of a meeting — ordinary resolutions need majority consent in writing; special resolutions need unanimous written consent from all voting members."
+        subtitle="Members' resolutions passed in writing instead of at a meeting."
+        info={
+          <p>Ordinary resolutions need majority written consent; special resolutions need unanimous written consent from all voting members.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New resolution

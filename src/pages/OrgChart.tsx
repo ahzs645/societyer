@@ -11,6 +11,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
@@ -20,60 +21,95 @@ import { useThemePreference } from "../hooks/useThemePreference";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Link } from "react-router-dom";
-import { Network, UsersRound, X } from "lucide-react";
+import { GitBranch, ListTree, Network, X } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { useIsMobile } from "../lib/useIsMobile";
+import { InfoPopover } from "../components/InfoPopover";
+import {
+  buildOrgTree,
+  descendantKeys,
+  findNode,
+  layoutOrgTree,
+  NODE_WIDTH,
+  personKey,
+  type OrgPerson,
+  type OrgTreeNode,
+} from "../lib/orgChartLayout";
 
-type OrgPerson = {
-  type: "director" | "employee" | "volunteer";
-  id: string;
-  name: string;
-  role: string;
-  status?: string;
-  href: string;
-  note?: string;
-};
 
-const TYPE_TONE: Record<string, { bg: string; border: string; label: string }> = {
-  root: { bg: "var(--bg-subtle)", border: "var(--accent)", label: "Entity" },
-  director: { bg: "color-mix(in srgb, var(--accent) 12%, var(--bg-panel))", border: "var(--accent)", label: "Director" },
-  employee: { bg: "color-mix(in srgb, var(--success) 12%, var(--bg-panel))", border: "var(--success)", label: "Employee" },
-  volunteer: { bg: "color-mix(in srgb, var(--warn) 14%, var(--bg-panel))", border: "var(--warn)", label: "Volunteer" },
+const TYPE_TONE: Record<string, { color: string; label: string }> = {
+  root: { color: "var(--text-primary)", label: "Organization" },
+  group: { color: "var(--text-tertiary)", label: "" },
+  director: { color: "var(--accent)", label: "Director" },
+  employee: { color: "var(--success)", label: "Employee" },
+  volunteer: { color: "var(--warn)", label: "Volunteer" },
 };
 
 function OrgNode({ data }: NodeProps) {
-  const d = data as any;
-  const tone = TYPE_TONE[d.type] ?? TYPE_TONE.root;
+  const d = data as {
+    kind: OrgTreeNode["kind"] | "team";
+    label: string;
+    role?: string;
+    count?: number;
+    selected?: boolean | string | null;
+    members?: OrgPerson[];
+    onSelect?: (key: string | null) => void;
+  };
+  if (d.kind === "team") {
+    return (
+      <div className="org-node org-node--team" style={{ width: NODE_WIDTH }}>
+        <Handle type="target" position={Position.Top} className="org-node__handle" />
+        <div className="org-node__group">
+          <span>{d.label}</span>
+          <span className="org-node__count">{d.members?.length}</span>
+        </div>
+        <ul className="org-node__members">
+          {d.members?.map((member) => {
+            const key = personKey(member);
+            return (
+              <li key={key}>
+                <button
+                  type="button"
+                  className={`org-node__member org-node__member--${member.type}${d.selected === key ? " is-selected" : ""}`}
+                  onClick={(event) => { event.stopPropagation(); d.onSelect?.(d.selected === key ? null : key); }}
+                >
+                  <span className="org-node__name">{member.name || "Unnamed"}</span>
+                  {member.role && <span className="org-node__role">{member.role}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <Handle type="source" position={Position.Bottom} className="org-node__handle" />
+      </div>
+    );
+  }
+  const tone = TYPE_TONE[d.kind] ?? TYPE_TONE.root;
   return (
     <div
-      style={{
-        background: tone.bg,
-        border: `1px solid ${tone.border}`,
-        borderLeft: `4px solid ${tone.border}`,
-        borderRadius: 8,
-        padding: "8px 12px",
-        minWidth: 150,
-        maxWidth: 220,
-        boxShadow: d.selected ? "0 0 0 2px var(--accent)" : "var(--shadow-sm)",
-        color: "var(--text-primary)",
-      }}
+      className={`org-node org-node--${d.kind}${d.selected ? " is-selected" : ""}`}
+      style={{ width: NODE_WIDTH, ["--org-tone" as string]: tone.color }}
     >
-      <Handle type="target" position={Position.Top} style={{ opacity: d.type === "root" ? 0 : undefined }} />
-      <div style={{ fontSize: "var(--fs-xs)", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.4 }}>
-        {tone.label}
-      </div>
-      <div style={{ fontWeight: 600, fontSize: "var(--fs-md)" }}>{d.label}</div>
-      {d.role && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.role}</div>}
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="target" position={Position.Top} className="org-node__handle" />
+      {d.kind === "group" ? (
+        <div className="org-node__group">
+          <span>{d.label}</span>
+          {d.count != null && <span className="org-node__count">{d.count}</span>}
+        </div>
+      ) : (
+        <>
+          <div className="org-node__name">{d.label}</div>
+          {d.role && <div className="org-node__role">{d.role}</div>}
+        </>
+      )}
+      <Handle type="source" position={Position.Bottom} className="org-node__handle" />
     </div>
   );
 }
 
 const nodeTypes = { orgPerson: OrgNode };
-
-const ROW_GAP = 170;
-const COL_GAP = 240;
 
 // Did this director hold office on the given date? Pure term-interval check:
 // present-day `status` must NOT gate a historical query, or a since-resigned
@@ -117,6 +153,11 @@ export function OrgChartPage() {
   // As-of date (YYYY-MM-DD); "" = live. Time-travel to a past org structure.
   const [asOf, setAsOf] = useState<string>("");
   const [selected, setSelected] = useState<string | null>(null);
+  // Phones get the outline by default: a canvas of tiny boxes is hard to read
+  // and pan with a thumb. Either view is one tap away.
+  const isMobile = useIsMobile();
+  const [modeChoice, setMode] = useState<"chart" | "list" | null>(null);
+  const mode = modeChoice ?? (isMobile ? "list" : "chart");
 
   const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");
   const employees = useQuery(api.employees.list, society && can("employees:read") ? { societyId: society._id } : "skip");
@@ -151,7 +192,6 @@ export function OrgChartPage() {
         role: employee.role || employee.employmentType,
         status: employee.employmentType,
         href: "/app/employees",
-        note: employee.notes,
       }));
     const volunteerPeople: OrgPerson[] = ((volunteers ?? []) as any[])
       .filter((v) =>
@@ -164,12 +204,11 @@ export function OrgChartPage() {
         role: volunteer.roleWanted || "Volunteer",
         status: volunteer.status,
         href: "/app/volunteers",
-        note: volunteer.notes,
       }));
     return [...directorPeople, ...employeePeople, ...volunteerPeople];
   }, [directors, employees, volunteers, asOf, dateForFilter]);
 
-  const assignments = (asOf ? asOfAssignments : liveAssignments) ?? [];
+  const assignments = useMemo(() => (asOf ? asOfAssignments : liveAssignments) ?? [], [asOf, asOfAssignments, liveAssignments]);
   const assignmentBySubject = useMemo(
     () => new Map(((assignments ?? []) as any[]).map((a) => [`${a.subjectType}:${a.subjectId}`, a])),
     [assignments],
@@ -192,45 +231,49 @@ export function OrgChartPage() {
   // even in dark mode. Match its colorMode to the resolved app theme.
   const { resolvedTheme } = useThemePreference();
 
-  // Recompute the graph whenever the structure (people / assignments / date)
-  // changes. Drag positions are kept by ReactFlow between recomputes of the
-  // same structure since the dependency refs stay stable.
+  const tree = useMemo(
+    () =>
+      buildOrgTree(society?.name ?? "Organization", allPeople, (key) => {
+        const a = assignmentBySubject.get(key);
+        return a?.managerId && a?.managerType ? `${a.managerType}:${a.managerId}` : undefined;
+      }),
+    [society?.name, allPeople, assignmentBySubject],
+  );
+  // Fit the viewport again whenever the structure changes (React Flow's
+  // fitView only runs on mount, which happens before the records arrive).
+  const structureKey = useMemo(() => layoutOrgTree(tree).map((entry) => `${entry.node.key}@${entry.parentKey ?? ""}`).join("|"), [tree]);
+
+  const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
+  // The instance belongs to the mounted canvas; drop it when the outline replaces it.
   useEffect(() => {
-    const rootId = "root";
-    const tiers: Record<string, number> = { director: 0, employee: 1, volunteer: 2 };
-    const perTierCount: Record<string, number> = {};
-    const builtNodes: Node[] = [
-      {
-        id: rootId,
-        type: "orgPerson",
-        position: { x: 0, y: -ROW_GAP },
-        data: { label: society?.name ?? "Entity", role: "", type: "root" },
-      },
-    ];
-    for (const person of allPeople) {
-      const tier = tiers[person.type] ?? 1;
-      const col = perTierCount[person.type] = (perTierCount[person.type] ?? 0) + 1;
-      builtNodes.push({
-        id: `${person.type}:${person.id}`,
-        type: "orgPerson",
-        position: { x: (col - 1) * COL_GAP, y: tier * ROW_GAP },
-        data: { label: person.name || "Unnamed", role: person.role, type: person.type, href: person.href },
-      });
-    }
-    const builtEdges: Edge[] = allPeople.map((person) => {
-      const a = assignmentBySubject.get(`${person.type}:${person.id}`);
-      const source = a?.managerId && a?.managerType ? `${a.managerType}:${a.managerId}` : rootId;
-      return {
-        id: `${source}->${person.type}:${person.id}`,
-        source,
-        target: `${person.type}:${person.id}`,
-        type: "smoothstep",
-        style: { stroke: "var(--border-strong)", strokeWidth: 1.5 },
-      };
-    });
-    setNodes(builtNodes);
-    setEdges(builtEdges);
-  }, [allPeople, assignmentBySubject, society?.name, setNodes, setEdges]);
+    if (mode !== "chart") setFlow(null);
+  }, [mode]);
+  useEffect(() => {
+    if (!flow || mode !== "chart") return;
+    // Wait a frame so the new nodes are measured before fitting.
+    const frame = requestAnimationFrame(() => void flow.fitView({ padding: 0.15, maxZoom: 1 }));
+    return () => cancelAnimationFrame(frame);
+  }, [flow, structureKey, mode]);
+
+  useEffect(() => {
+    const positioned = layoutOrgTree(tree);
+    setNodes(positioned.map(({ node, x, y }) => ({
+      id: node.key,
+      type: "orgPerson",
+      position: { x, y },
+      selectable: node.kind !== "root" && node.kind !== "group" && node.kind !== "team",
+      data: node.kind === "team"
+        ? { kind: "team", label: node.label, members: node.members, selected, onSelect: setSelected }
+        : { kind: node.kind, label: node.label, role: node.role, count: node.count, selected: node.key === selected },
+    })));
+    setEdges(positioned.filter((entry) => entry.parentKey).map(({ node, parentKey }) => ({
+      id: `${parentKey}->${node.key}`,
+      source: parentKey!,
+      target: node.key,
+      type: "smoothstep",
+      style: { stroke: "var(--border-strong)", strokeWidth: 1.25 },
+    })));
+  }, [tree, selected, setNodes, setEdges]);
 
   const saveManager = async (person: OrgPerson, value: string) => {
     if (!society || !canEditAssignments || asOf) return;
@@ -254,12 +297,20 @@ export function OrgChartPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const selectedPerson = allPeople.find((p) => `${p.type}:${p.id}` === selected) ?? null;
+  const selectedPerson = allPeople.find((p) => personKey(p) === selected) ?? null;
   const selectedAssignment = selected ? assignmentBySubject.get(selected) : undefined;
   const selectedManagerValue =
     selectedAssignment?.managerType && selectedAssignment?.managerId
       ? `${selectedAssignment.managerType}:${selectedAssignment.managerId}`
       : "";
+  // A person can't report to someone who already reports to them.
+  const blockedManagers = selected ? descendantKeys(findNode(tree, selected) ?? tree) : new Set<string>();
+  const counts = {
+    director: allPeople.filter((p) => p.type === "director").length,
+    employee: allPeople.filter((p) => p.type === "employee").length,
+    volunteer: allPeople.filter((p) => p.type === "volunteer").length,
+  };
+  const partial = !can("directors:read") || !can("employees:read") || !can("volunteers:read") || !canReadAssignments;
 
   return (
     <div className="page page--wide">
@@ -267,49 +318,81 @@ export function OrgChartPage() {
         title="Org chart"
         icon={<Network size={16} />}
         iconColor="pink"
-        subtitle="A live, draggable map of directors, employees, and volunteers and their reporting lines. Drag to rearrange, zoom to explore, and use “As of” to see a past structure."
-        actions={
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the org chart at a past date">
-            <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
-            <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
-            {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Live</button>}
-          </label>
+        subtitle="Who reports to whom across the board, staff and volunteers."
+        info={
+          <>
+            <p>Select a person to set who they report to. Anyone without a reporting line sits under their group.</p>
+            <p>Reporting lines are stored separately from the people records and versioned, so “As of” can show a past structure.</p>
+            {partial && <p>Only the people and reporting lines your role can read are shown.</p>}
+          </>
         }
       />
 
-      {(!can("directors:read") || !can("employees:read") || !can("volunteers:read") || !canReadAssignments) && <p className="muted">This chart includes only the people records and reporting lines your current role can read. Omitted categories are not a complete organization roster.</p>}
-      {!canEditAssignments && <p className="muted">Reporting-line editing requires workspace settings write access.</p>}
-      {asOf && (
-        <div className="muted" style={{ marginBottom: 12 }}>
-          Showing the structure as it stood on <strong>{asOf}</strong> (reporting lines from the saved history; people active on that date).
-          Editing is disabled while time-travelling.
+      <div className="org-chart-toolbar">
+        <div className="segmented" role="group" aria-label="Org chart view">
+          <button type="button" className={`segmented__btn${mode === "chart" ? " is-active" : ""}`} aria-pressed={mode === "chart"} onClick={() => setMode("chart")}>
+            <GitBranch size={12} /> Chart
+          </button>
+          <button type="button" className={`segmented__btn${mode === "list" ? " is-active" : ""}`} aria-pressed={mode === "list"} onClick={() => setMode("list")}>
+            <ListTree size={12} /> Outline
+          </button>
         </div>
+        <span className="org-chart-toolbar__legend" aria-label="People on the chart">
+          <span className="org-legend org-legend--director">{counts.director} {counts.director === 1 ? "director" : "directors"}</span>
+          <span className="org-legend org-legend--employee">{counts.employee} staff</span>
+          <span className="org-legend org-legend--volunteer">{counts.volunteer} {counts.volunteer === 1 ? "volunteer" : "volunteers"}</span>
+        </span>
+        <label className="org-chart-toolbar__asof" title="Reconstruct the org chart at a past date">
+          <span>As of</span>
+          <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
+          {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Live</button>}
+        </label>
+      </div>
+      {asOf && (
+        <p className="org-chart-note">
+          The structure on <strong>{asOf}</strong>: people active that day and the reporting lines saved then. Editing is off while viewing the past.
+        </p>
       )}
 
       <div className="org-chart-layout">
-        <div className="org-chart-layout__canvas">
-          <ReactFlow
-            colorMode={resolvedTheme}
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            nodeTypes={nodeTypes}
-            onNodeClick={(_, node) => setSelected(node.id === "root" ? null : node.id)}
-            fitView
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background />
-            <Controls />
-          </ReactFlow>
-        </div>
+        {mode === "chart" ? (
+          <div className="org-chart-layout__canvas">
+            <ReactFlow
+              onInit={setFlow}
+              colorMode={resolvedTheme}
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              nodeTypes={nodeTypes}
+              onNodeClick={(_, node) => {
+                const kind = (node.data as { kind?: string }).kind;
+                if (kind === "root" || kind === "group" || kind === "team") return;
+                setSelected(node.id);
+              }}
+              onPaneClick={() => setSelected(null)}
+              nodesConnectable={false}
+              fitView
+              fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
+              minZoom={0.2}
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background />
+              <Controls showInteractive={false} />
+            </ReactFlow>
+          </div>
+        ) : (
+          <div className="card org-outline">
+            <OrgOutline node={tree} selected={selected} onSelect={setSelected} />
+          </div>
+        )}
 
         <aside className="org-chart-layout__aside">
           <div className="card">
-            <div className="card__head"><h2 className="card__title">{selectedPerson ? "Reporting line" : "Select a person"}</h2></div>
+            <div className="card__head"><h2 className="card__title">{selectedPerson ? "Reporting line" : "Reporting lines"}</h2></div>
             <div className="card__body col" style={{ gap: 12 }}>
               {!selectedPerson ? (
-                <div className="muted">Click a node to set who they report to. The chart redraws automatically.</div>
+                <div className="muted">Select a person to set who they report to.</div>
               ) : (
                 <>
                   <div>
@@ -325,39 +408,72 @@ export function OrgChartPage() {
                       value={selectedManagerValue}
                       disabled={Boolean(asOf) || !canEditAssignments}
                       onChange={(value) => saveManager(selectedPerson, value)}
+                      searchable
                       options={[
-                        { value: "", label: "No manager (reports to the entity)" },
+                        { value: "", label: `No one (${GROUP_HOME[selectedPerson.type]})` },
                         ...managerOptions
-                          .filter((o) => o.value !== `${selectedPerson.type}:${selectedPerson.id}`)
+                          .filter((o) => o.value !== personKey(selectedPerson) && !blockedManagers.has(o.value))
                           .map((o) => ({ value: o.value, label: o.label })),
                       ]}
                     />
                   </label>
+                  {!canEditAssignments && <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>Changing reporting lines needs settings access.</p>}
                   {selectedManagerValue && !asOf && canEditAssignments && (
-                    <button className="btn btn--ghost btn--sm" onClick={() => saveManager(selectedPerson, "")}>
-                      <X size={12} /> Clear manager
+                    <button className="btn btn--ghost btn--sm" style={{ alignSelf: "flex-start" }} onClick={() => saveManager(selectedPerson, "")}>
+                      <X size={12} /> Clear reporting line
                     </button>
                   )}
                 </>
               )}
             </div>
           </div>
-
-          <div className="card" style={{ marginTop: 12 }}>
-            <div className="card__body col" style={{ gap: 6 }}>
-              <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                <UsersRound size={16} />
-                <strong>{allPeople.length}</strong>
-                <span className="muted">people on the chart</span>
-              </div>
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {TYPE_TONE.director.label}s, {TYPE_TONE.employee.label.toLowerCase()}s, and {TYPE_TONE.volunteer.label.toLowerCase()}s. Assignments are
-                stored separately from the source records and versioned so the chart can be rewound.
-              </div>
-            </div>
-          </div>
         </aside>
       </div>
     </div>
+  );
+}
+
+const GROUP_HOME: Record<OrgPerson["type"], string> = {
+  director: "sits with the board",
+  employee: "sits with staff",
+  volunteer: "sits with volunteers",
+};
+
+function OrgOutline({ node, selected, onSelect }: { node: OrgTreeNode; selected: string | null; onSelect: (key: string | null) => void }) {
+  return (
+    <ul className="org-outline__list" role="tree" aria-label="Organization outline">
+      <OrgOutlineItem node={node} selected={selected} onSelect={onSelect} depth={0} />
+    </ul>
+  );
+}
+
+function OrgOutlineItem({ node, selected, onSelect, depth }: { node: OrgTreeNode; selected: string | null; onSelect: (key: string | null) => void; depth: number }) {
+  const isPerson = node.kind !== "root" && node.kind !== "group";
+  return (
+    <li role="treeitem" aria-expanded={node.children.length ? true : undefined} aria-selected={isPerson ? selected === node.key : undefined}>
+      {isPerson ? (
+        <button
+          type="button"
+          className={`org-outline__row org-outline__row--${node.kind}${selected === node.key ? " is-selected" : ""}`}
+          onClick={() => onSelect(selected === node.key ? null : node.key)}
+        >
+          <span className="org-outline__dot" aria-hidden="true" />
+          <span className="org-outline__name">{node.label}</span>
+          {node.role && <span className="org-outline__role">{node.role}</span>}
+        </button>
+      ) : (
+        <div className={`org-outline__row org-outline__row--${node.kind}`}>
+          <span className="org-outline__name">{node.label}</span>
+          {node.kind === "group" && <span className="org-outline__count">{node.children.length}</span>}
+        </div>
+      )}
+      {node.children.length > 0 && (
+        <ul className="org-outline__list" role="group">
+          {node.children.map((child) => (
+            <OrgOutlineItem key={child.key} node={child} selected={selected} onSelect={onSelect} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

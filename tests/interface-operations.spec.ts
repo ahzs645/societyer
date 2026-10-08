@@ -33,7 +33,8 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(page.getByRole("dialog")).toContainText("posts a balanced entry");
     await fits(page);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByRole("button", { name: "New funding source", exact: true }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Funding source", exact: true }).click();
     await fits(page);
     await page.keyboard.press("Escape");
 
@@ -180,7 +181,8 @@ test("inventory creation and staged import parsing work without applying records
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "inventory");
-  await page.getByRole("button", { name: "New item", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Item", exact: true }).click();
   await input(page, "Name").fill("Operations audit supplies");
   await input(page, "SKU").fill("AUDIT-OPS-001");
   await fits(page);
@@ -370,7 +372,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await expect(page.getByRole("button", { name: "New policy", exact: true })).toBeDisabled();
     await expect(page.getByRole("main").getByRole("button", { name: "Edit", exact: true, includeHidden: true }).first()).toBeDisabled();
     await navigate("inventory");
-    await expect(page.getByRole("button", { name: "New item", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
     await expect(page.getByRole("main").getByRole("button", { name: "Place / move", exact: true, includeHidden: true }).first()).toBeDisabled();
     await navigate("assets");
     await expect(page.getByRole("button", { name: "New asset", exact: true })).toBeDisabled();
@@ -380,7 +382,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await expect(page.getByRole("button", { name: "New declaration", exact: true })).toBeDisabled();
     await navigate("treasurer");
     await expect(page.getByRole("button", { name: "Quick entry", exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "New funding source", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
     await navigate("financials/accounting");
     await expect(page.getByRole("button", { name: "Journal entry", exact: true })).toBeDisabled();
     const accountingExports = page.getByRole("button", { name: /^(chart of accounts|trial balance|journal entries|general ledger|board\/auditor ZIP)$/ });

@@ -115,7 +115,10 @@ export function SignificantIndividualsPage() {
         title="Significant individuals"
         icon={<ShieldCheck size={16} />}
         iconColor="green"
-        subtitle="Transparency Register of significant individuals (controllers) shown as of a chosen date, with the reasonable-diligence steps taken to identify them. This register is required for BC private corporations under the Business Corporations Act — not for societies."
+        subtitle="Significant individuals (controllers) and the steps taken to identify them."
+        info={
+          <p>The transparency register as of a chosen date, with the reasonable-diligence steps taken. Required for BC private corporations under the Business Corporations Act, not for societies.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> Record step

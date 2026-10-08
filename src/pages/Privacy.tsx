@@ -20,6 +20,7 @@ import {
   UserRound,
   UsersRound,
   type LucideIcon,
+  FilePlus2,
 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -409,11 +410,11 @@ export function PrivacyPage() {
                 </div>
                 <div className="privacy-document-path__actions">
                   <button className="btn btn--accent btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
-                    {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {policyDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
                   </button>
                   <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
-                    {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {memberDataMemoDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {memberDataMemoDraft ? canWriteDocuments ? "Edit data memo" : "View data memo" : "Create data memo"}
                   </button>
                 </div>
@@ -581,7 +582,7 @@ export function PrivacyPage() {
               actions={(
                 <>
                   <button className="btn btn--accent btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
-                    {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {policyDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
                   </button>
                   <a className="btn btn--ghost btn--sm" href="#privacy-operations"><FileText size={12} /> Program status</a>
@@ -629,7 +630,7 @@ export function PrivacyPage() {
               actions={(
                 <>
                   <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
-                    {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
+                    {memberDataMemoDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
                     {memberDataMemoDraft ? canWriteDocuments ? "Edit memo" : "View memo" : "Create memo"}
                   </button>
                   <a className="btn btn--ghost btn--sm" href="#privacy-operations"><UsersRound size={12} /> Data access</a>
@@ -902,7 +903,7 @@ function ResourceRow({
         </a>
       ) : onCreateDraft ? (
         <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={onCreateDraft}>
-          {hasDraft ? <PenLine size={12} /> : <Plus size={12} />}
+          {hasDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
           {hasDraft ? canEditDraft ? "Edit" : "View" : "Create"}
         </button>
       ) : (

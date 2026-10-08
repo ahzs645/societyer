@@ -1,4 +1,5 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { CreateMenu } from "../components/CreateMenu";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -629,14 +630,19 @@ export function InventoryPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
               items={[
-                { disabled: !canWrite, id: "add-library", label: "Add library", icon: <Boxes size={14} />, onSelect: openNewConnection },
                 { disabled: !canWrite, id: "backfill-assets", label: "Backfill assets", icon: <RefreshCw size={14} />, onSelect: runBackfill },
                 { disabled: !canWrite, id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => { setSyncConnectionId(null); setDrawer("openboxes"); } },
-                { disabled: !canWrite, id: "new-movement", label: "New movement", icon: <Plus size={14} />, onSelect: () => { setMovementForm(emptyMovementForm()); setDrawer("movement"); } },
                 { id: "assets", label: "Assets", icon: <ArrowLeft size={14} />, onSelect: () => navigate("/app/assets") },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={openNewItem} disabled={!canWrite}><Plus size={12} /> New item</button>
+            <CreateMenu
+              disabled={!canWrite}
+              items={[
+                { id: "item", label: "Item", onSelect: openNewItem },
+                { id: "movement", label: "Stock movement", onSelect: () => { setMovementForm(emptyMovementForm()); setDrawer("movement"); } },
+                { id: "library", label: "Inventory library", onSelect: openNewConnection },
+              ]}
+            />
           </div>
         }
       />

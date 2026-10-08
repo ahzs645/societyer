@@ -152,7 +152,14 @@ export function PeopleDirectoryPage() {
         title="People directory"
         icon={<Contact size={16} />}
         iconColor="blue"
-        subtitle="People in this workspace and existing linked records. Search before creating a new person, and review possible duplicates."
+        subtitle="Everyone in this workspace. Search before adding someone new."
+        info={
+          <p>
+            Shared legacy records stay reachable through their role links. Governance roles live in{" "}
+            <Link to="/app/directors">Directors</Link> and <Link to="/app/role-holders">Role holders</Link>;{" "}
+            <Link to="/app/people-history">review source identities and history</Link> to merge duplicates.
+          </p>
+        }
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
             <Plus size={12} /> New person
@@ -160,10 +167,6 @@ export function PeopleDirectoryPage() {
         }
       />
 
-      <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        Create and maintain people for this workspace. Shared legacy records remain available through this organization's existing role links. To manage governance roles, see{" "}
-        <Link to="/app/people-history">Review source identities and history</Link>. See <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link>.
-      </p>
 
       <div className="card">
         <Field label="Search people">

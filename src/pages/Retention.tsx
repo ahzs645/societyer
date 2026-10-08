@@ -70,7 +70,10 @@ export function RetentionPage() {
         title="Records retention"
         icon={<Archive size={16} />}
         iconColor="gray"
-        subtitle="Documents due for review, past their retention period. Default: 10 years for most records, 7 years for financial (CRA), indefinite for the constitution and bylaws. Review before purging."
+        subtitle="Documents past their retention period, due for review."
+        info={
+          <p>Defaults: 10 years for most records, 7 years for financial records (CRA), and indefinitely for the constitution and bylaws. Review before purging.</p>
+        }
       />
 
       {showMetadataWarning ? (

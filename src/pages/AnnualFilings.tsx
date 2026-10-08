@@ -150,7 +150,15 @@ export function AnnualFilingsPage() {
         title="Annual filings"
         icon={<CalendarCheck size={16} />}
         iconColor="green"
-        subtitle="Per-year, per-jurisdiction annual-filing ledger — track which annual filings have been filed and when."
+        subtitle="Which annual filings are done, by jurisdiction and year."
+        info={
+          <>
+            <p>
+              A simple per-year ledger. Detailed records with evidence and receipts live in{" "}
+              <Link to="/app/filings">Filings</Link>; link one here to reuse its status.
+            </p>
+          </>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
             <Plus size={12} /> Add filing
@@ -158,10 +166,8 @@ export function AnnualFilingsPage() {
         }
       />
 
-      <p className="muted">
-        A simplified per-jurisdiction, per-year filing ledger. For detailed filing records with
-        evidence and receipts, see <Link to="/app/filings">Filings</Link>. Link a detailed annual record
-        to use its current status here. Manual entries and linked records are self-reported; neither verifies government acceptance.
+      <p className="muted annual-filings__note">
+        Manual entries and linked records are self-reported; neither verifies government acceptance.
       </p>
 
       {rows === undefined || juris === undefined ? (
@@ -170,7 +176,9 @@ export function AnnualFilingsPage() {
         </div>
       ) : juris.length === 0 ? (
         <div className="card">
-          <p style={{ color: "var(--text-tertiary)" }}>No annual filings tracked yet.</p>
+          <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
+            No annual filings tracked yet. Detailed records live in <Link to="/app/filings">Filings</Link>.
+          </p>
         </div>
       ) : (
         juris.map((j) => {

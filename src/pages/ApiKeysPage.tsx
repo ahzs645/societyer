@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CreateMenu } from "../components/CreateMenu";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -13,7 +14,7 @@ import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { ArrowLeft, KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
+import { ArrowLeft, KeyRound, Trash2, Copy, Check } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -153,25 +154,24 @@ export function ApiKeysPage() {
         activeTab={activeTab}
         onTabChange={changeTab}
         actions={
-          <>
-            <Button disabled={!canManageClients} onClick={() => setClientOpen(true)}>
-              <Plus size={12} /> New client
-            </Button>
-            <Button
-              variant="accent"
-              disabled={!canMint || !(clients ?? []).some((client: any) => client.status === "active")}
-              onClick={() => {
-                setTokenForm({
-                  clientId: String(clients?.find((client: any) => client.status === "active")?._id ?? ""),
-                  name: "",
-                  scopes: "documents:read",
-                });
-                setTokenOpen(true);
-              }}
-            >
-              <Plus size={12} /> New token
-            </Button>
-          </>
+          <CreateMenu
+            items={[
+              {
+                id: "token",
+                label: "API token",
+                disabled: !canMint || !(clients ?? []).some((client: any) => client.status === "active"),
+                onSelect: () => {
+                  setTokenForm({
+                    clientId: String(clients?.find((client: any) => client.status === "active")?._id ?? ""),
+                    name: "",
+                    scopes: "documents:read",
+                  });
+                  setTokenOpen(true);
+                },
+              },
+              { id: "client", label: "API client", disabled: !canManageClients, onSelect: () => setClientOpen(true) },
+            ]}
+          />
         }
       >
 

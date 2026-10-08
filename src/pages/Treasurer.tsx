@@ -1,4 +1,5 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { CreateMenu } from "../components/CreateMenu";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -6,7 +7,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, PlusCircle, Trash2, Upload, Receipt } from "lucide-react";
+import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, Trash2, Upload, Receipt } from "lucide-react";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -434,15 +435,18 @@ export function TreasurerPage() {
             <MoreActionsMenu
               items={[
                 { disabled: !canWrite, id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
-                { disabled: !canWrite, id: "new-expense-claim", label: "New expense claim", icon: <Receipt size={14} />, onSelect: () => setExpenseDraft(newExpenseDraft()) },
               ]}
             />
             <button className="btn-action" onClick={openQuickEntry} disabled={!canWrite}>
               <DollarSign size={12} /> Quick entry
             </button>
-            <button className="btn-action btn-action--primary" onClick={() => setSourceDraft(newSourceDraft())} disabled={!canWrite}>
-              <PlusCircle size={12} /> New funding source
-            </button>
+            <CreateMenu
+              disabled={!canWrite}
+              items={[
+                { id: "source", label: "Funding source", onSelect: () => setSourceDraft(newSourceDraft()) },
+                { id: "expense", label: "Expense claim", icon: <Receipt size={14} />, onSelect: () => setExpenseDraft(newExpenseDraft()) },
+              ]}
+            />
           </>
         }
       />
@@ -686,9 +690,6 @@ export function TreasurerPage() {
               <h2 className="card__title">Source register</h2>
               <span className="card__subtitle">{(fundingSources ?? []).length} tracked sources</span>
             </div>
-            <button className="btn btn--ghost btn--sm" onClick={() => setSourceDraft(newSourceDraft())} disabled={!canWrite}>
-              <PlusCircle size={12} /> Add
-            </button>
           </div>
           <div className="card__body">
             <div className="table-wrap">

@@ -591,7 +591,10 @@ export function TasksPage() {
         title="Tasks"
         icon={<ListTodo size={16} />}
         iconColor="turquoise"
-        subtitle="Internal work items for your board and staff to get done. For dates set by law or regulation, use Deadlines; for promises made to funders or partners, use Commitments."
+        subtitle="Work items for your board and staff."
+        info={
+          <p>Dates set by law or regulation belong in Deadlines; promises made to funders or partners belong in Commitments.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
             <Plus size={12} /> New task

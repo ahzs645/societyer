@@ -172,7 +172,10 @@ export function DeadlinesPage() {
         title="Deadlines"
         icon={<Calendar size={16} />}
         iconColor="yellow"
-        subtitle="Dates imposed by law or regulation, like filings, AGMs, and renewals. For internal work items, use Tasks; for promises made to funders or partners, use Commitments."
+        subtitle="Dates set by law or regulation: filings, AGMs and renewals."
+        info={
+          <p>Internal work items belong in Tasks; promises made to funders or partners belong in Commitments.</p>
+        }
         actions={
           <>
             <Segmented<"list" | "calendar">

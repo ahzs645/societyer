@@ -280,7 +280,10 @@ export function OutboxPage() {
         title="Outbox"
         icon={<Inbox size={16} />}
         iconColor="orange"
-        subtitle="Queue manual-send emails when no email provider is configured. Review content, attach documents, then mark each one sent once you've dispatched it from your own inbox."
+        subtitle="Emails to send by hand when no email provider is set up."
+        info={
+          <p>Review the content, attach documents, send it from your own inbox, then mark it sent here.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New draft

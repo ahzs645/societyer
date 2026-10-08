@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { CreateMenu } from "../components/CreateMenu";
 import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -15,7 +16,6 @@ import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../li
 import {
   CreditCard,
   UserPlus,
-  PlusCircle,
   Trash2,
   CheckCircle2,
   CalendarClock,
@@ -130,38 +130,45 @@ export function MembershipPage() {
         title="Membership & billing"
         icon={<CreditCard size={16} />}
         iconColor="turquoise"
-        subtitle="Fee tiers, dated member-fee history, signup and renewal. Payments and activation require a connected server."
+        subtitle="Fee tiers, member-fee history, signup and renewal."
+        info={
+          <p>
+            Recurring subscriptions run through Stripe; payments and cancellations update after verified webhooks. Payments need a
+            configured provider and a connected server; simulation needs a demo workspace.
+          </p>
+        }
         actions={
           <>
             <MoreActionsMenu
               items={canManage ? [
                 { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
-                { id: "add-fee-period", label: "Add fee period", icon: <CalendarClock size={14} />, onSelect: () => setFeeDraft(newFeeDraft()) },
               ] : []}
             />
-            <button
-              className="btn-action btn-action--primary"
+            <CreateMenu
               disabled={!canManage}
-              onClick={() =>
-                setPlanDraft({
-                  name: "",
-                  description: "",
-                  priceCents: 2500,
-                  currency: "CAD",
-                  interval: "year",
-                  benefits: [],
-                  membershipClass: "Regular",
-                  active: true,
-                })
-              }
-            >
-              <PlusCircle size={12} /> New plan
-            </button>
+              items={[
+                {
+                  id: "plan",
+                  label: "Membership plan",
+                  onSelect: () =>
+                    setPlanDraft({
+                      name: "",
+                      description: "",
+                      priceCents: 2500,
+                      currency: "CAD",
+                      interval: "year",
+                      benefits: [],
+                      membershipClass: "Regular",
+                      active: true,
+                    }),
+                },
+                { id: "fee-period", label: "Fee period", icon: <CalendarClock size={14} />, onSelect: () => setFeeDraft(newFeeDraft()) },
+              ]}
+            />
           </>
         }
       />
 
-      <p className="muted">Live recurring subscriptions are managed in Stripe. Payment and cancellation records update after verified provider webhooks. Unconfigured services cannot accept a payment; simulation requires a demo workspace.</p>
       {isLocalDataRuntime() && <p className="muted" role="status">Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Active plans" value={String(activePlans.length)} />

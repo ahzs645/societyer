@@ -1,4 +1,5 @@
 import { usePermissions } from "@/hooks/usePermissions";
+import { InfoPopover } from "../components/InfoPopover";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
@@ -93,16 +94,26 @@ export function PortfolioPage() {
         title="Portfolio"
         icon={<Layers size={16} />}
         iconColor="purple"
-        subtitle={`Every entity you manage, with what's due and what's outstanding — and batch actions across them.`}
+        subtitle="Every entity you manage and what's due across them."
       />
 
       {/* Firm summary */}
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <div className="stat"><span className="stat__label">Entities</span><span className="stat__value">{totals.entities ?? 0}</span></div>
-        <div className="stat"><span className="stat__label">Corporations</span><span className="stat__value">{totals.corporations ?? 0}</span></div>
-        <div className="stat"><span className="stat__label">Societies</span><span className="stat__value">{totals.societies ?? 0}</span></div>
-        <div className="stat"><span className="stat__label">Overdue (firm-wide)</span><span className="stat__value">{totals.overdueDeadlines ?? 0}</span></div>
-        <div className="stat"><span className="stat__label">Upcoming (firm-wide)</span><span className="stat__value">{totals.upcomingDeadlines ?? 0}</span></div>
+      <div className="stat-grid portfolio-stats">
+        <div className="stat">
+          <span className="stat__label">Entities</span>
+          <span className="stat__value">{totals.entities ?? 0}</span>
+          <span className="stat__sub">{plural(totals.societies ?? 0, "society", "societies")} · {plural(totals.corporations ?? 0, "corporation", "corporations")}</span>
+        </div>
+        <div className="stat">
+          <span className="stat__label">Overdue</span>
+          <span className="stat__value" style={{ color: (totals.overdueDeadlines ?? 0) > 0 ? "var(--danger)" : undefined }}>{totals.overdueDeadlines ?? 0}</span>
+          <span className="stat__sub portfolio-stats__sub">deadlines, all entities</span>
+        </div>
+        <div className="stat">
+          <span className="stat__label">Upcoming</span>
+          <span className="stat__value">{totals.upcomingDeadlines ?? 0}</span>
+          <span className="stat__sub portfolio-stats__sub">deadlines, all entities</span>
+        </div>
       </div>
 
       {entities.length === 0 ? (
@@ -110,73 +121,71 @@ export function PortfolioPage() {
       ) : (
         <>
           {/* Batch generate (Multiple_Copy) */}
-          <div className="card" style={{ marginBottom: 16, padding: 14 }}>
-            <h3 style={{ margin: "0 0 8px", display: "flex", alignItems: "center", gap: 8 }}>
-              <ListChecks size={16} /> Batch generate a document across entities
-            </h3>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span className="muted" style={{ fontSize: 13 }}>Document packet</span>
-                <select className="input" value={packetKey} onChange={(e) => setPacketKey(e.target.value)}>
-                  <option value="">Select a packet…</option>
-                  <optgroup label="Corporation packets">
-                    {PACKET_OPTIONS.filter((p) => p.kind === "corporation").map((p) => <option key={`c-${p.key}`} value={p.key}>{p.label}</option>)}
-                  </optgroup>
-                  <optgroup label="Society packets">
-                    {PACKET_OPTIONS.filter((p) => p.kind === "society").map((p) => <option key={`s-${p.key}`} value={p.key}>{p.label}</option>)}
-                  </optgroup>
-                </select>
-              </label>
-              {packetKind && (
-                <button className="btn btn--ghost btn--sm" onClick={() => selectKind(packetKind)}>
-                  Select all {packetKind}s
-                </button>
-              )}
-              <button className="btn btn--accent" disabled={!canWrite || (busy || !packetKey || selectedIds.length === 0)} onClick={runBatch}>
-                {busy ? "Generating…" : `Generate for ${selectedIds.length} selected`}
+          <div className="portfolio-batch" role="group" aria-label="Batch generate a document">
+            <span className="portfolio-batch__label">
+              <ListChecks size={14} aria-hidden="true" /> Batch generate
+              <InfoPopover label="About batch generate">
+                <p>Tick entities in the table, pick a packet, then generate. A packet only applies to its entity kind; mismatched entities are skipped and reported.</p>
+              </InfoPopover>
+            </span>
+            <select className="input portfolio-batch__packet" aria-label="Document packet" value={packetKey} onChange={(e) => setPacketKey(e.target.value)}>
+              <option value="">Choose a packet…</option>
+              <optgroup label="Corporation packets">
+                {PACKET_OPTIONS.filter((p) => p.kind === "corporation").map((p) => <option key={`c-${p.key}`} value={p.key}>{p.label}</option>)}
+              </optgroup>
+              <optgroup label="Society packets">
+                {PACKET_OPTIONS.filter((p) => p.kind === "society").map((p) => <option key={`s-${p.key}`} value={p.key}>{p.label}</option>)}
+              </optgroup>
+            </select>
+            {packetKind && (
+              <button className="btn btn--ghost btn--sm" onClick={() => selectKind(packetKind)}>
+                Select all {packetKind}s
               </button>
-            </div>
-            <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-              Tick entities in the table below. A packet only applies to its entity kind; mismatched entities are skipped and reported.
-            </p>
+            )}
+            <button className="btn btn--accent btn--sm" disabled={!canWrite || (busy || !packetKey || selectedIds.length === 0)} onClick={runBatch}>
+              {busy ? "Generating…" : selectedIds.length ? `Generate for ${selectedIds.length}` : "Generate"}
+            </button>
           </div>
 
           {/* Entity table */}
           <div className="table-wrap">
-            <table className="table">
+            <table className="table portfolio-table">
               <thead>
                 <tr>
                   <th style={{ width: 28 }} />
                   <th>Entity</th>
-                  <th>Type</th>
+                  <th className="portfolio-table__wide">Type</th>
                   <th>Deadlines</th>
-                  <th>Post-incorporation</th>
-                  <th />
+                  <th className="portfolio-table__wide">Post-incorporation</th>
+                  <th className="portfolio-table__wide" />
                 </tr>
               </thead>
               <tbody>
                 {entities.map((e) => (
                   <tr key={e._id}>
-                    <td><input type="checkbox" checked={!!selected[e._id]} onChange={() => toggle(e._id)} /></td>
+                    <td><input type="checkbox" aria-label={`Select ${e.name}`} checked={!!selected[e._id]} onChange={() => toggle(e._id)} /></td>
                     <td>
-                      <strong>{e.name}</strong>
+                      <button type="button" className="portfolio-table__name" onClick={() => open(e._id)}>{e.name}</button>
                       {current && current._id === e._id && <span style={{ color: "var(--accent, green)" }}> · current</span>}
-                      <div className="muted">{e.incorporationNumber || (e.status ?? "")}</div>
+                      <div className="muted">
+                        <span className="portfolio-table__narrow">{KIND_LABEL[e.kind] ?? e.kind} · </span>
+                        {e.incorporationNumber || (e.status ?? "")}
+                      </div>
                     </td>
-                    <td>{KIND_LABEL[e.kind] ?? e.kind}</td>
-                    <td>
+                    <td className="portfolio-table__wide">{KIND_LABEL[e.kind] ?? e.kind}</td>
+                    <td className="portfolio-table__deadlines">
                       {e.overdueDeadlines > 0 && (
                         <Badge tone="danger"><AlertTriangle size={11} style={{ verticalAlign: "middle" }} /> {e.overdueDeadlines} overdue</Badge>
                       )}
                       {e.upcomingDeadlines > 0 && <Badge tone="warn">{e.upcomingDeadlines} upcoming</Badge>}
                       {e.openDeadlines === 0 && <span className="muted">none open</span>}
                     </td>
-                    <td>
+                    <td className="portfolio-table__wide">
                       {e.postIncorpTotal > 0
                         ? <Badge tone={e.postIncorpDone >= e.postIncorpTotal ? "success" : "neutral"}>{e.postIncorpDone}/{e.postIncorpTotal} steps</Badge>
                         : <span className="muted">—</span>}
                     </td>
-                    <td style={{ textAlign: "right" }}>
+                    <td className="portfolio-table__wide" style={{ textAlign: "right" }}>
                       <button className="btn btn--sm" onClick={() => open(e._id)}>
                         {current && current._id === e._id ? "Open" : "Switch"}
                       </button>
@@ -190,6 +199,10 @@ export function PortfolioPage() {
       )}
     </div>
   );
+}
+
+function plural(count: number, one: string, many: string) {
+  return `${count} ${count === 1 ? one : many}`;
 }
 
 export default PortfolioPage;
