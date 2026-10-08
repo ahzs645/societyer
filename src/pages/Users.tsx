@@ -58,7 +58,7 @@ export function UsersPage() {
         subtitle={
           auth.mode !== "none"
             ? "Manage workspace memberships, roles, and the access policy for each signed-in user."
-            : "Manage workspace memberships and role policies. Use the local acting-user picker to preview a role."
+            : "Workspace memberships and the access each role grants."
         }
         actions={
           canManageUsers ? (
@@ -88,7 +88,7 @@ export function UsersPage() {
             <span className="access-summary__label">Your access</span>
             <Badge tone={myRole === "Owner" || myRole === "Admin" ? "success" : "info"}>{myRole}</Badge>
             <span className="access-summary__text">
-              {roleSummary(myRole).replace(/^[A-Za-z]+: /, "")}
+              {capitalize(roleSummary(myRole).replace(/^[A-Za-z]+: /, ""))}
               {!canManageUsers && (canViewRoster ? " You can view users but not change roles." : " Your role can't view the workspace roster.")}
             </span>
             <span className="access-summary__more">{permissions.length} permission{permissions.length === 1 ? "" : "s"}</span>
@@ -354,6 +354,10 @@ export function UsersPage() {
       </Drawer>
     </div>
   );
+}
+
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function roleSummary(role?: string | null): string {

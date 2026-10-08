@@ -193,9 +193,19 @@
 .access-summary__more {
   color: token('text-tertiary');
   white-space: nowrap;
-  &::after { content: " ▾"; }
+  &::after {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 160ms ease;
+  }
 }
-.access-summary[open] .access-summary__more::after { content: " ▴"; }
+.access-summary[open] .access-summary__more::after { transform: translateY(1px) rotate(-135deg); }
 .access-summary__body {
   display: flex;
   flex-wrap: wrap;

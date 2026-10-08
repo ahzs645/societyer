@@ -139,6 +139,14 @@ export type RecordTableCellRenderer = (ctx: {
  *
  * `selectable` turns on the checkbox column + enables bulk actions.
  */
+/** "API clients" → "API clients", "Meeting templates" → "meeting templates": keep acronyms. */
+function lowerLabel(label: string) {
+  return label.replace(/\b([A-Z])([a-z])/g, (_, first: string, next: string) => first.toLowerCase() + next);
+}
+
+/** Columns grow to share spare width, but not past this multiple of their saved size. */
+const MAX_COLUMN_STRETCH = 1.8;
+
 export function RecordTable({
   selectable = false,
   emptyState,
@@ -236,6 +244,27 @@ export function RecordTable({
     () => limitColumnsForPhone(columns.filter((c) => c.isVisible), isMobile),
     [columns, isMobile],
   );
+  // Share spare width among columns on wide screens (see columnWidthStyle).
+  const columnSizeTotal = visibleColumns.reduce((sum, column) => sum + column.size, 0);
+  const [stretchRoot, setStretchRoot] = useState<HTMLElement | null>(null);
+  const [columnStretch, setColumnStretch] = useState(1);
+  useEffect(() => {
+    if (!stretchRoot || isMobile || !columnSizeTotal || typeof ResizeObserver === "undefined") {
+      setColumnStretch(1);
+      return;
+    }
+    const measure = () => {
+      const fixed = Array.from(
+        stretchRoot.querySelectorAll<HTMLElement>(".record-table__header-row > :is(.record-table__checkbox-cell, .record-table__drag-head, .record-table__row-actions-head)"),
+      ).reduce((sum, cell) => sum + cell.offsetWidth, 0);
+      const next = Math.min(MAX_COLUMN_STRETCH, Math.max(1, (stretchRoot.clientWidth - fixed - 2) / columnSizeTotal));
+      setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(stretchRoot);
+    return () => observer.disconnect();
+  }, [stretchRoot, isMobile, columnSizeTotal]);
   const hasOpenRecordAction = !!onRecordClick;
   const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
   const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
@@ -389,10 +418,7 @@ export function RecordTable({
     }
     return (
       emptyState ?? (
-        <RecordTableEmpty
-          title={`No ${objectMetadata.labelPlural.toLowerCase()}`}
-          description="Try clearing your filters or creating a new record."
-        />
+        <RecordTableEmpty title={`No ${lowerLabel(objectMetadata.labelPlural)} yet`} />
       )
     );
   }
@@ -547,9 +573,11 @@ export function RecordTable({
         aria-label={`${objectMetadata.labelPlural} table`}
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
+        ref={setStretchRoot}
         className={`record-table__scroll-frame${inlineSelection ? " is-mobile-selecting" : ""}`}
         style={{
           "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
+          "--rt-stretch": columnStretch,
         } as CSSProperties}
       >
         {mobileSelectionControls}
@@ -599,7 +627,10 @@ export function RecordTable({
   // renders an empty tbody. Pass height inline so our value wins.
   return (
     <div
-      ref={tableRootRef}
+      ref={(node) => {
+        tableRootRef.current = node;
+        setStretchRoot(node);
+      }}
       className={`record-table__interaction-root${inlineSelection ? " is-mobile-selecting" : ""}`}
       role="region"
       aria-label={`${objectMetadata.labelPlural} table`}
@@ -607,6 +638,7 @@ export function RecordTable({
       onKeyDown={handleTableKeyDown}
       style={{
         "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
+        "--rt-stretch": columnStretch,
       } as CSSProperties}
     >
       {mobileSelectionControls}

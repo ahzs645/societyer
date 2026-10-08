@@ -515,7 +515,8 @@
 
   /* "New …" actions are always a bare + on phones, whatever the fit, so the
    * create button looks the same on every page. */
-  .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child) {
+  .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child),
+  .settings-shell__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child) {
     justify-content: center;
     width: 36px;
     min-width: 36px;
@@ -789,6 +790,43 @@
   }
   .page__header[data-actions-fit] .page__actions :is(.btn, .btn-action) {
     min-height: 36px;
+  }
+
+  /* Pages that put "← Section" among their header actions get the same
+   * treatment: a bare arrow left of the page icon, not a text button. */
+  .page__header:has(> .page__actions > a:has(> svg.lucide-arrow-left:first-child)) {
+    position: relative;
+    padding-left: 30px;
+  }
+  .page__header > .page__actions > a:has(> svg.lucide-arrow-left:first-child) {
+    position: absolute;
+    z-index: 1;
+    top: 2px;
+    left: -6px;
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 0 !important;
+    color: token('text-secondary');
+    > svg { width: 18px; height: 18px; }
+  }
+
+  /* "⋯ More" is just "⋯" on phones. */
+  .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-ellipsis:first-child) {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    > svg { width: 16px; height: 16px; }
   }
 }
 

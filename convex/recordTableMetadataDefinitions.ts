@@ -1998,11 +1998,10 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       columns: [
         { fieldName: "title", size: 240 },
         { fieldName: "type", size: 120 },
-        { fieldName: "scheduledAt", size: 180 },
+        { fieldName: "scheduledAt", size: 210 },
         { fieldName: "location", size: 180 },
         { fieldName: "status", size: 120 },
         { fieldName: "minutes", size: 110 },
-        { fieldName: "body", size: 170 },
         { fieldName: "sourceReviewStatus", size: 130 },
         { fieldName: "motionCount", size: 90 },
       ],

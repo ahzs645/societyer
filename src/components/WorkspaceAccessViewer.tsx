@@ -44,7 +44,7 @@ export function WorkspaceAccessViewer({
             narrow this further; specialized operations note any extra authority they need.
           </p>
           <p>
-            "Some actions" means the role allows part of a module; "Not defined" means no role permission covers it. Turning a
+            "Some actions" means the role allows part of a module; "—" means no role permission covers it. Turning a
             module off hides it for the whole workspace but doesn't change role permissions. Change a user's policy by changing
             their role; per-user overrides aren't available.
           </p>
@@ -105,7 +105,9 @@ export function WorkspaceAccessViewer({
                     <td key={action}>
                       {coverage === "full" ? <Badge tone="success">Allowed</Badge>
                         : coverage === "partial" ? <Badge tone="warn">Some actions</Badge>
-                        : <span className="muted">{coverage === "unmapped" ? "Not defined" : "Not granted"}</span>}
+                        : coverage === "unmapped"
+                          ? <span className="muted" title="No role permission covers this action">—</span>
+                          : <span className="muted">Not granted</span>}
                     </td>
                   );
                 })}

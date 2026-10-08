@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { columnWidthStyle } from "../utils/columnWidth";
 import {
   ArrowDown,
   ArrowLeft,
@@ -198,7 +199,7 @@ export function RecordTableHeaderCell({
         "record-table__header-cell" +
         (isLabelIdentifier ? " record-table__header-cell--identifier" : "")
       }
-      style={{ width: recordField.size, minWidth: recordField.size }}
+      style={columnWidthStyle(recordField.size)}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
     >
       <button

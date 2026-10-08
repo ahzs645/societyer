@@ -179,18 +179,21 @@ export function DirectorsPage() {
         title="Directors"
         icon={<UserCog size={16} />}
         iconColor="blue"
-        subtitle={directorProfile.subtitle}
+        subtitle="The legal director register."
+        info={
+          <>
+            <p>{directorProfile.subtitle}</p>
+            <p>
+              Officers and past terms live in <Link to="/app/role-holders">Role holders</Link>.
+            </p>
+          </>
+        }
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
             <Plus size={12} /> New director
           </button>
         }
       />
-
-      <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        The legal director register. Officers and past terms live in{" "}
-        <Link to="/app/role-holders">Role holders</Link>.
-      </p>
 
       <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <div className="stat-grid">
@@ -222,7 +225,7 @@ export function DirectorsPage() {
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
           {directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors && !society.isMemberFunded && <Flag level="err">Fewer than {directorProfile.minimumActiveDirectors} active directors — regular societies must have at least {directorProfile.minimumActiveDirectors}.</Flag>}
           {directorProfile.requiresBcResidentDirector && bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
-          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent evidence on file.</Flag>}
+          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length === 1 ? "1 director has" : `${missingConsent.length} directors have`} no consent evidence on file.</Flag>}
         </div>
       )}
 
