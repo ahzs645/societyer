@@ -166,7 +166,7 @@ export function PortfolioPage() {
                     <td><input type="checkbox" aria-label={`Select ${e.name}`} checked={!!selected[e._id]} onChange={() => toggle(e._id)} /></td>
                     <td>
                       <button type="button" className="portfolio-table__name" onClick={() => open(e._id)}>{e.name}</button>
-                      {current && current._id === e._id && <span style={{ color: "var(--accent, green)" }}> · current</span>}
+                      {current && current._id === e._id && <span className="portfolio-current-tag" style={{ color: "var(--accent, green)" }}> · current</span>}
                       <div className="muted">
                         <span className="portfolio-table__narrow">{KIND_LABEL[e.kind] ?? e.kind} · </span>
                         {e.incorporationNumber || (e.status ?? "")}

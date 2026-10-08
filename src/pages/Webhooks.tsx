@@ -20,6 +20,10 @@ type Draft = {
   status: string;
 };
 
+function capitalize(value?: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+}
+
 const EMPTY_DRAFT: Draft = { name: "", targetUrl: "", eventTypesText: "*", status: "active" };
 
 export function WebhooksPage() {
@@ -87,18 +91,18 @@ export function WebhooksPage() {
         title="Webhooks"
         icon={<Webhook size={16} />}
         iconColor="gray"
-        subtitle="Send signed event notifications to external systems (n8n, Zapier, your own service). Each delivery is signed with the endpoint's secret and retried on failure."
+        subtitle="Send signed event notifications to other systems."
+        info={
+          <p>
+            Send signed event notifications to external systems (n8n, Zapier, your own service). Each delivery is signed
+            with the endpoint's secret and retried on failure.
+          </p>
+        }
         actions={
           <>
-            {isLocalDataRuntime() ? (
-              <button
-                className="btn-action"
-                disabled
-                title="The API reference is served by the Societyer API server, which is not running in this local workspace."
-              >
-                API docs
-              </button>
-            ) : (
+            {/* The API reference is served by the API server, which a local
+              * workspace doesn't run — hide the link rather than show it greyed. */}
+            {!isLocalDataRuntime() && (
               <a className="btn-action" href="/api/docs" target="_blank" rel="noreferrer">
                 API docs
               </a>
@@ -116,7 +120,10 @@ export function WebhooksPage() {
       {signingSecret && <Banner tone="warn" title="Copy this signing secret now — it will not be shown again" onDismiss={() => setSigningSecret(null)}><code className="mono" style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>{signingSecret}</code><Button size="sm" onClick={async () => { try { await navigator.clipboard.writeText(signingSecret); toast.success("Signing secret copied"); } catch { toast.error("Clipboard unavailable"); } }}>Copy signing secret</Button></Banner>}
       <div className="card">
         <div className="card__head"><h2 className="card__title">Endpoints</h2><Badge>{subscriptions?.length ?? 0}</Badge></div>
-        <div style={{ overflowX: "auto" }}><table className="table">
+        {(subscriptions ?? []).length === 0 ? (
+          <div className="card__body muted">{subscriptions === undefined ? "Loading endpoints…" : "No webhook endpoints yet."}</div>
+        ) : (
+        <div style={{ overflowX: "auto" }}><table className="table webhooks-table">
           <thead>
             <tr><th>Name</th><th>Target URL</th><th>Events</th><th>Secret</th><th>Status</th><th /></tr>
           </thead>
@@ -126,8 +133,8 @@ export function WebhooksPage() {
                 <td><strong>{sub.name}</strong></td>
                 <td className="mono" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.targetUrl}</td>
                 <td>{(sub.eventTypes ?? []).map((e: string) => <code key={e} className="chip" style={{ fontSize: 11, marginRight: 4 }}>{e}</code>)}</td>
-                <td>{sub.hasSecret ? <Badge tone="success">set</Badge> : <Badge tone="warn">none</Badge>}</td>
-                <td><Badge tone={sub.status === "active" ? "success" : "neutral"}>{sub.status}</Badge></td>
+                <td>{sub.hasSecret ? <Badge tone="success">Set</Badge> : <Badge tone="warn">None</Badge>}</td>
+                <td><Badge tone={sub.status === "active" ? "success" : "neutral"}>{capitalize(sub.status)}</Badge></td>
                 <td className="table__actions">
                   {canConfigure && (
                     <>
@@ -140,16 +147,17 @@ export function WebhooksPage() {
                 </td>
               </tr>
             ))}
-            {(subscriptions ?? []).length === 0 && (
-              <tr><td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>{subscriptions === undefined ? "Loading endpoints…" : "No webhook endpoints yet."}</td></tr>
-            )}
           </tbody>
         </table></div>
+        )}
       </div>
 
       <div className="card">
         <div className="card__head"><h2 className="card__title">Recent deliveries</h2><Badge>{deliveries?.length ?? 0}</Badge></div>
-        <div style={{ overflowX: "auto" }}><table className="table">
+        {(deliveries ?? []).length === 0 ? (
+          <div className="card__body muted">{deliveries === undefined ? "Loading deliveries…" : "No deliveries yet."}</div>
+        ) : (
+        <div style={{ overflowX: "auto" }}><table className="table webhooks-table">
           <thead>
             <tr><th>Event</th><th>Status</th><th>Attempts</th><th>When</th><th>Error</th></tr>
           </thead>
@@ -157,17 +165,15 @@ export function WebhooksPage() {
             {(deliveries ?? []).slice(0, 50).map((d: any) => (
               <tr key={d._id}>
                 <td className="mono">{d.eventType}</td>
-                <td><Badge tone={d.status === "delivered" ? "success" : d.status === "failed" ? "danger" : "warn"}>{d.status}</Badge></td>
+                <td><Badge tone={d.status === "delivered" ? "success" : d.status === "failed" ? "danger" : "warn"}>{capitalize(d.status)}</Badge></td>
                 <td className="mono">{d.attempts ?? 0}</td>
                 <td className="mono">{d.lastAttemptAtISO ? formatDateTime(d.lastAttemptAtISO) : d.createdAtISO ? formatDateTime(d.createdAtISO) : "—"}</td>
                 <td className="muted" style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.lastError ?? "—"}</td>
               </tr>
             ))}
-            {(deliveries ?? []).length === 0 && (
-              <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>{deliveries === undefined ? "Loading deliveries…" : "No deliveries yet. Deliveries appear here once an event fires for an active endpoint."}</td></tr>
-            )}
           </tbody>
         </table></div>
+        )}
       </div>
 
       <Drawer

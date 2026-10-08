@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { PageLoading } from "./_helpers";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -8,7 +8,6 @@ import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, type ErrorSummaryItem } from "../components/ui";
 import { IntakePrivacyNotice } from "../components/IntakePrivacyNotice";
 import { Select } from "../components/Select";
-import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
 
 const FIELD_IDS = {
@@ -29,9 +28,6 @@ export function GrantApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const summaryEditor = useRef<MarkdownEditorHandle>(null);
-  const useOfFundsEditor = useRef<MarkdownEditorHandle>(null);
-  const outcomesEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState({
     grantId: "",
     applicantName: currentUser?.displayName ?? "",
@@ -87,14 +83,9 @@ export function GrantApplyPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    // The editor's serialized change callback may follow the final keystroke.
-    // Capture its current document before validating and sending the form.
-    const projectSummary = summaryEditor.current?.getMarkdown() ?? form.projectSummary;
-    const proposedUseOfFunds = useOfFundsEditor.current?.getMarkdown() ?? form.proposedUseOfFunds;
-    const expectedOutcomes = outcomesEditor.current?.getMarkdown() ?? form.expectedOutcomes;
-    setForm((current) => ({ ...current, projectSummary, proposedUseOfFunds, expectedOutcomes }));
+    const { projectSummary, proposedUseOfFunds, expectedOutcomes } = form;
     setAttemptedSubmit(true);
-    if (errors.some((error) => error.fieldId !== FIELD_IDS.projectSummary) || !projectSummary.trim()) return;
+    if (errors.length > 0) return;
     setSubmitting(true);
     try {
       await submitApplication({
@@ -133,7 +124,7 @@ export function GrantApplyPage() {
 
   return (
     <div className="landing intake-page">
-      <div className="intake">
+      <div className="intake intake--single">
         <header className="intake__head">
           <Link to={`/public/${context.society.publicSlug}`} className="intake__back">
             <ArrowLeft size={14} /> {context.society.name}
@@ -202,7 +193,7 @@ export function GrantApplyPage() {
                   <Field label="Requested amount" id={FIELD_IDS.amountRequestedDollars} required hint="Canadian dollars" error={fieldError(visibleErrors, "Requested amount")}>
                     <span className="intake__money">
                       <span aria-hidden="true">$</span>
-                      <input className="input" type="number" inputMode="decimal" min="0" step="0.01" placeholder="2,500" value={form.amountRequestedDollars} onChange={(e) => setForm({ ...form, amountRequestedDollars: e.target.value })} />
+                      <input className="input" type="number" inputMode="decimal" min="0" step="0.01" placeholder="e.g. 2,500" value={form.amountRequestedDollars} onChange={(e) => setForm({ ...form, amountRequestedDollars: e.target.value })} />
                     </span>
                   </Field>
                   <Field label="Project title" id={FIELD_IDS.projectTitle} required error={fieldError(visibleErrors, "Project title")}>
@@ -210,13 +201,13 @@ export function GrantApplyPage() {
                   </Field>
                 </div>
                 <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(visibleErrors, "Project summary")}>
-                  <MarkdownEditor ref={summaryEditor} rows={4} value={form.projectSummary} onChange={(markdown) => setForm((current) => ({ ...current, projectSummary: markdown }))} />
+                  <textarea className="textarea" rows={4} value={form.projectSummary} onChange={(e) => setForm({ ...form, projectSummary: e.target.value })} />
                 </Field>
                 <Field label="Proposed use of funds">
-                  <MarkdownEditor ref={useOfFundsEditor} rows={3} value={form.proposedUseOfFunds} onChange={(markdown) => setForm((current) => ({ ...current, proposedUseOfFunds: markdown }))} />
+                  <textarea className="textarea" rows={3} value={form.proposedUseOfFunds} onChange={(e) => setForm({ ...form, proposedUseOfFunds: e.target.value })} />
                 </Field>
                 <Field label="Expected outcomes">
-                  <MarkdownEditor ref={outcomesEditor} rows={3} value={form.expectedOutcomes} onChange={(markdown) => setForm((current) => ({ ...current, expectedOutcomes: markdown }))} />
+                  <textarea className="textarea" rows={3} value={form.expectedOutcomes} onChange={(e) => setForm({ ...form, expectedOutcomes: e.target.value })} />
                 </Field>
               </fieldset>
               <IntakePrivacyNotice

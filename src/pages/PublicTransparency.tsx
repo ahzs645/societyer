@@ -19,9 +19,11 @@ export function PublicTransparencyPage() {
 
   if (!data || !data.society) {
     return (
-      <div className="landing" style={{ minHeight: "100vh", padding: "4rem 0" }}>
-        <div className="landing__container">
-          <h1 className="landing__h1">No public society page found.</h1>
+      <div className="landing public-center-missing">
+        <div className="public-center-missing__body">
+          <span className="public-center__empty-icon" aria-hidden="true"><FileText size={18} /></span>
+          <h1 className="public-center-missing__title">No public society page found</h1>
+          <Link className="btn-action" to="/">Go to Societyer</Link>
         </div>
       </div>
     );
@@ -54,7 +56,7 @@ export function PublicTransparencyPage() {
                 </Link>
               )}
               {society.grantApplyPath && (
-                <Link className="btn-action" to={society.grantApplyPath}>
+                <Link className="btn-action btn-action--primary" to={society.grantApplyPath}>
                   Apply for funding
                 </Link>
               )}
@@ -79,20 +81,14 @@ export function PublicTransparencyPage() {
                     <dd className="mono">{society.incorporationNumber}</dd>
                   </div>
                 )}
-                <div>
-                  <dt>Board</dt>
-                  <dd>
-                    {society.publicShowBoard
-                      ? `${directors.length} active director${directors.length === 1 ? "" : "s"}`
-                      : society.publicContactEmail
-                        ? "Available by records request"
-                        : "Contact society"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Public records</dt>
-                  <dd>{publications.length} item{publications.length === 1 ? "" : "s"} published</dd>
-                </div>
+                {/* The board list below already shows who serves; only say
+                  * how to reach the board when it is not listed. */}
+                {!showBoard && (
+                  <div>
+                    <dt>Board</dt>
+                    <dd>{society.publicContactEmail ? "Available by records request" : "Contact society"}</dd>
+                  </div>
+                )}
               </dl>
             </div>
             {showBoard && (
@@ -169,11 +165,9 @@ export function PublicTransparencyPage() {
                   <span className="public-center__empty-icon" aria-hidden="true"><FileText size={18} /></span>
                   <div>
                     <strong>Nothing published yet</strong>
-                    <p>Bylaws, annual reports, AGM notices and policies appear here once the society publishes them.</p>
                     {society.publicContactEmail && (
                       <p>
-                        For a records request, email{" "}
-                        <a href={`mailto:${society.publicContactEmail}`}>{society.publicContactEmail}</a>.
+                        <a href={`mailto:${society.publicContactEmail}`}>Request records by email</a>
                       </p>
                     )}
                   </div>

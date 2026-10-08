@@ -326,9 +326,13 @@ export function OutboxPage() {
               // rather than a bare number, and fold it into the subject
               // cell for continuity with the old layout.
               if (field.name === "subject") {
+                const subject = String(value ?? "") || "(no subject)";
                 return (
-                  <div>
-                    <strong>{String(value) || "(no subject)"}</strong>
+                  <div
+                    title={subject}
+                    style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    <strong>{subject}</strong>
                     {record.attachmentCount > 0 && (
                       <span className="muted" style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}>
                         <Paperclip size={10} /> {record.attachmentCount}

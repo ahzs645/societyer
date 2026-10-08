@@ -11,6 +11,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -146,7 +147,14 @@ export function ApiKeysPage() {
       </Link>
       <SettingsShell
         title="API keys"
-        description="Programmatic access to Societyer — create clients, then mint tokens with scoped permissions."
+        description={
+          <span className="settings-shell__description-row">
+            Programmatic access to Societyer.
+            <InfoPopover label="About API keys">
+              <p>Create clients, then mint tokens with scoped permissions.</p>
+            </InfoPopover>
+          </span>
+        }
         tabs={[
           { id: "clients", label: "Clients", icon: <KeyRound size={14} /> },
           { id: "tokens", label: "Tokens", icon: <ShieldCheckIcon /> },
@@ -193,8 +201,7 @@ export function ApiKeysPage() {
         </Banner>
       )}
 
-      {activeTab === "clients" && <section role="tabpanel" aria-label="Clients">
-      <h2 style={{ marginTop: 24, fontSize: "var(--fs-md)" }}>Clients</h2>
+      {activeTab === "clients" && <section role="tabpanel" aria-label="Clients" className="api-keys__panel">
       {clientsShowMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="apiClient" />
       ) : clientsTableData.objectMetadata ? (
@@ -237,8 +244,7 @@ export function ApiKeysPage() {
       )}
 
       </section>}
-      {activeTab === "tokens" && <section role="tabpanel" aria-label="Tokens">
-      <h2 style={{ fontSize: "var(--fs-md)" }}>Tokens</h2>
+      {activeTab === "tokens" && <section role="tabpanel" aria-label="Tokens" className="api-keys__panel">
       {tokensShowMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="apiToken" />
       ) : tokensTableData.objectMetadata ? (

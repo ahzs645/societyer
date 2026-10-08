@@ -15,6 +15,7 @@ import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "
 import { formatDate, money } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
+import { InfoPopover } from "../components/InfoPopover";
 import {
   EVIDENCE_REVIEW_STATUSES,
   evidenceReviewStatusLabel,
@@ -97,13 +98,14 @@ export function GovernanceRegistersPage() {
         title="Governance registers"
         icon={<GitBranch size={16} />}
         iconColor="blue"
-        subtitle="Source-backed director/officer timeline, board role changes, and signing authority records."
+        subtitle="Director and officer timeline, role changes and signing authority."
+        info={<p>Source-backed director/officer timeline, board role changes, and signing authority records.</p>}
         actions={
           <>
-            <button className="btn-action" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: todayDateOnly(), notes: "" })}>
-              <Plus size={12} /> Add record
+            <button className="btn-action" aria-label="Add record" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: todayDateOnly(), notes: "" })}>
+              <Plus size={12} /> <span className="evidence-action-label">Add record</span>
             </button>
-            <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
+            <Link className="btn-action" to="/app/imports" aria-label="Review imports"><FileSearch size={12} /> <span className="evidence-action-label">Review imports</span></Link>
           </>
         }
       />
@@ -189,7 +191,7 @@ export function GovernanceRegistersPage() {
         rows={signing}
         empty={<EmptyRegister kind="signing-authority" links={[["Directors", "/app/directors"], ["Role holders", "/app/role-holders"]]} />}
         columns={["Effective", "Person", "Institution", "Authority", "Status"]}
-        render={(row) => [formatDate(row.effectiveDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.institutionName ?? "-", row.authorityType, <Status key="s" value={row.status} />]}
+        render={(row) => [formatDate(row.effectiveDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.institutionName ?? "-", capitalize(row.authorityType), <Status key="s" value={row.status} />]}
       />
     </div>
   );
@@ -224,8 +226,9 @@ export function MeetingEvidencePage() {
         title="Meeting evidence"
         icon={<ClipboardCheck size={16} />}
         iconColor="orange"
-        subtitle="Attendance, quorum evidence, and source-backed motions extracted from minutes."
-        actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
+        subtitle="Attendance, quorum and motions from minutes."
+        info={<p>Attendance, quorum evidence, and source-backed motions extracted from minutes.</p>}
+        actions={<Link className="btn-action" to="/app/imports" aria-label="Review imports"><FileSearch size={12} /> <span className="evidence-action-label">Review imports</span></Link>}
       />
       <ImportCandidatesNotice noun="meeting evidence" kinds={["meetingAttendance", "motionEvidence", "motion", "meetingMinutes"]} emptyRegister={!attendance.length && !motions.length} />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
@@ -271,8 +274,9 @@ export function FinanceImportsPage() {
         title="Finance imports"
         icon={<Banknote size={16} />}
         iconColor="green"
-        subtitle="Imported budget snapshots, financial statements, treasurer reports, and transaction candidates awaiting verification."
-        actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
+        subtitle="Imported budgets, statements and reports to verify."
+        info={<p>Imported budget snapshots, financial statements, treasurer reports, and transaction candidates awaiting verification.</p>}
+        actions={<Link className="btn-action" to="/app/imports" aria-label="Review imports"><FileSearch size={12} /> <span className="evidence-action-label">Review imports</span></Link>}
       />
       <ImportCandidatesNotice noun="finance" targets={["financialStatementImports", "budgetSnapshots"]} kinds={["financialStatementImport", "budgetSnapshot", "treasurerReport", "transactionCandidate"]} documentCategory="FinancialStatement" emptyRegister={!budgets.length && !statements.length} />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
@@ -376,10 +380,15 @@ export function RecordsArchivePage() {
         title="Records archive"
         icon={<Archive size={16} />}
         iconColor="gray"
-        subtitle="Archive custody, accessions, source provenance, and restricted-source handling."
-        actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
+        subtitle="Archive custody, accessions and source provenance."
+        info={
+          <>
+            <p>Archive custody, accessions, source provenance, and restricted-source handling.</p>
+            <RelatedDocumentViews current="/app/records-archive" />
+          </>
+        }
+        actions={<Link className="btn-action" to="/app/imports" aria-label="Review imports"><FileSearch size={12} /> <span className="evidence-action-label">Review imports</span></Link>}
       />
-      <RelatedDocumentViews current="/app/records-archive" />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Accessions" value={accessions.length} />
         <Stat label="Evidence links" value={evidence.length} />
@@ -390,7 +399,7 @@ export function RecordsArchivePage() {
         title="Archive custody and accessions"
         restricted={data?.restrictedResources?.includes("documents")}
         rows={accessions}
-        empty="Approve archive accession imports for boxes, binders, drives, and external archive transfers."
+        empty={<EmptyNote text="No accessions yet." info="Approve archive accession imports for boxes, binders, drives, and external archive transfers." />}
         columns={["Received", "Title", "Container", "Location", "Status"]}
         render={(row) => [row.dateReceived ? formatDate(row.dateReceived) : "-", row.title, row.containerType, row.location, <Status key="s" value={row.status} />]}
       />
@@ -406,7 +415,7 @@ export function RecordsArchivePage() {
         title="Source evidence and provenance"
         restricted={data?.restrictedResources?.includes("documents")}
         rows={evidenceShown}
-        empty={statusFilter === "all" ? "Approved section imports automatically create source evidence links here." : "No evidence links have this status."}
+        empty={statusFilter === "all" ? <EmptyNote text="No evidence links yet." info="Approved section imports automatically create source evidence links here." /> : "No evidence links have this status."}
         columns={["Source", "Kind", "Model destination", "Access", "Status"]}
         pageActions={(pageRows) => canEdit && pageRows.length > 0 ? (
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -430,6 +439,10 @@ export function RecordsArchivePage() {
   );
 }
 
+function capitalize(value?: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : "-";
+}
+
 function useRegisters() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
@@ -442,15 +455,31 @@ function useRegisters() {
 /** One-line empty state: what will appear and where today's live data is. */
 function EmptyRegister({ kind, links }: { kind: string; links: [string, string][] }) {
   return (
-    <>
-      Nothing imported yet. Approved {kind} imports appear here. Current data:{" "}
-      {links.map(([label, to], index) => (
-        <span key={to}>
-          {index > 0 && " · "}
-          <Link to={to}>{label}</Link>
-        </span>
-      ))}
-    </>
+    <span className="evidence-empty">
+      Nothing imported yet.
+      <InfoPopover label={`About ${kind} imports`}>
+        <p>Approved {kind} imports appear here.</p>
+        <p>
+          Current data:{" "}
+          {links.map(([label, to], index) => (
+            <span key={to}>
+              {index > 0 && " · "}
+              <Link to={to}>{label}</Link>
+            </span>
+          ))}
+        </p>
+      </InfoPopover>
+    </span>
+  );
+}
+
+/** One-line empty state with the background behind an ⓘ. */
+function EmptyNote({ text, info }: { text: string; info: string }) {
+  return (
+    <span className="evidence-empty">
+      {text}
+      <InfoPopover label="About this register"><p>{info}</p></InfoPopover>
+    </span>
   );
 }
 
@@ -480,7 +509,7 @@ function RegisterTable({
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
         <h2 className="card__title">{title}</h2>
-        <span className="card__subtitle">{restricted ? "Access limited" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}</span>
+        {restricted && <span className="card__subtitle">Access limited</span>}
       </div>
       {rows.length>25&&<div className="card__body"><input className="input" aria-label={`Search ${title}`} placeholder="Search this evidence register" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></div>}
       {pageActions && pageRows.length > 0 && <div className="card__body" style={{ paddingTop: 0 }}>{pageActions(pageRows)}</div>}
@@ -509,7 +538,7 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   return (
     <div className="stat">
       <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ color: tone === "warn" ? "var(--warn)" : tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
+      <div className="stat__value" style={{ color: !value || value === 0 ? undefined : tone === "warn" ? "var(--warn)" : tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
     </div>
   );
 }

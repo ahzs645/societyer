@@ -10,6 +10,7 @@ import {
   writeAppRuntimeChoice,
 } from "../lib/appRuntime";
 import { InstallAppPrompt } from "../components/InstallAppPrompt";
+import { InfoPopover } from "../components/InfoPopover";
 
 type ProbeState = { status: "idle" } | { status: "checking" } | { status: "done"; ok: boolean; message: string };
 
@@ -77,10 +78,7 @@ export function AppSetupPage() {
           </div>
           <div className="society-create__copy">
             <h1>Where should your records live?</h1>
-            <p>
-              Societyer keeps a society's governance records, documents, and filings in one workspace.
-              Pick where this device stores them. You can change it later, and export a backup at any time.
-            </p>
+            <p>Pick where this device stores your society's records. You can change it later.</p>
           </div>
           <ol className="app-setup__steps" aria-label="Setup steps">
             {SETUP_STEPS.map((step, index) => (
@@ -131,8 +129,7 @@ export function AppSetupPage() {
           />
 
           <p className="muted app-setup__footnote">
-            Just looking around? <a href={appRouteHref("/demo", { demo: false })}>Open the seeded demo</a> — it runs on sample data and never
-            touches your workspace.
+            Just looking around? <a className="app-setup__link" href={appRouteHref("/demo", { demo: false })}>Open the demo</a> — sample data only.
           </p>
         </main>
       </div>
@@ -153,17 +150,21 @@ function LocalStorageOption({
         <div className="app-setup__card-head">
           <HardDrive size={16} />
           <div>
-            <h2 className="card__title">Keep records on this device</h2>
-            <span className="card__subtitle">Recommended for a single society with one or two officers.</span>
+            <div className="app-setup__title-row">
+              <h2 className="card__title">Keep records on this device</h2>
+              <InfoPopover label="About keeping records on this device">
+                <ul className="app-setup__points">
+                  <li>Everything is stored in this browser and works offline once installed.</li>
+                  <li>No account, no server, and nothing leaves the device unless you export it.</li>
+                  <li>Clearing this browser's site data erases the workspace — export backups regularly.</li>
+                </ul>
+              </InfoPopover>
+            </div>
+            <span className="card__subtitle">Best for one society with one or two officers.</span>
           </div>
         </div>
       </div>
       <div className="card__body">
-        <ul className="app-setup__points">
-          <li>Everything is stored in this browser and works offline once installed.</li>
-          <li>No account, no server, and nothing leaves the device unless you export it.</li>
-          <li>Clearing this browser's site data erases the workspace — export backups regularly.</li>
-        </ul>
         <div className="app-setup__actions">
           <button className="btn btn--accent" type="button" onClick={() => onChoose("fresh")} disabled={busy}>
             <Check size={14} /> Start a new organization
@@ -215,16 +216,17 @@ function ServerOption({
         <div className="app-setup__card-head">
           <CloudCog size={16} />
           <div>
-            <h2 className="card__title">Connect to a Societyer server</h2>
+            <div className="app-setup__title-row">
+              <h2 className="card__title">Connect to a Societyer server</h2>
+              <InfoPopover label="About connecting to a server">
+                <p>Records live on the server you host; this device is just a client.</p>
+              </InfoPopover>
+            </div>
             <span className="card__subtitle">For shared workspaces where several people need the same records.</span>
           </div>
         </div>
       </div>
       <div className="card__body">
-        <ul className="app-setup__points">
-          <li>Records live on the backend you self-host; this device is just a client.</li>
-          <li>Enter the Convex backend address, for example <code className="mono">https://societyer.example.org</code>.</li>
-        </ul>
         <label className="field__label" htmlFor="app-setup-server">Server address</label>
         <div className="app-setup__server-row">
           <input

@@ -7,7 +7,6 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, type ErrorSummaryItem } from "../components/ui";
 import { IntakePrivacyNotice } from "../components/IntakePrivacyNotice";
-import { MarkdownEditor } from "../components/MarkdownEditor";
 import { ArrowLeft, HandHeart } from "lucide-react";
 
 const FIELD_IDS = {
@@ -171,7 +170,7 @@ export function VolunteerApplyPage() {
                   </Field>
                 </div>
                 <Field label="Anything else the society should know?">
-                  <MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} />
+                  <textarea className="textarea" rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                 </Field>
               </fieldset>
               <IntakePrivacyNotice

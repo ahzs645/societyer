@@ -10,7 +10,8 @@ import { publicationUrl } from "../lib/publicationUrl";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { Globe, Plus, Save, Trash2, Copy } from "lucide-react";
+import { Globe, Plus, Save, Trash2, Copy, ExternalLink } from "lucide-react";
+import { InfoPopover } from "../components/InfoPopover";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -92,12 +93,21 @@ export function TransparencyPage() {
   const records = (publications ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
-  const builderChecks = [
-    { label: "Public URL", complete: Boolean(society.publicSlug), detail: society.publicSlug ? publicHref : "Add a slug" },
-    { label: "Page enabled", complete: Boolean(society.publicTransparencyEnabled), detail: society.publicTransparencyEnabled ? (isLocalDataRuntime() ? "Local preview only" : "Live when published") : "Draft only" },
-    { label: "Contact", complete: Boolean(society.publicContactEmail), detail: society.publicContactEmail ?? "Add a public email" },
-    { label: "Directors", complete: Boolean(society.publicShowBoard), detail: society.publicShowBoard ? "Board roster visible" : "Hidden" },
-    { label: "Published records", complete: publishedCount > 0, detail: `${publishedCount} published` },
+  const publicPath = society.publicSlug ? `/public/${society.publicSlug}` : null;
+  const copyPublicLink = async () => {
+    try {
+      await navigator.clipboard.writeText(absolutePublicHref);
+      toast.success("Public link copied");
+    } catch {
+      toast.error("Could not copy the link in this browser");
+    }
+  };
+  const visibility: Array<{ on: boolean; onLabel: string; offLabel: string }> = [
+    { on: Boolean(society.publicShowBoard), onLabel: "Board visible", offLabel: "Board hidden" },
+    { on: Boolean(society.publicShowBylaws), onLabel: "Bylaws visible", offLabel: "Bylaws hidden" },
+    { on: Boolean(society.publicShowFinancials), onLabel: "Financials visible", offLabel: "Financials hidden" },
+    { on: Boolean(society.publicVolunteerIntakeEnabled), onLabel: "Volunteer intake on", offLabel: "Volunteer intake off" },
+    { on: Boolean(society.publicGrantIntakeEnabled), onLabel: "Grant intake on", offLabel: "Grant intake off" },
   ];
 
   return (
@@ -106,34 +116,17 @@ export function TransparencyPage() {
         title="Public transparency"
         icon={<Globe size={16} />}
         iconColor="blue"
-        subtitle="Publish board info, bylaws, annual reports, AGM materials, and contact details without exposing the private workspace."
+        subtitle="What the public can see about your society."
+        info={
+          <p>
+            Publish board info, bylaws, annual reports, AGM materials, and contact details without exposing the
+            private workspace. Only reviewed records you publish appear on the public page.
+          </p>
+        }
         actions={
           <>
             <MoreActionsMenu
               items={[
-                ...(publicPageLive
-                  ? [
-                      {
-                        id: "view-public",
-                        label: isLocalDataRuntime() ? "Preview public page" : "View public page",
-                        icon: <Globe size={14} />,
-                        onSelect: () => window.open(publicHref, "_blank", "noreferrer"),
-                      },
-                      {
-                        id: "copy-link",
-                        label: "Copy link",
-                        icon: <Copy size={14} />,
-                        onSelect: async () => {
-                          try {
-                            await navigator.clipboard.writeText(absolutePublicHref);
-                            toast.success("Public link copied");
-                          } catch {
-                            toast.error("Could not copy the link in this browser");
-                          }
-                        },
-                      },
-                    ]
-                  : []),
                 {
                   id: "edit-settings",
                   label: "Edit settings",
@@ -194,88 +187,94 @@ export function TransparencyPage() {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card transparency-public-card">
         <div className="card__head">
-          <h2 className="card__title">Current public settings</h2>
-          <span className="card__subtitle">{publicHref}</span>
+          <h2 className="card__title">Public page</h2>
+          <InfoPopover label="About the public page settings">
+            <p>
+              These are visibility settings, not published content. A category marked visible shows nothing until a
+              reviewed record in that category is published below.
+              {isLocalDataRuntime() ? " This workspace is local, so the link is a preview on this device only." : ""}
+            </p>
+          </InfoPopover>
+          <span className="transparency-public-card__status">
+            <Badge tone={society.publicTransparencyEnabled ? "success" : "warn"}>
+              {society.publicTransparencyEnabled ? (isLocalDataRuntime() ? "Local preview only" : "Enabled") : "Draft only"}
+            </Badge>
+          </span>
         </div>
         <div className="card__body">
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            <Badge tone={society.publicTransparencyEnabled ? "success" : "warn"}>{society.publicTransparencyEnabled ? "Public page enabled" : "Draft only"}</Badge>
-            <Badge>{society.publicSlug ?? "no slug set"}</Badge>
-            <Badge tone={society.publicShowBoard ? "success" : "warn"}>{society.publicShowBoard ? "Board visible" : "Board hidden"}</Badge>
-            <Badge tone={society.publicShowBylaws ? "success" : "warn"}>{society.publicShowBylaws ? "Bylaws visible" : "Bylaws hidden"}</Badge>
-            <Badge tone={society.publicShowFinancials ? "success" : "warn"}>{society.publicShowFinancials ? "Financials visible" : "Financials hidden"}</Badge>
-            <Badge tone={society.publicVolunteerIntakeEnabled ? "success" : "warn"}>{society.publicVolunteerIntakeEnabled ? "Volunteer intake on" : "Volunteer intake off"}</Badge>
-            <Badge tone={society.publicGrantIntakeEnabled ? "success" : "warn"}>{society.publicGrantIntakeEnabled ? "Grant intake on" : "Grant intake off"}</Badge>
+          <div className="transparency-public-card__link">
+            {publicPath ? (
+              <>
+                <code className="transparency-public-card__path" title={absolutePublicHref}>{publicPath}</code>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={copyPublicLink}>
+                  <Copy size={12} /> Copy link
+                </button>
+                {publicPageLive && (
+                  <a className="btn btn--ghost btn--sm" href={publicHref} target="_blank" rel="noreferrer">
+                    <ExternalLink size={12} /> {isLocalDataRuntime() ? "Preview" : "Open"}
+                  </a>
+                )}
+              </>
+            ) : (
+              <span className="muted">No public address yet — set one in Edit settings.</span>
+            )}
           </div>
-          {publishedCount === 0 && (
-            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
-              These are visibility settings, not published content — with 0 published records below, the public page has nothing to show yet even though a category reads "visible."
-            </div>
-          )}
+          <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
+            {visibility.map((item) => (
+              <Badge key={item.onLabel} tone={item.on ? "success" : "warn"}>{item.on ? item.onLabel : item.offLabel}</Badge>
+            ))}
+          </div>
           <div className="muted" style={{ whiteSpace: "pre-wrap" }}>
             {society.publicSummary ?? "No public summary yet."}
           </div>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            <span className="muted mono">{absolutePublicHref}</span>
+          <div className="transparency-public-card__meta">
+            <span>{society.publicContactEmail ?? <span className="muted">No public contact email</span>}</span>
             <span className="muted">·</span>
-            <span>{publishedCount} published</span>
+            <span className={publishedCount === 0 ? "transparency-public-card__needed" : undefined}>
+              {publishedCount === 0 ? "Nothing published yet" : `${publishedCount} published`}
+            </span>
             <span className="muted">·</span>
-            <span>{draftCount} draft</span>
+            <span>{draftCount} {draftCount === 1 ? "draft" : "drafts"}</span>
           </div>
         </div>
       </div>
 
-      <div className="transparency-builder">
-        <div className="transparency-builder__panel">
-          <div className="card__head">
-            <h2 className="card__title">Public transparency builder</h2>
-            <span className="card__subtitle">Choose what the public page should disclose, then publish only reviewed records.</span>
-          </div>
-          <div className="transparency-builder__checks">
-            {builderChecks.map((check) => (
-              <div className={`transparency-builder__check${check.complete ? " is-complete" : ""}`} key={check.label}>
-                <span>{check.complete ? "Ready" : "Needed"}</span>
-                <strong>{check.label}</strong>
-                <small>{check.detail}</small>
-              </div>
-            ))}
-          </div>
+      <section className="transparency-presets" aria-labelledby="transparency-presets-heading">
+        <div className="transparency-presets__head">
+          <h2 className="card__title" id="transparency-presets-heading">Start a draft from a preset</h2>
+          <InfoPopover label="About disclosure presets">
+            <p>The board roster is controlled by the page settings; documents publish as reviewed records.</p>
+          </InfoPopover>
         </div>
-        <div className="transparency-builder__panel">
-          <div className="card__head">
-            <h2 className="card__title">Disclosure presets</h2>
-            <span className="card__subtitle">Directors are controlled by settings; documents publish as reviewed records.</span>
-          </div>
-          <div className="transparency-builder__presets">
-            {PUBLICATION_PRESETS.map((preset) => (
-              <button
-                type="button"
-                className="transparency-builder__preset"
-                disabled={!canPublish}
-                key={preset.category}
-                onClick={() =>
-                  setPublicationDraft({
-                    societyId: society._id,
-                    title: preset.title,
-                    summary: preset.summary,
-                    category: preset.category,
-                    documentId: "",
-                    url: "",
-                    status: "Draft",
-                    reviewStatus: "Draft",
-                    publishedAtISO: "",
-                  })
-                }
-              >
-                <strong>{preset.title}</strong>
-                <span>{preset.summary}</span>
-              </button>
-            ))}
-          </div>
+        <div className="transparency-builder__presets">
+          {PUBLICATION_PRESETS.map((preset) => (
+            <button
+              type="button"
+              className="transparency-builder__preset"
+              disabled={!canPublish}
+              key={preset.category}
+              onClick={() =>
+                setPublicationDraft({
+                  societyId: society._id,
+                  title: preset.title,
+                  summary: preset.summary,
+                  category: preset.category,
+                  documentId: "",
+                  url: "",
+                  status: "Draft",
+                  reviewStatus: "Draft",
+                  publishedAtISO: "",
+                })
+              }
+            >
+              <strong>{preset.title}</strong>
+              <span>{preset.summary}</span>
+            </button>
+          ))}
         </div>
-      </div>
+      </section>
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="publication" />
