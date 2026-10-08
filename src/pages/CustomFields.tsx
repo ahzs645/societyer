@@ -7,6 +7,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { AlertTriangle, Database, Link2, Plus, Sliders, Trash2 } from "lucide-react";
@@ -154,7 +155,17 @@ export function CustomFieldsPage() {
         title="Custom fields"
         icon={<Sliders size={16} />}
         iconColor="purple"
-        description="Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear on each person's detail and can be pulled into PDF mapping."
+        description={
+          <span className="settings-shell__description-row">
+            Extra fields for members, directors, volunteers and staff.
+            <InfoPopover label="About custom fields">
+              <p>
+                Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear
+                on each person's detail and can be pulled into PDF mapping.
+              </p>
+            </InfoPopover>
+          </span>
+        }
         tabs={[
           { id: "definitions", label: "Definitions", icon: <Sliders size={14} /> },
           { id: "mapping", label: "Link map", icon: <Link2 size={14} /> },
@@ -162,8 +173,8 @@ export function CustomFieldsPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         actions={activeTab === "definitions" ? (
-          <Button variant="accent" disabled={!canWrite} onClick={openNew}>
-            <Plus size={12} /> New field
+          <Button variant="accent" disabled={!canWrite} onClick={openNew} aria-label="New field">
+            <Plus size={12} /> <span className="settings-shell__action-label">New field</span>
           </Button>
         ) : null}
       >

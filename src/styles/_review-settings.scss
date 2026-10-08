@@ -1,0 +1,456 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+/* Review fixes for settings / integrations / workspace pages. */
+
+/* ---------- Settings shell (phones) ----------
+ * The shell stacks title, tabs and actions in a column on phones, which put
+ * "+ New" / "Refresh" on their own row under the tabs. Keep the actions on
+ * the title row, right-aligned, and let the tabs take the full row below. */
+@media (max-width: 760px) {
+  .settings-shell__bar:has(> .settings-shell__actions) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: token('s-2');
+    align-items: start;
+  }
+  .settings-shell__bar:has(> .settings-shell__actions) > .settings-shell__main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .settings-shell__bar:has(> .settings-shell__actions) > .settings-shell__actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .settings-shell__bar:has(> .settings-shell__actions) > .settings-shell__tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* Create actions are a bare "+" on phones; the button keeps its aria-label. */
+@media (max-width: 760px) {
+  .settings-shell__action-label {
+    display: none;
+  }
+}
+
+/* A one-line shell description with an ⓘ after it. */
+.settings-shell__description-row {
+  display: inline;
+}
+.settings-shell__description-row > .info-popover__trigger {
+  height: 20px;
+  width: 20px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* Phones: five tabs (AI agents) don't fit with icons; keep labels only so
+ * the row reads whole, and it still scrolls when it can't fit. */
+@media (max-width: 480px) {
+  .settings-shell__tab-icon {
+    display: none;
+  }
+}
+
+/* ---------- AI agents setup form ---------- */
+.ai-setup-form > * {
+  max-width: 640px;
+}
+.ai-setup-form > .btn {
+  align-self: flex-start;
+}
+.ai-setup-form__number .input {
+  max-width: 120px;
+}
+/* Short number fields sit side by side on phones too. */
+.ai-setup-form .settings-pair:has(> .ai-setup-form__number) {
+  display: grid;
+  gap: token('s-3');
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---------- Integration marketplace cards ---------- */
+.integration-card {
+  color: token('text-primary');
+  min-height: 190px;
+}
+@media (max-width: 760px) {
+  .integration-card {
+    min-height: 0;
+  }
+}
+.integration-card__head {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.integration-card__icon {
+  color: token('text-secondary');
+  display: inline-flex;
+  flex: none;
+  padding-top: 3px;
+}
+.integration-card__title {
+  color: token('text-primary');
+  flex: 1 1 auto;
+  font-size: token('fs-md');
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.integration-card__status {
+  flex: none;
+}
+
+/* ---------- Workflows ---------- */
+.workflows-local-note {
+  font-size: token('fs-sm');
+  margin: 0 0 token('s-3');
+}
+
+/* ---------- Workflow detail ---------- */
+.workflow-topbar__actions--phone,
+.workflow-steps-list {
+  display: none;
+}
+.workflow-technical > summary {
+  color: token('text-secondary');
+  cursor: pointer;
+  font-size: token('fs-sm');
+  font-weight: 600;
+}
+.workflow-technical[open] > summary {
+  margin-bottom: token('s-2');
+}
+.workflow-technical .field__label {
+  margin-top: token('s-2');
+}
+@media (max-width: 620px) {
+  .workflow-topbar {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  .workflow-topbar__title {
+    align-self: auto;
+    flex: 1 1 auto;
+  }
+  .workflow-topbar__actions--desktop {
+    display: none;
+  }
+  .workflow-topbar__actions--phone {
+    align-self: auto;
+    display: flex;
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  .workflow-canvas {
+    display: none;
+  }
+  .workflow-shell {
+    min-height: 0;
+  }
+  .workflow-steps-list {
+    align-content: start;
+    display: grid;
+    gap: token('s-2');
+    list-style: none;
+    margin: 0;
+    padding: token('s-3') token('s-4');
+  }
+  .workflow-steps-list__item {
+    align-items: center;
+    background: token('bg-panel');
+    border: 1px solid token('border');
+    border-radius: token('r-md');
+    color: token('text-primary');
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: token('s-2');
+    padding: token('s-2') token('s-3');
+    text-align: left;
+    width: 100%;
+  }
+  .workflow-steps-list__item.is-selected {
+    border-color: token('accent');
+    box-shadow: 0 0 0 1px token('accent');
+  }
+  .workflow-steps-list__index {
+    color: token('text-tertiary');
+    font-size: token('fs-sm');
+    min-width: 1.2em;
+    text-align: right;
+  }
+  .workflow-steps-list__text {
+    display: grid;
+    min-width: 0;
+  }
+  .workflow-steps-list__text .muted {
+    font-size: token('fs-xs');
+  }
+}
+
+/* ---------- Calendar sync ---------- */
+.calendar-sync__file-button {
+  cursor: pointer;
+  position: relative;
+}
+.calendar-sync__file-button:focus-within {
+  outline: 2px solid token('border-focus');
+  outline-offset: 2px;
+}
+.calendar-sync__file-input {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+/* ---------- Settings ---------- */
+/* System / Light / Dark on one row instead of wrapping "Dark" to a second. */
+@media (min-width: 761px) {
+  .settings-appearance .radio-group--horizontal {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+}
+.settings-appearance .radio-group {
+  width: 100%;
+}
+
+.webhooks-table th {
+  white-space: nowrap;
+}
+
+.api-keys__panel {
+  margin-top: token('s-2');
+}
+
+/* ---------- Wide pages on phones ----------
+ * `.page--wide > * { width: 100% }` fixes each child at the content width,
+ * so the phone full-bleed negative margins only shifted top-level cards left
+ * (flush at x=0 with an empty strip on the right) instead of widening them.
+ * Let full-bleed sections size to the bleed. (Role holders, rights ledger,
+ * template engine, formation & maintenance, Society.) */
+@media (max-width: 560px) {
+  .app-shell.is-mobile .page--wide > :is(.card, .stat-grid, .onboarding-compact, .record-show__summary):not(.card--boxed) {
+    width: auto;
+  }
+}
+
+/* ---------- Evidence registers ---------- */
+.evidence-empty {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+@media (max-width: 760px) {
+  /* "+" and "Review imports" both took title-row space; icons only here. */
+  .evidence-action-label {
+    display: none;
+  }
+  /* Status chips: one horizontally scrollable row instead of wrapping. */
+  .documents-facets__row.evidence-status-filter {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .evidence-status-filter::-webkit-scrollbar {
+    display: none;
+  }
+  .evidence-status-filter > .chip {
+    flex: none;
+  }
+}
+@media (max-width: 560px) {
+  /* Match the full-bleed cards around it instead of sitting in its own gutter. */
+  .app-shell.is-mobile .page > .import-candidates-notice {
+    border-radius: 0;
+    border-right-width: 0;
+    margin-inline: calc(-1 * var(--page-gutter));
+  }
+}
+
+/* ---------- Compliance settings ---------- */
+.settings-section__fact-link {
+  color: token('accent');
+}
+/* Fixed date column so the deadline titles line up. */
+.settings-deadlines__item {
+  grid-template-columns: 7.5em minmax(0, 1fr);
+}
+
+/* ---------- Portfolio ---------- */
+@media (max-width: 760px) {
+  .portfolio-current-tag {
+    display: none;
+  }
+}
+
+/* ---------- Organization profile ---------- */
+.society-address-item__head > .info-popover__trigger {
+  margin-right: auto;
+}
+@media (max-width: 760px) {
+  /* Keep "Save changes" on the title row; the button's title carries the date. */
+  .society-header__updated {
+    display: none;
+  }
+}
+
+/* ---------- Dashboard ---------- */
+.dashboard-remediation__actions {
+  align-items: center;
+}
+
+/* ---------- Guided organization setup ---------- */
+.society-create__choice {
+  align-items: center;
+  display: flex;
+  gap: token('s-2');
+}
+.society-create__choice[aria-pressed="true"] {
+  font-weight: 600;
+}
+.society-create__choice[aria-pressed="true"] svg {
+  color: token('accent');
+  flex: none;
+}
+.society-create__title-row {
+  align-items: baseline;
+  display: flex;
+  gap: token('s-3');
+  justify-content: space-between;
+}
+.society-create__cancel--stacked {
+  display: none;
+}
+@media (max-width: 820px) {
+  .society-create__cancel--stacked {
+    display: inline-flex;
+    flex: none;
+  }
+  .society-create__cancel--side {
+    display: none;
+  }
+  /* With Cancel moved up, the topbar only matters when it holds Back. */
+  .society-create__topbar:not(:has(.society-create__back)) {
+    display: none;
+  }
+}
+
+/* ---------- App setup ---------- */
+.app-setup__title-row {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+.app-setup__link {
+  color: token('accent');
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.info-popover .app-setup__points {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+/* ---------- Public transparency ---------- */
+.transparency-public-card {
+  margin-bottom: token('s-4');
+}
+.transparency-public-card .card__head {
+  gap: token('s-2');
+}
+.transparency-public-card__status {
+  margin-left: auto;
+}
+.transparency-public-card__link {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+.transparency-public-card__path {
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  font-size: token('fs-sm');
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transparency-public-card__meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: token('s-3');
+  overflow-wrap: anywhere;
+}
+.transparency-public-card__needed {
+  color: token('warn');
+  font-weight: 600;
+}
+.transparency-presets {
+  margin-bottom: token('s-4');
+}
+.transparency-presets__head {
+  align-items: center;
+  display: flex;
+  gap: token('s-2');
+  margin-bottom: token('s-2');
+}
+.transparency-presets .transparency-builder__presets {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.transparency-presets .transparency-builder__preset {
+  align-content: start;
+  background: token('bg-panel');
+}
+
+/* ---------- Public intake forms ---------- */
+/* Single-column intake (grant application): centre the header and form as
+ * one column instead of leaving the form in the left 60% of the container. */
+.intake--single {
+  max-width: 768px;
+}
+.intake--single .intake__layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.public-center__empty a {
+  color: token('accent');
+}
+
+/* ---------- Public page: not found ---------- */
+.public-center-missing {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: token('s-6') token('s-4');
+}
+.public-center-missing__body {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  text-align: center;
+}
+.public-center-missing__title {
+  color: token('text-primary');
+  font-size: token('fs-lg');
+  font-weight: 600;
+  margin: 0;
+}

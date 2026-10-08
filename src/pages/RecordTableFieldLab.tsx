@@ -62,7 +62,7 @@ export function RecordTableFieldLabPage() {
         title="Table field lab"
         icon={<FlaskConical size={16} />}
         iconColor="purple"
-        subtitle="Demo-only acceptance surface for every RecordTable field type."
+        subtitle="Try every kind of table field in one place (demo only)."
         actions={
           <button
             type="button"

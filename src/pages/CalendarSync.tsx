@@ -6,6 +6,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
@@ -46,6 +47,7 @@ export function CalendarSyncPage() {
   const [provider, setProvider] = useState("ics");
   const [calendarName, setCalendarName] = useState("");
   const [icsText, setIcsText] = useState("");
+  const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedBusy, setFeedBusy] = useState(false);
 
@@ -174,18 +176,22 @@ export function CalendarSyncPage() {
             <Rss size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
             Subscribe (outbound feed)
           </h2>
-          {feedAvailable && feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
+          <InfoPopover label="About the outbound feed">
+            <p>
+              A read-only iCalendar feed of this entity's deadlines, filings, and meetings. Add the URL to Google
+              Calendar, Outlook, or Apple Calendar to keep governance dates in your everyday calendar — it refreshes
+              automatically.
+            </p>
+          </InfoPopover>
+          <span style={{ marginLeft: "auto" }}>
+            {feedAvailable && feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
+          </span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
-          <div className="muted">
-            A read-only iCalendar feed of this entity's deadlines, filings, and meetings. Add the URL to
-            Google Calendar, Outlook, or Apple Calendar to keep governance dates in your everyday calendar —
-            it refreshes automatically.
-          </div>
           {!canManageFeed ? (
             <p className="muted">Managing outbound calendar subscriptions requires workspace settings write access.</p>
           ) : !feedAvailable ? (
-            <p className="muted">Outbound calendar subscriptions require a connected server. You can import .ics events locally below.</p>
+            <p className="muted" style={{ margin: 0 }}>Outbound calendar subscriptions require a connected server; import .ics events below.</p>
           ) : feedToken === undefined ? (
             <div className="muted">Loading…</div>
           ) : feedToken ? (
@@ -246,13 +252,29 @@ export function CalendarSyncPage() {
               <input className="input" value={calendarName} onChange={(e) => setCalendarName(e.target.value)} placeholder="e.g. Board calendar" />
             </Field>
           </div>
-          <Field label="Upload .ics file">
-            <input type="file" accept=".ics,text/calendar" onChange={(e) => onFile(e.target.files?.[0])} />
-          </Field>
+          <div className="field">
+            <div className="field__label">Upload .ics file</div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <label className="btn calendar-sync__file-button">
+                <UploadCloud size={12} /> Choose file
+                <input
+                  type="file"
+                  className="calendar-sync__file-input"
+                  accept=".ics,text/calendar"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    setFileName(file?.name ?? "");
+                    onFile(file);
+                  }}
+                />
+              </label>
+              <span className="muted" style={{ overflowWrap: "anywhere" }}>{fileName || "No file chosen"}</span>
+            </div>
+          </div>
           <Field label="…or paste .ics content">
             <textarea
-              className="input input--compact"
-              rows={8}
+              className="textarea"
+              rows={4}
               value={icsText}
               onChange={(e) => setIcsText(e.target.value)}
               placeholder="BEGIN:VCALENDAR…"

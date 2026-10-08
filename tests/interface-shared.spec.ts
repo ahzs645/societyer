@@ -434,9 +434,18 @@ test("workflow preparation is readable for Viewer while workflow and package wri
   await page.locator(".record-table__identifier-button").first().click();
   const preview = page.getByRole("dialog");
   if (await preview.count()) await preview.getByRole("button", { name: /^Open/ }).click();
-  await expect(page.getByRole("button", { name: "Add Node", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: /^(Pause|Activate)$/ })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+  if (page.viewportSize()!.width <= 620) {
+    // Phones show one primary action and fold the rest into the ⋯ menu.
+    await expect(page.getByRole("button", { name: /^(Launch|Activate)$/ })).toBeDisabled();
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Add node", exact: true })).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByRole("menuitem", { name: /^(Pause|Launch)$/ })).toHaveAttribute("aria-disabled", "true");
+    await page.keyboard.press("Escape");
+  } else {
+    await expect(page.getByRole("button", { name: "Add Node", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^(Pause|Activate)$/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+  }
   await expect(page.locator(".workflow-sidepanel fieldset")).toHaveAttribute("disabled", "");
   await navigate("Workflow packages");
   await expect(page.getByRole("button", { name: "New package", exact: true })).toBeDisabled();

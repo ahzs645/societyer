@@ -242,14 +242,15 @@ export function RoleHoldersPage() {
         title={corporationWorkspace ? "Corporation people" : "Role-holder register"}
         icon={<UsersRound size={16} />}
         iconColor="blue"
-        subtitle={
-          <>
+        subtitle={corporationWorkspace ? "Directors, officers, shareholders and controllers." : "Every governance role, with full history."}
+        info={
+          <p>
             {corporationWorkspace
               ? `Directors, officers, shareholders, controllers, and authorized filers for ${organizationLabel(society)}.`
               : "Every governance role — officers, incorporators, representatives and controllers — with full history."}{" "}
             The filing register is <Link to="/app/directors">Directors</Link>; for one person across organizations, see{" "}
             <Link to="/app/people-directory">People directory</Link>.
-          </>
+          </p>
         }
         actions={
           <CreateMenu
@@ -342,6 +343,11 @@ export function RoleHoldersPage() {
             <RecordTableFilterChips />
             <RecordTable
               loading={tableData.loading || rows === undefined}
+              renderCell={({ field, value }) => {
+                // Officer titles are stored as option keys (privacy_officer).
+                if (field.name === "officerTitle" && value) return <span>{optionLabel("officerTitles", String(value))}</span>;
+                return undefined;
+              }}
               renderRowActions={(record) => (
                 <>
                   <button className="btn btn--ghost btn--sm" disabled={!can("members:read") || record.historyReadable !== true} title={record.historyReadable === true ? undefined : "Your role cannot read this record’s complete history."} onClick={() => { if (can("members:read") && record.historyReadable === true) setHistoryId(record._id); }}>
@@ -630,10 +636,13 @@ export function RightsLedgerPage() {
         title={corporationWorkspace ? "Share register" : "Membership classes"}
         icon={<Scale size={16} />}
         iconColor="purple"
-        subtitle={
-          corporationWorkspace
-            ? "Share classes, current holdings, issuance, transfers, redemptions, cancellations, and supporting evidence."
-            : "Membership/right classes plus current holdings, issuance, transfer, redemption, cancellation, and adjustment history."
+        subtitle={corporationWorkspace ? "Share classes, holdings and transfers." : "Membership classes, holdings and transfers."}
+        info={
+          <p>
+            {corporationWorkspace
+              ? "Share classes, current holdings, issuance, transfers, redemptions, cancellations, and supporting evidence."
+              : "Membership/right classes plus current holdings, issuance, transfer, redemption, cancellation, and adjustment history."}
+          </p>
         }
         actions={
           <>
@@ -652,13 +661,11 @@ export function RightsLedgerPage() {
           <span>As of</span>
           <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
         </label>
-        {asOf ? (
+        {asOf && (
           <>
             <span>Holdings and transfers as they stood that day.</span>
             <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Back to live</button>
           </>
-        ) : (
-          <span>Live register</span>
         )}
       </div>
       {!can("settings:read") && <p className="muted">Controller records require additional workspace access and are omitted from this view. The visible register is not a complete controller register.</p>}
@@ -1124,11 +1131,12 @@ export function TemplateEnginePage() {
         title="Template engine"
         icon={<BookTemplate size={16} />}
         iconColor="green"
-        subtitle={
-          <>
-            Templates, precedents (reusable document bundles) and the package runs, drafts and
-            signers generated from them.
-          </>
+        subtitle="Templates, precedents and the drafts made from them."
+        info={
+          <p>
+            Templates, precedents (reusable document bundles) and the package runs, drafts and signers generated from
+            them.
+          </p>
         }
         actions={
           <>
@@ -1314,7 +1322,19 @@ export function FormationMaintenancePage() {
         title="Formation and maintenance"
         icon={<Landmark size={16} />}
         iconColor="orange"
-        subtitle="Formation packages, NUANS/name-search artifacts, amendments, annual maintenance filings, jurisdiction attributes, and operational event logs."
+        subtitle="Formation paperwork and annual upkeep."
+        info={
+          <>
+            <p>
+              Formation packages, NUANS/name-search artifacts, amendments, annual maintenance filings, jurisdiction
+              attributes, and operational event logs.
+            </p>
+            <p>
+              Tracks formation paperwork and annual-maintenance checklist items specific to incorporation upkeep. For
+              the full filings register, see <Link to="/app/filings">Filings</Link>.
+            </p>
+          </>
+        }
         actions={
           <CreateMenu
             disabled={!canWrite}
@@ -1329,12 +1349,6 @@ export function FormationMaintenancePage() {
           />
         }
       />
-
-      <p className="muted">
-        Tracks formation paperwork and annual-maintenance checklist items specific to
-        incorporation upkeep. For the full filings register, see{" "}
-        <Link to="/app/filings">Filings</Link>.
-      </p>
 
       <Section title="Formation records" count={data?.formations?.length ?? 0}>
         <SimpleTable

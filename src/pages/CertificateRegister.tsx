@@ -167,7 +167,6 @@ export function CertificateRegisterPage() {
         ) : list.length === 0 ? (
           <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
             No certificates issued yet.
-            {!isCorporation(society) && " Optional for societies, which have members rather than shareholders."}
           </p>
         ) : (
           <div className="table-scroll" role="region" aria-label="Share certificates" tabIndex={0}>

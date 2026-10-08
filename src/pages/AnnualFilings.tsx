@@ -177,7 +177,7 @@ export function AnnualFilingsPage() {
       ) : juris.length === 0 ? (
         <div className="card">
           <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
-            No annual filings tracked yet. Detailed records live in <Link to="/app/filings">Filings</Link>.
+            No annual filings yet.
           </p>
         </div>
       ) : (

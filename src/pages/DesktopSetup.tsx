@@ -240,17 +240,13 @@ export function DesktopSetupPage() {
       <div className="page page--wide">
         <PageHeader
           title="Desktop app setup"
-          subtitle="Configures the Societyer desktop app."
           icon={<Monitor size={16} />}
           iconColor="blue"
         />
-        <div className="card" style={{ maxWidth: 640 }}>
+        <div className="card" style={{ maxWidth: 640, marginLeft: 0, marginRight: "auto" }}>
           <div className="card__body col" style={{ gap: 12 }}>
             <h2 className="card__title" style={{ margin: 0 }}>You're using the web version</h2>
-            <p className="muted" style={{ margin: 0 }}>
-              Nothing to set up here. The desktop app keeps records and files on your computer; open this page from
-              inside Societyer Desktop to configure it.
-            </p>
+            <p className="muted" style={{ margin: 0 }}>Nothing to set up here — open this page in Societyer Desktop.</p>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link to="/app" className="btn btn--accent">
                 Back to dashboard
@@ -269,7 +265,8 @@ export function DesktopSetupPage() {
     <div className="page page--wide">
       <PageHeader
         title="Welcome to Societyer Desktop"
-        subtitle="Choose a local or online workspace, prepare your local vault, and connect optional services when needed."
+        subtitle="Choose where records live and prepare your local vault."
+        info={<p>Choose a local or online workspace, prepare your local vault, and connect optional services when needed.</p>}
         icon={<HardDrive size={16} />}
         iconColor="blue"
         actions={

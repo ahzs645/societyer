@@ -345,6 +345,9 @@ assert.equal(bylawReport.severity, "bylaw");
 
 const checks: any = await owner.runQuery("continuity:dashboardChecks", { societyId: "soc" });
 assert.deepEqual(checks.checks.map((check: any) => check.id).sort(), ["CONTINUITY-ANNUAL-REPORT-FILED", "CONTINUITY-DIRECTOR-CONSENT", "CONTINUITY-MINUTES-APPROVED"].sort(), "AGM rule archived, so no AGM card");
+const minutesCheck = checks.checks.find((check: any) => check.id === "CONTINUITY-MINUTES-APPROVED");
+assert.equal(minutesCheck.text, "No meetings held in the last 12 months.");
+assert.equal(minutesCheck.level, "warn", "no held meetings in a year is a gap, not a pass");
 
 // Committee structure (A4).
 await owner.runMutation("committees:updateStructure", { id: "c1", kind: "standing", parentBody: "board", cadenceRule: { frequency: "per_year_count", count: 4, months: [9, 11, 2, 5] }, mandateVersions: [{ id: "tor-2021", effectiveFrom: "2021-01-01", effectiveTo: "2021-12-31", title: "TOR 2021" }, { id: "tor-2022", effectiveFrom: "2022-01-01", title: "TOR 2022", quorumText: "All five members" }] });

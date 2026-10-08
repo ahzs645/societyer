@@ -293,7 +293,9 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       const minutes = minutesByMeeting.get(meeting._id);
       return minutes && !minutes.approvedAt && !minutes.approvedInMeetingId && !adopted.has(minutes._id);
     });
-    const level = missing.length ? "err" : unapproved.length ? "warn" : "ok";
+    // No held meetings in a year is itself a gap, not a pass: there are no
+    // minutes to approve because nothing was recorded.
+    const level = !recent.length ? "warn" : missing.length ? "err" : unapproved.length ? "warn" : "ok";
     checks.push({
       id: "CONTINUITY-MINUTES-APPROVED",
       level,

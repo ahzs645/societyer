@@ -236,12 +236,12 @@ export function WorkflowsPage() {
 
   return (
     <div className="page">
-      {isLocalDataRuntime() && <p className="muted">Workflow execution requires a connected server. You can prepare and review workflows here.</p>}
       <PageHeader
         title="Workflows"
         icon={<WorkflowIcon size={16} />}
         iconColor="orange"
-        subtitle="Set up automations — like AGM prep reminders or filing deadline alerts — and control when they run."
+        subtitle="Automations like AGM prep reminders and filing alerts."
+        info={<p>Set up automations — like AGM prep reminders or filing deadline alerts — and control when they run.</p>}
         actions={
           <>
             <MoreActionsMenu
@@ -331,6 +331,11 @@ export function WorkflowsPage() {
         }
       />
 
+      {isLocalDataRuntime() && (
+        <p className="muted workflows-local-note" role="status">
+          Running workflows needs a connected server; you can prepare and review them here.
+        </p>
+      )}
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="workflow" />
       ) : tableData.objectMetadata ? (

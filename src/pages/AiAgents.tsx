@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { InfoPopover } from "../components/InfoPopover";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useAction, useQuery } from "convex/react";
 import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
@@ -384,7 +385,14 @@ export function AiAgentsPage() {
         title="AI agents"
         icon={<Bot size={16} />}
         iconColor="purple"
-        description="Bounded workspace tools with fixed scopes, allowed actions, tool planning, and audit logging."
+        description={
+          <span className="settings-shell__description-row">
+            Assistants with fixed scopes and audit logging.
+            <InfoPopover label="About AI agents">
+              <p>Bounded workspace tools with fixed scopes, allowed actions, tool planning, and audit logging.</p>
+            </InfoPopover>
+          </span>
+        }
         tabs={[
           { id: "chat", label: "Chat", icon: <MessageSquare size={14} /> },
           { id: "tools", label: "Agents", icon: <Bot size={14} /> },
@@ -396,15 +404,17 @@ export function AiAgentsPage() {
         onTabChange={(section) => setActiveSection(section as AiAgentSection)}
       >
         {localOnly && <p className="muted" role="status">Live AI chat, agents and provider keys require a connected workspace. You can review saved conversations, tool drafts and runs, and prepare skills locally.</p>}
-        {isStaticDemoRuntime() && <p className="muted" role="status">AI actions in this demo use simulated responses and provider validation. No external AI provider is contacted.</p>}
+        {isStaticDemoRuntime() && <p className="muted" role="status">AI actions in this demo use simulated responses; no AI provider is contacted.</p>}
         {activeSection === "chat" && (
           <>
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">AI setup</h2>
-            <span className="card__subtitle">Onboard a personal or workspace provider key before live chat and agents run.</span>
+            <InfoPopover label="About AI setup">
+              <p>Onboard a personal or workspace provider key before live chat and agents run.</p>
+            </InfoPopover>
           </div>
-          <div className="card__body col" style={{ gap: 14 }}>
+          <div className="card__body col ai-setup-form" style={{ gap: 14 }}>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Badge tone={effectiveProvider ? "success" : "warn"}>
                 <KeyRound size={10} /> {effectiveProvider ? `${effectiveProvider.label} · ${effectiveProvider.modelId}` : "No live provider configured"}
@@ -515,10 +525,10 @@ export function AiAgentsPage() {
               <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Validate a provider key before choosing a model or saving settings.</span>
             )}
             <div className="settings-pair">
-              <Field label="Temperature" hint="How predictable vs. creative replies are. Lower (e.g. 0.2) is more consistent and factual; higher is more varied. Most societies should leave this at the default.">
+              <Field label="Temperature" hint="Lower is more consistent; most societies keep the default." className="ai-setup-form__number">
                 <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupEditable} />
               </Field>
-              <Field label="Max tool steps" hint="The most lookups or actions the assistant can chain together to answer one request before it must stop and reply. Higher allows more complex requests but can take longer and cost more.">
+              <Field label="Max tool steps" hint="Lookups or actions per request before it replies." className="ai-setup-form__number">
                 <input className="input" type="number" min="1" max="12" step="1" value={aiSetup.maxSteps} onChange={(event) => setAiSetup((draft) => ({ ...draft, maxSteps: event.target.value }))} disabled={!setupEditable} />
               </Field>
             </div>
@@ -532,7 +542,9 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">AI chat</h2>
-              <span className="card__subtitle">Test the assistant here: it reads workspace context, applies any active skills, then runs only the actions it's permitted to.</span>
+              <InfoPopover label="About AI chat">
+                <p>Test the assistant here: it reads workspace context, applies any active skills, then runs only the actions it's permitted to.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <div className="col" style={{ gap: 8, maxHeight: 360, overflow: "auto" }}>
@@ -578,7 +590,9 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Threads</h2>
-              <span className="card__subtitle">Private conversations belong to their creator and require current AI chat write permission.</span>
+              <InfoPopover label="About threads">
+                <p>Private conversations belong to their creator and require current AI chat write permission.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 8 }}>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelectedThreadId(undefined)}>
@@ -602,7 +616,9 @@ export function AiAgentsPage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">AI tool drafts</h2>
-            <span className="card__subtitle">Human approval queue for actions produced by chat or agents.</span>
+            <InfoPopover label="About AI tool drafts">
+              <p>Human approval queue for actions produced by chat or agents.</p>
+            </InfoPopover>
           </div>
           <div className="card__body col" style={{ gap: 10 }}>
             {(!canWriteTasks || (toolDrafts ?? []).length === 0) ? (
@@ -660,7 +676,9 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">AI agents</h2>
-              <span className="card__subtitle">Pre-built assistants, each limited to a specific job and a fixed set of records it can read or change.</span>
+              <InfoPopover label="About AI agents">
+                <p>Pre-built assistants, each limited to a specific job and a fixed set of records it can read or change.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
               {agentList.map((agent) => (
@@ -782,7 +800,9 @@ export function AiAgentsPage() {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card__head">
               <h2 className="card__title">Latest output</h2>
-              <span className="card__subtitle">Result of the test run above, also saved to the run history below.</span>
+              <InfoPopover label="About latest output">
+                <p>Result of the test run above, also saved to the run history below.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <pre className="mono" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{lastResult.output}</pre>
@@ -812,7 +832,9 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Skills</h2>
-              <span className="card__subtitle">Extra instructions that get added to an agent's behavior when it's relevant to the request.</span>
+              <InfoPopover label="About skills">
+                <p>Extra instructions that get added to an agent's behavior when it's relevant to the request.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
               {(visibleSkills ?? []).map((skill) => (
@@ -911,7 +933,10 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Available tools by role</h2>
-              <span className="card__subtitle">All actions AI agents can take, grouped by category and shown for your current role: {toolCatalog?.role ?? "Loading"}</span>
+              <span className="card__subtitle">Your role: {toolCatalog?.role ?? "Loading"}</span>
+              <InfoPopover label="About available tools">
+                <p>All actions AI agents can take, grouped by category and shown for your current role.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -937,7 +962,9 @@ export function AiAgentsPage() {
           <div className="card">
           <div className="card__head">
             <h2 className="card__title">Recent runs</h2>
-            <span className="card__subtitle">Run records are also mirrored into the main audit log.</span>
+            <InfoPopover label="About recent runs">
+              <p>Run records are also mirrored into the main audit log.</p>
+            </InfoPopover>
           </div>
           <div className="card__body col" style={{ gap: 10 }}>
             {(!canWriteTasks || (runs ?? []).length === 0) ? (

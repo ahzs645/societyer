@@ -107,7 +107,10 @@ export function ComplianceSettingsPage() {
     heldAgmYears: agmFacts.agmYears,
   };
   const today = todayDateOnly();
-  const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
+  // Deadlines anchored to an old AGM can land well in the past; a list of
+  // "deadlines from these settings" should not offer to add those.
+  const staleCutoff = shiftDateOnly(today, -30);
+  const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today).filter((d) => !d.dueDate || d.dueDate >= staleCutoff);
 
   const onSave = async () => {
     if (!canSaveSettings || saving) return;
@@ -288,7 +291,7 @@ export function ComplianceSettingsPage() {
           <div className="settings-section__head">
             <h2 className="settings-section__title">Deadlines from these settings</h2>
             <button className="btn btn--accent btn--sm" onClick={generate} disabled={generating || !canGenerate || pendingCount === 0}>
-              {generating ? "Adding…" : pendingCount ? `Add ${pendingCount}` : "All added"}
+              {generating ? "Adding…" : pendingCount ? `Add ${pendingCount} ${pendingCount === 1 ? "deadline" : "deadlines"}` : "All added"}
             </button>
           </div>
           {derived.length === 0 ? (
@@ -311,6 +314,12 @@ export function ComplianceSettingsPage() {
       </div>
     </div>
   );
+}
+
+function shiftDateOnly(dateOnly: string, days: number) {
+  const date = new Date(`${dateOnly}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export default ComplianceSettingsPage;

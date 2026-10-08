@@ -48,7 +48,7 @@ export function RecordNotFound({
           title={`This ${noun ?? recordLabel.toLowerCase()} doesn't exist in this workspace`}
           description={
             description ??
-            "It may have been deleted, or the link points to a record in another workspace. Check the address or return to the list."
+            "It may have been deleted, or the link is from another workspace."
           }
           action={action ?? <Link className="btn btn--accent" to={backTo}>{backLabel}</Link>}
         />

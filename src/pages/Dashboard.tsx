@@ -39,6 +39,9 @@ import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { RollingNumber } from "../components/RollingNumber";
+import { InfoPopover } from "../components/InfoPopover";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { pluralizeCounts } from "../lib/pluralizeCounts";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -190,7 +193,6 @@ export function Dashboard() {
       <PageHeader
         routeKey="/app"
         title="Dashboard"
-        subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
 
       {welcomeWorkflowId && society && (
@@ -337,17 +339,19 @@ export function Dashboard() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Compliance posture</h2>
-              <span className="card__subtitle">Automated checks against the Societies Act</span>
+              <InfoPopover label="About compliance posture">
+                <p>Automated checks against the Societies Act. Citations and full detail are available on each item.</p>
+              </InfoPopover>
             </div>
             <div className="card__body dashboard-compliance">
               <div className="dashboard-compliance__summary">
                 <div>
                   <div className="dashboard-compliance__count">
-                    {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} visible item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
+                    {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
                   </div>
-                  <div className="muted">
-                    {completeComplianceAccess ? "Start with the operational gaps below. Citations and full detail are available when needed." : "Some checks need an administrator. The items below use records available to your role."}
-                  </div>
+                  {!completeComplianceAccess && (
+                    <div className="muted">Some checks need an administrator. The items below use records available to your role.</div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -362,7 +366,7 @@ export function Dashboard() {
 
               <ul className="dashboard-compliance__todo">
                 {complianceFlags.slice(0, showComplianceDetails ? complianceFlags.length : 3).map((f: any, i: number) => (
-                  <li key={i}>{f.text}</li>
+                  <li key={i}>{pluralizeCounts(f.text)}</li>
                 ))}
               </ul>
 
@@ -384,51 +388,77 @@ export function Dashboard() {
                       citationId={(f as any).citationId}
                       citationIds={(f as any).citationIds}
                     >
-                      {f.text}
+                      {pluralizeCounts(f.text)}
                     </Flag>
-                    <div className="dashboard-remediation__meta">
-                      {f.evidenceRequired?.length > 0 && (
-                        <span>Evidence: {f.evidenceRequired.join(", ")}</span>
-                      )}
-                      {f.remediationStatus && (
+                    {f.remediationStatus && (
+                      <div className="dashboard-remediation__meta">
                         <Badge tone={f.remediationStatus === "resolved" ? "success" : "info"}>
                           {f.remediationStatus === "open" ? "Workflow open" : f.remediationStatus}
                         </Badge>
-                      )}
-                    </div>
-                    {f.remediationActions?.length > 0 && (
-                      <div className="dashboard-remediation__actions">
-                        {f.remediationActions.filter((action: any) => {
-                          const permission = action.intent === "navigate" ? interfaceRouteReadPermission(action.to) : null;
-                          return !permission || canRead(permission);
-                        }).map((action: any) => {
-                          const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`
-                            || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
-                          return action.intent === "navigate" ? (
-                            <Link key={action.id} className="btn btn--sm" to={action.to}>
-                              {action.label}
+                      </div>
+                    )}
+                    {(f.remediationActions?.length > 0 || f.evidenceRequired?.length > 0) && (() => {
+                      const evidenceInfo = f.evidenceRequired?.length > 0 ? (
+                        <InfoPopover label="Evidence that resolves this">
+                          <p><strong>Evidence that resolves this</strong></p>
+                          <ul style={{ margin: 0, paddingLeft: "1.1em" }}>
+                            {f.evidenceRequired.map((item: string) => <li key={item}>{item}</li>)}
+                          </ul>
+                        </InfoPopover>
+                      ) : null;
+                      const visibleActions = (f.remediationActions ?? []).filter((action: any) => {
+                        const permission = action.intent === "navigate" ? interfaceRouteReadPermission(action.to) : null;
+                        return !permission || canRead(permission);
+                      });
+                      const actionDisabled = (action: any) => busyRemediationAction === `${f.ruleId}:${action.id}`
+                        || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
+                      const [primary, ...secondary] = visibleActions;
+                      if (!primary) return evidenceInfo ? <div className="dashboard-remediation__actions">{evidenceInfo}</div> : null;
+                      // One primary action per row; the rest sit in a ⋯ menu.
+                      return (
+                        <div className="dashboard-remediation__actions">
+                          {primary.intent === "navigate" ? (
+                            <Link className="btn btn--sm" to={primary.to}>
+                              {primary.label}
                             </Link>
                           ) : (
                             <button
-                              key={action.id}
                               type="button"
                               className="btn btn--sm"
-                              disabled={disabled}
-                              onClick={() => runRemediationAction(f, action)}
+                              disabled={actionDisabled(primary)}
+                              onClick={() => runRemediationAction(f, primary)}
                             >
-                              {busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label}
+                              {busyRemediationAction === `${f.ruleId}:${primary.id}` ? "Working..." : primary.label}
                             </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                          )}
+                          {secondary.length > 0 && (
+                            <MoreActionsMenu
+                              label=""
+                              align="left"
+                              items={secondary.map((action: any) => ({
+                                id: action.id,
+                                label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
+                                disabled: actionDisabled(action),
+                                onSelect: () => runRemediationAction(f, action),
+                              }))}
+                            />
+                          )}
+                          {evidenceInfo}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          <ContinuityChecksCard societyId={society._id} />
+          {/* Director consent already shows (with its actions) under Compliance
+            * posture; don't repeat it under Record continuity. */}
+          <ContinuityChecksCard
+            societyId={society._id}
+            hideCheckIds={complianceFlags.some((flag: any) => flag.ruleId === "BC-SOC-DIRECTOR-CONSENT") ? ["CONTINUITY-DIRECTOR-CONSENT"] : undefined}
+          />
 
           <AgreementsExpiringCard societyId={society._id} />
 
@@ -553,7 +583,7 @@ export function Dashboard() {
                     <strong>{d.name}</strong>
                     <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.position}</div>
                   </div>
-                  {d.isBCResident && <Badge tone="info">BC</Badge>}
+                  {d.isBCResident && <span title="BC resident" aria-label="BC resident"><Badge tone="info">BC</Badge></span>}
                 </div>
               ))}
               {counts.directors > board.length && (

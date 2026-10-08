@@ -224,7 +224,13 @@ export function CorporateHistoryPage() {
         title="Corporate history"
         icon={<History size={16} />}
         iconColor="blue"
-        subtitle="Effective-dated corporate name history and the constating-document timeline — incorporation, transitions, continuances, amalgamations and restatements."
+        subtitle="Name history and the constating-document timeline."
+        info={
+          <p>
+            Effective-dated corporate name history and the constating-document timeline — incorporation, transitions,
+            continuances, amalgamations and restatements.
+          </p>
+        }
         actions={
           <CreateMenu
             label="Add"

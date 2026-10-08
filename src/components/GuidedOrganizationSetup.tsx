@@ -97,7 +97,14 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
   return <div className="society-create-shell"><div className="society-create">
     <aside className="society-create__intro">
       <div className="society-create__brand"><div className="society-create__logo"><Building2 size={18} /></div><span>Societyer setup</span></div>
-      <div className="society-create__copy"><h1>New organization workspace</h1><p>Answer three questions to create the workspace. Everything else becomes a checklist you can work through afterwards.</p></div>
+      <div className="society-create__copy">
+        <div className="society-create__title-row">
+          <h1>New organization workspace</h1>
+          {/* Stacked (phone) layout: Cancel sits on the title row instead of a row of its own. */}
+          <Link className="society-create__cancel society-create__cancel--stacked" to="/app/society">Cancel</Link>
+        </div>
+        <p>Answer three questions to create the workspace. Everything else becomes a checklist you can work through afterwards.</p>
+      </div>
       {!restoring && (
         <ol className="society-create__steps" aria-label="Setup progress">
           {STEPS.map((stepTitle, index) => <li className="society-create__step" key={stepTitle} aria-current={step === index ? "step" : undefined}><span className="society-create__step-index">{index < step ? <CheckCircle2 size={14} /> : index + 1}</span><span>{stepTitle}</span></li>)}
@@ -109,12 +116,19 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
         {!restoring && step > 0
           ? <button type="button" className="society-create__back" disabled={saving} onClick={back}><ChevronLeft size={16} /> Back</button>
           : <span />}
-        <Link className="society-create__cancel" to="/app/society">Cancel</Link>
+        <Link className="society-create__cancel society-create__cancel--side" to="/app/society">Cancel</Link>
       </div>
       {progress !== null && (
         <div className="society-create__progress">
-          <span>Step {step + 1} of {STEPS.length}</span>
-          <div className="society-create__progress-bar" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
+          {/* The step title is the card heading; the bar alone shows progress. */}
+          <div
+            className="society-create__progress-bar"
+            role="progressbar"
+            aria-label={`Step ${step + 1} of ${STEPS.length}`}
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-valuenow={step + 1}
+          ><span style={{ width: `${progress}%` }} /></div>
         </div>
       )}
 
@@ -140,13 +154,14 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
               <div className="society-create__question">
                 <p>Is the organization already incorporated?</p>
                 <div className="society-create__choices">
-                  <button type="button" className="society-create__choice" aria-pressed={stage === "existing"} onClick={() => chooseStage("existing")}>Yes, set up an existing organization</button>
-                  <button type="button" className="society-create__choice" aria-pressed={stage === "preparing"} onClick={() => chooseStage("preparing")}>No, prepare a new incorporation</button>
+                  <button type="button" className="society-create__choice" aria-pressed={stage === "existing"} onClick={() => chooseStage("existing")}>{stage === "existing" && <CheckCircle2 size={16} aria-hidden="true" />}Yes, set up an existing organization</button>
+                  <button type="button" className="society-create__choice" aria-pressed={stage === "preparing"} onClick={() => chooseStage("preparing")}>{stage === "preparing" && <CheckCircle2 size={16} aria-hidden="true" />}No, prepare a new incorporation</button>
                 </div>
               </div>
-              <Field label={stage === "existing" ? "Act the organization was formed under" : "Act you plan to incorporate under"}>
+              {/* The Act question depends on the answer above, so it appears once one is chosen. */}
+              {stage && <Field label={stage === "existing" ? "Act the organization was formed under" : "Act you plan to incorporate under"}>
                 <Select value={pathwayKey} onChange={choosePathway} options={[...PATHWAY_REGISTRY.map((pathway) => ({ value: pathway.key, label: `${pathway.setup.label} — ${optionLabel("actsFormedUnder", pathway.setup.actFormedUnder)}`, hint: pathway.setup.hint })), ...(stage === "existing" ? [{ value: "custom_existing", label: "Another existing organization — enter legal details", hint: "Reviewed incorporation guidance may be unavailable." }] : [])]} />
-              </Field>
+              </Field>}
               {pathwayKey === "custom_existing" && <div className="society-field-grid"><Field label="Legal jurisdiction"><Select value={form.jurisdictionCode} onChange={(value) => set("jurisdictionCode", value)} options={optionChoices("entityJurisdictions")} /></Field><Field label="Entity type"><Select value={form.entityType} onChange={(value) => set("entityType", value)} options={optionChoices("entityTypes")} /></Field><Field label="Act formed under"><Select value={form.actFormedUnder} onChange={(value) => set("actFormedUnder", value)} options={optionChoices("actsFormedUnder")} /></Field></div>}
               {pathwayKey && <div className="notice notice--info">{route.message}</div>}
               {canRestore && <button type="button" className="society-create__link" onClick={() => setRestoring(true)}>Have a Societyer backup? Restore it instead</button>}

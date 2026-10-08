@@ -123,7 +123,7 @@ test("public intake does not assign a visitor's membership from another workspac
   await page.getByRole("textbox", { name: "Email", exact: true }).fill("visitor@example.test");
   await page.getByRole("spinbutton", { name: "Requested amount", exact: true }).fill("50");
   await page.getByRole("textbox", { name: "Project title", exact: true }).fill("Community project");
-  await page.locator("#grant-project-summary .ProseMirror").fill("Public intake project summary.");
+  await page.getByRole("textbox", { name: "Project summary", exact: true }).fill("Public intake project summary.");
   await page.getByRole("button", { name: /Submit funding request/i }).click();
   await expect(page.getByRole("heading", { name: "Funding request submitted", exact: true })).toBeVisible();
   const payloads = await page.evaluate(() => (window as any).__publicIntakePayloads);
