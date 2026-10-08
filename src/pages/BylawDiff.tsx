@@ -7,6 +7,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { InfoPopover } from "../components/InfoPopover";
 import { Field, Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm, usePrompt, Modal } from "../components/Modal";
@@ -228,10 +229,11 @@ export function BylawDiffPage() {
         title="Bylaw amendments"
         icon={<GitCompare size={16} />}
         iconColor="purple"
-        subtitle="Draft, consult, pass and file bylaw amendments. Each draft keeps a full history of edits and lifecycle events."
+        subtitle="Draft, consult, pass and file bylaw amendments."
+        info={<p>Each draft keeps a full history of edits and lifecycle events.</p>}
         actions={
           <>
-            <button className="btn-action" onClick={newDraft} disabled={!canWrite}><Plus size={12} /> New draft</button>
+            {selected && <button className="btn-action" onClick={newDraft} disabled={!canWrite}><Plus size={12} /> New draft</button>}
             <button className="btn-action" onClick={exportRedline} disabled={!oldText && !newText}>
               <FileDown size={12} /> Export redline
             </button>
@@ -295,7 +297,9 @@ export function BylawDiffPage() {
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">New amendment draft</h2>
-                <Badge tone="accent">Draft</Badge>
+                <InfoPopover label="About amendment drafts">
+                  <p>Paste the current and proposed text below, then save. The amendment then moves through consultation, a special resolution (at least two-thirds of votes cast) and filing.</p>
+                </InfoPopover>
               </div>
               <div className="card__body">
                 <Field label="Title" hint="Required. For example: 2026 quorum and electronic meeting amendments">
@@ -308,10 +312,6 @@ export function BylawDiffPage() {
                     onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
                   />
                 </Field>
-                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  Paste the current and proposed text below, then save. The amendment then moves through
-                  consultation, a special resolution (at least two-thirds of votes cast) and filing.
-                </div>
               </div>
             </div>
           )}
@@ -459,7 +459,7 @@ export function BylawDiffPage() {
             </div>
           )}
 
-          <div className="two-col">
+          <div className="two-col bylaw-diff__editors">
             <Field label="Current bylaws">
               <textarea
                 className="textarea textarea--mono"
@@ -485,16 +485,18 @@ export function BylawDiffPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Redline</h2>
-              <span className="card__subtitle">
-                <Badge tone="success">+{sectionStats.adds} additions</Badge>{" "}
-                <Badge tone="danger">−{sectionStats.dels} deletions</Badge>
-                {sectionStats.moved > 0 && (
-                  <>
-                    {" "}
-                    <Badge tone="accent">{sectionStats.moved} moved</Badge>
-                  </>
-                )}
-              </span>
+              {hasChanges && (
+                <span className="card__subtitle">
+                  <Badge tone="success">+{sectionStats.adds} additions</Badge>{" "}
+                  <Badge tone="danger">−{sectionStats.dels} deletions</Badge>
+                  {sectionStats.moved > 0 && (
+                    <>
+                      {" "}
+                      <Badge tone="accent">{sectionStats.moved} moved</Badge>
+                    </>
+                  )}
+                </span>
+              )}
               {selected && hasChanges && (
                 <button
                   className="btn-action"

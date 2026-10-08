@@ -6,12 +6,13 @@ import { assertLiveFits, liveFixture, signInLive } from "./helpers/liveInterface
 
 type Surface = { path: string; actions: { name: RegExp; permission: Permission; optional?: boolean; blockedByText?: RegExp }[]; rows?: { name: RegExp; permission: Permission }[] };
 const surfaces: Surface[] = [
-  { path: "/app/committees/static_committee_finance", actions: [{ name: /^Delete$/, permission: "committees:write" }] },
+  // Delete lives in the header ⋯ menu, which is only rendered for writers.
+  { path: "/app/committees/static_committee_finance", actions: [{ name: /^More actions$/, permission: "committees:write" }] },
   { path: "/app/elections/static_election", actions: [{ name: /^Save election settings$/, permission: "elections:write" }], rows: [{ name: /^(?:Close election|Publish results|Add to ballot|Approve nomination|Reject nomination)$/, permission: "elections:write" }] },
   { path: "/app/bylaws-history", actions: [{ name: /^New amendment$/, permission: "documents:write" }] },
   { path: "/app/ai-agents", actions: [], rows: [{ name: /^(?:Send chat message|Run this agent|Save skill)$/, permission: "tasks:write" }, { name: /^Save AI provider$/, permission: "settings:write" }] },
   { path: "/app/meeting-templates", actions: [{ name: /^New template$/, permission: "meetings:write" }], rows: [{ name: /^(?:Schedule meeting|Edit |Duplicate |Delete )/, permission: "meetings:write" }] },
-  { path: "/app/agendas", actions: [{ name: /^Create$/, permission: "agendas:write" }] },
+  { path: "/app/agendas", actions: [{ name: /^New agenda$/, permission: "agendas:write" }] },
   { path: "/app/bylaw-rules", actions: [{ name: /^Save new version$/, permission: "documents:write" }] },
   { path: "/app/bylaw-diff", actions: [], rows: [{ name: /^(?:Start consultation|Record resolution|Mark filed|Save as sections)$/, permission: "documents:write" }] },
   { path: "/app/conflicts", actions: [{ name: /^New disclosure$/, permission: "conflicts:write" }], rows: [{ name: /^Resolve$/, permission: "conflicts:write" }] },

@@ -50,6 +50,16 @@ export function ConflictsPage() {
     nameSingular: "conflict",
     viewId: currentViewId,
   });
+  // The seeded column widths clipped "Abstained", "Left room" and the dates while
+  // the table had room to spare; give those columns their natural width.
+  const hydratedView = useMemo(() => {
+    if (!tableData.hydratedView) return null;
+    const minSize: Record<string, number> = { contractOrMatter: 320, declaredAt: 140, abstainedFromVote: 130, leftRoom: 130, status: 180 };
+    return {
+      ...tableData.hydratedView,
+      columns: tableData.hydratedView.columns.map((column) => minSize[column.field.name] ? { ...column, size: Math.max(column.size, minSize[column.field.name]) } : column),
+    };
+  }, [tableData.hydratedView]);
 
   const dirMap = useMemo(() => new Map<string, any>((directors ?? []).map((d: any) => [d._id, d])), [directors]);
   // Augment records with the derived `director` name and `status` so the record
@@ -106,7 +116,8 @@ export function ConflictsPage() {
         title="Conflicts of interest"
         icon={<AlertTriangle size={16} />}
         iconColor="red"
-        subtitle="Disclosures under s.56. Directors & senior managers must disclose material interests, leave the room, and abstain."
+        subtitle="Disclosures of directors' material interests (s.56)."
+        info={<p>Directors and senior managers must disclose material interests, leave the room, and abstain.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New disclosure
@@ -120,7 +131,7 @@ export function ConflictsPage() {
         <RecordTableScope
           tableId="conflicts"
           objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
+          hydratedView={hydratedView}
           records={records}
         >
           <RecordTableViewToolbar
@@ -144,6 +155,7 @@ export function ConflictsPage() {
                   : <Badge tone="warn">Open</Badge>;
               }
               if (field.name === "director") return <strong>{record.director}</strong>;
+              if (field.name === "declaredAt") return <span style={{ whiteSpace: "nowrap" }}>{formatDate(record.declaredAt)}</span>;
               return undefined;
             }}
             renderRowActions={(r) => !r.resolvedAt ? (

@@ -84,7 +84,8 @@ export function MinutesPage() {
         title="Minutes"
         icon={<FileText size={16} />}
         iconColor="turquoise"
-        subtitle="All meeting minutes on file. Minutes of general meetings (AGM/SGM) are accessible to members."
+        subtitle="All meeting minutes on file."
+        info={<p>Minutes of general meetings (AGM/SGM) are accessible to members.</p>}
       />
 
       {showMetadataWarning ? (
@@ -131,12 +132,11 @@ export function MinutesPage() {
                       tone={record.meetingType === "AGM" ? "purple" : record.meetingType === "Committee" ? "turquoise" : "gray"}
                       avatar={(record.meetingType || "MT").slice(0, 2).toUpperCase()}
                       label={<strong>{record.meeting}</strong>}
-                    />{" "}
-                    {record.meetingType && <Badge tone={record.meetingType === "AGM" ? "accent" : "info"}>{record.meetingType}</Badge>}
+                    />
                   </>
                 );
               }
-              if (field.name === "heldAt") return <span className="mono">{formatDate(record.heldAt)}</span>;
+              if (field.name === "heldAt") return <span>{formatDate(record.heldAt)}</span>;
               if (field.name === "quorum") {
                 if (record.notHeldYet) return <Badge tone="neutral">Not held yet</Badge>;
                 const quorum = recordedMinutesQuorum(record);

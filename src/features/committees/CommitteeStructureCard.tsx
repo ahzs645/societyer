@@ -10,7 +10,6 @@ import { useToast } from "../../components/Toast";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { describeCadenceRule, type CadenceRule } from "../../../shared/continuityRules";
 import { CadenceRuleFields, cleanCadenceRule } from "../gaps/CadenceRuleFields";
-import { formatDateTime } from "../../lib/format";
 import { calendarDateKey } from "../../lib/calendarDates";
 import { cleanQuorumRule, describeQuorumRule, quorumRuleProblems } from "../../../shared/bodyQuorum";
 import { QuorumRuleFields, quorumRuleDraft, quorumRuleFromDraft, type QuorumRuleDraft } from "./QuorumRuleFields";
@@ -141,16 +140,16 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
         )}
       </div>
       <div className="card__body col" style={{ gap: 8 }}>
-        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-          <Badge tone="accent">{!committee.cadence || committee.cadence === "Unknown" ? "Cadence not set" : committee.cadence}</Badge>
-          {kindLabel ? <Badge tone="neutral">{kindLabel}</Badge> : <Badge tone="gray">Kind not set</Badge>}
-          {parentLabel && <Badge tone="neutral">Reports to {parentLabel}</Badge>}
-          {committee.nextMeetingAt && <span className="muted">Next: {formatDateTime(committee.nextMeetingAt)}</span>}
-        </div>
+        {(kindLabel || parentLabel) && (
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {kindLabel && <Badge tone="neutral">{kindLabel}</Badge>}
+            {parentLabel && <Badge tone="neutral">Reports to {parentLabel}</Badge>}
+          </div>
+        )}
         <div className="muted" style={{ fontSize: 13 }}>
           {committee.cadenceRule
-            ? <>Structured cadence: {describeCadenceRule(committee.cadenceRule)}. {["monthly", "quarterly", "per_year_count", "calendar_year", "annual"].includes(String(committee.cadenceRule.frequency)) ? <>Missing meetings show on <Link to="/app/coverage?tab=continuity">Coverage &amp; gaps</Link>.</> : <Link to="/app/coverage?tab=expectations">Track record gaps</Link>}</>
-            : <>No structured cadence, so missing meetings are not tracked. <Link to="/app/coverage?tab=expectations">Track record gaps</Link></>}
+            ? <>Structured cadence: {describeCadenceRule(committee.cadenceRule)}. {["monthly", "quarterly", "per_year_count", "calendar_year", "annual"].includes(String(committee.cadenceRule.frequency)) ? <>Missing meetings show on <Link to="/app/coverage?tab=continuity">Coverage &amp; gaps</Link>.</> : <>Set one up in <Link to="/app/coverage?tab=expectations">record gaps</Link>.</>}</>
+            : <>No structured cadence, so missing meetings aren't tracked. Set one up in <Link to="/app/coverage?tab=expectations">record gaps</Link>.</>}
         </div>
         {committee.cadenceNotes && <div className="muted">{committee.cadenceNotes}</div>}
         <div style={{ fontSize: 13 }} data-testid="committee-quorum-rule">

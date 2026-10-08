@@ -7,6 +7,8 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { CreateMenu } from "../components/CreateMenu";
+import { InfoPopover } from "../components/InfoPopover";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -71,6 +73,12 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
     // Focus the title once the composer has mounted.
     requestAnimationFrame(() => titleInputRef.current?.focus());
   }, [canWrite, searchParams, setSearchParams]);
+
+  const openComposer = () => {
+    if (!canWrite) return;
+    setIsAddingBacklogMotion(true);
+    requestAnimationFrame(() => titleInputRef.current?.focus());
+  };
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -147,7 +155,8 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
           subtitle="Draft motions before a meeting, seed them into an agenda, then carry agenda motions into minutes."
           actions={(
             <>
-              <button className="btn-action btn-action--primary" onClick={addPrivacySetupMotions} disabled={!canWrite}>
+              <CreateMenu items={[{ id: "backlog", label: "New backlog motion", onSelect: openComposer, disabled: !canWrite }]} />
+              <button className="btn-action" onClick={addPrivacySetupMotions} disabled={!canWrite}>
                 <Sparkles size={12} /> Add PIPA setup motions
               </button>
               <Link className="btn-action" to="/app/agendas">
@@ -164,9 +173,15 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
             <div className="card__head">
               <h2 className="card__title">Backlog</h2>
               <span className="card__subtitle">{(backlog ?? []).length} motion{(backlog ?? []).length === 1 ? "" : "s"}</span>
-              <button className="btn-action btn-action--primary motion-backlog__new" onClick={() => { if (canWrite) setIsAddingBacklogMotion((value) => !value); }} disabled={!canWrite}>
-                <Plus size={12} /> {isAddingBacklogMotion ? "Close" : "New backlog motion"}
-              </button>
+              <InfoPopover label="About the backlog">
+                <p>Draft motions before a meeting, add them to a future agenda, then carry them into the minutes:</p>
+                <ol>
+                  <li>Create or seed backlog motions.</li>
+                  <li>Add backlog motions to a future agenda.</li>
+                  <li>Hold the meeting and create the minutes.</li>
+                  <li>Seed the agenda motions into the minutes and record outcomes.</li>
+                </ol>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
               {isAddingBacklogMotion && (
@@ -259,7 +274,7 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                         <div>
                           <strong>{item.title}</strong>
                           <div className="motion-backlog__badges">
-                            <Badge tone={statusTone(item.status)}>{item.status}</Badge>
+                            {item.status !== "Backlog" && <Badge tone={statusTone(item.status)}>{item.status}</Badge>}
                             {(item.tags ?? []).map((tag: string) => (
                               <Badge key={tag} tone="neutral">{tag}</Badge>
                             ))}
@@ -315,11 +330,11 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Agenda to minutes</h2>
+              <InfoPopover label="About agenda to minutes">
+                <p>After an agenda has backlog motions and minutes exist for the meeting, seed those agenda motions into the minutes as pending motions.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
-              <p className="muted">
-                After an agenda has backlog motions and minutes exist for the meeting, seed those agenda motions into the minutes as pending motions.
-              </p>
               <Field label="Meeting">
                 <Select value={minutesMeetingId} onChange={(value) => setMinutesMeetingId(value)}
                   options={[{ value: "", label: "Choose meeting..." }, ...(meetings ?? [])
@@ -333,19 +348,6 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
             </div>
           </div>
 
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Flow</h2>
-            </div>
-            <div className="card__body">
-              <ol className="privacy-bullet-list">
-                <li>Create or seed backlog motions.</li>
-                <li>Add backlog motions to a future agenda.</li>
-                <li>Hold the meeting and create/generate minutes.</li>
-                <li>Seed agenda motions into the minutes and record outcomes.</li>
-              </ol>
-            </div>
-          </div>
         </div>
       </div>
     </div>

@@ -350,3 +350,18 @@ export function motionCompletionGaps(motion: {
   if (tally === 0) gaps.push("vote totals");
   return gaps;
 }
+
+/** Display names for the motion label slugs the app applies itself (procedural
+ *  kinds and the manual "routine" tag). Free-form labels show as typed. */
+export const MOTION_TAG_LABELS: Record<string, string> = {
+  adjournment: "Adjournment",
+  "previous-minutes": "Previous minutes",
+  "approve-agenda": "Approve agenda",
+  "receive-reports": "Receive reports",
+  recess: "Recess",
+  routine: "Routine",
+};
+
+export function motionTagLabel(tag: string): string {
+  return MOTION_TAG_LABELS[tag] ?? tag;
+}
