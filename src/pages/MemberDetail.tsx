@@ -57,16 +57,6 @@ export function MemberDetailPage() {
           {aliases.length > 0 && <Detail label="Also known as" value={aliases.join(", ")} />}
         </div>
       </div>
-      <div className="card">
-        <div className="card__head"><h2 className="card__title">Membership</h2></div>
-        <div className="card__body col" style={{ gap: 6 }}>
-          <Detail label="Class" value={member.membershipClass} />
-          <Detail label="Status" value={member.status} />
-          <Detail label="Voting rights" value={member.votingRights ? "Yes" : "No"} />
-          <Detail label="Joined" value={member.joinedAt ? formatDate(member.joinedAt) : undefined} />
-          {member.leftAt && <Detail label="Left" value={formatDate(member.leftAt)} />}
-        </div>
-      </div>
       {member.notes && (
         <div className="card">
           <div className="card__head"><h2 className="card__title">Notes</h2></div>
@@ -92,6 +82,7 @@ export function MemberDetailPage() {
           { label: "Class", value: member.membershipClass ?? "—" },
           { label: "Status", value: member.status ?? "—" },
           { label: "Joined", value: member.joinedAt ? formatDate(member.joinedAt) : "—" },
+          ...(member.leftAt ? [{ label: "Left", value: formatDate(member.leftAt) }] : []),
           { label: "Voting", value: member.votingRights ? "Yes" : "No" },
         ]}
         actions={
@@ -104,7 +95,7 @@ export function MemberDetailPage() {
           { id: "history", label: "History", icon: <Activity size={12} />, content: <><PersonRecordLinks societyId={society._id} recordTable="members" recordId={member._id} personName={fullName} observedDate={member.joinedAt} /><MemberHistoryPanel societyId={society._id} memberId={member._id} /><MembershipEvidenceCard societyId={society._id} memberId={member._id} /></> },
           {
             id: "custom",
-            label: "Custom fields",
+            label: "Fields",
             icon: <Sparkles size={12} />,
             content: (
               <CustomFieldsPanel societyId={society._id} entityType="members" entityId={member._id} />

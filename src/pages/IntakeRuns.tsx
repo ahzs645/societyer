@@ -11,7 +11,8 @@ import { Badge, Banner, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
-import { formatDateTime, pluralize, relative } from "../lib/format";
+import { formatDate, formatDateTime, pluralize, relative } from "../lib/format";
+import { InfoPopover } from "../components/InfoPopover";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { getDesktopBridge } from "../lib/desktopBridge";
 import { todayDateOnly } from "../../shared/dateOnly";
@@ -74,7 +75,7 @@ export function IntakeRunsPage() {
   const extractRun = useAction(api.intakeActions.extractRun);
 
   const [selection, setSelection] = useState<IntakeSelection | null>(null);
-  const [name, setName] = useState(() => (params.get("missing") ? `Missing: ${params.get("missing")}` : `Intake ${todayDateOnly()}`));
+  const [name, setName] = useState(() => (params.get("missing") ? `Missing: ${params.get("missing")}` : `Intake ${formatDate(todayDateOnly())}`));
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<IntakeProgress | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -189,7 +190,7 @@ export function IntakeRunsPage() {
     setProgress({ stage: "inventory", done: 0, total: selection.files.length, counts: { files: selection.files.length }, errors: [] });
     try {
       const result = await runIntake(selection, {
-        societyId: society._id, name: name.trim() || `Intake ${todayDateOnly()}`, hosted, llm, mutation,
+        societyId: society._id, name: name.trim() || `Intake ${formatDate(todayDateOnly())}`, hosted, llm, mutation,
         ocr: ocrEnabled ? { pageBudget: ocrPageBudget } : undefined,
         extractRun: hosted ? (args) => extractRun(args) : undefined,
         onRunCreated: setActiveRunId,
@@ -237,19 +238,22 @@ export function IntakeRunsPage() {
     <div className="page intake-page">
       <PageHeader
         title="AI intake"
-        subtitle="Turn a folder of minutes, agendas and records into reviewed native records, with a source locator on every value."
+        subtitle="Turn a folder of records into reviewed native records."
+        info={<p>Choose a folder of minutes, agendas and records. The intake reads, sorts and extracts them, and every extracted value keeps a locator back to its source for review.</p>}
         actions={<>
-          <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Import sessions</Link>
-          <Link className="btn-action" to="/app/coverage?tab=coverage"><ScrollText size={12} /> Coverage & gaps</Link>
+          <Link className="btn-action" to="/app/imports" title="Import sessions" aria-label="Import sessions"><FileSearch size={12} /> Import sessions</Link>
+          <Link className="btn-action" to="/app/coverage?tab=coverage" title="Coverage & gaps" aria-label="Coverage & gaps"><ScrollText size={12} /> Coverage & gaps</Link>
         </>}
       />
 
       <div className="intake-grid">
         <section className="card intake-new" aria-labelledby="intake-new-title">
           <div className="card__head">
-            <div>
+            <div className="row" style={{ gap: 6, alignItems: "center" }}>
               <h2 className="card__title" id="intake-new-title">New intake run</h2>
-              <p className="card__subtitle">Files are read on this device. {hosted ? "Fields are extracted on the server with the workspace AI settings (deterministic fallback)." : "Fields are extracted on this device; nothing leaves it unless you turn on an AI provider."}</p>
+              <InfoPopover label="Where files are processed">
+                <p>Files are read on this device. {hosted ? "Fields are extracted on the server with the workspace AI settings, with a deterministic fallback." : "Fields are extracted on this device; nothing leaves it unless you turn on an AI provider."}</p>
+              </InfoPopover>
             </div>
           </div>
           <div className="card__body col" style={{ gap: 12 }}>
@@ -281,26 +285,36 @@ export function IntakeRunsPage() {
             )}
             <fieldset className="intake-llm" data-testid="intake-ocr-options">
               <legend><ScanText size={13} /> Scanned documents</legend>
-              <label className="intake-check">
-                <input type="checkbox" checked={ocrEnabled} onChange={(event) => { setOcrEnabled(event.target.checked); writeOcrPrefs({ enabled: event.target.checked, pageBudget: ocrPageBudget }); }} disabled={busy} />
-                Read scanned PDF pages and document images (signed forms, certificates, letters) with OCR on this device.
-              </label>
+              <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                <label className="intake-check">
+                  <input type="checkbox" checked={ocrEnabled} onChange={(event) => { setOcrEnabled(event.target.checked); writeOcrPrefs({ enabled: event.target.checked, pageBudget: ocrPageBudget }); }} disabled={busy} />
+                  Read scanned pages with OCR on this device
+                </label>
+                <InfoPopover label="About OCR">
+                  <p>Scanned PDF pages and document images (signed forms, certificates, letters) are read with the bundled English model on this device; no page is sent anywhere. Values read from low-confidence pages are never bulk-accepted.</p>
+                </InfoPopover>
+              </div>
               {ocrEnabled && (
                 <div className="intake-llm__grid">
-                  <Field label="Most pages to read by OCR in this run" hint="A page takes a few seconds. Pages beyond the limit stay listed as needing OCR.">
-                    <input className="input" type="number" min={1} max={5000} step={10} value={ocrPageBudget} onChange={(event) => { const next = Math.min(5000, Math.max(1, Number(event.target.value) || 1)); setOcrPageBudget(next); writeOcrPrefs({ enabled: true, pageBudget: next }); }} disabled={busy} />
+                  <Field label="Most pages to read by OCR in this run" hint="A page takes a few seconds; pages past the limit stay marked as needing OCR.">
+                    <input className="input" style={{ width: 120, maxWidth: "100%" }} type="number" min={1} max={5000} step={10} value={ocrPageBudget} onChange={(event) => { const next = Math.min(5000, Math.max(1, Number(event.target.value) || 1)); setOcrPageBudget(next); writeOcrPrefs({ enabled: true, pageBudget: next }); }} disabled={busy} />
                   </Field>
                 </div>
               )}
-              <p className="muted intake-llm__note"><Lock size={12} /> OCR runs locally with the bundled English model; no page is sent anywhere. Values read from low-confidence pages are never bulk-accepted.</p>
             </fieldset>
             {!hosted && (
               <fieldset className="intake-llm">
                 <legend><Sparkles size={13} /> AI extraction (optional)</legend>
-                <label className="intake-check">
-                  <input type="checkbox" checked={llmEnabled} onChange={(event) => setLlmEnabled(event.target.checked)} disabled={busy} />
-                  Use an AI provider from this device; the deterministic extractor is the fallback.
-                </label>
+                <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                  <label className="intake-check">
+                    <input type="checkbox" checked={llmEnabled} onChange={(event) => setLlmEnabled(event.target.checked)} disabled={busy} />
+                    Use an AI provider from this device
+                  </label>
+                  <InfoPopover label="About AI extraction">
+                    <p>The deterministic extractor is the fallback. Before any call, phone numbers, emails, SIN, account and card numbers and postal codes are masked; restricted files are never sent; each call is logged.</p>
+                    <p>Workspace provider defaults come from <Link to="/app/ai-agents">AI settings</Link>.</p>
+                  </InfoPopover>
+                </div>
                 {llmEnabled && (
                   <div className="intake-llm__grid">
                     <Field label="Provider">
@@ -315,7 +329,6 @@ export function IntakeRunsPage() {
                     {keyStored && <button type="button" className="btn btn--sm" onClick={() => void storeLocalApiKey("").then(() => setKeyStored(false))}><Trash2 size={12} /> Forget stored key</button>}
                   </div>
                 )}
-                <p className="muted intake-llm__note"><Lock size={12} /> Before any call, phone numbers, emails, SIN, account/card numbers and postal codes are masked; restricted files are never sent; each call is logged. Workspace provider defaults come from <Link to="/app/ai-agents">AI settings</Link>.</p>
               </fieldset>
             )}
             {hosted && (
@@ -332,7 +345,12 @@ export function IntakeRunsPage() {
             </div>
             <details className="intake-import" data-testid="intake-import-output">
               <summary>Import a run processed on another computer</summary>
-              <p className="muted" style={{ margin: "6px 0" }}>For large archives: run <span className="mono">npm run intake:run</span> on a workstation (legacy .doc/.xls are converted with LibreOffice there), then choose its output folder (run.json, coverage.json, extracts). Optionally choose the original source folder so the review viewer and promotion can use the original files.</p>
+              <p className="muted" style={{ margin: "6px 0", display: "flex", gap: 6, alignItems: "center" }}>
+                Choose the output folder of a run made on a workstation.
+                <InfoPopover label="About importing a run">
+                  <p>For large archives, run <span className="mono">npm run intake:run</span> on a workstation (legacy .doc/.xls files are converted with LibreOffice there), then choose its output folder (run.json, coverage.json, extracts). Optionally choose the original source folder so the review viewer and promotion can use the original files.</p>
+                </InfoPopover>
+              </p>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <button type="button" className="btn btn--sm" onClick={() => outputInput.current?.click()} disabled={busy || !canWrite}><FolderOpen size={12} /> Choose run output folder</button>
                 <button type="button" className="btn btn--sm" onClick={() => originalsInput.current?.click()} disabled={busy || !canWrite || !pipelineOutput}><FolderOpen size={12} /> Choose originals folder (optional)</button>

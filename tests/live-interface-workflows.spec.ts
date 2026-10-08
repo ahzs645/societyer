@@ -166,11 +166,15 @@ for (const role of ["Owner", "Admin", "Director", "Member", "Viewer"]) {
       if (["Owner", "Admin"].includes(role)) await expect(newGoal).toBeEnabled();
       else await expect(newGoal).toBeDisabled();
       await page.locator('a[href^="/app/goals/"]').first().click();
+      await page.getByRole("button", { name: "More actions", exact: true }).click();
+      const deleteGoal = page.getByRole("menuitem", { name: "Delete goal", exact: true });
       if (["Owner", "Admin"].includes(role)) {
-        await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeEnabled();
+        await expect(deleteGoal).toBeEnabled();
+        await page.keyboard.press("Escape");
         await expect(page.getByRole("slider")).toBeEnabled();
       } else {
-        await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
+        await expect(deleteGoal).toBeDisabled();
+        await page.keyboard.press("Escape");
         await expect(page.getByRole("slider")).toBeDisabled();
         for (const checkbox of await page.getByRole("checkbox").all()) await expect(checkbox).toBeDisabled();
         await expect(page.getByRole("link", { name: "New task", exact: true })).toHaveCount(0);

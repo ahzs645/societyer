@@ -6,7 +6,7 @@
  * at a time, a seat's history (and its identity links) loads only when the
  * seat is opened, and person/seat/meeting choices are pickers.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { evidenceUrl } from "../../shared/evidenceReview";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -38,7 +38,13 @@ function term(o: any) {
   return `${start ?? "?"} – ${end ?? "present"}`;
 }
 
-export function MembersRepresentativesCard({ societyId }: { societyId: string }) {
+const blankOrganizationMember = (linkSeatIds: string[] = [], organizationName = "") => ({ organizationName, membershipClass: "Organization", status: "Active", joinedAt: "", leftAt: "", votingRights: true, notes: "", linkSeatIds });
+
+/**
+ * createRequest: bump to open the "Add organization member" drawer — the
+ * Members page ⋯ menu uses it while the card is hidden because nothing exists yet.
+ */
+export function MembersRepresentativesCard({ societyId, createRequest = 0 }: { societyId: string; createRequest?: number }) {
   const { can } = usePermissions();
   const canWrite = can("members:write");
   const data = useQuery(api.memberGovernance.organizationMembers, can("members:read") ? { societyId } : "skip") as
@@ -53,7 +59,10 @@ export function MembersRepresentativesCard({ societyId }: { societyId: string })
   const [repForm, setRepForm] = useState<{ seat: SeatSummary } | null>(null);
   const [proxyOpen, setProxyOpen] = useState(false);
   // Directory and committees load only once the section is opened.
-  const people = useDirectoryPeople(open ? societyId : undefined);
+  const people = useDirectoryPeople(open || memberForm ? societyId : undefined);
+  useEffect(() => {
+    if (createRequest > 0) setMemberForm(blankOrganizationMember());
+  }, [createRequest]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
@@ -68,6 +77,16 @@ export function MembersRepresentativesCard({ societyId }: { societyId: string })
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visible = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
+  const drawers = (
+    <>
+      {memberForm && <OrganizationMemberDrawer societyId={societyId} form={memberForm} setForm={setMemberForm} seats={(data?.organizations ?? []).flatMap((g) => g.seats)} />}
+      {repForm && <RepresentativeDrawer seat={repForm.seat} people={people} onClose={() => setRepForm(null)} />}
+      {proxyOpen && <SeatProxyDrawer societyId={societyId} people={people} seats={(data?.organizations ?? []).flatMap((g) => g.seats)} onClose={() => setProxyOpen(false)} />}
+    </>
+  );
+  // Nothing to show until an organization member or seat exists.
+  if (!data || (data.organizationMemberCount === 0 && data.seatCount === 0 && !data.organizations.length)) return drawers;
+
   return (
     <details className="card members-reps" style={{ marginBottom: 16 }} open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary className="card__head" style={{ cursor: "pointer" }}>
@@ -78,9 +97,8 @@ export function MembersRepresentativesCard({ societyId }: { societyId: string })
       </summary>
       {open && (
         <div className="card__body col" style={{ gap: 12 }}>
-          <p className="muted" style={{ margin: 0 }}>
-            An organization can be a member and appoint people to represent it. Each seat keeps its source roster observations;
-            a change of representative ends the earlier term instead of overwriting it.
+          <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+            A new representative ends the earlier term; seat history is kept.
           </p>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <input className="input" aria-label="Search organizations, seats and representatives" placeholder="Search organizations, seats or people" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} style={{ flex: "1 1 220px" }} />
@@ -95,7 +113,7 @@ export function MembersRepresentativesCard({ societyId }: { societyId: string })
                 { value: "unlinked", label: "Seats without a member record" },
               ]}
             />
-            <button type="button" className="btn btn--accent btn--sm" disabled={!canWrite} onClick={() => setMemberForm({ organizationName: "", membershipClass: "Organization", status: "Active", joinedAt: "", leftAt: "", votingRights: true, notes: "", linkSeatIds: [] })}>
+            <button type="button" className="btn btn--accent btn--sm" disabled={!canWrite} onClick={() => setMemberForm(blankOrganizationMember())}>
               <Plus size={12} /> Add organization member
             </button>
             <button type="button" className="btn btn--sm" disabled={!can("proxies:write")} onClick={() => setProxyOpen(true)}>Record seat proxy</button>
@@ -129,9 +147,7 @@ export function MembersRepresentativesCard({ societyId }: { societyId: string })
           )}
         </div>
       )}
-      {memberForm && <OrganizationMemberDrawer societyId={societyId} form={memberForm} setForm={setMemberForm} seats={(data?.organizations ?? []).flatMap((g) => g.seats)} />}
-      {repForm && <RepresentativeDrawer seat={repForm.seat} people={people} onClose={() => setRepForm(null)} />}
-      {proxyOpen && <SeatProxyDrawer societyId={societyId} people={people} seats={(data?.organizations ?? []).flatMap((g) => g.seats)} onClose={() => setProxyOpen(false)} />}
+      {drawers}
     </details>
   );
 }

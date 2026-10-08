@@ -16,6 +16,7 @@ import { DatePicker } from "../components/DatePicker";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { dollarInputToCents, formatDate, money, relative } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
 import {
@@ -188,24 +189,28 @@ export function AgreementDetailPage() {
         subtitle={[AGREEMENT_KIND_LABELS[agreement.kind as AgreementKind] ?? agreement.kind, (agreement.counterparties ?? []).join("; "), agreement.agreementNumber].filter(Boolean).join(" · ")}
         actions={
           <>
-            <Badge tone={agreementStatusTone(status)}>{AGREEMENT_STATUS_LABELS[status] ?? status}</Badge>
-            {agreement.reviewStatus === "NeedsReview" && <Badge tone="warn">Needs review</Badge>}
-            {agreement.confidential && <Badge tone="neutral">Confidential</Badge>}
             <UnsupportedDetailsBadge table="agreements" id={agreement._id} />
             <SourceProvenanceButton table="agreements" id={agreement._id} />
-            {canWrite && agreement.reviewStatus === "NeedsReview" && (
-              <button type="button" className="btn-action" onClick={() => run("Marked as reviewed", () => update({ id: agreement._id, patch: { reviewStatus: "Verified" } }))}>
-                <CheckCircle2 size={12} /> Mark reviewed
-              </button>
-            )}
-            <button type="button" className="btn-action" disabled={!canWrite} onClick={() => { setServerError(""); setEditing(true); }}><Pencil size={12} /> Edit</button>
-            <button type="button" className="btn-action" disabled={!canWrite || closed} onClick={() => setRenewForm({ mode: "renew", title: agreement.title, effectiveDate: agreement.currentTermEnd ?? agreement.endDate ?? "", endDate: "", valueDollars: "", carry: true })}><RefreshCcw size={12} /> Renew</button>
-            <button type="button" className="btn-action" disabled={!canWrite || closed} onClick={() => setRenewForm({ mode: "supersede", title: agreement.title, effectiveDate: today, endDate: "", valueDollars: "", carry: true })}><GitBranch size={12} /> Replace</button>
-            <button type="button" className="btn-action" disabled={!canWrite || closed} onClick={() => setTerminateForm({ date: today, reason: "" })}><Ban size={12} /> Terminate</button>
-            <button type="button" className="btn-action" disabled={!canWrite} onClick={deleteAgreement} aria-label="Delete agreement"><Trash2 size={12} /></button>
+            <MoreActionsMenu
+              items={[
+                ...(canWrite && agreement.reviewStatus === "NeedsReview"
+                  ? [{ id: "reviewed", label: "Mark reviewed", icon: <CheckCircle2 size={14} />, onSelect: () => { void run("Marked as reviewed", () => update({ id: agreement._id, patch: { reviewStatus: "Verified" } })); } }]
+                  : []),
+                { id: "renew", label: "Renew", icon: <RefreshCcw size={14} />, disabled: !canWrite || closed, onSelect: () => setRenewForm({ mode: "renew", title: agreement.title, effectiveDate: agreement.currentTermEnd ?? agreement.endDate ?? "", endDate: "", valueDollars: "", carry: true }) },
+                { id: "replace", label: "Replace", icon: <GitBranch size={14} />, disabled: !canWrite || closed, onSelect: () => setRenewForm({ mode: "supersede", title: agreement.title, effectiveDate: today, endDate: "", valueDollars: "", carry: true }) },
+                { id: "terminate", label: "Terminate", icon: <Ban size={14} />, disabled: !canWrite || closed, onSelect: () => setTerminateForm({ date: today, reason: "" }) },
+                { id: "delete", label: "Delete agreement", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => { void deleteAgreement(); } },
+              ]}
+            />
+            <button type="button" className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => { setServerError(""); setEditing(true); }}><Pencil size={12} /> Edit</button>
           </>
         }
       />
+      <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: -4, marginBottom: 12 }}>
+        <Badge tone={agreementStatusTone(status)}>{AGREEMENT_STATUS_LABELS[status] ?? status}</Badge>
+        {agreement.reviewStatus === "NeedsReview" && <Badge tone="warn">Needs review</Badge>}
+        {agreement.confidential && <Badge tone="neutral">Confidential</Badge>}
+      </div>
 
       {signing?.status === "warning" && (
         <div className="banner banner--warn" role="alert" style={{ marginBottom: 12 }}>
@@ -280,7 +285,7 @@ export function AgreementDetailPage() {
             {(agreement.paymentSchedule ?? []).length > 0 && (
               <table className="table">
                 <thead><tr><th>Payment</th><th>Due</th><th>Amount</th></tr></thead>
-                <tbody>{agreement.paymentSchedule.map((row: any, index: number) => <tr key={index}><td>{row.label}</td><td>{row.dueDate ? formatDate(row.dueDate) : "—"}</td><td className="mono">{money(row.amountCents)}</td></tr>)}</tbody>
+                <tbody>{agreement.paymentSchedule.map((row: any, index: number) => <tr key={index}><td>{row.label}</td><td>{row.dueDate ? formatDate(row.dueDate) : "—"}</td><td style={{ fontVariantNumeric: "tabular-nums" }}>{money(row.amountCents)}</td></tr>)}</tbody>
               </table>
             )}
           </div>
@@ -331,7 +336,7 @@ export function AgreementDetailPage() {
                   {data.deadlines.map((row: any) => (
                     <li key={row._id}>
                       <Link to={`/app/deadlines?record=${encodeURIComponent(String(row._id))}`}>{row.title}</Link>
-                      <span className="muted mono">{formatDate(row.dueDate)}</span>
+                      <span className="muted">{formatDate(row.dueDate)}</span>
                       <Badge tone={(row.status ?? (row.done ? "complete" : "open")) === "open" ? (row.dueDate < today ? "danger" : "info") : "success"}>{(row.status ?? (row.done ? "complete" : "open")) === "open" ? (row.dueDate < today ? "Overdue" : "Open") : "Done"}</Badge>
                     </li>
                   ))}

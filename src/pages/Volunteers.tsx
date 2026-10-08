@@ -8,8 +8,9 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
-import { HandHeart, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { HandHeart, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { CreateMenu } from "../components/CreateMenu";
 import { formatDate } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
@@ -115,36 +116,23 @@ export function VolunteersPage() {
 
   return (
     <div className="page">
-      {!canWrite && <p className="muted">You can review volunteer records. Applications, roster changes, and screening updates require volunteers write access.</p>}
       <PageHeader
         title="Volunteers & screening"
         icon={<HandHeart size={16} />}
         iconColor="pink"
-        subtitle="Public/member intake, volunteer assignments, BC CRRP-ready screening records, and annual readiness tracking."
+        subtitle="Intake, assignments and screening checks."
+        info={<p>Public and member intake, volunteer assignments, BC Criminal Record Review Program screening records, and annual readiness tracking.</p>}
         actions={
-          <>
-            <button
-              className="btn-action"
-              disabled={!canWrite}
-              onClick={() =>
-                setScreeningDraft({
-                  societyId: society._id,
-                  volunteerId: volunteers?.[0]?._id ?? "",
-                  kind: "CriminalRecordCheck",
-                  status: "needed",
-                  provider: "BC_CRRP",
-                  portalUrl:
-                    (import.meta as any).env?.VITE_BC_CRRP_ORG_PORTAL_URL ??
-                    "https://justice.gov.bc.ca/eCRC/",
-                })
-              }
-            >
-              <ShieldCheck size={12} /> Log check
-            </button>
-            <button
-              className="btn-action btn-action--primary" disabled={!canWrite}
-              onClick={() =>
-                setVolunteerDraft({
+          <CreateMenu
+            disabled={!canWrite}
+            items={[
+              {
+                id: "volunteer",
+                label: "Volunteer",
+                icon: <UserPlus size={14} />,
+                disabled: !canWrite,
+                onSelect: () =>
+                  setVolunteerDraft({
                   societyId: society._id,
                   firstName: "",
                   lastName: "",
@@ -158,18 +146,32 @@ export function VolunteersPage() {
                   applicationReceivedAtISO: todayDateOnly(),
                   renewalDueAtISO: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
                   trainingStatus: "Pending",
-                })
-              }
-            >
-              <Plus size={12} /> New volunteer
-            </button>
-          </>
+                }),
+              },
+              {
+                id: "screening",
+                label: "Screening check",
+                icon: <ShieldCheck size={14} />,
+                disabled: !canWrite,
+                onSelect: () =>
+                  setScreeningDraft({
+                  societyId: society._id,
+                  volunteerId: volunteers?.[0]?._id ?? "",
+                  kind: "CriminalRecordCheck",
+                  status: "needed",
+                  provider: "BC_CRRP",
+                  portalUrl:
+                    (import.meta as any).env?.VITE_BC_CRRP_ORG_PORTAL_URL ??
+                    "https://justice.gov.bc.ca/eCRC/",
+                }),
+              },
+            ]}
+          />
         }
       />
 
+      {!canWrite && <p className="muted" style={{ marginTop: 0 }}>View only — changes need volunteers write access.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Total volunteers" value={String(summary?.total ?? 0)} />
-        <Stat label="Active" value={String(summary?.active ?? 0)} />
         <Stat label="Pending intake" value={String(summary?.pendingApplications ?? 0)} />
         <Stat label="Expiring checks" value={String(summary?.expiringChecks ?? 0)} tone={(summary?.overdueChecks ?? 0) > 0 ? "danger" : undefined} />
       </div>
@@ -200,14 +202,14 @@ export function VolunteersPage() {
             renderCell={({ record, field }) => {
               if (field.name === "applicant") return (
                 <div className="record-table__identifier-lines">
-                  <strong className="record-table__identifier-primary">{record.firstName} {record.lastName}</strong>
-                  <div className="record-table__identifier-secondary muted mono">{record.email}</div>
+                  <strong className="record-table__identifier-primary">{`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed applicant"}</strong>
+                  {record.email && <div className="record-table__identifier-secondary muted">{record.email}</div>}
                 </div>
               );
               if (field.name === "roleWanted") return <span className={record.roleWanted ? undefined : "muted"}>{record.roleWanted ?? "Not provided"}</span>;
               if (field.name === "status") return <Badge tone={record.status === "Converted" ? "success" : record.status === "Declined" ? "danger" : "warn"}>{record.status}</Badge>;
               if (field.name === "source") return record.source ? <span className="cell-tag">{record.source}</span> : <span className="muted">Not provided</span>;
-              if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
+              if (field.name === "submittedAtISO") return <span>{formatDate(record.submittedAtISO)}</span>;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -285,14 +287,14 @@ export function VolunteersPage() {
               if (field.name === "name") return (
                 <div className="record-table__identifier-lines">
                   <strong className="record-table__identifier-primary">{record.firstName} {record.lastName}</strong>
-                  <div className="record-table__identifier-secondary muted mono">{record.email ?? "No email on file"}</div>
+                  <div className="record-table__identifier-secondary muted">{record.email ?? "No email on file"}</div>
                 </div>
               );
               if (field.name === "status") return <Badge tone={record.status === "Active" ? "success" : record.status === "Applied" ? "warn" : "info"}>{record.status}</Badge>;
               if (field.name === "committee") return <span>{record.committee || "—"}</span>;
               if (field.name === "trainingStatus") return <Badge tone={record.trainingStatus === "Complete" ? "success" : "warn"}>{record.trainingStatus ?? "Pending"}</Badge>;
               if (field.name === "screeningRequired") return <Badge tone={record.screeningRequired ? "warn" : "info"}>{record.screeningRequired ? "Required" : "Not required"}</Badge>;
-              if (field.name === "renewalDueAtISO") return <span className="mono">{record.renewalDueAtISO ? formatDate(record.renewalDueAtISO) : "—"}</span>;
+              if (field.name === "renewalDueAtISO") return <span>{record.renewalDueAtISO ? formatDate(record.renewalDueAtISO) : "—"}</span>;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -348,8 +350,8 @@ export function VolunteersPage() {
               if (field.name === "kind") return <span className="cell-tag">{record.kind}</span>;
               if (field.name === "provider") return <span className="muted">{record.provider ?? "Manual"}</span>;
               if (field.name === "status") return <Badge tone={record.status === "clear" ? "success" : record.status === "expired" || record.status === "failed" ? "danger" : "warn"}>{record.status}</Badge>;
-              if (field.name === "requestedAtISO") return <span className="mono">{record.requestedAtISO ? formatDate(record.requestedAtISO) : "—"}</span>;
-              if (field.name === "expiresAtISO") return <span className="mono">{record.expiresAtISO ? formatDate(record.expiresAtISO) : "—"}</span>;
+              if (field.name === "requestedAtISO") return <span>{record.requestedAtISO ? formatDate(record.requestedAtISO) : "—"}</span>;
+              if (field.name === "expiresAtISO") return <span>{record.expiresAtISO ? formatDate(record.expiresAtISO) : "—"}</span>;
               return undefined;
             }}
             renderRowActions={(row) => (

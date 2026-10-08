@@ -1,12 +1,14 @@
 import { importSectionPermission } from "../../shared/importPromotionPermissions";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { CreateMenu } from "../components/CreateMenu";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { RepairImportedMinutesAction } from "../features/meetings/components/RepairImportedMinutesAction";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
@@ -37,6 +39,7 @@ import {
   ShieldAlert,
   Trash2,
   Upload,
+  Wrench,
 } from "lucide-react";
 
 type SessionTrack = "active" | "completed";
@@ -84,6 +87,10 @@ function paramsFromFilters(base: URLSearchParams, filters: QueueFilters) {
 export function ImportSessionsPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("settings:write");
+  const navigate = useNavigate();
+  const repairRef = useRef<HTMLSpanElement>(null);
+  // Mirrors RepairImportedMinutesAction's own gate, so the menu item matches its button.
+  const canRepairMinutes = loaded && can("minutes:write") && can("meetings:write") && can("motions:write") && can("agendas:write");
   const society = useSociety();
   const toast = useToast();
   const confirm = useConfirm();
@@ -440,20 +447,29 @@ export function ImportSessionsPage() {
         title="Import sessions"
         icon={<FileJson size={16} />}
         iconColor="purple"
-        subtitle="Review staged records from every import in one queue, then apply approved records into the app session by session."
+        subtitle="Review staged records, then apply them session by session."
+        info={<p>Every import stages its records here. Review them in one queue, highest priority first, then apply approved records into the app from each session.</p>}
         actions={
           <>
-          <Link className="btn-action" to="/app/intake"><Sparkles size={12} /> Start an AI intake run</Link>
-          <RepairImportedMinutesAction societyId={society._id} />
-          <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
-            <Upload size={12} /> Import members CSV
-          </button>
-          <button className="btn-action btn-action--primary" onClick={() => setCreateOpen(true)} disabled={!canWrite}>
-            <Plus size={12} /> New session
-          </button>
+            <MoreActionsMenu
+              items={[
+                { id: "repair", label: "Repair imported minutes", icon: <Wrench size={14} />, disabled: !canRepairMinutes, onSelect: () => repairRef.current?.querySelector<HTMLButtonElement>("button")?.click() },
+              ]}
+            />
+            <CreateMenu
+              items={[
+                { id: "session", label: "New session", icon: <FileJson size={14} />, disabled: !canWrite, onSelect: () => setCreateOpen(true) },
+                { id: "intake", label: "AI intake run", icon: <Sparkles size={14} />, onSelect: () => navigate("/app/intake") },
+                { id: "members-csv", label: "Members CSV", icon: <Upload size={14} />, disabled: !canWrite, onSelect: () => setCsvOpen(true) },
+              ]}
+            />
           </>
         }
       />
+      {/* The repair action owns its preview dialog; the ⋯ menu above opens it. */}
+      <span ref={repairRef} hidden>
+        <RepairImportedMinutesAction societyId={society._id} />
+      </span>
 
       <ImportWizard
         open={csvOpen}
@@ -515,11 +531,7 @@ export function ImportSessionsPage() {
           <div className="card__head">
             <div>
               <h2 className="card__title">Sessions</h2>
-              <p className="card__subtitle">
-                {sessionTrack === "active"
-                  ? "Batches that still need review or apply steps. Pick one to filter the queue and apply it."
-                  : "Finished, rejected, or empty batches kept for audit trail."}
-              </p>
+
             </div>
           </div>
           <div className="card__body import-session-track">
@@ -589,7 +601,7 @@ export function ImportSessionsPage() {
         <div className="card import-session-panel">
           <div className="card__head import-review-head">
             <div className="import-review-heading">
-              <h2 className="card__title">{session?.name ?? (selectedSessionId ? "Loading session…" : "No session selected")}</h2>
+              <h2 className="card__title">{session?.name ?? (selectedSessionId ? "Loading session…" : "Apply a session")}</h2>
               {session && <p className="card__subtitle">{[session.sourceSystem, session.createdAtISO ? `staged ${formatDate(session.createdAtISO)}` : null, selectedLabel && selectedLabel.primary !== session.name ? `shown as “${selectedLabel.primary}”` : null].filter(Boolean).join(" · ")}</p>}
             </div>
             {session && (
@@ -662,9 +674,7 @@ export function ImportSessionsPage() {
             </div>
           ) : (
             <div className="card__body">
-              <InspectorNote title="Pick a session to apply it">
-                The queue above reviews every session at once. Choose a session in the list to see its counts and unsupported details, and to create documents, minutes or section records from its approved candidates. To stage new records, use New session with a JSON bundle.
-              </InspectorNote>
+              <p className="muted" style={{ margin: 0 }}>Pick a session to see its counts and apply its approved records.</p>
             </div>
           )}
         </div>

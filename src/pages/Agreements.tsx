@@ -9,7 +9,6 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
-import { Segmented } from "../components/primitives";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -37,6 +36,7 @@ export function agreementTerm(row: any): string {
 }
 
 type QuickFilter = "all" | "active" | "expiring" | "review" | "warnings";
+const QUICK_FILTER_LABELS: Record<QuickFilter, string> = { all: "all agreements", active: "active agreements", expiring: "agreements expiring in 90 days", review: "agreements that need review", warnings: "agreements with signing warnings" };
 
 export function AgreementsPage() {
   const society = useSociety();
@@ -55,6 +55,13 @@ export function AgreementsPage() {
   const [serverError, setServerError] = useState("");
   const [converting, setConverting] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>(() => (["active", "expiring", "review", "warnings"].includes(params.get("filter") ?? "") ? (params.get("filter") as QuickFilter) : "all"));
+  const setQuickFilter = (value: QuickFilter) => {
+    setQuick(value);
+    const next = new URLSearchParams(params);
+    if (value === "all") next.delete("filter");
+    else next.set("filter", value);
+    setParams(next, { replace: true });
+  };
 
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -145,7 +152,8 @@ export function AgreementsPage() {
         title="Agreements"
         icon={<FileSignature size={16} />}
         iconColor="turquoise"
-        subtitle="Contracts, funding agreements, leases and MOUs: who they are with, when they end, what they cost and what they require."
+        subtitle="Contracts, funding agreements, leases and MOUs."
+        info={<p>Who each agreement is with, when it ends, what it costs and what it requires. The tiles above the table filter it.</p>}
         actions={
           <button type="button" className="btn-action btn-action--primary" onClick={() => { setServerError(""); setDrawerOpen(true); }} disabled={!canWrite}>
             <Plus size={12} /> New agreement
@@ -167,27 +175,33 @@ export function AgreementsPage() {
       )}
 
       <div className="stat-grid">
-        <div className="stat"><div className="stat__label">Active</div><div className="stat__value">{active.length}</div><div className="stat__sub">of {all.length} agreements</div></div>
-        <div className="stat"><div className="stat__label">Expiring in 90 days</div><div className="stat__value">{expiring.length}</div><div className="stat__sub">{expiring.filter((row) => !row.renewalDecided).length} without a renewal decision</div></div>
-        <div className="stat"><div className="stat__label">Overdue obligations</div><div className="stat__value">{overdue}</div><div className="stat__sub">deliverables and reports</div></div>
-        <div className="stat"><div className="stat__label">Signing warnings</div><div className="stat__value">{warnings.length}</div><div className="stat__sub">tier not satisfied</div></div>
-        <div className="stat"><div className="stat__label">Needs review</div><div className="stat__value">{needsReview.length}</div><div className="stat__sub">imported or converted drafts</div></div>
+        {([
+          { id: "active", label: "Active", value: active.length, sub: overdue ? `${overdue} overdue obligation${overdue === 1 ? "" : "s"}` : `of ${all.length} agreements` },
+          { id: "expiring", label: "Expiring in 90 days", value: expiring.length, sub: `${expiring.filter((row) => !row.renewalDecided).length} without a renewal decision` },
+          { id: "review", label: "Needs review", value: needsReview.length, sub: "imported or converted drafts" },
+          { id: "warnings", label: "Signing warnings", value: warnings.length, sub: "tier not satisfied" },
+        ] as { id: QuickFilter; label: string; value: number; sub: string }[]).map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            className="stat"
+            aria-pressed={quick === tile.id}
+            onClick={() => setQuickFilter(quick === tile.id ? "all" : tile.id)}
+            style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", borderColor: quick === tile.id ? "var(--accent)" : undefined, boxShadow: quick === tile.id ? "0 0 0 1px var(--accent)" : undefined }}
+          >
+            <span className="stat__label">{tile.label}</span>
+            <span className="stat__value">{tile.value}</span>
+            {tile.value > 0 && <span className="stat__sub">{tile.sub}</span>}
+          </button>
+        ))}
       </div>
 
-      <div className="agreement-quick-filters">
-        <Segmented<QuickFilter>
-          value={quick}
-          onChange={(value) => { setQuick(value); const next = new URLSearchParams(params); if (value === "all") next.delete("filter"); else next.set("filter", value); setParams(next, { replace: true }); }}
-          items={[
-            { id: "all", label: `All (${all.length})` },
-            { id: "active", label: "Active" },
-            { id: "expiring", label: `Expiring (${expiring.length})` },
-            { id: "review", label: `Needs review (${needsReview.length})` },
-            { id: "warnings", label: `Signing warnings (${warnings.length})` },
-          ]}
-        />
-
-      </div>
+      {quick !== "all" && (
+        <div className="row" style={{ gap: 8, alignItems: "center", margin: "0 0 8px", fontSize: "var(--fs-sm)" }}>
+          <span className="muted">Filtered to {QUICK_FILTER_LABELS[quick]}</span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setQuickFilter("all")}>All ({all.length})</button>
+        </div>
+      )}
 
       {!tableData.loading && !tableData.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society._id} objectLabel="agreement" />
@@ -216,21 +230,21 @@ export function AgreementsPage() {
             emptyState={all.length ? "No agreements match these filters." : "No agreements yet. Add one, or convert agreements recorded as system gaps."}
             renderCell={({ record: row, field }) => {
               if (field.name === "title") return (
-                <div>
+                <span title={row.agreementNumber ? `${row.title} · ${row.agreementNumber}` : row.title} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   <Link to={`/app/agreements/${row._id}`} onClick={(event) => event.stopPropagation()}><strong>{row.title}</strong></Link>
-                  {row.agreementNumber && <div className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>{row.agreementNumber}</div>}
-                </div>
+                  {row.agreementNumber && <span className="muted" style={{ fontWeight: 400 }}> · {row.agreementNumber}</span>}
+                </span>
               );
               if (field.name === "effectiveStatus") return <Badge tone={agreementStatusTone(row.effectiveStatus)}>{AGREEMENT_STATUS_LABELS[row.effectiveStatus as AgreementStatus] ?? row.effectiveStatus}</Badge>;
               if (field.name === "counterparty") return row.counterparty ? <span>{row.counterparty}</span> : <span className="muted">Not identified</span>;
               if (field.name === "kind") return <span>{AGREEMENT_KIND_LABELS[row.kind as AgreementKind] ?? row.kind ?? "—"}</span>;
-              if (field.name === "term") return <span className="muted">{row.term}</span>;
-              if (field.name === "valueCents") return row.valueCents === undefined ? <span className="muted">—</span> : <span className="mono">{money(row.valueCents)}{row.currency && row.currency !== "CAD" ? ` ${row.currency}` : ""}</span>;
+              if (field.name === "term") return <span className="muted" title={row.term}>{row.term}</span>;
+              if (field.name === "valueCents") return row.valueCents === undefined ? <span className="muted">—</span> : <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(row.valueCents)}{row.currency && row.currency !== "CAD" ? ` ${row.currency}` : ""}</span>;
               if (field.name === "renewalDue") {
                 if (!row.renewalDue) return <span className="muted">—</span>;
                 return (
                   <div>
-                    <span className="mono">{formatDate(row.renewalDue)}</span>
+                    <span>{formatDate(row.renewalDue)}</span>
                     <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                       {row.renewalDecided ? `Decided: ${RENEWAL_DECISION_LABELS[(row.renewalDecision?.decision ?? "renew") as RenewalDecision] ?? "yes"}` : relative(row.renewalDue)}
                     </div>

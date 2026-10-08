@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   FileText,
   Link2,
+  MoreHorizontal,
   Package,
   PackageCheck,
   Pencil,
@@ -34,7 +35,8 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { Tabs } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { type MenuSection } from "../components/Menu";
+import { singularUnit } from "./inventory/helpers";
+import { Menu, type MenuSection } from "../components/Menu";
 import { Select as StyledSelect } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -403,7 +405,8 @@ export function AssetsPage() {
     <div className="page">
       <PageHeader
         title="Assets"
-        subtitle="Asset register, QR labels, custody, grant restrictions, maintenance, insurance, finance, verification, and disposal evidence."
+        subtitle="Equipment, custody, maintenance and labels."
+        info={<p>The asset register with QR labels, custody, grant restrictions, maintenance, insurance, finance, physical verification and disposal evidence.</p>}
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
@@ -427,7 +430,7 @@ export function AssetsPage() {
         <Stat label="Assets" value={stats.total} sub={`${stats.active} active`} />
         <Stat label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
         <Stat label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
-        <Stat label="Register value" value={money(stats.valueCents)} sub={`Book value where known, else purchase price · ${stats.dueMaintenance} due soon`} tone={stats.dueMaintenance ? "warn" : undefined} />
+        <Stat label="Register value" value={money(stats.valueCents)} sub={stats.dueMaintenance ? `${stats.dueMaintenance} maintenance due soon` : "Book value where known"} tone={stats.dueMaintenance ? "warn" : undefined} />
       </div>
 
       {stats.openRun && (
@@ -502,7 +505,7 @@ export function AssetsPage() {
                 if (field.name === "status") return <StatusBadge status={row.status} />;
                 if (field.name === "custodian") return <CustodyCell row={row} />;
                 if (field.name === "location") return <span>{row.location}</span>;
-                if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
+                if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span>{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
                 if (field.name === "value") return <ValueCell row={row} />;
                 if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
                 if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
@@ -780,8 +783,8 @@ export function AssetDetailPage() {
   return (
     <div className="page">
       <PageHeader
-        title={editing ? `Edit ${asset.assetTag}` : asset.assetTag}
-        subtitle={asset.name}
+        title={editing ? `Edit ${asset.name}` : asset.name}
+        subtitle={asset.status === "Disposed" ? `${asset.assetTag} · Disposed${asset.disposedAt ? ` ${formatDate(asset.disposedAt)}` : ""}` : asset.assetTag}
         routeKey="/app/assets"
         actions={
           editing ? (
@@ -792,11 +795,13 @@ export function AssetDetailPage() {
           ) : (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-              {asset.status !== "Disposed" && <button className="btn-action" onClick={() => openDrawer("custody")} disabled={!canWrite}><Repeat2 size={12} /> Log custody change</button>}
-              {serviceable && asset.status !== "Disposed" && <button className="btn-action" onClick={() => openDrawer("maintenance")} disabled={!canWrite}><Wrench size={12} /> Schedule</button>}
-              {asset.status === "Disposed"
-                ? <Badge tone="neutral">Disposed{asset.disposedAt ? ` ${formatDate(asset.disposedAt)}` : ""}</Badge>
-                : <button className="btn-action" onClick={() => openDrawer("disposal")} disabled={!canWrite}><Trash2 size={12} /> Dispose</button>}
+              <MoreActionsMenu
+                items={[
+                  ...(asset.status !== "Disposed" ? [{ id: "custody", label: "Log custody change", icon: <Repeat2 size={14} />, disabled: !canWrite, onSelect: () => openDrawer("custody") }] : []),
+                  ...(serviceable && asset.status !== "Disposed" ? [{ id: "maintenance", label: "Schedule maintenance", icon: <Wrench size={14} />, disabled: !canWrite, onSelect: () => openDrawer("maintenance") }] : []),
+                  ...(asset.status !== "Disposed" ? [{ id: "dispose", label: "Dispose", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => openDrawer("disposal") }] : []),
+                ]}
+              />
               <button className="btn-action btn-action--primary" onClick={openEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
             </div>
           )
@@ -833,9 +838,10 @@ export function AssetDetailPage() {
         {activeTab === "overview" && (
           <>
           <section className="panel">
-            <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
+            <div className="panel__head"><h2 className="card__title">Details</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
+            <div style={asset.imageUrl ? { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 16, alignItems: "start" } : undefined}>
             {asset.imageUrl ? (
-              <figure className="asset-hero">
+              <figure className="asset-hero" style={{ margin: 0 }}>
                 <img src={asset.imageUrl} alt={`Photo of ${asset.name}`} />
                 <span className="asset-hero__status"><StatusBadge status={asset.status} /></span>
               </figure>
@@ -849,10 +855,11 @@ export function AssetDetailPage() {
               <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
               <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
             </dl>
+            </div>
           </section>
           <section className="panel">
             <div className="panel__head">
-              <h2>Purchase &amp; accounting</h2>
+              <h2 className="card__title">Purchase &amp; accounting</h2>
               <Link className="btn btn--ghost btn--sm" to="/app/financials?tab=transactions"><Link2 size={12} /> Transactions</Link>
             </div>
             <dl className="record-kv">
@@ -870,7 +877,7 @@ export function AssetDetailPage() {
         {activeTab === "maintenance" && (
           <>
             <section className="panel">
-              <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
+              <div className="panel__head"><h2 className="card__title">Maintenance and warranty</h2><Wrench size={16} /></div>
               <dl className="record-kv">
                 <div><dt>Warranty expires</dt><dd>{asset.warrantyExpiresAt ? <DueDate date={asset.warrantyExpiresAt} /> : "—"}</dd></div>
                 <div><dt>Next maintenance</dt><dd>{asset.nextMaintenanceDate ? <DueDate date={asset.nextMaintenanceDate} /> : "—"}</dd></div>
@@ -895,7 +902,7 @@ export function AssetDetailPage() {
               ) : null}
             />
             <section className="panel">
-              <div className="panel__head"><h2>Documentation &amp; resources</h2><FileText size={16} /></div>
+              <div className="panel__head"><h2 className="card__title">Documentation &amp; resources</h2><FileText size={16} /></div>
               {linkedDocuments.length === 0 && resourceLinks.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>
                   No manuals, warranty documents, or resource links yet. Use <strong>Edit</strong> to attach a document or add a link.
@@ -956,7 +963,7 @@ export function AssetDetailPage() {
 
         {activeTab === "compliance" && (
           <section className="panel">
-            <div className="panel__head"><h2>Grant and compliance</h2></div>
+            <div className="panel__head"><h2 className="card__title">Grant and compliance</h2></div>
             <dl className="record-kv">
               <div><dt>Funding source</dt><dd>{asset.fundingSource || "—"}</dd></div>
               <div><dt>Grant restrictions</dt><dd>{asset.grantRestrictions || "—"}</dd></div>
@@ -969,7 +976,7 @@ export function AssetDetailPage() {
 
         {activeTab === "label" && (
           <section className="panel">
-            <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
+            <div className="panel__head"><h2 className="card__title">QR label</h2><QrCode size={16} /></div>
             <Field label="Label type">
               <StyledSelect
                 value={labelType}
@@ -1051,7 +1058,7 @@ export function AssetVerificationPage() {
 
   if (society === undefined || (society && (runs === undefined || assets === undefined))) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!run) return <RecordNotFound recordLabel="Physical inventory run" backTo="/app/assets" backLabel="All assets" />;
+  if (!run) return <RecordNotFound recordLabel="Physical inventory run" backTo="/app/assets" backLabel="All assets" description="It may have been deleted." />;
   if (items === undefined) return <PageLoading />;
 
   const finishRun = async () => {
@@ -1264,7 +1271,24 @@ function AssetMobileCard({
           <strong>{row.name}</strong>
           <span>{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</span>
         </button>
-        <StatusBadge status={row.status} />
+        <span className="row" style={{ gap: 4, alignItems: "center", flex: "none" }}>
+          <StatusBadge status={row.status} />
+          <Menu
+            align="right"
+            trigger={
+              <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.name}`}>
+                <MoreHorizontal size={14} />
+              </button>
+            }
+            sections={[{
+              id: "asset",
+              items: [
+                { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canWrite, onSelect: onEdit },
+                ...(row.category === "Consumable" ? [{ id: "stock", label: "Add stock", icon: <Plus size={14} />, disabled: !canWrite, onSelect: onAddStock }] : []),
+              ],
+            }]}
+          />
+        </span>
       </div>
       <dl className="asset-mobile-card__facts">
         <div><dt>Location</dt><dd>{row.location || "Not set"}</dd></div>
@@ -1280,11 +1304,6 @@ function AssetMobileCard({
           <EvidenceCell row={row} documents={documents} transactions={transactions} />
         </div>
       )}
-      <div className="asset-mobile-card__actions">
-        <button className="btn btn--accent btn--sm" onClick={onOpen}>Open</button>
-        <button className="btn btn--sm" onClick={onEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
-        {row.category === "Consumable" && <button className="btn btn--sm" onClick={onAddStock} disabled={!canWrite}><Plus size={12} /> Add stock</button>}
-      </div>
     </article>
   );
 }
@@ -1346,7 +1365,7 @@ function DueDate({ date }: { date?: string }) {
 
 function formatQuantity(quantity?: number | null, unit?: string | null) {
   if (quantity == null) return "—";
-  return `${quantity.toLocaleString("en-CA")}${unit ? ` ${unit}` : ""}`;
+  return `${quantity.toLocaleString("en-CA")}${unit ? ` ${Math.abs(quantity) === 1 ? singularUnit(unit) : unit}` : ""}`;
 }
 
 function stockTotalPreview(form: { observedQuantityBefore: string; quantityAdded: string }) {

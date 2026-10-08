@@ -8,6 +8,8 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
@@ -421,12 +423,16 @@ export function OrganizationHistoryPage() {
         title="Org history"
         icon={<Newspaper size={16} />}
         iconColor="purple"
-        subtitle="Build an editable, source-backed organization profile from Paperless, archive, registry, and meeting records."
+        subtitle="A source-backed profile of the organization's history."
+        info={<p>Build an editable organization profile from Paperless, archive, registry and meeting records. Each fact, board term, motion and budget links back to its sources.</p>}
         actions={
           <>
-            <button className="btn-action" onClick={() => setImportOpen(true)} disabled={!canWrite}>
-              <Upload size={12} /> Import JSON
-            </button>
+            <MoreActionsMenu
+              items={[
+                { id: "import", label: "Import JSON", icon: <Upload size={14} />, disabled: !canWrite, onSelect: () => setImportOpen(true) },
+                { id: "workflow", label: "How it works", icon: <BookOpen size={14} />, onSelect: () => setWorkflowOpen(true) },
+              ]}
+            />
             <CreateMenu
               label="Add"
               disabled={!canWrite}
@@ -465,17 +471,6 @@ export function OrganizationHistoryPage() {
 
       {section === "facts" && (
         <div className="card">
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">Profile facts</h2>
-              <span className="card__subtitle">Paged, searchable claims with source-document links</span>
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn-action" onClick={() => setWorkflowOpen(true)} disabled={!canWrite}>
-                <BookOpen size={12} /> Workflow
-              </button>
-            </div>
-          </div>
           {!factsTableData.loading && !factsTableData.objectMetadata ? (
             <RecordTableMetadataEmpty societyId={society?._id} objectLabel="profile-fact" />
           ) : factsTableData.objectMetadata ? (
@@ -1252,26 +1247,7 @@ export function OrganizationHistoryBudgetPage() {
   if (data === undefined) return <PageLoading />;
 
   if (!budget) {
-    return (
-      <div className="page">
-        <PageHeader
-          title="Budget snapshot"
-          icon={<Archive size={16} />}
-          iconColor="purple"
-          subtitle="The requested budget snapshot could not be found."
-          actions={<Link className="btn-action" to="/app/org-history?section=budgets"><ArrowLeft size={12} /> Org history</Link>}
-        />
-        <div className="card">
-          <div className="card__body">
-            <EmptyCallout
-              title="Budget not found"
-              body="Return to Org history and open a current budget snapshot."
-              action={<Link className="btn-action" to="/app/org-history?section=budgets"><ArrowLeft size={12} /> Back to Org history</Link>}
-            />
-          </div>
-        </div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Budget snapshot" backTo="/app/org-history?section=budgets" backLabel="Org history" icon={<Archive size={16} />} description="It may have been deleted." />;
   }
 
   return (

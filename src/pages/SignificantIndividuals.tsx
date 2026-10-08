@@ -6,8 +6,11 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field, InspectorNote } from "../components/ui";
-import { ShieldCheck, Plus, Trash2 } from "lucide-react";
+import { Drawer, Field } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
+import { formatDate } from "../lib/format";
+import type { ReactNode } from "react";
+import { Info, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
 import { isCorporation } from "../../shared/organizationDomain";
@@ -127,23 +130,24 @@ export function SignificantIndividualsPage() {
       />
 
       {notApplicable && (
-        <InspectorNote title="Not required for this organization">
+        <NotRequiredNote>
           {society.name} is not a BC company, so the BC Business Corporations Act transparency register does not apply.
           Records kept here are optional and are not a statutory register for a society.
-        </InspectorNote>
+        </NotRequiredNote>
       )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <Field label="As of">
-          <DatePicker
-            value={asOf}
-            onChange={(value) => setAsOf(value)}
-          />
-        </Field>
-      </div>
-
       <section style={{ marginBottom: 24 }}>
-        <h2 className="page__section-title">Significant individuals</h2>
+        <div className="register-asof">
+          <label className="register-asof__date">
+            <span>As of</span>
+            <DatePicker value={asOf} onChange={(value) => setAsOf(value)} />
+          </label>
+          {!!individuals?.length && (
+            <span className="register-asof__totals">
+              {individuals.length} significant individual{individuals.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
         {individuals === undefined ? (
           <div className="card">Loading…</div>
         ) : individuals.length === 0 ? (
@@ -160,12 +164,12 @@ export function SignificantIndividualsPage() {
                   {ind.status && <span className="muted">{ind.status}</span>}
                 </div>
                 <div className="muted">{ind.reason}</div>
-                <div className="muted" style={{ display: "flex", gap: 12 }}>
-                  <span>Became significant: {ind.becameSignificantOn}</span>
+                <div className="muted" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <span>Became significant: {formatDate(ind.becameSignificantOn)}</span>
                   {ind.ceasedSignificantOn && (
-                    <span>Ceased: {ind.ceasedSignificantOn}</span>
+                    <span>Ceased: {formatDate(ind.ceasedSignificantOn)}</span>
                   )}
-                  {ind.dateOfBirth && <span>DOB: {ind.dateOfBirth}</span>}
+                  {ind.dateOfBirth && <span>DOB: {formatDate(ind.dateOfBirth)}</span>}
                 </div>
               </div>
             ))}
@@ -194,11 +198,11 @@ export function SignificantIndividualsPage() {
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                     <strong>{s.individualName}</strong>
-                    <span className="muted">{s.stepDate}</span>
+                    <span className="muted">{formatDate(s.stepDate)}</span>
                   </div>
                   <div className="muted">{s.stepsNarrative}</div>
                   {s.nextReviewDate && (
-                    <div className="muted">Next review: {s.nextReviewDate}</div>
+                    <div className="muted">Next review: {formatDate(s.nextReviewDate)}</div>
                   )}
                 </div>
                 <button
@@ -266,3 +270,23 @@ export function SignificantIndividualsPage() {
 }
 
 export default SignificantIndividualsPage;
+
+/**
+ * One-line "not required" notice for registers that only apply to BC
+ * companies; the reason sits behind an ⓘ.
+ */
+export function NotRequiredNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="inspector-note inspector-note--info" style={{ alignItems: "center", marginBottom: 16 }}>
+      <div className="inspector-note__icon">
+        <Info size={14} />
+      </div>
+      <div className="inspector-note__content row" style={{ gap: 6, alignItems: "center" }}>
+        <span className="inspector-note__title" style={{ margin: 0 }}>Not required for this organization</span>
+        <InfoPopover label="Why this is optional">
+          <p>{children}</p>
+        </InfoPopover>
+      </div>
+    </div>
+  );
+}

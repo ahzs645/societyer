@@ -12,6 +12,7 @@ import { Select } from "../components/Select";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { ArrowLeft, ListTodo, Plus, Target, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { effectiveGoalStatus, goalTone, labelStatus } from "./Goals";
@@ -56,6 +57,10 @@ export function GoalDetailPage() {
   const committee = (committees ?? []).find((c: any) => c._id === goal.committeeId);
   const tasks = (allTasks ?? []).filter((t: any) => t.goalId === goal._id);
   const doneMs = goal.milestones.filter((m: any) => m.done).length;
+  // The status chip and the Status select both read the stored status; a goal
+  // past its target date gets its own chip rather than a silently different status.
+  const storedStatus: string = goal.status ?? "NotStarted";
+  const pastTarget = effectiveGoalStatus(goal) !== storedStatus;
 
   return (
     <div className="page">
@@ -67,58 +72,71 @@ export function GoalDetailPage() {
         subtitle={goal.description}
         actions={
           <>
-            <Badge>{goal.category}</Badge>
-            <Badge tone={goalTone(effectiveGoalStatus(goal))}>{labelStatus(effectiveGoalStatus(goal))}</Badge>
-            <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`} className="btn-action">
-              <ListTodo size={12} /> Tasks
-            </Link>
-            {canCreateTask && <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}&new=1`} className="btn-action btn-action--primary">
-              <Plus size={12} /> New task
-            </Link>}
-            <button
-              className="btn-action"
-              disabled={!canWrite}
-              onClick={async () => {
-                if (!canWrite) return;
-                const ok = await confirm({
-                  title: "Delete goal?",
-                  message: `"${goal.title}" and its milestones will be permanently deleted. Linked tasks are kept but unlinked.`,
-                  confirmLabel: "Delete",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                await removeGoal({ id: goal._id });
-                toast.success("Goal deleted");
-                navigate("/app/goals");
-              }}
-            >
-              <Trash2 size={12} /> Delete
-            </button>
+            {canCreateTask && (
+              <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}&new=1`} className="btn-action btn-action--primary">
+                <Plus size={12} /> New task
+              </Link>
+            )}
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "tasks",
+                  label: "Open in Tasks",
+                  icon: <ListTodo size={14} />,
+                  onSelect: () => navigate(`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`),
+                },
+                {
+                  id: "delete",
+                  label: "Delete goal",
+                  icon: <Trash2 size={14} />,
+                  destructive: true,
+                  disabled: !canWrite,
+                  onSelect: async () => {
+                    if (!canWrite) return;
+                    const ok = await confirm({
+                      title: "Delete goal?",
+                      message: `"${goal.title}" and its milestones will be permanently deleted. Linked tasks are kept but unlinked.`,
+                      confirmLabel: "Delete",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    await removeGoal({ id: goal._id });
+                    toast.success("Goal deleted");
+                    navigate("/app/goals");
+                  },
+                },
+              ]}
+            />
           </>
         }
       />
+      <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: -4, marginBottom: 16 }}>
+        <Badge>{goal.category}</Badge>
+        <Badge tone={goalTone(storedStatus)}>{labelStatus(storedStatus)}</Badge>
+        {pastTarget && <Badge tone="warn">Past target date</Badge>}
+      </div>
 
       <div className="two-col">
         <div className="col" style={{ gap: 16 }}>
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Progress</h2>
-              <span className="card__subtitle">{goal.progressPercent}% · {doneMs}/{goal.milestones.length} milestones</span>
+              <span className="card__subtitle">{doneMs}/{goal.milestones.length} milestones done</span>
             </div>
             <div className="card__body">
-              <Progress value={goal.progressPercent} tone={effectiveGoalStatus(goal) === "AtRisk" || effectiveGoalStatus(goal) === "OffTrack" ? "warn" : undefined} />
-              <div className="row" style={{ marginTop: 10, gap: 6 }}>
+              <div className="row" style={{ gap: 10 }}>
                 <input
                   type="range"
+                  aria-label="Progress"
                   disabled={!canWrite}
                   min={0}
                   max={100}
                   step={5}
                   value={goal.progressPercent}
                   onChange={(e) => update({ id: goal._id, patch: { progressPercent: Number(e.target.value) } })}
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minWidth: 0 }}
                 />
-                <span className="mono" style={{ minWidth: 40, textAlign: "right" }}>{goal.progressPercent}%</span>
+                <span style={{ minWidth: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{goal.progressPercent}%</span>
               </div>
             </div>
           </div>
@@ -127,15 +145,16 @@ export function GoalDetailPage() {
             <div className="card__head"><h2 className="card__title">Milestones</h2></div>
             <div className="card__body col">
               {goal.milestones.map((m: any, i: number) => (
-                <div key={i} className="row" style={{ padding: 8, border: "1px solid var(--border)", borderRadius: 4, gap: 8 }}>
+                <div key={i} className="row" style={{ padding: 8, border: "1px solid var(--border)", borderRadius: 4, gap: 8, justifyContent: "flex-start" }}>
                   <Checkbox
                     disabled={!canWrite}
                     checked={!!m.done}
                     onChange={() => toggleMilestone({ id: goal._id, index: i })}
+                    ariaLabel={m.title}
                     bare
                   />
-                  <span style={{ flex: 1, textDecoration: m.done ? "line-through" : "none", color: m.done ? "var(--text-tertiary)" : undefined }}>{m.title}</span>
-                  {m.dueDate && <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(m.dueDate)}</span>}
+                  <span style={{ flex: 1, minWidth: 0, textAlign: "left", textDecoration: m.done ? "line-through" : "none", color: m.done ? "var(--text-tertiary)" : undefined }}>{m.title}</span>
+                  {m.dueDate && <span className="muted" style={{ fontSize: "var(--fs-sm)", flex: "none" }}>{formatDate(m.dueDate)}</span>}
                 </div>
               ))}
               {goal.milestones.length === 0 && <div className="muted">No milestones yet.</div>}
@@ -169,23 +188,23 @@ export function GoalDetailPage() {
                 All tasks <ListTodo size={12} />
               </Link>
             </div>
-            <table className="table">
-              <thead><tr><th /><th>Title</th><th>Assignee</th><th>Status</th><th>Due</th></tr></thead>
-              <tbody>
-                {tasks.map((t: any) => (
-                  <tr key={t._id}>
-                    <td><span className={`priority-dot priority-${t.priority}`} /></td>
-                    <td>
-                      <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`}>{t.title}</Link>
-                    </td>
-                    <td>{t.assignee ?? "—"}</td>
-                    <td><Badge tone={t.status === "Done" ? "success" : t.status === "Blocked" ? "danger" : "info"}>{taskStatusLabel(t.status)}</Badge></td>
-                    <td className="table__cell--mono">{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
-                  </tr>
-                ))}
-                {tasks.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks linked.</td></tr>}
-              </tbody>
-            </table>
+            <div className="card__body col" style={{ gap: 0, paddingTop: 4, paddingBottom: 4 }}>
+              {tasks.map((t: any) => (
+                <div key={t._id} className="row" style={{ gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+                  <span className={`priority-dot priority-${t.priority}`} style={{ marginTop: 7, flex: "none" }} />
+                  <div className="col" style={{ gap: 2, flex: 1, minWidth: 0, textAlign: "left" }}>
+                    <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`}>{t.title}</Link>
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      {[t.assignee, t.dueDate ? `Due ${formatDate(t.dueDate)}` : null].filter(Boolean).join(" · ") || "Unassigned"}
+                    </span>
+                  </div>
+                  <span style={{ flex: "none" }}>
+                    <Badge tone={t.status === "Done" ? "success" : t.status === "Blocked" ? "danger" : "info"}>{taskStatusLabel(t.status)}</Badge>
+                  </span>
+                </div>
+              ))}
+              {tasks.length === 0 && <div className="muted" style={{ padding: "8px 0" }}>No tasks linked.</div>}
+            </div>
           </div>
         </div>
 

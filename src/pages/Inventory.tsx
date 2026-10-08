@@ -567,6 +567,7 @@ export function InventoryPage() {
     setDrawer("connection");
   };
 
+  const editingConnection = editingConnectionId ? ((connections ?? []) as any[]).find((c) => c._id === editingConnectionId) : undefined;
   const openEditConnection = (connection: any) => {
     setEditingConnectionId(connection._id);
     setConnectionForm({
@@ -624,7 +625,8 @@ export function InventoryPage() {
     <div className="page">
       <PageHeader
         title="Inventory"
-        subtitle="Societyer-controlled supplies, consumables, grant-funded equipment, bins and locations, audit evidence, and OpenBoxes-compatible movement history."
+        subtitle="Supplies, consumables, locations and stock movements."
+        info={<p>Supplies, consumables and grant-funded equipment, with bins and locations, physical counts and a movement history that can import from OpenBoxes.</p>}
         routeKey="/app/inventory"
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -633,6 +635,14 @@ export function InventoryPage() {
                 { disabled: !canWrite, id: "backfill-assets", label: "Backfill assets", icon: <RefreshCw size={14} />, onSelect: runBackfill },
                 { disabled: !canWrite, id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => { setSyncConnectionId(null); setDrawer("openboxes"); } },
                 { id: "assets", label: "Assets", icon: <ArrowLeft size={14} />, onSelect: () => navigate("/app/assets") },
+                ...((connections ?? []) as any[]).map((connection) => ({
+                  id: `library-${connection._id}`,
+                  label: `Library: ${connection.displayName}`,
+                  hint: providerLabel(connection.provider),
+                  icon: <Boxes size={14} />,
+                  disabled: !canWrite,
+                  onSelect: () => openEditConnection(connection),
+                })),
               ]}
             />
             <CreateMenu
@@ -751,45 +761,6 @@ export function InventoryPage() {
           </div>
         </div>
       )}
-
-      <div className="row inv-libraries-bar" style={{ gap: 8, alignItems: "center", flexWrap: "wrap", margin: "0 0 8px", fontSize: 13 }}>
-        <span className="row" style={{ gap: 6, alignItems: "center", color: "var(--text-tertiary)" }}>
-          <Boxes size={13} /> <span style={{ fontWeight: 500 }}>Libraries</span>
-        </span>
-        {connections === undefined ? (
-          <span className="muted">Loading…</span>
-        ) : connections.length === 0 ? (
-          <span className="muted">None connected — add a source (OpenBoxes, CSV, or manual) to keep this register in sync.</span>
-        ) : (
-          connections.map((connection: any) => (
-            <span
-              key={connection._id}
-              className="row inv-library-chip"
-              style={{ gap: 6, alignItems: "center", padding: "2px 6px 2px 8px", border: "1px solid var(--border)", borderRadius: 999 }}
-              title={`${providerLabel(connection.provider)} · synced ${relativeSince(connection.lastSyncedAtISO)}`}
-            >
-              <span
-                aria-hidden
-                style={{ width: 7, height: 7, borderRadius: 999, background: connection.status === "active" ? "var(--success)" : connection.status === "disabled" ? "var(--text-tertiary)" : "var(--warning, orange)" }}
-              />
-              <button className="btn btn--ghost btn--sm" style={{ padding: "0 2px" }} onClick={() => openEditConnection(connection)} title="Edit library" disabled={!canWrite}>
-                {connection.displayName}
-              </button>
-              {connection.provider === "openboxes" && (
-                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => { setSyncConnectionId(connection._id); setDrawer("openboxes"); }} aria-label={`Sync ${connection.displayName}`} title="Import an OpenBoxes snapshot" disabled={!canWrite}>
-                  <RefreshCw size={12} />
-                </button>
-              )}
-              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove ${connection.displayName}`} title="Remove library" onClick={() => removeConnection(connection)} disabled={!canWrite}>
-                <Trash2 size={12} />
-              </button>
-            </span>
-          ))
-        )}
-        <button className="btn btn--sm btn--ghost" style={{ marginLeft: "auto" }} onClick={openNewConnection} disabled={!canWrite}>
-          <Plus size={12} /> Add library
-        </button>
-      </div>
 
       <div className="tab-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 4px", alignItems: "center" }}>
         <TabButton active={tab === "stock"} onClick={() => setTab("stock")} icon={<Package size={13} />} label="Stock & items" />
@@ -912,6 +883,16 @@ export function InventoryPage() {
         title={editingConnectionId ? "Edit library" : "Add library"}
         footer={
           <>
+            {editingConnection && (
+              <button className="btn btn--ghost" style={{ marginRight: "auto" }} onClick={() => { setDrawer(null); void removeConnection(editingConnection); }} disabled={!canWrite}>
+                <Trash2 size={12} /> Remove
+              </button>
+            )}
+            {editingConnection?.provider === "openboxes" && (
+              <button className="btn" onClick={() => { setSyncConnectionId(editingConnection._id); setDrawer("openboxes"); }} disabled={!canWrite}>
+                <RefreshCw size={12} /> Sync snapshot
+              </button>
+            )}
             <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
             <button className="btn btn--accent" onClick={saveConnection} disabled={!canWrite}>{editingConnectionId ? "Save library" : "Add library"}</button>
           </>
@@ -943,8 +924,7 @@ export function InventoryPage() {
           </Field>
         </div>
         <p className="muted">
-          OpenBoxes libraries can pull a snapshot from the <strong>Sync</strong> action in the libraries list. CSV and manual
-          libraries are kept up to date through imports and the item editor.
+          OpenBoxes libraries pull a snapshot with <strong>Sync snapshot</strong>. CSV and manual libraries update through imports and the item editor.
         </p>
       </Drawer>
 

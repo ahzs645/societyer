@@ -499,7 +499,8 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await policy.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.goto("/demo/app/assets");
   if (page.viewportSize()!.width <= 760) {
-    await page.locator(".asset-mobile-card").first().getByRole("button", { name: "Edit", exact: true }).tap();
+    await page.locator(".asset-mobile-card").first().getByRole("button", { name: /^Actions for / }).tap();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).tap();
   } else {
     await activate(page.locator(".record-table__row").first().getByRole("button", { name: "Actions for this asset", exact: true }));
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
