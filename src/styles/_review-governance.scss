@@ -1,0 +1,214 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// Interface review fixes for the governance pages (meetings, motions,
+// agendas, elections, bylaws, committees).
+
+// ---- Meeting detail ---------------------------------------------------
+// Status chips live in the subtitle, under the body · date · place line.
+.meeting-detail-subtitle__status {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-1');
+  margin-top: token('s-1');
+}
+.meeting-detail-subtitle__status:empty {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  // Stat tiles: one flat strip divided by hairlines, not four inset cards.
+  .meeting-detail-page .meeting-detail-summary {
+    gap: 0;
+    border-top: 1px solid token('border');
+    border-bottom: 1px solid token('border');
+  }
+  .meeting-detail-page .meeting-detail-summary > div {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 8px 8px 8px 0;
+  }
+  .meeting-detail-page .meeting-detail-summary > div + div {
+    border-left: 1px solid token('border');
+    padding-left: 8px;
+  }
+  // Notice / minutes approval / next meeting: list rows, not boxed cards.
+  .meeting-governance-strip {
+    gap: 0;
+  }
+  .meeting-governance-strip__item {
+    border: 0;
+    border-bottom: 1px solid token('border');
+    border-radius: 0;
+    background: transparent;
+    padding: token('s-2') 0;
+  }
+}
+
+// ---- Minutes preview page ----------------------------------------------
+@media (max-width: 760px) {
+  // The settings and the document sit on the page, not in framed panels.
+  .meeting-preview-page__settings {
+    position: static;
+    padding: 0 0 token('s-3');
+    border: 0;
+    border-bottom: 1px solid token('border');
+    border-radius: 0;
+    background: transparent;
+  }
+  .minutes-preview--standalone .minutes-docx-preview {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+}
+
+// ---- Meeting template editor ---------------------------------------------
+@media (max-width: 760px) {
+  // The agenda is the work; template details follow it on phones.
+  .meeting-templates-page .meeting-template-builder {
+    grid-template-areas:
+      "agenda"
+      "sidebar";
+  }
+  .meeting-templates-page .meeting-template-builder__main {
+    grid-row: 1;
+  }
+  .meeting-templates-page .meeting-template-builder__sidebar {
+    grid-row: 2;
+  }
+  // Library entries are list rows inside their section, not cards in a card.
+  .meeting-templates-page .meeting-template-library {
+    gap: 0;
+  }
+  .meeting-templates-page .meeting-template-library__item {
+    padding: 10px 0;
+    border: 0;
+    border-bottom: 1px solid token('border');
+    border-radius: 0;
+    background: transparent;
+  }
+  .meeting-templates-page .meeting-template-library__item:last-child {
+    border-bottom: 0;
+  }
+}
+
+// ---- Motion backlog ------------------------------------------------------
+// Agenda picker and "Add to agenda" share one row.
+.motion-backlog__actions {
+  flex-wrap: nowrap;
+}
+.motion-backlog__actions > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.motion-backlog__actions > .btn {
+  flex: none;
+}
+@media (max-width: 760px) {
+  // Motions are list rows inside the Backlog section, not cards in a card.
+  .motion-backlog .motion-backlog__item {
+    padding: token('s-3') 0;
+    border: 0;
+    border-bottom: 1px solid token('border');
+    border-radius: 0;
+    background: transparent;
+  }
+  .motion-backlog .motion-backlog__item:last-child {
+    border-bottom: 0;
+  }
+}
+
+// ---- Agenda builder -------------------------------------------------------
+// The agenda list reads as list rows, not bordered boxes inside the card.
+.agenda-builder .agenda-builder__sidebar .card__body {
+  gap: 0 !important;
+}
+.agenda-builder .agenda-builder__agenda-button {
+  border: 0;
+  border-bottom: 1px solid token('border');
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding-inline: token('s-1');
+}
+.agenda-builder .agenda-builder__agenda-button:last-child {
+  border-bottom: 0;
+}
+.agenda-builder .agenda-builder__agenda-button:hover {
+  background: token('bg-hover');
+}
+@media (max-width: 760px) {
+  // Nothing to show until an agenda is picked; the list says what to do.
+  .agenda-builder .agenda-builder__empty-main {
+    display: none;
+  }
+}
+
+// ---- Bylaw amendments -----------------------------------------------------
+// Current and proposed text get equal columns (the shared .two-col is 2fr/1fr).
+.bylaw-diff__editors {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+@media (max-width: 760px) {
+  .bylaw-diff__editors {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// ---- Decision threshold preview (bylaw rules) -------------------------------
+// Dropdowns share a row; the three vote counts share the next, at number width.
+.decision-assessment__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: token('s-3');
+}
+.decision-assessment__counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 9.5rem));
+  gap: token('s-3');
+  align-items: end;
+}
+.decision-assessment__counts .field,
+.decision-assessment__counts .input {
+  min-width: 0;
+  width: 100%;
+}
+// Let "Votes for / signed consent" wrap rather than clip in a narrow column.
+.decision-assessment__counts .field__label {
+  white-space: normal;
+}
+@media (max-width: 760px) {
+  .decision-assessment__counts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: token('s-2');
+  }
+  // The phone rule that sizes number fields to 8rem would overflow three across.
+  .decision-assessment__counts .field > input.input[type="number"] {
+    align-self: stretch;
+    min-width: 0;
+  }
+}
+
+// ---- Committee detail -------------------------------------------------------
+// Roster initials sit side by side; the shared overlapping stack clipped them.
+.committee-roster .avatar-stack {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.committee-roster .avatar-stack .avatar + .avatar {
+  margin-left: 0;
+  box-shadow: none;
+}
+.committee-roster .avatar {
+  width: 28px;
+  height: 28px;
+}
+
+// ---- AGM workflow ------------------------------------------------------
+// A long title wraps beside the icon instead of leaving it alone on a row.
+.agm-workflow-page .page__title {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}

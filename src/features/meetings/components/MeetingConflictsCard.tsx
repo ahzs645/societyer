@@ -126,7 +126,7 @@ export function MeetingConflictsCard({
       <div className="card__head">
         <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
           <ShieldAlert size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
-          Conflicts of interest &amp; recusals
+          Conflicts &amp; recusals
         </h3>
         {!adding && (
           <button className="btn-action" style={{ marginLeft: "auto" }} disabled={!canWrite} onClick={() => { if (canWrite) setAdding(true); }}>
@@ -137,8 +137,7 @@ export function MeetingConflictsCard({
       <div className="card__body">
         {(conflicts ?? []).length === 0 && !adding && (
           <p className="muted" style={{ margin: 0 }}>
-            No conflicts declared for this meeting. Record any director's disclosed interest and whether
-            they abstained or left the room.
+            No conflicts declared for this meeting.
           </p>
         )}
 

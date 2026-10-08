@@ -644,9 +644,10 @@ export function gapStatusLabel(status: "available" | "missing" | "not_collected"
 
 export function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="row" style={{ justifyContent: "space-between" }}>
+    // No wrap: a long value (a quorum rule, say) stays on the label's line, right-aligned.
+    <div className="row row--nowrap" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
       <span className="muted">{label}</span>
-      <span>{children}</span>
+      <span style={{ textAlign: "right" }}>{children}</span>
     </div>
   );
 }

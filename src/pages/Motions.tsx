@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { BookOpen, CalendarPlus, Gavel, Layers, Pencil, Plus, Tag as TagIcon, X } from "lucide-react";
+import { BookOpen, CalendarPlus, Gavel, Layers, Pencil, Tag as TagIcon, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
@@ -12,7 +12,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
-import { isRoutineMotion } from "../lib/motionGovernance";
+import { isRoutineMotion, motionTagLabel } from "../lib/motionGovernance";
 import { DECIDED_BY_LABELS, DECIDED_BY_VALUES, ROUTINE_MOTION_TAGS } from "../../shared/proceduralMotions";
 import { OUTCOME_OVERRIDE_DECIDED_BY, motionOutcomeConsistencyIssues, motionVoteIssues } from "../../shared/motionValidation";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -25,6 +25,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import { Tabs } from "../components/primitives";
+import { CreateMenu } from "../components/CreateMenu";
 import { MotionBacklogPage } from "./MotionBacklog";
 import { MotionLibraryPage } from "./MotionLibrary";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
@@ -78,6 +79,8 @@ type MotionsTab = (typeof MOTIONS_TABS)[number];
 // The Motions area consolidates the master motions table, the Tabled/backlog
 // workflow, and the template library into one tabbed page (driven by ?tab=).
 export function MotionsPage() {
+  const { can } = usePermissions();
+  const canWrite = can("motions:write");
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab") as MotionsTab | null;
   const tab: MotionsTab = tabFromUrl && MOTIONS_TABS.includes(tabFromUrl) ? tabFromUrl : "motions";
@@ -87,6 +90,16 @@ export function MotionsPage() {
         const params = new URLSearchParams(prev);
         if (next === "motions") params.delete("tab");
         else params.set("tab", next);
+        return params;
+      },
+      { replace: true },
+    );
+  // The Backlog and Templates tabs open their composer from the header "+".
+  const openComposer = () =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("intent", "add");
         return params;
       },
       { replace: true },
@@ -102,13 +115,20 @@ export function MotionsPage() {
         info={
           <p>Motions that exist only inside minutes text appear here once they are extracted or reviewed.</p>
         }
+        actions={
+          tab === "tabled" ? (
+            <CreateMenu items={[{ id: "backlog", label: "New backlog motion", onSelect: openComposer, disabled: !canWrite }]} />
+          ) : tab === "templates" ? (
+            <CreateMenu items={[{ id: "template", label: "New template", onSelect: openComposer, disabled: !canWrite }]} />
+          ) : undefined
+        }
       />
       <Tabs<MotionsTab>
         value={tab}
         onChange={setTab}
         items={[
           { id: "motions", label: "Motions", icon: <Gavel size={13} /> },
-          { id: "tabled", label: "Tabled", icon: <Layers size={13} /> },
+          { id: "tabled", label: "Backlog", icon: <Layers size={13} /> },
           { id: "templates", label: "Templates", icon: <BookOpen size={13} /> },
         ]}
       />
@@ -145,6 +165,23 @@ function MotionsTableTab() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // The stored label options use slugs ("previous-minutes"); show their names in
+  // filter chips and pickers, and give "Outcome" room for its header.
+  const hydratedView = useMemo(() => tableData.hydratedView ? {
+    ...tableData.hydratedView,
+    columns: tableData.hydratedView.columns.map((column) => {
+      if (column.field.name === "outcome") return { ...column, size: Math.max(column.size, 130) };
+      if (column.field.name !== "tags") return column;
+      const options = (column.field.config as any)?.options;
+      return Array.isArray(options) ? {
+        ...column,
+        field: {
+          ...column.field,
+          config: { ...column.field.config, options: options.map((option: any) => ({ ...option, label: motionTagLabel(String(option.value)) })) },
+        },
+      } : column;
+    }),
+  } : null, [tableData.hydratedView]);
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -274,7 +311,7 @@ function MotionsTableTab() {
         <RecordTableScope
           tableId="motions"
           objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
+          hydratedView={hydratedView}
           records={records}
         >
           <RecordTableViewToolbar
@@ -318,11 +355,11 @@ function MotionsTableTab() {
                     {(row.tags ?? []).map((tag: string) => (
                       <Badge key={tag} tone="neutral">
                         <span className="row" style={{ gap: 2, alignItems: "center" }}>
-                          <TagIcon size={10} /> {tag}
+                          <TagIcon size={10} /> {motionTagLabel(tag)}
                           <button
                             className="btn btn--ghost btn--icon"
                             style={{ padding: 0, height: 14 }}
-                            aria-label={`Remove label ${tag}`}
+                            aria-label={`Remove label ${motionTagLabel(tag)}`}
                             onClick={() => removeTag(row, tag)}
                           disabled={!canWrite}
                          >
@@ -339,11 +376,10 @@ function MotionsTableTab() {
                       onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
                       placeholder="+ label"
                       aria-label="Add label"
+                      enterKeyHint="done"
+                      title="Type a label and press Enter"
                       disabled={!canWrite}
                     />
-                    <button className="btn btn--ghost btn--icon" aria-label="Add label" onClick={() => addTag(row)} disabled={!canWrite}>
-                      <Plus size={12} />
-                    </button>
                   </div>
                 );
               }

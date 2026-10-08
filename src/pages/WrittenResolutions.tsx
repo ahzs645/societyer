@@ -47,6 +47,11 @@ export function WrittenResolutionsPage() {
     nameSingular: "writtenResolution",
     viewId: currentViewId,
   });
+  // Status can read "Circulating · 186 days"; give it room.
+  const hydratedView = useMemo(() => tableData.hydratedView ? {
+    ...tableData.hydratedView,
+    columns: tableData.hydratedView.columns.map((column) => column.field.name === "status" ? { ...column, size: Math.max(column.size, 190) } : column),
+  } : null, [tableData.hydratedView]);
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   const records = useMemo(
     () => (items ?? []).map((r: any) => ({ ...r, signatureCount: r.signatures?.length ?? 0 })),
@@ -97,7 +102,7 @@ export function WrittenResolutionsPage() {
         <RecordTableScope
           tableId="writtenResolutions"
           objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
+          hydratedView={hydratedView}
           records={records}
         >
           <RecordTableViewToolbar
@@ -116,26 +121,28 @@ export function WrittenResolutionsPage() {
             loading={tableData.loading || items === undefined}
             renderCell={({ record, field }) => {
               if (field.name === "kind") return <Badge tone={record.kind === "Special" ? "warn" : "neutral"}>{record.kind}</Badge>;
-              if (field.name === "circulatedAtISO") return <span className="mono">{formatDate(record.circulatedAtISO)}</span>;
+              if (field.name === "circulatedAtISO") return <span style={{ whiteSpace: "nowrap" }}>{formatDate(record.circulatedAtISO)}</span>;
               if (field.name === "signatureCount") {
                 const count = record.signatures?.length ?? 0;
+                // Count and bar on one line, centred in the row.
+                return (
+                  <div className="row row--nowrap" style={{ gap: 8, alignItems: "center", minWidth: 120 }}>
+                    <span className="muted" style={{ fontSize: "var(--fs-xs)", whiteSpace: "nowrap" }}>{count} / {record.requiredCount}</span>
+                    <div style={{ flex: 1, minWidth: 48 }}>
+                      <Progress value={Math.min(100, (count / Math.max(1, record.requiredCount)) * 100)} tone={count >= record.requiredCount ? "success" : undefined} />
+                    </div>
+                  </div>
+                );
+              }
+              if (field.name === "status") {
                 const daysCirculating = record.circulatedAtISO
                   ? Math.floor((Date.now() - new Date(record.circulatedAtISO).getTime()) / 86_400_000)
                   : null;
                 const isStale = record.status === "Circulating" && daysCirculating !== null && daysCirculating > 30;
-                return (
-                  <div style={{ minWidth: 140 }}>
-                    <Progress value={Math.min(100, (count / Math.max(1, record.requiredCount)) * 100)} tone={count >= record.requiredCount ? "success" : undefined} />
-                    <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>{count} / {record.requiredCount}</div>
-                    {isStale && (
-                      <div style={{ fontSize: "var(--fs-xs)", marginTop: 2, color: "var(--danger)", fontWeight: 600 }}>
-                        Circulating for {daysCirculating} days
-                      </div>
-                    )}
-                  </div>
-                );
+                // A long-circulating resolution says so in its status chip rather than in a second red line.
+                if (isStale) return <Badge tone="danger">{`Circulating · ${daysCirculating} days`}</Badge>;
+                return <Badge tone={record.status === "Carried" ? "success" : record.status === "Failed" ? "danger" : "warn"}>{record.status}</Badge>;
               }
-              if (field.name === "status") return <Badge tone={record.status === "Carried" ? "success" : record.status === "Failed" ? "danger" : "warn"}>{record.status}</Badge>;
               return undefined;
             }}
             renderRowActions={(r) => (

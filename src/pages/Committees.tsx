@@ -134,10 +134,11 @@ export function CommitteesPage() {
         title="Committees"
         icon={<UsersIcon size={16} />}
         iconColor="pink"
-        subtitle="Standing and ad-hoc committees — each with its own cadence, roster, tasks, and goals."
+        subtitle="Standing and ad-hoc committees."
+        info={<p>Standing and ad-hoc committees — each with its own cadence, roster, tasks, and goals. "Build rosters" reads roster sheets in Documents and proposes committee members for review.</p>}
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <BuildRostersButton societyId={society._id} disabled={!canWrite} />
+            <BuildRostersButton societyId={society._id} disabled={!canWrite} label="Build rosters" />
             <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
               <Plus size={12} /> New committee
             </button>
@@ -190,14 +191,18 @@ export function CommitteesPage() {
             renderCell={({ record, field }) => {
               if (field.name === "name") {
                 return (
-                  <div title={record.description || undefined}>
-                    <div className="row">
-                      <span className="color-chip" style={{ background: record.color }} />
-                      <strong>{record.name}</strong>
-                    </div>
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                      {truncate(record.description || "No description yet.", 72)}
-                    </div>
+                  // One line: colour, name, then the description as a small muted tail.
+                  <div className="row row--nowrap" style={{ gap: 6, minWidth: 0 }} title={record.description || undefined}>
+                    <span className="color-chip" style={{ background: record.color, flex: "none" }} />
+                    <strong style={{ flex: "none" }}>{record.name}</strong>
+                    {record.description && (
+                      <span
+                        className="muted"
+                        style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "var(--fs-xs)", fontWeight: 400 }}
+                      >
+                        {truncate(record.description, 72)}
+                      </span>
+                    )}
                   </div>
                 );
               }

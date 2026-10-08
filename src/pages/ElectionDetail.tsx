@@ -13,12 +13,16 @@ import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
+import { InfoPopover } from "../components/InfoPopover";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock, Plus, Users } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
-import { formatDateTime, toDateTimeLocalValue } from "../lib/format";
+import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { useConfirm } from "../components/Modal";
 import { validateElectionQuestion } from "../../shared/electionValidation";
+
+/** Matches the 12-hour clock of the nomination window pickers ("4:00 PM"). */
+const NOMINATION_TIME_FORMAT = "MMM d, yyyy · h:mm a";
 
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -137,9 +141,6 @@ export function ElectionDetailPage() {
             : "You cannot vote in this election.";
   const tallyRows = tally ?? [];
   const nominationRows = nominations ?? [];
-  const scrutineers = (users ?? []).filter((user) =>
-    (election.scrutineerUserIds ?? []).includes(user._id),
-  );
   const canNominate =
     isAuthenticatedAuthMode() &&
     ["Draft", "Open"].includes(election.status) &&
@@ -326,7 +327,7 @@ export function ElectionDetailPage() {
               )}
               {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
               {electionBundle.questions.map((question: any) => (
-                <div key={question._id} className="panel" style={{ padding: 12 }}>
+                <div key={question._id}>
                   <div className="row" style={{ justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                     <strong>{question.title}</strong>
                     {canManage && election.status === "Draft" && (
@@ -363,7 +364,13 @@ export function ElectionDetailPage() {
                       const values = selected[question._id] ?? [];
                       const checked = values.includes(option.id);
                       return (
-                        <label key={option.id} className="checkbox">
+                        <label
+                          key={option.id}
+                          className="checkbox"
+                          // Read-only ballots look read-only, not like live choices.
+                          style={!canVote ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
+                          aria-disabled={!canVote || undefined}
+                        >
                           <input
                             type={question.maxSelections > 1 ? "checkbox" : "radio"}
                             checked={checked}
@@ -418,9 +425,12 @@ export function ElectionDetailPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Nominations</h2>
+              <InfoPopover label="About nominations">
+                <p>Nominations are available only to confirmed members while the nomination window is open.</p>
+              </InfoPopover>
               <span className="card__subtitle">
                 {election.nominationsOpenAtISO
-                  ? `${formatDateTime(election.nominationsOpenAtISO)} → ${formatDateTime(election.nominationsCloseAtISO ?? election.closesAtISO)}`
+                  ? `${formatDate(election.nominationsOpenAtISO, NOMINATION_TIME_FORMAT)} → ${formatDate(election.nominationsCloseAtISO ?? election.closesAtISO, NOMINATION_TIME_FORMAT)}`
                   : "No nomination window configured"}
               </span>
             </div>
@@ -473,12 +483,6 @@ export function ElectionDetailPage() {
                     Submit nomination
                   </button>
                 </fieldset>
-              )}
-              {!canNominate && (
-                <div className="muted" style={{ fontSize: 13 }}>
-                  Nominations are available only to confirmed members while the nomination
-                  window is open.
-                </div>
               )}
               {nominationRows.length > 0 ? (
                 nominationRows.map((nomination: any) => (
@@ -565,6 +569,9 @@ export function ElectionDetailPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Eligibility</h2>
+              <InfoPopover label="About eligibility">
+                <p>Eligibility is verified against the member register. The ballot itself is stored without a member identifier.</p>
+              </InfoPopover>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 8 }}>
               <Row
@@ -597,10 +604,6 @@ export function ElectionDetailPage() {
                   )
                 }
               />
-              <div className="muted" style={{ fontSize: 13 }}>
-                Eligibility is verified against the member register. The ballot itself is
-                stored without a member identifier.
-              </div>
             </div>
           </div>
 
@@ -610,16 +613,10 @@ export function ElectionDetailPage() {
                 <h2 className="card__title">Administration</h2>
               </div>
               <div className="card__body" style={{ display: "grid", gap: 12 }}>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  {scrutineers.length > 0 ? (
-                    scrutineers.map((user) => <Badge key={user._id}>{user.displayName}</Badge>)
-                  ) : (
-                    <span className="muted">No scrutineers assigned.</span>
-                  )}
-                </div>
                 <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
                   <Field label="Nominations open">
                     <DateTimeInput
+                      clock={12}
                       value={adminDraft.nominationsOpenAtISO}
                       onChange={(value) =>
                         setAdminDraft({ ...adminDraft, nominationsOpenAtISO: value })
@@ -628,6 +625,7 @@ export function ElectionDetailPage() {
                   </Field>
                   <Field label="Nominations close">
                     <DateTimeInput
+                      clock={12}
                       value={adminDraft.nominationsCloseAtISO}
                       onChange={(value) =>
                         setAdminDraft({ ...adminDraft, nominationsCloseAtISO: value })

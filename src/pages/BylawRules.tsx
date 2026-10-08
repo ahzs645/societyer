@@ -217,7 +217,8 @@ export function BylawRulesPage() {
         title="Bylaw rules"
         icon={<Scale size={16} />}
         iconColor="purple"
-        subtitle="Configure rules derived from the operative bylaws or articles. Draft baselines require review; workspace roles do not establish legal voting rights."
+        subtitle="Rules derived from the operative bylaws or articles."
+        info={<p>Configure rules derived from the operative bylaws or articles. Draft baselines require review; workspace roles do not establish legal voting rights.</p>}
         actions={
           <>
             <button

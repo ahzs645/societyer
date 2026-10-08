@@ -31,8 +31,7 @@ export function OfflineMeetingPreparationPage() {
   if (!meetingPreparationEnabled() || auth.mode === "none" || isLocalDataRuntime()) return <div className="page">
     <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: 12 }}><ArrowLeft size={12} /> Meetings</Link>
     <PageHeader title="Offline meeting preparation" />
-    <p>Offline meeting preparation isn't available in this workspace. It needs a connected server.</p>
-    <Link to="/app/meetings" className="btn">Back to meetings</Link></div>;
+    <p className="muted">Offline meeting preparation needs a connected server.</p></div>;
   return <MeetingPreparation />;
 }
 
