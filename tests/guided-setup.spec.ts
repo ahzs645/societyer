@@ -70,7 +70,7 @@ test("existing company collects its Act, addresses and share planning without fa
   await page.getByLabel("Where will the organization operate?", { exact: true }).fill("British Columbia and Alberta");
   await fits(page);
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\/workflows\//);
+  await page.waitForURL(/\/app\?welcome=/);
   await page.reload();
   await expect(page.getByText("Workspace onboarding").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Continue organization setup", exact: true })).toBeVisible();

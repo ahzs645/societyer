@@ -72,7 +72,8 @@ export function SocietyNewPage() {
       auth.refreshMembership(result.societyId);
       setStoredSocietyId(result.societyId);
       toast.success("Workspace created", `${result.taskIds.length} onboarding tasks created.`);
-      navigate(`/app/workflows/${result.workflowId}`);
+      // Land on the dashboard with the new organization's setup checklist.
+      navigate(`/app?welcome=${encodeURIComponent(String(result.workflowId))}`);
     } finally { setSaving(false); }
   };
   return <GuidedOrganizationSetup onCreate={create} saving={saving} restoreCard={restoreCard} canRestore={canRestore} restoreRequested={searchParams.get("restore") === "1"} />;

@@ -941,3 +941,21 @@
 }
 
 /* Privacy setup workflow */
+
+/* Dashboard after creating an organization: its setup checklist leads. */
+.dashboard-welcome {
+  display: grid;
+  gap: token('s-3');
+  margin-bottom: token('s-5');
+}
+.dashboard-welcome .organization-onboarding-panel {
+  margin: 0;
+}
+.dashboard-welcome__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+  font-size: token('fs-sm');
+}

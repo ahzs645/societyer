@@ -8,7 +8,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
 import { formatDate, formatDateTime, isPastDue, relative } from "../lib/format";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useToast } from "../components/Toast";
 import {
   Activity,
@@ -95,7 +96,12 @@ export function Dashboard() {
   // slim strip by default so it stops dominating the page. Auto-hide once fully done.
   const onboardingCollapsedByDefault = completedOnboardingSteps / onboardingSteps.length >= 0.5;
   const onboardingExpanded = onboardingExpandedOverride ?? !onboardingCollapsedByDefault;
-  const showOnboarding = !onboardingFlowHidden && !allOnboardingComplete;
+  // Fresh from the new-organization flow: lead with that organization's
+  // setup checklist (and a link to its onboarding workflow) instead of the
+  // generic setup guide, so there is one checklist, not two.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const welcomeWorkflowId = searchParams.get("welcome");
+  const showOnboarding = !welcomeWorkflowId && !onboardingFlowHidden && !allOnboardingComplete;
 
   const setOnboardingFlowHidden = (hidden: boolean) => {
     const nextIds = hidden
@@ -185,6 +191,18 @@ export function Dashboard() {
         title="Dashboard"
         subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
+
+      {welcomeWorkflowId && society && (
+        <div className="dashboard-welcome">
+          <OrganizationOnboardingPanel organization={society} />
+          <div className="dashboard-welcome__foot">
+            <Link to={`/app/workflows/${welcomeWorkflowId}`}>Open the Workspace onboarding workflow</Link>
+            <button type="button" className="btn-action" onClick={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("welcome"); return next; }, { replace: true })}>
+              Go to dashboard
+            </button>
+          </div>
+        </div>
+      )}
 
       {showOnboarding && onboardingExpanded && (
         <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">

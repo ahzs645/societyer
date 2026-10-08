@@ -168,7 +168,7 @@ try {
   await local.getByRole("textbox", { name: "Proposed name / working name", exact: true }).fill("Disposable camera qualification society");
   await local.getByRole("button", { name: "Continue", exact: true }).click();
   await local.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await local.waitForURL(/\/app\/workflows\//);
+  await local.waitForURL(/\/app\?welcome=/);
   await local.evaluate(() => { location.hash = "#/app/assets"; });
   await local.getByRole("button", { name: "Scan", exact: true }).click();
   const scanner = local.getByRole("dialog", { name: "Scan an asset", exact: true });

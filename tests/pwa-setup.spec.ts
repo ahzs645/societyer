@@ -15,9 +15,9 @@ const RUNTIME_KEY = "societyer:app-runtime";
 
 async function createOrganization(page: Page, name: string) {
   await completeGuidedOrganizationSetup(page, name);
-  // Setup hands off to the onboarding workflow it just created. If that page
-  // can't find the workflow — or finds a row shaped differently from the one
-  // the Convex mutation writes — the pipeline dead-ends on its final step.
+  // Setup lands on the dashboard with the new organization's setup checklist
+  // and a link to the onboarding workflow it created. If either is missing the
+  // pipeline dead-ends on its final step.
   await expect(page.getByText("Workflow not found.")).toHaveCount(0);
   await expect(page.getByText("Workspace onboarding").first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Organization profile").first()).toBeVisible({ timeout: 20_000 });
