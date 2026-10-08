@@ -411,10 +411,10 @@ export function InsurancePolicyDetailPage() {
         <ArrowLeft size={12} /> Insurance policies
       </Link>
       <PageHeader
-        title={`${kindLabel(policy.kind)} ${policy.policyNumber}`}
+        title={policy.insurer || `${kindLabel(policy.kind)} ${policy.policyNumber}`}
         icon={<Shield size={16} />}
         iconColor="green"
-        subtitle={[policy.insurer, policy.policyTermLabel, policy.broker].filter(Boolean).join(" · ")}
+        subtitle={[kindLabel(policy.kind), policy.policyNumber ? `Policy ${policy.policyNumber}` : "", policy.policyTermLabel, policy.broker].filter(Boolean).join(" · ")}
         actions={
           <>
             <button className="btn-action" disabled={!canWrite} onClick={() => { setRenewalError(""); setRenewal({ policyNumber: "", startDate: dateInput(policy.endDate || policy.renewalDate), endDate: "", premiumDollars: "", policyFeeDollars: "", totalCostDollars: "" }); }}><Plus size={12} /> Record renewal</button>

@@ -88,7 +88,7 @@ test("stock intake updates the asset and the camera fallback resolves an existin
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "assets");
-  await page.locator(".asset-mobile-card").filter({ hasText: /\bflats?\b/ }).first().getByRole("button", { name: /^Actions for / }).click();
+  await page.locator(".asset-mobile-card").filter({ hasText: /flat/ }).first().getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Add stock", exact: true }).click();
   await input(page, "Amount being added").fill("2");
   await expect(input(page, "Resulting total")).toHaveValue("3");
