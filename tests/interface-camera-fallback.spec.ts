@@ -18,7 +18,7 @@ test("camera denial still lets an asset tag resolve through the existing registe
   await page.getByRole("button", { name: "Scan", exact: true }).click();
   await assertScannerFallback(page, "AST-0001", "Scan an asset");
   await expect(page).toHaveURL(/\/assets\/static_asset_projector$/);
-  await expect(page.getByRole("heading", { name: "AST-0001", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Epson community projector", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 

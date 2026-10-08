@@ -31,10 +31,12 @@ import {
   FolderOpen,
   Link as LinkIcon,
   ListTodo,
+  MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
+import { Menu } from "../components/Menu";
 import { daysUntilDate, formatDate, isPastDue, relative, todayDateOnly } from "../lib/format";
 import { addDaysToDateOnly } from "../../shared/dateOnly";
 import {
@@ -136,11 +138,6 @@ export function CommitmentsPage() {
   const mostOverdue = [...overdue].sort(
     (a, b) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime(),
   )[0];
-  const featuredCommitment = mostOverdue ?? rows.find((row) => {
-    const source = documentsById.get(String(row.sourceDocumentId));
-    const sourceTags = Array.isArray(source?.tags) ? source.tags.join(" ").toLowerCase() : "";
-    return sourceTags.includes("tenancy") || row.title.toLowerCase().includes("presentation");
-  }) ?? rows[0];
 
   const openNew = () => {
     if (!canWrite) return;
@@ -287,26 +284,16 @@ export function CommitmentsPage() {
           <div className="stat__value">{needsReview.length}</div>
           <div className="stat__sub">source or cadence uncertainty</div>
         </div>
-        <div className="stat">
-          <div className="stat__label">Evidence links</div>
-          <div className="stat__value">{linkedEvidenceCount}</div>
-          <div className="stat__sub">meetings or documents</div>
-        </div>
       </div>
 
-      {featuredCommitment && (
-        <FeaturedCommitmentCard
+      {mostOverdue && (
+        <OverdueCommitmentAlert
+          commitment={mostOverdue}
           canWrite={canWrite}
           canCreateTask={canCreateTask}
-          commitment={featuredCommitment}
-          isOverdue={isOverdue(featuredCommitment)}
-          sourceDocument={documentsById.get(String(featuredCommitment.sourceDocumentId))}
-          events={eventsByCommitment.get(String(featuredCommitment._id)) ?? []}
-          openTasks={openTasksByCommitment.get(String(featuredCommitment._id)) ?? []}
-          documentsById={documentsById}
-          meetingsById={meetingsById}
-          onRecord={() => openRecord(featuredCommitment)}
-          onPlanTask={() => createPreparationTask(featuredCommitment)}
+          onOpen={() => (canWrite ? openEdit(mostOverdue) : undefined)}
+          onRecord={() => openRecord(mostOverdue)}
+          onPlanTask={() => createPreparationTask(mostOverdue)}
         />
       )}
 
@@ -336,77 +323,36 @@ export function CommitmentsPage() {
             loading={tableData.loading || commitments === undefined}
             renderCell={({ record: row, field }) => {
               if (field.name === "title") return (
-                <div>
-                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                    <strong>{row.title}</strong>
-                    <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
-                    {typeof row.confidence === "number" && <Badge tone="neutral">{formatConfidence(row.confidence)}</Badge>}
-                  </div>
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.requirement}</div>
-                  {row.sourceExcerpt && (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
-                      "{truncate(row.sourceExcerpt, 120)}"
-                    </div>
-                  )}
-                  {row.sourceDocumentId && (
-                    <div className="row" style={{ gap: 6, marginTop: 4 }}>
-                      <LinkIcon size={12} />
-                      <Link
-                        to={`/app/documents/${row.sourceDocumentId}`}
-                        className="muted"
-                        style={{ fontSize: "var(--fs-sm)" }}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {documentsById.get(String(row.sourceDocumentId))?.title ?? "Source document"}
-                      </Link>
-                    </div>
-                  )}
-                </div>
+                <span title={row.requirement} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <strong>{row.title}</strong>
+                  {row.requirement && <span className="muted"> · {row.requirement}</span>}
+                </span>
               );
               if (field.name === "category") return <Badge tone={categoryTone(row.category)}>{row.category}</Badge>;
-              if (field.name === "source") return (
-                <div>
-                  {row.counterparty && <div>{row.counterparty}</div>}
-                  {row.sourceLabel && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.sourceLabel}</div>}
-                  {row.dueDateBasis && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{row.dueDateBasis}</div>}
-                  {!row.counterparty && !row.sourceLabel && <span className="muted">No source label</span>}
-                </div>
-              );
+              if (field.name === "source") {
+                const label = row.counterparty || row.sourceLabel;
+                return label ? <span title={[row.counterparty, row.sourceLabel, row.dueDateBasis].filter(Boolean).join(" · ")}>{label}</span> : <span className="muted">No source label</span>;
+              }
               if (field.name === "reviewStatus") return (
-                <div>
+                <span title={[typeof row.confidence === "number" ? formatConfidence(row.confidence) : "", row.uncertaintyNote ?? ""].filter(Boolean).join(" · ") || undefined}>
                   <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
-                  {typeof row.confidence === "number" && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{formatConfidence(row.confidence)}</div>}
-                  {row.uncertaintyNote && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{truncate(row.uncertaintyNote, 90)}</div>}
-                </div>
+                </span>
               );
               if (field.name === "cadence") return <span className="muted">{row.cadence}</span>;
               if (field.name === "nextDueDate") return <DueBadge row={row} />;
-              if (field.name === "lastCompletedAtISO") {
-                const latestEvent = eventsByCommitment.get(String(row._id))?.[0];
-                return (
-                  <div>
-                    <span className="mono">{formatDate(row.lastCompletedAtISO)}</span>
-                    {latestEvent?.evidenceStatus && (
-                      <div style={{ marginTop: 4 }}>
-                        <Badge tone={evidenceStatusTone(latestEvent.evidenceStatus)}>{reviewStatusLabel(latestEvent.evidenceStatus)}</Badge>
-                      </div>
-                    )}
-                    {row.lastCompletionSummary && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.lastCompletionSummary}</div>}
-                  </div>
-                );
-              }
+              if (field.name === "lastCompletedAtISO") return (
+                <span title={row.lastCompletionSummary ?? undefined}>{row.lastCompletedAtISO ? formatDate(row.lastCompletedAtISO) : "—"}</span>
+              );
               if (field.name === "tasks") {
                 const openTasks = openTasksByCommitment.get(String(row._id)) ?? [];
                 if (openTasks.length === 0) return <span className="muted">No open task</span>;
                 return (
-                  <div className="tag-list">
-                    {openTasks.slice(0, 2).map((task) => (
-                      <Link key={task._id} className="badge badge--info" to="/app/tasks" onClick={(event) => event.stopPropagation()}>
-                        {task.title}
-                      </Link>
-                    ))}
-                    {openTasks.length > 2 && <Badge tone="neutral">+{openTasks.length - 2}</Badge>}
-                  </div>
+                  <span style={{ display: "inline-flex", gap: 4, alignItems: "center", maxWidth: "100%", overflow: "hidden", whiteSpace: "nowrap" }}>
+                    <Link className="badge badge--info" to="/app/tasks" style={{ overflow: "hidden", textOverflow: "ellipsis" }} onClick={(event) => event.stopPropagation()}>
+                      {openTasks[0].title}
+                    </Link>
+                    {openTasks.length > 1 && <Badge tone="neutral">+{openTasks.length - 1}</Badge>}
+                  </span>
                 );
               }
               if (field.name === "status") return <Badge tone={statusTone(row.status)}>{row.status}</Badge>;
@@ -467,7 +413,7 @@ export function CommitmentsPage() {
                 <div className="timeline-vertical__item is-past" key={event._id}>
                   <span className="timeline-vertical__dot" />
                   <div className="row">
-                    <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.happenedAtISO)}</span>
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.happenedAtISO)}</span>
                     <Badge tone="success">Completed</Badge>
                     {event.evidenceStatus && <Badge tone={evidenceStatusTone(event.evidenceStatus)}>{reviewStatusLabel(event.evidenceStatus)}</Badge>}
                     <button
@@ -653,120 +599,45 @@ function EventFormFields({
   );
 }
 
-function FeaturedCommitmentCard({
+/** One-line alert for the most overdue commitment; the full record is in the table. */
+function OverdueCommitmentAlert({
   commitment,
-  isOverdue: overdue,
-  sourceDocument,
-  events,
-  openTasks,
-  documentsById,
-  meetingsById,
+  onOpen,
   onRecord,
   onPlanTask,
   canWrite,
   canCreateTask,
 }: {
   commitment: any;
-  isOverdue: boolean;
-  sourceDocument?: any;
-  events: any[];
-  openTasks: any[];
-  documentsById: Map<string, any>;
-  meetingsById: Map<string, any>;
+  onOpen: () => void;
   onRecord: () => void;
   onPlanTask: () => void;
   canWrite: boolean;
   canCreateTask: boolean;
 }) {
-  const latest = events[0];
-  const meeting = latest?.meetingId ? meetingsById.get(String(latest.meetingId)) : null;
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card__head">
-        <div>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-            <Badge tone={overdue ? "danger" : "orange"}>{overdue ? "Most overdue commitment" : "Featured commitment"}</Badge>
-            <Badge tone={reviewStatusTone(commitment.reviewStatus)}>{reviewStatusLabel(commitment.reviewStatus)}</Badge>
-            {typeof commitment.confidence === "number" && <Badge tone="neutral">{formatConfidence(commitment.confidence)}</Badge>}
-          </div>
-          <h2 className="card__title">{commitment.title}</h2>
-          <p className="card__subtitle">{commitment.requirement}</p>
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="btn-action" onClick={onPlanTask} disabled={!canCreateTask}>
-            <ListTodo size={12} /> Plan task
-          </button>
-          <button className="btn-action btn-action--primary" onClick={onRecord} disabled={!canWrite}>
-            <CheckCircle2 size={12} /> Record evidence
-          </button>
-        </div>
+    <div className="inspector-note inspector-note--danger" style={{ alignItems: "center", marginBottom: 16 }}>
+      <div className="inspector-note__icon"><AlertTriangle size={14} /></div>
+      <div className="inspector-note__content" style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        Most overdue:{" "}
+        <button type="button" className="link-button" onClick={onOpen} disabled={!canWrite} style={{ fontWeight: 600 }}>
+          {commitment.title}
+        </button>
+        {commitment.nextDueDate && <span className="muted"> · due {formatDate(commitment.nextDueDate)}</span>}
       </div>
-      <div className="card__body">
-        <div className="stat-grid" style={{ marginBottom: 14 }}>
-          <div className="stat">
-            <div className="stat__label">Next due</div>
-            <div className="stat__value" style={{ fontSize: "var(--fs-xl)" }}>{formatDate(commitment.nextDueDate)}</div>
-            <div className="stat__sub">{commitment.noticeLeadDays ?? 0} day lead</div>
-          </div>
-          <div className="stat">
-            <div className="stat__label">Last satisfied</div>
-            <div className="stat__value" style={{ fontSize: "var(--fs-xl)" }}>{formatDate(commitment.lastCompletedAtISO)}</div>
-            <div className="stat__sub">{latest?.evidenceStatus ? reviewStatusLabel(latest.evidenceStatus) : "No review status"}</div>
-          </div>
-          <div className="stat">
-            <div className="stat__label">Open tasks</div>
-            <div className="stat__value" style={{ fontSize: "var(--fs-xl)" }}>{openTasks.length}</div>
-            <div className="stat__sub">{openTasks[0]?.title ?? "No preparation task"}</div>
-          </div>
-        </div>
-
-        <div className="row" style={{ alignItems: "flex-start", gap: 18, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 320px" }}>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>Source reference</div>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-              {sourceDocument ? (
-                <Link className="badge badge--orange" to={`/app/documents/${sourceDocument._id}`}>
-                  {sourceDocument.title}
-                </Link>
-              ) : (
-                <Badge tone="warn">No source document</Badge>
-              )}
-              {commitment.sourceLabel && <Badge tone="neutral">{commitment.sourceLabel}</Badge>}
-              {sourceDocument?.reviewStatus && <Badge tone={documentReviewTone(sourceDocument.reviewStatus)}>{documentReviewLabel(sourceDocument.reviewStatus)}</Badge>}
-            </div>
-            {commitment.sourceExcerpt && (
-              <p className="muted" style={{ marginTop: 8, fontSize: "var(--fs-sm)" }}>
-                "{commitment.sourceExcerpt}"
-              </p>
-            )}
-            {commitment.uncertaintyNote && (
-              <div className="row" style={{ gap: 6, color: "var(--warn)", fontSize: "var(--fs-sm)" }}>
-                <AlertTriangle size={14} /> {commitment.uncertaintyNote}
-              </div>
-            )}
-          </div>
-
-          <div style={{ flex: "1 1 320px" }}>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>Last satisfaction evidence</div>
-            {latest ? (
-              <>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <Badge tone={evidenceStatusTone(latest.evidenceStatus)}>{reviewStatusLabel(latest.evidenceStatus)}</Badge>
-                  <Badge tone="success">{formatDate(latest.happenedAtISO)}</Badge>
-                  {meeting && <Link className="badge badge--info" to={`/app/meetings/${meeting._id}`}>{meeting.title}</Link>}
-                  {latest.evidenceDocumentIds?.map((id: string) => {
-                    const doc = documentsById.get(String(id));
-                    return <Link key={id} className="badge" to={`/app/documents/${id}`}>{doc?.title ?? "Evidence document"}</Link>;
-                  })}
-                </div>
-                {latest.summary && <p className="muted" style={{ marginTop: 8, fontSize: "var(--fs-sm)" }}>{latest.summary}</p>}
-                {latest.evidenceNotes && <p className="muted" style={{ marginTop: 4, fontSize: "var(--fs-sm)" }}>{latest.evidenceNotes}</p>}
-              </>
-            ) : (
-              <div className="muted">No satisfaction evidence recorded yet.</div>
-            )}
-          </div>
-        </div>
+      <div className="row" style={{ gap: 6, flex: "none" }}>
+        <button className="btn btn--sm" onClick={onRecord} disabled={!canWrite}>
+          <CheckCircle2 size={12} /> Record evidence
+        </button>
+        <Menu
+          align="right"
+          trigger={
+            <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label="More actions for the overdue commitment">
+              <MoreHorizontal size={14} />
+            </button>
+          }
+          sections={[{ id: "overdue", items: [{ id: "plan", label: "Plan task", icon: <ListTodo size={14} />, disabled: !canCreateTask, onSelect: onPlanTask }] }]}
+        />
       </div>
     </div>
   );
@@ -778,12 +649,9 @@ function DueBadge({ row }: { row: any }) {
   if (row.status === "Paused") return <Badge tone="neutral">Paused</Badge>;
   const overdue = isOverdue(row);
   return (
-    <div>
-      <span className="mono">{formatDate(row.nextDueDate)}</span>
-      <div>
-        <Badge tone={overdue ? "danger" : "info"}>{overdue ? `Overdue ${relative(row.nextDueDate)}` : relative(row.nextDueDate)}</Badge>
-      </div>
-    </div>
+    <span title={relative(row.nextDueDate)} style={{ whiteSpace: "nowrap" }}>
+      {overdue ? <Badge tone="danger">{formatDate(row.nextDueDate)}</Badge> : formatDate(row.nextDueDate)}
+    </span>
   );
 }
 

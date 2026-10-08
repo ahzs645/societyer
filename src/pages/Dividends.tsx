@@ -10,6 +10,9 @@ import { Plus, Coins, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { validateDividend } from "../../shared/dividends";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { isCorporation } from "../../shared/organizationDomain";
+import { formatDate } from "../lib/format";
+import { NotRequiredNote } from "./SignificantIndividuals";
 
 /**
  * Dividend declarations register (corporations track). Lists each declaration
@@ -107,13 +110,20 @@ export function DividendsPage() {
         title="Dividend declarations"
         icon={<Coins size={16} />}
         iconColor="yellow"
-        subtitle="Register of declared dividends by share class — per-share amount, shares outstanding and the total payable."
+        subtitle="Declared dividends by share class."
+        info={<p>Each declaration records the per-share amount, shares outstanding and the total payable. Dividends apply to BC companies with shares.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New declaration
           </button>
         }
       />
+
+      {!isCorporation(society) && (
+        <NotRequiredNote>
+          {society.name} is not a BC company and has no shares, so it does not declare dividends. Records kept here are optional.
+        </NotRequiredNote>
+      )}
 
       {Object.keys(byClass).length > 0 && (
         <p style={{ color: "var(--text-secondary)" }}>
@@ -144,7 +154,7 @@ export function DividendsPage() {
             <tbody>
               {rows.map((r: any) => (
                 <tr key={r._id}>
-                  <td>{r.declaredOn}</td>
+                  <td>{formatDate(r.declaredOn)}</td>
                   <td>{r.shareClass}</td>
                   <td>{money(r.perShareCents, r.currency)}</td>
                   <td>{r.sharesOutstanding.toLocaleString()}</td>
@@ -152,7 +162,7 @@ export function DividendsPage() {
                   <td>
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
-                      aria-label={`Delete dividend declared ${r.declaredOn}`}
+                      aria-label={`Delete dividend declared ${formatDate(r.declaredOn)}`}
                       onClick={() => remove({ id: r._id })} disabled={!canWrite}
                     >
                       <Trash2 size={12} />

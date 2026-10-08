@@ -80,7 +80,8 @@ test("create, edit, renew and terminate an agreement", async ({ page }) => {
   await expect(page.getByText("$2,400").first()).toBeVisible();
 
   // Renew: a linked draft with the version chain.
-  await page.getByRole("button", { name: "Renew", exact: true }).click();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Renew", exact: true }).click();
   const renewal = page.getByRole("dialog", { name: "Renew for a new term" });
   await pickDate(page, "End date", iso(425));
   await renewal.getByRole("button", { name: "Create renewal" }).click();
@@ -90,7 +91,8 @@ test("create, edit, renew and terminate an agreement", async ({ page }) => {
 
   // Terminate the original (confirmation names what is lost).
   await page.goto(originalUrl, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Terminate", exact: true }).click();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Terminate", exact: true }).click();
   const terminate = page.getByRole("dialog", { name: "Terminate agreement" });
   await terminate.getByRole("button", { name: "Terminate" }).click();
   await expect(terminate.getByText("Give the termination date and the reason.")).toBeVisible();
@@ -100,7 +102,8 @@ test("create, edit, renew and terminate an agreement", async ({ page }) => {
   await expect(confirm.getByText(/open deadline/)).toBeVisible();
   await confirm.getByRole("button", { name: "Terminate" }).click();
   await expect(page.getByText("Terminated").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Renew", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Renew", exact: true })).toBeDisabled();
 });
 
 test("register filters and phone layout", async ({ page }) => {

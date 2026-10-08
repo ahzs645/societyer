@@ -65,7 +65,7 @@ export function InsurancePage() {
   const records = useMemo(
     () => rows.map((r) => ({
       ...r,
-      period: `${formatDate(r.startDate)} to ${formatDate(r.endDate)}`,
+      period: `${formatDate(r.startDate)} – ${formatDate(r.endDate)}`,
     })),
     [rows],
   );
@@ -255,10 +255,10 @@ export function InsurancePage() {
             renderCell={({ record, field }) => {
               if (field.name === "kind") return <span className="cell-tag">{kindLabel(record.kind)}</span>;
               if (field.name === "insurer") return <PolicyCell row={record} />;
-              if (field.name === "policyNumber") return <span className="mono">{record.policyNumber}</span>;
-              if (field.name === "coverageCents") return <span className="mono">{money(record.coverageCents)}</span>;
-              if (field.name === "premiumCents") return <span className="mono">{money(record.premiumCents)}</span>;
-              if (field.name === "period") return <span className="mono">{formatDate(record.startDate)} to {formatDate(record.endDate)}</span>;
+              if (field.name === "policyNumber") return <span>{record.policyNumber}</span>;
+              if (field.name === "coverageCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(record.coverageCents)}</span>;
+              if (field.name === "premiumCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(record.premiumCents)}</span>;
+              if (field.name === "period") return <span style={{ whiteSpace: "nowrap" }} title={`${formatDate(record.startDate)} – ${formatDate(record.endDate)}`}>{formatDate(record.startDate, "MMM d, yyyy")} – {formatDate(record.endDate, "MMM d, yyyy")}</span>;
               if (field.name === "renewalDate") return <RenewalCell date={record.renewalDate} />;
               return undefined;
             }}
@@ -445,12 +445,12 @@ export function InsurancePolicyDetailPage() {
           {renewalError && <p role="alert">{renewalError}</p>}
         </>}
       </Drawer>
-      <InsuranceOperationsCard policy={policy} />
       <InsuranceInsightCards policy={policy} />
 
       <div className="insurance-full-layout">
         <div className="insurance-full-layout__main">
-          <PolicyStructuredDetails row={policy} />
+          <PolicyStructuredDetails row={policy} hideIdentity />
+          <InsuranceOperationsCard policy={policy} />
         </div>
         <aside className="insurance-full-layout__side">
           <div className="card">
@@ -458,28 +458,28 @@ export function InsurancePolicyDetailPage() {
             <div className="card__body col">
               <DetailRow label="Kind">{kindLabel(policy.kind)}</DetailRow>
               <DetailRow label="Policy #">{policy.policyNumber}</DetailRow>
-              <DetailRow label="Series">
-                <span title={policy.policySeriesKey || undefined}>{shortPolicySeries(policy.policySeriesKey)}</span>
-              </DetailRow>
-              <DetailRow label="Term">{policy.policyTermLabel || "Not set"}</DetailRow>
-              <DetailRow label="Period">{formatDate(policy.startDate)} to {formatDate(policy.endDate)}</DetailRow>
+              {policy.policySeriesKey && (
+                <DetailRow label="Series">
+                  <span title={policy.policySeriesKey}>{shortPolicySeries(policy.policySeriesKey)}</span>
+                </DetailRow>
+              )}
+              {policy.policyTermLabel && <DetailRow label="Term">{policy.policyTermLabel}</DetailRow>}
+              <DetailRow label="Period">{formatDate(policy.startDate)} – {formatDate(policy.endDate)}</DetailRow>
               <DetailRow label="Renewal">{formatDate(policy.renewalDate)}</DetailRow>
-              <DetailRow label="Confidence">{policy.confidence || "Unspecified"}</DetailRow>
+              {policy.confidence && <DetailRow label="Confidence">{policy.confidence}</DetailRow>}
             </div>
           </div>
 
           <PolicyHistoryCard versions={versions} />
 
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Sources</h2></div>
-            <div className="card__body col">
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Source IDs are collapsed in the brief. Hover a source chip to see the preserved IDs.
+          {sourceIds.length > 0 && (
+            <div className="card">
+              <div className="card__head"><h2 className="card__title">Sources</h2></div>
+              <div className="card__body col">
+                <SourceBadges ids={sourceIds} />
               </div>
-              <SourceBadges ids={sourceIds} />
-              {sourceIds.length === 0 && <div className="muted">No source IDs recorded.</div>}
             </div>
-          </div>
+          )}
 
           {noteSummary && (
             <div className="card">
@@ -531,7 +531,7 @@ function InsuranceInsightCards({ policy }: { policy: any }) {
   const evidenceCount = sourceIdsForPolicy(policy).length;
 
   return (
-    <div className="insurance-insights" aria-label="Insurance policy quick answers">
+    <div className="insurance-insights" aria-label="Insurance policy quick answers" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
       <div className="insurance-insight-card">
         <span>What it covers</span>
         <strong>{largestLimit != null ? money(largestLimit) : money(policy.coverageCents)}</strong>
@@ -549,8 +549,8 @@ function InsuranceInsightCards({ policy }: { policy: any }) {
       </div>
       <div className="insurance-insight-card">
         <span>Review state</span>
-        <strong>{openChecks ? `${openChecks} open check${openChecks === 1 ? "" : "s"}` : policy.confidence || "No open checks"}</strong>
-        <small>{evidenceCount ? `${evidenceCount} preserved source${evidenceCount === 1 ? "" : "s"}` : "No source IDs"}</small>
+        <strong>{openChecks ? `${openChecks} open check${openChecks === 1 ? "" : "s"}` : "No open checks"}</strong>
+        {evidenceCount > 0 && <small>{`${evidenceCount} preserved source${evidenceCount === 1 ? "" : "s"}`}</small>}
       </div>
     </div>
   );
@@ -561,7 +561,8 @@ function policyDrawerTitle(form: any) {
   return [kindLabel(form.kind), form.policyNumber].filter(Boolean).join(" · ") || "Insurance policy";
 }
 
-function PolicyStructuredDetails({ row }: { row: any }) {
+/** hideIdentity: the policy page header already shows insurer, policy number and status. */
+function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hideIdentity?: boolean }) {
   const parties = row.coveredParties ?? [];
   const items = row.coverageItems ?? [];
   const locations = row.coveredLocations ?? [];
@@ -581,23 +582,25 @@ function PolicyStructuredDetails({ row }: { row: any }) {
     return (
       <div className="insurance-brief">
         <div className="insurance-brief__hero">
-          <PolicyBriefHeader row={row} sourceIds={allSourceIds} />
-          <div className="insurance-empty">No first-class coverage details entered yet.</div>
+          {!hideIdentity && <PolicyBriefHeader row={row} sourceIds={allSourceIds} />}
+          <div className="insurance-empty">No coverage details entered yet.</div>
         </div>
       </div>
     );
   }
   return (
     <div className="insurance-brief">
-      <div className="insurance-brief__hero">
-        <PolicyBriefHeader row={row} sourceIds={allSourceIds} />
-      </div>
+      {!hideIdentity && (
+        <div className="insurance-brief__hero">
+          <PolicyBriefHeader row={row} sourceIds={allSourceIds} />
+        </div>
+      )}
 
       <div className="insurance-brief__grid">
         <BriefMetric label="Policy" value={row.policyNumber || "Not set"} sub={[row.policyTermLabel, row.versionType].filter(Boolean).join(" · ")} />
         <BriefMetric label="Coverage" value={money(row.coverageCents)} sub={row.deductibleCents != null ? `Deductible ${money(row.deductibleCents)}` : ""} />
         <BriefMetric label="Premium" value={money(row.premiumCents)} sub={`Fee ${money(row.policyFeeCents)} · Total invoiced ${money(row.totalCostCents)}`} />
-        <BriefMetric label="Renewal" value={formatDate(row.renewalDate)} sub={`${formatDate(row.startDate)} to ${formatDate(row.endDate)}`} />
+        <BriefMetric label="Renewal" value={formatDate(row.renewalDate)} sub={`${formatDate(row.startDate)} – ${formatDate(row.endDate)}`} />
       </div>
 
       {row.coverageSummary && <div className="insurance-brief__summary">{row.coverageSummary}</div>}
@@ -897,22 +900,15 @@ function PolicyCitation({ id }: { id?: string }) {
 
 function PolicyCell({ row }: { row: any }) {
   const flags = riskFlagsForPolicy(row);
+  const details = [row.broker || "Broker not set", row.policyTermLabel, row.versionType].filter(Boolean).join(" · ");
   return (
-    <div>
-      <strong>{row.insurer}</strong>
-      <div className="row" style={{ gap: 6, marginTop: 2 }}>
-        <Badge tone={statusTone(row.status)}>{row.status}</Badge>
-        {flags.map((flag) => (
-          <Badge key={flag} tone={flag === "restricted" ? "danger" : "warn"}>{flag}</Badge>
-        ))}
-      </div>
-      <div className="muted" style={{ fontSize: 12 }}>
-        {row.broker || "Broker not set"}
-        {row.policyTermLabel ? ` · ${row.policyTermLabel}` : ""}
-        {row.versionType ? ` · ${row.versionType}` : ""}
-        {row.sourceExternalIds?.length ? ` · ${row.sourceExternalIds.length} source${row.sourceExternalIds.length === 1 ? "" : "s"}` : ""}
-      </div>
-    </div>
+    <span title={details} style={{ display: "inline-flex", gap: 6, alignItems: "center", maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden" }}>
+      <strong style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.insurer}</strong>
+      {row.status && row.status !== "Active" && <Badge tone={statusTone(row.status)}>{row.status}</Badge>}
+      {flags.map((flag) => (
+        <Badge key={flag} tone={flag === "restricted" ? "danger" : "warn"}>{flag}</Badge>
+      ))}
+    </span>
   );
 }
 
@@ -1395,8 +1391,7 @@ function PolicyHistoryCard({ versions }: { versions: any[] }) {
     <div className="card">
       <div className="card__head"><h2 className="card__title">Cost and coverage history</h2></div>
       <div className="card__body col">
-        <p className="muted" style={{ margin: 0 }}>Compare recorded premiums, limits, and deductibles for this policy series. Premiums are policy costs; payment records belong in Finance.</p>
-        {versions.length < 2 && <p className="muted">Add earlier or renewal records with the same policy series key to compare changes.</p>}
+        {versions.length < 2 && <p className="muted" style={{ margin: 0 }}>Record a renewal to compare premiums, limits and deductibles across terms.</p>}
         {versions.map((version, index) => {
           const previous = versions[index - 1];
           return (

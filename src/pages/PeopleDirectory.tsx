@@ -7,7 +7,9 @@ import { useToast } from "../components/Toast";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
-import { Contact, GitMerge, Plus, Undo2, UserPlus } from "lucide-react";
+import { Contact, GitMerge, MoreHorizontal, Plus, Undo2, UserPlus } from "lucide-react";
+import { Menu } from "../components/Menu";
+import { formatDate } from "../lib/format";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Modal, useConfirm, usePrompt } from "../components/Modal";
@@ -27,7 +29,6 @@ export function PeopleDirectoryPage() {
   const { loaded, can } = usePermissions();
   const canManage = loaded && can("members:write");
   const [saving, setSaving] = useState(false);
-  const [prefix, setPrefix] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
 
@@ -41,13 +42,6 @@ export function PeopleDirectoryPage() {
         isIndividual?: boolean;
         editable?: boolean;
       }>
-    | undefined;
-
-  const matches = useQuery(
-    api.peopleDirectory.searchByPrefix,
-    prefix && society ? { prefix, societyId: society._id } : "skip",
-  ) as
-    | Array<{ id: string; fullName: string; firstName?: string; lastName?: string; dob?: string; editable?: boolean }>
     | undefined;
 
   const duplicateGroups = useQuery(api.peopleDirectory.duplicates, society ? { societyId: society._id } : "skip") as
@@ -157,7 +151,7 @@ export function PeopleDirectoryPage() {
           <p>
             Shared legacy records stay reachable through their role links. Governance roles live in{" "}
             <Link to="/app/directors">Directors</Link> and <Link to="/app/role-holders">Role holders</Link>;{" "}
-            <Link to="/app/people-history">review source identities and history</Link> to merge duplicates.
+            <Link to="/app/people-history">People and source history</Link> matches names found in meeting records to these profiles.
           </p>
         }
         actions={
@@ -167,44 +161,6 @@ export function PeopleDirectoryPage() {
         }
       />
 
-
-      <div className="card">
-        <Field label="Search people">
-          <input
-            className="input"
-            placeholder="Start typing a name…"
-            value={prefix}
-            onChange={(e) => setPrefix(e.target.value)}
-          />
-        </Field>
-        {prefix && (
-          <div style={{ marginTop: 8 }}>
-            {matches === undefined ? (
-              <p>Searching…</p>
-            ) : matches.length === 0 ? (
-              <p>No matches for “{prefix}”.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {matches.map((m) => (
-                  <div
-                    key={m.id}
-                    className="row"
-                    style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}
-                  >
-                    <span>{m.fullName}</span>
-                    <span className="row" style={{ gap: 8, alignItems: "center" }}>
-                      {m.dob && <span style={{ opacity: 0.6 }}>{m.dob}</span>}
-                      <button className="btn btn--ghost" onClick={() => openEdit(m)} disabled={!canManage || m.editable === false}>
-                        Edit
-                      </button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
       {suggestions && suggestions.length > 0 && (
         <div className="card people-duplicates">
@@ -255,7 +211,7 @@ export function PeopleDirectoryPage() {
                     style={{ gap: 8, justifyContent: "space-between" }}
                   >
                     <Link style={{ minWidth: 0, overflowWrap: "anywhere" }} to={`/app/people-directory/${p.id}`}>{p.fullName}</Link>
-                    {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
+                    {p.dob && <span style={{ opacity: 0.6 }}>{formatDate(p.dob)}</span>}
                   </div>
                 ))}
               </div>
@@ -265,34 +221,67 @@ export function PeopleDirectoryPage() {
       )}
 
       <div className="card">
-        <h2 className="page__title-text">All people{people ? ` (${people.length})` : ""}</h2>
-        {people && people.length > 10 && (
-          <input className="input" aria-label="Filter the list" placeholder="Filter by any part of a name" value={listQuery} onChange={(e) => { setListQuery(e.target.value); setPage(0); }} style={{ margin: "8px 0" }} />
-        )}
+        <div className="card__head" style={{ flexWrap: "wrap", gap: 8 }}>
+          <h2 className="card__title">Directory profiles</h2>
+          {people && <span className="card__subtitle">{people.length}</span>}
+          {people && people.length > 0 && (
+            <input
+              className="input"
+              type="search"
+              aria-label="Search people"
+              placeholder="Search names"
+              value={listQuery}
+              onChange={(e) => { setListQuery(e.target.value); setPage(0); }}
+              style={{ marginLeft: "auto", width: 220, maxWidth: "100%" }}
+            />
+          )}
+        </div>
+        <div className="card__body">
         {people === undefined ? (
-          <p>Loading…</p>
+          <p className="muted" style={{ margin: 0 }}>Loading…</p>
         ) : people.length === 0 ? (
-          <p>No people in the directory yet. <Link to="/app/people-history">Review source identities</Link></p>
+          <p className="muted" style={{ margin: 0 }}>
+            No directory profiles yet. Board and members are in <Link style={{ color: "var(--accent)" }} to="/app/directors">Directors</Link> and <Link style={{ color: "var(--accent)" }} to="/app/members">Members</Link>.
+          </p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-            {filteredPeople.length === 0 && <p className="muted">No one matches “{listQuery}”.</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {filteredPeople.length === 0 && <p className="muted" style={{ margin: 0 }}>No one matches “{listQuery}”.</p>}
             {filteredPeople.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((p: any) => (
               <div
                 key={p._id}
                 className="row"
-                style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}
+                style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}
               >
-                <Link style={{ minWidth: 0, overflowWrap: "anywhere" }} to={`/app/people-directory/${p._id}`}>{p.fullName}</Link>
-                <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
-                  {p.isIndividual === false && <span style={{ opacity: 0.6 }}>Organization</span>}
-                  {!!p.aliases?.length && <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>also {p.aliases.slice(0, 2).join(", ")}</span>}
-                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage || p.editable === false} onClick={() => setMergeFrom({ id: p._id, fullName: p.fullName })} aria-label={`Merge ${p.fullName} with another profile`}>
-                    <GitMerge size={12} /> Merge
-                  </button>
-                  <button type="button" className="btn btn--sm" disabled={!canManage} onClick={() => setAddTo({ id: p._id, fullName: p.fullName })} aria-label={`Add ${p.fullName} to this society`}>
-                    <UserPlus size={12} /> Add to society…
-                  </button>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <Link style={{ overflowWrap: "anywhere" }} to={`/app/people-directory/${p._id}`}>{p.fullName}</Link>
+                  {Boolean(p.dob || p.isIndividual === false || p.aliases?.length) && (
+                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      {" · "}
+                      {[p.dob ? formatDate(p.dob) : null, p.isIndividual === false ? "Organization" : null, p.aliases?.length ? `also ${p.aliases.slice(0, 2).join(", ")}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                </span>
+                <span className="row" style={{ gap: 4, alignItems: "center", flex: "none" }}>
+                  {canManage && p.editable !== false && (
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => openEdit({ ...p, id: p._id })}>
+                      Edit
+                    </button>
+                  )}
+                  <Menu
+                    align="right"
+                    trigger={
+                      <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${p.fullName}`}>
+                        <MoreHorizontal size={14} />
+                      </button>
+                    }
+                    sections={[{
+                      id: "row",
+                      items: [
+                        { id: "merge", label: "Merge with another profile…", icon: <GitMerge size={14} />, disabled: !canManage || p.editable === false, onSelect: () => setMergeFrom({ id: p._id, fullName: p.fullName }) },
+                        { id: "add", label: "Add to society…", icon: <UserPlus size={14} />, disabled: !canManage, onSelect: () => setAddTo({ id: p._id, fullName: p.fullName }) },
+                      ],
+                    }]}
+                  />
                 </span>
               </div>
             ))}
@@ -305,6 +294,7 @@ export function PeopleDirectoryPage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {!!mergeHistory?.length && (
@@ -314,8 +304,8 @@ export function PeopleDirectoryPage() {
             {mergeHistory.map((row) => (
               <div key={row._id} className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ flex: "1 1 260px" }}>
-                  {row.createdAtISO.slice(0, 10)} · <strong>{row.mergedName}</strong> into <Link to={`/app/people-directory/${row.survivorId}`}>{row.survivorName}</Link> · {row.movedReferences} links moved · {row.rationale}
-                  {row.status === "undone" && <span className="muted"> · undone {String(row.undoneAtISO ?? "").slice(0, 10)}</span>}
+                  {formatDate(row.createdAtISO)} · <strong>{row.mergedName}</strong> into <Link to={`/app/people-directory/${row.survivorId}`}>{row.survivorName}</Link> · {row.movedReferences} links moved · {row.rationale}
+                  {row.status === "undone" && <span className="muted"> · undone {row.undoneAtISO ? formatDate(row.undoneAtISO) : ""}</span>}
                 </span>
                 {row.status === "applied" && <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => void undoMerge(row)}><Undo2 size={12} /> Undo</button>}
               </div>

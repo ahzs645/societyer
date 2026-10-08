@@ -81,7 +81,8 @@ export function PipaTrainingPage() {
         title="PIPA training"
         icon={<ShieldCheck size={16} />}
         iconColor="green"
-        subtitle="PIPA + CASL training records for directors, staff, and volunteers. Annual renewal recommended."
+        subtitle="Privacy and anti-spam training for directors, staff and volunteers."
+        info={<p>Training records for BC's Personal Information Protection Act (PIPA) and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log training
@@ -127,7 +128,7 @@ export function PipaTrainingPage() {
                 );
                 return (
                   <span className="row" style={{ gap: 6, alignItems: "center" }}>
-                    <span className="mono">{formatDate(String(value))}</span>
+                    <span>{formatDate(String(value))}</span>
                     <Badge tone={days < 0 ? "danger" : days <= 30 ? "warn" : "info"}>
                       {days < 0 ? `${-days}d overdue` : `in ${days}d`}
                     </Badge>

@@ -61,8 +61,9 @@ test("commitment preparation reaches editable tasks and rejects an invalid event
   await dialog.locator("[contenteditable=true]").first().pressSequentially("Prepare the annual external audit package.");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(dialog).toBeHidden();
-  // The featured card exposes the same cross-module callback as the row action.
-  await page.getByRole("button", { name: "Plan task", exact: true }).first().click();
+  // The row menu exposes the cross-module "plan a preparation task" callback.
+  await page.getByRole("button", { name: "Actions for this commitment" }).first().click();
+  await page.getByRole("menuitem", { name: "Create preparation task", exact: true }).click();
   await expect(page.getByText("Preparation task created", { exact: true })).toBeVisible();
   await page.goto("/app/tasks");
   const title = "Prepare Annual external audit promise";

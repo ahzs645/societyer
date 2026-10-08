@@ -9,6 +9,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DataTable } from "../components/DataTable";
+import { Segmented } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Mail, Plus, Send, Settings2 } from "lucide-react";
 import { useToast } from "../components/Toast";
@@ -34,6 +35,8 @@ import type { Id } from "../../convex/_generated/dataModel";
  * non-empty set to zero" so we don't tell someone to "clear filters" when
  * there's nothing to clear. Must render inside a <RecordTableScope>.
  */
+type CommsSection = "templates" | "segments" | "campaigns" | "deliveries" | "preferences";
+
 function CommunicationsEmptyState({
   hasAnyRecords,
   labelPlural,
@@ -49,18 +52,12 @@ function CommunicationsEmptyState({
 
   if (hasAnyRecords && isFiltered) {
     return (
-      <RecordTableEmpty
-        title={`No ${labelPlural} match your filters`}
-        description="Try clearing your filters or search to see all records."
-      />
+      <RecordTableEmpty title={`No ${labelPlural} match your filters or search.`} />
     );
   }
 
   return (
-    <RecordTableEmpty
-      title={`No ${labelPlural} yet`}
-      description={createHint}
-    />
+    <RecordTableEmpty title={`No ${labelPlural} yet. ${createHint}`} />
   );
 }
 
@@ -264,6 +261,7 @@ export function CommunicationsPage() {
   const sendCampaign = useAction(api.communications.sendCampaign);
   const toast = useToast();
   const confirm = useConfirm();
+  const [section, setSection] = useState<CommsSection>("templates");
   const [templateDraft, setTemplateDraft] = useState<any | null>(null);
   const [segmentDraft, setSegmentDraft] = useState<any | null>(null);
   const [prefDraft, setPrefDraft] = useState<any | null>(null);
@@ -398,12 +396,12 @@ export function CommunicationsPage() {
 
   return (
     <div className="page">
-      {!canWrite && <p className="muted">You can review communications. Editing templates, segments, contact preferences, or campaigns requires communications write access.</p>}
       <PageHeader
         title="Communications"
         icon={<Mail size={16} />}
         iconColor="orange"
-        subtitle="Templated notices, campaign history, member contact preferences, and proof-of-notice delivery logs."
+        subtitle="Notices, campaigns and member contact preferences."
+        info={<p>Templated notices, campaign history, member contact preferences and proof-of-notice delivery logs.</p>}
         actions={
           <>
             <MoreActionsMenu
@@ -483,14 +481,28 @@ export function CommunicationsPage() {
         }
       />
 
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Templates" value={String((templates ?? []).length)} />
-        <Stat label="Campaigns" value={String((campaigns ?? []).length)} />
-        <Stat label="Sent" value={String(sentCount)} />
-        <Stat label="Issues" value={String(issueCount + suppressedCount)} tone={issueCount > 0 ? "danger" : "ok"} />
+      {!canWrite && <p className="muted" style={{ marginTop: 0 }}>View only — changes need communications write access.</p>}
+      {issueCount + suppressedCount > 0 && (
+        <p role="status" style={{ margin: "0 0 12px", color: issueCount > 0 ? "var(--danger)" : "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>
+          {issueCount + suppressedCount} delivery issue{issueCount + suppressedCount === 1 ? "" : "s"} in the delivery log.
+        </p>
+      )}
+
+      <div style={{ margin: "0 0 12px", overflowX: "auto", maxWidth: "100%" }}>
+        <Segmented<CommsSection>
+          value={section}
+          onChange={setSection}
+          items={[
+            { id: "templates", label: `Templates (${templateRecords.length})` },
+            { id: "segments", label: `Segments (${segmentRecords.length})` },
+            { id: "campaigns", label: `Campaigns (${campaignRecords.length})` },
+            { id: "deliveries", label: `Deliveries (${deliveryRecords.length})` },
+            { id: "preferences", label: "Preferences" },
+          ]}
+        />
       </div>
 
-      {!templatesTable.loading && !templatesTable.objectMetadata ? (
+      {section === "templates" && (!templatesTable.loading && !templatesTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="template" />
       ) : templatesTable.objectMetadata ? (
         <RecordTableScope
@@ -526,7 +538,7 @@ export function CommunicationsPage() {
               if (field.name === "kind") return <Badge>{row.kind}</Badge>;
               if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;
               if (field.name === "audience") return <span>{row.audience}</span>;
-              if (field.name === "updatedAtISO") return <span className="mono">{formatDateTime(row.updatedAtISO)}</span>;
+              if (field.name === "updatedAtISO") return <span>{formatDateTime(row.updatedAtISO)}</span>;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -536,11 +548,9 @@ export function CommunicationsPage() {
             )}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      {!segmentsTable.loading && !segmentsTable.objectMetadata ? (
+      {section === "segments" && (!segmentsTable.loading && !segmentsTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="saved segment" />
       ) : segmentsTable.objectMetadata ? (
         <RecordTableScope
@@ -575,7 +585,7 @@ export function CommunicationsPage() {
               if (field.name === "name") return <strong>{row.name}</strong>;
               if (field.name === "includeAudience") return <Badge>{row.includeAudience}</Badge>;
               if (field.name === "filters") return <span className="muted">{row.filters}</span>;
-              if (field.name === "updatedAtISO") return <span className="mono">{formatDateTime(row.updatedAtISO)}</span>;
+              if (field.name === "updatedAtISO") return <span>{formatDateTime(row.updatedAtISO)}</span>;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -598,11 +608,9 @@ export function CommunicationsPage() {
             )}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      {!campaignsTable.loading && !campaignsTable.objectMetadata ? (
+      {section === "campaigns" && (!campaignsTable.loading && !campaignsTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="campaign" />
       ) : campaignsTable.objectMetadata ? (
         <RecordTableScope
@@ -642,16 +650,14 @@ export function CommunicationsPage() {
                 </Badge>
               );
               if (field.name === "counts") return <span className="mono">{row.counts}</span>;
-              if (field.name === "sentAtISO") return <span className="mono">{formatDateTime(row.sentAtISO)}</span>;
+              if (field.name === "sentAtISO") return <span>{formatDateTime(row.sentAtISO)}</span>;
               return undefined;
             }}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      {!deliveriesTable.loading && !deliveriesTable.objectMetadata ? (
+      {section === "deliveries" && (!deliveriesTable.loading && !deliveriesTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="delivery" />
       ) : deliveriesTable.objectMetadata ? (
         <RecordTableScope
@@ -685,7 +691,7 @@ export function CommunicationsPage() {
               if (field.name === "recipientName") return (
                 <div className="record-table__identifier-lines">
                   <strong className="record-table__identifier-primary">{row.recipientName}</strong>
-                  <div className="record-table__identifier-secondary muted mono">{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
+                  <div className="record-table__identifier-secondary muted">{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
                 </div>
               );
               if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;
@@ -701,11 +707,9 @@ export function CommunicationsPage() {
             }}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      <DataTable
+      {section === "preferences" && <DataTable
         label="Member contact preferences"
         icon={<Mail size={14} />}
         data={prefRows as any[]}
@@ -782,7 +786,7 @@ export function CommunicationsPage() {
             Edit
           </button>
         )}
-      />
+      />}
 
       <Drawer
         open={!!templateDraft}
@@ -1136,25 +1140,6 @@ export function CommunicationsPage() {
           </div>
         )}
       </Drawer>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "danger";
-}) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={tone === "danger" ? { color: "var(--danger)" } : undefined}>
-        {value}
-      </div>
     </div>
   );
 }

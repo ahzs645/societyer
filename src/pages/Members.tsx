@@ -16,7 +16,8 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Users, Trash2, Pencil, GitMerge, Download } from "lucide-react";
+import { Plus, Users, Trash2, Pencil, GitMerge, Download, Building2, ScrollText } from "lucide-react";
+import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 import { useRegisterCommand } from "../lib/commands";
 import { rowsToCsv } from "../lib/csv";
@@ -58,6 +59,8 @@ export function MembersPage() {
   const [mergeRows, setMergeRows] = useState<any[] | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [orgMemberRequest, setOrgMemberRequest] = useState(0);
+  const [ruleRequest, setRuleRequest] = useState(0);
   const mergeMembers = useMutation(api.members.merge);
 
   const tableData = useObjectRecordTableData({
@@ -184,6 +187,8 @@ export function MembersPage() {
             <MoreActionsMenu
               items={[
                 { id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: exportMembersCsv },
+                { id: "org-member", label: "Add organization member", icon: <Building2 size={14} />, disabled: !canManage, onSelect: () => setOrgMemberRequest((n) => n + 1) },
+                { id: "rule", label: "New membership rule version", icon: <ScrollText size={14} />, disabled: !canManage, onSelect: () => setRuleRequest((n) => n + 1) },
               ]}
             />
             <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
@@ -193,8 +198,8 @@ export function MembersPage() {
         }
       />
 
-      <MembersRepresentativesCard societyId={society._id} />
-      <MembershipEvidenceCard societyId={society._id} />
+      <MembersRepresentativesCard societyId={society._id} createRequest={orgMemberRequest} />
+      <MembershipEvidenceCard societyId={society._id} createRequest={ruleRequest} />
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="member" />
       ) : tableData.objectMetadata ? (
@@ -233,6 +238,8 @@ export function MembersPage() {
               <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setDrawerOpen(true); }}>
                 {record.firstName || record.lastName || "Unnamed member"}
               </button>
+            ) : field.name === "joinedAt" || field.name === "leftAt" ? (
+              <span>{record[field.name] ? formatDate(record[field.name]) : ""}</span>
             ) : undefined}
             selectable={canManage}
             loading={metadataLoading || members === undefined}

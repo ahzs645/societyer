@@ -17,7 +17,8 @@ function field(page: Page, label: string) {
 }
 
 async function stageBundle(page: Page, name: string, bundle: unknown) {
-  await page.getByRole("button", { name: "New session", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New session", exact: true }).click();
   await field(page, "Session name").fill(name);
   await field(page, "Import JSON").fill(JSON.stringify(bundle));
   const ownership = page.getByRole("checkbox", { name: /I reviewed the source ownership/ });

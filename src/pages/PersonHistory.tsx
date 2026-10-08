@@ -1,7 +1,7 @@
 import {sourceRoleLabel} from '../../shared/personHistory';
-import {useMemo,useState} from 'react';import {Link,useParams} from 'react-router-dom';import {useMutation,useQuery} from 'convex/react';import {api} from '@/lib/convexApi';import {useSociety} from '@/hooks/useSociety';import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {PageLoading,SeedPrompt} from './_helpers';import {PersonOccurrenceReview} from '@/components/PersonRecordLinks';
-import {useConfirm} from '@/components/Modal';import {EmptyState} from '@/components/ui';import {UnsupportedDetailsBadge} from '@/components/UnsupportedDetailsBadge';import {PersonPicker,useDirectoryPeople} from '@/components/PersonPicker';import {PersonMergeDialog} from '../features/people/PersonMergeDialog';
-import {GitMerge,UserX,Undo2,Wrench} from 'lucide-react';import {useRecordQuery} from '@/hooks/useRecordQuery';
+import {useMemo,useState} from 'react';import {Link,useNavigate,useParams} from 'react-router-dom';import {useMutation,useQuery} from 'convex/react';import {api} from '@/lib/convexApi';import {useSociety} from '@/hooks/useSociety';import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {PageHeader,PageLoading,SeedPrompt} from './_helpers';import {PersonOccurrenceReview} from '@/components/PersonRecordLinks';
+import {Modal,useConfirm} from '@/components/Modal';import {EmptyState,Field} from '@/components/ui';import {Select} from '@/components/Select';import {MoreActionsMenu} from '@/components/MoreActionsMenu';import {UnsupportedDetailsBadge} from '@/components/UnsupportedDetailsBadge';import {PersonPicker,useDirectoryPeople} from '@/components/PersonPicker';import {PersonMergeDialog} from '../features/people/PersonMergeDialog';
+import {GitMerge,Plus,UserX,Undo2,Wrench} from 'lucide-react';import {useRecordQuery} from '@/hooks/useRecordQuery';
 
 const PAGE=25;
 function Pager({page,count,setPage,label}:{page:number;count:number;setPage:(n:number)=>void;label:string}){
@@ -10,28 +10,67 @@ function Pager({page,count,setPage,label}:{page:number;count:number;setPage:(n:n
 }
 
 /** P8: find and move history entries left behind by earlier re-links. */
-function RepairLostHistory({societyId}:{societyId:string}){
+function useRepairLostHistory(societyId:string){
  const repair=useMutation(api.personHistory.repairOrphanedEvents);const confirm=useConfirm();const toast=useToast();const [busy,setBusy]=useState(false);
- return <button className="btn btn--sm" disabled={busy} onClick={async()=>{setBusy(true);try{
+ const run=async()=>{if(busy)return;setBusy(true);try{
   const preview:any=await repair({societyId,dryRun:true});
   if(!preview.count){toast.info('No lost history found','Every history entry is on the same person as its source occurrence.');return;}
   const ok=await confirm({title:`Move ${preview.count} history entr${preview.count===1?'y':'ies'}?`,message:<><p style={{margin:'0 0 8px'}}>Earlier re-links moved these source occurrences to another person but left their history behind, so it was hidden on both profiles. They will move to the person the occurrence is linked to now.</p><ul style={{margin:0,paddingLeft:18}}>{preview.examples.slice(0,8).map((e:any)=><li key={e.id}>{e.title??e.table}</li>)}</ul></>,confirmLabel:'Move history'});
   if(!ok)return;const result:any=await repair({societyId,dryRun:false});toast.success('History repaired',`${result.count} entries moved`);
- }catch(e:any){toast.error('Repair failed',e.message);}finally{setBusy(false);}}}><Wrench size={12}/> Find history lost by earlier re-links</button>;
+ }catch(e:any){toast.error('Repair failed',e.message);}finally{setBusy(false);}};
+ return {run,busy};
 }
+
+const REVIEW_FILTERS:[string,string][]=[['pending','Needs review'],['ambiguous','Ambiguous names'],['all','All mentions'],['verified','Confirmed'],['assumed','Test assumptions'],['not_person','Organizations and headings'],['named_fragment','Headings with a known name'],['rejected','Rejected']];
 
 export function PersonReviewPage(){
  const society=useSociety();const {can}=usePermissions();const data=useQuery(api.personHistory.overview,society&&can('members:read')?{societyId:society._id}:'skip') as any;
- const [search,setSearch]=useState('');const [status,setStatus]=useState('pending');const [page,setPage]=useState(0);const [name,setName]=useState('');const toast=useToast();const create=useMutation(api.personHistory.createContact);
+ const [search,setSearch]=useState('');const [status,setStatus]=useState('pending');const [page,setPage]=useState(0);const [name,setName]=useState('');const [createOpen,setCreateOpen]=useState(false);const toast=useToast();const create=useMutation(api.personHistory.createContact);
+ const navigate=useNavigate();const repair=useRepairLostHistory(society?._id??'');
  const matches=useMemo(()=>{if(!data)return [];const query=search.toLocaleLowerCase();return data.occurrences.filter((r:any)=>(status==='all'||(status==='pending'?['suggested','unresolved','assumed'].includes(r.matchStatus):status==='ambiguous'?(r.candidates?.length??0)>1&&r.matchStatus!=='verified':status==='named_fragment'?r.matchStatus==='not_person'&&(r.namedPeople?.length??0)>0:r.matchStatus===status))&&[r.personName,r.context,r.affiliation,r.notes].join(' ').toLocaleLowerCase().includes(query));},[data,search,status]);
  if(society===undefined)return <PageLoading/>;if(!society)return <SeedPrompt/>;if(!can('members:read'))return <p>People access required.</p>;if(!data)return <PageLoading/>;
  const query=search.toLocaleLowerCase();
- return <div className="page"><h1>People, source identities and history</h1><p>Contact profiles connect meeting attendance, notes, roles and affiliations. Test assumptions connect the interface while retaining an unconfirmed identity label; membership and voting rights are assessed separately.</p>
- <p>{data.people.length} contact profiles · {data.occurrences.length} source occurrences · {data.occurrences.filter((r:any)=>r.matchStatus==='verified').length} confirmed identity links · {data.occurrences.filter((r:any)=>r.matchStatus==='assumed').length} test assumptions</p>
- <div className="row" style={{gap:8,flexWrap:'wrap'}}><input className="input" aria-label="Search people and evidence" placeholder="Search names, affiliations or notes" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/><select className="input" aria-label="Identity review filter" value={status} onChange={e=>{setStatus(e.target.value);setPage(0);}}>{[['pending','Pending identity review'],['ambiguous','Ambiguous names (several possible people)'],['all','All occurrences'],['verified','Confirmed'],['assumed','Test assumptions'],['not_person','Organizations and headings'],['named_fragment','Headings that contain a known name'],['rejected','Rejected']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>{can('members:write')&&<RepairLostHistory societyId={society._id}/>}<Link className="btn btn--sm" to="/app/people-directory">Duplicates and merges</Link></div>
- <details style={{margin:'16px 0'}}><summary>Person profiles ({data.people.length})</summary><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:8,marginTop:12}}>{data.people.filter((p:any)=>[p.fullName,...(p.aliases??[])].join(' ').toLocaleLowerCase().includes(query)).map((p:any)=><Link key={p._id} to={`/app/people-directory/${p._id}`}>{p.fullName} · {p.occurrences} observations · {p.unreviewed} unreviewed</Link>)}</div></details>
- {can('members:write')&&<details><summary>Create a contact profile</summary><label>Person's name<input className="input" value={name} onChange={e=>setName(e.target.value)}/></label><button className="btn" disabled={!name.trim()} onClick={async()=>{try{await create({societyId:society._id,fullName:name});setName('');toast.success('Contact profile created');}catch(e:any){toast.error(e.message);}}}>Create contact</button></details>}
- <h2>Source identity review ({matches.length})</h2>{matches.slice(page*30,page*30+30).map((row:any)=><PersonOccurrenceReview key={row._id+row.matchStatus+(row.personId??'')} row={row} people={data.people}/>)}<div className="row" style={{gap:12,marginTop:12}}><button className="btn" disabled={!page} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page+1} of {Math.max(1,Math.ceil(matches.length/30))}</span><button className="btn" disabled={(page+1)*30>=matches.length} onClick={()=>setPage(page+1)}>Next</button></div>
+ const canWrite=can('members:write');
+ const confirmed=data.occurrences.filter((r:any)=>r.matchStatus==='verified').length;
+ const assumed=data.occurrences.filter((r:any)=>r.matchStatus==='assumed').length;
+ const profiles=data.people.filter((p:any)=>[p.fullName,...(p.aliases??[])].join(' ').toLocaleLowerCase().includes(query));
+ const pages=Math.max(1,Math.ceil(matches.length/30));
+ const createContact=async()=>{try{await create({societyId:society._id,fullName:name});setName('');setCreateOpen(false);toast.success('Contact profile created');}catch(e:any){toast.error(e.message);}};
+ return <div className="page">
+  <PageHeader
+   title="People and source history"
+   subtitle="Match names in meetings and rosters to contact profiles."
+   info={<><p>Contact profiles connect meeting attendance, notes, roles and affiliations found in source records.</p><p>Each name found in a source is a mention. Confirm which profile it belongs to, or mark it as an organization or heading. Membership and voting rights are assessed separately.</p></>}
+   actions={<>
+    {canWrite&&<button className="btn-action btn-action--primary" onClick={()=>setCreateOpen(true)}><Plus size={12}/> New contact</button>}
+    <MoreActionsMenu items={[
+     {id:'duplicates',label:'Duplicates and merges',icon:<GitMerge size={14}/>,onSelect:()=>navigate('/app/people-directory')},
+     ...(canWrite?[{id:'repair',label:'Find history lost by earlier re-links',icon:<Wrench size={14}/>,disabled:repair.busy,onSelect:()=>{void repair.run();}}]:[]),
+    ]}/>
+   </>}
+  />
+  {(data.people.length>0||data.occurrences.length>0)&&<p className="muted" style={{margin:'0 0 12px',fontSize:'var(--fs-sm)'}}>{data.people.length} profile{data.people.length===1?'':'s'} · {data.occurrences.length} mention{data.occurrences.length===1?'':'s'} · {confirmed} confirmed{assumed?` · ${assumed} test assumption${assumed===1?'':'s'}`:''}</p>}
+  <div className="row" style={{gap:8,flexWrap:'wrap',marginBottom:16}}>
+   <input className="input" style={{flex:'1 1 220px',maxWidth:360}} aria-label="Search people and evidence" placeholder="Search names or notes" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/>
+   <Select size="sm" aria-label="Identity review filter" value={status} onChange={v=>{setStatus(v);setPage(0);}} style={{width:200}} options={REVIEW_FILTERS.map(([value,label])=>({value,label}))}/>
+  </div>
+  {data.people.length>0&&<section className="card" style={{marginBottom:16}}>
+   <div className="card__head"><h2 className="card__title">Profiles</h2><span className="card__subtitle">{profiles.length}</span></div>
+   <div className="card__body" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(100%,240px),1fr))',gap:8}}>
+    {profiles.map((p:any)=><Link key={p._id} to={`/app/people-directory/${p._id}`}>{p.fullName}<span className="muted" style={{fontSize:'var(--fs-sm)'}}> · {p.occurrences} mention{p.occurrences===1?'':'s'}{p.unreviewed?` · ${p.unreviewed} to review`:''}</span></Link>)}
+    {profiles.length===0&&<span className="muted">No profiles match.</span>}
+   </div>
+  </section>}
+  <section className="card">
+   <div className="card__head"><h2 className="card__title">Identity review</h2><span className="card__subtitle">{matches.length}</span></div>
+   <div className="card__body">
+    {matches.length===0?<p className="muted" style={{margin:0}}>{data.occurrences.length?'Nothing matches this filter.':'No names found in source records yet.'}</p>:matches.slice(page*30,page*30+30).map((row:any)=><PersonOccurrenceReview key={row._id+row.matchStatus+(row.personId??'')} row={row} people={data.people}/>)}
+    {pages>1&&<nav className="row" aria-label="Identity review pages" style={{gap:12,marginTop:12,alignItems:'center'}}><button className="btn btn--sm" disabled={!page} onClick={()=>setPage(page-1)}>Previous</button><span className="muted">Page {page+1} of {pages}</span><button className="btn btn--sm" disabled={page+1>=pages} onClick={()=>setPage(page+1)}>Next</button></nav>}
+   </div>
+  </section>
+  <Modal open={createOpen&&canWrite} onClose={()=>setCreateOpen(false)} size="sm" title="New contact profile" footer={<><button className="btn" onClick={()=>setCreateOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={!name.trim()} onClick={createContact}>Create contact</button></>}>
+   <Field label="Person's name"><input className="input" autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&name.trim())void createContact();}}/></Field>
+  </Modal>
  </div>;
 }
 

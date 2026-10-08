@@ -7,6 +7,9 @@ import { Select } from "../../components/Select";
 import { Segmented } from "../../components/primitives";
 import { useConfirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import { InfoPopover } from "../../components/InfoPopover";
+import { useIsMobile } from "../../lib/useIsMobile";
+import { formatDueDate } from "../../lib/format";
 import { distinguishSessionNames } from "../../../shared/importSessionLabels";
 import { REVIEW_RISK_LABELS, type ReviewRiskLevel } from "../../../shared/importReviewRisk";
 import { importKindLabel, importTargetLabel } from "./importKindLabels";
@@ -78,6 +81,8 @@ export function ImportReviewQueue({
   const [decided, setDecided] = useState<Map<string, Decision>>(new Map());
   const [focusIndex, setFocusIndex] = useState(0);
   const [searchDraft, setSearchDraft] = useState(filters.search ?? "");
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
@@ -199,6 +204,10 @@ export function ImportReviewQueue({
   const total = Math.max(0, (data?.total ?? 0) - hiddenByDecision);
   const firstShown = total ? filters.page * PAGE_SIZE + 1 : 0;
   const lastShown = Math.min(filters.page * PAGE_SIZE + items.length, filters.page * PAGE_SIZE + PAGE_SIZE);
+  const activeFilterCount = [filters.recordKind, filters.targetModule, filters.sessionId, filters.risk, filters.source].filter(Boolean).length;
+  const emptyMessage = filters.status === "Pending" && progress.total > 0 && !activeFilterCount && !filters.search
+    ? "Every staged candidate has been reviewed. Apply approved records from their session below."
+    : "No candidates match these filters.";
   const facetOptions = (facets: any[] | undefined, label: (value: string) => string, all: string) => [
     { value: "", label: all },
     ...(facets ?? []).map((facet: any) => ({ value: facet.value, label: `${label(facet.value)} (${facet.count.toLocaleString()})` })),
@@ -207,9 +216,11 @@ export function ImportReviewQueue({
   return (
     <div className="card import-queue">
       <div className="card__head import-queue__head">
-        <div>
+        <div className="row" style={{ gap: 6, alignItems: "center" }}>
           <h2 className="card__title">Review queue</h2>
-          <p className="card__subtitle">Every staged candidate across all import sessions, highest priority first.</p>
+          <InfoPopover label="About the review queue">
+            <p>Every staged candidate across all import sessions, highest priority first.</p>
+          </InfoPopover>
         </div>
         <div className="import-queue__progress" aria-label="Review progress">
           <div className="import-queue__progress-text">
@@ -232,25 +243,40 @@ export function ImportReviewQueue({
             { id: "all", label: "All" },
           ]}
         />
-        <Select aria-label="Record type" className="import-queue__select" value={filters.recordKind ?? ""} onChange={(value) => setFilter({ recordKind: value || undefined })} searchable options={facetOptions(data?.facets?.kinds, importKindLabel, "All record types")} />
-        <Select aria-label="Target module" className="import-queue__select" value={filters.targetModule ?? ""} onChange={(value) => setFilter({ targetModule: value || undefined })} searchable options={facetOptions(data?.facets?.targets, importTargetLabel, "All targets")} />
-        <Select aria-label="Session" className="import-queue__select" value={filters.sessionId ?? ""} onChange={(value) => { setFilter({ sessionId: value || undefined }); if (value) onSessionPicked?.(value); }} searchable options={facetOptions(data?.facets?.sessions, (id) => labels.get(id)?.primary ?? "Session", "All sessions")} />
-        <Select aria-label="Priority" className="import-queue__select" value={filters.risk ?? ""} onChange={(value) => setFilter({ risk: value || undefined })} options={facetOptions(data?.facets?.risks, (value) => REVIEW_RISK_LABELS[value as ReviewRiskLevel] ?? value, "Any priority")} />
-        <Select aria-label="Source" className="import-queue__select" value={filters.source ?? ""} onChange={(value) => setFilter({ source: value || undefined })} options={[{ value: "", label: "All sources" }, ...((data?.facets?.sources ?? []) as any[]).map((facet) => ({ value: facet.value, label: `${facet.label} (${facet.count.toLocaleString()})` }))]} />
+        {isMobile && (
+          <button type="button" className="btn btn--sm" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}>
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+          </button>
+        )}
+        {(!isMobile || filtersOpen) && (
+          <>
+            <Select aria-label="Record type" className="import-queue__select" value={filters.recordKind ?? ""} onChange={(value) => setFilter({ recordKind: value || undefined })} searchable options={facetOptions(data?.facets?.kinds, importKindLabel, "All record types")} />
+            <Select aria-label="Target module" className="import-queue__select" value={filters.targetModule ?? ""} onChange={(value) => setFilter({ targetModule: value || undefined })} searchable options={facetOptions(data?.facets?.targets, importTargetLabel, "All targets")} />
+            <Select aria-label="Session" className="import-queue__select" value={filters.sessionId ?? ""} onChange={(value) => { setFilter({ sessionId: value || undefined }); if (value) onSessionPicked?.(value); }} searchable options={facetOptions(data?.facets?.sessions, (id) => labels.get(id)?.primary ?? "Session", "All sessions")} />
+            <Select aria-label="Priority" className="import-queue__select" value={filters.risk ?? ""} onChange={(value) => setFilter({ risk: value || undefined })} options={facetOptions(data?.facets?.risks, (value) => REVIEW_RISK_LABELS[value as ReviewRiskLevel] ?? value, "Any priority")} />
+            <Select aria-label="Source" className="import-queue__select" value={filters.source ?? ""} onChange={(value) => setFilter({ source: value || undefined })} options={[{ value: "", label: "All sources" }, ...((data?.facets?.sources ?? []) as any[]).map((facet) => ({ value: facet.value, label: `${facet.label} (${facet.count.toLocaleString()})` }))]} />
+            <Select aria-label="Order" className="import-queue__select" value={filters.sort ?? "priority"} onChange={(value) => setFilter({ sort: value as QueueFilters["sort"] })} options={[{ value: "priority", label: "Priority first" }, { value: "session", label: "Session order" }]} />
+          </>
+        )}
         <input className="input import-queue__search" aria-label="Search candidates" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search title, file, path, source id…" />
-        <Select aria-label="Order" className="import-queue__select" value={filters.sort ?? "priority"} onChange={(value) => setFilter({ sort: value as QueueFilters["sort"] })} options={[{ value: "priority", label: "Priority first" }, { value: "session", label: "Session order" }]} />
       </div>
       <div className="card__body import-queue__toolbar">
         <span className="muted import-queue__count" aria-live="polite">
-          {total ? `${firstShown.toLocaleString()}–${lastShown.toLocaleString()} of ${total.toLocaleString()} matching` : live === undefined ? "Loading…" : "No candidates match"}
+          {total ? `${firstShown.toLocaleString()}–${lastShown.toLocaleString()} of ${total.toLocaleString()} matching` : live === undefined && !data ? "Loading the review queue…" : emptyMessage}
         </span>
-        <span className="import-queue__keys muted"><Keyboard size={12} /> j/k move · a approve · r reject · e edit · n skip · o open source</span>
-        <div className="import-queue__bulk">
-          <button className="btn-action" disabled={!canWrite || !items.length} onClick={() => { void bulk("Approved"); }}><Check size={12} /> Approve {items.length} shown</button>
-          <button className="btn-action" disabled={!canWrite || !items.length} onClick={() => { void bulk("Rejected"); }}><X size={12} /> Reject {items.length} shown</button>
-        </div>
+        {items.length > 0 && (
+          <>
+            <InfoPopover label="Keyboard shortcuts">
+              <p className="row" style={{ gap: 6, alignItems: "center", margin: 0 }}><Keyboard size={12} /> j/k move · a approve · r reject · e edit · n skip · o open source</p>
+            </InfoPopover>
+            <div className="import-queue__bulk">
+              <button className="btn-action" disabled={!canWrite} onClick={() => { void bulk("Approved"); }}><Check size={12} /> Approve {items.length} shown</button>
+              <button className="btn-action" disabled={!canWrite} onClick={() => { void bulk("Rejected"); }}><X size={12} /> Reject {items.length} shown</button>
+            </div>
+          </>
+        )}
       </div>
-      <div className="import-queue__layout">
+      {items.length > 0 && <div className="import-queue__layout">
         <div
           ref={listRef}
           className="import-queue__list"
@@ -282,7 +308,7 @@ export function ImportReviewQueue({
                 <div className="import-queue-row__meta">
                   <Badge tone="info">{importKindLabel(item.recordKind)}</Badge>
                   <span>→ {importTargetLabel(item.targetModule)}</span>
-                  {item.sourceDate && <span className="mono">{item.sourceDate}</span>}
+                  {item.sourceDate && <span>{formatDueDate(item.sourceDate)}</span>}
                   <span className="import-queue-row__session" title={labels.get(item.sessionId)?.full}>{labels.get(item.sessionId)?.primary ?? item.sessionName}</span>
                   {item.status !== "Pending" && <StatusBadge status={item.status} />}
                   {item.duplicateCount > 1 && <Badge tone="warn">{item.duplicateCount}× same file</Badge>}
@@ -293,13 +319,6 @@ export function ImportReviewQueue({
               </div>
             </div>
           ))}
-          {!items.length && (
-            <div className="import-queue__empty">
-              {live === undefined && !data ? "Loading the review queue…" : filters.status === "Pending" && progress.total > 0 && !filters.recordKind && !filters.targetModule && !filters.sessionId && !filters.risk && !filters.source && !filters.search
-                ? "Every staged candidate has been reviewed. Apply approved records from their session below."
-                : "No candidates match these filters."}
-            </div>
-          )}
         </div>
         <QueueDetail
           item={focused}
@@ -310,7 +329,7 @@ export function ImportReviewQueue({
           onEdit={() => focused && onEdit(focused._id)}
           onOpenSession={() => focused && onSessionPicked?.(focused.sessionId)}
         />
-      </div>
+      </div>}
       {(data?.total ?? 0) > PAGE_SIZE && (
         <div className="card__body row import-queue__pager">
           <button className="btn btn--sm" disabled={!filters.page} onClick={() => setFilter({ page: filters.page - 1 })}><ChevronLeft size={12} /> Previous</button>
@@ -375,7 +394,7 @@ function QueueDetail({
         {(item.locator?.path || item.locator?.page || item.locator?.section) && (
           <Fact label="Locator">{[item.locator.path, item.locator.section, item.locator.page ? `p. ${item.locator.page}` : null].filter(Boolean).join(" · ")}</Fact>
         )}
-        {item.sourceDate && <Fact label="Source date">{item.sourceDate}</Fact>}
+        {item.sourceDate && <Fact label="Source date">{formatDueDate(item.sourceDate)}</Fact>}
         {item.sha256 && <Fact label="SHA-256"><span className="mono import-queue__hash" title={item.sha256}>{item.sha256.slice(0, 16)}…</span></Fact>}
         <Fact label="Confidence">{item.confidence}</Fact>
       </dl>

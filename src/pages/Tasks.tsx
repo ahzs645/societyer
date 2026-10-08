@@ -2,7 +2,9 @@ import { ActionRegisterCard } from "../components/ActionRegisterCard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUpRight, Check, History, ListTodo, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { ArrowUpRight, Check, History, ListTodo, MoreHorizontal, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { Menu } from "../components/Menu";
+import { InfoPopover } from "../components/InfoPopover";
 import { isHistoricalSourceAction, taskStatusLabel as sharedTaskStatusLabel } from "../../shared/taskStatus";
 import { HistoricalActionSource } from "../features/tasks/HistoricalActionSource";
 import { api } from "@/lib/convexApi";
@@ -585,6 +587,68 @@ export function TasksPage() {
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   const activePageFilterCount = [filterCommittee, filterGoal, filterLink].filter(Boolean).length;
 
+  const pageFilterControls = (
+          <>
+            <Select
+              value={filterCommittee}
+              onChange={setFilterCommittee}
+              clearable
+              clearLabel="All committees"
+              placeholder="All committees"
+              size="sm"
+              style={{ width: isMobile ? "100%" : 200, maxWidth: "100%" }}
+              options={((committees ?? []) as Doc<"committees">[]).map((committee) => ({
+                value: committee._id,
+                label: committee.name,
+              }))}
+            />
+            <Select
+              value={filterGoal}
+              onChange={changeGoalFilter}
+              clearable
+              clearLabel="All goals"
+              placeholder="All goals"
+              size="sm"
+              style={{ width: isMobile ? "100%" : 220, maxWidth: "100%" }}
+              options={((goals ?? []) as Doc<"goals">[]).map((goal) => ({
+                value: goal._id,
+                label: goal.title,
+              }))}
+            />
+            <Select
+              value={filterLink}
+              onChange={setFilterLink}
+              clearable
+              clearLabel="All links"
+              placeholder="All links"
+              size="sm"
+              style={{ width: isMobile ? "100%" : 180, maxWidth: "100%" }}
+              options={[
+                { value: "linked", label: "Any linked record" },
+                { value: "meeting", label: "Meeting linked" },
+                { value: "goal", label: "Goal linked" },
+                { value: "filing", label: "Filing linked" },
+                { value: "workflow", label: "Workflow linked" },
+                { value: "document", label: "Document linked" },
+                { value: "commitment", label: "Commitment linked" },
+                { value: "event", label: "Event linked" },
+              ]}
+            />
+          </>
+  );
+  const pageFilterCount = activePageFilterCount > 0 ? (
+          <div
+            className="muted"
+            style={{
+              marginLeft: isMobile ? 0 : "auto",
+              fontSize: "var(--fs-sm)",
+              flexShrink: 0,
+            }}
+          >
+            {pageFilteredRecords.length} of {register === "historical" ? registerCounts.historical : registerCounts.current}
+          </div>
+  ) : null;
+
   return (
     <div className="page">
       <PageHeader
@@ -602,20 +666,37 @@ export function TasksPage() {
         }
       />
 
-      <div className="segmented" role="tablist" aria-label="Task register" style={{ marginBottom: 12, maxWidth: "100%", flexWrap: "wrap" }}>
+      <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="segmented" role="tablist" aria-label="Task register" style={{ maxWidth: "100%" }}>
         <button type="button" role="tab" aria-selected={register === "current"} className={`segmented__btn${register === "current" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("current")}>
-          <ListTodo size={12} /> Current tasks ({registerCounts.current})
+          <ListTodo size={12} /> Current ({registerCounts.current})
         </button>
         <button type="button" role="tab" aria-selected={register === "historical"} className={`segmented__btn${register === "historical" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("historical")}>
-          <History size={12} /> Historical source actions ({registerCounts.historical})
+          <History size={12} /> History ({registerCounts.historical})
         </button>
+      </div>
+        {!isMobile && pageFilterControls}
+        {!isMobile && pageFilterCount}
+        {isMobile && (
+          <button
+            type="button"
+            className="btn btn--sm"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setFiltersOpen((value) => !value)}
+            aria-expanded={filtersOpen}
+          >
+            Filters{activePageFilterCount ? ` (${activePageFilterCount})` : ""}
+          </button>
+        )}
       </div>
       {register === "historical" && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card__body col" style={{ gap: 8 }}>
-            <p style={{ margin: 0 }}>
-              Action lines copied from past minutes. They show what a meeting asked for; whether each was done, and whether it is still owed, is unknown.
-              They are not counted as open tasks. Convert one to a current task when it is still relevant.
+            <p className="muted" style={{ margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              Action lines from past minutes — not counted as open work.
+              <InfoPopover label="About historical actions">
+                <p>They show what a meeting asked for; whether each was done, and whether it is still owed, is unknown. Convert one to a current task when it is still relevant.</p>
+              </InfoPopover>
             </p>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <button type="button" className="btn btn--sm" disabled={!canManage || registerCounts.historical === 0} onClick={tidyHistorical}>
@@ -626,74 +707,12 @@ export function TasksPage() {
         </div>
       )}
       {register === "historical" && <ActionRegisterCard societyId={society._id} tasks={pageFilteredRecords} />}
-      <div className="row" style={{ marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
-        {isMobile && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => setFiltersOpen((value) => !value)}
-            aria-expanded={filtersOpen}
-          >
-            Page filters{activePageFilterCount ? ` (${activePageFilterCount})` : ""}
-          </button>
-        )}
-        {(!isMobile || filtersOpen) && (
-          <>
-            <Select
-              value={filterCommittee}
-              onChange={setFilterCommittee}
-              clearable
-              clearLabel="All committees"
-              placeholder="All committees"
-              style={{ width: isMobile ? "100%" : 200, maxWidth: "100%" }}
-              options={((committees ?? []) as Doc<"committees">[]).map((committee) => ({
-                value: committee._id,
-                label: committee.name,
-              }))}
-            />
-            <Select
-              value={filterGoal}
-              onChange={changeGoalFilter}
-              clearable
-              clearLabel="All goals"
-              placeholder="All goals"
-              style={{ width: isMobile ? "100%" : 220, maxWidth: "100%" }}
-              options={((goals ?? []) as Doc<"goals">[]).map((goal) => ({
-                value: goal._id,
-                label: goal.title,
-              }))}
-            />
-            <Select
-              value={filterLink}
-              onChange={setFilterLink}
-              clearable
-              clearLabel="All links"
-              placeholder="All links"
-              style={{ width: isMobile ? "100%" : 180, maxWidth: "100%" }}
-              options={[
-                { value: "linked", label: "Any linked record" },
-                { value: "meeting", label: "Meeting linked" },
-                { value: "goal", label: "Goal linked" },
-                { value: "filing", label: "Filing linked" },
-                { value: "workflow", label: "Workflow linked" },
-                { value: "document", label: "Document linked" },
-                { value: "commitment", label: "Commitment linked" },
-                { value: "event", label: "Event linked" },
-              ]}
-            />
-          </>
-        )}
-        <div
-          className="muted"
-          style={{
-            marginLeft: isMobile ? 0 : "auto",
-            fontSize: "var(--fs-sm)",
-            flexShrink: 0,
-          }}
-        >
-          {pageFilteredRecords.length} of {register === "historical" ? registerCounts.historical : registerCounts.current}
+      {isMobile && filtersOpen && (
+        <div className="row" style={{ marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
+          {pageFilterControls}
+          {pageFilterCount}
         </div>
-      </div>
+      )}
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society._id} objectLabel="task" />
@@ -1034,24 +1053,23 @@ function TaskPhoneList({
                   <ArrowUpRight size={12} /> Make current
                 </button>
               )}
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm btn--icon"
-                style={{ marginLeft: "auto" }}
-                aria-label={`${canManage ? "Edit" : "View"} task ${task.title}`}
-                onClick={() => onEdit(task)}
-              >
-                <Pencil size={12} />
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm btn--icon"
-                aria-label={`Delete task ${task.title}`}
-                disabled={!canManage}
-                onClick={() => void onDelete(task._id, task.title)}
-              >
-                <Trash2 size={12} />
-              </button>
+              <span style={{ marginLeft: "auto" }}>
+                <Menu
+                  align="right"
+                  trigger={
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for task ${task.title}`}>
+                      <MoreHorizontal size={14} />
+                    </button>
+                  }
+                  sections={[{
+                    id: "task",
+                    items: [
+                      { id: "edit", label: canManage ? "Edit" : "View", icon: <Pencil size={14} />, onSelect: () => onEdit(task) },
+                      { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canManage, onSelect: () => void onDelete(task._id, task.title) },
+                    ],
+                  }]}
+                />
+              </span>
             </div>
           </div>
         );

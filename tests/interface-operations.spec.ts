@@ -88,7 +88,8 @@ test("stock intake updates the asset and the camera fallback resolves an existin
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "assets");
-  await page.getByRole("button", { name: "Add stock", exact: true }).first().click();
+  await page.locator(".asset-mobile-card").filter({ hasText: /\bflats?\b/ }).first().getByRole("button", { name: /^Actions for / }).click();
+  await page.getByRole("menuitem", { name: "Add stock", exact: true }).click();
   await input(page, "Amount being added").fill("2");
   await expect(input(page, "Resulting total")).toHaveValue("3");
   await page.getByRole("button", { name: "Update stock", exact: true }).click();
@@ -101,7 +102,7 @@ test("stock intake updates the asset and the camera fallback resolves an existin
   await manualCode.fill("AST-0001");
   await manualCode.press("Enter");
   await expect(page).toHaveURL(/assets\/static_asset_projector/);
-  await expect(page.getByRole("heading", { name: "AST-0001", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Epson community projector", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /^Maintenance/ }).click();
   await fits(page);
   await visit(page, "assets");
@@ -194,7 +195,8 @@ test("inventory creation and staged import parsing work without applying records
   await page.getByRole("button", { name: /Lots & serials/ }).click();
   await fits(page);
   await visit(page, "imports");
-  await page.getByRole("button", { name: "New session", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New session", exact: true }).click();
   await input(page, "Session name").fill("Operations audit staged import");
   await input(page, "Import JSON").fill("{ invalid JSON");
   // Invalid JSON is caught by the live preview: the parse error shows, and
