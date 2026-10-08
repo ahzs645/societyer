@@ -32,6 +32,8 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
   const [isAddingBacklogMotion, setIsAddingBacklogMotion] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [agendaTargets, setAgendaTargets] = useState<Record<string, string>>({});
+  // Phones clamp long resolutions; these cards are expanded in full.
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(() => new Set());
   const [minutesMeetingId, setMinutesMeetingId] = useState("");
 
   const backlog = useQuery(api.motionBacklog.list, society ? { societyId: society._id } : "skip");
@@ -268,8 +270,22 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                           <Trash2 size={14} />
                         </button>
                       </div>
-                      <p>{item.motionText}</p>
-                      {item.notes && <div className="muted">{item.notes}</div>}
+                      <p className={`motion-backlog__text${expandedItems.has(String(item._id)) ? " is-expanded" : ""}`}>{item.motionText}</p>
+                      {item.notes && <div className={`muted motion-backlog__notes${expandedItems.has(String(item._id)) ? " is-expanded" : ""}`}>{item.notes}</div>}
+                      {(item.motionText.length > 140 || item.notes) && (
+                        <button
+                          type="button"
+                          className="motion-backlog__more"
+                          aria-expanded={expandedItems.has(String(item._id))}
+                          onClick={() => setExpandedItems((current) => {
+                            const next = new Set(current);
+                            if (next.has(String(item._id))) next.delete(String(item._id)); else next.add(String(item._id));
+                            return next;
+                          })}
+                        >
+                          {expandedItems.has(String(item._id)) ? "Show less" : "Show full text"}
+                        </button>
+                      )}
                       {linkedMeeting && (
                         <div className="muted">
                           Linked meeting: {linkedMeeting.title} ({formatDate(linkedMeeting.scheduledAt)})
