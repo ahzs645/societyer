@@ -4,6 +4,7 @@ import { forwardRef, type CSSProperties, type ReactNode, useCallback, useEffect,
 // stable call order on every render. An earlier iteration had a useMemo
 // after the virtualization branch and it crashed the page once the record
 // count grew past the threshold on a re-render.
+import { lowerLabel } from "../utils/lowerLabel";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
@@ -139,11 +140,6 @@ export type RecordTableCellRenderer = (ctx: {
  *
  * `selectable` turns on the checkbox column + enables bulk actions.
  */
-/** "API clients" → "API clients", "Meeting templates" → "meeting templates": keep acronyms. */
-function lowerLabel(label: string) {
-  return label.replace(/\b([A-Z])([a-z])/g, (_, first: string, next: string) => first.toLowerCase() + next);
-}
-
 /** Columns grow to share spare width, but not past this multiple of their saved size. */
 const MAX_COLUMN_STRETCH = 1.8;
 

@@ -1,4 +1,5 @@
 import { ViewportPopover } from "@/components/ViewportPopover";
+import { lowerLabel } from "../utils/lowerLabel";
 import { createElement, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import {
@@ -211,7 +212,7 @@ export function RecordTableToolbar({
               <button
                 type="button"
                 className="record-table__icon-button"
-                aria-label={`Search ${objectMetadata.labelPlural.toLowerCase()}`}
+                aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
                 onClick={() => {
                   setSearchOpen(true);
                   window.setTimeout(() => searchInputRef.current?.focus(), 0);
@@ -249,7 +250,7 @@ export function RecordTableToolbar({
           <input
             ref={searchInputRef}
             className="record-table__search-input"
-            placeholder={`Search ${objectMetadata.labelPlural.toLowerCase()}…`}
+            placeholder={`Search ${lowerLabel(objectMetadata.labelPlural)}…`}
             value={searchTerm}
             onChange={(e) => handle.get().setSearchTerm(e.target.value)}
             onBlur={() => { if (!searchTerm) setSearchOpen(false); }}

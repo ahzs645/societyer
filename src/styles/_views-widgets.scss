@@ -475,7 +475,9 @@
     flex: none;
     white-space: nowrap;
   }
-  .page > .tabs {
+  .page > .tabs,
+  .record-show__main > .tabs,
+  .record-show > .tabs {
     margin-inline: calc(-1 * var(--page-gutter, #{token('s-4')}));
     padding-inline: var(--page-gutter, #{token('s-4')});
     border-inline: 0;
