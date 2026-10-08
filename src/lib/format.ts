@@ -33,7 +33,7 @@ export function formatDueDate(value?: string | null, pattern = "MMM d, yyyy") {
 }
 
 export function formatDateTime(value?: DateInput) {
-  return formatDate(value, "MMM d, yyyy · h:mma");
+  return formatDate(value, "MMM d, yyyy · h:mm a");
 }
 
 export function relative(value?: DateInput) {

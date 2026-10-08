@@ -469,6 +469,10 @@
     /* Twenty sizes page titles a bit smaller on phones so the header doesn't
      * dominate the viewport. Still semibold, still -0.03em tracking. */
     font-size: clamp(18px, 4.5vw, 22px);
+    /* A long name wraps beside its icon tile, never leaving the icon alone
+     * on its own row (with or without header actions). */
+    flex-wrap: nowrap;
+    align-items: flex-start;
   }
 
   .page__subtitle {
