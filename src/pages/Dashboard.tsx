@@ -57,6 +57,8 @@ function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
 
 export function Dashboard() {
   const society = useSociety();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const welcomeWorkflowId = searchParams.get("welcome");
   const { can } = usePermissions();
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const navigate = useNavigate();
@@ -99,8 +101,6 @@ export function Dashboard() {
   // Fresh from the new-organization flow: lead with that organization's
   // setup checklist (and a link to its onboarding workflow) instead of the
   // generic setup guide, so there is one checklist, not two.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const welcomeWorkflowId = searchParams.get("welcome");
   const showOnboarding = !welcomeWorkflowId && !onboardingFlowHidden && !allOnboardingComplete;
 
   const setOnboardingFlowHidden = (hidden: boolean) => {
