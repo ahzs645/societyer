@@ -148,7 +148,7 @@ export function PoliciesPage() {
         title="Policy registry"
         icon={<FileText size={16} />}
         iconColor="green"
-        subtitle="First-class policy records with source documents, review dates, signers, jurisdictions, and entity scope."
+        subtitle="Your policies with their documents, review dates and signers."
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New policy
@@ -158,12 +158,8 @@ export function PoliciesPage() {
       <ImportCandidatesNotice noun="policy" targets={["policies"]} kinds={["policy"]} documentCategory="Policy" emptyRegister={!(policies ?? []).length} />
 
       <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">Policies</h2>
-          <Badge>{policies?.length ?? 0}</Badge>
-        </div>
         <div className="table-wrap">
-          <table className="table table--stack-mobile policies-table">
+          <table className="table table--stack-mobile policies-table review-stack-inline">
             <thead>
               <tr>
                 <th>Policy</th>

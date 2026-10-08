@@ -311,6 +311,48 @@ details.exports-tables {
   }
 }
 
+// Notifications: category chips in a fixed column so titles line up.
+.notif-row__kind {
+  flex: 0 0 84px;
+  display: flex;
+
+  .badge { max-width: 100%; }
+}
+
+// Phones: stacked table cells read "Label   value" on one line instead of an
+// uppercase label above every value (policies, compliance obligations).
+@media (max-width: 760px) {
+  .table.table--stack-mobile.review-stack-inline {
+    tbody td[data-label] {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      column-gap: token('s-2');
+      align-items: baseline;
+
+      text-align: left;
+
+      > * { grid-column: 2; justify-self: start; max-width: 100%; }
+    }
+
+    td[data-label]::before {
+      text-align: left;
+      grid-column: 1;
+      grid-row: 1;
+      margin: 0;
+      font-size: token('fs-sm');
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    // The first cell is the record's name: no label, full width.
+    tbody td:first-child {
+      display: block;
+
+      &::before { display: none; }
+    }
+  }
+}
+
 .review-kv__list {
   margin: 0;
   padding: 0;

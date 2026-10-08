@@ -313,7 +313,7 @@ export function ComplianceObligationsPage() {
         </div>
         {obligations.length ? (
           <div className="table-wrap" style={{ marginInline: 0, maxWidth: "100%" }}>
-            <table className="table table--stack-mobile obligations-table">
+            <table className="table table--stack-mobile obligations-table review-stack-inline">
               <thead>
                 <tr>
                   <th>Obligation</th>

@@ -99,6 +99,7 @@ export function RetentionPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || expired === undefined}
+            emptyState="No records past retention."
             renderRowActions={(r) => (
               <>
                 <button

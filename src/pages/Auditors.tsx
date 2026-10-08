@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { InfoPopover } from "../components/InfoPopover";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -79,7 +80,8 @@ export function AuditorsPage() {
         title="Auditor appointments"
         icon={<Calculator size={16} />}
         iconColor="green"
-        subtitle="First auditor appointed by directors; subsequent appointments made by members at the AGM. Only independent CPAs or CPA firms may serve as auditors."
+        subtitle="Who audits or reviews the society's financial statements."
+        info={<p>First auditor appointed by directors; subsequent appointments made by members at the AGM. Only independent CPAs or CPA firms may serve as auditors.</p>}
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New appointment
@@ -117,6 +119,7 @@ export function AuditorsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || items === undefined}
+            emptyState="No auditor appointments yet."
             renderRowActions={(r) => (
               <button
                 className="btn btn--ghost btn--sm btn--icon"
@@ -140,9 +143,6 @@ export function AuditorsPage() {
       <div className="spacer-6" />
       <div className="hr" style={{ marginBottom: 16 }} />
 
-      <p className="muted" style={{ marginBottom: 12 }}>
-        External parties like auditors can be given limited portal access to specific records — configure that here.
-      </p>
       <StakeholderPortalSection societyId={society._id} />
 
       <Drawer
@@ -159,8 +159,8 @@ export function AuditorsPage() {
                 <Select value={form.engagementType} onChange={(value) => setForm({ ...form, engagementType: value })}
                   options={[
                     { value: "Audit", label: "Audit" },
-                    { value: "ReviewEngagement", label: "ReviewEngagement" },
-                    { value: "CompilationEngagement", label: "CompilationEngagement" },
+                    { value: "ReviewEngagement", label: "Review engagement" },
+                    { value: "CompilationEngagement", label: "Compilation engagement" },
                   ]} />
               </Field>
               <Field label="Fiscal year"><input className="input" value={form.fiscalYear} onChange={(e) => setForm({ ...form, fiscalYear: e.target.value })} /></Field>
@@ -211,6 +211,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
   const [scopes, setScopes] = useState<string[]>(["board", "publications"]);
   const [allowDownload, setAllowDownload] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   const portalUrl = (token: string) => `${window.location.origin}/portal/${token}`;
   const nowISO = new Date().toISOString();
@@ -232,6 +233,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
       toast.success("Portal created", "The share link is copied to your clipboard.");
       setLabel("");
       setEmail("");
+      setShowForm(false);
     } catch (err: any) {
       toast.error(err?.message ?? "Could not create the portal");
     } finally {
@@ -255,9 +257,18 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
     <div className="card">
       <div className="card__head">
         <h2 className="card__title"><Share2 size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Stakeholder portal access</h2>
-        <span className="card__subtitle">Read-only rooms for auditors and other outside parties — no account needed</span>
+        <InfoPopover label="About stakeholder portals">
+          <p>Read-only rooms for auditors and other outside parties, with no account needed. You choose which records they can read.</p>
+          <p>Document access shares released records only. Public document tags or public meeting-material access are required; restricted or expired materials stay private. Publications must also be approved.</p>
+        </InfoPopover>
+        {!showForm && (
+          <button className="btn-action" style={{ marginLeft: "auto" }} disabled={!canWrite} onClick={() => setShowForm(true)}>
+            <Plus size={12} /> New portal
+          </button>
+        )}
       </div>
       <div className="card__body col" style={{ gap: 14 }}>
+        {showForm && <>
         <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <Field label="Party name"><input className="input" disabled={!canWrite} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Smith & Co. (auditor)" /></Field>
           <Field label="Email (optional)"><input className="input" disabled={!canWrite} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="auditor@firm.com" /></Field>
@@ -273,9 +284,13 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
             <input type="checkbox" disabled={!canWrite} checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} /> Allow downloads
           </label>
           <button className="btn btn--accent btn--sm" disabled={!canWrite || busy} onClick={onCreate}><Plus size={12} /> Create portal</button>
+          <button className="btn btn--sm" disabled={busy} onClick={() => setShowForm(false)}>Cancel</button>
         </div>
-        <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>Document access shares released records only. Public document tags or public meeting-material access are required; restricted or expired materials stay private. Publications must also be approved.</p>
+        </>}
 
+        {(portals ?? []).length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>No portals yet.</p>
+        ) : (
         <div className="table-wrap">
           <table className="table">
             <thead><tr><th>Party</th><th>Shares</th><th>Downloads</th><th>Status</th><th /></tr></thead>
@@ -298,12 +313,10 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
                   </td>
                 </tr>
               ))}
-              {(portals ?? []).length === 0 && (
-                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 20 }}>{canWrite ? "No portals yet. Create one to share a read-only room." : "No portals yet."}</td></tr>
-              )}
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

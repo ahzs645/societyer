@@ -101,7 +101,8 @@ export function InspectionsPage() {
         title="Records inspections"
         icon={<Eye size={16} />}
         iconColor="gray"
-        subtitle="Log of who inspected official records and what fees were charged (s.24 — public may pay up to $10/day inspection + $0.50/page copies, $0.10 electronic)."
+        subtitle="Who inspected official records and what fees were charged."
+        info={<p>Societies Act s.24: the public may be charged up to $10 per day for inspection, plus $0.50 per page for copies ($0.10 per page electronic).</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log inspection
