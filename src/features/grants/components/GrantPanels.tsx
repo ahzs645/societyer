@@ -369,11 +369,13 @@ export function GrantDossierStack({
   editorPanel?: ReactNode;
   layout?: "stack" | "tabs" | "compact";
 }) {
-  const [activeTab, setActiveTab] = useState<GrantDossierTabId>(editorPanel ? "edit" : "overview");
+  // While editing, the editor takes the Overview tab's place rather than
+  // adding a separate "Edit" tab at the far end of the row.
+  const [activeTab, setActiveTab] = useState<GrantDossierTabId>("overview");
   useEffect(() => {
     const syncHashToTab = () => {
       if (window.location.hash === "#funded-employees") setActiveTab("people");
-      if (editorPanel && window.location.hash.startsWith("#grant-edit-")) setActiveTab("edit");
+      if (editorPanel && window.location.hash.startsWith("#grant-edit-")) setActiveTab("overview");
     };
     syncHashToTab();
     window.addEventListener("hashchange", syncHashToTab);
@@ -458,7 +460,6 @@ export function GrantDossierStack({
       { id: "evidence", label: "Evidence", count: grantRelatedDocuments(grant, documents).length },
       { id: "financials", label: "Financials", count: asUseOfFunds(grant.useOfFunds).length },
       { id: "source", label: "Source", count: cleanSourceKeyFacts(grant.keyFacts).length },
-      ...(editorPanel ? [{ id: "edit" as const, label: "Edit" }] : []),
     ];
     const renderTab = () => {
       if (activeTab === "timeline") return timelinePanels;
@@ -466,7 +467,7 @@ export function GrantDossierStack({
       if (activeTab === "evidence") return evidencePanels;
       if (activeTab === "financials") return financialPanels;
       if (activeTab === "source") return sourcePanels;
-      if (activeTab === "edit" && editorPanel) return editorPanel;
+      if (editorPanel) return editorPanel;
       return overviewPanels;
     };
 

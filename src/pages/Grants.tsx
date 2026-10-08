@@ -546,7 +546,7 @@ export function GrantsPage() {
             renderCell={({ record: row, field }) => {
               if (field.name === "grantTitle") return <strong>{row.grantTitle}</strong>;
               if (field.name === "date") return <span className="mono">{formatDate(row.date)}</span>;
-              if (field.name === "direction") return <span className="cell-tag">{row.direction}</span>;
+              if (field.name === "direction") return <span className="cell-tag">{row.direction === "inflow" ? "Inflow" : row.direction === "outflow" ? "Outflow" : row.direction}</span>;
               if (field.name === "amountCents") return <span className="mono">{money(row.amountCents)}</span>;
               return undefined;
             }}
@@ -854,8 +854,8 @@ export function GrantsPage() {
               <Field label="Direction">
                 <Select value={txnDraft.direction} onChange={(value) => setTxnDraft({ ...txnDraft, direction: value })}
                   options={[
-                    { value: "inflow", label: "inflow" },
-                    { value: "outflow", label: "outflow" },
+                    { value: "inflow", label: "Inflow" },
+                    { value: "outflow", label: "Outflow" },
                     { value: "commitment", label: "commitment" },
                     { value: "adjustment", label: "adjustment" },
                   ]} />

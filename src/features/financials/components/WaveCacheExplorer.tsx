@@ -195,7 +195,7 @@ export function WaveCacheExplorer({
 
           {hiddenResourceCount > 0 && (
             <div className="card__body muted" style={{ borderTop: "1px solid var(--border)", fontSize: 12 }}>
-              Hidden {hiddenResourceCount} Wave row{hiddenResourceCount === 1 ? "" : "s"} from this view. Use Raw accounts to inspect imported ledger artifacts.
+              Hidden {hiddenResourceCount} Wave row{hiddenResourceCount === 1 ? "" : "s"} from this view. Use All accounts to see Wave's internal rows.
             </div>
           )}
         </>
@@ -553,13 +553,13 @@ export function WaveAccountViewControls({
   const options: Array<{ value: WaveAccountView; label: string; title: string }> = [
     { value: "transaction", label: "Money accounts", title: "Bank, cash, credit card, and payroll clearing accounts." },
     { value: "category", label: "Categories", title: "Income, expense, equity, tax, payroll, and other chart-of-account categories." },
-    { value: "working", label: "Working set", title: "Money accounts and chart categories, excluding Wave ledger artifacts." },
-    { value: "ledger", label: "Ledger/system", title: "Wave-generated payable and transfer clearing rows hidden from the default view." },
-    { value: "all", label: "Raw accounts", title: "Every Wave account row exactly as cached." },
+    { value: "working", label: "Money & categories", title: "Money accounts and chart categories, without Wave's internal rows." },
+    { value: "ledger", label: "Internal rows", title: "Payable and transfer clearing rows Wave creates for itself, hidden from the default view." },
+    { value: "all", label: "All accounts", title: "Every Wave account row exactly as last synced." },
   ];
 
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
+    <div className="wave-account-views" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
       {options.map((option) => {
         const count = accountRows.filter((row) => waveAccountMatchesView(row, option.value)).length;
         return (
