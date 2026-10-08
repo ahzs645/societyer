@@ -1,13 +1,14 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { CreateMenu } from "../components/CreateMenu";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, Trash2, Upload, Receipt } from "lucide-react";
+import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, Trash2, Upload, Receipt, MoreHorizontal, Pencil, CalendarPlus } from "lucide-react";
+import { Menu } from "../components/Menu";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -430,6 +431,13 @@ export function TreasurerPage() {
         icon={<PiggyBank size={16} />}
         iconColor="green"
         subtitle="P&L summary, funding sources, budget variance, and restricted-fund balances."
+        info={
+          <p>
+            Totals are based on synced bank transactions (cash basis), so they may be provisional and can differ from
+            the posted ledger until transactions are reconciled. See <Link to="/app/financials">Financials</Link> for
+            the ledger-based (accrual) total.
+          </p>
+        }
         actions={
           <>
             <MoreActionsMenu
@@ -479,12 +487,6 @@ export function TreasurerPage() {
         <SummaryCard label="Expenses" value={-(pnl?.totalExpenseCents ?? 0)} icon={<TrendingDown size={14} />} color="red" />
         <SummaryCard label="Net" value={pnl?.netCents ?? 0} icon={<DollarSign size={14} />} color={pnl && pnl.netCents < 0 ? "red" : "green"} />
       </div>
-      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8, marginBottom: 12 }}>
-        Based on synced bank transactions (cash basis) — totals here may be provisional and can differ from the
-        posted ledger until transactions are reconciled. See <Link to="/app/financials">Financials</Link> for the
-        ledger-based (accrual) total.
-      </p>
-
       <div className="treasurer-category-grid">
         <div className="card treasurer-category-card">
           <div className="card__head"><h2 className="card__title">Income by category</h2></div>
@@ -520,7 +522,7 @@ export function TreasurerPage() {
               Reimbursement claims with receipt evidence and approval status.
             </span>
           </div>
-          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(newExpenseDraft())} disabled={!canWrite}>
+          <button className="btn btn--ghost btn--sm treasurer-card-head-action" onClick={() => setExpenseDraft(newExpenseDraft())} disabled={!canWrite}>
             <Receipt size={12} /> New claim
           </button>
         </div>
@@ -579,8 +581,7 @@ export function TreasurerPage() {
                     )}
                   </td>
                   <td>
-                    <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(expenseDraftFromRow(report))} disabled={!canWrite}>Edit</button>
+                    <div className="row treasurer-row-actions">
                       {report.status === "Draft" && (
                         <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted" })} disabled={!canWrite}>Submit</button>
                       )}
@@ -594,10 +595,12 @@ export function TreasurerPage() {
                           <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid" })} disabled={!canWrite}>Mark paid</button>
                         )
                       )}
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        aria-label={`Delete expense report ${report.title}`}
-                        onClick={async () => {
+                      <RowActionsMenu
+                        label={`Actions for ${report.title}`}
+                        disabled={!canWrite}
+                        onEdit={() => setExpenseDraft(expenseDraftFromRow(report))}
+                        deleteLabel="Delete report"
+                        onDelete={async () => {
                           const approved = await confirm({
                             title: "Delete expense report?",
                             message: `"${report.title}" (${report.status}) will be permanently removed with its line items and receipt links. Journal entries already posted for it are not removed.`,
@@ -611,10 +614,8 @@ export function TreasurerPage() {
                           } catch (error: any) {
                             toast.error("Could not delete expense report", error?.message);
                           }
-                        }} disabled={!canWrite}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                        }}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -720,13 +721,14 @@ export function TreasurerPage() {
                     <td className="mono" style={{ textAlign: "right" }}>{source.committedTotalCents ? cents(source.committedTotalCents) : "—"}</td>
                     <td className="mono" style={{ textAlign: "right" }}>{source.receivedTotalCents ? cents(source.receivedTotalCents) : "—"}</td>
                     <td>
-                      <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                        <button className="btn btn--ghost btn--sm" onClick={() => setEventDraft(newEventDraft(source))} disabled={!canWrite}>Event</button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => setSourceDraft(sourceDraftFromRow(source))} disabled={!canWrite}>Edit</button>
-                        <button
-                          className="btn btn--ghost btn--sm btn--icon"
-                          aria-label={`Delete funding source ${source.name}`}
-                          onClick={async () => {
+                      <div className="row treasurer-row-actions">
+                        <RowActionsMenu
+                          label={`Actions for ${source.name}`}
+                          disabled={!canWrite}
+                          extraItems={[{ id: "event", label: "Add funding event", icon: <CalendarPlus size={14} />, onSelect: () => setEventDraft(newEventDraft(source)) }]}
+                          onEdit={() => setSourceDraft(sourceDraftFromRow(source))}
+                          deleteLabel="Delete source"
+                          onDelete={async () => {
                             const eventCount = (source.events ?? []).length;
                             const approved = await confirm({
                               title: "Delete funding source?",
@@ -741,10 +743,8 @@ export function TreasurerPage() {
                             } catch (error: any) {
                               toast.error("Could not delete funding source", error?.message);
                             }
-                          }} disabled={!canWrite}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                          }}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -799,12 +799,13 @@ export function TreasurerPage() {
                 <td className="mono" style={{ textAlign: "right" }}>{event.amountCents != null ? cents(event.amountCents) : "—"}</td>
                 <td>{event.attributionStatus ? <Badge tone="info">{event.attributionStatus}</Badge> : <span className="muted">—</span>}</td>
                 <td>
-                  <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                    <button className="btn btn--ghost btn--sm" onClick={() => setEventDraft(eventDraftFromRow(event, event.source))} disabled={!canWrite}>Edit</button>
-                    <button
-                      className="btn btn--ghost btn--sm btn--icon"
-                      aria-label={`Delete funding event ${event.label}`}
-                      onClick={async () => {
+                  <div className="row treasurer-row-actions">
+                    <RowActionsMenu
+                      label={`Actions for ${event.label}`}
+                      disabled={!canWrite}
+                      onEdit={() => setEventDraft(eventDraftFromRow(event, event.source))}
+                      deleteLabel="Delete event"
+                      onDelete={async () => {
                         const approved = await confirm({
                           title: "Delete funding event?",
                           message: `"${event.label}"${event.amountCents != null ? ` (${cents(event.amountCents)})` : ""} will be permanently removed from this funding source's history.`,
@@ -818,10 +819,8 @@ export function TreasurerPage() {
                         } catch (error: any) {
                           toast.error("Could not delete funding event", error?.message);
                         }
-                      }} disabled={!canWrite}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                      }}
+                    />
                   </div>
                 </td>
               </tr>
@@ -1449,4 +1448,42 @@ function expenseStatusTone(status: string) {
     case "Rejected": return "danger" as const;
     default: return "neutral" as const;
   }
+}
+
+/** Row "⋯" for the treasurer registers: edit + delete (plus any extras). */
+function RowActionsMenu({
+  label,
+  disabled,
+  onEdit,
+  onDelete,
+  deleteLabel,
+  extraItems = [],
+}: {
+  label: string;
+  disabled?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  deleteLabel: string;
+  extraItems?: { id: string; label: string; icon?: ReactNode; onSelect: () => void }[];
+}) {
+  return (
+    <Menu
+      align="right"
+      trigger={
+        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={label} title="More actions" disabled={disabled}>
+          <MoreHorizontal size={14} />
+        </button>
+      }
+      sections={[
+        {
+          id: "row-actions",
+          items: [
+            ...extraItems,
+            { id: "edit", label: "Edit", icon: <Pencil size={14} />, onSelect: onEdit },
+            { id: "delete", label: deleteLabel, icon: <Trash2 size={14} />, destructive: true, onSelect: () => void onDelete() },
+          ],
+        },
+      ]}
+    />
+  );
 }

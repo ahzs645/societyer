@@ -11,6 +11,9 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { formatDate } from "../lib/format";
+
+const LOCAL_DISCOVERY_NOTE = "Feed discovery needs a connected server; add opportunities manually.";
 
 export function GrantSourcesPage() {
   const society = useSociety();
@@ -29,14 +32,14 @@ export function GrantSourcesPage() {
         title="Grant sources"
         icon={<Globe2 size={16} />}
         iconColor="green"
-        subtitle="Built-in and workspace grant discovery sources, extraction notes, and source profiles."
+        subtitle="Where grant opportunities come from, and the queue to triage them."
         actions={
           <>
             <Link className="btn-action" to="/app/grants">
               <ArrowLeft size={12} /> Grants
             </Link>
-            <Link className="btn-action" to="/app/grants">
-              <BadgeDollarSign size={12} /> Grant pipeline
+            <Link className="btn-action" to="/app/grants" aria-label="Grant pipeline" title="Grant pipeline">
+              <BadgeDollarSign size={12} aria-hidden="true" /> Grant pipeline
             </Link>
           </>
         }
@@ -115,14 +118,14 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card__head" style={{ flexWrap: "wrap", gap: 8 }}>
+      <div className="card__head grant-queue__head">
         <h2 className="card__title">Opportunity queue</h2>
-        <span className="card__subtitle">{active.length} open · triage discovered or manually-added grant opportunities</span>
-        <div className="row" style={{ gap: 6, marginLeft: "auto", alignItems: "center", flexWrap: "wrap" }}>
+        <span className="card__subtitle">{active.length} open</span>
+        <div className="row grant-queue__actions">
           {(sources ?? []).length > 0 && (
             <>
-              <select aria-label="Grant discovery source" className="input" value={discoverSourceId} onChange={(e) => setDiscoverSourceId(e.target.value)} style={{ maxWidth: 200 }}>
-                <option value="">Discover from source…</option>
+              <select aria-label="Grant discovery source" className="input grant-queue__source" value={discoverSourceId} onChange={(e) => setDiscoverSourceId(e.target.value)}>
+                <option value="">Choose a source…</option>
                 {(sources ?? []).map((s: any) => (
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
@@ -138,7 +141,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
         </div>
       </div>
       <div className="card__body col" style={{ gap: 10 }}>
-        {isLocalDataRuntime() && <p className="muted" role="status">Feed discovery requires online mode and a connected server. You can add and review opportunities locally.</p>}
+        {isLocalDataRuntime() && <p className="muted" role="status" style={{ margin: 0 }}>{LOCAL_DISCOVERY_NOTE}</p>}
         {adding && (
           <div className="col" style={{ gap: 8 }}>
             <Field label="Title">
@@ -156,7 +159,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
           </div>
         )}
         {(candidates ?? []).length === 0 ? (
-          <div className="muted">No opportunities yet. Add one above to start a review queue.</div>
+          !isLocalDataRuntime() && <div className="muted">No opportunities yet.</div>
         ) : (
           (candidates ?? []).map((c: any) => (
             <div key={c._id} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
@@ -164,7 +167,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
                 <Badge tone={CANDIDATE_TONES[c.status] ?? "neutral"}>{c.status}</Badge>{" "}
                 {c.opportunityUrl ? <a href={c.opportunityUrl} target="_blank" rel="noreferrer"><strong>{c.title}</strong></a> : <strong>{c.title}</strong>}
                 <span className="muted">
-                  {c.funder ? ` · ${c.funder}` : ""}{c.amountText ? ` · ${c.amountText}` : ""}{c.applicationDueDate ? ` · due ${c.applicationDueDate}` : ""}
+                  {c.funder ? ` · ${c.funder}` : ""}{c.amountText ? ` · ${c.amountText}` : ""}{c.applicationDueDate ? ` · due ${formatDate(c.applicationDueDate)}` : ""}
                 </span>
               </span>
               <span className="row" style={{ gap: 6 }}>

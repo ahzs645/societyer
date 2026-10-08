@@ -197,7 +197,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
         title={grant.title}
         icon={<BadgeDollarSign size={16} />}
         iconColor="green"
-        subtitle={editing ? "Editing grant workspace details, format library, evidence, and source data." : `${grant.funder}${grant.program ? ` · ${grant.program}` : ""}`}
+        subtitle={editing ? "Editing grant details" : `${grant.funder}${grant.program ? ` · ${grant.program}` : ""}`}
         actions={
           editing && canWrite ? (
             <>
@@ -207,8 +207,15 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
               </button>
             </>
           ) : (
-            <button className="btn-action btn-action--primary" onClick={startEditing} disabled={!canWrite}>
-              <Pencil size={12} /> Edit workspace
+            <button
+              type="button"
+              className="btn-action btn-action--icon grant-workspace__edit"
+              onClick={startEditing}
+              disabled={!canWrite}
+              aria-label="Edit workspace"
+              title="Edit workspace"
+            >
+              <Pencil size={14} aria-hidden="true" />
             </button>
           )
         }

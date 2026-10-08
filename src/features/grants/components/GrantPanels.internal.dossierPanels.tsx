@@ -71,44 +71,45 @@ export function GrantDossierSummary({
 
   return (
     <DossierSection title="Grant Overview">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
-        <DossierFact label="Funder" value={grant.funder ?? grant.funderName} />
-        <DossierFact label="Program" value={grant.program} />
+      {/* Only filled-in facts are shown; a wall of "—" tiles hid the useful ones. */}
+      <div className="grant-overview-facts" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8 }}>
+        <OverviewFact label="Funder" value={grant.funder ?? grant.funderName} />
+        <OverviewFact label="Program" value={grant.program} />
         <DossierFact label="Status">
           <Badge tone={grantStatusTone(grant.status)}>{grant.status ?? "Not set"}</Badge>
         </DossierFact>
-        <DossierFact label="Opportunity type" value={grant.opportunityType} />
-        <DossierFact label="Priority" value={grant.priority} />
-        <DossierFact label="Fit score" value={fitScore} />
-        <DossierFact label="Requested" value={grant.amountRequestedCents == null ? undefined : money(grant.amountRequestedCents)} />
-        <DossierFact label="Awarded" value={grant.amountAwardedCents == null ? undefined : money(grant.amountAwardedCents)} />
-        <DossierFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
-        <DossierFact label="Confirmation" value={grant.confirmationCode} />
-        <DossierFact label="Readiness">
-          {readiness.total > 0 ? (
+        <OverviewFact label="Opportunity type" value={grant.opportunityType} />
+        <OverviewFact label="Priority" value={grant.priority} />
+        <OverviewFact label="Fit score" value={fitScore} />
+        <OverviewFact label="Requested" value={grant.amountRequestedCents == null ? undefined : money(grant.amountRequestedCents)} />
+        <OverviewFact label="Awarded" value={grant.amountAwardedCents == null ? undefined : money(grant.amountAwardedCents)} />
+        <OverviewFact label="Submitted" value={grant.submittedAtISO ? formatDate(grant.submittedAtISO) : undefined} />
+        <OverviewFact label="Confirmation" value={grant.confirmationCode} />
+        {readiness.total > 0 && (
+          <DossierFact label="Readiness">
             <span>
               <Badge tone={readiness.percent === 100 ? "success" : readiness.percent >= 50 ? "warn" : "info"}>
                 {readiness.percent}%
               </Badge>{" "}
               <span className="muted">{readiness.complete}/{readiness.total}</span>
             </span>
-          ) : (
-            "—"
-          )}
-        </DossierFact>
-        <DossierFact label="Application due" value={grant.applicationDueDate ? formatDate(grant.applicationDueDate) : undefined} />
-        <DossierFact label="Decision" value={grant.decisionAtISO ? formatDate(grant.decisionAtISO) : undefined} />
-        <DossierFact label="Project start" value={grant.startDate ? formatDate(grant.startDate) : undefined} />
-        <DossierFact label="Project end" value={grant.endDate ? formatDate(grant.endDate) : undefined} />
-        <DossierFact label="Next report" value={grant.nextReportDueAtISO ? formatDate(grant.nextReportDueAtISO) : undefined} />
-        <DossierFact label="Committee">
-          {committee ? <Link to={`/app/committees/${committee._id}`}>{committee.name}</Link> : "—"}
-        </DossierFact>
-        <DossierFact label="Board owner" value={owner?.displayName} />
+          </DossierFact>
+        )}
+        <OverviewFact label="Application due" value={grant.applicationDueDate ? formatDate(grant.applicationDueDate) : undefined} />
+        <OverviewFact label="Decision" value={grant.decisionAtISO ? formatDate(grant.decisionAtISO) : undefined} />
+        <OverviewFact label="Project start" value={grant.startDate ? formatDate(grant.startDate) : undefined} />
+        <OverviewFact label="Project end" value={grant.endDate ? formatDate(grant.endDate) : undefined} />
+        <OverviewFact label="Next report" value={grant.nextReportDueAtISO ? formatDate(grant.nextReportDueAtISO) : undefined} />
+        {committee && (
+          <DossierFact label="Committee">
+            <Link to={`/app/committees/${committee._id}`}>{committee.name}</Link>
+          </DossierFact>
+        )}
+        <OverviewFact label="Board owner" value={owner?.displayName} />
         <DossierFact label="Public intake">
           <Badge tone={grant.allowPublicApplications ? "success" : "info"}>{grant.allowPublicApplications ? "Open" : "Internal"}</Badge>
         </DossierFact>
-        <DossierFact label="Linked account" value={account ? `${account.name} · ${money(account.balanceCents ?? 0)}` : undefined} />
+        <OverviewFact label="Linked account" value={account ? `${account.name} · ${money(account.balanceCents ?? 0)}` : undefined} />
       </div>
       {grant.nextAction && (
         <div style={{ marginTop: 10 }}>
@@ -448,7 +449,8 @@ export function cleanSourceKeyFacts(value: unknown) {
   const byKey = new Map<string, string>();
   for (const fact of cleanStringList(value)) {
     const key = /^approved\/requested delta:/i.test(fact) ? "approved-requested-delta" : fact.toLowerCase();
-    byKey.set(key, fact);
+    // Source facts are free text; show any ISO dates in them as human dates.
+    byKey.set(key, fact.replace(/\b\d{4}-\d{2}-\d{2}\b/g, (date) => formatDate(date)));
   }
   return Array.from(byKey.values());
 }
@@ -463,7 +465,7 @@ export function DossierSection({
   children: ReactNode;
 }) {
   return (
-    <section id={id} style={dossierSectionStyle}>
+    <section id={id} className="grant-dossier-section" style={dossierSectionStyle}>
       <div className="stat__label" style={{ marginBottom: 10 }}>{title}</div>
       {children}
     </section>
@@ -481,9 +483,15 @@ export function DossierFact({
 }) {
   const displayValue = children ?? (value === "" ? undefined : value) ?? "—";
   return (
-    <div style={factBoxStyle}>
+    <div className="grant-dossier-fact" style={factBoxStyle}>
       <div className="stat__label">{label}</div>
       <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{displayValue}</div>
     </div>
   );
+}
+
+/** A summary fact that is left out entirely when it has no value. */
+function OverviewFact({ label, value }: { label: string; value?: ReactNode }) {
+  if (value == null || value === "") return null;
+  return <DossierFact label={label} value={value} />;
 }

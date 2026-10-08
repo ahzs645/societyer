@@ -150,7 +150,9 @@ test("direct grant editing opens its fields, persists corrections and source alt
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "grants/static_grant/edit");
-  await expect(page.getByRole("tab", { name: "Edit", exact: true })).toHaveAttribute("aria-selected", "true");
+  // The editor opens in the Overview tab; there is no separate Edit tab.
+  await expect(page.getByRole("tab", { name: "Overview", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Edit", exact: true })).toHaveCount(0);
   await input(page, "Title").fill("Operations audit youth grant");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Operations audit youth grant", exact: true })).toBeVisible();
@@ -165,7 +167,9 @@ test("direct grant editing opens its fields, persists corrections and source alt
   await page.getByRole("button", { name: "Cards", exact: true }).click();
   await visit(page, "grants/sources/bc-arts-council");
   await expect(page.getByRole("link", { name: "Official source", exact: true })).toHaveAttribute("href", /^https:\/\//);
-  await expect(page.getByText("manual_mapping", { exact: true })).toBeVisible();
+  // Scraper internals sit in a collapsed "Technical details" disclosure, in plain words.
+  await page.getByText("Technical details", { exact: true }).click();
+  await expect(page.getByText("Manual mapping", { exact: true })).toBeVisible();
   await fits(page);
   await visit(page, "org-history?section=budgets");
   await page.getByRole("button", { name: /^Budgets/ }).click();
@@ -227,7 +231,9 @@ test("disconnecting Wave preserves the cache while disabling refresh and showing
   await page.getByRole("menuitem", { name: "Disconnect", exact: true }).click();
   await expect(page.getByRole("button", { name: "Connect Wave", exact: true })).toBeVisible();
   await visit(page, "financials/wave/account");
-  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /^Refresh from Wave/ })).toBeDisabled();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("status", { name: "" }).filter({ hasText: "Wave is disconnected" })).toBeVisible();
   await expect(page.getByText("Operating chequing", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: /^Categories/ }).click();
@@ -238,9 +244,11 @@ test("disconnecting Wave preserves the cache while disabling refresh and showing
   await fits(page);
   await visit(page, "financials");
   await page.getByRole("button", { name: "Connect Wave", exact: true }).click();
-  await expect(page.getByText("Connected · wave", { exact: true })).toBeVisible();
+  await expect(page.getByTitle("Connected to Wave", { exact: true })).toBeVisible();
   await visit(page, "financials/wave/account");
-  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /^Refresh from Wave/ })).toBeEnabled();
+  await page.keyboard.press("Escape");
   await expect(page.getByText("Operating chequing", { exact: true }).first()).toBeVisible();
 });
 
@@ -305,7 +313,8 @@ test("a manual bank transaction can be reconciled with its note and a quick entr
   await expect(entry.locator("tbody tr")).toHaveCount(2);
   await expect(entry).toContainText("debit");
   await expect(entry).toContainText("credit");
-  await page.getByRole("button", { name: "Journal entry", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Journal entry", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Post journal entry");
   await fits(page);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -384,7 +393,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await expect(page.getByRole("button", { name: "Quick entry", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
     await navigate("financials/accounting");
-    await expect(page.getByRole("button", { name: "Journal entry", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
     const accountingExports = page.getByRole("button", { name: /^(chart of accounts|trial balance|journal entries|general ledger|board\/auditor ZIP)$/ });
     await expect(accountingExports).toHaveCount(5);
     for (const button of await accountingExports.all()) {

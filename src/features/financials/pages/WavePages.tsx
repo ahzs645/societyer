@@ -3,11 +3,12 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../../../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "../../../pages/_helpers";
-import { Badge, Flag } from "../../../components/ui";
+import { Flag } from "../../../components/ui";
 import { DataTable } from "../../../components/DataTable";
 import { money, relative } from "../../../lib/format";
-import { ArrowLeft, Database, ExternalLink, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Database, Eye, EyeOff, ExternalLink, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
 import { RecordNotFound } from "../../../components/RecordNotFound";
@@ -156,34 +157,42 @@ export function WaveResourceTablePage() {
         title={title}
         icon={<Database size={16} />}
         iconColor="green"
-        subtitle={
-          waveSummary
-            ? `${waveSummary.businessName} · ${rows.length} rows · Last synced from Wave ${relative(waveSummary._creationTime)}${hiddenRows > 0 ? ` · ${hiddenRows} hidden by view` : ""}`
-            : "Data pulled from your connected Wave account. Refresh to sync the latest."
+        subtitle={waveSummary ? waveTableSubtitle(waveSummary, rows.length) : "Data pulled from your connected Wave account."}
+        info={
+          <p>
+            Wave is an external accounting tool. This shows the data it reported at the last sync, before Societyer
+            processes it into the ledger.{hiddenRows > 0 ? ` ${hiddenRows} row${hiddenRows === 1 ? " is" : "s are"} hidden by the current view.` : ""}
+          </p>
         }
         actions={
           <>
             <Link className="btn-action" to="/app/financials">
               <ArrowLeft size={12} /> Financials
             </Link>
-            {queryResourceType === "account" && (
-              <button
-                className="btn-action"
-                onClick={() => setHideZeroWaveAccounts(!hideZeroWaveAccounts)}
-              >
-                Zero-balance {hideZeroWaveAccounts ? "hidden" : "shown"}
-              </button>
-            )}
-            <button className="btn-action" disabled={!(canWrite && canEditSettings) || (busy || !activeConnection)} title={!activeConnection ? "Connect Wave from Financials before refreshing cached records." : undefined} onClick={refreshWaveCache}>
-              <RefreshCw size={12} /> Refresh
-            </button>
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "refresh",
+                  label: "Refresh from Wave",
+                  icon: <RefreshCw size={14} />,
+                  disabled: !(canWrite && canEditSettings) || busy || !activeConnection,
+                  hint: !activeConnection ? "Connect Wave from Financials first" : undefined,
+                  onSelect: () => void refreshWaveCache(),
+                },
+                ...(queryResourceType === "account"
+                  ? [{
+                      id: "zero-balance",
+                      label: hideZeroWaveAccounts ? "Show zero-balance accounts" : "Hide zero-balance accounts",
+                      icon: hideZeroWaveAccounts ? <Eye size={14} /> : <EyeOff size={14} />,
+                      onSelect: () => setHideZeroWaveAccounts(!hideZeroWaveAccounts),
+                    }]
+                  : []),
+              ]}
+            />
           </>
         }
       />
 
-      <p className="muted" style={{ fontSize: 13, marginTop: -4, marginBottom: 12 }}>
-        Wave is an external accounting tool — this shows the data it reported at last sync, before Societyer processes it into the ledger.
-      </p>
       {connections !== undefined && !activeConnection && (
         <p className="muted" role="status">
           Wave is disconnected. Previously synced records remain available for review. <Link to="/app/financials">Connect from Financials</Link> to refresh them.
@@ -284,6 +293,20 @@ export function WaveAccountDetailPage() {
     nameSingular: "accountTransaction",
     viewId: txnViewId,
   });
+  // On a money account's own page every row is that account, so the Account
+  // column only repeats the title. Category pages keep it (rows span accounts).
+  const txnHydratedView = useMemo(() => {
+    const view = txnTableData.hydratedView;
+    if (!view) return view;
+    return {
+      ...view,
+      columns: view.columns.map((column) => {
+        if (column.field.name === "accountName" && !isCategoryAccount) return { ...column, isVisible: false };
+        if (column.field.name === "date") return { ...column, size: Math.max(column.size ?? 0, 130) };
+        return column;
+      }),
+    };
+  }, [txnTableData.hydratedView, isCategoryAccount]);
 
   useEffect(() => {
     setPullState("idle");
@@ -347,7 +370,7 @@ export function WaveAccountDetailPage() {
         iconColor="green"
         subtitle={
           isLedgerAccount
-            ? `${capitalize(accountKind)} · Wave ledger row`
+            ? `${capitalize(accountKind)} · Wave internal row`
             : activity !== undefined
             ? `${capitalize(accountKind)} · ${activity.total ?? transactions.length} ${transactionLabel}${(activity.total ?? transactions.length) === 1 ? "" : "s"}${isCategoryAccount ? ` · ${money(linkedTotalCents)}` : ""}`
             : `Wave ${accountKind} details`
@@ -367,7 +390,6 @@ export function WaveAccountDetailPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{capitalize(accountKind)} details</h2>
-          {resource.status && <Badge tone={resource.status === "archived" ? "neutral" : "info"}>{resource.status}</Badge>}
         </div>
         <div className="card__body">
           <WaveResourceSummary resource={resource} />
@@ -402,7 +424,7 @@ export function WaveAccountDetailPage() {
 
       {isLedgerAccount ? (
         <Flag level="warn">
-          Wave ledger/system row. Usually payable or transfer clearing internals, not a reusable transaction category.
+          An internal Wave row, usually payable or transfer clearing, not a reusable transaction category.
         </Flag>
       ) : txnMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="account-transaction" />
@@ -410,7 +432,7 @@ export function WaveAccountDetailPage() {
         <RecordTableScope
           tableId={`wave-account-txns-${resource._id}`}
           objectMetadata={txnTableData.objectMetadata}
-          hydratedView={txnTableData.hydratedView}
+          hydratedView={txnHydratedView}
           records={txnRecords}
           onRecordClick={(_, record) => setSelectedTransaction(record)}
         >
@@ -513,7 +535,7 @@ export function WaveResourceDetailPage() {
         subtitle={
           isWaveCounterpartyResource(resource)
             ? `${waveTypeLabel(resource.resourceType)} · ${activity?.total ?? 0} linked transaction${activity?.total === 1 ? "" : "s"} · ${money(linkedTotalCents)}`
-            : `${waveTypeLabel(resource.resourceType)} · Wave resource`
+            : `${waveSingularTypeLabel(resource.resourceType)} from Wave`
         }
         actions={
           <>
@@ -530,7 +552,6 @@ export function WaveResourceDetailPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{capitalize(resourceKind)} details</h2>
-          {resource.status && <Badge tone={resource.status === "archived" ? "neutral" : "info"}>{resource.status}</Badge>}
         </div>
         <div className="card__body">
           <WaveResourceSummary resource={resource} />
@@ -615,4 +636,13 @@ export function WaveResourceDetailPage() {
       />
     </div>
   );
+}
+
+function waveTableSubtitle(summary: any, rowCount: number) {
+  const synced = relative(summary._creationTime);
+  return [
+    summary.businessName,
+    `${rowCount} row${rowCount === 1 ? "" : "s"}`,
+    synced && synced !== "—" ? `synced ${synced}` : null,
+  ].filter(Boolean).join(" · ");
 }

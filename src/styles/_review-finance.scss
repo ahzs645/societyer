@@ -1,0 +1,340 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ---------------------------------------------------------------------------
+// Finance + grants review fixes (Financials, FY detail, Treasurer, Wave,
+// Reconciliation, Grants, Grant sources).
+// ---------------------------------------------------------------------------
+
+// FY detail inspector: sections sit flat inside the inspector panel rather
+// than as bordered cards nested in it.
+.finance-inspector__section {
+  @include flex-column;
+  gap: token('s-3');
+  min-width: 0;
+}
+.finance-inspector__section + .finance-inspector__section {
+  padding-top: token('s-4');
+  border-top: 1px solid token('border');
+}
+@media (max-width: 560px) {
+  // On phones the inspector stacks under the tabs: run it edge to edge like
+  // other page sections rather than as an inset box.
+  .app-shell.is-mobile .page .record-show__inspector:has(.finance-inspector__section) {
+    margin-inline: calc(-1 * var(--page-gutter));
+    padding-inline: var(--page-gutter);
+    border-inline-width: 0;
+    border-radius: 0;
+  }
+}
+.finance-inspector__title {
+  @include flex-center;
+  gap: token('s-2');
+  margin: 0;
+  font-size: token('fs-md');
+  font-weight: 600;
+}
+
+// ---- Treasurer -------------------------------------------------------------
+// Period labels ("From", "To", "FY") never break letter by letter.
+.treasurer-period-field > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-width: max-content;
+}
+.treasurer-period-field {
+  flex-shrink: 0;
+}
+// The picker's 100% width made the field collapse to the picker alone, so the
+// next field's label slid underneath it.
+.treasurer-period-field .date-trigger-wrap {
+  width: auto;
+  min-width: 168px;
+}
+// The register sits in a half-width card: let its columns size to content
+// so Status / Committed / Received stay visible instead of scrolling away.
+@media (min-width: 761px) {
+  .treasurer-source-table,
+  .treasurer-funding-table {
+    width: 100%;
+  }
+  .treasurer-funding-table th:nth-child(1) { width: auto; }
+  .treasurer-funding-table th:nth-child(3),
+  .treasurer-funding-table th:nth-child(4) { width: 112px; }
+  .treasurer-funding-table td.mono { white-space: nowrap; }
+}
+.treasurer-source-table th:nth-child(1) { width: auto; }
+.treasurer-source-table th:nth-child(3),
+.treasurer-source-table th:nth-child(4) { width: 112px; }
+.treasurer-source-table td.mono,
+.treasurer-timeline-table td:first-child { white-space: nowrap; }
+.treasurer-timeline-table th:nth-child(1) { width: 120px; }
+.treasurer-row-actions {
+  justify-content: flex-end;
+  gap: token('s-1');
+  flex-wrap: nowrap;
+}
+.treasurer-card-head-action {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.treasurer-claims-table th:nth-child(6) { width: 140px; }
+.treasurer-source-table th:nth-child(2) { width: 96px; }
+.treasurer-source-table th:nth-child(5) { width: 48px; }
+.treasurer-timeline-table th:nth-child(6) { width: 56px; }
+
+@media (max-width: 760px) {
+  // "New claim" stays on the title row, right-aligned.
+  .treasurer-expense-card .card__head {
+    flex-wrap: nowrap;
+  }
+  // Income / Expenses / Net sit three across under the period controls.
+  .treasurer-overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: token('s-2');
+  }
+  .treasurer-period-card {
+    grid-column: 1 / -1;
+  }
+  .treasurer-summary-card {
+    padding: token('s-3');
+  }
+  .treasurer-summary-card__label {
+    font-size: token('fs-xs');
+  }
+  .treasurer-summary-card__value {
+    font-size: token('fs-sm');
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 480px) {
+  // From and To side by side; the short FY field gets its own row.
+  .treasurer-period-card__body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: token('s-2');
+  }
+  .treasurer-period-field--fy {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .treasurer-period-field--fy .input {
+    width: 90px;
+  }
+  .treasurer-period-field .date-trigger-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+// ---- Financials --------------------------------------------------------------
+.financials-tabs {
+  margin-bottom: token('s-4');
+}
+.financials-summary-card__stats {
+  margin: 0 token('s-4') token('s-4');
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+@media (max-width: 760px) {
+  // The summary's stats are the card body: no second bordered box inside it.
+  .financials-summary-card__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+    border: 0;
+    border-top: 1px solid token('border-color-light');
+    border-radius: 0;
+  }
+  .financials-tabs {
+    margin-bottom: token('s-3');
+  }
+}
+
+// ---- Accounting ----------------------------------------------------------------
+// Statement section headings and totals read as left-aligned labels in the
+// same column as the account names, not centred across the table.
+.accounting-statement-table tbody th {
+  text-align: left;
+  font-weight: 600;
+  padding-left: token('s-2');
+}
+.accounting-statement-table tbody th[colspan] {
+  padding-top: token('s-3');
+  color: token('text-secondary');
+}
+.accounting-statement-table {
+  width: 100%;
+}
+@media (max-width: 760px) {
+  // Two-column statements fit a phone: labels wrap, amounts stay visible.
+  .accounting-table-wrap .accounting-statement-table {
+    min-width: 0;
+    width: 100%;
+  }
+  .accounting-statement-table :is(th, td) {
+    white-space: normal !important;
+  }
+  .accounting-statement-table td.mono {
+    white-space: nowrap !important;
+    width: 1%;
+  }
+}
+.accounting-section-heading {
+  @include flex-center;
+  gap: token('s-2');
+}
+.accounting-section-heading h3 {
+  margin: 0;
+  color: token('text-primary');
+}
+.accounting-budget-year {
+  width: 120px;
+  max-width: 100%;
+}
+
+// ---- Year-end reports ------------------------------------------------------------
+.year-end-fy-select {
+  width: 220px;
+  max-width: 100%;
+}
+.year-end-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: token('s-2') token('s-3');
+  align-items: start;
+  padding: token('s-3');
+}
+.year-end-check__icon {
+  margin-top: 2px;
+  line-height: 0;
+}
+.year-end-check__body {
+  gap: 2px;
+  min-width: 0;
+}
+.year-end-check__status {
+  white-space: nowrap;
+}
+
+// ---- Wave ---------------------------------------------------------------------------
+@media (max-width: 760px) {
+  // Account views scroll sideways in one row instead of wrapping into three.
+  .wave-account-views {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wave-account-views > * {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+
+// ---- Grant sources --------------------------------------------------------------------
+.grant-queue__head {
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+.grant-queue__actions {
+  gap: token('s-2');
+  margin-left: auto;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.grant-queue__source {
+  width: 220px;
+  max-width: 100%;
+}
+@media (max-width: 760px) {
+  // Source picker + Discover share one full-width row; nothing is clipped.
+  .grant-queue__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+  .grant-queue__source {
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0;
+  }
+}
+
+// Source detail page.
+.grant-source-detail__clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.grant-source-detail__technical {
+  margin-top: token('s-4');
+}
+.grant-source-detail__technical > summary {
+  cursor: pointer;
+  list-style: none;
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+.grant-source-detail__technical > summary::-webkit-details-marker {
+  display: none;
+}
+.grant-source-detail__technical > summary::before {
+  content: "▸";
+  color: token('text-tertiary');
+  transition: transform 0.15s ease;
+}
+.grant-source-detail__technical[open] > summary::before {
+  transform: rotate(90deg);
+}
+.grant-source-detail__technical:not([open]) > summary {
+  border-bottom: 0;
+}
+
+// ---- Grant workspace ---------------------------------------------------------------------
+.grant-workspace__edit {
+  width: 28px;
+}
+.grant-money-input {
+  position: relative;
+  display: block;
+  max-width: 220px;
+}
+.grant-money-input__prefix {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: token('text-tertiary');
+  pointer-events: none;
+}
+.grant-money-input > .input {
+  width: 100%;
+  padding-left: 24px;
+}
+@media (max-width: 760px) {
+  // Overview facts read as one flat list inside the section, not boxed tiles
+  // inside a padded box.
+  .grant-overview-facts {
+    gap: 0 token('s-3') !important;
+  }
+  .grant-overview-facts .grant-dossier-fact {
+    border: 0 !important;
+    border-bottom: 1px solid token('border-color-light') !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: token('s-2') 0 !important;
+  }
+}
+@media (max-width: 560px) {
+  // Grant sections run edge to edge on phones like other page-level cards,
+  // instead of boxed sections inset inside the page gutter.
+  .app-shell.is-mobile .page :is(.grant-edit-section, .grant-dossier-section):not(.grant-edit-section *, .grant-dossier-section *) {
+    margin-inline: calc(-1 * var(--page-gutter));
+    border-inline-width: 0 !important;
+    border-radius: 0 !important;
+    padding-inline: var(--page-gutter) !important;
+  }
+}
+
+// @end-of-partial
