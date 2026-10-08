@@ -37,6 +37,11 @@
     min-height: 32px;
   }
 
+  /* Anchored menus / dropdowns (short lists stay popovers on phones). */
+  .menu:not(.menu--sheet) .menu__item {
+    min-height: 40px;
+  }
+
   /* Native checkboxes / radios render at 13px — barely tappable. */
   input[type="checkbox"],
   input[type="radio"] {

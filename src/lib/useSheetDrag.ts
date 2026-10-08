@@ -1,6 +1,13 @@
 import { RefObject, useEffect, useRef, useState } from "react";
 import { bottomSheetMediaQuery } from "./breakpoints";
 
+/**
+ * Phones only use a bottom sheet for lists longer than this (or ones with a
+ * search box). A couple of actions read better as a small popover anchored
+ * to their trigger, like native context menus.
+ */
+export const SHEET_MIN_ITEMS = 6;
+
 /** iOS sheet curve (also what vaul / UIKit sheets use). */
 export const SHEET_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
 

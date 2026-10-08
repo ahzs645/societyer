@@ -4,7 +4,7 @@ import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
-import { useSheetDrag } from "../lib/useSheetDrag";
+import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
 import { getDialogFocusables } from "../lib/useDialogFocus";
 import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
 
@@ -91,8 +91,14 @@ export function Select<T extends string>({
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [isBottomSheet, setIsBottomSheet] = useState(
+  const [isPhone, setIsPhone] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
+  );
+  // Phones use a bottom sheet for long or searchable option lists; a short
+  // list (Yes / No, a few statuses) stays an anchored popover.
+  const isBottomSheet = isPhone && (
+    Boolean(searchable ?? options.some((o) => o.color))
+    || options.length + (clearable ? 1 : 0) > SHEET_MIN_ITEMS
   );
   // Keeps the bottom sheet above the on-screen keyboard: iOS overlays the
   // keyboard on the layout viewport, so a `bottom: 0` sheet disappears
@@ -130,7 +136,7 @@ export function Select<T extends string>({
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
-    const update = () => setIsBottomSheet(media.matches);
+    const update = () => setIsPhone(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
