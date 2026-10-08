@@ -704,3 +704,47 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: token('s-3');
 }
+
+/* Export readiness: a score and the open items first, the full checklist
+ * behind "Show all checks". */
+.minutes-export-summary {
+  display: grid;
+  gap: 10px;
+}
+.minutes-export-summary__head {
+  display: grid;
+  gap: 6px;
+}
+.minutes-export-summary__bar {
+  height: 4px;
+  border-radius: 999px;
+  background: token('bg-subtle');
+  overflow: hidden;
+}
+.minutes-export-summary__bar span {
+  display: block;
+  height: 100%;
+  background: token('success');
+}
+.minutes-export-summary__open {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.minutes-export-summary__open li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: token('fs-sm');
+}
+.minutes-export-summary__all > summary {
+  color: token('accent');
+  font-size: token('fs-sm');
+  font-weight: 500;
+  cursor: pointer;
+}
+.minutes-export-summary__all[open] > summary {
+  margin-bottom: 10px;
+}

@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   Table2,
   X,
+  ListChecks,
 } from "lucide-react";
 import {
   useRecordTableIsDirty,
@@ -29,6 +30,7 @@ import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -94,6 +96,18 @@ export function RecordTableToolbar({
   const prompt = usePrompt();
   const { t } = useTranslation();
   const canPersistView = usePermissions().can("settings:write");
+  // Phones: search is an icon until tapped, and the "Select records" toggle
+  // sits in this row instead of taking a row of its own above the table.
+  const isMobile = useIsMobile();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const mobileSelectable = useRecordTableState((s) => s.mobileSelectable);
+  const mobileSelectionMode = useRecordTableState((s) => s.mobileSelectionMode);
+  useEffect(() => {
+    handle.get().setToolbarMounted(true);
+    return () => handle.get().setToolbarMounted(false);
+  }, [handle]);
+  const showSearch = !isMobile || searchOpen || Boolean(searchTerm);
 
   // The section icon comes from the route registry so a table's icon always
   // matches its page header and sidebar nav (single source of truth, same as
@@ -191,29 +205,69 @@ export function RecordTableToolbar({
             <span className="record-table__view-count">{filteredRecords.length}</span>
           </div>
         )}
+        {isMobile && (
+          <div className="record-table__mobile-tools">
+            {!showSearch && (
+              <button
+                type="button"
+                className="record-table__icon-button"
+                aria-label={`Search ${objectMetadata.labelPlural.toLowerCase()}`}
+                onClick={() => {
+                  setSearchOpen(true);
+                  window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                }}
+              >
+                <Search size={16} />
+              </button>
+            )}
+            {mobileSelectable && (
+              <button
+                type="button"
+                className={`record-table__icon-button${mobileSelectionMode ? " is-active" : ""}`}
+                aria-pressed={mobileSelectionMode}
+                aria-label={mobileSelectionMode ? "Exit selection" : "Select records"}
+                title={mobileSelectionMode ? "Exit selection" : "Select records"}
+                onKeyDown={(event) => {
+                  if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
+                }}
+                onClick={() => {
+                  if (mobileSelectionMode) handle.get().clearSelection();
+                  handle.get().setMobileSelectionMode(!mobileSelectionMode);
+                }}
+              >
+                <ListChecks size={16} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
+      {showSearch && (
       <div className="record-table__toolbar-center">
         <div className="record-table__search">
           <Search size={12} />
           <input
+            ref={searchInputRef}
             className="record-table__search-input"
             placeholder={`Search ${objectMetadata.labelPlural.toLowerCase()}…`}
             value={searchTerm}
             onChange={(e) => handle.get().setSearchTerm(e.target.value)}
+            onBlur={() => { if (!searchTerm) setSearchOpen(false); }}
           />
-          {searchTerm && (
+          {(searchTerm || (isMobile && searchOpen)) && (
             <button
               type="button"
               className="record-table__search-clear"
-              aria-label="Clear search"
-              onClick={() => handle.get().setSearchTerm("")}
+              aria-label={searchTerm ? "Clear search" : "Close search"}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => { handle.get().setSearchTerm(""); setSearchOpen(false); }}
             >
-              <X size={11} />
+              <X size={isMobile ? 14 : 11} />
             </button>
           )}
         </div>
       </div>
+      )}
 
       <div className="record-table__toolbar-right">
         {onSaveView && isDirty && (

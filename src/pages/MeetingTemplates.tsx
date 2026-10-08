@@ -376,7 +376,6 @@ export function MeetingTemplatesPage() {
             currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
             onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
             onOpenFilter={() => setFilterOpen((open) => !open)}
-            actions={<span className="muted">{records.length} saved</span>}
           />
           <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
           <RecordTableFilterChips />

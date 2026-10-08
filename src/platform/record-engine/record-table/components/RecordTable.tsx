@@ -200,7 +200,14 @@ export function RecordTable({
   // drawer. Column pickers/sort/filter still see the full column list.
   const isMobile = useIsMobile();
   const actorId = useCurrentUserId();
-  const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
+  const mobileSelectionMode = useRecordTableState((s) => s.mobileSelectionMode);
+  const toolbarMounted = useRecordTableState((s) => s.toolbarMounted);
+  const setMobileSelectionMode = (on: boolean) => handle.get().setMobileSelectionMode(on);
+  // Tell a mounted toolbar whether to offer the phone "Select records" toggle.
+  useEffect(() => {
+    handle.get().setMobileSelectable(Boolean(isMobile && selectable && viewType === "table"));
+    return () => handle.get().setMobileSelectable(false);
+  }, [handle, isMobile, selectable, viewType]);
   const selectionScope = useRef({ actorId, objectName: objectMetadata._id });
   const inlineSelection = isMobile && selectable && mobileSelectionMode && viewType === "table";
   useEffect(() => {
@@ -211,7 +218,7 @@ export function RecordTable({
       if (scopeChanged || mobileSelectionMode) handle.get().clearSelection();
     }
   }, [actorId, objectMetadata._id, isMobile, selectable, viewType, mobileSelectionMode, handle]);
-  const mobileSelectionControls = isMobile && selectable ? (
+  const mobileSelectionControls = isMobile && selectable && !toolbarMounted ? (
     <div className="record-table__mobile-selection-controls">
       <button type="button" className="btn btn--sm" aria-pressed={inlineSelection}
         onKeyDown={(event) => {

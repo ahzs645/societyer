@@ -102,6 +102,15 @@ export type RecordTableState = {
   openRecordIn: ViewOpenRecordIn;
   setOpenRecordIn: (openRecordIn: ViewOpenRecordIn) => void;
 
+  /* phone selection mode — the toggle lives in the toolbar row when a
+     toolbar is mounted, otherwise above the table */
+  mobileSelectionMode: boolean;
+  setMobileSelectionMode: (on: boolean) => void;
+  mobileSelectable: boolean;
+  setMobileSelectable: (on: boolean) => void;
+  toolbarMounted: boolean;
+  setToolbarMounted: (on: boolean) => void;
+
   /* selection */
   selectedRecordIds: Set<string>;
   setSelectedRecordIds: (next: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
@@ -159,6 +168,9 @@ export function createRecordTableStore(opts: {
     viewGroups: [],
     visibility: "personal",
     openRecordIn: "drawer",
+    mobileSelectionMode: false,
+    mobileSelectable: false,
+    toolbarMounted: false,
     selectedRecordIds: new Set(),
     selectionAnchorRowIndex: null,
     hoverPosition: null,
@@ -237,6 +249,9 @@ export function createRecordTableStore(opts: {
         return { selectedRecordIds: resolved };
       }),
     clearSelection: () => set({ selectedRecordIds: new Set(), selectionAnchorRowIndex: null }),
+    setMobileSelectionMode: (mobileSelectionMode) => set({ mobileSelectionMode }),
+    setMobileSelectable: (mobileSelectable) => set({ mobileSelectable }),
+    setToolbarMounted: (toolbarMounted) => set({ toolbarMounted }),
     setSelectionAnchorRowIndex: (selectionAnchorRowIndex) => set({ selectionAnchorRowIndex }),
 
     setHoverPosition: (pos) => set({ hoverPosition: pos }),

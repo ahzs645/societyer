@@ -417,11 +417,14 @@ export function MeetingsPage() {
             Clear review filters
           </button>
         )}
+        {/* Only worth a line when it says something the view pill's count doesn't. */}
+        {(filteredRecords.length !== records.length || reviewCounts.needs_review > 0 || duplicateGroups.length > 0) && (
         <span className="muted" style={{ fontSize: "var(--fs-sm)" }} data-testid="meetings-review-count">
           {filteredRecords.length} of {records.length} meetings
           {reviewCounts.needs_review > 0 ? ` · ${reviewCounts.needs_review} awaiting source review` : ""}
           {duplicateGroups.length > 0 ? ` · ${duplicateGroups.length} same-day duplicate group${duplicateGroups.length === 1 ? "" : "s"}` : ""}
         </span>
+        )}
       </div>
 
       {reviewFilter === "duplicates" && duplicateGroups.length > 0 && (

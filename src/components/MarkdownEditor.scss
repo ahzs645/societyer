@@ -390,3 +390,37 @@
   font: inherit;
   z-index: var(--z-popover, 40);
 }
+
+// Phones: one row of formatting buttons that scrolls sideways (with an edge
+// fade) instead of wrapping into two rows above every editor. The table
+// picker is pinned to the viewport so the scrolling row can't clip it.
+@media (max-width: 760px) {
+  .markdown-editor__toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    padding-right: 24px;
+  }
+  .markdown-editor__toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  .markdown-editor__toolbar-button {
+    flex: none;
+    width: 34px;
+    height: 34px;
+  }
+  .markdown-editor__table-anchor {
+    flex: none;
+  }
+  .markdown-editor__table-picker {
+    position: fixed;
+    top: auto;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    box-shadow: var(--shadow-strong);
+  }
+}

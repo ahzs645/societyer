@@ -300,19 +300,43 @@ export function MeetingSidebarColumn({
                     </div>
                   </>
                 )}
-                {showExportGaps && (
-                  <div className="minutes-export-gaps">
-                    {minutesExportGaps.map((gap) => (
-                      <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
-                        <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <strong>{gap.label}</strong>
-                          <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
-                        </div>
-                        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
+                {showExportGaps && (() => {
+                  // Lead with what's missing; the full checklist is one tap away.
+                  const ready = minutesExportGaps.filter((gap) => gap.status === "available").length;
+                  const open = minutesExportGaps.filter((gap) => gap.status !== "available");
+                  return (
+                    <div className="minutes-export-summary">
+                      <div className="minutes-export-summary__head">
+                        <strong>{ready} of {minutesExportGaps.length} ready</strong>
+                        <div className="minutes-export-summary__bar" aria-hidden="true"><span style={{ width: `${minutesExportGaps.length ? (ready / minutesExportGaps.length) * 100 : 0}%` }} /></div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {open.length > 0 && (
+                        <ul className="minutes-export-summary__open">
+                          {open.map((gap) => (
+                            <li key={`${gap.status}-${gap.label}`}>
+                              <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                              <span>{gap.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <details className="minutes-export-summary__all">
+                        <summary>Show all checks</summary>
+                        <div className="minutes-export-gaps">
+                          {minutesExportGaps.map((gap) => (
+                            <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
+                              <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <strong>{gap.label}</strong>
+                                <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                              </div>
+                              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

@@ -2551,3 +2551,35 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     min-width: 34px;
   }
 }
+
+/* Phone toolbar tools: search + selection toggles share the view pill's row. */
+.record-table__mobile-tools {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.record-table__icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid token('border-color-medium');
+  border-radius: token('r-pill');
+  background: token('bg-primary');
+  color: token('text-secondary');
+  cursor: pointer;
+  &:hover { color: token('text-primary'); background: token('bg-transparent-light'); }
+  &.is-active {
+    border-color: token('accent');
+    background: token('accent-soft');
+    color: token('accent');
+  }
+}
+@media (max-width: 760px) {
+  .record-table__toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: token('s-2');
+  }
+}
