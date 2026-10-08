@@ -165,7 +165,7 @@ export function ServiceProvidersPage() {
                   <span style={{ minWidth: 140, color: "var(--text-secondary)" }}>
                     {labelFor(row.function)}
                   </span>
-                  <span style={{ flex: "1 1 160px", minWidth: 0, fontWeight: 500 }}>{row.firmName}</span>
+                  <span style={{ flex: "1 1 0", minWidth: 120, fontWeight: 500 }}>{row.firmName}</span>
                   {row.contactName ? (
                     <span style={{ color: "var(--text-secondary)" }}>{row.contactName}</span>
                   ) : null}
