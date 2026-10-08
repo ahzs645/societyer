@@ -6,6 +6,7 @@
   flex-wrap: nowrap;
   gap: 4px;
   margin: 0 0 16px;
+  width: fit-content;
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
