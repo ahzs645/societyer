@@ -175,6 +175,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     publicSlug: v.optional(v.string()),
     publicSummary: v.optional(v.string()),
     publicContactEmail: v.optional(v.string()),
+    publicIntakePrivacyNotice: v.optional(v.string()),
     publicTransparencyEnabled: v.optional(v.boolean()),
     publicShowBoard: v.optional(v.boolean()),
     publicShowBylaws: v.optional(v.boolean()),

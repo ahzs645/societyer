@@ -513,6 +513,24 @@
     }
   }
 
+  /* "New …" actions are always a bare + on phones, whatever the fit, so the
+   * create button looks the same on every page. */
+  .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child) {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    letter-spacing: 0;
+
+    > svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
   /* Compact: icon buttons drop their visible text (it stays in the DOM, so
    * the accessible name is unchanged) and become square icon targets. */
   .page__header[data-actions-fit="compact"] .page__actions :is(.btn, .btn-action):has(> svg) {

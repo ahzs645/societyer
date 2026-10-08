@@ -28,6 +28,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 
 const PUBLICATION_PRESETS = [
   { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
@@ -158,6 +159,7 @@ export function TransparencyPage() {
                     publicSlug: society.publicSlug ?? society.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
                     publicSummary: society.publicSummary ?? society.purposes ?? "",
                     publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail ?? "",
+                    publicIntakePrivacyNotice: society.publicIntakePrivacyNotice ?? "",
                     publicTransparencyEnabled: society.publicTransparencyEnabled ?? true,
                     publicShowBoard: society.publicShowBoard ?? true,
                     publicShowBylaws: society.publicShowBylaws ?? true,
@@ -401,6 +403,7 @@ export function TransparencyPage() {
                   publicSlug: normalizePublicSlug(settingsDraft.publicSlug) || undefined,
                   publicSummary: settingsDraft.publicSummary || undefined,
                   publicContactEmail: settingsDraft.publicContactEmail || undefined,
+                  publicIntakePrivacyNotice: settingsDraft.publicIntakePrivacyNotice?.trim() || undefined,
                 });
                 toast.success("Public settings saved");
                 setSettingsDraft(null);
@@ -417,6 +420,9 @@ export function TransparencyPage() {
             <Field label="Public slug"><input className="input" value={settingsDraft.publicSlug ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicSlug: e.target.value })} /></Field>
             <Field label="Public summary"><MarkdownEditor rows={6} value={settingsDraft.publicSummary ?? ""} onChange={(markdown) => setSettingsDraft({ ...settingsDraft, publicSummary: markdown })} /></Field>
             <Field label="Public contact email"><input className="input" value={settingsDraft.publicContactEmail ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicContactEmail: e.target.value })} /></Field>
+            <Field label="Privacy notice on public forms" hint="Shown on the volunteer and funding forms. Leave blank to use the default notice.">
+              <textarea className="textarea" rows={4} value={settingsDraft.publicIntakePrivacyNotice ?? ""} placeholder={PIPA_INTAKE_NOTICE.body} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicIntakePrivacyNotice: e.target.value })} />
+            </Field>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicTransparencyEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicTransparencyEnabled: e.target.checked })} /> Enable public page</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBoard} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBoard: e.target.checked })} /> Show board roster</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show bylaws and governance records</label>

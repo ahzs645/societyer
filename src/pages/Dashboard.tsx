@@ -262,40 +262,46 @@ export function Dashboard() {
       )}
 
       {showOnboarding && !onboardingExpanded && (
-        <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
-          <div className="onboarding-flow__story">
-            <div>
-              <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
-              <p style={{ margin: "4px 0 0" }}>
-                Next: <strong>{nextOnboardingStep.title}</strong> — {nextOnboardingStep.description}
-              </p>
-            </div>
-            <div className="onboarding-flow__actions" style={{ flexWrap: "wrap", alignItems: "center" }}>
-              <div className="onboarding-flow__status">
-                <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
-                <span>setup checks complete</span>
-              </div>
-              <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
-                Open <ArrowRight size={12} />
-              </Link>
-              <button
-                type="button"
-                className="btn-action"
-                onClick={() => setOnboardingExpandedOverride(true)}
-                aria-expanded={false}
-              >
-                Show steps <ChevronDown size={12} />
-              </button>
-              <button
-                type="button"
-                className="onboarding-flow__dismiss"
-                onClick={hideOnboardingFlow}
-                title="Hide setup guide"
-                aria-label="Hide setup guide"
-              >
-                <X size={14} />
-              </button>
-            </div>
+        <section className="onboarding-compact" aria-labelledby="onboarding-flow-title">
+          <div
+            className="onboarding-compact__ring"
+            style={{ "--progress": `${onboardingProgress}%` } as React.CSSProperties}
+            role="img"
+            aria-label={`${completedOnboardingSteps} of ${onboardingSteps.length} setup checks complete`}
+          >
+            <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
+          </div>
+          <div className="onboarding-compact__main">
+            <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
+            <Link to={nextOnboardingStep.to} className="onboarding-compact__next">
+              <span className="onboarding-compact__next-label">Next</span>
+              <span className="onboarding-compact__next-text">
+                <strong>{nextOnboardingStep.title}</strong>
+                <span className="onboarding-compact__next-desc">{nextOnboardingStep.description}</span>
+              </span>
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
+          <div className="onboarding-compact__actions">
+            <button
+              type="button"
+              className="onboarding-flow__dismiss"
+              onClick={() => setOnboardingExpandedOverride(true)}
+              aria-expanded={false}
+              aria-label="Show steps"
+              title="Show all setup steps"
+            >
+              <ChevronDown size={16} />
+            </button>
+            <button
+              type="button"
+              className="onboarding-flow__dismiss"
+              onClick={hideOnboardingFlow}
+              title="Hide setup guide"
+              aria-label="Hide setup guide"
+            >
+              <X size={14} />
+            </button>
           </div>
         </section>
       )}

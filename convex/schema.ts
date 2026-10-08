@@ -127,6 +127,9 @@ export default defineSchema({
     calendarFeedToken: v.optional(v.string()),
     publicSummary: v.optional(v.string()),
     publicContactEmail: v.optional(v.string()),
+    // Shown on public volunteer / funding forms; falls back to the reviewed
+    // default notice when unset.
+    publicIntakePrivacyNotice: v.optional(v.string()),
     publicTransparencyEnabled: v.optional(v.boolean()),
     publicShowBoard: v.optional(v.boolean()),
     publicShowBylaws: v.optional(v.boolean()),

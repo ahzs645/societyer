@@ -8,8 +8,10 @@
 .flag--err { background: token('danger-soft'); color: token('danger'); }
 .flag > svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
 
-.flag__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
-.flag__text { min-width: 0; }
+/* Citation chips follow the flag text on the same line when there's room,
+ * and only wrap underneath when there isn't. */
+.flag__body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; flex: 1; }
+.flag__text { min-width: 0; flex: 0 1 auto; }
 .flag__citations { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 
 .dashboard-compliance {
@@ -226,6 +228,99 @@
 
 .transparency-builder__preset:hover {
   background: token('bg-hover');
+}
+
+/* Collapsed setup guide: one compact row — progress ring, title, the next
+ * step as a single tappable line, and expand / hide controls. */
+.onboarding-compact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: token('s-3');
+  margin-bottom: token('s-5');
+  padding: token('s-3') token('s-3') token('s-3') token('s-4');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-xs');
+}
+.onboarding-compact__ring {
+  --progress: 0%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, token('bg-panel') calc(100% - 4px), transparent calc(100% - 3px)),
+    conic-gradient(token('accent') var(--progress), token('bg-subtle') 0);
+  font-size: token('fs-xs');
+  font-weight: 700;
+  color: token('text-primary');
+  font-variant-numeric: tabular-nums;
+}
+.onboarding-compact__main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.onboarding-compact__main h2 {
+  margin: 0;
+  font-size: token('fs-lg');
+  font-weight: 650;
+  line-height: 1.25;
+  color: token('text-primary');
+  text-wrap: balance;
+}
+.onboarding-compact__next {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-width: 0;
+  margin-left: -6px;
+  padding: 4px 6px;
+  border-radius: token('r-sm');
+  color: token('text-secondary');
+  text-decoration: none;
+}
+.onboarding-compact__next:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.onboarding-compact__next > svg {
+  flex: none;
+  color: token('accent');
+}
+.onboarding-compact__next-label {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: token('r-pill');
+  background: token('accent-soft');
+  color: token('accent');
+  font-size: token('fs-xs');
+  font-weight: 600;
+}
+.onboarding-compact__next-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+}
+.onboarding-compact__next-text strong {
+  color: token('text-primary');
+  font-weight: 600;
+}
+.onboarding-compact__next-desc {
+  color: token('text-tertiary');
+}
+.onboarding-compact__actions {
+  display: flex;
+  gap: 2px;
+}
+@media (max-width: 760px) {
+  .onboarding-compact__next-desc {
+    display: none;
+  }
 }
 
 .onboarding-flow {
