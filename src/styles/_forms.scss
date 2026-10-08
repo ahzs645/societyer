@@ -983,3 +983,26 @@ select.editable-cell__input:hover:not(:disabled) {
     max-width: 100%;
   }
 }
+
+/* A switch/checkbox row directly above another field sat flush against the
+ * next label ("Electronic participation permitted" / "Quorum required"). */
+.check-row + .field {
+  margin-top: token('s-3');
+}
+
+/* Phones: short-valued controls hug their content instead of stretching
+ * across the sheet — a quorum of "4" or a date doesn't need 350px. */
+@media (max-width: 760px) {
+  .field > input.input:is([type="number"], [type="time"]) {
+    align-self: flex-start;
+    field-sizing: content;
+    min-width: 8rem;
+    max-width: 100%;
+  }
+  .field > .date-trigger-wrap {
+    align-self: flex-start;
+    width: auto;
+    min-width: min(15rem, 100%);
+    max-width: 100%;
+  }
+}

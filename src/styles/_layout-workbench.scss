@@ -487,6 +487,49 @@
   .page__header-main {
     flex-basis: 100%;
   }
+
+  /* Actions on the title's row, right-aligned (PageHeader measures whether
+   * they fit and sets data-actions-fit). */
+  .page__header:is([data-actions-fit="inline"], [data-actions-fit="compact"]) {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+
+    > .page__header-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    /* A long name wraps beside its icon tile rather than dropping under it. */
+    .page__title {
+      flex-wrap: nowrap;
+    }
+
+    > .page__actions {
+      flex: none;
+      width: auto;
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+  }
+
+  /* Compact: icon buttons drop their visible text (it stays in the DOM, so
+   * the accessible name is unchanged) and become square icon targets. */
+  .page__header[data-actions-fit="compact"] .page__actions :is(.btn, .btn-action):has(> svg) {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    letter-spacing: 0;
+
+    > svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
 }
 
 /* Bottom navigation bar — mobile only.

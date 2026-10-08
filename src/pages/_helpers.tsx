@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import { ReactNode, useState, createElement } from "react";
+import { ReactNode, useState, createElement, useLayoutEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -11,6 +11,7 @@ import { getRuntimeMode } from "../lib/runtimeMode";
 import { useTranslation } from "react-i18next";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
+import { mobileCardMediaQuery } from "../lib/breakpoints";
 
 // The society-loading placeholder shown while `useSociety()` is undefined.
 // Extracted so the ~86 page guards share one element instead of hand-rolling
@@ -140,10 +141,13 @@ export function PageHeader({
   const resolvedIcon = identity
     ? createElement(identity.icon, { size: 16 })
     : icon;
+  const headerRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  usePhoneHeaderActionsFit(headerRef, actionsRef, Boolean(actions));
   const resolvedTone: IconTone = identity?.color ?? iconColor ?? "blue";
 
   return (
-    <div className="page__header">
+    <div className="page__header" ref={headerRef}>
       <div className="page__header-main">
         <div className="page__intro">
           <h1 className="page__title">
@@ -157,7 +161,68 @@ export function PageHeader({
           {subtitle && <p className="page__subtitle">{subtitle}</p>}
         </div>
       </div>
-      {actions && <div className="page__actions">{actions}</div>}
+      {actions && <div className="page__actions" ref={actionsRef}>{actions}</div>}
     </div>
   );
+}
+
+/** Room the title keeps beside inline actions (icon tile + a short name). */
+const PHONE_HEADER_MIN_TITLE = 140;
+/** Past this many, bare icons stop being recognisable — keep labels and wrap. */
+const PHONE_HEADER_MAX_ICON_ACTIONS = 3;
+
+/**
+ * Phones: put the page actions on the title's row, right-aligned. If they
+ * don't fit at full size, icon buttons drop their text ("+ New member" →
+ * "+", label kept for assistive tech) — at most three of them, since a
+ * longer row of bare icons stops being readable; otherwise, or if even that
+ * doesn't fit, they wrap under the title as before. Sets `data-actions-fit` on the
+ * header ("inline" | "compact" | "wrap") before paint, and re-measures when
+ * the header is resized or the actions change.
+ */
+function usePhoneHeaderActionsFit(
+  headerRef: React.RefObject<HTMLDivElement | null>,
+  actionsRef: React.RefObject<HTMLDivElement | null>,
+  hasActions: boolean,
+) {
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const actions = actionsRef.current;
+    if (!header || !actions || !hasActions) return;
+    const media = window.matchMedia(mobileCardMediaQuery);
+    let lastWidth = -1;
+    const measure = (force = false) => {
+      if (!media.matches) {
+        delete header.dataset.actionsFit;
+        lastWidth = -1;
+        return;
+      }
+      const width = header.clientWidth;
+      if (!force && width === lastWidth) return;
+      lastWidth = width;
+      const fits = () => actions.scrollWidth + 8 + PHONE_HEADER_MIN_TITLE <= width;
+      header.dataset.actionsFit = "inline";
+      if (fits()) return;
+      const iconActions = actions.querySelectorAll(":is(.btn, .btn-action):has(> svg)").length;
+      if (iconActions <= PHONE_HEADER_MAX_ICON_ACTIONS) {
+        header.dataset.actionsFit = "compact";
+        if (fits()) return;
+      }
+      header.dataset.actionsFit = "wrap";
+    };
+    measure(true);
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
+    resize?.observe(header);
+    // Buttons appear/disappear or relabel as data loads.
+    const mutations = new MutationObserver(() => measure(true));
+    mutations.observe(actions, { childList: true, subtree: true, characterData: true });
+    const onMedia = () => measure(true);
+    media.addEventListener("change", onMedia);
+    return () => {
+      resize?.disconnect();
+      mutations.disconnect();
+      media.removeEventListener("change", onMedia);
+      delete header.dataset.actionsFit;
+    };
+  }, [headerRef, actionsRef, hasActions]);
 }
