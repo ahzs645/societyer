@@ -1,0 +1,230 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// Records-area review fixes (filing pre-fill, minute book, exports, …).
+
+// Readable label/value summary (filing pre-fill and similar previews).
+.review-kv {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.review-kv__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  gap: token('s-3');
+  padding: token('s-2') 0;
+  border-bottom: 1px solid token('border-color-light');
+
+  &:last-child { border-bottom: 0; }
+
+  dt {
+    color: token('text-secondary');
+    font-size: token('fs-sm');
+  }
+
+  dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+// Minute book: connected-records table.
+// Fit the card instead of growing to max-content and scrolling the
+// Gaps/Status columns off the right edge.
+@media (min-width: 761px) {
+  .table.minute-book-bundles,
+  .table.obligations-table {
+    width: 100%;
+
+    tbody td {
+      padding-top: token('s-2');
+      padding-bottom: token('s-2');
+      vertical-align: top;
+    }
+  }
+}
+
+.minute-book-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px token('s-3');
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  min-width: 140px;
+  max-width: 260px;
+
+  strong {
+    color: token('text-primary');
+    font-weight: token('fw-medium');
+  }
+}
+
+// Research library: one compact filter row, records listed in one card.
+.research-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  align-items: center;
+  margin-bottom: token('s-2');
+
+  > :not(.research-filters__search) { flex: 0 1 220px; min-width: 0; }
+
+  .research-filters__search { flex: 1 1 200px; min-width: 0; }
+
+  @media (max-width: 760px) {
+    > :not(.research-filters__search) { flex: 1 1 calc(50% - #{token('s-2')}); }
+    .research-filters__search { flex-basis: 100%; }
+  }
+}
+
+.research-count {
+  margin: 0 0 token('s-2');
+  font-size: token('fs-sm');
+}
+
+.card.research-list {
+  padding: 0;
+}
+
+.research-entry {
+  padding: token('s-3') token('s-4');
+  border-bottom: 1px solid token('border-color-light');
+
+  &:last-child { border-bottom: 0; }
+
+  .review-kv__row { padding: 4px 0; border-bottom: 0; }
+}
+
+.research-entry__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token('s-3');
+  margin-bottom: token('s-1');
+}
+
+.research-entry__title {
+  margin: 0;
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+}
+
+.research-entry__meta {
+  font-size: token('fs-sm');
+}
+
+// Document catalog.
+.doc-catalog-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2') token('s-3');
+}
+
+.doc-catalog-link {
+  color: token('accent-primary');
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+// Collapsed background sections (incorporation guide, preparation notes).
+.doc-catalog-prep {
+  margin-top: token('s-4');
+
+  > summary {
+    cursor: pointer;
+    font-weight: token('fw-medium');
+    color: token('text-secondary');
+    padding: token('s-2') 0;
+  }
+
+  > summary + * { margin-top: token('s-2'); }
+}
+
+// Exports: per-table downloads tucked into a collapsed card.
+details.exports-tables {
+  > summary {
+    cursor: pointer;
+    list-style: none;
+    border-bottom: 0;
+
+    &::-webkit-details-marker { display: none; }
+
+    &::before {
+      content: "▸";
+      color: token('text-tertiary');
+      margin-right: token('s-1');
+    }
+  }
+
+  &[open] > summary {
+    border-bottom: 1px solid token('border-color-light');
+
+    &::before { content: "▾"; }
+  }
+}
+
+.exports-tables__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+  padding-bottom: 0;
+}
+
+.btn-action.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+// Deadlines: title over a one-line muted description.
+.deadline-title-cell {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.25;
+
+  > strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.deadline-title-cell__desc {
+  font-size: 0.92em; // a step below the cell's title text
+  color: token('text-tertiary');
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Compliance obligations: rule packs listed on demand.
+.obligations-packs {
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+
+  > summary { cursor: pointer; }
+
+  ul {
+    margin: token('s-1') 0 0;
+    padding-left: token('s-5');
+  }
+}
+
+.review-kv__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: token('s-1');
+}

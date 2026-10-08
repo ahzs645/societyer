@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge, Banner, Drawer, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
+import { Menu } from "../../components/Menu";
+import { InfoPopover } from "../../components/InfoPopover";
 import { useConfirm, usePrompt } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
@@ -12,7 +14,7 @@ import { usePermissions } from "../../hooks/usePermissions";
 import {
   GAP_REASON_LABELS,
   GAP_REASONS,
-  GAP_STATUS_LABELS,
+  GAP_STATUS_LABELS as CATALOG_STATUS_LABELS,
   GAP_STATUSES,
   INFO_TYPES,
   infoTypeDefinition,
@@ -26,6 +28,12 @@ const STATUS_TONE: Record<string, "warn" | "neutral" | "success" | "info" | "gra
   resolved_native: "success",
   schema_change_requested: "info",
   wont_fix: "gray",
+};
+
+/** Catalog labels in the words a records reviewer uses ("schema" is developer wording). */
+const GAP_STATUS_LABELS: Record<GapStatus, string> = {
+  ...CATALOG_STATUS_LABELS,
+  schema_change_requested: "New field requested",
 };
 
 const PAGE = 25;
@@ -207,26 +215,30 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
         </Banner>
       )}
 
-      <div className="stat-grid">
-        {GAP_STATUSES.map((status) => (
-          <div key={status} className="stat">
-            <div className="stat__label">{GAP_STATUS_LABELS[status]}</div>
-            <div className="stat__value">{summary.byStatus[status] ?? 0}</div>
-          </div>
-        ))}
-      </div>
+      {summary.total > 0 && (
+        <p className="coverage-status-summary" aria-label="Gaps by status">
+          {GAP_STATUSES.filter((status) => summary.byStatus[status]).map((status) => (
+            <span key={status}><strong>{summary.byStatus[status]}</strong> {GAP_STATUS_LABELS[status].toLowerCase()}</span>
+          ))}
+        </p>
+      )}
 
       {recordFocused && detailSection}
       <section className="card">
         <div className="card__head">
           <h2 className="card__title">Backlog by information type</h2>
-          <span className="card__subtitle">{summary.total} gaps · ranked by open count</span>
+          <InfoPopover label="About system gaps">
+            <p>Details from source files that Societyer can't hold as structured data yet. Gaps appear here from imports, preflight checks and reviewer entries, ranked by open count.</p>
+          </InfoPopover>
           {canWrite && (
             <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setCreating(true)}>
               <Plus size={12} /> Record a gap
             </button>
           )}
         </div>
+        {!groups.length ? (
+          <div className="card__body muted">No system gaps recorded.</div>
+        ) : (
         <div className="coverage-table-scroll">
           <table className="table">
             <thead>
@@ -235,16 +247,13 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
                 <th>Reason</th>
                 <th>Open</th>
                 <th>Kept as text</th>
-                <th>Schema change</th>
+                <th>New field requested</th>
                 <th>Resolved / won't fix</th>
                 <th>Suggested target</th>
                 <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {!groups.length && (
-                <tr><td colSpan={8} className="table__empty">No system gaps recorded. Gaps appear here from imports, preflight checks and reviewer entries.</td></tr>
-              )}
               {groups.map((group) => {
                 const isSelected = selected?.infoType === group.infoType && selected?.reason === group.reason;
                 return (
@@ -253,7 +262,7 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
                       <button type="button" className="btn-link" onClick={() => { setSelected({ infoType: group.infoType, reason: group.reason }); setPage(0); }}>
                         {group.label}
                       </button>
-                      <div className="muted" style={{ fontSize: 11 }}>{group.infoType} · {group.area}</div>
+                      <div className="muted" style={{ fontSize: 11 }}>{group.area}</div>
                     </td>
                     <td>{GAP_REASON_LABELS[group.reason as GapReason] ?? group.reason}</td>
                     <td>{group.byStatus.open ?? 0}</td>
@@ -263,11 +272,15 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
                     <td><code style={{ fontSize: 11 }}>{group.suggestedTarget ?? "—"}</code></td>
                     <td>
                       {canWrite && (
-                        <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
-                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "kept_as_text")}>Keep as text</button>
-                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "schema_change_requested")}>Request schema change</button>
-                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "wont_fix")}>Won't fix</button>
-                        </div>
+                        <Menu
+                          align="right"
+                          trigger={<button type="button" className="btn-action btn-action--icon" aria-label={`Triage ${group.label}`}><MoreHorizontal size={14} /></button>}
+                          sections={[{ id: "triage", items: [
+                            { id: "kept_as_text", label: "Keep as text", onSelect: () => void bulk(group, "kept_as_text") },
+                            { id: "schema_change_requested", label: "Request a new field", onSelect: () => void bulk(group, "schema_change_requested") },
+                            { id: "wont_fix", label: "Won't fix", onSelect: () => void bulk(group, "wont_fix") },
+                          ] }]}
+                        />
                       )}
                     </td>
                   </tr>
@@ -276,6 +289,7 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
             </tbody>
           </table>
         </div>
+        )}
       </section>
 
       {!recordFocused && detailSection}

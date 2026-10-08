@@ -101,7 +101,8 @@ test("exports contain native file controls and handle invalid previews; local we
   await expect(page.locator(".notice--danger")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Data export", exact: true })).toBeVisible();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^societies\s/ }).click();
+  await page.getByText("Technical details: individual tables", { exact: true }).click();
+  await page.getByRole("button", { name: /^Societies(\s|$)/ }).click();
   expect((await download).suggestedFilename()).toMatch(/-societies-.*\.csv$/);
   await openApp(page, "webhooks", "Webhooks");
   await expect(page.getByText("Webhook delivery requires a connected server", { exact: true })).toBeVisible();

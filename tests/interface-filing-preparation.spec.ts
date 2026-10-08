@@ -8,13 +8,15 @@ test("local filing preparation exposes real form values and manual submission ha
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/demo/app/filings/prefill");
   await expect(page.getByRole("heading", { name: "BC Societies Annual Report", exact: true })).toBeVisible();
-  await expect(page.locator("pre")).toContainText("Riverside Community Society");
-  await expect(page.getByRole("button", { name: "Copy JSON", exact: true })).toBeEnabled();
+  await expect(page.locator(".review-kv")).toContainText("Riverside Community Society");
+  await expect(page.getByRole("button", { name: "More pre-fill actions", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Export .docx", exact: true })).toBeEnabled();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export .docx", exact: true }).click();
   expect((await download).suggestedFilename()).toBe("prefill-AnnualReport.docx");
+  await page.getByRole("button", { name: "About Filing pre-fill", exact: true }).click();
   await expect(page.getByRole("link", { name: "Filing checklist and evidence", exact: true })).toHaveAttribute("href", "/demo/app/filings");
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("link", { name: "BC Registry", exact: true })).toHaveAttribute("href", /bcregistry/);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await page.goto("/demo/app/filings");

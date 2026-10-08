@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { CalendarRange, FileWarning, ListChecks, PieChart, Settings2, Sparkles } from "lucide-react";
@@ -8,6 +8,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { Banner } from "../components/ui";
 import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { InfoPopover } from "../components/InfoPopover";
+import { formatDate } from "../lib/format";
 import { ContinuityHeatmap, StatusLegend } from "../features/gaps/ContinuityHeatmap";
 import { PeriodDrawer, type PeriodSelection } from "../features/gaps/PeriodDrawer";
 import { RecordGapsPanel } from "../features/gaps/RecordGapsPanel";
@@ -48,6 +50,14 @@ export function CoverageGapsPage() {
   const [monthYear, setMonthYear] = useState<number>(new Date().getFullYear());
   const [bodyFilter, setBodyFilter] = useState<string>("all");
   const [selection, setSelection] = useState<PeriodSelection | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  // Phones scroll the tab row sideways; keep the active tab in view (e.g. a ?tab=system link).
+  useEffect(() => {
+    const list = tabsRef.current;
+    const active = list?.querySelector<HTMLElement>(".is-active");
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return;
+    list.scrollLeft = Math.max(0, active.offsetLeft - list.offsetLeft - 16);
+  }, [tab, society]);
   const canRead = can("deadlines:read");
   const data = useQuery(
     api.continuity.gaps,
@@ -89,10 +99,11 @@ export function CoverageGapsPage() {
     <div className="page coverage-root">
       <PageHeader
         title="Coverage & gaps"
-        subtitle="What records should exist, which are missing, and which source details the app cannot hold yet."
+        subtitle="Which records should exist and which are missing."
+        info={<p>What records should exist, which are missing, and which source details the app cannot hold yet.</p>}
         actions={<Link className="btn-action" to="/app/intake"><Sparkles size={12} /> AI intake runs</Link>}
       />
-      <div className="segmented coverage-tabs" role="tablist" aria-label="Coverage and gaps views">
+      <div ref={tabsRef} className="segmented coverage-tabs" role="tablist" aria-label="Coverage and gaps views">
         {TABS.map((item) => {
           const Icon = item.icon;
           const disabled = (item.id === "system" || item.id === "coverage") ? !can("documents:read") : !canRead;
@@ -150,13 +161,19 @@ export function CoverageGapsPage() {
               </label>
             )}
           </div>
-          <StatusLegend />
+          <div className="coverage-key">
+            <StatusLegend />
+            <span className="coverage-key__label">Key</span>
+            <InfoPopover label="About record continuity">
+              <p>Click a cell for evidence and actions. Evidence missing is shown separately from "not held": a period is only "never held" when someone marks it.</p>
+              {data.rulePack && (
+                <p>Statutory rows come from the {data.rulePack.title} rule pack (draft; checked against the Act current to {data.rulePack.sources[0]?.currentTo ? formatDate(data.rulePack.sources[0].currentTo) : "the retrieval date"}; not legal advice).</p>
+              )}
+              <StatusLegend />
+            </InfoPopover>
+          </div>
           <ContinuityHeatmap rows={rows} fromYear={data.range.fromYear} toYear={data.range.toYear} mode={mode} year={monthYear} onSelect={open} />
-          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-            {data.rulePack ? `Statutory rows come from the ${data.rulePack.title} rule pack (draft; checked against the Act current to ${data.rulePack.sources[0]?.currentTo ?? "the retrieval date"}; not legal advice). ` : ""}
-            Evidence missing is shown separately from "not held": a period is only "never held" when someone marks it. Click a cell for evidence and actions.
-            {!data.readable.meetings && " Meeting records are not visible to your role."}
-          </p>
+          {!data.readable.meetings && <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Meeting records are not visible to your role.</p>}
         </>
       )}
 
