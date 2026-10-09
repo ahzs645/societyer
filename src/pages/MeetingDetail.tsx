@@ -31,6 +31,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Banner, Drawer, EmptyState, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
+import { useIsMobile } from "../lib/useIsMobile";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -356,6 +357,8 @@ export function MeetingDetailPage() {
   }, [activeTab, focusMotionParam, isSyntheticFocus, focusMotions, minutes, displayMotions]);
 
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
+  // Phones keep one primary header action beside the ⋯ menu; the rest move into it.
+  const isPhone = useIsMobile();
   const [sourceReviewNote, setSourceReviewNote] = useState("");
   const [packageReviewNote, setPackageReviewNote] = useState("");
 
@@ -2108,6 +2111,16 @@ export function MeetingDetailPage() {
               {" · "}{formatMeetingDate(meeting, { dateStyle: "long" })}
               {meeting.location ? ` · ${meeting.location}` : meeting.electronic ? " · Online" : ""}
             </span>
+            {/* Status chips sit with the meeting facts, so the header row keeps room for its actions. */}
+            <span className="meeting-detail-subtitle__status">
+              <Badge tone={meetingStatusTone(meeting.status) as any}>
+                {meetingStatusLabel(meeting.status)}
+              </Badge>
+              {sourceReviewStatus === "imported_needs_review" && <Badge tone="warn">Source review pending</Badge>}
+              {sourceReviewStatus === "source_reviewed" && <Badge tone="success">Source reviewed</Badge>}
+              <UnsupportedDetailsBadge table="meetings" id={meeting._id} />
+              <SourceProvenanceButton table="meetings" id={meeting._id} />
+            </span>
             {sourceHeaderText && (
               <span className="meeting-detail-subtitle__source" title="The meeting header exactly as written in the source document">
                 As written in source: {sourceHeaderText}
@@ -2117,32 +2130,25 @@ export function MeetingDetailPage() {
         }
         actions={
           <>
-            <Badge tone={meetingStatusTone(meeting.status) as any}>
-              {meetingStatusLabel(meeting.status)}
-            </Badge>
-            {sourceReviewStatus === "imported_needs_review" && <Badge tone="warn">Source review pending</Badge>}
-            {sourceReviewStatus === "source_reviewed" && <Badge tone="success">Source reviewed</Badge>}
-            <UnsupportedDetailsBadge table="meetings" id={meeting._id} />
             {canMeetingsWrite && (
               <button className="btn-action btn-action--primary" type="button" onClick={() => setEditMeetingOpen(true)} data-testid="edit-meeting">
-                <Pencil size={12} /> Edit meeting
+                <Pencil size={12} /> {isPhone ? "Edit" : "Edit meeting"}
               </button>
             )}
-            {sourceReviewStatus === "imported_needs_review" && canMeetingsWrite && (
+            {!isPhone && sourceReviewStatus === "imported_needs_review" && canMeetingsWrite && (
               <button className="btn-action" type="button" onClick={() => { void completeSourceReview(); }} data-testid="mark-source-reviewed">
                 <CheckCircle2 size={12} /> Mark source reviewed
               </button>
             )}
-            <SourceProvenanceButton table="meetings" id={meeting._id} />
-            {meeting.status !== "Held" && meeting.status !== "Cancelled" && (
+            {!isPhone && meeting.status !== "Held" && meeting.status !== "Cancelled" && (
               <button className="btn-action" onClick={markHeld} disabled={!canMeetingsWrite}>Mark held</button>
             )}
-            {meeting.type === "AGM" && (
+            {!isPhone && meeting.type === "AGM" && (
               <Link className="btn-action" to={`/app/meetings/${meeting._id}/agm`}>
                 <ClipboardCheck size={12} /> AGM workflow
               </Link>
             )}
-            {joinDetails.url && (
+            {!isPhone && joinDetails.url && (
               <a className="btn-action" href={joinDetails.url} target="_blank" rel="noreferrer">
                 <ExternalLink size={12} /> Join
               </a>
@@ -2151,11 +2157,29 @@ export function MeetingDetailPage() {
               align="right"
               minWidth={220}
               trigger={
-                <button className="btn-action" type="button" title="Meeting actions">
-                  <MoreHorizontal size={12} /> Actions
+                <button className="btn-action" type="button" title="Meeting actions" aria-label={isPhone ? "Meeting actions" : undefined}>
+                  <MoreHorizontal size={12} />{isPhone ? null : " Actions"}
                 </button>
               }
               sections={[
+                ...(isPhone
+                  ? [
+                      {
+                        id: "primary",
+                        items: [
+                          ...(meeting.status !== "Held" && meeting.status !== "Cancelled"
+                            ? [{ id: "mark-held", label: "Mark held", icon: <CheckCircle2 size={12} />, disabled: !canMeetingsWrite, onSelect: markHeld }]
+                            : []),
+                          ...(meeting.type === "AGM"
+                            ? [{ id: "agm-workflow", label: "AGM workflow", icon: <ClipboardCheck size={12} />, onSelect: () => navigate(`/app/meetings/${meeting._id}/agm`) }]
+                            : []),
+                          ...(joinDetails.url
+                            ? [{ id: "join", label: "Join meeting", icon: <ExternalLink size={12} />, onSelect: () => { window.open(joinDetails.url, "_blank", "noopener,noreferrer"); } }]
+                            : []),
+                        ],
+                      },
+                    ]
+                  : []),
                 {
                   id: "edit",
                   items: [
@@ -2271,7 +2295,7 @@ export function MeetingDetailPage() {
                     },
                   ],
                 },
-              ]}
+              ].filter((section) => section.items.length > 0)}
             />
           </>
         }

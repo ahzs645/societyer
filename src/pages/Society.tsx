@@ -1,4 +1,5 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
+import { MonthDayPicker } from "../components/MonthDayPicker";
 import { formatAddressText } from "../../shared/structuredAddress";
 import { EntitySetupFields } from "../components/EntitySetupFields";
 import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
@@ -13,6 +14,7 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { InfoPopover } from "../components/InfoPopover";
 import { Field, LockedField, Badge, Drawer } from "../components/ui";
 import { Select } from "../components/Select";
 import { OptionSelect } from "../components/OptionSelect";
@@ -72,7 +74,8 @@ export function SocietyNewPage() {
       auth.refreshMembership(result.societyId);
       setStoredSocietyId(result.societyId);
       toast.success("Workspace created", `${result.taskIds.length} onboarding tasks created.`);
-      navigate(`/app/workflows/${result.workflowId}`);
+      // Land on the dashboard with the new organization's setup checklist.
+      navigate(`/app?welcome=${encodeURIComponent(String(result.workflowId))}`);
     } finally { setSaving(false); }
   };
   return <GuidedOrganizationSetup onCreate={create} saving={saving} restoreCard={restoreCard} canRestore={canRestore} restoreRequested={searchParams.get("restore") === "1"} />;
@@ -477,10 +480,15 @@ export function SocietyPage() {
         subtitle={form.organizationStatus === "pre_incorporation" ? "Preparing incorporation. Add the assigned registry number and effective date after confirmation." : "Governing details, registered office, and key flags."}
         actions={
           <>
-            <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            <span className="muted society-header__updated" style={{ fontSize: "var(--fs-sm)" }}>
               {saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`}
             </span>
-            <button className="btn btn--accent" onClick={save} disabled={saving || !canEdit}>
+            <button
+              className="btn btn--accent"
+              onClick={save}
+              disabled={saving || !canEdit}
+              title={saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`}
+            >
               {saving ? "Saving…" : "Save changes"}
             </button>
           </>
@@ -537,15 +545,14 @@ export function SocietyPage() {
                 </LockedField>
                 <LockedField
                   label="Fiscal year end"
-                  hint="MM-DD"
                   reason="Changing the fiscal year end can require a bylaw amendment and notification to the CRA. Affects every filing deadline downstream."
                 >
                   {(locked) => (
-                    <input
-                      className="input"
+                    <MonthDayPicker
+                      ariaLabel="Fiscal year end"
                       disabled={locked}
-                      value={form.fiscalYearEnd ?? ""}
-                      onChange={(e) => set("fiscalYearEnd", e.target.value)}
+                      value={form.fiscalYearEnd}
+                      onChange={(value) => set("fiscalYearEnd", value)}
                     />
                   )}
                 </LockedField>
@@ -566,7 +573,7 @@ export function SocietyPage() {
               </LockedField>
 
               <div className="society-field-grid">
-                <Field label="Legal jurisdiction" hint="Used for statutory guide tracks and point-in-time legal sources.">
+                <Field label="Legal jurisdiction">
                   <Select
                     value={form.jurisdictionCode ?? ""}
                     onChange={(value) => set("jurisdictionCode", value)}
@@ -625,7 +632,8 @@ export function SocietyPage() {
                 />
               </div>
               <div className="hr" />
-              <div className="society-field-grid society-field-grid--mobile-pair">
+              {/* Stacked: this side card is narrow, and an email needs the full width. */}
+              <div className="col" style={{ gap: 0 }}>
                 <Field label={jurisdictionCopy.privacyOfficerLabel}>
                   <input className="input" value={form.privacyOfficerName ?? ""} onChange={(e) => set("privacyOfficerName", e.target.value)} />
                 </Field>
@@ -908,6 +916,11 @@ function AddressSummary({ label, row, fallback, hint }: { label: string; row?: a
     <div className="society-address-item">
       <div className="society-address-item__head">
         <strong>{label}</strong>
+        {hint && (
+          <InfoPopover label={`About the ${label.toLowerCase()}`}>
+            <p>{hint}</p>
+          </InfoPopover>
+        )}
         {row ? (
           <Badge tone={row.status === "current" ? "success" : "neutral"}>{optionLabel("addressStatuses", row.status)}</Badge>
         ) : fallback ? (
@@ -922,7 +935,6 @@ function AddressSummary({ label, row, fallback, hint }: { label: string; row?: a
       {row?.effectiveFrom && (
         <div className="field__hint">Effective {formatDate(row.effectiveFrom)}</div>
       )}
-      {hint && <div className="field__hint">{hint}</div>}
     </div>
   );
 }

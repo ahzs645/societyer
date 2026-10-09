@@ -3,7 +3,9 @@ import { AccountingStatementsCard } from "../components/AccountingStatementsCard
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { CreateMenu } from "../../../components/CreateMenu";
+import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Download, FileSpreadsheet, GitCompareArrows, Landmark, Lock, PlusCircle, Scale, Split, Unlock } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -135,6 +137,7 @@ export function AccountingWorkbenchPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const navigate = useNavigate();
   const [drawer, setDrawerState] = useState<DrawerKind>(null);
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const setDrawer = (next: DrawerKind) => {
@@ -392,39 +395,49 @@ export function AccountingWorkbenchPage() {
         title="Accounting"
         icon={<Landmark size={16} />}
         iconColor="green"
-        subtitle="Internal ledger setup, journal posting, candidate allocation, reconciliation, and audit exports."
-        actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>}
+        subtitle="Ledger setup, journal posting, reconciliation and audit exports."
+        info={
+          <>
+            <p>
+              <Link to="/app/reconciliation">Bank reconciliation</Link> matches imported bank lines to records, while
+              ledger reconciliation here checks the journal against a statement balance.
+            </p>
+            <p>
+              Use <strong>Post bank transactions to journal</strong> (under More) to post synced or manual bank
+              transactions into the journal so both agree.
+            </p>
+          </>
+        }
+        actions={
+          <>
+            <Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "seed-chart",
+                  label: "Set up standard chart of accounts",
+                  icon: <Landmark size={14} />,
+                  disabled: !canWrite || busy,
+                  onSelect: () => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded"),
+                },
+                { id: "period", label: "Add fiscal period", icon: <PlusCircle size={14} />, disabled: !canWrite, onSelect: () => setDrawer("period") },
+                { id: "opening", label: "Opening balances", icon: <FileSpreadsheet size={14} />, disabled: !canWrite, onSelect: () => setDrawer("opening") },
+                { id: "backfill", label: "Post bank transactions to journal", icon: <FileSpreadsheet size={14} />, disabled: !canWrite || busy, onSelect: () => setDrawer("backfill") },
+                { id: "bank-reconciliation", label: "Bank reconciliation", icon: <GitCompareArrows size={14} />, onSelect: () => navigate("/app/reconciliation") },
+              ]}
+            />
+            <CreateMenu
+              disabled={!canWrite}
+              minWidth={220}
+              items={[
+                { id: "journal", label: "Journal entry", icon: <GitCompareArrows size={14} />, onSelect: () => setDrawer("journal") },
+                { id: "candidate", label: "Allocate imported transaction", icon: <Split size={14} />, onSelect: () => setDrawer("candidate") },
+                { id: "reconciliation", label: "Ledger reconciliation", icon: <Scale size={14} />, onSelect: () => setDrawer("reconciliation") },
+              ]}
+            />
+          </>
+        }
       />
-
-      <div className="accounting-action-panel">
-        <div className="accounting-action-panel__heading">
-          <strong>Accounting tools</strong>
-          <span>Set up, post, and reconcile the ledger.</span>
-        </div>
-        <div className="accounting-action-bar" role="group" aria-label="Accounting tools">
-          <button className="btn-action btn-action--primary" disabled={!canWrite || (busy)} onClick={() => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded")}>
-            <Landmark size={12} /> Seed chart
-          </button>
-          <button className="btn-action" onClick={() => setDrawer("period")} disabled={!canWrite}><PlusCircle size={12} /> Fiscal period</button>
-          <button className="btn-action" onClick={() => setDrawer("opening")} disabled={!canWrite}><FileSpreadsheet size={12} /> Opening balances</button>
-          <button className="btn-action" onClick={() => setDrawer("journal")} disabled={!canWrite}><GitCompareArrows size={12} /> Journal entry</button>
-          <button className="btn-action" onClick={() => setDrawer("candidate")} disabled={!canWrite}><Split size={12} /> Post candidate</button>
-          <button className="btn-action" onClick={() => setDrawer("reconciliation")} disabled={!canWrite}><Scale size={12} /> Reconcile</button>
-          <button className="btn-action" disabled={!canWrite || (busy)} onClick={() => setDrawer("backfill")}>
-            <FileSpreadsheet size={12} /> Backfill imports
-          </button>
-          <Link className="btn-action" to="/app/reconciliation"><GitCompareArrows size={12} /> Bank reconciliation</Link>
-        </div>
-      </div>
-
-      <details className="accounting-reconciliation-note">
-        <summary>How reconciliation works</summary>
-        <div className="muted">
-          <Link to="/app/reconciliation">Bank reconciliation</Link> matches imported bank lines to records, while ledger
-          reconciliation here checks the journal against a statement balance. Use <strong>Backfill imports</strong> to post
-          synced/manual bank transactions into the journal so both agree.
-        </div>
-      </details>
 
       <div className="stat-grid">
         <div className="stat"><div className="stat__label">Chart accounts</div><div className="stat__value">{accounts?.length ?? 0}</div></div>

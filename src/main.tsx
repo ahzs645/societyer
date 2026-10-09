@@ -18,6 +18,7 @@ import { appRuntimeNeedsSetup, isBrowserLocalWorkspace } from "./lib/appRuntime"
 import { useSocieties } from "./hooks/useSociety";
 import { useLocalWorkspaceReady } from "./hooks/useLocalWorkspaceReady";
 
+const NotFoundPage = React.lazy(() => import("./pages/NotFound").then((m) => ({ default: m.NotFoundPage })));
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const DesktopSetupPage = React.lazy(() => import("./pages/DesktopSetup").then((m) => ({ default: m.DesktopSetupPage })));
 const SocietyPage = React.lazy(() => import("./pages/Society").then((m) => ({ default: m.SocietyPage })));
@@ -645,9 +646,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
             <Route path="webhooks" element={<WebhooksPage />} />
+            <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage standalone />} />
         </Routes>
         </Suspense>
       </Router>

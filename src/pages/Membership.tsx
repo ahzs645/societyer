@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { CreateMenu } from "../components/CreateMenu";
 import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -12,10 +13,13 @@ import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../lib/format";
+import { Menu } from "../components/Menu";
+import { InfoPopover } from "../components/InfoPopover";
 import {
   CreditCard,
+  MoreHorizontal,
+  Pencil,
   UserPlus,
-  PlusCircle,
   Trash2,
   CheckCircle2,
   CalendarClock,
@@ -30,6 +34,14 @@ const PLAN_INTERVALS = [
   { value: "year", label: "Annual" },
   { value: "one_time", label: "One-time" },
 ];
+
+function intervalLabel(interval: string) {
+  return interval === "one_time" ? "one time" : interval;
+}
+
+function sentenceCase(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, " ") : value;
+}
 
 const FEE_INTERVALS = [
   ...PLAN_INTERVALS,
@@ -130,39 +142,46 @@ export function MembershipPage() {
         title="Membership & billing"
         icon={<CreditCard size={16} />}
         iconColor="turquoise"
-        subtitle="Fee tiers, dated member-fee history, signup and renewal. Payments and activation require a connected server."
+        subtitle="Fee tiers, member-fee history, signup and renewal."
+        info={
+          <p>
+            Recurring subscriptions run through Stripe; payments and cancellations update after verified webhooks. Payments need a
+            configured provider and a connected server; simulation needs a demo workspace.
+          </p>
+        }
         actions={
           <>
             <MoreActionsMenu
               items={canManage ? [
                 { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
-                { id: "add-fee-period", label: "Add fee period", icon: <CalendarClock size={14} />, onSelect: () => setFeeDraft(newFeeDraft()) },
               ] : []}
             />
-            <button
-              className="btn-action btn-action--primary"
+            <CreateMenu
               disabled={!canManage}
-              onClick={() =>
-                setPlanDraft({
-                  name: "",
-                  description: "",
-                  priceCents: 2500,
-                  currency: "CAD",
-                  interval: "year",
-                  benefits: [],
-                  membershipClass: "Regular",
-                  active: true,
-                })
-              }
-            >
-              <PlusCircle size={12} /> New plan
-            </button>
+              items={[
+                {
+                  id: "plan",
+                  label: "Membership plan",
+                  onSelect: () =>
+                    setPlanDraft({
+                      name: "",
+                      description: "",
+                      priceCents: 2500,
+                      currency: "CAD",
+                      interval: "year",
+                      benefits: [],
+                      membershipClass: "Regular",
+                      active: true,
+                    }),
+                },
+                { id: "fee-period", label: "Fee period", icon: <CalendarClock size={14} />, onSelect: () => setFeeDraft(newFeeDraft()) },
+              ]}
+            />
           </>
         }
       />
 
-      <p className="muted">Live recurring subscriptions are managed in Stripe. Payment and cancellation records update after verified provider webhooks. Unconfigured services cannot accept a payment; simulation requires a demo workspace.</p>
-      {isLocalDataRuntime() && <p className="muted" role="status">Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.</p>}
+      {isLocalDataRuntime() && <p className="muted" role="status" style={{ margin: "0 0 12px", fontSize: "var(--fs-sm)" }}>Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Active plans" value={String(activePlans.length)} />
         <Stat label="Active subscribers" value={String(activeSubs.length)} />
@@ -181,18 +200,20 @@ export function MembershipPage() {
         />
       </div>
 
-      <div className="card">
-        <div className="card__head">
+      <section style={{ marginBottom: 16 }}>
+        <div className="row" style={{ gap: 6, alignItems: "center", margin: "0 0 8px" }}>
           <h2 className="card__title">Fee tiers & plans</h2>
-          <span className="card__subtitle">Shown on the self-serve signup page; each tier can also carry dated fee periods.</span>
+          <InfoPopover label="About fee tiers">
+            <p>Active tiers are shown on the self-serve signup page. Each tier can also carry dated fee periods.</p>
+          </InfoPopover>
         </div>
-        <div className="card__body" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" }}>
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))" }}>
           {(plans ?? []).map((p) => (
             <div
               key={p._id}
+              className="card"
               style={{
-                border: "1px solid var(--border)",
-                borderRadius: 8,
+                margin: 0,
                 padding: 12,
                 background: p.active ? undefined : "var(--bg-soft)",
               }}
@@ -200,7 +221,7 @@ export function MembershipPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <strong>{p.name}</strong>
                 {!p.active && <Badge>Inactive</Badge>}
-                {p.membershipClass && <Badge tone="info">{p.membershipClass}</Badge>}
+                {p.membershipClass && p.membershipClass.trim().toLowerCase() !== p.name.trim().toLowerCase() && <Badge tone="info">{p.membershipClass}</Badge>}
               </div>
               {p.description && (
                 <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
@@ -210,13 +231,15 @@ export function MembershipPage() {
               <div style={{ fontSize: 18, fontWeight: 600, marginTop: 8 }}>
                 {money(p.priceCents)}{" "}
                 <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
-                  / {p.interval}
+                  / {intervalLabel(p.interval)}
                 </span>
               </div>
-              <ul style={{ marginTop: 8, paddingLeft: 18, fontSize: 13 }}>
-                {p.benefits.map((b, i) => <li key={i}>{b}</li>)}
-              </ul>
-              <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              {p.benefits.length > 0 && (
+                <ul style={{ marginTop: 8, paddingLeft: 18, fontSize: 13 }}>
+                  {p.benefits.map((b, i) => <li key={i}>{b}</li>)}
+                </ul>
+              )}
+              <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center" }}>
                 <button
                   className="btn btn--accent btn--sm"
                   disabled={!paymentsAvailable || !p.active}
@@ -231,46 +254,39 @@ export function MembershipPage() {
                 >
                   <UserPlus size={12} /> Sign up
                 </button>
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={!canManage}
-                  onClick={() => setFeeDraft(newFeeDraft(p))}
-                >
-                  Fee
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={!canManage}
-                  onClick={() => setPlanDraft({ ...p, id: p._id })}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  disabled={!canManage}
-                  aria-label={`Delete membership plan ${p.name}`}
-                  onClick={() => removePlan({ id: p._id })}
-                >
-                  <Trash2 size={12} />
-                </button>
+                <span style={{ marginLeft: "auto" }}>
+                  <Menu
+                    align="right"
+                    trigger={
+                      <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${p.name}`}>
+                        <MoreHorizontal size={14} />
+                      </button>
+                    }
+                    sections={[{
+                      id: "plan",
+                      items: [
+                        { id: "edit", label: "Edit plan", icon: <Pencil size={14} />, disabled: !canManage, onSelect: () => setPlanDraft({ ...p, id: p._id }) },
+                        { id: "fee", label: "Add fee period", icon: <CalendarClock size={14} />, disabled: !canManage, onSelect: () => setFeeDraft(newFeeDraft(p)) },
+                        { id: "delete", label: "Delete plan", icon: <Trash2 size={14} />, destructive: true, disabled: !canManage, onSelect: () => void removePlan({ id: p._id }) },
+                      ],
+                    }]}
+                  />
+                </span>
               </div>
             </div>
           ))}
           {(plans ?? []).length === 0 && (
-            <div className="muted" style={{ padding: 24, textAlign: "center", gridColumn: "1 / -1" }}>
+            <div className="card muted" style={{ margin: 0, padding: 24, textAlign: "center", gridColumn: "1 / -1" }}>
               No plans yet — create one to open signups.
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       <div className="card">
         <div className="card__head">
-          <div>
-            <h2 className="card__title">Member fee timeline</h2>
-            <span className="card__subtitle">Historical, current, and planned fee periods by tier.</span>
-          </div>
-          <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => setFeeDraft(newFeeDraft())}>
+          <h2 className="card__title">Member fee timeline</h2>
+          <button className="btn btn--ghost btn--sm" style={{ marginLeft: "auto" }} disabled={!canManage} onClick={() => setFeeDraft(newFeeDraft())}>
             <CalendarClock size={12} /> Add period
           </button>
         </div>
@@ -296,40 +312,51 @@ export function MembershipPage() {
                   )}
                 </td>
                 <td>{period.membershipClass ? <Badge tone="info">{period.membershipClass}</Badge> : <span className="muted">—</span>}</td>
-                <td className="mono">
-                  {money(period.priceCents)} <span className="muted">/ {period.interval}</span>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {money(period.priceCents)} <span className="muted">/ {intervalLabel(period.interval)}</span>
                 </td>
-                <td className="mono">
+                <td>
                   {period.effectiveFrom === "current" ? "Current" : formatDate(period.effectiveFrom)}
                   {period.effectiveTo ? ` – ${formatDate(period.effectiveTo)}` : ""}
                 </td>
                 <td>
                   <Badge tone={period.status === "active" ? "success" : period.status === "planned" ? "warn" : "neutral"}>
-                    {period.status}
+                    {sentenceCase(period.status)}
                   </Badge>
                 </td>
                 <td className="muted" style={{ maxWidth: 320 }}>{period.notes ?? (period.synthetic ? "Current plan price; add a dated period to preserve history." : "—")}</td>
                 <td>
                   <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                    <button
-                      className="btn btn--ghost btn--sm"
-                      disabled={!canManage}
-                      onClick={() => setFeeDraft(feeDraftFromPeriod(period))}
-                    >
-                      {period.synthetic ? "Add" : "Edit"}
-                    </button>
-                    {!period.synthetic && (
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        disabled={!canManage}
-                        aria-label={`Delete fee period ${period.label}`}
-                        onClick={async () => {
-                          await removeFeePeriod({ id: period._id });
-                          toast.success("Fee period removed");
-                        }}
-                      >
-                        <Trash2 size={12} />
+                    {period.synthetic ? (
+                      <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => setFeeDraft(feeDraftFromPeriod(period))}>
+                        Add
                       </button>
+                    ) : (
+                      <Menu
+                        align="right"
+                        trigger={
+                          <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for fee period ${period.label}`}>
+                            <MoreHorizontal size={14} />
+                          </button>
+                        }
+                        sections={[{
+                          id: "period",
+                          items: [
+                            { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canManage, onSelect: () => setFeeDraft(feeDraftFromPeriod(period)) },
+                            {
+                              id: "delete",
+                              label: "Delete fee period",
+                              icon: <Trash2 size={14} />,
+                              destructive: true,
+                              disabled: !canManage,
+                              onSelect: async () => {
+                                await removeFeePeriod({ id: period._id });
+                                toast.success("Fee period removed");
+                              },
+                            },
+                          ],
+                        }]}
+                      />
                     )}
                   </div>
                 </td>
@@ -370,7 +397,7 @@ export function MembershipPage() {
                 <tr key={s._id}>
                   <td>
                     <strong>{s.fullName}</strong>
-                    <div className="muted mono" style={{ fontSize: 11 }}>{s.email}</div>
+                    <div className="muted" style={{ fontSize: 11 }}>{s.email}</div>
                   </td>
                   <td>{plan?.name ?? "—"}</td>
                   <td>
@@ -385,13 +412,13 @@ export function MembershipPage() {
                           : "info"
                       }
                     >
-                      {s.status}
+                      {sentenceCase(s.status)}
                     </Badge>
-                    {s.demo && <Badge>demo</Badge>}
+                    {s.demo && <Badge>Demo</Badge>}
                   </td>
-                  <td className="mono">{formatDate(s.startedAtISO)}</td>
-                  <td className="mono">{s.currentPeriodEndISO ? formatDate(s.currentPeriodEndISO) : "—"}</td>
-                  <td className="mono">{s.lastPaymentCents != null ? money(s.lastPaymentCents) : "—"}</td>
+                  <td>{formatDate(s.startedAtISO)}</td>
+                  <td>{s.currentPeriodEndISO ? formatDate(s.currentPeriodEndISO) : "—"}</td>
+                  <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.lastPaymentCents != null ? money(s.lastPaymentCents) : "—"}</td>
                   <td>
                     {s.status !== "canceled" && !s.demo && s.stripeSubscriptionId ? (
                       <a className="btn btn--ghost btn--sm" href="https://dashboard.stripe.com/subscriptions" target="_blank" rel="noopener noreferrer">Manage in Stripe</a>

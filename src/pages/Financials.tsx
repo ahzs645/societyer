@@ -13,7 +13,10 @@ import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
-import { Database, Link2, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Menu } from "../components/Menu";
+import { InfoPopover } from "../components/InfoPopover";
+import { Tabs } from "../components/primitives";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
@@ -349,11 +352,27 @@ export function FinancialsPage() {
         title="Financials"
         icon={<PiggyBank size={16} />}
         iconColor="green"
-        subtitle="Connected bank balances, budget vs actuals, restricted funds, and the AGM financial statements. Disclose remuneration ≥ $75k (s.36)."
+        subtitle="Bank balances, budgets, restricted funds and year-end statements."
+        info={
+          <>
+            <p>
+              Ledger figures come from the posted accounting ledger (accrual basis) and are the authoritative total once
+              transactions are reconciled. The <Link to="/app/treasurer">Treasurer</Link> dashboard shows the
+              bank-transaction view, which can be provisional before reconciliation.
+            </p>
+            <p>
+              Year-over-year figures come from each year's recorded financial statements, so they may differ from the
+              ledger if a statement predates recent postings.
+            </p>
+            <p>Societies must disclose remuneration of $75,000 or more in the AGM financial statements (s.36).</p>
+          </>
+        }
         actions={
           activeConnection ? (
             <>
-              <Badge tone="success">Connected · {activeConnection.provider}</Badge>
+              <span title={`Connected to ${providerLabel(activeConnection.provider)}`}>
+                <Badge tone="success">{providerLabel(activeConnection.provider)}</Badge>
+              </span>
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
@@ -417,21 +436,18 @@ export function FinancialsPage() {
       />
       <ImportCandidatesNotice noun="financial statement" targets={["financials", "financialStatements", "financialStatementImports"]} kinds={["financialStatement", "financialStatementImport", "budgetSnapshot", "treasurerReport"]} documentCategory="FinancialStatement" emptyRegister={!(items ?? []).length} also={{ to: "/app/finance-imports", label: "Imported statements and budget snapshots awaiting verification are in Finance imports" }} />
 
-      <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-        {[
-          { id: "overview", label: "Overview" },
-          { id: "transactions", label: "Transactions" },
-          { id: "wave", label: "Wave data" },
-          { id: "subscriptions", label: "Subscriptions" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            className={`btn-action${tab === t.id ? " btn-action--primary" : ""}`}
-            onClick={() => setTab(t.id as typeof tab)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="financials-tabs">
+        <Tabs<typeof tab>
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Financials sections"
+          items={[
+            { id: "overview", label: "Overview" },
+            { id: "transactions", label: "Transactions" },
+            { id: "wave", label: "Wave data" },
+            { id: "subscriptions", label: "Subscriptions" },
+          ]}
+        />
       </div>
 
       {tab === "transactions" && (accounts ?? []).length > 0 && (
@@ -473,35 +489,34 @@ export function FinancialsPage() {
 
       {tab === "wave" && waveHealth && <WaveHealthPanel result={waveHealth} />}
 
-      {tab === "overview" && (trialBalance ?? []).length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
+      {tab === "overview" && ((trialBalance ?? []).length > 0 || (activeConnection && hub)) && (
+        <div className="card financials-summary-card" style={{ marginBottom: 16 }}>
           <div className="card__head">
-            <h2 className="card__title">Internal ledger summary</h2>
-            <span className="card__subtitle">Posted journal lines take priority for board and auditor reporting.</span>
+            <h2 className="card__title">{(trialBalance ?? []).length > 0 ? "Internal ledger summary" : "Bank summary"}</h2>
+            {activeConnection?.lastSyncAtISO && (
+              <span className="card__subtitle">Last synced {formatDateTime(activeConnection.lastSyncAtISO)}</span>
+            )}
           </div>
-          <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
-            <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
-            <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
-            <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
-            <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+          <div className="stat-grid financials-summary-card__stats">
+            {(trialBalance ?? []).length > 0 && (
+              <>
+                <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
+                <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
+                <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
+                {/* Ledger assets only earn a tile when they differ from the bank balance beside them. */}
+                {!(activeConnection && hub && hub.totalBalance === ledgerAssetCents) && (
+                  <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+                )}
+              </>
+            )}
+            {activeConnection && hub && (
+              <>
+                <Stat label="Bank balance" value={money(hub.totalBalance)} />
+                <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
+                <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} />
+              </>
+            )}
           </div>
-          <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: "0 16px 16px" }}>
-            Based on the posted accounting ledger (accrual basis) — this is the authoritative total once
-            transactions are reconciled. Compare with the bank-transaction view on{" "}
-            <Link to="/app/treasurer">Treasurer</Link>, which can be provisional before reconciliation.
-          </p>
-        </div>
-      )}
-
-      {tab === "overview" && activeConnection && hub && (
-        <div className="stat-grid" style={{ marginBottom: 16 }}>
-          <Stat label="Total bank balance" value={money(hub.totalBalance)} />
-          <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
-          <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} sub="Bank accounts flagged restricted" />
-          <Stat
-            label="Last sync"
-            value={activeConnection.lastSyncAtISO ? formatDateTime(activeConnection.lastSyncAtISO) : "—"}
-          />
         </div>
       )}
 
@@ -563,7 +578,12 @@ export function FinancialsPage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Restricted funds</h2>
-            <span className="card__subtitle">Bank accounts flagged as restricted. The fund-by-fund ledger balance is under Accounting; the audited figure is in the year's statements.</span>
+            <InfoPopover label="About restricted funds">
+              <p>
+                Bank accounts flagged as restricted. The fund-by-fund ledger balance is under{" "}
+                <Link to="/app/financials/accounting">Accounting</Link>; the audited figure is in the year's statements.
+              </p>
+            </InfoPopover>
           </div>
           <table className="table">
             <thead>
@@ -621,37 +641,54 @@ export function FinancialsPage() {
                       {money(variance)}
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        aria-label={`Edit budget ${b.category}`}
-                        title="Edit planned amount"
-                        onClick={() => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); }}
-                        disabled={!canWrite}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        aria-label={`Delete budget ${b.category}`}
-                        onClick={async () => {
-                          const approved = await confirm({
-                            title: "Delete budget line?",
-                            message: `The FY ${fiscalYear} "${b.category}" budget of ${money(b.plannedCents)} will be removed. Actual transactions are not affected.`,
-                            confirmLabel: "Delete budget line",
-                            tone: "danger",
-                          });
-                          if (!approved) return;
-                          try {
-                            await removeBudget({ id: b._id });
-                            toast.success("Budget line deleted", b.category);
-                          } catch (error: any) {
-                            toast.error("Could not delete budget line", error?.message);
-                          }
-                        }}
-                        disabled={!canWrite}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <Menu
+                        align="right"
+                        trigger={
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm btn--icon"
+                            aria-label={`Actions for budget ${b.category}`}
+                            title="More actions"
+                            disabled={!canWrite}
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        }
+                        sections={[
+                          {
+                            id: "budget-actions",
+                            items: [
+                              {
+                                id: "edit",
+                                label: "Edit planned amount",
+                                icon: <Pencil size={14} />,
+                                onSelect: () => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); },
+                              },
+                              {
+                                id: "delete",
+                                label: "Delete budget line",
+                                icon: <Trash2 size={14} />,
+                                destructive: true,
+                                onSelect: async () => {
+                                  const approved = await confirm({
+                                    title: "Delete budget line?",
+                                    message: `The FY ${fiscalYear} "${b.category}" budget of ${money(b.plannedCents)} will be removed. Actual transactions are not affected.`,
+                                    confirmLabel: "Delete budget line",
+                                    tone: "danger",
+                                  });
+                                  if (!approved) return;
+                                  try {
+                                    await removeBudget({ id: b._id });
+                                    toast.success("Budget line deleted", b.category);
+                                  } catch (error: any) {
+                                    toast.error("Could not delete budget line", error?.message);
+                                  }
+                                },
+                              },
+                            ],
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
@@ -816,25 +853,6 @@ export function FinancialsPage() {
             <Link to="/app/org-history?section=budgets">Review in history →</Link>
           </Flag>
         </div>
-      )}
-
-      {tab === "overview" && latest && (
-        <>
-          <div className="stat-grid">
-            <Stat label={`FY ${latest.fiscalYear} revenue`} value={money(latest.revenueCents)} />
-            <Stat label="Expenses" value={money(latest.expensesCents)} />
-            <Stat
-              label="Net surplus / (deficit)"
-              value={money(latest.revenueCents - latest.expensesCents)}
-              tone={latest.revenueCents - latest.expensesCents >= 0 ? "ok" : "danger"}
-            />
-            <Stat label="Net assets" value={money(latest.netAssetsCents)} />
-          </div>
-          <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
-            From the recorded year-end financial statement for FY {latest.fiscalYear} — may differ from the
-            "Internal ledger summary" above if the statement predates recent postings.
-          </p>
-        </>
       )}
 
       {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}
@@ -1141,4 +1159,11 @@ function BankCsvImportCard({
       </div>
     </div>
   );
+}
+
+function providerLabel(provider: string | undefined) {
+  const value = String(provider ?? "").trim();
+  if (!value) return "Connected";
+  if (value.toLowerCase() === "quickbooks") return "QuickBooks";
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

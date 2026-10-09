@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -8,17 +8,128 @@ import { useToast } from "../components/Toast";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { Select } from "../components/Select";
-import { FileCog, Copy, FileDown, ExternalLink } from "lucide-react";
+import { FileCog, Copy, FileDown, ExternalLink, MoreHorizontal } from "lucide-react";
+import { Menu } from "../components/Menu";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { formatDate } from "../lib/format";
+import { humanizeKey } from "../../shared/documentProvenance";
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
 import { isBcSociety } from "../../shared/organizationDomain";
 import { BC_SOCIETY_PRE_FILL_KINDS, CRA_PRE_FILL_KINDS } from "../../shared/filingPreparation";
 import { jurisdictionModuleContract } from "../../shared/jurisdictionWorkspace";
 
+const PREFILL_LABELS: Record<string, string> = {
+  societyName: "Society",
+  charityName: "Charity",
+  corporationName: "Corporation",
+  incorporationNumber: "Incorporation number",
+  agmHeldOn: "AGM held on",
+  registeredOffice: "Registered office",
+  mailingAddress: "Mailing address",
+  newRegisteredOffice: "New registered office",
+  newMailingAddress: "New mailing address",
+  directors: "Directors",
+  active: "Active directors",
+  ceased: "Ceased directors",
+  feeCad: "Fee",
+  mustBeFiledWithin: "File within",
+  specialResolutionRequired: "Special resolution required",
+  thresholdPercent: "Approval threshold",
+  fiscalPeriodEnd: "Fiscal period end",
+  fiscalYear: "Fiscal year",
+  totalRevenue: "Total revenue",
+  totalExpenditures: "Total expenditures",
+  totalExpenses: "Total expenses",
+  netAssets: "Net assets",
+  netIncome: "Net income",
+  directorCount: "Active directors",
+  dueDate: "Due",
+  fullName: "Name",
+  isBCResident: "BC resident",
+  termStart: "Term start",
+  consentOnFile: "Consent on file",
+  resignedAt: "Resigned",
+};
+const PREFILL_MONEY_KEYS = new Set(["feeCad", "totalRevenue", "totalExpenditures", "totalExpenses", "netAssets", "netIncome"]);
+const PREFILL_HIDDEN_KEYS = new Set(["formName", "form", "kind"]);
+const cadFormatter = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" });
+
+function prefillLabel(key: string) {
+  return PREFILL_LABELS[key] ?? humanizeKey(key);
+}
+
+/** One pre-fill value as a person reads it: dates, money, yes/no instead of raw JSON. */
+function prefillValueText(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") {
+    if (PREFILL_MONEY_KEYS.has(key)) return cadFormatter.format(value);
+    if (key === "thresholdPercent") return `${value}%`;
+    return String(value);
+  }
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}(T|$)/.test(value)) return formatDate(value.slice(0, 10));
+    return value;
+  }
+  return JSON.stringify(value);
+}
+
+function prefillRows(data: Record<string, unknown>) {
+  return Object.entries(data).filter(([key]) => !PREFILL_HIDDEN_KEYS.has(key));
+}
+
+/** A list of people (directors) as one line each: name first, then the other facts. */
+function prefillListItemParts(item: unknown): { title: string; details: string[] } {
+  if (!item || typeof item !== "object") return { title: prefillValueText("", item), details: [] };
+  const entries = Object.entries(item as Record<string, unknown>);
+  const [first, ...rest] = entries;
+  return {
+    title: first ? prefillValueText(first[0], first[1]) : "—",
+    details: rest
+      .filter(([, value]) => value !== "" && value !== undefined && value !== null)
+      .map(([key, value]) => (typeof value === "boolean" || key === "termStart" || key === "resignedAt")
+        ? `${prefillLabel(key)}: ${prefillValueText(key, value)}`
+        : prefillValueText(key, value)),
+  };
+}
+
+function PrefillValue({ name, value }: { name: string; value: unknown }): ReactNode {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="muted">None</span>;
+    return <ul className="review-kv__list">{value.map((item, index) => {
+      const { title, details } = prefillListItemParts(item);
+      return <li key={index}><strong>{title}</strong>{details.length > 0 && <span className="muted"> · {details.join(" · ")}</span>}</li>;
+    })}</ul>;
+  }
+  return <>{prefillValueText(name, value)}</>;
+}
+
+function PrefillSummary({ data }: { data: Record<string, unknown> }) {
+  return <dl className="review-kv">
+    {prefillRows(data).map(([key, value]) => <div className="review-kv__row" key={key}>
+      <dt>{prefillLabel(key)}</dt>
+      <dd><PrefillValue name={key} value={value} /></dd>
+    </div>)}
+  </dl>;
+}
+
+function prefillValueHtml(key: string, value: unknown) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "None";
+    return `<ul>${value.map((item) => {
+      const { title, details } = prefillListItemParts(item);
+      return `<li><strong>${escapeHtml(title)}</strong>${details.length ? ` · ${escapeHtml(details.join(" · "))}` : ""}</li>`;
+    }).join("")}</ul>`;
+  }
+  return escapeHtml(prefillValueText(key, value));
+}
+
 export function FilingPreFillPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const toast = useToast();
+  const navigate = useNavigate();
   const [selection, setSelection] = useState<{ workspace: string; provider: "societies" | "cra"; kind: string } | null>(null);
   const [fiscalYear, setFiscalYear] = useState(String(new Date().getFullYear() - 1));
   const canRead = loaded && can("filings:read");
@@ -52,8 +163,8 @@ export function FilingPreFillPage() {
   };
   const exportDoc = async () => {
     if (!ready) return;
-    const rows = Object.entries(data).map(([key, value]) =>
-      `<tr><th>${escapeHtml(key)}</th><td><pre style="margin:0;font-family:Consolas,monospace;font-size:10pt;">${escapeHtml(typeof value === "object" ? JSON.stringify(value, null, 2) : String(value))}</pre></td></tr>`).join("");
+    const rows = prefillRows(data as Record<string, unknown>).map(([key, value]) =>
+      `<tr><th>${escapeHtml(prefillLabel(key))}</th><td>${prefillValueHtml(key, value)}</td></tr>`).join("");
     try {
       await exportWordDocx({ filename: `prefill-${kind}.docx`, title: `${kind} pre-fill`,
         bodyHtml: `<h1>${escapeHtml((data as any).formName ?? (data as any).form ?? kind)}</h1><p>Preparation summary. Review and submit through the official government workflow.</p><table>${rows}</table>` });
@@ -62,17 +173,21 @@ export function FilingPreFillPage() {
 
   return <div className="page">
     <PageHeader title="Filing pre-fill" icon={<FileCog size={16} />} iconColor="orange"
-      subtitle="Review a preparation summary, then complete the official form or portal submission. Preparing or exporting this summary does not file a return." />
-    <div className="card"><div className="card__body">
-      <p className="muted">Registry route: {jurisdiction.registryPortalLabel}. {supportsSocieties
-        ? "BC society form preparation is available below. Confirm current fees and required evidence in the registry."
-        : "This entity does not use BC Societies Online. Use its jurisdiction filing checklist and official registry; CRA preparation is separate."}</p>
-      <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-        <Link className="btn-action" to="/app/filings">Filing checklist and evidence</Link>
-        <Link className="btn-action" to="/app/formation-maintenance">Formation and annual maintenance</Link>
+      subtitle="Review a preparation summary before the official filing."
+      info={<>
+        <p>Preparing or exporting this summary does not file a return. Complete the official form or portal submission afterwards.</p>
+        <p>Registry route: {jurisdiction.registryPortalLabel}. {supportsSocieties
+          ? "BC society form preparation is available here. Confirm current fees and required evidence in the registry."
+          : "This entity does not use BC Societies Online. Use its jurisdiction filing checklist and official registry; CRA preparation is separate."}</p>
+        <p><Link to="/app/filings">Filing checklist and evidence</Link> · <Link to="/app/formation-maintenance">Formation and annual maintenance</Link></p>
+      </>}
+      actions={<>
         {registryUrl && <a className="btn-action" href={registryUrl} target="_blank" rel="noreferrer"><ExternalLink size={12} /> {jurisdiction.registryPortalLabel}</a>}
-      </div>
-    </div></div>
+        <MoreActionsMenu items={[
+          { id: "filings", label: "Filing checklist and evidence", onSelect: () => navigate("/app/filings") },
+          { id: "formation", label: "Formation and annual maintenance", onSelect: () => navigate("/app/formation-maintenance") },
+        ]} />
+      </>} />
     <div className="card"><div className="card__body"><div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
       <Field label="Provider"><Select value={provider} onChange={value => setSelection({ workspace: society._id, provider: value as "societies" | "cra", kind: "" })}
         options={[...(supportsSocieties ? [{ value: "societies", label: "BC Societies Online" }] : []), ...(canReadCRA ? [{ value: "cra", label: "CRA" }] : [])]} /></Field>
@@ -83,16 +198,17 @@ export function FilingPreFillPage() {
     </div></div></div>
     <div className="card"><div className="card__head" style={{ flexWrap: "wrap", gap: 8 }}>
       <h2 className="card__title">{(data as any)?.formName ?? (data as any)?.form ?? kind}</h2>
-      <div style={{ marginLeft: "auto", display: "flex", gap: 4, flexWrap: "wrap" }}>
-        <button className="btn-action" disabled={!ready} onClick={() => void copy()}><Copy size={12} /> Copy JSON</button>
+      <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
         <button className="btn-action btn-action--primary" disabled={!ready} onClick={() => void exportDoc()}><FileDown size={12} /> Export .docx</button>
+        <Menu align="right" trigger={<button className="btn-action btn-action--icon" aria-label="More pre-fill actions" disabled={!ready}><MoreHorizontal size={14} /></button>}
+          sections={[{ id: "copy", items: [{ id: "copy-json", label: "Copy as JSON", icon: <Copy size={14} />, disabled: !ready, onSelect: () => void copy() }] }]} />
       </div></div><div className="card__body">
         {!canRead ? <p className="muted">Filing read access is required.</p>
           : provider === "cra" && !canReadCRA ? <p className="muted">Financial read access is required for CRA preparation.</p>
           : provider === "cra" && !validYear ? <p className="muted">Enter a fiscal year to load the financial summary.</p>
           : !data ? <p className="muted">Loading pre-fill…</p>
           : (data as any).error ? <Badge tone="warn">{(data as any).error}</Badge>
-          : <pre style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)", background: "var(--bg-subtle)", padding: 12, borderRadius: 6, overflow: "auto" }}>{JSON.stringify(data, null, 2)}</pre>}
+          : <PrefillSummary data={data as Record<string, unknown>} />}
       {!canExport && <p className="muted">Your role can review this summary. Download permission is required to copy or export it.</p>}
     </div></div>
   </div>;

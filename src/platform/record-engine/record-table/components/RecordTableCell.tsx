@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { columnWidthStyle } from "../utils/columnWidth";
 import { createPortal } from "react-dom";
 import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
 import type { RecordField } from "../../types";
@@ -99,7 +100,7 @@ export function RecordTableCell({
       }
       tabIndex={isFocused ? 0 : -1}
       aria-selected={isFocused}
-      style={{ width: recordField.size, minWidth: recordField.size }}
+      style={columnWidthStyle(recordField.size)}
       // The identifier column opens the record on a single click, so double-click
       // must NOT also try to edit it (the first click already navigates away —
       // that mismatch is what made renaming feel janky). Edit it via the hover

@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Braces, Database, ExternalLink, Link2, PiggyBank } from "lucide-react";
+import { ArrowLeft, Database, ExternalLink, FileInput, Link2, PiggyBank } from "lucide-react";
 import { useSociety } from "../../../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { Badge } from "../../../components/ui";
@@ -69,6 +69,7 @@ export function FinancialYearDetailPage() {
   }
 
   return (
+    <div className="page">
     <RecordShowPage
       layout={{ societyId: society._id, pageId: "financial-year-detail", objectId: fiscalYear }}
       title={`FY ${fiscalYear} financials`}
@@ -119,7 +120,7 @@ export function FinancialYearDetailPage() {
           id: "imports",
           label: "Imports",
           count: imports.length,
-          icon: <Braces size={14} />,
+          icon: <FileInput size={14} />,
           content: (
             <ImportSummaryTable
               imports={imports}
@@ -131,22 +132,20 @@ export function FinancialYearDetailPage() {
       inspector={
         <>
         <FinancialPresentationCard societyId={society._id} financial={financial} canWrite={canWrite} />
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">Evidence status</h2>
-          </div>
-          <div className="card__body col">
-            <DetailCell label="Financial row" value={financial?._id ?? "Not created"} mono />
+        <section className="finance-inspector__section">
+          <h2 className="finance-inspector__title">Evidence status</h2>
+          <div className="col">
+            <DetailCell label="Financial statements" value={financial ? "Recorded" : "Not created"} />
             <DetailCell label="Matched imports" value={String(exactImports.length)} />
             <DetailCell label="Related imports" value={String(relatedImports.length)} />
             <DetailCell label="Source documents" value={String(documents.length)} />
             <DetailCell label="Line items" value={String(lineCount)} />
-            <DetailCell label="Presented at meeting" value={detail.presentedAtMeeting?.title ?? "—"} />
           </div>
-        </div>
+        </section>
         </>
       }
     />
+    </div>
   );
 }
 

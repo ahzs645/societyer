@@ -16,6 +16,8 @@ import {
 import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
+import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
 import i18n from "../i18n";
 
 type ModalSize = "sm" | "md" | "lg" | "xl";
@@ -78,6 +80,11 @@ export function Modal({
     storageKey: resizeKey ?? slugifyTitle(title),
     elementRef: dialogRef,
   });
+  // Phones: a bottom sheet, swipe-dismissable only when a backdrop tap would
+  // be too, riding above the on-screen keyboard.
+  const isSheet = useIsBottomSheet();
+  useSheetDrag(dialogRef, { enabled: open && isSheet && dismissOnBackdrop, onDismiss: onClose });
+  const keyboardInset = useVisualViewportBottomInset(open && isSheet);
 
   if (!open) return null;
   const maxWidth = width != null ? `${width}px` : MODAL_WIDTH_VARS[size];
@@ -98,9 +105,10 @@ export function Modal({
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth, zIndex: modalZ, ...resize.style }}
+        style={{ maxWidth, zIndex: modalZ, ...resize.style, ...(isSheet && keyboardInset > 0 ? { bottom: keyboardInset, maxHeight: `calc(100dvh - ${keyboardInset + 12}px)` } : null) }}
       >
         {resize.handles}
+        {isSheet && <div className="sheet-grabber" aria-hidden="true" />}
         <div className="modal__head">
           <h2 className="modal__title" id={titleId}>{title}</h2>
           <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label={i18n.t("common.close", "Close")}>

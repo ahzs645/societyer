@@ -11,7 +11,9 @@ import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { BookTemplate, FileSignature, Landmark, Plus, Scale, Trash2, UserCheck, UsersRound } from "lucide-react";
+import { BookTemplate, FileSignature, Landmark, Scale, Trash2, UserCheck, UsersRound } from "lucide-react";
+import { CreateMenu } from "../components/CreateMenu";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
@@ -240,30 +242,26 @@ export function RoleHoldersPage() {
         title={corporationWorkspace ? "Corporation people" : "Role-holder register"}
         icon={<UsersRound size={16} />}
         iconColor="blue"
-        subtitle={
-          <>
+        subtitle={corporationWorkspace ? "Directors, officers, shareholders and controllers." : "Every governance role, with full history."}
+        info={
+          <p>
             {corporationWorkspace
               ? `Directors, officers, shareholders, controllers, and authorized filers for ${organizationLabel(society)}.`
-              : "Canonical register for directors, officers, incorporators, attorneys for service, authorized representatives, members, rightsholders, and control relationships."}{" "}
-            The complete governance-role register for this organization, with full audit
-            history. For your BC director filing register specifically, see{" "}
-            <Link to="/app/directors">Directors</Link>. Looking up a person across multiple
-            organizations instead? Try the <Link to="/app/people-directory">People directory</Link>.
-          </>
+              : "Every governance role — officers, incorporators, representatives and controllers — with full history."}{" "}
+            The filing register is <Link to="/app/directors">Directors</Link>; for one person across organizations, see{" "}
+            <Link to="/app/people-directory">People directory</Link>.
+          </p>
         }
         actions={
-          <div className="row" style={{ flexWrap: "wrap" }}>
-            {corporationWorkspace && (
-              <>
-                <button className="btn-action" disabled={!canWrite} onClick={() => openNew("officer")}><Plus size={12} /> Officer</button>
-                <button className="btn-action" disabled={!canWrite} onClick={() => openNew("shareholder")}><Plus size={12} /> Shareholder</button>
-                <button className="btn-action" disabled={!canWrite} onClick={() => openNew("controller")}><Plus size={12} /> Controller</button>
-              </>
-            )}
-            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => openNew()}>
-              <Plus size={12} /> {corporationWorkspace ? "Director" : "New holder"}
-            </button>
-          </div>
+          <CreateMenu
+            disabled={!canWrite}
+            items={[
+              { id: "holder", label: corporationWorkspace ? "Director" : "Role holder", onSelect: () => openNew() },
+              corporationWorkspace && { id: "officer", label: "Officer", onSelect: () => openNew("officer") },
+              corporationWorkspace && { id: "shareholder", label: "Shareholder", onSelect: () => openNew("shareholder") },
+              corporationWorkspace && { id: "controller", label: "Controller", onSelect: () => openNew("controller") },
+            ]}
+          />
         }
       />
 
@@ -345,6 +343,11 @@ export function RoleHoldersPage() {
             <RecordTableFilterChips />
             <RecordTable
               loading={tableData.loading || rows === undefined}
+              renderCell={({ field, value }) => {
+                // Officer titles are stored as option keys (privacy_officer).
+                if (field.name === "officerTitle" && value) return <span>{optionLabel("officerTitles", String(value))}</span>;
+                return undefined;
+              }}
               renderRowActions={(record) => (
                 <>
                   <button className="btn btn--ghost btn--sm" disabled={!can("members:read") || record.historyReadable !== true} title={record.historyReadable === true ? undefined : "Your role cannot read this record’s complete history."} onClick={() => { if (can("members:read") && record.historyReadable === true) setHistoryId(record._id); }}>
@@ -633,29 +636,39 @@ export function RightsLedgerPage() {
         title={corporationWorkspace ? "Share register" : "Membership classes"}
         icon={<Scale size={16} />}
         iconColor="purple"
-        subtitle={
-          corporationWorkspace
-            ? "Share classes, current holdings, issuance, transfers, redemptions, cancellations, and supporting evidence."
-            : "Membership/right classes plus current holdings, issuance, transfer, redemption, cancellation, and adjustment history."
+        subtitle={corporationWorkspace ? "Share classes, holdings and transfers." : "Membership classes, holdings and transfers."}
+        info={
+          <p>
+            {corporationWorkspace
+              ? "Share classes, current holdings, issuance, transfers, redemptions, cancellations, and supporting evidence."
+              : "Membership/right classes plus current holdings, issuance, transfer, redemption, cancellation, and adjustment history."}
+          </p>
         }
         actions={
-          <div className="row" style={{ alignItems: "center", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the register at a past date">
-              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
-              <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
-              {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")} title="Back to live">Live</button>}
-            </label>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> {corporationWorkspace ? "Issuance" : "Transfer"}</button>
-            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" })}><Plus size={12} /> {corporationWorkspace ? "Share class" : "Class"}</button>
-          </div>
+          <>
+            <CreateMenu
+              disabled={!canWrite}
+              items={[
+                { id: "class", label: corporationWorkspace ? "Share class" : "Class", onSelect: () => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" }) },
+                { id: "transfer", label: corporationWorkspace ? "Issuance" : "Transfer", onSelect: () => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" }) },
+              ]}
+            />
+          </>
         }
       />
+      <div className="register-asof">
+        <label className="register-asof__date" title="Reconstruct the register at a past date">
+          <span>As of</span>
+          <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
+        </label>
+        {asOf && (
+          <>
+            <span>Holdings and transfers as they stood that day.</span>
+            <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")}>Back to live</button>
+          </>
+        )}
+      </div>
       {!can("settings:read") && <p className="muted">Controller records require additional workspace access and are omitted from this view. The visible register is not a complete controller register.</p>}
-      {asOf && (
-        <div className="muted" style={{ marginBottom: 12 }}>
-          Showing the register as it stood on <strong>{asOf}</strong>. Issuance, transfers, and holdings reflect that date.
-        </div>
-      )}
 
       <Section title={corporationWorkspace ? "Share classes" : "Rights and membership classes"} count={data?.classes?.length ?? 0}>
         <div className="table-wrap">
@@ -1118,26 +1131,34 @@ export function TemplateEnginePage() {
         title="Template engine"
         icon={<BookTemplate size={16} />}
         iconColor="green"
-        subtitle={
-          <>
-            Technical setup area — used to configure document templates for automated packages.
-            Manage reusable precedents (pre-built document bundles, e.g. an incorporation
-            package), data fields, templates, generated drafts, signing state, package runs
-            (a specific instance of a precedent filled in with real data), timelines,
-            deliverables, terms, and price items.
-          </>
+        subtitle="Templates, precedents and the drafts made from them."
+        info={
+          <p>
+            Templates, precedents (reusable document bundles) and the package runs, drafts and signers generated from
+            them.
+          </p>
         }
         actions={
-          <div className="row" style={{ flexWrap: "wrap" }}>
-            <button className="btn-action" disabled={!canWrite} onClick={addStarterTemplates}><FileSignature size={12} /> Starter templates</button>
-            <button className="btn-action" disabled={!canWrite} onClick={addCorporationPackets}><FileSignature size={12} /> Corporation packets</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "field" })}><Plus size={12} /> Field</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "precedent", status: "draft" })}><Plus size={12} /> Precedent</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "run", status: "draft" })}><Plus size={12} /> Run</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "document", status: "draft" })}><Plus size={12} /> Draft</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "signer", status: "unsigned" })}><Plus size={12} /> Signer</button>
-            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setDraft({ kind: "template", templateType: "document", status: "draft" })}><Plus size={12} /> Template</button>
-          </div>
+          <>
+            <MoreActionsMenu
+              label="Install"
+              items={[
+                { id: "starter", label: "Starter templates", icon: <FileSignature size={14} />, disabled: !canWrite, onSelect: addStarterTemplates },
+                { id: "packets", label: "Corporation packets", icon: <FileSignature size={14} />, disabled: !canWrite, onSelect: addCorporationPackets },
+              ]}
+            />
+            <CreateMenu
+              disabled={!canWrite}
+              items={[
+                { id: "template", label: "Template", onSelect: () => setDraft({ kind: "template", templateType: "document", status: "draft" }) },
+                { id: "precedent", label: "Precedent", onSelect: () => setDraft({ kind: "precedent", status: "draft" }) },
+                { id: "field", label: "Field", onSelect: () => setDraft({ kind: "field" }) },
+                { id: "run", label: "Package run", onSelect: () => setDraft({ kind: "run", status: "draft" }) },
+                { id: "document", label: "Draft document", onSelect: () => setDraft({ kind: "document", status: "draft" }) },
+                { id: "signer", label: "Signer", onSelect: () => setDraft({ kind: "signer", status: "unsigned" }) },
+              ]}
+            />
+          </>
         }
       />
 
@@ -1157,7 +1178,7 @@ export function TemplateEnginePage() {
       </Section>
 
       <Section
-        title="Precedents and runs (document-bundle blueprints and their filled-in instances)"
+        title="Precedents and runs"
         count={(data?.precedents?.length ?? 0) + (data?.runs?.length ?? 0)}
       >
         <SimpleTable
@@ -1175,7 +1196,7 @@ export function TemplateEnginePage() {
       </Section>
 
       <Section
-        title="Generated documents and signers (finished drafts and the people who need to sign them)"
+        title="Generated documents and signers"
         count={(data?.generatedDocuments?.length ?? 0) + (data?.signers?.length ?? 0)}
       >
         <SimpleTable
@@ -1301,24 +1322,33 @@ export function FormationMaintenancePage() {
         title="Formation and maintenance"
         icon={<Landmark size={16} />}
         iconColor="orange"
-        subtitle="Formation packages, NUANS/name-search artifacts, amendments, annual maintenance filings, jurisdiction attributes, and operational event logs."
+        subtitle="Formation paperwork and annual upkeep."
+        info={
+          <>
+            <p>
+              Formation packages, NUANS/name-search artifacts, amendments, annual maintenance filings, jurisdiction
+              attributes, and operational event logs.
+            </p>
+            <p>
+              Tracks formation paperwork and annual-maintenance checklist items specific to incorporation upkeep. For
+              the full filings register, see <Link to="/app/filings">Filings</Link>.
+            </p>
+          </>
+        }
         actions={
-          <div className="row" style={{ flexWrap: "wrap" }}>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "nameSearch" })}><Plus size={12} /> Name search</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "amendment", status: "draft" })}><Plus size={12} /> Amendment</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "annual", status: "draft" })}><Plus size={12} /> Annual</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "jurisdiction" })}><Plus size={12} /> Jurisdiction</button>
-            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "log", logType: "edit", severity: "info" })}><Plus size={12} /> Log</button>
-            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setDraft({ kind: "formation", status: "draft" })}><Plus size={12} /> Formation</button>
-          </div>
+          <CreateMenu
+            disabled={!canWrite}
+            items={[
+              { id: "formation", label: "Formation package", onSelect: () => setDraft({ kind: "formation", status: "draft" }) },
+              { id: "nameSearch", label: "Name search", onSelect: () => setDraft({ kind: "nameSearch" }) },
+              { id: "amendment", label: "Amendment", onSelect: () => setDraft({ kind: "amendment", status: "draft" }) },
+              { id: "annual", label: "Annual maintenance", onSelect: () => setDraft({ kind: "annual", status: "draft" }) },
+              { id: "jurisdiction", label: "Jurisdiction", onSelect: () => setDraft({ kind: "jurisdiction" }) },
+              { id: "log", label: "Log entry", onSelect: () => setDraft({ kind: "log", logType: "edit", severity: "info" }) },
+            ]}
+          />
         }
       />
-
-      <p className="muted">
-        Tracks formation paperwork and annual-maintenance checklist items specific to
-        incorporation upkeep. For the full filings register, see{" "}
-        <Link to="/app/filings">Filings</Link>.
-      </p>
 
       <Section title="Formation records" count={data?.formations?.length ?? 0}>
         <SimpleTable
@@ -1541,7 +1571,7 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: an
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
     <div className="card">
-      <div className="card__head"><h2 className="card__title">{title}</h2><Badge>{count}</Badge></div>
+      <div className="card__head"><h2 className="card__title">{title} <Badge>{count}</Badge></h2></div>
       {children}
     </div>
   );

@@ -998,3 +998,407 @@ p.landing__fineprint {
     font-size: token('fs-xs');
   }
 }
+
+/* ============================================================
+   Public transparency center (/public/:slug)
+   ============================================================ */
+.public-center__hero {
+  padding-top: 64px;
+  padding-bottom: 40px;
+}
+.public-center__eyebrow-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: token('s-2');
+  margin-bottom: token('s-4');
+}
+.public-center__eyebrow-row .landing__eyebrow {
+  margin-bottom: 0;
+}
+.public-center__cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: token('s-5');
+}
+.public-center__body .landing__container {
+  display: grid;
+  gap: token('s-4');
+}
+/* One card: facts beside the board roster on wide screens, stacked on
+ * phones. */
+.public-center__about {
+  display: grid;
+  gap: token('s-5');
+  padding: token('s-5');
+}
+.public-center__about.has-board {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.public-center__about .card__title {
+  margin: 0 0 token('s-3');
+}
+.public-center__facts dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.public-center__facts dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: token('s-3');
+}
+.public-center__facts dt {
+  color: token('text-tertiary');
+}
+.public-center__facts dd {
+  margin: 0;
+  text-align: right;
+  min-width: 0;
+}
+.public-center__board {
+  padding-left: token('s-5');
+  border-left: 1px solid token('border-color-light');
+}
+.public-center__board ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.public-center__board li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: token('s-3');
+}
+.public-center__board li span {
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+  white-space: nowrap;
+}
+.public-center__empty {
+  display: flex;
+  gap: token('s-3');
+  align-items: flex-start;
+  color: token('text-secondary');
+}
+.public-center__empty strong {
+  display: block;
+  color: token('text-primary');
+  margin-bottom: 2px;
+}
+.public-center__empty p {
+  margin: 4px 0 0;
+}
+.public-center__empty-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+  color: token('text-tertiary');
+}
+@media (max-width: 760px) {
+  .public-center__hero {
+    padding-top: 40px;
+    padding-bottom: 24px;
+  }
+  .public-center__cta > * {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+  .public-center__about,
+  .public-center__about.has-board {
+    grid-template-columns: minmax(0, 1fr);
+    padding: token('s-4');
+  }
+  .public-center__board {
+    padding-left: 0;
+    padding-top: token('s-4');
+    border-left: 0;
+    border-top: 1px solid token('border-color-light');
+  }
+}
+.public-center p.landing__lede {
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   Public intake forms (volunteer / funding)
+   ============================================================ */
+.intake-page {
+  min-height: 100vh;
+}
+.intake {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: token('s-8') token('s-5') token('s-10');
+}
+.intake__head {
+  display: grid;
+  justify-items: start;
+  gap: token('s-2');
+  max-width: 680px;
+  margin-bottom: token('s-6');
+}
+.intake__head .landing__eyebrow {
+  margin: token('s-2') 0 0;
+}
+.intake__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  text-decoration: none;
+}
+.intake__back:hover {
+  color: token('text-primary');
+}
+.intake__title {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 36px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.intake__lede {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-lg');
+  line-height: 1.5;
+  max-width: 60ch;
+}
+.intake__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: token('s-6');
+  align-items: start;
+}
+.intake__layout--single,
+.intake__layout:not(:has(.intake__aside)) {
+  grid-template-columns: minmax(0, 720px);
+}
+.intake__form {
+  display: grid;
+  gap: token('s-5');
+  padding: token('s-5');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-lg');
+  box-shadow: token('shadow-xs');
+}
+.intake__section {
+  display: grid;
+  gap: token('s-3');
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.intake__section .field {
+  margin-bottom: 0;
+}
+.intake__section > legend {
+  padding: 0;
+  margin-bottom: token('s-3');
+  font-size: token('fs-md');
+  font-weight: 650;
+  color: token('text-primary');
+}
+.intake__section + .intake__section {
+  padding-top: token('s-5');
+  border-top: 1px solid token('border-color-light');
+}
+/* Pairs that belong together share a row; first/last name stay paired even
+ * on phones, wider pairs (email + phone) stack below 560px. */
+.intake__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token('s-3');
+}
+.intake__row--amount {
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+}
+.intake__money {
+  position: relative;
+  display: block;
+}
+.intake__money > span {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: token('text-tertiary');
+  pointer-events: none;
+}
+.intake__money > .input {
+  width: 100%;
+  padding-left: 22px;
+}
+.intake__program-info {
+  display: grid;
+  gap: 6px;
+  padding: token('s-3');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.intake__program-info p {
+  margin: 0;
+}
+.intake-notice {
+  margin-top: token('s-1');
+}
+.intake__submit {
+  display: grid;
+}
+.intake__submit .btn {
+  justify-self: start;
+  min-width: 200px;
+  min-height: 40px;
+  justify-content: center;
+}
+.intake__aside {
+  position: sticky;
+  top: token('s-5');
+  display: grid;
+  gap: token('s-3');
+  padding: token('s-4');
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-lg');
+  background: token('bg-subtle');
+}
+.intake__aside h2 {
+  margin: 0;
+  font-size: token('fs-md');
+  font-weight: 650;
+}
+.intake__aside ul {
+  display: grid;
+  gap: token('s-3');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.intake__aside li {
+  display: grid;
+  gap: 2px;
+}
+.intake__aside li span {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.intake__done {
+  display: grid;
+  gap: token('s-3');
+  justify-items: start;
+  max-width: 560px;
+  padding: token('s-5');
+}
+.intake__done p {
+  margin: 0;
+}
+
+/* Collapsible personal-information notice. */
+.intake-notice {
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.intake-notice > summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.intake-notice > summary::-webkit-details-marker {
+  display: none;
+}
+.intake-notice > summary > svg {
+  flex: none;
+  margin-top: 3px;
+  color: token('accent');
+}
+.intake-notice > summary > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.intake-notice > summary strong {
+  color: token('text-primary');
+  font-weight: 600;
+}
+.intake-notice__more {
+  flex: none;
+  color: token('accent');
+  font-weight: 500;
+  white-space: nowrap;
+}
+.intake-notice[open] .intake-notice__more {
+  visibility: hidden;
+}
+.intake-notice__body {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px 34px;
+}
+.intake-notice__body p {
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .intake__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .intake__aside {
+    position: static;
+  }
+}
+@media (max-width: 560px) {
+  .intake {
+    padding: token('s-5') token('s-4') token('s-8');
+  }
+  .intake__head {
+    margin-bottom: token('s-4');
+  }
+  .intake__lede {
+    font-size: token('fs-md');
+  }
+  /* On phones the form is the page — no card chrome eating the width. */
+  .intake__form {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .intake__row--wide,
+  .intake__row--amount {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .intake__row--amount > .field:first-child {
+    max-width: 12rem;
+  }
+  .intake__submit {
+    position: sticky;
+    bottom: 0;
+    margin-inline: calc(-1 * token('s-4'));
+    padding: token('s-3') token('s-4') calc(token('s-3') + env(safe-area-inset-bottom, 0px));
+    background: token('bg-base');
+  }
+  .intake__submit .btn {
+    justify-self: stretch;
+  }
+}

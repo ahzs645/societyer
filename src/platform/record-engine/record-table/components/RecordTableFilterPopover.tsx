@@ -85,6 +85,13 @@ export function RecordTableFilterPopover({
   const availableOps =
     (selectedColumn && DEFAULT_OPERATORS[selectedColumn.field.fieldType]) ?? ["contains"];
 
+  // Fields with a fixed set of choices (selects, and relations a page has
+  // given names to) pick a value from a list instead of typing a raw value.
+  const configOptions = (selectedColumn?.field.config as { options?: { value: string; label: string }[] } | undefined)?.options;
+  const valueOptions = Array.isArray(configOptions)
+    ? configOptions.map((option) => ({ value: String(option.value), label: String(option.label ?? option.value) }))
+    : [];
+
   const add = () => {
     if (!selectedColumn) return;
     const existingRoot = filterGroups.find((group) => !group.parentViewFilterGroupId);
@@ -191,7 +198,17 @@ export function RecordTableFilterPopover({
           options={availableOps.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
           disabled={!selectedColumn}
         />
-        {!VALUELESS.includes(operator) && (
+        {!VALUELESS.includes(operator) && valueOptions.length > 0 ? (
+          <Select
+            size="sm"
+            value={value}
+            onChange={(v) => setValue(v)}
+            placeholder="Choose…"
+            searchable={valueOptions.length > 8}
+            aria-label="Filter value"
+            options={valueOptions}
+          />
+        ) : !VALUELESS.includes(operator) && (
           <input
             type={
               selectedColumn?.field.fieldType === FIELD_TYPES.DATE

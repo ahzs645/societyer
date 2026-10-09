@@ -3,9 +3,53 @@
 
 .coverage-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   margin: 0 0 16px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.coverage-tabs::-webkit-scrollbar { display: none; }
+
+.coverage-tabs .segmented__btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.coverage-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, inherit);
+}
+
+.coverage-status-summary strong { color: var(--text-primary, inherit); }
+
+.coverage-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.coverage-key .coverage-legend { margin: 0; }
+
+.coverage-key__label {
+  display: none;
+  font-size: 12px;
+  color: var(--text-secondary, inherit);
+}
+
+.info-popover .coverage-legend { margin: 8px 0 0; }
+
+@media (max-width: 760px) {
+  .coverage-key > .coverage-legend { display: none; }
+  .coverage-key__label { display: inline; }
 }
 
 .coverage-toolbar {

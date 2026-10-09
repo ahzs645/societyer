@@ -240,36 +240,19 @@ export function DesktopSetupPage() {
       <div className="page page--wide">
         <PageHeader
           title="Desktop app setup"
-          subtitle="This page configures the Societyer desktop app. You're currently using the web version."
           icon={<Monitor size={16} />}
           iconColor="blue"
         />
-        <div className="card" style={{ maxWidth: 720 }}>
-          <div className="card__head">
-            <h2 className="card__title">You're using the web version</h2>
-            <span className="card__subtitle">
-              {inDemo
-                ? "This is the browser-based demo, which doesn't have a desktop bridge."
-                : "No desktop bridge was found in this browser tab."}
-            </span>
-          </div>
-          <div className="card__body col">
-            <div className="muted">
-              The desktop app unlocks local-first storage — your society's records live in the app's local database,
-              while document files live in your chosen workspace folder. Both remain on your computer for offline
-              access, backups, and exports/imports. Societyer Desktop isn't required; everything else works normally
-              in the web version you're using now.
-            </div>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              To set up the desktop app, download and open Societyer Desktop, then revisit this page from inside
-              that app.
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <Link to="/app/settings" className="btn btn--accent">
-                Open settings
-              </Link>
-              <Link to="/app" className="btn">
+        <div className="card" style={{ maxWidth: 640, marginLeft: 0, marginRight: "auto" }}>
+          <div className="card__body col" style={{ gap: 12 }}>
+            <h2 className="card__title" style={{ margin: 0 }}>You're using the web version</h2>
+            <p className="muted" style={{ margin: 0 }}>Nothing to set up here — open this page in Societyer Desktop.</p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <Link to="/app" className="btn btn--accent">
                 Back to dashboard
+              </Link>
+              <Link to="/app/settings" className="btn">
+                Open settings
               </Link>
             </div>
           </div>
@@ -282,7 +265,8 @@ export function DesktopSetupPage() {
     <div className="page page--wide">
       <PageHeader
         title="Welcome to Societyer Desktop"
-        subtitle="Choose a local or online workspace, prepare your local vault, and connect optional services when needed."
+        subtitle="Choose where records live and prepare your local vault."
+        info={<p>Choose a local or online workspace, prepare your local vault, and connect optional services when needed.</p>}
         icon={<HardDrive size={16} />}
         iconColor="blue"
         actions={

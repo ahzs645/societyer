@@ -1,4 +1,5 @@
 import { JURISDICTION_WORKSPACE_CONFIGS } from "../../shared/jurisdictionWorkspace";
+import { formatMonthDay } from "../components/MonthDayPicker";
 import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -8,7 +9,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
 import { formatDate, formatDateTime, isPastDue, relative } from "../lib/format";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useToast } from "../components/Toast";
 import {
   Activity,
@@ -36,6 +38,10 @@ import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
+import { RollingNumber } from "../components/RollingNumber";
+import { InfoPopover } from "../components/InfoPopover";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { pluralizeCounts } from "../lib/pluralizeCounts";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -55,6 +61,8 @@ function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
 
 export function Dashboard() {
   const society = useSociety();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const welcomeWorkflowId = searchParams.get("welcome");
   const { can } = usePermissions();
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const navigate = useNavigate();
@@ -94,7 +102,10 @@ export function Dashboard() {
   // slim strip by default so it stops dominating the page. Auto-hide once fully done.
   const onboardingCollapsedByDefault = completedOnboardingSteps / onboardingSteps.length >= 0.5;
   const onboardingExpanded = onboardingExpandedOverride ?? !onboardingCollapsedByDefault;
-  const showOnboarding = !onboardingFlowHidden && !allOnboardingComplete;
+  // Fresh from the new-organization flow: lead with that organization's
+  // setup checklist (and a link to its onboarding workflow) instead of the
+  // generic setup guide, so there is one checklist, not two.
+  const showOnboarding = !welcomeWorkflowId && !onboardingFlowHidden && !allOnboardingComplete;
 
   const setOnboardingFlowHidden = (hidden: boolean) => {
     const nextIds = hidden
@@ -182,8 +193,19 @@ export function Dashboard() {
       <PageHeader
         routeKey="/app"
         title="Dashboard"
-        subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
+
+      {welcomeWorkflowId && society && (
+        <div className="dashboard-welcome">
+          <OrganizationOnboardingPanel organization={society} />
+          <div className="dashboard-welcome__foot">
+            <Link to={`/app/workflows/${welcomeWorkflowId}`}>Open the Workspace onboarding workflow</Link>
+            <button type="button" className="btn-action" onClick={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("welcome"); return next; }, { replace: true })}>
+              Go to dashboard
+            </button>
+          </div>
+        </div>
+      )}
 
       {showOnboarding && onboardingExpanded && (
         <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
@@ -261,40 +283,46 @@ export function Dashboard() {
       )}
 
       {showOnboarding && !onboardingExpanded && (
-        <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
-          <div className="onboarding-flow__story">
-            <div>
-              <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
-              <p style={{ margin: "4px 0 0" }}>
-                Next: <strong>{nextOnboardingStep.title}</strong> — {nextOnboardingStep.description}
-              </p>
-            </div>
-            <div className="onboarding-flow__actions" style={{ flexWrap: "wrap", alignItems: "center" }}>
-              <div className="onboarding-flow__status">
-                <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
-                <span>setup checks complete</span>
-              </div>
-              <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
-                Open <ArrowRight size={12} />
-              </Link>
-              <button
-                type="button"
-                className="btn-action"
-                onClick={() => setOnboardingExpandedOverride(true)}
-                aria-expanded={false}
-              >
-                Show steps <ChevronDown size={12} />
-              </button>
-              <button
-                type="button"
-                className="onboarding-flow__dismiss"
-                onClick={hideOnboardingFlow}
-                title="Hide setup guide"
-                aria-label="Hide setup guide"
-              >
-                <X size={14} />
-              </button>
-            </div>
+        <section className="onboarding-compact" aria-labelledby="onboarding-flow-title">
+          <div
+            className="onboarding-compact__ring"
+            style={{ "--progress": `${onboardingProgress}%` } as React.CSSProperties}
+            role="img"
+            aria-label={`${completedOnboardingSteps} of ${onboardingSteps.length} setup checks complete`}
+          >
+            <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
+          </div>
+          <div className="onboarding-compact__main">
+            <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
+            <Link to={nextOnboardingStep.to} className="onboarding-compact__next">
+              <span className="onboarding-compact__next-label">Next</span>
+              <span className="onboarding-compact__next-text">
+                <strong>{nextOnboardingStep.title}</strong>
+                <span className="onboarding-compact__next-desc">{nextOnboardingStep.description}</span>
+              </span>
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
+          <div className="onboarding-compact__actions">
+            <button
+              type="button"
+              className="onboarding-compact__icon"
+              onClick={() => setOnboardingExpandedOverride(true)}
+              aria-expanded={false}
+              aria-label="Show steps"
+              title="Show all setup steps"
+            >
+              <ChevronDown size={16} />
+            </button>
+            <button
+              type="button"
+              className="onboarding-compact__icon"
+              onClick={hideOnboardingFlow}
+              title="Hide setup guide"
+              aria-label="Hide setup guide"
+            >
+              <X size={14} />
+            </button>
           </div>
         </section>
       )}
@@ -311,17 +339,19 @@ export function Dashboard() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Compliance posture</h2>
-              <span className="card__subtitle">Automated checks against the Societies Act</span>
+              <InfoPopover label="About compliance posture">
+                <p>Automated checks against the Societies Act. Citations and full detail are available on each item.</p>
+              </InfoPopover>
             </div>
             <div className="card__body dashboard-compliance">
               <div className="dashboard-compliance__summary">
                 <div>
                   <div className="dashboard-compliance__count">
-                    {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} visible item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
+                    {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
                   </div>
-                  <div className="muted">
-                    {completeComplianceAccess ? "Start with the operational gaps below. Citations and full detail are available when needed." : "Some checks need an administrator. The items below use records available to your role."}
-                  </div>
+                  {!completeComplianceAccess && (
+                    <div className="muted">Some checks need an administrator. The items below use records available to your role.</div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -336,7 +366,7 @@ export function Dashboard() {
 
               <ul className="dashboard-compliance__todo">
                 {complianceFlags.slice(0, showComplianceDetails ? complianceFlags.length : 3).map((f: any, i: number) => (
-                  <li key={i}>{f.text}</li>
+                  <li key={i}>{pluralizeCounts(f.text)}</li>
                 ))}
               </ul>
 
@@ -358,51 +388,77 @@ export function Dashboard() {
                       citationId={(f as any).citationId}
                       citationIds={(f as any).citationIds}
                     >
-                      {f.text}
+                      {pluralizeCounts(f.text)}
                     </Flag>
-                    <div className="dashboard-remediation__meta">
-                      {f.evidenceRequired?.length > 0 && (
-                        <span>Evidence: {f.evidenceRequired.join(", ")}</span>
-                      )}
-                      {f.remediationStatus && (
+                    {f.remediationStatus && (
+                      <div className="dashboard-remediation__meta">
                         <Badge tone={f.remediationStatus === "resolved" ? "success" : "info"}>
                           {f.remediationStatus === "open" ? "Workflow open" : f.remediationStatus}
                         </Badge>
-                      )}
-                    </div>
-                    {f.remediationActions?.length > 0 && (
-                      <div className="dashboard-remediation__actions">
-                        {f.remediationActions.filter((action: any) => {
-                          const permission = action.intent === "navigate" ? interfaceRouteReadPermission(action.to) : null;
-                          return !permission || canRead(permission);
-                        }).map((action: any) => {
-                          const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`
-                            || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
-                          return action.intent === "navigate" ? (
-                            <Link key={action.id} className="btn btn--sm" to={action.to}>
-                              {action.label}
+                      </div>
+                    )}
+                    {(f.remediationActions?.length > 0 || f.evidenceRequired?.length > 0) && (() => {
+                      const evidenceInfo = f.evidenceRequired?.length > 0 ? (
+                        <InfoPopover label="Evidence that resolves this">
+                          <p><strong>Evidence that resolves this</strong></p>
+                          <ul style={{ margin: 0, paddingLeft: "1.1em" }}>
+                            {f.evidenceRequired.map((item: string) => <li key={item}>{item}</li>)}
+                          </ul>
+                        </InfoPopover>
+                      ) : null;
+                      const visibleActions = (f.remediationActions ?? []).filter((action: any) => {
+                        const permission = action.intent === "navigate" ? interfaceRouteReadPermission(action.to) : null;
+                        return !permission || canRead(permission);
+                      });
+                      const actionDisabled = (action: any) => busyRemediationAction === `${f.ruleId}:${action.id}`
+                        || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
+                      const [primary, ...secondary] = visibleActions;
+                      if (!primary) return evidenceInfo ? <div className="dashboard-remediation__actions">{evidenceInfo}</div> : null;
+                      // One primary action per row; the rest sit in a ⋯ menu.
+                      return (
+                        <div className="dashboard-remediation__actions">
+                          {primary.intent === "navigate" ? (
+                            <Link className="btn btn--sm" to={primary.to}>
+                              {primary.label}
                             </Link>
                           ) : (
                             <button
-                              key={action.id}
                               type="button"
                               className="btn btn--sm"
-                              disabled={disabled}
-                              onClick={() => runRemediationAction(f, action)}
+                              disabled={actionDisabled(primary)}
+                              onClick={() => runRemediationAction(f, primary)}
                             >
-                              {busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label}
+                              {busyRemediationAction === `${f.ruleId}:${primary.id}` ? "Working..." : primary.label}
                             </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                          )}
+                          {secondary.length > 0 && (
+                            <MoreActionsMenu
+                              label=""
+                              align="left"
+                              items={secondary.map((action: any) => ({
+                                id: action.id,
+                                label: busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label,
+                                disabled: actionDisabled(action),
+                                onSelect: () => runRemediationAction(f, action),
+                              }))}
+                            />
+                          )}
+                          {evidenceInfo}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          <ContinuityChecksCard societyId={society._id} />
+          {/* Director consent already shows (with its actions) under Compliance
+            * posture; don't repeat it under Record continuity. */}
+          <ContinuityChecksCard
+            societyId={society._id}
+            hideCheckIds={complianceFlags.some((flag: any) => flag.ruleId === "BC-SOC-DIRECTOR-CONSENT") ? ["CONTINUITY-DIRECTOR-CONSENT"] : undefined}
+          />
 
           <AgreementsExpiringCard societyId={society._id} />
 
@@ -414,7 +470,7 @@ export function Dashboard() {
                 View all <ArrowRight size={12} />
               </Link>
             </div>
-            <table className="table">
+            <div className="table-wrap"><table className="table">
               <thead>
                 <tr>
                   <th>Kind</th>
@@ -448,7 +504,7 @@ export function Dashboard() {
                   </tr>
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
           )}
         </div>
@@ -492,7 +548,7 @@ export function Dashboard() {
             <div className="card__body col">
               <div><strong>{society.name}</strong></div>
               <div className="muted mono">{society.incorporationNumber}</div>
-              <div className="muted">Fiscal year end: {society.fiscalYearEnd ?? "—"}</div>
+              <div className="muted">Fiscal year end: {society.fiscalYearEnd ? formatMonthDay(society.fiscalYearEnd) : "—"}</div>
               <div className="muted">{society.registeredOfficeAddress}</div>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                 {society.isCharity && <Badge tone="accent">CRA charity</Badge>}
@@ -527,7 +583,7 @@ export function Dashboard() {
                     <strong>{d.name}</strong>
                     <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.position}</div>
                   </div>
-                  {d.isBCResident && <Badge tone="info">BC</Badge>}
+                  {d.isBCResident && <span title="BC resident" aria-label="BC resident"><Badge tone="info">BC</Badge></span>}
                 </div>
               ))}
               {counts.directors > board.length && (
@@ -604,7 +660,7 @@ export function Dashboard() {
               All tasks <ArrowRight size={12} />
             </Link>
           </div>
-          <table className="table">
+          <div className="table-wrap"><table className="table">
             <thead>
               <tr>
                 <th scope="col" className="table__icon-col">
@@ -634,7 +690,7 @@ export function Dashboard() {
                 </tr>
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
           )}
       </div>
@@ -778,7 +834,7 @@ function Stat({
         className="stat__value"
         style={{ color: tone === "danger" ? "var(--danger)" : undefined }}
       >
-        {value}
+        <RollingNumber value={value} />
       </div>
     </div>
   );

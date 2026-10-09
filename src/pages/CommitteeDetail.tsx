@@ -27,6 +27,8 @@ import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { PersonPicker, useDirectoryPeople } from "../components/PersonPicker";
 import { BuildRostersButton } from "../features/committees/BuildRostersButton";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { useIsMobile } from "../lib/useIsMobile";
 import { TASK_CREATE_STATUSES, TASK_STATUSES, isHistoricalSourceAction, isOpenOperationalTask, taskStatusLabel } from "../../shared/taskStatus";
 
 const isPartialDate = (value?: string) => !value || /^\d{4}(-\d{2}(-\d{2})?)?$/.test(value);
@@ -48,6 +50,7 @@ export function CommitteeDetailPage() {
   const people = useDirectoryPeople(society?._id);
   const removeCommittee = usePermissionedMutation(api.committees.remove, canWrite);
   const navigate = useNavigate();
+  const isPhone = useIsMobile();
   const createTask = usePermissionedMutation(api.tasks.create, canWriteTasks);
   const updateTask = usePermissionedMutation(api.tasks.update, canWriteTasks);
   const confirm = useConfirm();
@@ -186,7 +189,7 @@ export function CommitteeDetailPage() {
             <div className="card">
               <div className="card__head"><h2 className="card__title">Roster</h2></div>
               <div className="card__body col">
-                <AvatarGroup names={currentMembers.map((m: any) => m.name)} max={8} />
+                <div className="committee-roster"><AvatarGroup names={currentMembers.map((m: any) => m.name)} max={8} /></div>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{currentMembers.length} current member{currentMembers.length === 1 ? "" : "s"}{members.length > currentMembers.length ? ` · ${members.length - currentMembers.length} former` : ""}{pendingMembers ? ` · ${pendingMembers} pending review` : ""}</div>
               </div>
             </div>
@@ -383,41 +386,40 @@ export function CommitteeDetailPage() {
       </Link>
       <RecordShowPage
         layout={{ societyId: society._id, pageId: "committee-detail", objectId: String(committee._id) }}
-        title={
-          <span className="row" style={{ gap: 10 }}>
-            <span className="color-chip" style={{ background: committee.color, width: 14, height: 14 }} />
-            {committee.name}
-          </span>
-        }
+        title={committee.name}
         subtitle={committee.description}
         actions={
-          <button
-            className="btn-action"
-            disabled={!canWrite}
-            onClick={async () => {
-              if (!canWrite) return;
-              const ok = await confirm({
-                title: "Delete committee?",
-                message: `"${committee.name}" will be permanently deleted along with its membership roster. Linked meetings, tasks, and goals are kept but unlinked.`,
-                confirmLabel: "Delete",
-                tone: "danger",
-              });
-              if (!ok) return;
-              await removeCommittee({ id: committee._id });
-              toast.success("Committee deleted");
-              navigate("/app/committees");
-            }}
-          >
-            <Trash2 size={12} /> Delete
-          </button>
+          // Delete is destructive and rare: it lives in the ⋯ menu, not on the header.
+          canWrite ? (
+            <MoreActionsMenu
+              label={isPhone ? "" : "More"}
+              items={[
+                {
+                  id: "delete",
+                  label: "Delete committee",
+                  icon: <Trash2 size={12} />,
+                  destructive: true,
+                  onSelect: async () => {
+                    if (!canWrite) return;
+                    const ok = await confirm({
+                      title: "Delete committee?",
+                      message: `"${committee.name}" will be permanently deleted along with its membership roster. Linked meetings, tasks, and goals are kept but unlinked.`,
+                      confirmLabel: "Delete",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    await removeCommittee({ id: committee._id });
+                    toast.success("Committee deleted");
+                    navigate("/app/committees");
+                  },
+                },
+              ]}
+            />
+          ) : null
         }
-        chips={
-          <>
-            <Badge>{cadenceLabel(committee.cadence)}</Badge>
-            <Badge tone={committee.status === "Active" ? "success" : "warn"}>{committeeStatusLabel(committee.status)}</Badge>
-            <UnsupportedDetailsBadge table="committees" id={committee._id} />
-          </>
-        }
+        // Cadence and status already lead the summary; only keep chips that
+        // add something.
+        chips={<UnsupportedDetailsBadge table="committees" id={committee._id} />}
         summary={[
           { label: "Cadence", value: cadenceLabel(committee.cadence) },
           { label: "Status", value: committeeStatusLabel(committee.status) },

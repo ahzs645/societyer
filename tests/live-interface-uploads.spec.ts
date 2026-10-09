@@ -29,7 +29,8 @@ test("production inventory photo uploads and persists with its created item", as
   await signInLive(page);
   const title = `Live photographed item ${testInfo.project.name} ${Date.now()}`;
   await page.goto("/app/inventory");
-  await page.getByRole("button", { name: "New item", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Item", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New item", exact: true });
   await dialog.locator('input[type="file"]').setInputFiles(image());
   await expect(dialog.locator("img")).toBeVisible();

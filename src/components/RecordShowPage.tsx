@@ -269,7 +269,7 @@ export function RecordShowPage({
   );
 
   return (
-    <div className="record-show">
+    <div className={`record-show${inspectorVisible ? "" : " record-show--full"}`}>
       <div className="record-show__main">
         <TitleHeader
           title={title}

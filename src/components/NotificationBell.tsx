@@ -9,6 +9,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
 import { useSociety } from "../hooks/useSociety";
 
 export function NotificationBell() {
@@ -35,9 +36,22 @@ export function NotificationBell() {
   const btnRef = useRef<HTMLButtonElement | null>(null);
   // Dialog semantics: focus moves in, Escape closes, focus returns to the bell.
   const panelRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false));
+  // Phones: the panel is a swipe-dismissable bottom sheet, not a popover
+  // hanging off a bell in the corner.
+  const isSheet = useIsBottomSheet();
+  useSheetDrag(panelRef, { enabled: open && isSheet, onDismiss: () => setOpen(false) });
+  // Ring the bell when the unread count goes UP (not on first load / reads).
+  const unreadCount = unread ?? 0;
+  const prevUnreadRef = useRef<number | null>(null);
+  const [ringKey, setRingKey] = useState(0);
+  useEffect(() => {
+    const prev = prevUnreadRef.current;
+    prevUnreadRef.current = unreadCount;
+    if (prev !== null && unreadCount > prev) setRingKey((k) => k + 1);
+  }, [unreadCount]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isSheet) return;
     const place = () => {
       const rect = btnRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -70,7 +84,7 @@ export function NotificationBell() {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
+  }, [open, isSheet]);
 
   if (!society) return null;
 
@@ -80,69 +94,42 @@ export function NotificationBell() {
     <>
       <button
         ref={btnRef}
-        className="sidebar__icon-btn"
+        className="sidebar__icon-btn notif-bell"
         onClick={() => setOpen((v) => !v)}
         title="Notifications"
-        aria-label={unread && unread > 0 ? `Notifications (${unread} unread)` : "Notifications"}
+        aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
         aria-haspopup="dialog"
         aria-expanded={open}
-        style={{ position: "relative" }}
       >
-        <Bell size={14} />
-        {unread && unread > 0 ? (
-          <span
-            style={{
-              position: "absolute",
-              top: -2,
-              right: -2,
-              background: "var(--danger)",
-              color: "var(--text-inverse)",
-              borderRadius: "var(--r-pill)",
-              padding: "0 5px",
-              fontSize: "var(--fs-xs)",
-              lineHeight: "14px",
-              minWidth: 14,
-              textAlign: "center",
-            }}
-          >
-            {unread > 9 ? "9+" : unread}
+        <Bell key={ringKey} size={14} className={ringKey > 0 ? "notif-bell__icon is-ringing" : "notif-bell__icon"} />
+        {unreadCount > 0 ? (
+          <span key={unreadCount} className="notif-bell__badge">
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}
       </button>
 
-      {open && anchor &&
+      {open && (isSheet || anchor) &&
         createPortal(
+          <>
+          {isSheet && <div className="menu-backdrop" aria-hidden="true" onMouseDown={() => setOpen(false)} />}
           <div
             ref={panelRef}
             role="dialog"
             aria-label="Notifications"
+            aria-modal={isSheet || undefined}
             tabIndex={-1}
-            style={{
-              position: "fixed",
+            className={`notif-panel${isSheet ? " notif-panel--sheet" : ""}`}
+            style={isSheet || !anchor ? undefined : {
               top: anchor.top,
               left: anchor.left,
               width: anchor.width,
               maxHeight: anchor.maxHeight,
-              overflow: "auto",
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--r-md)",
-              boxShadow: "var(--shadow-lg)",
-              zIndex: "var(--z-dropdown)",
-              color: "var(--text-primary)",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "8px 12px",
-                borderBottom: "1px solid var(--border)",
-                background: "var(--bg-panel)",
-              }}
-            >
-              <strong style={{ fontSize: "var(--fs-md)" }}>Notifications</strong>
-              <div style={{ flex: 1 }} />
+            {isSheet && <div className="sheet-grabber" aria-hidden="true" />}
+            <div className="notif-panel__head">
+              <strong>Notifications</strong>
               {(notifications ?? []).length > 0 && (
                 <>
                   <button
@@ -195,14 +182,7 @@ export function NotificationBell() {
                   : "var(--text-secondary)";
               const body = (
                 <div
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    padding: "10px 32px 10px 12px",
-                    borderBottom: "1px solid var(--border)",
-                    background: n.readAt ? "var(--bg-panel)" : "var(--bg-subtle)",
-                    cursor: "pointer",
-                  }}
+                  className={`notif-row${n.readAt ? "" : " is-unread"}`}
                   onClick={async () => {
                     if (canWrite && !n.readAt) await markRead({ id: n._id });
                     setOpen(false);
@@ -278,7 +258,7 @@ export function NotificationBell() {
               );
             })}
 
-            <div style={{ padding: 8, textAlign: "center", background: "var(--bg-panel)" }}>
+            <div className="notif-panel__foot">
               <Link
                 to="/app/notifications"
                 className="btn btn--ghost btn--sm"
@@ -287,7 +267,8 @@ export function NotificationBell() {
                 View all
               </Link>
             </div>
-          </div>,
+          </div>
+          </>,
           document.body,
         )}
     </>

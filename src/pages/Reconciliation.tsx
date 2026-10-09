@@ -12,7 +12,7 @@ import { DatePicker } from "../components/DatePicker";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { Boxes, GitCompareArrows, Scale, Link2, Undo2, Plus } from "lucide-react";
+import { Boxes, GitCompareArrows, Scale, Link2, Undo2, Plus, Wand2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -83,6 +83,36 @@ export function ReconciliationPage() {
     nameSingular: "reconciliationTransaction",
     viewId: currentViewId,
   });
+
+  // Amount and match status are what a reconciler scans for, so they sit
+  // right after the description/date (and stay visible) instead of off to
+  // the right past a wide counterparty column.
+  const reconciliationView = useMemo(() => {
+    const view = tableData.hydratedView;
+    if (!view) return view;
+    const order = ["description", "date", "amountCents", "status", "counterparty"];
+    const sizes: Record<string, number> = { description: 210, date: 130, amountCents: 145, status: 140, counterparty: 160 };
+    const rank = (name: string) => {
+      const index = order.indexOf(name);
+      return index < 0 ? order.length : index;
+    };
+    return {
+      ...view,
+      view: { ...view.view, openRecordIn: "page" as const },
+      columns: view.columns
+        .map((column) => {
+          const name = column.field.name;
+          if (!order.includes(name)) return column;
+          return {
+            ...column,
+            isVisible: name === "amountCents" || name === "status" ? true : column.isVisible,
+            size: sizes[name] ?? column.size,
+          };
+        })
+        .sort((a, b) => rank(a.field.name) - rank(b.field.name))
+        .map((column, position) => ({ ...column, position })),
+    };
+  }, [tableData.hydratedView]);
 
   const rows = overview?.rows ?? [];
   const summary = overview?.summary ?? { total: 0, reconciled: 0, withSuggestions: 0, unmatched: 0 };
@@ -192,7 +222,13 @@ export function ReconciliationPage() {
         title="Bank reconciliation"
         icon={<Scale size={16} />}
         iconColor="green"
-        subtitle="Match imported bank transactions to internal records (filings, donation receipts, payroll). Anything unreconciled at year-end is a red flag for the auditor."
+        subtitle="Match imported bank transactions to internal records."
+        info={
+          <p>
+            Match imported bank transactions to internal records such as filings, donation receipts and payroll.
+            Anything unreconciled at year-end is a red flag for the auditor.
+          </p>
+        }
         actions={
           <>
             <MoreActionsMenu
@@ -202,7 +238,7 @@ export function ReconciliationPage() {
               ]}
             />
             <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence} disabled={!canWrite}>
-              <Link2 size={12} /> Auto-match high confidence
+              <Wand2 size={12} /> Auto-match high confidence
             </button>
           </>
         }
@@ -270,7 +306,7 @@ export function ReconciliationPage() {
               objectMetadata={tableData.objectMetadata}
               // Row clicks select the transaction for matching (the panel on the
               // right) instead of opening the generic record side panel.
-              hydratedView={tableData.hydratedView ? { ...tableData.hydratedView, view: { ...tableData.hydratedView.view, openRecordIn: "page" } } : tableData.hydratedView}
+              hydratedView={reconciliationView}
               records={records}
               onRecordClick={(_, record) => selectForMatching(record._id)}
             >

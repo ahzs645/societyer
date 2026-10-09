@@ -8,7 +8,8 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { ArrowDown, ArrowUp, ClipboardList, ExternalLink, IndentDecrease, IndentIncrease, Plus, Save, Trash2 } from "lucide-react";
+import { CreateMenu } from "../components/CreateMenu";
+import { ArrowDown, ArrowUp, ClipboardList, ExternalLink, IndentDecrease, IndentIncrease, Plus, Save, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { formatDate } from "../lib/format";
@@ -62,6 +63,8 @@ export function AgendaBuilderPage() {
   const [draftItems, setDraftItems] = useState<AgendaDraftItem[]>([]);
   const [applyTemplateId, setApplyTemplateId] = useState<string>("");
   const [replaceExisting, setReplaceExisting] = useState(false);
+  // The create form opens from the header "+" (it was always on screen).
+  const [createOpen, setCreateOpen] = useState(false);
 
   const selected = useQuery(
     api.agendas.get,
@@ -121,6 +124,7 @@ export function AgendaBuilderPage() {
     setSelectedAgendaId(id);
     setNewTitle("");
     setNewMeetingId("");
+    setCreateOpen(false);
     toast.success("Agenda created");
   };
 
@@ -238,12 +242,20 @@ export function AgendaBuilderPage() {
         title="Agenda builder"
         icon={<ClipboardList size={16} />}
         iconColor="orange"
-        subtitle="Draft agendas against meeting records. Saving an agenda with items creates or updates the matching minutes record."
+        subtitle="Draft agendas against meeting records."
+        info={<p>Saving an agenda with items creates or updates the matching minutes record.</p>}
+        actions={<CreateMenu items={[{ id: "agenda", label: "New agenda", onSelect: () => setCreateOpen((open) => !open), disabled: !canWrite }]} />}
       />
 
+      {(createOpen || (agendas !== undefined && agendas.length === 0)) && (
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">New agenda</h2>
+          {createOpen && (
+            <button className="btn-action btn-action--icon" style={{ marginLeft: "auto" }} type="button" aria-label="Close new agenda form" onClick={() => setCreateOpen(false)}>
+              <X size={12} />
+            </button>
+          )}
         </div>
         <div className="card__body row" style={{ gap: 8, flexWrap: "wrap" }}>
           <Select value={newMeetingId} onChange={value => setNewMeetingId(value)} options={[{
@@ -260,7 +272,7 @@ export function AgendaBuilderPage() {
             className="input"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Agenda title (e.g. Board — May 2026)"
+            placeholder="Agenda title"
             style={{ flex: "1 1 220px", minWidth: 0 }} disabled={!canWrite} />
           <button className="btn btn--accent" onClick={handleCreate} disabled={!canWrite}>
             <Plus size={14} /> Create
@@ -284,6 +296,7 @@ export function AgendaBuilderPage() {
           </button>
         </div>
       </div>
+      )}
 
       <div className="agenda-builder__workspace">
         <aside className="agenda-builder__sidebar">
@@ -515,7 +528,7 @@ export function AgendaBuilderPage() {
           </div>
             </div>
           ) : (
-            <div className="card">
+            <div className="card agenda-builder__empty-main">
               <div className="card__body">
                 <div className="muted">Select an agenda to edit it.</div>
               </div>

@@ -5,9 +5,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
-import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
-import { MarkdownEditor } from "../components/MarkdownEditor";
-import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
+import { ErrorSummary, Field, type ErrorSummaryItem } from "../components/ui";
+import { IntakePrivacyNotice } from "../components/IntakePrivacyNotice";
 import { ArrowLeft, HandHeart } from "lucide-react";
 
 const FIELD_IDS = {
@@ -111,93 +110,99 @@ export function VolunteerApplyPage() {
   const visibleErrors = attemptedSubmit ? errors : [];
 
   return (
-    <div className="landing" style={{ minHeight: "100vh" }}>
-      <section className="landing__hero" style={{ paddingTop: 72, paddingBottom: 56 }}>
-        <div className="landing__container" style={{ maxWidth: 760 }}>
-          <Link to={`/public/${context.society.publicSlug}`} className="row muted" style={{ marginBottom: 16, fontSize: 12 }}>
-            <ArrowLeft size={12} /> Back to public center
+    <div className="landing intake-page">
+      <div className="intake">
+        <header className="intake__head">
+          <Link to={`/public/${context.society.publicSlug}`} className="intake__back">
+            <ArrowLeft size={14} /> {context.society.name}
           </Link>
           <div className="landing__eyebrow">
             <HandHeart size={12} /> Volunteer application
           </div>
-          <h1 className="landing__h1" style={{ marginBottom: 12 }}>
-            Volunteer with {context.society.name}
-          </h1>
-          <p className="landing__lede">
-            Submit your interest once. The society can review, convert it into a volunteer record,
-            and track screening and onboarding from there.
-          </p>
+          <h1 className="intake__title">Volunteer with {context.society.name}</h1>
+          <p className="intake__lede">Tell the society where you'd like to help. Someone will follow up by email.</p>
+        </header>
 
-          {completed ? (
-            <div className="card" style={{ marginTop: 24 }}>
-              <div className="card__body" style={{ display: "grid", gap: 10 }}>
-                <h2 className="card__title" style={{ margin: 0 }}>Application submitted</h2>
-                <div className="muted">
-                  {context.society.name} received the volunteer application. Keep a copy of any follow-up messages you receive for your records.
-                </div>
-                <Link className="btn btn--accent" to={`/public/${context.society.publicSlug}`}>
-                  Back to public center
-                </Link>
-              </div>
-            </div>
-          ) : (
-          <form className="card" style={{ marginTop: 24 }} onSubmit={submit} noValidate>
-            <div className="card__body" style={{ display: "grid", gap: 12 }}>
+        {completed ? (
+          <div className="card intake__done">
+            <h2 className="card__title">Application submitted</h2>
+            <p className="muted">
+              {context.society.name} received your application. Keep any follow-up messages for your records.
+            </p>
+            <Link className="btn btn--accent" to={`/public/${context.society.publicSlug}`}>
+              Back to public center
+            </Link>
+          </div>
+        ) : (
+          <div className="intake__layout">
+            <form className="intake__form" onSubmit={submit} noValidate>
               <ErrorSummary errors={visibleErrors} title="Complete these fields to submit" />
-              <InspectorNote title={PIPA_INTAKE_NOTICE.title}>
-                {PIPA_INTAKE_NOTICE.body} Published privacy records, when available, appear in the{" "}
-                <Link to={`/public/${context.society.publicSlug}`}>public center</Link>.
-              </InspectorNote>
-              <Field label="First name" id={FIELD_IDS.firstName} required error={fieldError(visibleErrors, "First name")}>
-                <input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete="given-name" />
-              </Field>
-              <Field label="Last name" id={FIELD_IDS.lastName} required error={fieldError(visibleErrors, "Last name")}>
-                <input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete="family-name" />
-              </Field>
-              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(visibleErrors, "Email")}>
-                <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
-              </Field>
-              <Field label="Phone">
-                <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
-              </Field>
-              <Field label="Role or area of interest" id={FIELD_IDS.roleWanted} required error={fieldError(visibleErrors, "Role or area of interest")}>
-                <input className="input" value={form.roleWanted} onChange={(e) => setForm({ ...form, roleWanted: e.target.value })} />
-              </Field>
-              <Field label="Availability">
-                <input className="input" value={form.availability} onChange={(e) => setForm({ ...form, availability: e.target.value })} />
-              </Field>
-              <Field label="Interests (comma-separated)">
-                <input className="input" value={form.interests} onChange={(e) => setForm({ ...form, interests: e.target.value })} />
-              </Field>
-              <Field label="Anything else the society should know?">
-                <MarkdownEditor rows={5} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} />
-              </Field>
-              <button className="btn btn--accent" type="submit" disabled={submitting}>
-                {submitting ? "Submitting…" : "Submit application"}
-              </button>
-            </div>
-          </form>
-          )}
+              <fieldset className="intake__section">
+                <legend>About you</legend>
+                <div className="intake__row">
+                  <Field label="First name" id={FIELD_IDS.firstName} required error={fieldError(visibleErrors, "First name")}>
+                    <input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} autoComplete="given-name" />
+                  </Field>
+                  <Field label="Last name" id={FIELD_IDS.lastName} required error={fieldError(visibleErrors, "Last name")}>
+                    <input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} autoComplete="family-name" />
+                  </Field>
+                </div>
+                <div className="intake__row intake__row--wide">
+                  <Field label="Email" id={FIELD_IDS.email} required error={fieldError(visibleErrors, "Email")}>
+                    <input className="input" type="email" inputMode="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+                  </Field>
+                  <Field label="Phone">
+                    <input className="input" type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
+                  </Field>
+                </div>
+              </fieldset>
+              <fieldset className="intake__section">
+                <legend>How you'd like to help</legend>
+                <Field label="Role or area of interest" id={FIELD_IDS.roleWanted} required error={fieldError(visibleErrors, "Role or area of interest")}>
+                  <input className="input" value={form.roleWanted} onChange={(e) => setForm({ ...form, roleWanted: e.target.value })} placeholder="e.g. Event setup, bookkeeping, outreach" />
+                </Field>
+                <div className="intake__row intake__row--wide">
+                  <Field label="Availability">
+                    <input className="input" value={form.availability} onChange={(e) => setForm({ ...form, availability: e.target.value })} placeholder="e.g. Weekday evenings" />
+                  </Field>
+                  <Field label="Interests (comma-separated)">
+                    <input className="input" value={form.interests} onChange={(e) => setForm({ ...form, interests: e.target.value })} />
+                  </Field>
+                </div>
+                <Field label="Anything else the society should know?">
+                  <textarea className="textarea" rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                </Field>
+              </fieldset>
+              <IntakePrivacyNotice
+                societyName={context.society.name}
+                customNotice={context.society.privacyNotice}
+                publicSlug={context.society.publicSlug}
+                privacyOfficerName={context.society.privacyOfficerName}
+                contactEmail={context.society.publicContactEmail}
+              />
+              <div className="intake__submit">
+                <button className="btn btn--accent" type="submit" disabled={submitting}>
+                  {submitting ? "Submitting…" : "Submit application"}
+                </button>
+              </div>
+            </form>
 
-          {context.committees.length > 0 && (
-            <div className="card" style={{ marginTop: 18 }}>
-              <div className="card__head">
-                <h2 className="card__title">Current committees</h2>
-              </div>
-              <div className="card__body" style={{ display: "grid", gap: 10 }}>
-                {context.committees.map((committee) => (
-                  <div key={committee._id}>
-                    <strong>{committee.name}</strong>
-                    {committee.summary && (
-                      <div className="muted" style={{ marginTop: 4 }}>{committee.summary}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
+            {context.committees.length > 0 && (
+              <aside className="intake__aside" aria-labelledby="volunteer-committees">
+                <h2 id="volunteer-committees">Current committees</h2>
+                <ul>
+                  {context.committees.map((committee) => (
+                    <li key={committee._id}>
+                      <strong>{committee.name}</strong>
+                      {committee.summary && <span>{committee.summary}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

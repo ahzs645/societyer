@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -8,7 +9,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { BookOpen, Pencil, Plus, Sparkles, Tag, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
-import { Field } from "../components/ui";
+import { Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Checkbox } from "../components/Controls";
@@ -50,6 +51,21 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [tagDraft, setTagDraft] = useState("");
+  // The editor opens in a drawer: from the header "+" (?intent=add) or a row's edit button.
+  const [creating, setCreating] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("intent") !== "add") return;
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setTagDraft("");
+    setCreating(true);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const templates = useQuery(
     api.motionTemplates.list,
@@ -86,6 +102,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
       }
       setForm(EMPTY_FORM);
       setEditingId(null);
+      setCreating(false);
     } catch (error) {
       toast.error("Template could not be saved", error instanceof Error ? error.message : "Please try again.");
     } finally { setSaving(false); }
@@ -103,6 +120,11 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
     });
   };
 
+  const closeEditor = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setCreating(false);
+  };
   const addFormTag = (raw: string) => {
     const value = raw.trim().toLowerCase();
     if (!value) return;
@@ -154,128 +176,120 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
         />
       )}
 
-      <div className="motion-library__layout">
-        <div className="card motion-library__editor">
-          <div className="card__head">
-            <h2 className="card__title">
-              {editingId ? "Edit template" : "New template"}
-            </h2>
-          </div>
-          <fieldset className="card__body motion-library__form" disabled={!canManage || saving} style={{ border: 0, margin: 0, minWidth: 0 }}>
-            <Field label="Title">
-              <input
-                className="input"
-                placeholder="Approve minutes of previous meeting"
-                value={form.title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, title: e.target.value }))
-                }
-              />
-            </Field>
-            <Field label="Motion text">
-              <MarkdownEditor
-                placeholder="BE IT RESOLVED THAT..."
-                rows={5}
-                value={form.body}
-                onChange={(markdown) =>
-                  setForm((f) => ({ ...f, body: markdown }))
-                }
-              />
-            </Field>
-            <Field label="Tags">
-              <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                {form.tags.map((tag) => (
-                  <span key={tag} className="pill pill--sm">
-                    <span className="row" style={{ gap: 2, alignItems: "center" }}>
-                      <Tag size={10} /> {tag}
-                      <button
-                        className="btn btn--ghost btn--icon"
-                        style={{ padding: 0, height: 14 }}
-                        aria-label={`Remove tag ${tag}`}
-                        onClick={() => removeFormTag(tag)}
-                      >
-                        <X size={10} />
-                      </button>
-                    </span>
+      <Drawer
+        open={creating || editingId !== null}
+        onClose={closeEditor}
+        title={editingId ? "Edit template" : "New template"}
+      >
+        <fieldset className="motion-library__form" disabled={!canManage || saving} style={{ border: 0, margin: 0, minWidth: 0 }}>
+          <Field label="Title">
+            <input
+              className="input"
+              placeholder="Approve minutes of previous meeting"
+              value={form.title}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, title: e.target.value }))
+              }
+            />
+          </Field>
+          <Field label="Motion text">
+            <MarkdownEditor
+              placeholder="BE IT RESOLVED THAT..."
+              rows={5}
+              value={form.body}
+              onChange={(markdown) =>
+                setForm((f) => ({ ...f, body: markdown }))
+              }
+            />
+          </Field>
+          <Field label="Tags">
+            <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+              {form.tags.map((tag) => (
+                <span key={tag} className="pill pill--sm">
+                  <span className="row" style={{ gap: 2, alignItems: "center" }}>
+                    <Tag size={10} /> {tag}
+                    <button
+                      className="btn btn--ghost btn--icon"
+                      style={{ padding: 0, height: 14 }}
+                      aria-label={`Remove tag ${tag}`}
+                      onClick={() => removeFormTag(tag)}
+                    >
+                      <X size={10} />
+                    </button>
                   </span>
-                ))}
-                <input
-                  className="input"
-                  style={{ width: 120, height: 28, fontSize: 13 }}
-                  value={tagDraft}
-                  onChange={(e) => setTagDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addFormTag(tagDraft);
-                    }
-                  }}
-                  list="motion-library-tag-suggestions"
-                  placeholder="+ tag"
-                  aria-label="Add tag"
-                />
-                <datalist id="motion-library-tag-suggestions">
-                  {allTags.map((tag) => (
-                    <option key={tag} value={tag} />
-                  ))}
-                </datalist>
-                <button className="btn btn--ghost btn--icon" aria-label="Add tag" onClick={() => addFormTag(tagDraft)}>
-                  <Plus size={12} />
-                </button>
-              </div>
-            </Field>
-            <div className="motion-library__checkbox">
-              <Checkbox
-                checked={form.requiresSpecialResolution}
-                onChange={(checked) =>
-                  setForm((f) => ({
-                    ...f,
-                    requiresSpecialResolution: checked,
-                  }))
-                }
-                label="Special resolution"
-              />
-            </div>
-            <Field label="Notes">
+                </span>
+              ))}
               <input
-                className="input"
-                placeholder="Filing deadline, threshold, or source note"
-                value={form.notes}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, notes: e.target.value }))
-                }
+                className="input input--compact"
+                style={{ width: 120, height: 28 }}
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addFormTag(tagDraft);
+                  }
+                }}
+                list="motion-library-tag-suggestions"
+                placeholder="+ tag"
+                aria-label="Add tag"
+                enterKeyHint="done"
+                title="Type a tag and press Enter"
               />
-            </Field>
-            <div className="motion-library__actions">
-              <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form.title.trim() || !form.body.trim()}>
-                <Plus size={14} /> {saving ? "Saving…" : editingId ? "Save changes" : "Add template"}
-              </button>
-              {editingId && (
-                <button
-                  className="btn btn--ghost"
-                  onClick={() => {
-                    setForm(EMPTY_FORM);
-                    setEditingId(null);
-                  }}
-                >
-                  <X size={14} /> Cancel
-                </button>
-              )}
+              <datalist id="motion-library-tag-suggestions">
+                {allTags.map((tag) => (
+                  <option key={tag} value={tag} />
+                ))}
+              </datalist>
             </div>
-          </fieldset>
-        </div>
+          </Field>
+          <div className="motion-library__checkbox">
+            <Checkbox
+              checked={form.requiresSpecialResolution}
+              onChange={(checked) =>
+                setForm((f) => ({
+                  ...f,
+                  requiresSpecialResolution: checked,
+                }))
+              }
+              label="Special resolution"
+            />
+          </div>
+          <Field label="Notes">
+            <input
+              className="input"
+              placeholder="Filing deadline, threshold, or source note"
+              value={form.notes}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, notes: e.target.value }))
+              }
+            />
+          </Field>
+          <div className="motion-library__actions">
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form.title.trim() || !form.body.trim()}>
+              <Plus size={14} /> {saving ? "Saving…" : editingId ? "Save changes" : "Add template"}
+            </button>
+            <button className="btn btn--ghost" onClick={closeEditor}>
+              <X size={14} /> Cancel
+            </button>
+          </div>
+        </fieldset>
+      </Drawer>
 
+      <div className="motion-library__layout" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
         <div className="card motion-library__templates">
           <div className="card__head motion-library__templates-head">
             <div>
               <h2 className="card__title">Reusable templates</h2>
-              <div className="card__subtitle">
-                {filtered.length} of {(templates ?? []).length} shown
-              </div>
+              {(templates ?? []).length > 0 && (
+                <div className="card__subtitle">
+                  {filtered.length} of {(templates ?? []).length} shown
+                </div>
+              )}
             </div>
           </div>
           <div className="card__body motion-library__templates-body">
-            <div className="motion-library__toolbar">
+            {(templates ?? []).length > 0 && <div className="motion-library__toolbar">
               <input
                 className="input"
                 value={query}
@@ -290,7 +304,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
                   ...allTags.map((c) => ({ value: c, label: c })),
                 ]}
               />
-            </div>
+            </div>}
 
             {(templates ?? []).length === 0 ? (
               <div className="motion-library__empty">

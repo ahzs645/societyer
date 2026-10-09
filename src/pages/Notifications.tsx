@@ -14,6 +14,13 @@ import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
 
+/** "filing" / "ai_draft" → "Filing" / "AI draft". */
+function kindLabel(kind?: string) {
+  const text = String(kind ?? "").replace(/[_-]+/g, " ").trim();
+  if (!text) return "General";
+  return text.replace(/\bai\b/gi, "AI").replace(/^./, (letter) => letter.toUpperCase());
+}
+
 export function NotificationsPage() {
   const society = useSociety();
   const { can } = usePermissions();
@@ -50,7 +57,13 @@ export function NotificationsPage() {
         title="Notifications"
         icon={<Bell size={16} />}
         iconColor="orange"
-        subtitle="In-app alerts for compliance deadlines, filings, AI-drafted minutes, filing-bot progress and billing events."
+        subtitle="Alerts about deadlines, filings, drafts and billing."
+        info={<>
+          <p>In-app alerts for compliance deadlines, filings, AI-drafted minutes, filing-bot progress and billing events.</p>
+          {isLocalDataRuntime()
+            ? <p>Email and SMS digests require a connected server. In-app notifications and reminders remain available here.</p>
+            : <p>Digest emails go out on the server schedule: daily at 07:00 UTC.</p>}
+        </>}
         actions={
           <>
             <button
@@ -97,14 +110,9 @@ export function NotificationsPage() {
         }
       />
 
-      {isLocalDataRuntime() && <p className="muted" role="status">Email and SMS digests require a connected server. In-app notifications and reminders remain available here.</p>}
-
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Recent</h2>
-          <span className="card__subtitle">
-            {notifications?.length ?? 0} total · {unreadCount} unread · {isLocalDataRuntime() ? "Local notification history" : "server schedule: daily at 07:00 UTC"}
-          </span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
             {scope === "dismissed" && dismissedCount > 0 && (
               <button
@@ -155,7 +163,7 @@ export function NotificationsPage() {
           )}
           {filtered.map((n) => (
             <div key={n._id} className="notif-row" style={n.dismissedAt ? { opacity: 0.6 } : undefined}>
-              <Badge
+              <span className="notif-row__kind"><Badge
                 tone={
                   n.severity === "success"
                     ? "success"
@@ -166,9 +174,9 @@ export function NotificationsPage() {
                     : "info"
                 }
               >
-                {n.kind}
-              </Badge>
-              <div style={{ flex: 1 }}>
+                {kindLabel(n.kind)}
+              </Badge></span>
+              <div className="notif-row__main">
                 <div style={{ fontWeight: 500 }}>
                   {n.linkHref ? <Link to={n.linkHref}>{n.title}</Link> : n.title}
                   {!n.readAt && (
@@ -188,7 +196,7 @@ export function NotificationsPage() {
                 </div>
                 {n.body && <div className="muted" style={{ fontSize: 13 }}>{n.body}</div>}
               </div>
-              <span className="muted mono" style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span className="muted notif-row__meta" style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {n.dismissedAt && <Badge tone="neutral">Cleared</Badge>}
                 {formatDateTime(n.createdAtISO)}
               </span>

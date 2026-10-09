@@ -9,7 +9,8 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
-import { History, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, History, Pencil, Trash2, Type } from "lucide-react";
+import { CreateMenu } from "../components/CreateMenu";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { formatDate } from "../lib/format";
@@ -223,16 +224,21 @@ export function CorporateHistoryPage() {
         title="Corporate history"
         icon={<History size={16} />}
         iconColor="blue"
-        subtitle="Effective-dated corporate name history and the constating-document timeline — incorporation, transitions, continuances, amalgamations and restatements."
+        subtitle="Name history and the constating-document timeline."
+        info={
+          <p>
+            Effective-dated corporate name history and the constating-document timeline — incorporation, transitions,
+            continuances, amalgamations and restatements.
+          </p>
+        }
         actions={
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn-action btn-action--primary" disabled={!canWriteNames} onClick={openName}>
-              <Plus size={12} /> Add name
-            </button>
-            <button className="btn-action btn-action--primary" disabled={!canWriteEvents} onClick={openEvent}>
-              <Plus size={12} /> Add event
-            </button>
-          </div>
+          <CreateMenu
+            label="Add"
+            items={[
+              { id: "name", label: "Name change", icon: <Type size={14} />, disabled: !canWriteNames, onSelect: openName },
+              { id: "event", label: "Constating event", icon: <FileText size={14} />, disabled: !canWriteEvents, onSelect: openEvent },
+            ]}
+          />
         }
       />
 
@@ -323,11 +329,6 @@ export function CorporateHistoryPage() {
             ))}
           </ul>
         )}
-        <div style={{ marginTop: 12 }}>
-          <button className="btn" disabled={!canWriteEvents} onClick={openEvent}>
-            <Plus size={12} /> Add event
-          </button>
-        </div>
       </div>
 
       <Drawer

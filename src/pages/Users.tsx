@@ -5,9 +5,12 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId, setStoredUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Avatar, Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { Copy, UserCog, PlusCircle, Trash2, KeyRound, ShieldCheck } from "lucide-react";
+import { Copy, UserCog, Plus, PlusCircle, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, MoreHorizontal } from "lucide-react";
+import { Menu, type MenuItem } from "../components/Menu";
+import { InfoPopover } from "../components/InfoPopover";
+import { formatDate } from "../lib/format";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
@@ -55,7 +58,7 @@ export function UsersPage() {
         subtitle={
           auth.mode !== "none"
             ? "Manage workspace memberships, roles, and the access policy for each signed-in user."
-            : "Manage workspace memberships and role policies. Use the local acting-user picker to preview a role."
+            : "Workspace memberships and the access each role grants."
         }
         actions={
           canManageUsers ? (
@@ -70,7 +73,7 @@ export function UsersPage() {
                 })
               }
             >
-              <PlusCircle size={12} /> Add user
+              <Plus size={12} /> Add user
             </button>
           ) : undefined
         }
@@ -79,53 +82,45 @@ export function UsersPage() {
       {society.accessRecoveryRequired && <div className="card"><div className="card__body">This workspace requires controlled access recovery. A security disable removed its last Active Owner. An authorized operator must establish a new owner; disabled identities keep no access.</div></div>}
 
       {myRole && (
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">
-              <ShieldCheck size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
-              Your access
-            </h2>
+        <details className="card access-summary">
+          <summary className="access-summary__head">
+            <ShieldCheck size={14} aria-hidden="true" />
+            <span className="access-summary__label">Your access</span>
             <Badge tone={myRole === "Owner" || myRole === "Admin" ? "success" : "info"}>{myRole}</Badge>
+            <span className="access-summary__text">
+              {capitalize(roleSummary(myRole).replace(/^[A-Za-z]+: /, ""))}
+              {!canManageUsers && (canViewRoster ? " You can view users but not change roles." : " Your role can't view the workspace roster.")}
+            </span>
+            <span className="access-summary__more">{permissions.length} permission{permissions.length === 1 ? "" : "s"}</span>
+          </summary>
+          <div className="access-summary__body">
+            {permissions.map((p) => (
+              <code key={p} className="chip" style={{ fontSize: 11 }}>{p}</code>
+            ))}
           </div>
-          <div className="card__body">
-            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 6 }}>
-              {roleSummary(myRole)}
-              {!canManageUsers && (canViewRoster ? " You can view users but not change roles." : " Your role does not permit viewing the workspace roster.")}
-            </div>
-            <details>
-              <summary className="muted" style={{ fontSize: "var(--fs-sm)", cursor: "pointer" }}>
-                View all {permissions.length} permission{permissions.length === 1 ? "" : "s"}
-              </summary>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
-                {permissions.map((p) => (
-                  <code key={p} className="chip" style={{ fontSize: 11 }}>{p}</code>
-                ))}
-              </div>
-            </details>
-          </div>
-        </div>
+        </details>
       )}
 
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Users</h2>
-          <span className="card__subtitle">
-            {auth.mode === "none"
-              ? "Pick a local acting user from the header to test workspace roles."
-              : "Workspace roles and invitations control access for signed-in accounts."}
-          </span>
+          {users && <Badge>{users.length}</Badge>}
+          {auth.mode === "none" && (
+            <InfoPopover label="About acting as a user">
+              <p>Use "Act as" (or the acting-user picker in the header) to preview the workspace as another role.</p>
+            </InfoPopover>
+          )}
         </div>
         {!permissionsLoaded && <p role="status" className="muted">Checking workspace access…</p>}
         {permissionsLoaded && !canViewRoster && <p role="status" className="muted">Your role does not permit viewing the workspace roster. Your own access is shown above.</p>}
-        {canViewRoster && <table className="table users-table">
+        {canViewRoster && <table className="table table--comfortable users-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
+              <th>User</th>
               <th>Role</th>
-              <th>Status</th>
-              <th>Last login</th>
-              <th />
+              <th className="users-table__wide">Status</th>
+              <th className="users-table__wide">Last login</th>
+              <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
@@ -134,14 +129,53 @@ export function UsersPage() {
               const isLastOwner = u.role === "Owner" && (!u.status || u.status === "Active") && ownerCount <= 1;
               const mayManage = canManageUsers && (myRole === "Owner" || !["Owner", "Admin"].includes(u.role));
               const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
+              const status = u.status ?? "Active";
+              const removeUser = async () => {
+                const ok = await confirm({
+                  title: "Remove user access?",
+                  message: `${u.displayName} will be removed from this workspace user table. This does not delete related member, director, or audit records.`,
+                  confirmLabel: "Remove access",
+                  tone: "danger",
+                });
+                if (!ok) return;
+                try {
+                  await remove({ id: u._id });
+                  toast.success("User access removed");
+                } catch (error) {
+                  toast.error("Couldn't remove user", error instanceof Error ? error.message : String(error));
+                }
+              };
+              const rowActions: MenuItem[] = [
+                canManageUsers && { id: "access", label: "View module access", icon: <ShieldCheck size={14} />, onSelect: () => setSelectedUserId(u._id) },
+                mayManage && { id: "edit", label: "Edit user", icon: <Pencil size={14} />, onSelect: () => setDraft(u) },
+                mayManage && status !== "Disabled" && { id: "disable", label: "Security disable", icon: <ShieldOff size={14} />, onSelect: () => setIncident({ id: u._id, name: u.displayName, reason: "" }) },
+                {
+                  id: "remove",
+                  label: "Remove access",
+                  icon: <Trash2 size={14} />,
+                  destructive: true,
+                  disabled: isLastOwner || !canRemoveUsers,
+                  hint: isLastOwner ? "last owner" : !canRemoveUsers ? "owners only" : undefined,
+                  onSelect: () => void removeUser(),
+                },
+              ].filter(Boolean) as MenuItem[];
               return (
-              <tr key={u._id}>
-                <td data-label="Name">
-                  <strong>{u.displayName}</strong>
+              <tr key={u._id} className={selectedUserId === u._id ? "is-selected" : undefined}>
+                <td>
+                  <div className="users-table__who">
+                    <Avatar label={u.displayName || u.email || "?"} />
+                    <span className="users-table__identity">
+                      <strong>{u.displayName}</strong>
+                      <span className="users-table__email">{u.email}</span>
+                    </span>
+                    {status !== "Active" && (
+                      <span className="users-table__narrow-status"><Badge tone={status === "Invited" ? "warn" : "neutral"}>{status}</Badge></span>
+                    )}
+                  </div>
                 </td>
-                <td className="mono" data-label="Email">{u.email}</td>
-                <td data-label="Role" title={isLastOwner ? lastOwnerHint : undefined}>
+                <td className="users-table__role" title={isLastOwner ? lastOwnerHint : undefined}>
                   <Select
+                    size="sm"
                     value={u.role}
                     disabled={isLastOwner || !mayManage}
                     onChange={async (v) => {
@@ -163,60 +197,45 @@ export function UsersPage() {
                     options={assignableRoles.map((r) => ({ value: r, label: r }))}
                   />
                 </td>
-                <td data-label="Status">
-                  <Badge tone={u.status === "Active" ? "success" : u.status === "Invited" ? "warn" : "neutral"}>
-                    {u.status ?? "Active"}
+                <td className="users-table__wide">
+                  <Badge tone={status === "Active" ? "success" : status === "Invited" ? "warn" : "neutral"}>
+                    {status}
                   </Badge>
                 </td>
-                <td className="mono" data-label="Last login">{u.lastLoginAtISO ?? "—"}</td>
-                <td>
-                  {canManageUsers && <button className="btn btn--ghost btn--sm" aria-label={`View access for ${u.displayName}`} aria-pressed={selectedUserId === u._id} onClick={() => setSelectedUserId(u._id)}><ShieldCheck size={12} /> Access</button>}
-                  {mayManage && <button className="btn btn--ghost btn--sm" onClick={() => setDraft(u)}>Edit access</button>}
-                  {mayManage && u.status !== "Disabled" && <button className="btn btn--ghost btn--sm" onClick={() => setIncident({ id: u._id, name: u.displayName, reason: "" })}>Security disable</button>}
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => {
-                      setStoredUserId(u._id);
-                      toast.success(
-                        `Now acting as ${u.displayName}`,
-                        isStaticDemoRuntime() ? "Demo preview: this resets to the owner when the page reloads." : undefined,
-                      );
-                    }}
-                    disabled={auth.mode !== "none"}
-                    title="Act as this user"
-                  >
-                    <KeyRound size={12} /> Act as
-                  </button>
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={`Remove user ${u.name ?? u.email}`}
-                    disabled={isLastOwner || !canRemoveUsers}
-                    title={isLastOwner ? lastOwnerHint : !canRemoveUsers ? "Only an Owner can remove access." : undefined}
-                    onClick={async () => {
-                      const ok = await confirm({
-                        title: "Remove user access?",
-                        message: `${u.displayName} will be removed from this workspace user table. This does not delete related member, director, or audit records.`,
-                        confirmLabel: "Remove access",
-                        tone: "danger",
-                      });
-                      if (!ok) return;
-                      try {
-                        await remove({ id: u._id });
-                        toast.success("User access removed");
-                      } catch (error) {
-                        toast.error("Couldn't remove user", error instanceof Error ? error.message : String(error));
-                      }
-                    }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                <td className="mono users-table__wide">{u.lastLoginAtISO ? formatDate(u.lastLoginAtISO) : "—"}</td>
+                <td className="users-table__actions">
+                  {auth.mode === "none" && (
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => {
+                        setStoredUserId(u._id);
+                        toast.success(
+                          `Now acting as ${u.displayName}`,
+                          isStaticDemoRuntime() ? "Demo preview: this resets to the owner when the page reloads." : undefined,
+                        );
+                      }}
+                      title="Act as this user"
+                    >
+                      <KeyRound size={12} /> Act as
+                    </button>
+                  )}
+                  <Menu
+                    align="right"
+                    minWidth={210}
+                    trigger={
+                      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${u.displayName}`}>
+                        <MoreHorizontal size={14} />
+                      </button>
+                    }
+                    sections={[{ id: "user", items: rowActions }]}
+                  />
                 </td>
               </tr>
               );
             })}
             {(users ?? []).length === 0 && (
               <tr>
-                <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>
+                <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>
                   No users yet. Add one to start testing role-based access.
                 </td>
               </tr>
@@ -335,6 +354,10 @@ export function UsersPage() {
       </Drawer>
     </div>
   );
+}
+
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function roleSummary(role?: string | null): string {

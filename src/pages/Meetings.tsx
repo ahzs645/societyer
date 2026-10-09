@@ -63,16 +63,6 @@ function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
   return out;
 }
 
-type ReviewFilter = "all" | "needs_review" | "reviewed" | "duplicates" | "no_motions" | "date_only" | "minutes_missing";
-const REVIEW_FILTERS: Array<{ value: ReviewFilter; label: string }> = [
-  { value: "all", label: "All meetings" },
-  { value: "needs_review", label: "Source review pending" },
-  { value: "reviewed", label: "Source reviewed" },
-  { value: "duplicates", label: "Same-day duplicates" },
-  { value: "no_motions", label: "No motions recorded" },
-  { value: "date_only", label: "Date only (no time)" },
-  { value: "minutes_missing", label: "Held, no minutes" },
-];
 
 const SOURCE_REVIEW_LABELS: Record<string, string> = {
   imported_needs_review: "Needs review",
@@ -109,14 +99,6 @@ export function MeetingsPage() {
   const [bulk, setBulk] = useState<{ kind: BulkKind; rows: any[]; value: string } | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Doc<"views">["_id"] | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  const reviewFilter = (params.get("review") as ReviewFilter | null) ?? "all";
-  const bodyFilter = params.get("body") ?? "";
-  const setListParam = (key: string, value: string) => setParams((prev) => {
-    const next = new URLSearchParams(prev);
-    if (!value || value === "all") next.delete(key);
-    else next.set(key, value);
-    return next;
-  }, { replace: true });
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
     nameSingular: "meeting",
@@ -130,11 +112,13 @@ export function MeetingsPage() {
   useEffect(() => {
     const metadata = tableData.objectMetadata;
     if (!society?._id || !metadata || !loaded || !can("settings:write")) return;
-    if (metadata.fields.some((field) => field.name === "sourceReviewStatus")) return;
+    const current = metadata.fields.some((field) => field.name === "minutesMissing")
+      && tableData.views.some((view) => view.name === "Needs source review");
+    if (current) return;
     if (metadataHealRef.current === String(society._id)) return;
     metadataHealRef.current = String(society._id);
     void ensureMetadata({ societyId: society._id }).catch(() => undefined);
-  }, [society?._id, tableData.objectMetadata, loaded, can, ensureMetadata]);
+  }, [society?._id, tableData.objectMetadata, tableData.views, loaded, can, ensureMetadata]);
   const noticeMinDays = data.noticeMinDays;
   const noticeMaxDays = data.noticeMaxDays;
   const effectiveNoticeMinDays = data.effectiveNoticeMinDays;
@@ -171,6 +155,7 @@ export function MeetingsPage() {
         presentCount: summary?.presentCount ?? 0,
         datePrecision: meetingDatePrecision(meeting),
         duplicateCount: duplicateCount.get(String(meeting._id)) ?? 0,
+        minutesMissing: (meeting.status === "Held" || meeting.status === "HeldMinutesMissing") && !summary?.started,
         _summary: summary,
         _searchText: [meeting.title, meeting.sourceTitle, meeting.location, meetingBodyLabel(meeting, committeeRows), formatMeetingDate(meeting, { withTime: false }), String(meeting.scheduledAt ?? "").slice(0, 10), summary?.peopleText].filter(Boolean).join(" "),
       };
@@ -179,36 +164,12 @@ export function MeetingsPage() {
     return rows;
   }, [meetings, summaryByMeeting, committeeRows, duplicateCount]);
 
-  const reviewCounts = useMemo(() => {
-    const counts: Record<ReviewFilter, number> = { all: records.length, needs_review: 0, reviewed: 0, duplicates: 0, no_motions: 0, date_only: 0, minutes_missing: 0 };
-    for (const row of records) {
-      if (row.sourceReviewStatus === "imported_needs_review") counts.needs_review += 1;
-      if (row.sourceReviewStatus === "source_reviewed") counts.reviewed += 1;
-      if (row.duplicateCount > 0) counts.duplicates += 1;
-      if (!row.motionCount) counts.no_motions += 1;
-      if (row.datePrecision === "date") counts.date_only += 1;
-      if ((row.status === "Held" || row.status === "HeldMinutesMissing") && !row._summary?.started) counts.minutes_missing += 1;
-    }
-    return counts;
-  }, [records]);
-
-  const filteredRecords = useMemo(() => records.filter((row) => {
-    if (bodyFilter && row.bodyValue !== bodyFilter && !(bodyFilter === "committee" && row.type === "Committee")) return false;
-    switch (reviewFilter) {
-      case "needs_review": return row.sourceReviewStatus === "imported_needs_review";
-      case "reviewed": return row.sourceReviewStatus === "source_reviewed";
-      case "duplicates": return row.duplicateCount > 0;
-      case "no_motions": return !row.motionCount;
-      case "date_only": return row.datePrecision === "date";
-      case "minutes_missing": return (row.status === "Held" || row.status === "HeldMinutesMissing") && !row._summary?.started;
-      default: return true;
-    }
-  }), [records, reviewFilter, bodyFilter]);
-
-  const bodyFilterOptions = useMemo(() => [
-    { value: "", label: "All bodies" },
-    ...meetingBodyOptions(committeeRows).filter((option) => !option.value.endsWith(":special")).map((option) => ({ value: option.value, label: option.label })),
-  ], [committeeRows]);
+  const reviewCounts = useMemo(() => ({
+    needsReview: records.filter((row) => row.sourceReviewStatus === "imported_needs_review").length,
+    minutesMissing: records.filter((row) => row.minutesMissing).length,
+  }), [records]);
+  const viewNamed = (name: string) => tableData.views.find((view) => view.name === name);
+  const activeView = tableData.views.find((view) => view._id === (currentViewId ?? tableData.views[0]?._id));
 
   const openNew = (overrides: Partial<MeetingDraft> = {}) => {
     const draft = makeMeetingDraft(data, overrides);
@@ -399,32 +360,32 @@ export function MeetingsPage() {
         }
       />
 
-      <div className="meetings-review-toolbar" role="toolbar" aria-label="Review filters">
-        <div className="meetings-review-toolbar__select">
-          <Select
-            value={reviewFilter}
-            onChange={(value) => setListParam("review", value)}
-            options={REVIEW_FILTERS.map((option) => ({ value: option.value, label: `${option.label} (${reviewCounts[option.value]})` }))}
-            size="sm"
-            aria-label="Review filter"
-          />
+      {(reviewCounts.needsReview > 0 || reviewCounts.minutesMissing > 0 || duplicateGroups.length > 0) && (
+        <div className="meetings-review-toolbar" role="toolbar" aria-label="Review queues" data-testid="meetings-review-count">
+          {([
+            ["Needs source review", reviewCounts.needsReview, "awaiting source review"],
+            ["Held, no minutes", reviewCounts.minutesMissing, "held without minutes"],
+            ["Same-day duplicates", duplicateGroups.length, duplicateGroups.length === 1 ? "same-day duplicate group" : "same-day duplicate groups"],
+          ] as const).filter(([, count]) => count > 0).map(([viewName, count, label]) => {
+            const view = viewNamed(viewName);
+            const active = !!view && activeView?._id === view._id;
+            return (
+              <button
+                key={viewName}
+                type="button"
+                className={`meetings-review-toolbar__queue${active ? " is-active" : ""}`}
+                aria-pressed={active}
+                disabled={!view}
+                onClick={() => view && setCurrentViewId((active ? tableData.views[0]?._id : view._id) as Doc<"views">["_id"])}
+              >
+                <strong>{count}</strong> {label}
+              </button>
+            );
+          })}
         </div>
-        <div className="meetings-review-toolbar__select">
-          <Select value={bodyFilter} onChange={(value) => setListParam("body", value)} options={bodyFilterOptions} size="sm" searchable aria-label="Body filter" />
-        </div>
-        {(reviewFilter !== "all" || bodyFilter) && (
-          <button type="button" className="btn-action" onClick={() => setParams((prev) => { const next = new URLSearchParams(prev); next.delete("review"); next.delete("body"); return next; }, { replace: true })}>
-            Clear review filters
-          </button>
-        )}
-        <span className="muted" style={{ fontSize: "var(--fs-sm)" }} data-testid="meetings-review-count">
-          {filteredRecords.length} of {records.length} meetings
-          {reviewCounts.needs_review > 0 ? ` · ${reviewCounts.needs_review} awaiting source review` : ""}
-          {duplicateGroups.length > 0 ? ` · ${duplicateGroups.length} same-day duplicate group${duplicateGroups.length === 1 ? "" : "s"}` : ""}
-        </span>
-      </div>
+      )}
 
-      {reviewFilter === "duplicates" && duplicateGroups.length > 0 && (
+      {activeView?.name === "Same-day duplicates" && duplicateGroups.length > 0 && (
         <div className="card meetings-duplicates" data-testid="duplicate-groups">
           <div className="card__head">
             <h2 className="card__title"><Copy size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Same-day duplicates</h2>
@@ -473,7 +434,7 @@ export function MeetingsPage() {
             tableId="meetings"
             objectMetadata={tableData.objectMetadata}
             hydratedView={tableData.hydratedView}
-            records={filteredRecords}
+            records={records}
             onRecordClick={(recordId) => navigate(`/app/meetings/${recordId}`)}
             onCreate={canManage ? () => openNew() : undefined}
             onUpdate={canManage ? async ({ recordId, fieldName, value }) => {

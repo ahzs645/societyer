@@ -257,7 +257,7 @@ const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack = {
         if (missingConsent.length > 0) {
           return flag(this, {
             level: "warn",
-            text: `${missingConsent.length} director(s) missing consent evidence.`,
+            text: `${missingConsent.length} ${missingConsent.length === 1 ? "director is" : "directors are"} missing consent evidence.`,
             citationId: "BC-SOC-DIRECTOR-CONSENT",
           });
         }

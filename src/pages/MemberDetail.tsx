@@ -6,14 +6,13 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
-import { Badge } from "../components/ui";
 import { RecordShowPage } from "../components/RecordShowPage";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { ActivityTimeline } from "../components/ActivityTimeline";
 import { MemberHistoryPanel } from "../components/MemberHistoryPanel";
 import { useTrackRecentRecord } from "../hooks/useTrackRecentRecord";
-import { ArrowLeft, Users, MessageSquare, Activity, Sparkles } from "lucide-react";
+import { ArrowLeft, Users, MessageSquare, Activity, Sparkles, ExternalLink } from "lucide-react";
 import { formatDate } from "../lib/format";
 
 export function MemberDetailPage() {
@@ -58,16 +57,6 @@ export function MemberDetailPage() {
           {aliases.length > 0 && <Detail label="Also known as" value={aliases.join(", ")} />}
         </div>
       </div>
-      <div className="card">
-        <div className="card__head"><h2 className="card__title">Membership</h2></div>
-        <div className="card__body col" style={{ gap: 6 }}>
-          <Detail label="Class" value={member.membershipClass} />
-          <Detail label="Status" value={member.status} />
-          <Detail label="Voting rights" value={member.votingRights ? "Yes" : "No"} />
-          <Detail label="Joined" value={member.joinedAt ? formatDate(member.joinedAt) : undefined} />
-          {member.leftAt && <Detail label="Left" value={formatDate(member.leftAt)} />}
-        </div>
-      </div>
       {member.notes && (
         <div className="card">
           <div className="card__head"><h2 className="card__title">Notes</h2></div>
@@ -89,22 +78,16 @@ export function MemberDetailPage() {
         icon={<Users size={16} />}
         iconColor="blue"
         subtitle={member.email ?? undefined}
-        chips={
-          <>
-            <Badge tone={member.status === "Active" ? "success" : "warn"}>{member.status}</Badge>
-            <Badge>{member.membershipClass}</Badge>
-            {member.votingRights && <Badge tone="info">Voting</Badge>}
-          </>
-        }
         summary={[
           { label: "Class", value: member.membershipClass ?? "—" },
           { label: "Status", value: member.status ?? "—" },
           { label: "Joined", value: member.joinedAt ? formatDate(member.joinedAt) : "—" },
+          ...(member.leftAt ? [{ label: "Left", value: formatDate(member.leftAt) }] : []),
           { label: "Voting", value: member.votingRights ? "Yes" : "No" },
         ]}
         actions={
           <Link className="btn-action" to="/app/members">
-            Open in register
+            <ExternalLink size={12} /> Open in register
           </Link>
         }
         tabs={[
@@ -112,7 +95,7 @@ export function MemberDetailPage() {
           { id: "history", label: "History", icon: <Activity size={12} />, content: <><PersonRecordLinks societyId={society._id} recordTable="members" recordId={member._id} personName={fullName} observedDate={member.joinedAt} /><MemberHistoryPanel societyId={society._id} memberId={member._id} /><MembershipEvidenceCard societyId={society._id} memberId={member._id} /></> },
           {
             id: "custom",
-            label: "Custom fields",
+            label: "Fields",
             icon: <Sparkles size={12} />,
             content: (
               <CustomFieldsPanel societyId={society._id} entityType="members" entityId={member._id} />

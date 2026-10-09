@@ -9,6 +9,8 @@ import { DatePicker } from "../components/DatePicker";
 import { Badge } from "../components/ui";
 import { formatDate } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { activeAsOf } from "../../shared/registerHistory";
+import { normalizeOptionValue, SOURCE_OPTION_VALUES } from "../../shared/orgHubOptions";
 
 /**
  * Point-in-Time Register — reconstructs who held each role on a chosen date,
@@ -24,22 +26,42 @@ const ROLES: Array<{ roleType: string; label: string }> = [
   { roleType: "member", label: "Members" },
 ];
 
+type HolderRow = { _id?: string; fullName?: string; startDate?: string; title?: string };
+
+/** A director whose position is an officer title (President, Treasurer, …) holds that office too. */
+function officerTitleOf(director: any): string | undefined {
+  for (const raw of [director.officerTitle, director.position]) {
+    const code = normalizeOptionValue("officerTitles", raw);
+    if (code && code !== "other" && SOURCE_OPTION_VALUES.officerTitles.includes(code)) return String(raw);
+  }
+  return undefined;
+}
+
 function RoleColumn({
   societyId,
   asOf,
   roleType,
   label,
+  extraRows,
 }: {
   societyId: string;
   asOf: string;
   roleType: string;
   label: string;
+  /** Rows derived elsewhere (officers held by directors), merged by name. */
+  extraRows?: HolderRow[];
 }) {
-  const rows = useQuery(api.registerHistory.roleHoldersAsOfDate, {
+  const fetched = useQuery(api.registerHistory.roleHoldersAsOfDate, {
     societyId,
     asOf,
     roleType,
-  }) as Array<{ _id?: string; fullName?: string; startDate?: string }> | undefined;
+  }) as HolderRow[] | undefined;
+  const rows = useMemo(() => {
+    if (fetched === undefined) return undefined;
+    if (!extraRows?.length) return fetched;
+    const seen = new Set(fetched.map((r) => (r.fullName ?? "").toLowerCase()));
+    return [...fetched, ...extraRows.filter((r) => !seen.has((r.fullName ?? "").toLowerCase()))];
+  }, [fetched, extraRows]);
 
   return (
     <div className="card" style={{ flex: 1, minWidth: 220, padding: 16 }}>
@@ -55,8 +77,9 @@ function RoleColumn({
           {rows.map((r) => (
             <li key={r._id ?? r.fullName} style={{ padding: "3px 0" }}>
               {r.fullName}
+              {r.title ? <span style={{ color: "var(--text-secondary)" }}> · {r.title}</span> : null}
               {r.startDate ? (
-                <span style={{ color: "var(--text-tertiary)" }}> · since {r.startDate}</span>
+                <span style={{ color: "var(--text-tertiary)" }}> · since {formatDate(r.startDate)}</span>
               ) : null}
             </li>
           ))}
@@ -86,6 +109,22 @@ export function PointInTimeRegisterPage() {
     return events.sort((a, b) => a.date.localeCompare(b.date));
   }, [directors]);
 
+  // Officers are usually directors holding an officer title; the role-holder
+  // register rarely carries separate "officer" rows, so derive them here.
+  const directorOfficers = useMemo<HolderRow[]>(
+    () =>
+      activeAsOf((directors ?? []) as any[], asOf, { start: "termStart", end: "termEnd" })
+        .map((d: any) => ({ d, title: officerTitleOf(d) }))
+        .filter((entry) => entry.title)
+        .map(({ d, title }) => ({
+          _id: String(d._id),
+          fullName: d.name ?? `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim(),
+          startDate: d.termStart,
+          title,
+        })),
+    [directors, asOf],
+  );
+
   // Pivot the strip on the selected date: a few transitions on each side of it.
   const before = useMemo(() => changes.filter((e) => e.date <= asOf).slice(-6), [changes, asOf]);
   const after = useMemo(() => changes.filter((e) => e.date > asOf).slice(0, 6), [changes, asOf]);
@@ -99,10 +138,11 @@ export function PointInTimeRegisterPage() {
         title="Point-in-time register"
         icon={<History size={16} />}
         iconColor="blue"
-        subtitle="Reconstruct who held each role on any past date from the role-holder term history — the statutory 'who were the directors on date X?' view."
+        subtitle="Who held each role on a chosen date."
+        info={<p>Rebuilt from role-holder and director term dates — the statutory &ldquo;who were the directors on date X?&rdquo; view. Officers include directors whose position is an officer title such as President or Treasurer.</p>}
         actions={
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
+            <span style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
             <DatePicker
               value={asOf}
               onChange={(value) => setAsOf(value)}
@@ -120,16 +160,14 @@ export function PointInTimeRegisterPage() {
             asOf={asOf}
             roleType={role.roleType}
             label={role.label}
+            extraRows={role.roleType === "officer" ? directorOfficers : undefined}
           />
         ))}
       </div>
 
       {changes.length > 0 && (
         <div className="card" style={{ marginTop: 16, padding: 16 }}>
-          <h3 style={{ margin: "0 0 4px" }}>Board changes around this date</h3>
-          <p style={{ margin: "0 0 12px", color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>
-            Director term starts and ends near the selected date, from the role-holder history.
-          </p>
+          <h3 style={{ margin: "0 0 12px" }}>Board changes around this date</h3>
           <div className="timeline-vertical">
             {before.map((e, i) => (
               <TransitionItem key={`before-${i}-${e.date}`} event={e} tense="is-past" />
@@ -162,7 +200,7 @@ function TransitionItem({
     <div className={`timeline-vertical__item ${tense}`}>
       <span className="timeline-vertical__dot" />
       <div className="row">
-        <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.date)}</span>
+        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.date)}</span>
         <Badge tone={event.kind === "joined" ? "success" : "warn"}>
           {event.kind === "joined" ? "Joined" : "Left"}
         </Badge>

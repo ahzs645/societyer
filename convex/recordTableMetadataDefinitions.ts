@@ -129,7 +129,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "votingRights", label: "Voting rights", fieldType: FIELD_TYPES.BOOLEAN, icon: "Vote" },
+      { name: "votingRights", label: "Voting", fieldType: FIELD_TYPES.BOOLEAN, icon: "Vote" },
       { name: "joinedAt", label: "Joined", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "leftAt", label: "Left", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "notes", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
@@ -146,7 +146,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "email", size: 240 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -225,6 +239,14 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "consentOnFile", size: 120 },
       ],
     },
+    // Opened by default: the current register, with former directors one
+    // filter (or the "All directors" view) away.
+    extraViews: [
+      {
+        name: "Current directors",
+        filters: [{ fieldName: "status", operator: "in", value: ["Active", "NeedsReview"] }],
+      },
+    ],
   },
   {
     nameSingular: "roleHolder",
@@ -484,7 +506,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "confirmationNumber", size: 160 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -690,8 +726,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       name: "All pending emails",
       columns: [
         { fieldName: "subject", size: 280 },
+        { fieldName: "to", size: 240 },
         { fieldName: "fromEmail", size: 190 },
-        { fieldName: "to", size: 220 },
         { fieldName: "status", size: 110 },
         { fieldName: "createdAtISO", size: 180 },
         { fieldName: "sentAtISO", size: 180 },
@@ -1129,8 +1165,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     defaultView: {
       name: "All workflows",
       columns: [
-        { fieldName: "name", size: 220 },
-        { fieldName: "recipeLabel", size: 200 },
+        { fieldName: "name", size: 240 },
         { fieldName: "triggerLabel", size: 180 },
         { fieldName: "provider", size: 120 },
         { fieldName: "status", size: 110 },
@@ -1713,7 +1748,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "feeCents", label: "Inspection fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
+      { name: "feeCents", label: "Fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
       { name: "copies", label: "Copies", fieldType: FIELD_TYPES.TEXT, icon: "Copy", isReadOnly: true },
     ],
     defaultView: {
@@ -1954,22 +1989,37 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         },
       },
       { name: "duplicateCount", label: "Same-day duplicates", fieldType: FIELD_TYPES.NUMBER, icon: "Copy", isReadOnly: true },
+      // Derived on the page: held, but no minutes started.
+      { name: "minutesMissing", label: "Minutes missing", fieldType: FIELD_TYPES.BOOLEAN, icon: "FileText", isReadOnly: true },
     ],
     defaultView: {
       name: "All meetings",
       columns: [
         { fieldName: "title", size: 240 },
         { fieldName: "type", size: 120 },
-        { fieldName: "scheduledAt", size: 180 },
+        { fieldName: "scheduledAt", size: 210 },
         { fieldName: "location", size: 180 },
         { fieldName: "status", size: 120 },
         { fieldName: "minutes", size: 110 },
-        { fieldName: "body", size: 170 },
         { fieldName: "sourceReviewStatus", size: 130 },
         { fieldName: "motionCount", size: 90 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -2090,7 +2140,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "openTaskCount", size: 110 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -2149,6 +2213,72 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "renewalDate", size: 150 },
       ],
     },
+  },
+  {
+    nameSingular: "serviceProvider",
+    namePlural: "serviceProviders",
+    labelSingular: "Service provider",
+    labelPlural: "Service providers",
+    icon: "Briefcase",
+    iconColor: "purple",
+    routePath: "/app/service-providers",
+    labelIdentifierFieldName: "firmName",
+    fields: [
+      { name: "firmName", label: "Firm", fieldType: FIELD_TYPES.TEXT, icon: "Building", isSystem: true },
+      {
+        name: "function",
+        label: "Role",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Briefcase",
+        config: {
+          options: [
+            { value: "lawyer", label: "Lawyer", color: "purple" },
+            { value: "accountant", label: "Accountant", color: "green" },
+            { value: "banker", label: "Banker", color: "blue" },
+            { value: "transfer_agent", label: "Transfer agent", color: "teal" },
+            { value: "auditor", label: "Auditor", color: "amber" },
+            { value: "registered_agent", label: "Registered agent", color: "pink" },
+            { value: "other", label: "Other", color: "gray" },
+          ],
+        },
+      },
+      { name: "contactName", label: "Contact", fieldType: FIELD_TYPES.TEXT, icon: "User" },
+      { name: "firmLocation", label: "Location", fieldType: FIELD_TYPES.TEXT, icon: "MapPin" },
+      { name: "appointedOn", label: "Appointed", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "removedOn", label: "Removed", fieldType: FIELD_TYPES.DATE, icon: "LogOut" },
+      {
+        // Derived on the page from removedOn and today's date.
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "active", label: "Active", color: "green" },
+            { value: "former", label: "Former", color: "gray" },
+          ],
+        },
+      },
+    ],
+    defaultView: {
+      name: "All providers",
+      columns: [
+        { fieldName: "firmName", size: 240 },
+        { fieldName: "function", size: 150 },
+        { fieldName: "contactName", size: 200 },
+        { fieldName: "status", size: 110 },
+        { fieldName: "appointedOn", size: 140 },
+        { fieldName: "removedOn", size: 140 },
+        { fieldName: "firmLocation", size: 180 },
+      ],
+    },
+    extraViews: [
+      {
+        name: "Active providers",
+        filters: [{ fieldName: "status", operator: "in", value: ["active"] }],
+      },
+    ],
   },
   {
     nameSingular: "volunteerApplication",
@@ -2553,7 +2683,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "purchaseEvidence", size: 170 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -3128,18 +3272,18 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           "Free-form labels. Adjournment and 'accept previous minutes' are auto-applied and hidden by the default view.",
         config: {
           options: [
-            { value: "governance", label: "governance", color: "purple" },
-            { value: "finance", label: "finance", color: "green" },
-            { value: "membership", label: "membership", color: "blue" },
-            { value: "operations", label: "operations", color: "teal" },
-            { value: "bylaws", label: "bylaws", color: "amber" },
-            { value: "privacy", label: "privacy", color: "pink" },
-            { value: "adjournment", label: "adjournment", color: "gray" },
-            { value: "previous-minutes", label: "previous-minutes", color: "gray" },
-            { value: "approve-agenda", label: "approve-agenda", color: "gray" },
-            { value: "receive-reports", label: "receive-reports", color: "gray" },
-            { value: "recess", label: "recess", color: "gray" },
-            { value: "routine", label: "routine", color: "gray" },
+            { value: "governance", label: "Governance", color: "purple" },
+            { value: "finance", label: "Finance", color: "green" },
+            { value: "membership", label: "Membership", color: "blue" },
+            { value: "operations", label: "Operations", color: "teal" },
+            { value: "bylaws", label: "Bylaws", color: "amber" },
+            { value: "privacy", label: "Privacy", color: "pink" },
+            { value: "adjournment", label: "Adjournment", color: "gray" },
+            { value: "previous-minutes", label: "Previous minutes", color: "gray" },
+            { value: "approve-agenda", label: "Approve agenda", color: "gray" },
+            { value: "receive-reports", label: "Receive reports", color: "gray" },
+            { value: "recess", label: "Recess", color: "gray" },
+            { value: "routine", label: "Routine", color: "gray" },
           ],
         },
       },
@@ -3197,7 +3341,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "createdAtISO", size: 140 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -3287,6 +3445,24 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           targetObjectNamePlural: "committees",
           targetLabelFieldName: "name",
           kind: "many-to-one",
+        },
+      },
+      {
+        name: "linkedTo",
+        label: "Linked to",
+        fieldType: FIELD_TYPES.MULTI_SELECT,
+        icon: "Link",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "meeting", label: "Meeting", color: "blue" },
+            { value: "goal", label: "Goal", color: "green" },
+            { value: "filing", label: "Filing", color: "orange" },
+            { value: "workflow", label: "Workflow", color: "purple" },
+            { value: "document", label: "Document", color: "gray" },
+            { value: "commitment", label: "Commitment", color: "yellow" },
+            { value: "event", label: "Event", color: "red" },
+          ],
         },
       },
       {
@@ -3395,7 +3571,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "dueDate", size: 130 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",

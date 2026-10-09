@@ -17,6 +17,7 @@ import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
+import { humanizeKey } from "../../shared/documentProvenance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -222,7 +223,8 @@ export function MinuteBookPage() {
         title="Minute book"
         icon={<BookOpen size={16} />}
         iconColor="purple"
-        subtitle="A legal record spine tying documents, meetings, minutes, resolutions, filings, signatures, policies, and workflow packages together."
+        subtitle="Your society's legal records and the evidence behind them."
+        info={<p>A legal record spine tying documents, meetings, minutes, resolutions, filings, signatures, policies, and workflow packages together.</p>}
         actions={
           <>
             <MoreActionsMenu
@@ -231,7 +233,7 @@ export function MinuteBookPage() {
                 { id: "export-csv", disabled: !canExport, label: "Export CSV", icon: <Download size={14} />, onSelect: () => runExport("csv") },
               ]}
             />
-            <Button variant="accent" icon={<Plus size={14} />} disabled={!canWrite} onClick={openNew}>New record</Button>
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}><Plus size={12} /> New record</button>
           </>
         }
       />
@@ -243,9 +245,7 @@ export function MinuteBookPage() {
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Connected records" value={recordBundles.length} />
-        <Stat label="Manual records" value={items.length} />
         <Stat label="Documents" value={detail?.restrictedResources?.includes("documents") ? "Restricted" : safeCount(detail, "documents")} />
-        <Stat label="Meetings" value={detail?.restrictedResources?.includes("meetings") ? "Restricted" : safeCount(detail, "meetings")} />
         <Stat label="Record gaps" value={bundleGapCount} tone={bundleGapCount ? "warn" : undefined} />
         <Stat label="Open checks" value={openCheckCount} tone={openCheckCount ? "warn" : undefined} />
       </div>
@@ -431,7 +431,7 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
         <Badge tone={gapCount ? "warn" : partial ? "neutral" : "success"}>{gapCount ? `${gapCount} visible gaps` : partial ? "Access limited" : `${rows.length} records`}</Badge>
       </div>
       <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
-        <table className="table table--stack-mobile">
+        <table className="table table--stack-mobile minute-book-bundles">
           <thead>
             <tr>
               <th>Record</th>
@@ -445,16 +445,15 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
             {visibleRows.map((row) => (
               <tr key={row.key}>
                 <td data-label="Record">
-                  <div style={{marginTop: 3}}>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
-                  <div className="row" style={{ gap: 6 , flexWrap: "wrap", marginTop: 9 }}>
-                    <Badge>{labelize(row.type)}</Badge>
-                    {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
+                  <div>{row.href ? <Link to={row.href}><strong>{bundleTitle(row)}</strong></Link> : <strong>{bundleTitle(row)}</strong>}</div>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                    {bundleChips(row).map((chip) => <Badge key={`${row.key}:${chip.label}`} tone={chip.tone}>{chip.label}</Badge>)}
                   </div>
                 </td>
                 <td data-label="Connected evidence"><BundleLinks links={row.links ?? []} partial={partial} /></td>
                 <td data-label="Counts"><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
                 <td data-label="Gaps"><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
-                <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
+                <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{sentenceCase(humanize(row.status)) || "-"}</Badge></td>
               </tr>
             ))}
             {rows.length === 0 && (
@@ -475,7 +474,7 @@ function BundleLinks({ links, partial }: { links: any[]; partial?: boolean }) {
       {links.slice(0, 5).map((link) => (
         <div key={`${link.kind}:${link.label}`} style={{ fontSize: "var(--fs-sm)" }}>
           <Link to={link.href}>{link.kind}</Link>
-          <span className="muted"> - {link.label}</span>
+          <span className="muted"> · {link.kind === "Filing" ? sentenceCase(String(link.label ?? "")) : singularizeOne(String(link.label ?? ""))}</span>
         </div>
       ))}
       {links.length > 5 && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>+{links.length - 5} more links</div>}
@@ -487,8 +486,8 @@ function CountBadges({ counts, partial }: { counts: Record<string, number>; part
   const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0);
   if (!entries.length) return <span className="muted">{partial ? "No accessible counts" : "No counts"}</span>;
   return (
-    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-      {entries.slice(0, 6).map(([key, value]) => <Badge key={key}>{labelize(key)} {value}</Badge>)}
+    <div className="minute-book-counts">
+      {entries.map(([key, value]) => <span key={key}>{COUNT_LABELS[key] ?? humanizeKey(key)} <strong>{value}</strong></span>)}
     </div>
   );
 }
@@ -581,7 +580,71 @@ function safeCount(detail: any, key: string) {
 }
 
 function labelize(value?: string) {
-  return String(value ?? "-").replace(/_/g, " ");
+  const text = String(value ?? "-").replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const COUNT_LABELS: Record<string, string> = {
+  documents: "Documents",
+  agendas: "Agendas",
+  agendaItems: "Agenda items",
+  materials: "Materials",
+  attendance: "Attendance",
+  motions: "Motions",
+  signatures: "Signatures",
+  notices: "Notices",
+  tasks: "Tasks",
+  amendments: "Amendments",
+  required: "Signatures required",
+  manualRecords: "Manual records",
+  sourceEvidence: "Source evidence",
+  signers: "Signers",
+  parts: "Parts",
+  filings: "Filings",
+  meetings: "Meetings",
+  archiveAccessions: "Archive accessions",
+  restrictedSources: "Restricted sources",
+  recordsLocations: "Records locations",
+};
+
+/**
+ * "Change Of Directors" / "In Progress" → "Change of directors" / "In progress".
+ * Only plain capitalised words are lowered, so acronyms (AGM, PIPA) and codes
+ * (T3010) keep their case.
+ */
+function sentenceCase(value: string) {
+  const words = value.split(" ");
+  return words
+    .map((word, index) => (index > 0 && /^[A-Z][a-z]+$/.test(word) ? word.toLowerCase() : word))
+    .join(" ")
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+/** Server labels read "1 tasks", "1 meeting materials"; a count of one takes the singular. */
+function singularizeOne(label: string) {
+  const match = /^1 ([^/]+?)(ies|s)$/.exec(label);
+  if (!match) return label;
+  return `1 ${match[1]}${match[2] === "ies" ? "y" : ""}`;
+}
+
+function bundleTitle(row: any) {
+  const title = humanize(row.title);
+  // Filing titles come from the filing kind ("ChangeOfDirectors"), not a person's wording.
+  return row.type === "filing" ? sentenceCase(title) : title;
+}
+
+/** Type chip plus the server's badges, capitalised and without case-only duplicates ("filing"/"Filing"). */
+function bundleChips(row: any): { label: string; tone?: any }[] {
+  const chips: { label: string; tone?: any }[] = [{ label: labelize(row.type) }];
+  for (const badge of (row.badges ?? []).slice(0, 3)) chips.push({ label: sentenceCase(String(badge.label ?? "")), tone: badge.tone });
+  // The Status column already shows the status; don't repeat it as a chip.
+  const seen = new Set<string>([sentenceCase(humanize(row.status)).toLowerCase()]);
+  return chips.filter((chip) => {
+    const key = chip.label.toLowerCase();
+    if (!chip.label || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

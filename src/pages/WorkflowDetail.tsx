@@ -2,7 +2,7 @@ import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useDocumentTitle } from "../lib/documentTitle";
 import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Background,
@@ -23,6 +23,7 @@ import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { useRecordQuery } from "../hooks/useRecordQuery";
@@ -99,6 +100,22 @@ import type {
   FieldMapping,
 } from "./WorkflowDetail.internal";
 
+const WORKFLOW_STATUS_LABELS: Record<string, string> = {
+  active: "Active",
+  paused: "Paused",
+  draft: "Draft",
+};
+
+const NODE_STATUS_LABELS: Record<string, string> = {
+  ready: "Ready",
+  needs_setup: "Needs setup",
+  draft: "Draft",
+};
+
+function titleCase(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
 export function WorkflowDetailPage() {
   const { id } = useParams();
   const society = useSociety();
@@ -118,6 +135,7 @@ export function WorkflowDetailPage() {
   const run = useAction(api.workflows.run);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const navigate = useNavigate();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -176,6 +194,31 @@ export function WorkflowDetailPage() {
   };
 
   const isActive = workflow.status === "active";
+  const statusLabel = WORKFLOW_STATUS_LABELS[workflow.status] ?? titleCase(workflow.status ?? "draft");
+  const toggleStatus = () =>
+    canManage && setStatus({
+      id: workflow._id,
+      status: isActive ? "paused" : "active",
+    });
+  const launch = () => (launchUsesIntake ? openIntake() : runWorkflow());
+  const launchDisabled = !canManage || busy || !isActive || isLocalDataRuntime();
+  // Phones get one primary action plus a ⋯ menu; five labelled buttons wrapped
+  // onto two rows there.
+  const phonePrimaryIsLaunch = isActive;
+  const phoneMenuItems = [
+    phonePrimaryIsLaunch
+      ? { id: "status", label: "Pause", icon: <Pause size={14} />, disabled: !canManage || busy, onSelect: toggleStatus }
+      : { id: "launch", label: "Launch", icon: <Play size={14} />, disabled: launchDisabled, onSelect: launch },
+    { id: "runs", label: "See runs", icon: <History size={14} />, onSelect: () => navigate(`/app/workflow-runs?workflowId=${workflow._id}`) },
+    { id: "add-node", label: "Add node", icon: <Plus size={14} />, disabled: !canManage, onSelect: () => { if (canManage) setAddOpen(true); } },
+    {
+      id: "n8n",
+      label: "Open in n8n",
+      icon: <ExternalLink size={14} />,
+      disabled: !providerConfig.externalEditUrl,
+      onSelect: () => { if (providerConfig.externalEditUrl) window.open(providerConfig.externalEditUrl, "_blank", "noreferrer"); },
+    },
+  ];
 
   return (
     <div className="workflow-detail">
@@ -191,28 +234,34 @@ export function WorkflowDetailPage() {
           <span className="muted">/</span>
           <h1 className="workflow-topbar__heading"><strong>{workflow.name}</strong></h1>
           <Badge tone={workflow.status === "active" ? "success" : workflow.status === "paused" ? "warn" : "neutral"}>
-            {workflow.status}
+            {statusLabel}
           </Badge>
-          {workflow.provider && <Badge tone={workflow.provider === "n8n" ? "info" : "neutral"}>{workflow.provider}</Badge>}
         </div>
-        <div className="workflow-topbar__actions">
+        <div className="workflow-topbar__actions workflow-topbar__actions--phone">
+          {phonePrimaryIsLaunch ? (
+            <button className="btn btn--accent btn--sm" disabled={launchDisabled} onClick={launch}>
+              <Play size={12} /> Launch
+            </button>
+          ) : (
+            <button className="btn btn--accent btn--sm" disabled={!canManage || busy} onClick={toggleStatus}>
+              <Power size={12} /> Activate
+            </button>
+          )}
+          <MoreActionsMenu label="" items={phoneMenuItems} />
+        </div>
+        <div className="workflow-topbar__actions workflow-topbar__actions--desktop">
           <button
             className="btn btn--ghost btn--sm"
             disabled={!canManage || busy}
-            onClick={() =>
-              canManage && setStatus({
-                id: workflow._id,
-                status: isActive ? "paused" : "active",
-              })
-            }
+            onClick={toggleStatus}
           >
             {isActive ? <Pause size={12} /> : <Power size={12} />}
             {isActive ? "Pause" : "Activate"}
           </button>
           <button
             className="btn btn--ghost btn--sm"
-            disabled={!canManage || busy || !isActive || isLocalDataRuntime()}
-            onClick={() => (launchUsesIntake ? openIntake() : runWorkflow())}
+            disabled={launchDisabled}
+            onClick={launch}
           >
             <Play size={12} /> Launch
           </button>
@@ -240,7 +289,7 @@ export function WorkflowDetailPage() {
       </div>
 
       {workflow.recipe === "workspace_onboarding" && String(workflow.societyId) === String(society._id) && <OrganizationOnboardingPanel organization={society} />}
-      {isLocalDataRuntime() && <p className="muted" style={{ padding: "8px 16px", margin: 0 }}>Workflow execution requires a connected server. You can prepare and review this workflow here.</p>}
+      {isLocalDataRuntime() && <p className="muted" style={{ padding: "8px 16px", margin: 0, fontSize: "var(--fs-sm)" }}>Running workflows needs a connected server; you can prepare and review this one here.</p>}
       <div className="workflow-shell">
         <section className="workflow-canvas" aria-label="Workflow canvas">
           <ReactFlow
@@ -252,16 +301,32 @@ export function WorkflowDetailPage() {
             nodesConnectable={false}
             elementsSelectable
             onNodeClick={(_, node) => setSelectedKey(String(node.data.key))}
+            proOptions={{ hideAttribution: true }}
           >
             <Background gap={20} size={1} />
             <Controls showInteractive={false} />
           </ReactFlow>
-          <div className="workflow-status-chip">
-            <Badge tone={workflow.status === "active" ? "success" : "warn"}>
-              {workflow.status === "active" ? "Active" : "Draft"}
-            </Badge>
-          </div>
         </section>
+        {/* Phones: the canvas is too small to read, so list the steps in order. */}
+        <ol className="workflow-steps-list" aria-label="Workflow steps">
+          {preview.map((node, index) => (
+            <li key={node.key}>
+              <button
+                type="button"
+                className={`workflow-steps-list__item${selectedNode?.key === node.key ? " is-selected" : ""}`}
+                aria-current={selectedNode?.key === node.key ? "step" : undefined}
+                onClick={() => setSelectedKey(node.key)}
+              >
+                <span className="workflow-steps-list__index">{index + 1}</span>
+                <NodeIcon type={node.type} />
+                <span className="workflow-steps-list__text">
+                  <span className="muted">{nodeTypeLabel(node.type)}</span>
+                  <strong>{node.label}</strong>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
 
         <aside className="workflow-sidepanel">
           {selectedNode ? (
@@ -275,14 +340,12 @@ export function WorkflowDetailPage() {
               </div>
               <p className="muted">{selectedNode.description ?? "No description configured."}</p>
               <div className="workflow-sidepanel__section">
-                <div className="field__label">Node key</div>
-                <div className="mono">{selectedNode.key}</div>
-              </div>
-              <div className="workflow-sidepanel__section">
-                <div className="field__label">Status</div>
-                <Badge tone={selectedNode.status === "needs_setup" ? "warn" : selectedNode.status === "draft" ? "neutral" : "success"}>
-                  {selectedNode.status ?? "ready"}
-                </Badge>
+                <div className="field__label">Step setup</div>
+                <span>
+                  <Badge tone={selectedNode.status === "needs_setup" ? "warn" : selectedNode.status === "draft" ? "neutral" : "success"}>
+                    {NODE_STATUS_LABELS[selectedNode.status ?? "ready"] ?? titleCase(String(selectedNode.status))}
+                  </Badge>
+                </span>
                 {Array.isArray(selectedNode.setupIssues) && selectedNode.setupIssues.length > 0 && (
                   <ul className="workflow-setup-issues">
                     {selectedNode.setupIssues.map((issue: string) => (
@@ -328,12 +391,23 @@ export function WorkflowDetailPage() {
                 }}
               />
               </fieldset>
-              {workflow.provider === "n8n" && (
-                <div className="workflow-sidepanel__section">
-                  <div className="field__label">Workflow-level n8n webhook</div>
-                  <div className="workflow-codebox">{providerConfig.externalWebhookUrl ?? "Not configured"}</div>
-                </div>
-              )}
+              <details className="workflow-sidepanel__section workflow-technical">
+                <summary>Technical details</summary>
+                <div className="field__label">Step key</div>
+                <div className="mono">{selectedNode.key}</div>
+                {workflow.provider && (
+                  <>
+                    <div className="field__label">Runs on</div>
+                    <div>{workflow.provider === "n8n" ? "n8n automation engine" : "Societyer"}</div>
+                  </>
+                )}
+                {workflow.provider === "n8n" && (
+                  <>
+                    <div className="field__label">Workflow-level n8n webhook</div>
+                    <div className="workflow-codebox">{providerConfig.externalWebhookUrl ?? "Not configured"}</div>
+                  </>
+                )}
+              </details>
             </>
           ) : (
             <div className="empty-state">Select a node to inspect it.</div>
@@ -344,7 +418,7 @@ export function WorkflowDetailPage() {
             {latestRun ? (
               <div className="workflow-run-mini">
                 <Badge tone={latestRun.status === "success" ? "success" : latestRun.status === "failed" ? "danger" : "warn"}>
-                  {latestRun.status}
+                  {titleCase(String(latestRun.status).replace(/_/g, " "))}
                 </Badge>
                 <span className="mono muted">{formatDateTime(latestRun.startedAtISO)}</span>
               </div>

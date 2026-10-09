@@ -166,11 +166,15 @@ for (const role of ["Owner", "Admin", "Director", "Member", "Viewer"]) {
       if (["Owner", "Admin"].includes(role)) await expect(newGoal).toBeEnabled();
       else await expect(newGoal).toBeDisabled();
       await page.locator('a[href^="/app/goals/"]').first().click();
+      await page.getByRole("button", { name: "More actions", exact: true }).click();
+      const deleteGoal = page.getByRole("menuitem", { name: "Delete goal", exact: true });
       if (["Owner", "Admin"].includes(role)) {
-        await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeEnabled();
+        await expect(deleteGoal).toBeEnabled();
+        await page.keyboard.press("Escape");
         await expect(page.getByRole("slider")).toBeEnabled();
       } else {
-        await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
+        await expect(deleteGoal).toBeDisabled();
+        await page.keyboard.press("Escape");
         await expect(page.getByRole("slider")).toBeDisabled();
         for (const checkbox of await page.getByRole("checkbox").all()) await expect(checkbox).toBeDisabled();
         await expect(page.getByRole("link", { name: "New task", exact: true })).toHaveCount(0);
@@ -241,9 +245,8 @@ test("anonymous live grant intake validates then submits without a membership", 
   await page.locator("#grant-requested-amount").fill("250.50");
   await page.locator("#grant-project-title").fill(`Isolated live public proposal ${testInfo.project.name}`);
   await assertLiveFits(page);
-  // Submit immediately after the last editor keystroke, before an asynchronous
-  // serialized onChange can catch up with the parent's form state.
-  await page.locator("[contenteditable=true]").first().pressSequentially("Community event proposal from an anonymous browser.");
+  // Submit immediately after the last keystroke in the project summary.
+  await page.locator("#grant-project-summary").pressSequentially("Community event proposal from an anonymous browser.");
   await page.getByRole("button", { name: "Submit funding request", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Funding request submitted", exact: true })).toBeVisible();
   await expect(page.locator(".app-shell")).toHaveCount(0);

@@ -434,9 +434,18 @@ test("workflow preparation is readable for Viewer while workflow and package wri
   await page.locator(".record-table__identifier-button").first().click();
   const preview = page.getByRole("dialog");
   if (await preview.count()) await preview.getByRole("button", { name: /^Open/ }).click();
-  await expect(page.getByRole("button", { name: "Add Node", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: /^(Pause|Activate)$/ })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+  if (page.viewportSize()!.width <= 620) {
+    // Phones show one primary action and fold the rest into the ⋯ menu.
+    await expect(page.getByRole("button", { name: /^(Launch|Activate)$/ })).toBeDisabled();
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Add node", exact: true })).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByRole("menuitem", { name: /^(Pause|Launch)$/ })).toHaveAttribute("aria-disabled", "true");
+    await page.keyboard.press("Escape");
+  } else {
+    await expect(page.getByRole("button", { name: "Add Node", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^(Pause|Activate)$/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+  }
   await expect(page.locator(".workflow-sidepanel fieldset")).toHaveAttribute("disabled", "");
   await navigate("Workflow packages");
   await expect(page.getByRole("button", { name: "New package", exact: true })).toBeDisabled();
@@ -490,7 +499,8 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await policy.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.goto("/demo/app/assets");
   if (page.viewportSize()!.width <= 760) {
-    await page.locator(".asset-mobile-card").first().getByRole("button", { name: "Edit", exact: true }).tap();
+    await page.locator(".asset-mobile-card").first().getByRole("button", { name: /^Actions for / }).tap();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).tap();
   } else {
     await activate(page.locator(".record-table__row").first().getByRole("button", { name: "Actions for this asset", exact: true }));
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();

@@ -12,6 +12,7 @@
  * convex-test oracle.
  */
 
+import { countLabel, humanDate } from "../humanDate";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import {
@@ -270,7 +271,7 @@ export async function readinessPortable(
       "Year-end financial statements approved by the board",
       Boolean(financial?.approvedByBoardAt),
       financial?.approvedByBoardAt
-        ? `Approved ${financial.approvedByBoardAt}.`
+        ? `Approved ${humanDate(financial.approvedByBoardAt)}.`
         : "No board approval date recorded for this fiscal year.",
       "/app/financials",
     ),
@@ -314,7 +315,7 @@ export async function readinessPortable(
       outstandingReports.length === 0,
       outstandingReports.length === 0
         ? "All grant reports submitted."
-        : `${outstandingReports.length} grant report(s) outstanding.`,
+        : `${countLabel(outstandingReports.length, "grant report")} outstanding.`,
       "/app/grants",
       outstandingReports.length === 0 ? "complete" : "attention",
     ),
@@ -323,7 +324,7 @@ export async function readinessPortable(
       "Program actuals & budget statements prepared",
       statements.length > 0,
       statements.length > 0
-        ? `${statements.length} program statement(s) prepared.`
+        ? `${countLabel(statements.length, "program statement")} prepared.`
         : "No program actuals/budget statements prepared yet.",
       "/app/financials/year-end",
       statements.length > 0 ? "complete" : "upcoming",

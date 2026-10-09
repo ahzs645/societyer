@@ -29,24 +29,35 @@ async function containedAtWidths(page: Page) {
   }
 }
 
+/** Opens the page's "+ New" menu, checks one option's state, and closes it. */
+async function expectNewMenuItem(page: Page, item: string, state: "enabled" | "disabled") {
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const option = page.getByRole("menuitem", { name: item, exact: true });
+  if (state === "disabled") await expect(option).toBeDisabled();
+  else await expect(option).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(option).toHaveCount(0);
+}
+
 test("API clients persist, real tabs select panels, and local preview cannot issue server credentials", async ({ page }) => {
   const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
   await openApp(page, "settings/api-keys", "API keys");
-  await expect(page.getByRole("button", { name: "New token", exact: true })).toBeDisabled();
+  await expectNewMenuItem(page, "API token", "disabled");
   await expect(page.getByText("API tokens require a connected server", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Tokens", exact: true }).click();
   await expect(page).toHaveURL(/tab=tokens/);
   await expect(page.getByRole("tab", { name: "Tokens", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel", { name: "Tokens", exact: true })).toBeVisible();
   await expect(page.getByRole("tabpanel", { name: "Clients", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "New client", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "API client", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Interface audit client");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByText("Client created", { exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Clients", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Interface audit client", { exact: true })).toBeVisible();
   // A client record must not bypass the local-runtime credential gate.
-  await expect(page.getByRole("button", { name: "New token", exact: true })).toBeDisabled();
+  await expectNewMenuItem(page, "API token", "disabled");
   await containedAtWidths(page);
   expect(errors).toEqual([]);
 });
@@ -90,7 +101,8 @@ test("exports contain native file controls and handle invalid previews; local we
   await expect(page.locator(".notice--danger")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Data export", exact: true })).toBeVisible();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /^societies\s/ }).click();
+  await page.getByText("Technical details: individual tables", { exact: true }).click();
+  await page.getByRole("button", { name: /^Societies(\s|$)/ }).click();
   expect((await download).suggestedFilename()).toMatch(/-societies-.*\.csv$/);
   await openApp(page, "webhooks", "Webhooks");
   await expect(page.getByText("Webhook delivery requires a connected server", { exact: true })).toBeVisible();
@@ -205,18 +217,18 @@ test("Admin manages API clients while Viewer retains read-only client access", a
   };
   await chooseActor("Admin");
   await openApp(page, "settings/api-keys", "API keys");
-  await expect(page.getByRole("button", { name: "New client", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "New client", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "API client", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Admin-created API client");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByText("Client created", { exact: true })).toBeVisible();
   await expect(page.getByText("Admin-created API client", { exact: true })).toBeVisible();
   await expect(page.locator(".record-table__cell--editable").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "New token", exact: true })).toBeDisabled();
+  await expectNewMenuItem(page, "API token", "disabled");
   await chooseActor("Viewer");
   await expect(page.getByText("Admin-created API client", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New client", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "New token", exact: true })).toBeDisabled();
+  // Neither a client nor a token can be created, so the "+" menu is disabled.
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
   await expect(page.locator(".record-table__cell--editable")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
@@ -89,6 +90,7 @@ export function DateTimeInput({
   const [isBottomSheet, setIsBottomSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
+  useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -306,6 +308,7 @@ export function DateTimeInput({
               className={`calendar calendar--with-time${isBottomSheet ? " calendar--sheet" : ""}`}
               style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
             >
+              {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
               <div className="calendar__typed">
                 <label htmlFor={typedInputId} className="sr-only">Type a date</label>
                 <input

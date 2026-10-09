@@ -280,7 +280,10 @@ export function OutboxPage() {
         title="Outbox"
         icon={<Inbox size={16} />}
         iconColor="orange"
-        subtitle="Queue manual-send emails when no email provider is configured. Review content, attach documents, then mark each one sent once you've dispatched it from your own inbox."
+        subtitle="Emails to send by hand when no email provider is set up."
+        info={
+          <p>Review the content, attach documents, send it from your own inbox, then mark it sent here.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New draft
@@ -323,9 +326,13 @@ export function OutboxPage() {
               // rather than a bare number, and fold it into the subject
               // cell for continuity with the old layout.
               if (field.name === "subject") {
+                const subject = String(value ?? "") || "(no subject)";
                 return (
-                  <div>
-                    <strong>{String(value) || "(no subject)"}</strong>
+                  <div
+                    title={subject}
+                    style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    <strong>{subject}</strong>
                     {record.attachmentCount > 0 && (
                       <span className="muted" style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}>
                         <Paperclip size={10} /> {record.attachmentCount}

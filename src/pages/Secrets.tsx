@@ -238,7 +238,13 @@ export function SecretsPage() {
         title="Access custody"
         icon={<LockKeyhole size={16} />}
         iconColor="red"
-        subtitle="Credential ownership, recovery-key custody, access review, and rotation tracking."
+        subtitle="Who holds credentials and recovery keys, and when to rotate."
+        info={
+          <>
+            <p>Credential ownership, recovery-key custody, access review and rotation tracking.</p>
+            <p>Stored values are encrypted and hidden by default. Only authorized users can reveal a value, and every reveal is logged in the activity trail.</p>
+          </>
+        }
         actions={
           <div className="row" style={{ gap: 8 }}>
             <Link className="btn-action" to="/app/users"><UsersRound size={12} /> People</Link>
@@ -253,14 +259,6 @@ export function SecretsPage() {
         <Stat label="Stored values" value={summary.stored} sub="encrypted in Societyer" />
         <Stat label="Needs review" value={summary.needsReview} sub="pending owner check" tone={summary.needsReview > 0 ? "warn" : undefined} />
         <Stat label="Rotation due" value={summary.rotationDue} sub="within 30 days or late" tone={summary.rotationDue > 0 ? "warn" : undefined} />
-      </div>
-
-      <div className="flag flag--warn" style={{ marginBottom: 16 }}>
-        <ShieldAlert size={14} />
-        <div>
-          <strong>Stored values are encrypted and hidden by default.</strong>
-          <div>Only authorized users can reveal a value. Every reveal is logged in the activity trail.</div>
-        </div>
       </div>
 
       {showMetadataWarning ? (
@@ -495,7 +493,7 @@ function Stat({ label, value, sub, tone }: { label: string; value: number; sub: 
     <div className="stat">
       <div className="stat__label">{label}</div>
       <div className="stat__value" style={tone ? { color: tone === "danger" ? "var(--danger)" : "var(--warn)" } : undefined}>{value}</div>
-      <div className="stat__sub">{sub}</div>
+      {value > 0 && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }

@@ -10,9 +10,11 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
-import { ArrowLeft, BookOpen, CalendarPlus, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarPlus, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, Upload, X } from "lucide-react";
+import { formatDate } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
-import { MeetingTemplateImportButton } from "../features/meetings/components/MeetingTemplateImportButton";
+import { MeetingTemplateImportDialog } from "../features/meetings/components/MeetingTemplateImportButton";
+import { CreateMenu } from "../components/CreateMenu";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Modal, useConfirm } from "../components/Modal";
 import { toDateTimeLocalValue } from "../lib/format";
@@ -249,6 +251,13 @@ export function MeetingTemplatesPage() {
     [templates],
   );
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const [importOpen, setImportOpen] = useState(false);
+  // A "Default" chip on every row says nothing; show the column only when it tells templates apart.
+  const allDefault = (templates?.length ?? 0) > 0 && (templates ?? []).every((template) => template.isDefault);
+  const hydratedView = useMemo(() => tableData.hydratedView && allDefault ? {
+    ...tableData.hydratedView,
+    columns: tableData.hydratedView.columns.filter((column) => column.field.name !== "isDefault"),
+  } : tableData.hydratedView, [tableData.hydratedView, allDefault]);
 
   const handleDeleteTemplate = async (template: MeetingTemplateRecord) => {
     if (!canWrite) return;
@@ -330,30 +339,33 @@ export function MeetingTemplatesPage() {
         iconColor="orange"
         subtitle="Reusable agenda patterns for new meetings."
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <MeetingTemplateImportButton societyId={society._id} existingNames={(templates ?? []).map(template => template.name)} />
-            {(templates?.length ?? 0) === 0 && (
-              <button
-                className="btn-action"
-                type="button"
-                onClick={async () => {
+          <CreateMenu
+            label="New template"
+            items={[
+              canWrite && { id: "new", label: "Blank template", icon: <Plus size={12} />, onSelect: () => navigate("/app/meeting-templates/new") },
+              canWrite && { id: "import", label: "Import from JSON…", icon: <Upload size={12} />, onSelect: () => setImportOpen(true) },
+              canWrite && (templates?.length ?? 0) === 0 && {
+                id: "seed",
+                label: "Add starter templates",
+                icon: <Sparkles size={12} />,
+                onSelect: async () => {
                   const result = await seed({ societyId: society._id });
                   if (result.inserted > 0) {
                     toast.success(`Added ${result.inserted} starter template${result.inserted === 1 ? "" : "s"}`);
                   } else {
                     toast.info("Starter templates already exist.");
                   }
-                }}
-              disabled={!canWrite}
-             >
-                <Sparkles size={12} /> Seed starter
-              </button>
-            )}
-            {canWrite && <Link className="btn-action btn-action--primary" to="/app/meeting-templates/new">
-              <Plus size={12} /> New template
-            </Link>}
-          </div>
+                },
+              },
+            ]}
+          />
         }
+      />
+      <MeetingTemplateImportDialog
+        societyId={society._id}
+        existingNames={(templates ?? []).map(template => template.name)}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
       />
 
       {showMetadataWarning ? (
@@ -362,7 +374,7 @@ export function MeetingTemplatesPage() {
         <RecordTableScope
           tableId="meetingTemplates"
           objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
+          hydratedView={hydratedView}
           records={records}
           onRecordClick={(recordId) => navigate(`/app/meeting-templates/${recordId}`)}
           onCreate={canWrite ? () => navigate("/app/meeting-templates/new") : undefined}
@@ -376,7 +388,6 @@ export function MeetingTemplatesPage() {
             currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
             onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
             onOpenFilter={() => setFilterOpen((open) => !open)}
-            actions={<span className="muted">{records.length} saved</span>}
           />
           <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
           <RecordTableFilterChips />
@@ -394,6 +405,9 @@ export function MeetingTemplatesPage() {
               />
             }
             renderCell={({ record, field }) => {
+              if (field.name === "updatedAtISO") {
+                return record.updatedAtISO ? <span>{formatDate(record.updatedAtISO)}</span> : <span className="muted">—</span>;
+              }
               if (field.name === "isDefault") {
                 return record.isDefault
                   ? <Badge tone="success"><Star size={10} /> Default</Badge>
@@ -721,7 +735,7 @@ export function MeetingTemplateBuilderPage() {
                               className="input"
                               value={item.presenter}
                               onChange={(event) => updateItem(index, { presenter: event.target.value })}
-                              placeholder="Presenter..."
+                              placeholder="Presenter or role"
                               aria-label="Presenter" disabled={!canWrite} />
                           </span>
                         </span>
@@ -759,21 +773,15 @@ export function MeetingTemplateBuilderPage() {
                         </div>
                         {activeItemTab === "details" && (
                           <div className="meeting-minutes-section-editor__panel meeting-template-section-editor__panel">
-                            <Field label="Agenda level">
+                            {/* Section type and presenter are edited on the item's own row above. */}
+                            <Field label="Level">
                               <Select
                                 value={String(item.depth)}
                                 onChange={(value) => updateItem(index, { depth: Number(value) === 1 ? 1 : 0 })}
                                 options={[
-                                  { value: "0", label: "Root item" },
+                                  { value: "0", label: "Top level" },
                                   { value: "1", label: "Sub-item" },
                                 ]} disabled={!canWrite} />
-                            </Field>
-                            <Field label="Section type">
-                              <Select value={item.sectionType} onChange={(value) => updateItem(index, { sectionType: value })}
-                                options={SECTION_TYPES.map((type) => ({ value: type, label: formatLabel(type) }))} disabled={!canWrite} />
-                            </Field>
-                            <Field label="Presenter or role">
-                              <input className="input" value={item.presenter} onChange={(event) => updateItem(index, { presenter: event.target.value })} placeholder="Chair, secretary, treasurer..." disabled={!canWrite} />
                             </Field>
                             <Field label="Default notes">
                               <MarkdownEditor
@@ -830,9 +838,6 @@ export function MeetingTemplateBuilderPage() {
                           </div>
                         )}
                         <div className="meeting-template-section-editor__actions">
-                          <button className="btn-action" type="button" onClick={() => addItem(0)} disabled={!canWrite}>
-                            <Plus size={12} /> Add root item
-                          </button>
                           <button className="btn-action" type="button" onClick={() => addItem(1)} disabled={!canWrite}>
                             <Plus size={12} /> Add sub-item
                           </button>

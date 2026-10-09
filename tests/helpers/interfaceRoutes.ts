@@ -876,7 +876,6 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "pattern": "*",
     "path": "/demo/interface-audit-unknown-route",
     "kind": "fallback",
-    "fixture": "route",
-    "redirectTo": "/demo"
+    "fixture": "route"
   }
 ];

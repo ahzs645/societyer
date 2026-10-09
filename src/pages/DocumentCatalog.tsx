@@ -2,13 +2,14 @@ import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPa
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
 import { entityPreparationDecision } from "../../shared/entitySetup";
-import { Badge } from "../components/ui";
+import { Badge, Banner } from "../components/ui";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
@@ -18,6 +19,7 @@ import { incorporationWorksheetText, incorporationWorksheetFileName } from "../.
 import { isCorporation } from "../../shared/organizationDomain";
 import { triggerBlobDownload } from "../lib/zip";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { humanizeKey } from "../../shared/documentProvenance";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -94,6 +96,7 @@ export function DocumentCatalogPage() {
   const seedCatalog = useMutation(api.legalOperations.seedDocumentPacketsForEntity);
   const permissions = usePermissions();
   const toast = useToast();
+  const navigate = useNavigate();
   const [seeding, setSeeding] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [doneKey, setDoneKey] = useState<string | null>(null);
@@ -162,32 +165,32 @@ export function DocumentCatalogPage() {
         icon={<FileText size={16} />}
         iconColor="blue"
         subtitle="Prepare editable drafts from this entity’s template and precedent catalog."
+        info={<>
+          {preparation.allowed && <p>{preparation.message}</p>}
+          <p>These are application-authored working drafts. A signature, filing receipt and certified registry document are separate evidence stages. Official government forms and model layouts remain linked originals unless their reuse rights are confirmed.</p>
+          <p>The templates prepare governance records and working drafts. They do not file an incorporation application or supply a complete set of incorporation articles, bylaws, or an incorporation agreement.</p>
+          {preparationGuide?.id === "bc_company" && <p>Corporate packets are generic drafts. Review them against your BC company's articles and the Business Corporations Act before use.</p>}
+        </>}
+        actions={
+          <MoreActionsMenu
+            items={[
+              { id: "track", label: "Track preparation and evidence", onSelect: () => navigate("/app/post-incorporation") },
+              { id: "research", label: "Research and source review", onSelect: () => navigate("/app/research-library") },
+              ...(preparationGuide ? [{
+                id: "worksheet",
+                label: "Download preparation worksheet",
+                onSelect: () => triggerBlobDownload(
+                  new Blob([incorporationWorksheetText(preparationGuide, society)], { type: "text/plain;charset=utf-8" }),
+                  incorporationWorksheetFileName(preparationGuide, society),
+                ),
+              }] : []),
+            ]}
+          />
+        }
       />
 
       <RelatedDocumentViews current="/app/document-catalog" />
-      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
-        <Badge tone={preparation.allowed ? "info" : "warn"}>{preparation.allowed ? "Draft preparation" : "Route review required"}</Badge>
-        <p style={{ margin: "8px 0" }}>{preparation.message}</p>
-        <p className="muted" style={{ margin: 0 }}>These are application-authored working drafts. A signature, filing receipt and certified registry document are separate evidence stages. Official government forms and model layouts remain linked originals unless their reuse rights are confirmed.</p>
-        <Link to="/app/post-incorporation">Track preparation and evidence</Link>{" · "}<Link to="/app/research-library">Research and source review</Link>
-      </div>
-
-      <IncorporationPreparation organization={society} />
-      {preparationGuide && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h3>Incorporation preparation worksheet</h3>
-          <p>Download an editable text worksheet for the selected legal track, with information to gather and links to official sources. Complete the incorporation application in the official registry service.</p>
-          <button className="btn" onClick={() => triggerBlobDownload(
-            new Blob([incorporationWorksheetText(preparationGuide, society)], { type: "text/plain;charset=utf-8" }),
-            incorporationWorksheetFileName(preparationGuide, society),
-          )}>Download preparation worksheet</button>
-        </div>
-      )}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3>Internal document drafts</h3>
-        <p>These templates prepare governance records and working drafts. They do not file an incorporation application or supply a complete set of incorporation articles, bylaws, or an incorporation agreement.</p>
-        {preparationGuide?.id === "bc_company" && <p>Corporate packets are generic drafts. Review them against your BC company's articles and the Business Corporations Act before use.</p>}
-      </div>
+      {!preparation.allowed && <Banner tone="warn">Route review required. {preparation.message}</Banner>}
       {generationError && <p role="alert">{generationError}</p>}
 
       {templates === undefined ? (
@@ -196,27 +199,24 @@ export function DocumentCatalogPage() {
         </div>
       ) : templates.length === 0 ? (
         <div className="card">
-          <p style={{ color: "var(--text-tertiary)" }}>
-            No document catalog seeded yet for this entity. This catalog is a structured,
-            generate-ready view of templates and precedents — it doesn't hold the entity's
-            actual documents. Those already exist and can be viewed on{" "}
-            <Link to="/app/documents">Documents</Link>.
-          </p>
-          {preparation.allowed && permissions.loaded && permissions.can("documents:write") && (
-            <button className="btn" disabled={seeding} onClick={onSeedCatalog}>
-              {seeding ? "Initializing…" : "Initialize document catalog"}
-            </button>
-          )}
+          <div className="card__body doc-catalog-empty">
+            <span className="muted">No templates yet. Your existing files are in <Link className="doc-catalog-link" to="/app/documents">Documents</Link>.</span>
+            {preparation.allowed && permissions.loaded && permissions.can("documents:write") && (
+              <button className="btn-action btn-action--primary" disabled={seeding} onClick={onSeedCatalog}>
+                {seeding ? "Initializing…" : "Initialize document catalog"}
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {groupEntries.map(([tag, items]) => (
             <div className="card" key={tag}>
-              <h3 style={{ margin: "0 0 12px" }}>
-                {humanizeTag(tag)}{" "}
-                <span style={{ color: "var(--text-tertiary)" }}>({items.length})</span>
-              </h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div className="card__head">
+                <h2 className="card__title">{humanizeTag(tag)}</h2>
+                <Badge>{items.length}</Badge>
+              </div>
+              <div className="card__body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {items.map((t) => {
                   const desc = firstLine(t.notes);
                   const key = packetKeyOf(t);
@@ -270,10 +270,10 @@ export function DocumentCatalogPage() {
                           )}
                         </span>
                       </div>
-                      {packet?.preparationOnly && <p className="muted" style={{ margin: "6px 0" }}>Original preparation worksheet — unresolved drafting prompts require tailored legal review before execution or registry submission.</p>}
+                      {packet?.preparationOnly && <p className="muted" style={{ margin: "6px 0", fontSize: 13 }}>Original preparation worksheet — unresolved drafting prompts require tailored legal review before execution or registry submission.</p>}
                       {!compatibleJurisdiction && <Badge tone="warn">Different home jurisdiction</Badge>}
                       {!compatibleEntity && <Badge tone="warn">Different entity type</Badge>}
-                      {packet?.sourceUrls && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 6 }}>{packet.sourceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer">Official source {index + 1}</a>)}</div>}
+                      {packet?.sourceUrls && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 6, fontSize: 13 }}>{packet.sourceUrls.map((url, index) => <a key={url} className="doc-catalog-link" href={url} target="_blank" rel="noreferrer">Official source {index + 1}</a>)}</div>}
                       {desc && (
                         <p
                           style={{
@@ -310,7 +310,7 @@ export function DocumentCatalogPage() {
                                   color: "var(--text-secondary)",
                                 }}
                               >
-                                {field}
+                                {humanizeKey(field)}
                               </span>
                             ))}
                           </div>
@@ -324,7 +324,7 @@ export function DocumentCatalogPage() {
                             color: "var(--text-tertiary)",
                           }}
                         >
-                          Required signers: {t.requiredSigners.join(", ")}
+                          Required signers: {t.requiredSigners.map(humanizeTag).join(", ")}
                         </p>
                       )}
                     </div>
@@ -338,11 +338,11 @@ export function DocumentCatalogPage() {
 
       {precedents.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <h3 style={{ margin: "0 0 12px" }}>
-            Packages &amp; precedents{" "}
-            <span style={{ color: "var(--text-tertiary)" }}>({precedents.length})</span>
-          </h3>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
+          <div className="card__head">
+            <h2 className="card__title">Packages &amp; precedents</h2>
+            <Badge>{precedents.length}</Badge>
+          </div>
+          <ul className="card__body" style={{ margin: 0, paddingLeft: 34 }}>
             {precedents.map((p) => (
               <li key={p._id} style={{ marginBottom: 6 }}>
                 <strong>{p.packageName}</strong>
@@ -357,6 +357,11 @@ export function DocumentCatalogPage() {
           </ul>
         </div>
       )}
+
+      <details className="doc-catalog-prep">
+        <summary>Incorporation preparation guide</summary>
+        <IncorporationPreparation organization={society} />
+      </details>
     </div>
   );
 }

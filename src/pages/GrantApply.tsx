@@ -1,14 +1,13 @@
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { PageLoading } from "./_helpers";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
-import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
+import { ErrorSummary, Field, type ErrorSummaryItem } from "../components/ui";
+import { IntakePrivacyNotice } from "../components/IntakePrivacyNotice";
 import { Select } from "../components/Select";
-import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
-import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
 
 const FIELD_IDS = {
@@ -29,9 +28,6 @@ export function GrantApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const summaryEditor = useRef<MarkdownEditorHandle>(null);
-  const useOfFundsEditor = useRef<MarkdownEditorHandle>(null);
-  const outcomesEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState({
     grantId: "",
     applicantName: currentUser?.displayName ?? "",
@@ -87,14 +83,9 @@ export function GrantApplyPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    // The editor's serialized change callback may follow the final keystroke.
-    // Capture its current document before validating and sending the form.
-    const projectSummary = summaryEditor.current?.getMarkdown() ?? form.projectSummary;
-    const proposedUseOfFunds = useOfFundsEditor.current?.getMarkdown() ?? form.proposedUseOfFunds;
-    const expectedOutcomes = outcomesEditor.current?.getMarkdown() ?? form.expectedOutcomes;
-    setForm((current) => ({ ...current, projectSummary, proposedUseOfFunds, expectedOutcomes }));
+    const { projectSummary, proposedUseOfFunds, expectedOutcomes } = form;
     setAttemptedSubmit(true);
-    if (errors.some((error) => error.fieldId !== FIELD_IDS.projectSummary) || !projectSummary.trim()) return;
+    if (errors.length > 0) return;
     setSubmitting(true);
     try {
       await submitApplication({
@@ -132,100 +123,109 @@ export function GrantApplyPage() {
   const visibleErrors = attemptedSubmit ? errors : [];
 
   return (
-    <div className="landing" style={{ minHeight: "100vh" }}>
-      <section className="landing__hero" style={{ paddingTop: 72, paddingBottom: 56 }}>
-        <div className="landing__container" style={{ maxWidth: 760 }}>
-          <Link to={`/public/${context.society.publicSlug}`} className="row muted" style={{ marginBottom: 16, fontSize: 12 }}>
-            <ArrowLeft size={12} /> Back to public center
+    <div className="landing intake-page">
+      <div className="intake intake--single">
+        <header className="intake__head">
+          <Link to={`/public/${context.society.publicSlug}`} className="intake__back">
+            <ArrowLeft size={14} /> {context.society.name}
           </Link>
           <div className="landing__eyebrow">
             <BadgeDollarSign size={12} /> Grant application
           </div>
-          <h1 className="landing__h1" style={{ marginBottom: 12 }}>
-            Funding intake for {context.society.name}
-          </h1>
-          <p className="landing__lede">
-            Submit a project or funding request directly. It will land in the internal intake queue
-            instead of being re-entered by hand later.
-          </p>
+          <h1 className="intake__title">Funding intake for {context.society.name}</h1>
+          <p className="intake__lede">Request funding for a project. Your request goes straight to the society's review queue.</p>
+        </header>
 
-          {completed ? (
-            <div className="card" style={{ marginTop: 24 }}>
-              <div className="card__body" style={{ display: "grid", gap: 10 }}>
-                <h2 className="card__title" style={{ margin: 0 }}>Funding request submitted</h2>
-                <div className="muted">
-                  {context.society.name} received the request. Keep a copy of any follow-up messages you receive for your records.
-                </div>
-                <Link className="btn btn--accent" to={`/public/${context.society.publicSlug}`}>
-                  Back to public center
-                </Link>
-              </div>
-            </div>
-          ) : (
-          <form className="card" style={{ marginTop: 24 }} onSubmit={submit} noValidate>
-            <div className="card__body" style={{ display: "grid", gap: 12 }}>
+        {completed ? (
+          <div className="card intake__done">
+            <h2 className="card__title">Funding request submitted</h2>
+            <p className="muted">
+              {context.society.name} received the request. Keep any follow-up messages for your records.
+            </p>
+            <Link className="btn btn--accent" to={`/public/${context.society.publicSlug}`}>
+              Back to public center
+            </Link>
+          </div>
+        ) : (
+          <div className="intake__layout intake__layout--single">
+            <form className="intake__form" onSubmit={submit} noValidate>
               <ErrorSummary errors={visibleErrors} title="Complete these fields to submit" />
-              <InspectorNote title={PIPA_INTAKE_NOTICE.title}>
-                {PIPA_INTAKE_NOTICE.body} Published privacy records, when available, appear in the{" "}
-                <Link to={`/public/${context.society.publicSlug}`}>public center</Link>.
-              </InspectorNote>
-              {context.grants.length > 0 && (
-                <Field label="Program or opportunity">
-                  <Select
-                    value={form.grantId}
-                    onChange={(value) => setForm({ ...form, grantId: value })}
-                    options={[
-                      { value: "", label: "General funding intake" },
-                      ...context.grants.map((grant) => ({ value: grant._id, label: grant.title })),
-                    ]}
-                  />
+              <fieldset className="intake__section">
+                <legend>Applicant</legend>
+                <div className="intake__row intake__row--wide">
+                  <Field label="Applicant name" id={FIELD_IDS.applicantName} required error={fieldError(visibleErrors, "Applicant name")}>
+                    <input className="input" value={form.applicantName} onChange={(e) => setForm({ ...form, applicantName: e.target.value })} autoComplete="name" />
+                  </Field>
+                  <Field label="Organization name">
+                    <input className="input" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} autoComplete="organization" />
+                  </Field>
+                </div>
+                <div className="intake__row intake__row--wide">
+                  <Field label="Email" id={FIELD_IDS.email} required error={fieldError(visibleErrors, "Email")}>
+                    <input className="input" type="email" inputMode="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+                  </Field>
+                  <Field label="Phone">
+                    <input className="input" type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
+                  </Field>
+                </div>
+              </fieldset>
+              <fieldset className="intake__section">
+                <legend>Your request</legend>
+                {context.grants.length > 0 && (
+                  <Field label="Program or opportunity">
+                    <Select
+                      value={form.grantId}
+                      onChange={(value) => setForm({ ...form, grantId: value })}
+                      options={[
+                        { value: "", label: "General funding intake" },
+                        ...context.grants.map((grant) => ({ value: grant._id, label: grant.title })),
+                      ]}
+                    />
+                  </Field>
+                )}
+                {(selectedGrant?.publicDescription || selectedGrant?.applicationInstructions) && (
+                  <div className="intake__program-info">
+                    {selectedGrant?.publicDescription && <p>{selectedGrant.publicDescription}</p>}
+                    {selectedGrant?.applicationInstructions && <p>{selectedGrant.applicationInstructions}</p>}
+                  </div>
+                )}
+                <div className="intake__row intake__row--amount">
+                  <Field label="Requested amount" id={FIELD_IDS.amountRequestedDollars} required hint="Canadian dollars" error={fieldError(visibleErrors, "Requested amount")}>
+                    <span className="intake__money">
+                      <span aria-hidden="true">$</span>
+                      <input className="input" type="number" inputMode="decimal" min="0" step="0.01" placeholder="e.g. 2,500" value={form.amountRequestedDollars} onChange={(e) => setForm({ ...form, amountRequestedDollars: e.target.value })} />
+                    </span>
+                  </Field>
+                  <Field label="Project title" id={FIELD_IDS.projectTitle} required error={fieldError(visibleErrors, "Project title")}>
+                    <input className="input" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
+                  </Field>
+                </div>
+                <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(visibleErrors, "Project summary")}>
+                  <textarea className="textarea" rows={4} value={form.projectSummary} onChange={(e) => setForm({ ...form, projectSummary: e.target.value })} />
                 </Field>
-              )}
-              {selectedGrant?.publicDescription && (
-                <div className="muted" style={{ marginTop: -2 }}>
-                  {selectedGrant.publicDescription}
-                </div>
-              )}
-              {selectedGrant?.applicationInstructions && (
-                <div className="muted" style={{ marginTop: -6 }}>
-                  {selectedGrant.applicationInstructions}
-                </div>
-              )}
-              <Field label="Applicant name" id={FIELD_IDS.applicantName} required error={fieldError(visibleErrors, "Applicant name")}>
-                <input className="input" value={form.applicantName} onChange={(e) => setForm({ ...form, applicantName: e.target.value })} autoComplete="name" />
-              </Field>
-              <Field label="Organization name">
-                <input className="input" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
-              </Field>
-              <Field label="Email" id={FIELD_IDS.email} required error={fieldError(visibleErrors, "Email")}>
-                <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
-              </Field>
-              <Field label="Phone">
-                <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" />
-              </Field>
-              <Field label="Requested amount" id={FIELD_IDS.amountRequestedDollars} required hint="Enter dollars, e.g. 2500.00. The app stores this as cents internally." error={fieldError(visibleErrors, "Requested amount")}>
-                <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.amountRequestedDollars} onChange={(e) => setForm({ ...form, amountRequestedDollars: e.target.value })} />
-              </Field>
-              <Field label="Project title" id={FIELD_IDS.projectTitle} required error={fieldError(visibleErrors, "Project title")}>
-                <input className="input" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
-              </Field>
-              <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(visibleErrors, "Project summary")}>
-                <MarkdownEditor ref={summaryEditor} rows={5} value={form.projectSummary} onChange={(markdown) => setForm((current) => ({ ...current, projectSummary: markdown }))} />
-              </Field>
-              <Field label="Proposed use of funds">
-                <MarkdownEditor ref={useOfFundsEditor} rows={4} value={form.proposedUseOfFunds} onChange={(markdown) => setForm((current) => ({ ...current, proposedUseOfFunds: markdown }))} />
-              </Field>
-              <Field label="Expected outcomes">
-                <MarkdownEditor ref={outcomesEditor} rows={4} value={form.expectedOutcomes} onChange={(markdown) => setForm((current) => ({ ...current, expectedOutcomes: markdown }))} />
-              </Field>
-              <button className="btn btn--accent" type="submit" disabled={submitting}>
-                {submitting ? "Submitting…" : "Submit funding request"}
-              </button>
-            </div>
-          </form>
-          )}
-        </div>
-      </section>
+                <Field label="Proposed use of funds">
+                  <textarea className="textarea" rows={3} value={form.proposedUseOfFunds} onChange={(e) => setForm({ ...form, proposedUseOfFunds: e.target.value })} />
+                </Field>
+                <Field label="Expected outcomes">
+                  <textarea className="textarea" rows={3} value={form.expectedOutcomes} onChange={(e) => setForm({ ...form, expectedOutcomes: e.target.value })} />
+                </Field>
+              </fieldset>
+              <IntakePrivacyNotice
+                societyName={context.society.name}
+                customNotice={context.society.privacyNotice}
+                publicSlug={context.society.publicSlug}
+                privacyOfficerName={context.society.privacyOfficerName}
+                contactEmail={context.society.publicContactEmail}
+              />
+              <div className="intake__submit">
+                <button className="btn btn--accent" type="submit" disabled={submitting}>
+                  {submitting ? "Submitting…" : "Submit funding request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

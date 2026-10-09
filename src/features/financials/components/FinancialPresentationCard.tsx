@@ -56,7 +56,10 @@ export function FinancialPresentationCard({
       { value: "", label: "Not recorded" },
       ...rows.map((meeting) => ({
         value: String(meeting._id),
-        label: `${meeting.scheduledAt ? formatDate(meeting.scheduledAt) : "Undated"} · ${meeting.type ?? "Meeting"} · ${meeting.title}`,
+        // Title alone keeps the closed picker readable in the narrow
+        // inspector; the date and meeting type ride along as the hint.
+        label: String(meeting.title ?? "Meeting"),
+        hint: `${meeting.scheduledAt ? formatDate(meeting.scheduledAt) : "Undated"} · ${meeting.type ?? "Meeting"}`,
       })),
     ];
   }, [meetings, periodEnd]);
@@ -96,11 +99,9 @@ export function FinancialPresentationCard({
   const selectedDocument = ((documents ?? []) as any[]).find((doc) => String(doc._id) === form.statementsDocId);
 
   return (
-    <div className="card" data-testid="financial-presentation-card">
-      <div className="card__head">
-        <h2 className="card__title"><CalendarCheck size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Approval and presentation</h2>
-      </div>
-      <div className="card__body col">
+    <section className="finance-inspector__section" data-testid="financial-presentation-card">
+      <h2 className="finance-inspector__title"><CalendarCheck size={14} aria-hidden="true" />Approval and presentation</h2>
+      <div className="col">
         <Field label="Board approval date">
           <DatePicker value={form.approvedByBoardAt} onChange={(value) => setForm({ ...form, approvedByBoardAt: value })} disabled={!canWrite} />
         </Field>
@@ -132,6 +133,6 @@ export function FinancialPresentationCard({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

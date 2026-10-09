@@ -372,7 +372,7 @@ export function SettingsPage() {
                   </button>
                 )}
               </div>
-              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: 0 }}>
                 {t("settings.logoFormats", "SVG, PNG, or JPG. Max 2 MB.")}
               </p>
             </div>
@@ -544,13 +544,14 @@ export function SettingsPage() {
             <span className="card__subtitle">{t("settings.languageSubtitle")}</span>
           </div>
           <div className="card__body row" style={{ gap: 8 }}>
-            <LocaleSwitcher />
+            {/* The card heading already says "Language"; the switcher keeps its aria-label. */}
+            <LocaleSwitcher compact />
           </div>
         </div>
 
         <div className="card">
           <div className="card__head"><h2 className="card__title">{t("settings.appearanceTitle")}</h2></div>
-          <div className="card__body row" style={{ gap: 8 }}>
+          <div className="card__body row settings-appearance" style={{ gap: 8 }}>
             <RadioGroup<ThemePreference>
               name="appearance-theme"
               value={theme}

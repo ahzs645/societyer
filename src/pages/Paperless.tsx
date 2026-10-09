@@ -12,6 +12,7 @@ import { formatDateTime } from "../lib/format";
 import { Database, ExternalLink, RefreshCw, Tags, UploadCloud } from "lucide-react";
 import { useEffect, useState } from "react";
 import { openableExternalUrl } from "../lib/externalUrl";
+import { InfoPopover } from "../components/InfoPopover";
 
 export function PaperlessPage() {
   const society = useSociety();
@@ -47,6 +48,12 @@ export function PaperlessPage() {
   const connected = connection?.status === "connected";
   const demoAvailable = society.demoMode === true || isStaticDemoRuntime();
   const providerAvailable = runtime?.live === true || demoAvailable;
+  const rawServerUrl = connection?.baseUrl ?? runtime?.baseUrl;
+  // Demo adapters report placeholder addresses (demo://…) and versions
+  // ("demo"); those are not something a user can act on.
+  const serverUrl = rawServerUrl && /^https?:\/\//i.test(rawServerUrl) ? rawServerUrl : null;
+  const serverLabel = serverUrl ?? (demoAvailable ? "Demo adapter" : "Not configured");
+  const showVersion = Boolean(connection?.apiVersion && connection.apiVersion !== "demo");
 
   const save = async () => {
     if (!canConfigure || !providerAvailable || busy) return;
@@ -89,7 +96,10 @@ export function PaperlessPage() {
         title="Paperless-ngx"
         icon={<Database size={16} />}
         iconColor="gray"
-        subtitle="Technical setup area. Connects Societyer to an external document archive that automatically scans (OCR) and tags uploaded files so they're searchable — typically configured once by an administrator, not a page a board member needs to visit."
+        subtitle="Connect a Paperless-ngx archive for OCR and tagging."
+        info={
+          <p>An administrator usually sets this up once. Paperless scans (OCR) and tags uploaded files so they're searchable from Societyer.</p>
+        }
         actions={
           <>
             <button className="btn-action" disabled={busy || !canConfigure} onClick={runTest}>
@@ -102,13 +112,18 @@ export function PaperlessPage() {
         }
       />
 
-      {!localOnly && !providerAvailable && <p className="muted" role="status">Paperless is not configured on this server. An administrator must configure its server address and API token before enabling synchronization. Test reports missing configuration.</p>}
+      {!localOnly && !providerAvailable && <p className="muted" role="status">Paperless isn't configured on this server yet. An administrator sets it up.</p>}
       {localOnly && <p className="muted" role="status">Paperless connections and OCR synchronization require a connected workspace. Local document records and files remain available in Documents and Library.</p>}
       <div className="grid two" style={{ marginBottom: 16 }}>
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Connection</h2>
-            <span className="card__subtitle">Server address and API token are set by an administrator in the hosting environment, not typed in here.</span>
+            <InfoPopover label="About the Paperless connection">
+              <p>
+                The server address and API token are set by an administrator in the hosting environment, not typed in
+                here (<code>PAPERLESS_NGX_URL</code> and <code>PAPERLESS_NGX_TOKEN</code>).
+              </p>
+            </InfoPopover>
           </div>
           <div className="card__body col" style={{ gap: 12 }}>
             <div className="row" style={{ justifyContent: "space-between" }}>
@@ -123,25 +138,28 @@ export function PaperlessPage() {
                 {localOnly ? "Local records" : demoAvailable ? "Demo adapter" : runtime?.live ? "Live Paperless-ngx" : "Not configured"}
               </Badge>
             </div>
-            <div className="muted">
-              Paperless server URL: <code className="mono">{connection?.baseUrl ?? runtime?.baseUrl ?? "Not set (admin: set PAPERLESS_NGX_URL)"}</code>
+            {(serverUrl || !demoAvailable) && (
+              <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                <span className="muted">Server</span>
+                <span className={serverUrl ? "mono" : undefined} style={{ overflowWrap: "anywhere", textAlign: "right" }}>{serverLabel}</span>
+              </div>
+            )}
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="muted">API token</span>
+              <span>{runtime?.configured ? "Configured" : demoAvailable ? "Not needed for the demo" : "Not configured"}</span>
             </div>
-            <div className="muted">
-              API token: <code className="mono">{runtime?.configured ? "Configured" : "Not set (admin: set PAPERLESS_NGX_TOKEN)"}</code>
-            </div>
-            {connection?.apiVersion && (
-              <div className="muted">
-                Paperless version: <code className="mono">{connection.apiVersion}</code>
-                {connection.serverVersion ? ` · ${connection.serverVersion}` : ""}
+            {showVersion && (
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span className="muted">Paperless version</span>
+                <span>
+                  {connection?.apiVersion}
+                  {connection?.serverVersion ? ` · ${connection.serverVersion}` : ""}
+                </span>
               </div>
             )}
             {connection?.lastError && <div className="alert alert--danger">{connection.lastError}</div>}
-            {isLocalDataRuntime() && <p className="muted">This local adapter previews Paperless records. Disconnect the external provider from its connected server workspace.</p>}
+            {connection && (
             <div className="row">
-              <button className="btn btn--accent" disabled={busy || !canConfigure || !providerAvailable} onClick={save}>
-                {connected ? "Save settings" : "Enable connection"}
-              </button>
-              {connection && (
                 <button
                   className="btn"
                   disabled={busy || !canConfigure || isLocalDataRuntime()}
@@ -157,15 +175,17 @@ export function PaperlessPage() {
                 >
                   Disable
                 </button>
-              )}
             </div>
+            )}
           </div>
         </div>
 
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Tagging</h2>
-            <span className="card__subtitle">Controls how Societyer's document categories are labeled once they reach Paperless.</span>
+            <InfoPopover label="About tagging">
+              <p>Controls how Societyer's document categories are labeled once they reach Paperless.</p>
+            </InfoPopover>
           </div>
           <div className="card__body col" style={{ gap: 12 }}>
             <Toggle
@@ -173,19 +193,20 @@ export function PaperlessPage() {
               checked={autoCreateTags}
               onChange={setAutoCreateTags}
               label="Create missing Paperless tags"
-              hint="When enabled, Societyer creates any tags that don't already exist in Paperless before uploading a document."
+              hint="Creates tags that don't exist in Paperless yet before uploading."
             />
             <Toggle
               disabled
               checked={false}
               onChange={setAutoUpload}
               label="Auto-upload new document versions"
-              hint="Automatic uploads are not available yet. Use Sync to Paperless on a stored document or version; existing automatic-upload settings do not start background jobs."
+              hint="Not available yet — use Sync to Paperless on a document."
             />
             <Field label="Tag prefix">
               <input
                 disabled={!canConfigure}
                 className="input"
+                style={{ maxWidth: 320 }}
                 value={tagPrefix}
                 onChange={(event) => setTagPrefix(event.target.value)}
                 placeholder="societyer"
@@ -198,7 +219,9 @@ export function PaperlessPage() {
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Cross-app tag profiles</h2>
-          <span className="card__subtitle">These are inferred from existing document references across modules.</span>
+          <InfoPopover label="About tag profiles">
+            <p>These are inferred from existing document references across modules.</p>
+          </InfoPopover>
         </div>
         <div className="card__body grid two">
           {(tagProfiles ?? []).map((profile: any) => (
@@ -235,7 +258,7 @@ export function PaperlessPage() {
                 </div>
                 <div className="row" style={{ gap: 6 }}>
                   <Badge tone={sync.status === "complete" ? "success" : sync.status === "failed" ? "danger" : "info"}>
-                    {sync.status}
+                    {sync.status ? sync.status.charAt(0).toUpperCase() + sync.status.slice(1) : "Queued"}
                   </Badge>
                   {openableExternalUrl(sync.paperlessDocumentUrl) && (
                     <a className="btn btn--ghost btn--sm" href={openableExternalUrl(sync.paperlessDocumentUrl)!} target="_blank" rel="noreferrer">

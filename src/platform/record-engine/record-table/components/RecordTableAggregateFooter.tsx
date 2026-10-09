@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { columnWidthStyle } from "../utils/columnWidth";
 import { ChevronDown } from "lucide-react";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { pluralize } from "../../../../lib/format";
@@ -116,7 +117,7 @@ function RecordTableAggregateFooterCell({
   return (
     <td
       className="record-table__footer-cell"
-      style={{ width: column.size, minWidth: column.size }}
+      style={columnWidthStyle(column.size)}
     >
       <div ref={menuRef} className="record-table__aggregate">
         <button

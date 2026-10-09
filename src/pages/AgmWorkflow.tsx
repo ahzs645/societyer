@@ -13,6 +13,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import {
   ArrowLeft,
@@ -219,7 +220,7 @@ export function AgmWorkflowPage() {
   };
 
   return (
-    <div className="page">
+    <div className="page agm-workflow-page">
       <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
         <ArrowLeft size={12} /> Back to meeting
       </Link>
@@ -248,11 +249,13 @@ export function AgmWorkflowPage() {
             tone={noticeWithinWindow ? "success" : "warn"}
           />
           <Item label="Notice coverage"
-            value={[
+            value={votingMemberCount
+              ? `${noticeCoverage} notified · ${votingMemberCount} voting member${votingMemberCount === 1 ? "" : "s"}`
+              : "No voting member register"}
+            detail={[
               `${deliveredCount} delivery record${deliveredCount === 1 ? "" : "s"} logged`,
-              votingMemberCount ? `${votingMemberCount} voting member${votingMemberCount === 1 ? "" : "s"}` : "no voting member register",
-              recordedRecipientCount ? `workflow records ${recordedRecipientCount} recipient${recordedRecipientCount === 1 ? "" : "s"}` : "",
-            ].filter(Boolean).join(" · ")}
+              recordedRecipientCount ? `the workflow records ${recordedRecipientCount} recipient${recordedRecipientCount === 1 ? "" : "s"}` : "",
+            ].filter(Boolean).join("; ")}
             tone={votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? (deliveredCount >= votingMemberCount ? "success" : "info") : "warn"}
           />
           <Item label="Annual report"
@@ -309,7 +312,7 @@ export function AgmWorkflowPage() {
               }}>
                 <div style={{ marginTop: 2 }}>
                   {done
-                    ? <CheckCircle2 size={18} style={{ color: "var(--success)" }} />
+                    ? <CheckCircle2 size={18} role="img" aria-label="Completed" style={{ color: "var(--success)" }} />
                     : <Circle size={18} style={{ color: "var(--text-tertiary)" }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -320,7 +323,6 @@ export function AgmWorkflowPage() {
                   </div>
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>{s.sub}</div>
                   <div className="row agm-workflow__step-actions" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                    {done && <Badge tone="success">Completed</Badge>}
                     {done && doneFromRun && i === currentIdx && !doneFromRecord && (
                       <button className="btn-action" onClick={undoLastStep}>
                         <Undo2 size={12} /> Undo
@@ -482,11 +484,24 @@ export function AgmWorkflowPage() {
   );
 }
 
-function Item({ label, value, tone }: { label: string; value: string; tone: "success" | "warn" | "danger" | "info" | "neutral" }) {
+const POSTURE_TONE_COLOR: Record<"success" | "warn" | "danger" | "info" | "neutral", string> = {
+  success: "var(--success)",
+  warn: "var(--warn)",
+  danger: "var(--danger)",
+  info: "var(--info)",
+  neutral: "var(--text-tertiary)",
+};
+
+/** One posture fact: plain text with a status dot (a long value in a chip wrapped and overlapped the next row). */
+function Item({ label, value, tone, detail }: { label: string; value: string; tone: "success" | "warn" | "danger" | "info" | "neutral"; detail?: string }) {
   return (
     <div className="row agm-workflow__posture-item" style={{ flexWrap: "wrap", gap: 6 }}>
       <span className="muted" style={{ minWidth: 160 }}>{label}</span>
-      <Badge tone={tone as any}>{value}</Badge>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        <span aria-hidden="true" style={{ flex: "none", width: 7, height: 7, borderRadius: "50%", background: POSTURE_TONE_COLOR[tone] }} />
+        <span>{value}</span>
+        {detail && <InfoPopover label={`About ${label.toLowerCase()}`}><p>{detail}.</p></InfoPopover>}
+      </span>
     </div>
   );
 }

@@ -1,14 +1,15 @@
 import {useState} from 'react';import {useMutation} from 'convex/react';import {api} from '@/lib/convexApi';
-import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {money} from '@/lib/format';
+import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {formatDate,money} from '@/lib/format';import {ChevronRight} from 'lucide-react';
 import {EvidenceRowsEditor,type EvidenceColumn} from './EvidenceRowsEditor';import {insuranceBalances,requirementResult} from '../../shared/insuranceOperations';
 import { todayDateOnly } from "../../shared/dateOnly";
 const evidence:EvidenceColumn[]=[{key:'observedDate',label:'Evidence day',type:'date'},{key:'sourceUrl',label:'Source URL'},{key:'sourceReference',label:'Page / row citation'},{key:'reviewStatus',label:'Review',options:['pending','verified','rejected']}];
 export function InsuranceOperationsCard({policy}:{policy:any}){
  const {can}=usePermissions();const toast=useToast();const save=useMutation(api.insurance.appendOperations);const scan=useMutation(api.insurance.ensureRenewalTasks);
  const [entries,setEntries]=useState<any[]>([]),[amendments,setAmendments]=useState<any[]>([]),[checks,setChecks]=useState<any[]>([]),[busy,setBusy]=useState(false);
- return <details className="card" style={{marginTop:16}}><summary className="card__head">Invoices, payments, amendments and requirement checks</summary><div className="card__body col" style={{gap:12}}>
+ const recorded=(policy.moneyEntries?.length??0)+(policy.requirementChecks?.length??0)+(policy.amendments?.length??0);
+ return <details className="card insurance-operations" style={{marginTop:16}}><summary className="card__head" style={{cursor:'pointer'}}><ChevronRight size={14} aria-hidden="true" className="insurance-operations__chevron"/><h2 className="card__title">Invoices, payments and amendments</h2><span className="card__subtitle">{recorded?`${recorded} recorded`:'None recorded'}</span></summary><div className="card__body col" style={{gap:12}}>
  {insuranceBalances(policy.moneyEntries??[]).map(row=><p key={row.currency}>{row.currency}: outstanding {row.outstandingCents==null?'unknown':money(row.outstandingCents)}; claim cost {row.claimCostCents==null?'unknown':money(row.claimCostCents)}, recoveries {row.recoveryCents==null?'unknown':money(row.recoveryCents)}</p>)}
- {(policy.moneyEntries??[]).map((row:any)=><p key={row.id}>{row.observedDate} {row.kind}: {row.amountCents==null?'unknown':money(row.amountCents)} {row.currency} · <a href={row.sourceUrl}>{row.sourceReference}</a></p>)}
+ {(policy.moneyEntries??[]).map((row:any)=><p key={row.id}>{formatDate(row.observedDate)} {row.kind}: {row.amountCents==null?'unknown':money(row.amountCents)} {row.currency} · <a href={row.sourceUrl}>{row.sourceReference}</a></p>)}
  {(policy.requirementChecks??[]).map((row:any)=><p key={row.id}>{row.context}: {requirementResult(row)}</p>)}
  <EvidenceRowsEditor title="Append invoice / payment / claim observations" rows={entries} onChange={setEntries} disabled={!can('financials:write')||busy} columns={[{key:'kind',label:'Entry kind',options:['invoice','payment','refund','credit','claim_cost','recovery']},{key:'amountCents',label:'Amount in cents (blank = unknown)',type:'number'},{key:'currency',label:'Currency'},{key:'reference',label:'Invoice / payment / claim reference'},...evidence]}/>
  <EvidenceRowsEditor title="Append dated policy amendments" rows={amendments} onChange={setAmendments} disabled={!can('financials:write')||busy} columns={[{key:'kind',label:'Amendment kind',options:['cancellation','endorsement','reinstatement']},{key:'notes',label:'Amended terms / reason'},...evidence]}/>

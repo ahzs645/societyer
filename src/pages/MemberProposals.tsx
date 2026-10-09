@@ -75,7 +75,13 @@ export function MemberProposalsPage() {
         title="Member proposals"
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={`Proposals from members — active rule set requires at least ${rules?.memberProposalThresholdPct ?? 5}% of voting members, subject to a floor of ${rules?.memberProposalMinSignatures ?? 1}, and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before AGM notice. Current voting members: ${eligibleVoters}.`}
+        subtitle={`Proposals from members. ${eligibleVoters} voting members today.`}
+        info={
+          <p>
+            Under the active rules a proposal needs at least {rules?.memberProposalThresholdPct ?? 5}% of voting members (and no fewer than{" "}
+            {rules?.memberProposalMinSignatures ?? 1}), received at least {rules?.memberProposalLeadDays ?? 7} days before the AGM notice goes out.
+          </p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New proposal

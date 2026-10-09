@@ -260,7 +260,10 @@ export function DocumentsPage() {
         title="Documents"
         icon={<FolderOpen size={16} />}
         iconColor="gray"
-        subtitle="Every record and source file the organization keeps — constitution, bylaws, minutes, statements, policies and imported sources. Records ≥ 10 years (CRA: 7 years financial)."
+        subtitle="Every record and source file the organization keeps."
+        info={
+          <p>Constitution, bylaws, minutes, statements, policies and imported sources. Keep records at least 10 years; financial records 7 years (CRA).</p>
+        }
         actions={
           <>
             {nativeStorage && (
@@ -279,6 +282,12 @@ export function DocumentsPage() {
                   label: "Library",
                   icon: <BookOpen size={14} />,
                   onSelect: () => navigate("/app/library"),
+                },
+                {
+                  id: "archived",
+                  label: showArchived ? "Hide archived and merged copies" : "Show archived and merged copies",
+                  icon: <Layers size={14} />,
+                  onSelect: () => setParam("archived", showArchived ? null : "1"),
                 },
                 ...(nativeStorage
                   ? [
@@ -327,26 +336,29 @@ export function DocumentsPage() {
       )}
 
       {browse && (
-        <div className="documents-facets" aria-label="Document filters">
+        <div className="documents-facets documents-facets--single" aria-label="Document filters">
           <div className="documents-facets__row" role="group" aria-label="Show">
             {([
               ["all", "All", undefined],
               ["needs_review", "Needs review", <ClipboardCheck key="r" size={12} />],
               ["duplicates", "Duplicates", <Copy key="d" size={12} />],
               ["versions", "Version groups", <Layers key="v" size={12} />],
-            ] as [ShowFilter, string, ReactNode][]).map(([value, label, icon]) => (
-              <button key={value} type="button" className={`chip${show === value ? " is-active" : ""}`} aria-pressed={show === value} onClick={() => setParam("show", value === "all" ? null : value)}>
-                {icon}{label} <span className="chip__count">{showCounts[value].toLocaleString()}</span>
+            ] as [ShowFilter, string, ReactNode][])
+              // Empty queues add nothing to choose from; keep the active one so it can be cleared.
+              .filter(([value]) => value === "all" || show === value || showCounts[value] > 0)
+              .map(([value, label, icon]) => (
+                <button key={value} type="button" className={`chip${show === value ? " is-active" : ""}`} aria-pressed={show === value} onClick={() => setParam("show", value === "all" ? null : value)}>
+                  {icon}{label} <span className="chip__count">{showCounts[value].toLocaleString()}</span>
+                </button>
+              ))}
+            {showArchived && (
+              <button type="button" className="chip is-active" aria-pressed="true" onClick={() => setParam("archived", null)}>
+                <Layers size={12} /> Including archived ×
               </button>
-            ))}
-            <label className="documents-facets__toggle">
-              <input type="checkbox" checked={showArchived} onChange={(event) => setParam("archived", event.target.checked ? "1" : null)} /> Show archived and merged copies
-            </label>
+            )}
           </div>
+          <span className="documents-facets__divider" aria-hidden="true" />
           <div className="documents-facets__row" role="group" aria-label="Category">
-            <button type="button" className={`chip${!categoryKey ? " is-active" : ""}`} aria-pressed={!categoryKey} onClick={() => setParam("category", null)}>
-              All categories <span className="chip__count">{activeRows.length.toLocaleString()}</span>
-            </button>
             {facets.map((facet) => (
               <button key={facet.key} type="button" className={`chip${categoryKey === facet.key ? " is-active" : ""}`} aria-pressed={categoryKey === facet.key} onClick={() => setParam("category", categoryKey === facet.key ? null : facet.value)}>
                 {facet.label} <span className="chip__count">{facet.count.toLocaleString()}</span>
@@ -494,24 +506,21 @@ function DocumentQueues({ queues }: { queues: any }) {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: 12, marginBottom: 16 }}>
       <DocumentQueueCard
         title="Recent documents"
-        subtitle="Opened or added recently"
         icon={<History size={14} />}
         documents={queues.recent}
         empty="No recent document activity."
       />
       <DocumentQueueCard
         title="Action required"
-        subtitle="Open comments, tasks, or signatures"
         icon={<MessageSquare size={14} />}
         documents={queues.actionRequired}
         empty="No document actions waiting."
       />
       <DocumentQueueCard
         title="Work in progress"
-        subtitle={queues.counts?.inProgressTotal ? `${queues.counts.inProgressTotal.toLocaleString()} awaiting review or in a meeting packet` : "Meeting packets and reviews"}
         icon={<ClipboardCheck size={14} />}
         documents={queues.workInProgress}
-        empty="No in-progress document reviews."
+        empty="Nothing awaiting review."
       />
     </div>
   );
@@ -519,13 +528,11 @@ function DocumentQueues({ queues }: { queues: any }) {
 
 function DocumentQueueCard({
   title,
-  subtitle,
   icon,
   documents,
   empty,
 }: {
   title: string;
-  subtitle: string;
   icon: ReactNode;
   documents: any[];
   empty: string;
@@ -533,10 +540,10 @@ function DocumentQueueCard({
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? documents : documents.slice(0, 3);
   return (
-    <div className="card">
+    <div className="card document-queue-card">
       <div className="card__head">
         <h2 className="card__title">{icon} {title}</h2>
-        <span className="card__subtitle">{subtitle}</span>
+        {documents.length > 0 && <Badge>{documents.length}</Badge>}
       </div>
       <div className="card__body col" style={{ gap: 8 }}>
         {shown.map((doc) => (

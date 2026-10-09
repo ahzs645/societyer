@@ -358,3 +358,21 @@
     vertical-align: top;
   }
 }
+
+/* Directors: historical role evidence folds under the register. */
+.directors-history { margin-top: token(s-4); }
+.directors-history__summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: token(s-2);
+  &::-webkit-details-marker { display: none; }
+}
+.directors-history:not([open]) > .directors-history__summary { border-bottom: 0; }
+.directors-history__chevron {
+  flex: none;
+  color: token(text-tertiary);
+  transition: transform 180ms ease;
+}
+.directors-history[open] .directors-history__chevron { transform: rotate(90deg); }

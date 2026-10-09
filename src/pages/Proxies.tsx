@@ -100,7 +100,12 @@ export function ProxiesPage() {
         title="Proxies & ballots"
         icon={<UserCheck size={16} />}
         iconColor="purple"
-        subtitle={`Proxy appointments for general meetings. Active rule set: ${rules?.allowProxyVoting ? "proxies allowed" : "proxies disabled"}, ${rules?.proxyLimitPerGrantorPerMeeting ?? 1} holder(s) per grantor per meeting.`}
+        subtitle={rules?.allowProxyVoting ? "Proxy appointments for general meetings." : "Proxy voting is off under the active rules."}
+        info={
+          <p>
+            Active rules: proxies {rules?.allowProxyVoting ? "allowed" : "not allowed"}, up to {rules?.proxyLimitPerGrantorPerMeeting ?? 1} holder(s) per member per meeting.
+          </p>
+        }
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite || !rules?.allowProxyVoting}>
             <Plus size={12} /> New proxy

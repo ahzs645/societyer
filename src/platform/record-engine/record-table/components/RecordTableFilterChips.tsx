@@ -25,6 +25,13 @@ const OPERATOR_LABELS: Record<ViewFilterOperator, string> = {
  * Shows each active filter as a pill the user can dismiss. Lives just above
  * the table body.
  */
+/** "previous-minutes" / "NeedsReview" / "needs_review" → "Previous minutes" / "Needs review". Free text is left alone. */
+function humanizeToken(value: string) {
+  if (!/^[A-Za-z0-9_-]+$/.test(value) || /^\d+$/.test(value)) return value;
+  const words = value.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function RecordTableFilterChips() {
   const filters = useRecordTableState((s) => s.filters);
   const columns = useRecordTableState((s) => s.columns);
@@ -35,15 +42,17 @@ export function RecordTableFilterChips() {
   const labelFor = (f: ViewFilter) => {
     const col = columns.find((c) => c.fieldMetadataId === f.fieldMetadataId);
     const field = col?.field.label ?? "Unknown";
-    const op = OPERATOR_LABELS[f.operator];
-    const value =
-      f.operator === "isEmpty" ||
-      f.operator === "isNotEmpty" ||
-      f.operator === "isTrue" ||
-      f.operator === "isFalse"
-        ? ""
-        : ` ${Array.isArray(f.value) ? f.value.join(", ") : String(f.value ?? "")}`;
-    return `${field} ${op}${value}`;
+    // Show option labels ("Needs review"), not stored values ("NeedsReview").
+    const options = (col?.field.config as { options?: { value: string; label: string }[] } | undefined)?.options ?? [];
+    const display = (value: unknown) => options.find((option) => option.value === value)?.label ?? humanizeToken(String(value ?? ""));
+    if (f.operator === "isTrue") return field;
+    if (f.operator === "isFalse") return `Not ${field.charAt(0).toLowerCase()}${field.slice(1)}`;
+    if (f.operator === "isEmpty" || f.operator === "isNotEmpty") return `${field} ${OPERATOR_LABELS[f.operator]}`;
+    if (f.operator === "in" || f.operator === "notIn") {
+      const values = (Array.isArray(f.value) ? f.value : [f.value]).map(display);
+      return `${field} ${f.operator === "in" ? "is" : "is not"} ${values.join(" or ")}`;
+    }
+    return `${field} ${OPERATOR_LABELS[f.operator]} ${Array.isArray(f.value) ? f.value.map(display).join(", ") : display(f.value)}`;
   };
 
   const remove = (f: ViewFilter) => {

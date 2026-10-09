@@ -2,12 +2,15 @@ import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useConvex, useQuery } from "convex/react";
-import { CheckCircle2, Database, Download, FileJson, Archive, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Database, Download, FileJson, Archive, ShieldAlert, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { Badge } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { InfoPopover } from "../components/InfoPopover";
+import { humanizeKey } from "../../shared/documentProvenance";
 import { useToast } from "../components/Toast";
 import { escapeCsvCell } from "../lib/csv";
 import { buildWorkspaceArchive, readWorkspaceArchiveFile, archiveDatabaseSnapshot, type ArchiveManifest } from "../lib/workspaceArchive";
@@ -25,6 +28,16 @@ type TableSummary = {
 };
 
 type Format = "csv" | "json";
+
+const REDACTED_FIELD_LABELS: Record<string, string> = {
+  secretEncrypted: "encrypted secrets",
+  tokenHash: "API token hashes",
+  storageId: "file storage IDs",
+};
+
+function redactedFieldLabel(field: string) {
+  return REDACTED_FIELD_LABELS[field] ?? humanizeKey(field).toLowerCase();
+}
 
 type ImportPreview = {
   fileName: string;
@@ -288,29 +301,24 @@ export function ExportsPage() {
         title="Data export"
         icon={<Database size={16} />}
         iconColor="blue"
-        subtitle="Export this organization's records and saved files, or inspect a backup before restoring it."
+        subtitle="Export your records and files, or inspect a backup."
+        info={<>
+          <p>Export this organization's records and saved files, or inspect a backup before restoring it.</p>
+          <p>The ZIP includes every accessible record table, embedded source images, uploaded files, saved originals, a file inventory, and restore instructions.</p>
+          <p>External-only links are retained; their files are not downloaded from the external service. Any saved file that cannot be read is clearly marked unavailable. For a full backup of every organization on this device and its retained change journal, use Settings → Workspace storage.</p>
+        </>}
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <label className="row" style={{ gap: 6, alignItems: "center" }}>
-              <span className="muted">Table format</span>
-              <select
-                value={format}
-                onChange={(e) => setFormat(e.target.value as Format)}
-                className="input"
-                disabled={workspaceBusy || busy !== null}
-              >
-                <option value="csv">CSV</option>
-                <option value="json">JSON</option>
-              </select>
-            </label>
-            <button className="btn-action" disabled={countBusy || workspaceBusy || busy !== null || !tablesReady} onClick={validateCounts}>
-              <CheckCircle2 size={12} /> {countBusy ? "Validating..." : "Validate rows"}
-            </button>
-            <button className="btn-action" disabled={workspaceBusy || countBusy || busy !== null || !tablesReady} onClick={() => void downloadWorkspace(false)}><FileJson size={12} /> Records JSON</button>
+          <>
+            <MoreActionsMenu
+              items={[
+                { id: "validate", label: countBusy ? "Validating…" : "Validate row counts", icon: <CheckCircle2 size={14} />, disabled: countBusy || workspaceBusy || busy !== null || !tablesReady, onSelect: () => void validateCounts() },
+                { id: "records-json", label: "Records JSON", icon: <FileJson size={14} />, disabled: workspaceBusy || countBusy || busy !== null || !tablesReady, onSelect: () => void downloadWorkspace(false) },
+              ]}
+            />
             <button className="btn-action btn-action--primary" disabled={workspaceBusy || countBusy || busy !== null || !tablesReady} onClick={() => void downloadWorkspace()}>
               <Archive size={12} /> {workspaceBusy ? "Exporting…" : "Export ZIP"}
             </button>
-          </div>
+          </>
         }
       />
       {progress && <div className="notice" role="status" aria-live="polite">{progress}</div>}
@@ -320,7 +328,7 @@ export function ExportsPage() {
         <div>Saved files include their checksum-verified bytes. External links remain in the records. The ZIP manifest lists every file's status.</div>
       </div>}
 
-      <div className="stat-grid stat-grid--3">
+      <div className="stat-grid">
         <Stat
           label="Record coverage"
           value={validation ? (validationOk ? "Ready" : "Review") : "..."}
@@ -337,42 +345,37 @@ export function ExportsPage() {
               : `${formatNumber(nonEmptyTableCount ?? 0)} non-empty tables for this organization`
           }
         />
-        <Stat
-          label="Redaction"
-          value={includeRecoverySecrets ? "Recovery" : "On"}
-          icon={<ShieldAlert size={14} />}
-          sub={includeRecoverySecrets ? "encrypted secrets and token hashes included" : "storage IDs, token hashes, and encrypted secrets"}
-        />
       </div>
 
       <div className="card">
         <div className="card__head">
-          <div>
-            <h2 className="card__title">What's included</h2>
-            <span className="card__subtitle">ZIP includes every accessible record table, embedded source images, uploaded files, saved originals, a file inventory, and restore instructions.</span>
-          </div>
+          <h2 className="card__title">What's included</h2>
+          <InfoPopover label="About what's included">
+            <p>The ZIP includes every accessible record table, embedded source images, uploaded files, saved originals, a file inventory, and restore instructions.</p>
+            <p>Recovery secrets keep encrypted vault values, webhook encrypted secrets, and API token hashes in ZIP and JSON records. File storage IDs stay redacted in the records.</p>
+            <p>External-only links are retained; their files are not downloaded from the external service. Any saved file that cannot be read is clearly marked unavailable.</p>
+          </InfoPopover>
         </div>
         <div className="card__body">
-          <label className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+          <label className="row row--nowrap" style={{ gap: 8, alignItems: "flex-start", flexWrap: "nowrap" }}>
             <input
               type="checkbox"
               checked={includeRecoverySecrets}
               disabled={workspaceBusy || countBusy || busy !== null}
               onChange={(event) => setIncludeRecoverySecrets(event.target.checked)}
-              style={{ marginTop: 3 }}
+              style={{ marginTop: 3, flex: "none" }}
             />
-            <span>
+            <span style={{ minWidth: 0 }}>
               <strong>Include recovery secrets</strong>
               <span className="muted" style={{ display: "block", fontSize: "var(--fs-sm)" }}>
-                Keeps encrypted vault values, webhook encrypted secrets, and API token hashes in ZIP and JSON records. Storage IDs remain redacted in the records.
+                Keeps encrypted secrets and API token hashes in the export.
               </span>
             </span>
           </label>
           <div className="muted" style={{ marginTop: 10, fontSize: "var(--fs-sm)" }}>
-            Current redaction: {redactedFields.join(", ") || "none"}
+            Left out: {redactedFields.map(redactedFieldLabel).join(", ") || "nothing"}
           </div>
-          <p className="muted">External-only links are retained; their files are not downloaded from the external service. Any saved file that cannot be read is clearly marked unavailable. For a full backup of every organization on this device and its retained change journal, use Settings → Workspace storage.</p>
-          {localWorkspaceRestoreSupported() && <Link className="btn-action" to="/app/settings?tab=runtime">Open full device backup</Link>}
+          {localWorkspaceRestoreSupported() && <Link className="btn-action" style={{ marginTop: 10 }} to="/app/settings?tab=runtime">Open full device backup</Link>}
         </div>
       </div>
 
@@ -394,21 +397,26 @@ export function ExportsPage() {
 
       <div className="card">
         <div className="card__head">
-          <div>
-            <h2 className="card__title">Import preview</h2>
-            <span className="card__subtitle">Choose a ZIP or JSON backup to inspect records, saved files, and recovery settings. ZIP checksums are verified before restore.</span>
-          </div>
+          <h2 className="card__title">Import preview</h2>
+          <InfoPopover label="About import preview">
+            <p>Choose a ZIP or JSON backup to inspect records, saved files, and recovery settings. ZIP checksums are verified before restore.</p>
+          </InfoPopover>
         </div>
         <div className="card__body">
-          <input
-            className="input"
-            type="file"
-            accept="application/json,application/zip,.json,.zip"
-            disabled={previewBusy || restoreBusy || workspaceBusy}
-            onChange={(event) => void inspectImportFile(event.target.files?.[0])}
-            aria-label="Workspace backup ZIP or JSON"
-            style={{ width: "100%", minWidth: 0, maxWidth: 420, boxSizing: "border-box" }}
-          />
+          <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <label className={`btn-action${previewBusy || restoreBusy || workspaceBusy ? " is-disabled" : ""}`} style={{ cursor: "pointer" }}>
+              <Upload size={12} /> Choose backup file
+              <input
+                className="sr-only"
+                type="file"
+                accept="application/json,application/zip,.json,.zip"
+                disabled={previewBusy || restoreBusy || workspaceBusy}
+                onChange={(event) => { void inspectImportFile(event.target.files?.[0]); event.target.value = ""; }}
+                aria-label="Workspace backup ZIP or JSON"
+              />
+            </label>
+            <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{importPreview?.fileName ?? restoreFile?.name ?? "ZIP or JSON"}</span>
+          </div>
           {previewBusy && <p role="status">Checking backup and saved-file checksums…</p>}
           {importPreview?.archive && <p>{importPreview.archive.includedFiles} saved files · {importPreview.archive.externalFiles} external links · {importPreview.archive.unavailableFiles} unavailable files.</p>}
           {restoreFile && localWorkspaceRestoreSupported() && <button className="btn" disabled={restoreBusy || previewBusy} onClick={() => void restorePreview()}>{restoreBusy ? "Restoring…" : "Restore on this device"}</button>}
@@ -437,31 +445,43 @@ export function ExportsPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card__head">
-          <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-            <h2 className="card__title">Tables</h2>
-            <span className="card__subtitle">One file per table. Row counts fill in as validation or exports page through the current database.</span>
-          </div>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <input
-              className="input"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              placeholder="Search tables..."
-              style={{ width: 220, maxWidth: "100%" }}
-            />
-            <label className="row muted" style={{ gap: 6, alignItems: "center", fontSize: "var(--fs-sm)" }}>
-              <input type="checkbox" checked={hideEmpty} onChange={(event) => setHideEmpty(event.target.checked)} />
-              Non-empty
-            </label>
-          </div>
+      <details className="card exports-tables">
+        <summary className="card__head">
+          <h2 className="card__title">Technical details: individual tables</h2>
+          <InfoPopover label="About individual tables">
+            <p>One file per table. Row counts fill in as validation or exports page through the current database.</p>
+          </InfoPopover>
+        </summary>
+        <div className="card__body exports-tables__toolbar">
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as Format)}
+            className="input"
+            aria-label="Table format"
+            disabled={workspaceBusy || busy !== null}
+            style={{ width: "auto" }}
+          >
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <input
+            className="input"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder="Search tables"
+            aria-label="Search tables"
+            style={{ width: 220, maxWidth: "100%" }}
+          />
+          <label className="row row--nowrap muted" style={{ gap: 6, alignItems: "center", fontSize: "var(--fs-sm)", flexWrap: "nowrap" }}>
+            <input type="checkbox" checked={hideEmpty} onChange={(event) => setHideEmpty(event.target.checked)} />
+            Non-empty only
+          </label>
         </div>
         <div className="card__body">
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))",
               gap: 8,
             }}
           >
@@ -474,15 +494,16 @@ export function ExportsPage() {
                 className="btn"
                 disabled={busy !== null || workspaceBusy || countBusy}
                 onClick={() => download(table.name)}
-                style={{ justifyContent: "space-between" }}
+                title={table.name}
+                style={{ justifyContent: "space-between", gap: 8 }}
               >
-                <span className="row row--nowrap" style={{ gap: 8, minWidth: 0, overflow: "hidden" }}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{table.name}</span>
-                  <Badge tone={count != null && Number(count) > 0 ? "info" : "neutral"}>
-                    {count == null ? "pending" : formatNumber(Number(count))}
-                  </Badge>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{humanizeKey(table.name)}</span>
+                <span className="row row--nowrap" style={{ gap: 6, flex: "none" }}>
+                  {count != null && (
+                    <Badge tone={Number(count) > 0 ? "info" : "neutral"}>{formatNumber(Number(count))}</Badge>
+                  )}
+                  {busy === table.name ? <span className="muted">...</span> : <Download size={14} />}
                 </span>
-                {busy === table.name ? <span className="muted">...</span> : <Download size={14} />}
               </button>
                 );
               })()
@@ -494,7 +515,7 @@ export function ExportsPage() {
             )}
           </div>
         </div>
-      </div>
+      </details>
     </div>
   );
 }

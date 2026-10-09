@@ -181,6 +181,47 @@
 .motion-backlog__actions .input {
   flex: 1 1 260px;
 }
+.motion-backlog__more {
+  display: none;
+}
+
+/* Phones: a resolution reads as a 3-line preview with "Show full text";
+ * its usage note only appears once expanded; the agenda picker and its
+ * button share one row. */
+@media (max-width: 760px) {
+  .motion-backlog__text:not(.is-expanded) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+  .motion-backlog__notes:not(.is-expanded) {
+    display: none;
+  }
+  .motion-backlog__more {
+    display: inline-flex;
+    align-self: flex-start;
+    margin-top: calc(-1 * token('s-2'));
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: token('accent');
+    font: inherit;
+    font-size: token('fs-sm');
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .motion-backlog__actions {
+    flex-wrap: nowrap;
+  }
+  .motion-backlog__actions > :first-child {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .motion-backlog__actions > .btn {
+    flex: none;
+  }
+}
 
 @media (max-width: 760px) {
   .privacy-document-path {

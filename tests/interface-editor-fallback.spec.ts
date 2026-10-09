@@ -20,9 +20,11 @@ test("an unavailable rich-editor chunk leaves a real local deadline draft editab
   await expect(drawer).toBeHidden();
   expect(blocked).toBeGreaterThan(0);
   await page.reload();
-  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Agenda", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Offline fallback evidence", exact: true }).click();
+  // Calendar events open the record inspector, like table rows; Open edits it.
+  await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
   drawer = page.getByRole("dialog", { name: "Edit deadline", exact: true });
   await expect(drawer.getByRole("textbox", { name: "Markdown text", exact: true })).toHaveValue(text);
   const edited = `${text}\n\nAmended locally.`;
@@ -30,9 +32,10 @@ test("an unavailable rich-editor chunk leaves a real local deadline draft editab
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).toBeHidden();
   await page.reload();
-  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Agenda", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Offline fallback evidence", exact: true }).click();
+  await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
   await expect(page.getByRole("dialog", { name: "Edit deadline", exact: true }).getByRole("textbox", { name: "Markdown text", exact: true })).toHaveValue(edited);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
@@ -58,8 +61,9 @@ test("a failed rich-editor import keeps Viewer fallback text read-only", async (
   const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
   await palette.getByRole("combobox").fill("Deadlines");
   await palette.getByRole("option", { name: /^Deadlines/ }).first().click();
-  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "File annual report", exact: true }).click();
+  await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
   const drawer = page.getByRole("dialog", { name: "View deadline", exact: true });
   const text = drawer.getByRole("textbox", { name: "Markdown text", exact: true });
   await expect(text).toHaveAttribute("readonly", "");

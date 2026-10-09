@@ -1,4 +1,5 @@
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { humanDate } from "../humanDate";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../minutesQuorum";
 /**
  * PORTABLE FUNCTIONS: the annual-cycle domain (summary).
@@ -355,7 +356,7 @@ export async function summaryPortable(
       title: "Approve and store minutes",
       detail: minutes
         ? minutes.approvedAt
-          ? `Approved ${minutes.approvedAt}.`
+          ? `Approved ${humanDate(minutes.approvedAt)}.`
           : "Minutes exist but are not approved yet."
         : "No AGM minutes are linked yet.",
       status: minutes?.approvedAt ? "complete" : minutes ? "attention" : agmHeld ? "blocked" : "upcoming",
@@ -376,7 +377,7 @@ export async function summaryPortable(
         : selectedAgm
           ? `No annual report filing record; due ${annualReportDueDate} (${dueDays} days after the AGM).`
           : noAgmReportDueDate
-            ? `No AGM ${today > endISO ? "was held" : "is on record yet"} in ${cycleYear}. Without an AGM in ${cycleYear}, the annual report is due ${noAgmReportDueDate}.`
+            ? `No AGM ${today > endISO ? "was held" : "is on record yet"} in ${cycleYear}. Without an AGM in ${cycleYear}, the annual report is due ${humanDate(noAgmReportDueDate)}.`
             : "Schedule the AGM to compute the annual report filing deadline.",
       status: annualReport?.status === "Filed" ? (annualReportMatch?.late ? "attention" : "complete") : annualReportDueDate && today > annualReportDueDate ? "blocked" : annualReport ? "attention" : "upcoming",
       evidence: ["Annual report filing", "Confirmation number", "Receipt or submission evidence"],

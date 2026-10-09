@@ -7,6 +7,9 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field } from "../components/ui";
+import { Checkbox } from "../components/Controls";
+import { formatMonthDay } from "../components/MonthDayPicker";
+import { Link } from "react-router-dom";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import {
@@ -104,7 +107,10 @@ export function ComplianceSettingsPage() {
     heldAgmYears: agmFacts.agmYears,
   };
   const today = todayDateOnly();
-  const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
+  // Deadlines anchored to an old AGM can land well in the past; a list of
+  // "deadlines from these settings" should not offer to add those.
+  const staleCutoff = shiftDateOnly(today, -30);
+  const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today).filter((d) => !d.dueDate || d.dueDate >= staleCutoff);
 
   const onSave = async () => {
     if (!canSaveSettings || saving) return;
@@ -148,149 +154,172 @@ export function ComplianceSettingsPage() {
     finally { setGenerating(false); }
   };
 
+  const pendingCount = derived.filter((d) => !existingKeys.has(deadlineKey(d))).length;
+
   return (
     <div className="page">
       <PageHeader
         title="Compliance settings"
         icon={<CalendarClock size={16} />}
         iconColor="orange"
-        subtitle="AGM date and fiscal year-end drive your annual compliance deadlines. Set them once, then generate the deadlines."
+        subtitle="Your AGM date and fiscal year end set the annual deadlines."
         actions={
           <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving || !canSaveSettings}>
-            {saving ? "Saving…" : saved ? "Saved ✓" : "Save settings"}
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
           </button>
         }
       />
 
-      <div className="card" style={{ maxWidth: 520 }}>
-        <div className="row" style={{ gap: 12 }}>
-          <Field label="AGM month">
-            <Select value={String(agmMonth)} onChange={(value) => setAgmMonth(value === "" ? "" : Number(value))}
-              options={[{ value: "", label: "—" }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
-          </Field>
-          <Field label="AGM day">
-            <input className="input" type="number" min={1} max={31} value={agmDay}
-              onChange={(e) => setAgmDay(e.target.value === "" ? "" : Number(e.target.value))} />
-          </Field>
+      <div className="settings-split">
+        <div className="settings-split__main">
+          <section className="card settings-section">
+            <h2 className="settings-section__title">Annual cycle</h2>
+            <div className="settings-section__row settings-section__row--pair">
+              <Field label="AGM month">
+                <Select value={String(agmMonth)} onChange={(value) => setAgmMonth(value === "" ? "" : Number(value))}
+                  options={[{ value: "", label: "Not set" }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
+              </Field>
+              <Field label="AGM day">
+                <input className="input" type="number" inputMode="numeric" min={1} max={31} value={agmDay}
+                  onChange={(e) => setAgmDay(e.target.value === "" ? "" : Number(e.target.value))} />
+              </Field>
+            </div>
+            {lastAgmDay && (agmMonth === "" || agmDay === "") && (
+              <p className="settings-section__hint">
+                Last AGM was {formatDate(agmFacts.annualMeetingDate!)}.{" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    setAgmMonth(lastAgmDay.month);
+                    setAgmDay(lastAgmDay.day);
+                  }}
+                >
+                  Use this date
+                </button>
+              </p>
+            )}
+            <div className="settings-section__fact">
+              <span className="settings-section__fact-label">Fiscal year end</span>
+              <span>{society.fiscalYearEnd ? formatMonthDay(society.fiscalYearEnd) : "Not set"}</span>
+              <Link to="/app/society" className="settings-section__fact-link">Change in profile</Link>
+            </div>
+            <Checkbox
+              checked={waive}
+              onChange={setWaive}
+              label="Financial-statement preparation waiver"
+              hint="Recorded for review. It doesn't waive registry filings."
+            />
+          </section>
+
+          <section className="card settings-section">
+            <h2 className="settings-section__title">Documents</h2>
+            <Checkbox
+              checked={restrictPeople}
+              onChange={setRestrictPeople}
+              label="Pick people from the directory only"
+              hint="Directors, officers and signers must match a People directory record."
+            />
+            <Checkbox
+              checked={docIdHeader}
+              onChange={setDocIdHeader}
+              label="Stamp a document ID on generated documents"
+            />
+            <Field label="Document language">
+              <Select value={docLanguage} onChange={(value) => setDocLanguage(value)}
+                options={[{ value: "", label: "English (default)" }, { value: "French", label: "French (resolutions, execution block and dates)" }]} />
+            </Field>
+          </section>
+
+          <section className="card settings-section">
+            <h2 className="settings-section__title">Contacts &amp; records</h2>
+            <Field label="Short name" hint={'Defined term, e.g. "the Society"'}>
+              <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
+            </Field>
+            <div className="settings-section__row">
+              <Field label="Primary contact">
+                <input className="input" value={contacts.primaryContactName} onChange={(e) => setC("primaryContactName", e.target.value)} />
+              </Field>
+              <Field label="Contact email">
+                <input className="input" type="email" value={contacts.primaryContactEmail} onChange={(e) => setC("primaryContactEmail", e.target.value)} />
+              </Field>
+            </div>
+            <div className="settings-section__row">
+              <Field label="Minute book location">
+                <input className="input" value={contacts.minuteBookLocation} onChange={(e) => setC("minuteBookLocation", e.target.value)} />
+              </Field>
+              <Field label="Seal / records location">
+                <input className="input" value={contacts.sealLocation} onChange={(e) => setC("sealLocation", e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Responsible lawyer / file owner">
+              <input className="input" value={contacts.responsibleLawyer} onChange={(e) => setC("responsibleLawyer", e.target.value)} />
+            </Field>
+          </section>
+
+          <details className="card settings-section settings-section--collapsible">
+            <summary className="settings-section__title">Clone this entity</summary>
+            <p className="settings-section__hint">
+              Copies role holders, addresses, share classes, name and constating history, filings and signers into a new entity.
+            </p>
+            <div className="settings-section__row settings-section__row--action">
+              <Field label="New entity name">
+                <input className="input" value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
+              </Field>
+              <button
+                className="btn"
+                disabled={!cloneName.trim() || !canClone}
+                onClick={async () => {
+                  const r = (await cloneSociety({
+                    sourceSocietyId: society._id,
+                    newName: cloneName.trim(),
+                    nowISO: new Date().toISOString(),
+                  })) as { copiedRows?: number } | undefined;
+                  setCloneResult(`Cloned (${r?.copiedRows ?? 0} records copied).`);
+                  setCloneName("");
+                  setTimeout(() => setCloneResult(null), 4000);
+                }}
+              >
+                Clone
+              </button>
+            </div>
+            {cloneResult && <p style={{ color: "var(--success)", margin: 0 }}>{cloneResult}</p>}
+          </details>
         </div>
-        {lastAgmDay && (agmMonth === "" || agmDay === "") && (
-          <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8 }}>
-            Last AGM was held {formatDate(agmFacts.annualMeetingDate!)}.{" "}
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              style={{ display: "inline", padding: 0, height: "auto" }}
-              onClick={() => {
-                setAgmMonth(lastAgmDay.month);
-                setAgmDay(lastAgmDay.day);
-              }}
-            >
-              Use this date
+
+        <aside className="card settings-section settings-split__aside" aria-label="Deadlines from these settings">
+          <div className="settings-section__head">
+            <h2 className="settings-section__title">Deadlines from these settings</h2>
+            <button className="btn btn--accent btn--sm" onClick={generate} disabled={generating || !canGenerate || pendingCount === 0}>
+              {generating ? "Adding…" : pendingCount ? `Add ${pendingCount} ${pendingCount === 1 ? "deadline" : "deadlines"}` : "All added"}
             </button>
-          </p>
-        )}
-        <Field label="Fiscal year-end">
-          <input className="input" value={society.fiscalYearEnd ?? "(not set on society)"} disabled />
-        </Field>
-        <label className="checkbox">
-          <input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
-          {" "}Record a financial-statement preparation waiver for review (does not waive registry filings)
-        </label>
-        <label className="checkbox">
-          <input type="checkbox" checked={restrictPeople} onChange={(e) => setRestrictPeople(e.target.checked)} />
-          {" "}Restrict people to the directory (directors, officers, and signers must
-          resolve to a People Directory record — no free-text entry)
-        </label>
-        <label className="checkbox">
-          <input type="checkbox" checked={docIdHeader} onChange={(e) => setDocIdHeader(e.target.checked)} />
-          {" "}Stamp a document ID at the top of generated documents
-        </label>
-        <Field label="Document language">
-          <Select value={docLanguage} onChange={(value) => setDocLanguage(value)}
-            options={[{ value: "", label: "English (default)" }, { value: "French", label: "French — résolutions in French (execution block + dates)" }]} />
-        </Field>
-      </div>
-
-      <div className="card" style={{ maxWidth: 520 }}>
-        <h3 style={{ margin: "0 0 8px" }}>Clone this entity</h3>
-        <p style={{ color: "var(--text-tertiary)", marginTop: 0 }}>
-          Deep-copy this entity's registers (role holders, addresses, share classes,
-          name/constating history, filings, signers) into a new entity.
-        </p>
-        <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
-          <Field label="New entity name">
-            <input className="input" value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
-          </Field>
-          <button
-            className="btn btn--accent"
-            disabled={!cloneName.trim() || !canClone}
-            onClick={async () => {
-              const r = (await cloneSociety({
-                sourceSocietyId: society._id,
-                newName: cloneName.trim(),
-                nowISO: new Date().toISOString(),
-              })) as { copiedRows?: number } | undefined;
-              setCloneResult(`Cloned (${r?.copiedRows ?? 0} records copied).`);
-              setCloneName("");
-              setTimeout(() => setCloneResult(null), 4000);
-            }}
-          >
-            Clone
-          </button>
-        </div>
-        {cloneResult && <p style={{ color: "var(--accent, green)" }}>{cloneResult}</p>}
-      </div>
-
-      <div className="card" style={{ maxWidth: 520 }}>
-        <h3 style={{ margin: "0 0 8px" }}>Contacts &amp; records</h3>
-        <Field label="Short name / defined term (e.g. &quot;the Society&quot;)">
-          <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
-        </Field>
-        <div className="row" style={{ gap: 12 }}>
-          <Field label="Primary contact name">
-            <input className="input" value={contacts.primaryContactName} onChange={(e) => setC("primaryContactName", e.target.value)} />
-          </Field>
-          <Field label="Primary contact email">
-            <input className="input" value={contacts.primaryContactEmail} onChange={(e) => setC("primaryContactEmail", e.target.value)} />
-          </Field>
-        </div>
-        <div className="row" style={{ gap: 12 }}>
-          <Field label="Minute book location">
-            <input className="input" value={contacts.minuteBookLocation} onChange={(e) => setC("minuteBookLocation", e.target.value)} />
-          </Field>
-          <Field label="Seal / records location">
-            <input className="input" value={contacts.sealLocation} onChange={(e) => setC("sealLocation", e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Responsible lawyer / file owner">
-          <input className="input" value={contacts.responsibleLawyer} onChange={(e) => setC("responsibleLawyer", e.target.value)} />
-        </Field>
-      </div>
-
-      <div className="card" style={{ maxWidth: 520 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <h3 style={{ margin: 0 }}>Derived deadlines</h3>
-          <button className="btn btn--accent" onClick={generate} disabled={generating || !canGenerate || derived.length === 0}>
-            Generate {derived.length || ""}
-          </button>
-        </div>
-        {derived.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>Set an AGM date and/or fiscal year-end to derive deadlines.</p>
-        ) : (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {derived.map((d) => (
-              <li key={d.key}>
-                <strong>{formatDate(d.dueDate)}</strong> — {d.title}{" "}
-                <span style={{ color: "var(--text-tertiary)" }}>({d.deadlineCategory})</span>
-                {d.basis ? <div style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-sm)" }}>{d.basis}</div> : null}
-                {existingKeys.has(deadlineKey(d)) ? <span style={{ color: "var(--text-tertiary)" }}> · already added</span> : null}
-              </li>
-            ))}
-          </ul>
-        )}
+          </div>
+          {derived.length === 0 ? (
+            <p className="settings-section__hint">Set an AGM date or fiscal year end to see the deadlines they create.</p>
+          ) : (
+            <ul className="settings-deadlines">
+              {derived.map((d) => (
+                <li key={d.key} className="settings-deadlines__item">
+                  <span className="settings-deadlines__date">{formatDate(d.dueDate)}</span>
+                  <span className="settings-deadlines__title">
+                    {d.title}
+                    {existingKeys.has(deadlineKey(d)) && <span className="settings-deadlines__added"> · added</span>}
+                  </span>
+                  {d.basis ? <span className="settings-deadlines__basis">{d.basis}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
       </div>
     </div>
   );
+}
+
+function shiftDateOnly(dateOnly: string, days: number) {
+  const date = new Date(`${dateOnly}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export default ComplianceSettingsPage;

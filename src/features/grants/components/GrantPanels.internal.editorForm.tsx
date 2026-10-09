@@ -145,11 +145,11 @@ export function GrantEditorPageLayout({
             </Field>
           </div>
           <div className="grant-edit-grid grant-edit-grid--2">
-            <Field label="Requested" hint="Dollars" error={errors?.amountRequestedCents}>
-              <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => update({ amountRequestedDollars: e.target.value })} />
+            <Field label="Requested" error={errors?.amountRequestedCents}>
+              <DollarInput value={grantDraft.amountRequestedDollars} onChange={(value) => update({ amountRequestedDollars: value })} />
             </Field>
-            <Field label="Awarded" hint="Dollars" error={errors?.amountAwardedCents}>
-              <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => update({ amountAwardedDollars: e.target.value })} />
+            <Field label="Awarded" error={errors?.amountAwardedCents}>
+              <DollarInput value={grantDraft.amountAwardedDollars} onChange={(value) => update({ amountAwardedDollars: value })} />
             </Field>
           </div>
           <Field label="Next action">
@@ -524,4 +524,26 @@ export function serializeExternalIdRow(row: SourceExternalIdRow) {
 
 export function joinExternalIdRows(rows: SourceExternalIdRow[]) {
   return Array.from(new Set(rows.map(serializeExternalIdRow).filter(Boolean))).join(", ");
+}
+
+/** Dollar amount input with a "$" prefix in place of a "Dollars" hint. */
+function DollarInput({
+  value,
+  onChange,
+  ...inputProps
+}: {
+  value: unknown;
+  onChange: (value: string) => void;
+  // Field passes the label's id and described-by/invalid state through.
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
+}) {
+  const text = String(value ?? "");
+  return (
+    <span className="grant-money-input">
+      <span className="grant-money-input__prefix" aria-hidden="true">$</span>
+      <input {...inputProps} className="input" type="number" inputMode="decimal" min="0" step="0.01" value={text} onChange={(e) => onChange(e.target.value)} />
+    </span>
+  );
 }

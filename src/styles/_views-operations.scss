@@ -8,16 +8,35 @@
 .users-table td.mono {
   overflow-wrap: anywhere;
 }
+.users-table__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.users-table__identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+  strong { font-weight: 600; }
+}
+.users-table__email {
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+  overflow-wrap: anywhere;
+}
+.users-table__role { width: 150px; }
+.users-table__actions {
+  white-space: nowrap;
+  text-align: right;
+  > * { vertical-align: middle; }
+}
+.users-table__narrow-status { display: none; }
+.users-table tr.is-selected td { background: token('bg-subtle'); }
 
 @media (max-width: 760px) {
-  .users-table,
-  .users-table tbody,
-  .users-table tr,
-  .users-table td {
-    display: block;
-    width: 100%;
-  }
-
+  .table.users-table { width: 100%; min-width: 0; }
   .users-table thead {
     position: absolute;
     width: 1px;
@@ -26,44 +45,28 @@
     clip: rect(0 0 0 0);
     white-space: nowrap;
   }
-
-  .users-table tr {
-    border: 1px solid token('border-color-light');
-    border-radius: token('r-sm');
-    padding: 10px 12px;
-    margin-bottom: 10px;
+  .users-table tbody { display: block; }
+  /* Each user is one row: who on the left, role and actions on the right. */
+  .users-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid token('border');
   }
-
-  .table.users-table {
-    width: 100%;
-    min-width: 0;
-  }
-
+  .users-table tbody tr:last-child { border-bottom: 0; }
   .table.users-table tbody td {
     height: auto;
     border: 0;
-    padding: 4px 0;
+    padding: 0;
     background: transparent;
-    word-break: normal;
-    overflow-wrap: anywhere;
   }
-
-  .users-table td[data-label]::before {
-    content: attr(data-label);
-    display: block;
-    font-size: 11px;
-    color: token('text-tertiary');
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 2px;
-  }
-
-  .table.users-table tbody td:last-child {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding-top: 8px;
-  }
+  .users-table .users-table__wide { display: none; }
+  .users-table__narrow-status { display: inline-flex; margin-left: auto; }
+  .users-table__role { width: auto; grid-column: 2; grid-row: 1; }
+  .users-table__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 4px; }
+  .users-table td[colspan] { grid-column: 1 / -1; }
 }
 
 // Accounting backfill review.
@@ -114,3 +117,107 @@
     min-width: 0;
   }
 }
+
+/* Portfolio */
+.portfolio-stats { margin-bottom: token(s-4); }
+@media (min-width: 761px) {
+  .portfolio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.portfolio-batch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-2);
+  margin: 0 0 token(s-3);
+}
+.portfolio-batch__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: token(s-1);
+  color: token(text-secondary);
+  font-size: token(fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.portfolio-batch__packet {
+  width: auto;
+  min-width: 0;
+  flex: 0 1 280px;
+}
+.portfolio-table__narrow { display: none; }
+@media (max-width: 560px) {
+  .portfolio-table .portfolio-table__wide { display: none; }
+  .portfolio-table__narrow { display: inline; }
+  .portfolio-batch__packet { flex: 1 1 100%; order: 2; }
+  .portfolio-batch__label { flex: 1 1 auto; }
+}
+.portfolio-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.portfolio-table__name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: token(text-primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+}
+.portfolio-table__deadlines {
+  .badge + .badge { margin-left: 4px; }
+}
+@media (max-width: 560px) {
+  .portfolio-stats__sub { display: none; }
+  .portfolio-table__deadlines {
+    .badge { display: table; }
+    .badge + .badge { margin: 4px 0 0; }
+  }
+}
+
+/* Users & access: your own role as one collapsible line. */
+.access-summary { padding: 0; }
+.access-summary__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+  font-size: token('fs-sm');
+  &::-webkit-details-marker { display: none; }
+}
+.access-summary__label { font-weight: 600; color: token('text-primary'); }
+.access-summary__text { flex: 1 1 240px; min-width: 0; color: token('text-secondary'); }
+.access-summary__more {
+  color: token('text-tertiary');
+  white-space: nowrap;
+  &::after {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 160ms ease;
+  }
+}
+.access-summary[open] .access-summary__more::after { transform: translateY(1px) rotate(-135deg); }
+.access-summary__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 16px 12px;
+}
+.access-summary__head { font-weight: 400; }
+.access-policy-table tbody th,
+.access-policy-table tbody td {
+  height: auto;
+  padding: 8px;
+  vertical-align: top;
+}
+.access-policy-table tbody th { border-bottom: 1px solid token('border-color-light'); }
+.access-summary__text { font-weight: 400; }

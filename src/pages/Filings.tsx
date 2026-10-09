@@ -273,6 +273,13 @@ export function FilingsPage() {
         icon={<ClipboardList size={16} />}
         iconColor="orange"
         subtitle={jurisdictionCopy.filingsSubtitle}
+        info={
+          <p>
+            Annual jurisdiction filings are also tracked in <Link to="/app/annual-filings">Annual filings</Link> and{" "}
+            <Link to="/app/formation-maintenance">Formation &amp; annual maintenance</Link>.{" "}
+            <Link to="/app/filings/prefill">Prepare filing values</Link> before submitting through the official portal.
+          </p>
+        }
         actions={
           <>
             {jurisdictionModule.registryImportSupported && (
@@ -292,12 +299,6 @@ export function FilingsPage() {
         }
       />
 
-      <p className="muted">
-        Related: annual jurisdiction filings are also tracked on{" "}
-        <Link to="/app/annual-filings">Annual filings</Link> and{" "}
-        <Link to="/app/formation-maintenance">Formation &amp; annual maintenance</Link>.{" "}
-        <Link to="/app/filings/prefill">Prepare filing values</Link> before submitting through the official portal.
-      </p>
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="filing" />

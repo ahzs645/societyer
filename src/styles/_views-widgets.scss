@@ -52,18 +52,36 @@
 }
 
 @media (max-width: 760px) {
-  /* F29: phone tabs scroll horizontally but keep their labels and counts. */
-  .meeting-detail-page .tabs {
+  /* F29: phone tabs scroll horizontally but keep their labels and counts.
+   * Applies to every tab bar — wrapping produced a ragged multi-row grid on
+   * record pages. The right edge fades to hint at off-screen tabs. */
+  .tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: token('s-4');
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    /* Lets the last tab scroll clear of the fade. */
+    padding-inline-end: 28px;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
-  .meeting-detail-page .tab {
+  .tab {
     flex: 0 0 auto;
     padding: 6px 10px;
+    min-height: 34px;
     font-size: var(--fs-sm);
     white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .tabs__trailing {
+    flex: 0 0 auto;
   }
 }
 
@@ -435,3 +453,55 @@
 }
 
 /* Import sessions */
+
+/* Phones: tab strips and segmented controls stay one row and scroll
+ * sideways instead of wrapping into a stack of rows. A page-level tab strip
+ * runs edge to edge rather than sitting in an inset box. */
+@media (max-width: 760px) {
+  .tabs,
+  .segmented,
+  .segmented-control {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    &::-webkit-scrollbar { display: none; }
+  }
+  .tab,
+  .segmented__btn,
+  .segmented-control__item {
+    flex: none;
+    white-space: nowrap;
+  }
+  /* An underlined strip, not a bordered box inside the page. */
+  .tabs {
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid token('border');
+    border-radius: 0;
+    background: transparent;
+  }
+  .tabs .tab {
+    border: 0;
+    border-radius: 0;
+    padding: 9px 10px;
+    box-shadow: none;
+  }
+  .tabs .tab:hover { background: transparent; }
+  .tabs .tab.is-active {
+    background: transparent;
+    box-shadow: inset 0 -2px 0 token('accent');
+  }
+  .page > .tabs,
+  .record-show__main > .tabs,
+  .record-show > .tabs {
+    margin-inline: calc(-1 * var(--page-gutter, #{token('s-4')}));
+    padding-inline: var(--page-gutter, #{token('s-4')});
+    border-inline: 0;
+    border-radius: 0;
+    scroll-padding-inline: var(--page-gutter, #{token('s-4')});
+  }
+}

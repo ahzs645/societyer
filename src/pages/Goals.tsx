@@ -80,33 +80,39 @@ export function GoalsPage() {
         title="Goals"
         icon={<Target size={16} />}
         iconColor="red"
-        subtitle="Strategic, program, and operational goals — tracked with milestones and key results."
+        subtitle="Goals tracked with milestones and key results."
         actions={
-          <>
-            <Segmented
-              value={filter}
-              onChange={setFilter}
-              items={[
-                { id: "all", label: "All" },
-                { id: "active", label: "Active" },
-                { id: "atrisk", label: "At risk" },
-                { id: "done", label: "Completed" },
-              ]}
-            />
-            <Segmented<"grid" | "board">
-              value={view}
-              onChange={setView}
-              items={[
-                { id: "grid", label: "Grid" },
-                { id: "board", label: "Board" },
-              ]}
-            />
-            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
-              <Plus size={12} /> New goal
-            </button>
-          </>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
+            <Plus size={12} /> New goal
+          </button>
         }
       />
+
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <Select<"all" | "active" | "atrisk" | "done">
+          size="sm"
+          aria-label="Show goals"
+          value={filter}
+          onChange={setFilter}
+          style={{ width: 150 }}
+          options={[
+            { value: "all", label: "All goals" },
+            { value: "active", label: "Active" },
+            { value: "atrisk", label: "At risk" },
+            { value: "done", label: "Completed" },
+          ]}
+        />
+        <span style={{ marginLeft: "auto" }}>
+          <Segmented<"grid" | "board">
+            value={view}
+            onChange={setView}
+            items={[
+              { id: "grid", label: "Grid" },
+              { id: "board", label: "Board" },
+            ]}
+          />
+        </span>
+      </div>
 
       {view === "board" && (
         <RecordBoard<any>
@@ -135,8 +141,8 @@ export function GoalsPage() {
                   <Badge>{g.category}</Badge>
                 </div>
                 <div className="record-table__board-card-field record-table__identifier-secondary row" style={{ gap: 6 }}>
-                  <Progress value={g.progressPercent} />
-                  <span className="mono" style={{ minWidth: 36, textAlign: "right" }}>{g.progressPercent}%</span>
+                  <div style={{ flex: 1, minWidth: 0 }}><Progress value={g.progressPercent} /></div>
+                  <span style={{ minWidth: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.progressPercent}%</span>
                 </div>
                 <div className="record-table__board-card-field record-table__identifier-secondary">
                   Target {formatDate(g.targetDate)}
@@ -176,8 +182,10 @@ export function GoalsPage() {
                 </div>
                 {g.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{g.description}</div>}
                 <div className="row" style={{ gap: 8 }}>
-                  <Progress value={g.progressPercent} tone={effectiveGoalStatus(g) === "AtRisk" || effectiveGoalStatus(g) === "OffTrack" ? "warn" : undefined} />
-                  <span className="mono" style={{ minWidth: 40, textAlign: "right" }}>{g.progressPercent}%</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Progress value={g.progressPercent} tone={effectiveGoalStatus(g) === "AtRisk" || effectiveGoalStatus(g) === "OffTrack" ? "warn" : undefined} />
+                  </div>
+                  <span style={{ minWidth: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.progressPercent}%</span>
                 </div>
                 <div className="row" style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>
                   <span>{done}/{total} milestones</span>

@@ -1,0 +1,75 @@
+@use "tokens" as *;
+
+/* Touch ergonomics. Desktop keeps its dense controls; coarse pointers
+ * (phones, tablets) get hit areas closer to the 44px platform guidance.
+ * Loaded last so it can widen controls defined anywhere above. */
+@media (pointer: coarse) {
+  /* Tactile press feedback — buttons dip slightly under the finger (there
+   * is no hover state on touch to confirm the target). */
+  .btn,
+  .bottom-nav__item,
+  .menu__item,
+  .mobile-topbar__search,
+  .notif-bell,
+  .view-bar__btn,
+  .chip {
+    transition-property: background, color, border-color, box-shadow, transform;
+    transition-duration: 0.12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active:not(:disabled),
+  .bottom-nav__item:active,
+  .mobile-topbar__search:active,
+  .notif-bell:active,
+  .view-bar__btn:active {
+    transform: scale(0.96);
+  }
+
+  /* Linked chips ("Documents", "Library" shortcuts) were 20px tall. */
+  a.chip--sm,
+  button.chip--sm {
+    height: auto;
+    min-height: 28px;
+    padding-inline: 10px;
+  }
+
+  .view-bar__btn {
+    min-height: 32px;
+  }
+
+  /* Anchored menus / dropdowns (short lists stay popovers on phones). */
+  .menu:not(.menu--sheet) .menu__item {
+    min-height: 40px;
+  }
+
+  /* Native checkboxes / radios render at 13px — barely tappable. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Custom table checkbox: keep the 16px box, grow the button around it. */
+  .check-bare {
+    min-width: 32px;
+    min-height: 32px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* "← Back to …" links at the top of detail pages. */
+  .page > a.row.muted:first-child {
+    min-height: 32px;
+    align-items: center;
+  }
+}
+
+@media (pointer: coarse) and (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled),
+  .bottom-nav__item:active,
+  .mobile-topbar__search:active,
+  .notif-bell:active,
+  .view-bar__btn:active {
+    transform: none;
+  }
+}

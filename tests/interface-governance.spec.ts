@@ -15,7 +15,9 @@ test("motion library loads cold, creates, edits and confirms deletion", async ({
   const errors = monitor(page);
   await page.goto("/demo/app/motion-library");
   await expect(page.getByRole("heading", { name: "Motions", exact: true })).toBeVisible();
-  const editor = page.locator(".motion-library__editor");
+  // The template editor opens in a drawer from the page's "+ New template".
+  await page.getByRole("button", { name: "New template", exact: true }).click();
+  let editor = page.getByRole("dialog", { name: "New template", exact: true });
   await expect(editor.getByRole("button", { name: "Add template", exact: true })).toBeDisabled();
   await editor.getByLabel("Title", { exact: true }).fill("Interface audit motion");
   await editor.locator("[contenteditable=true]").fill("BE IT RESOLVED THAT the interface audit be recorded.");
@@ -24,6 +26,7 @@ test("motion library loads cold, creates, edits and confirms deletion", async ({
   await expect(template).toHaveCount(1);
   await fitsPage(page);
   await template.getByRole("button", { name: "Edit Interface audit motion", exact: true }).click();
+  editor = page.getByRole("dialog", { name: "Edit template", exact: true });
   await editor.getByLabel("Title", { exact: true }).fill("Edited interface audit motion");
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
   const edited = page.locator(".motion-library__template").filter({ hasText: "Edited interface audit motion" });
@@ -68,12 +71,14 @@ test("AGM steps fit a narrow phone and local delivery actions remain honest", as
   // shown for meetings that have not happened yet; meetings retest 9406573).
   const steps = page.locator(".card").filter({ has: page.getByRole("heading", { name: "Steps", exact: true }) });
   await expect(steps.getByText("Send notice", { exact: true })).toBeVisible();
-  await expect(steps.getByText("Completed").first()).toBeVisible();
+  await expect(steps.getByRole("img", { name: "Completed" }).first()).toBeVisible();
   await expect(page.getByText("Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.", { exact: true })).toHaveCount(0);
   await fitsPage(page);
   await page.goto("/demo/app/notifications");
   await expect(page.getByRole("button", { name: "Send digest", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "About Notifications", exact: true }).click();
   await expect(page.getByText("Email and SMS digests require a connected server. In-app notifications and reminders remain available here.", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Mark all read", exact: true }).click();
   await expect(page.getByText("Marked all read", { exact: true })).toBeVisible();
   await fitsPage(page);
@@ -84,7 +89,8 @@ test("minutes preview preserves the demo workspace in a new tab", async ({ page 
   const errors = monitor(page);
   await page.goto("/demo/app/meetings/static_meeting_agm_2025?tab=minutes");
   await expect(page.getByRole("heading", { name: "2025 annual general meeting", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  // Phones show the meeting's actions as a bare "⋯" labelled "Meeting actions".
+  await page.getByRole("button", { name: /^(Actions|Meeting actions)$/ }).click();
   const popupEvent = page.context().waitForEvent("page");
   await page.getByRole("menuitem", { name: "Open preview page", exact: true }).click();
   const popup = await popupEvent;

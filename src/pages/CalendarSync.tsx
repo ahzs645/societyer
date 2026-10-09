@@ -6,6 +6,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
@@ -46,6 +47,7 @@ export function CalendarSyncPage() {
   const [provider, setProvider] = useState("ics");
   const [calendarName, setCalendarName] = useState("");
   const [icsText, setIcsText] = useState("");
+  const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedBusy, setFeedBusy] = useState(false);
 
@@ -156,7 +158,10 @@ export function CalendarSyncPage() {
         title="Calendar sync"
         icon={<CalendarClock size={16} />}
         iconColor="purple"
-        subtitle="Import events from an external calendar (Google, Outlook, or any .ics feed) into a reviewable import session. Events become candidate deadlines and source evidence you can apply to governance records."
+        subtitle="Import events from Google, Outlook or any .ics feed for review."
+        info={
+          <p>Imported events land in a reviewable import session as candidate deadlines and source evidence you can apply to governance records.</p>
+        }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canStage || busy || parsed.length === 0} onClick={submit}>
             <UploadCloud size={12} /> Stage {parsed.length || ""} event{parsed.length === 1 ? "" : "s"}
@@ -171,18 +176,22 @@ export function CalendarSyncPage() {
             <Rss size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
             Subscribe (outbound feed)
           </h2>
-          {feedAvailable && feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
+          <InfoPopover label="About the outbound feed">
+            <p>
+              A read-only iCalendar feed of this entity's deadlines, filings, and meetings. Add the URL to Google
+              Calendar, Outlook, or Apple Calendar to keep governance dates in your everyday calendar — it refreshes
+              automatically.
+            </p>
+          </InfoPopover>
+          <span style={{ marginLeft: "auto" }}>
+            {feedAvailable && feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
+          </span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
-          <div className="muted">
-            A read-only iCalendar feed of this entity's deadlines, filings, and meetings. Add the URL to
-            Google Calendar, Outlook, or Apple Calendar to keep governance dates in your everyday calendar —
-            it refreshes automatically.
-          </div>
           {!canManageFeed ? (
             <p className="muted">Managing outbound calendar subscriptions requires workspace settings write access.</p>
           ) : !feedAvailable ? (
-            <p className="muted">Outbound calendar subscriptions require a connected server. You can import .ics events locally below.</p>
+            <p className="muted" style={{ margin: 0 }}>Outbound calendar subscriptions require a connected server; import .ics events below.</p>
           ) : feedToken === undefined ? (
             <div className="muted">Loading…</div>
           ) : feedToken ? (
@@ -190,11 +199,11 @@ export function CalendarSyncPage() {
               <Field label="Subscribe URL">
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                   <input
-                    className="input mono"
+                    className="input mono input--compact"
                     readOnly
                     aria-label="Subscribe URL"
                     value={feedUrl ?? ""}
-                    style={{ flex: "1 1 180px", minWidth: 0, fontSize: 12 }}
+                    style={{ flex: "1 1 180px", minWidth: 0 }}
                     onFocus={(e) => e.currentTarget.select()}
                   />
                   <button className="btn" onClick={copyFeed}><Copy size={12} /> Copy</button>
@@ -243,17 +252,33 @@ export function CalendarSyncPage() {
               <input className="input" value={calendarName} onChange={(e) => setCalendarName(e.target.value)} placeholder="e.g. Board calendar" />
             </Field>
           </div>
-          <Field label="Upload .ics file">
-            <input type="file" accept=".ics,text/calendar" onChange={(e) => onFile(e.target.files?.[0])} />
-          </Field>
+          <div className="field">
+            <div className="field__label">Upload .ics file</div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <label className="btn calendar-sync__file-button">
+                <UploadCloud size={12} /> Choose file
+                <input
+                  type="file"
+                  className="calendar-sync__file-input"
+                  accept=".ics,text/calendar"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    setFileName(file?.name ?? "");
+                    onFile(file);
+                  }}
+                />
+              </label>
+              <span className="muted" style={{ overflowWrap: "anywhere" }}>{fileName || "No file chosen"}</span>
+            </div>
+          </div>
           <Field label="…or paste .ics content">
             <textarea
-              className="input"
-              rows={8}
+              className="textarea"
+              rows={4}
               value={icsText}
               onChange={(e) => setIcsText(e.target.value)}
               placeholder="BEGIN:VCALENDAR…"
-              style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+              style={{ fontFamily: "var(--font-mono)" }}
             />
           </Field>
         </div>

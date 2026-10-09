@@ -2194,10 +2194,14 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   position: sticky;
   right: 0;
   z-index: 2;
-  background: token('bg-panel');
+  /* Empty header cell: never paint over the last column's label. */
+  background: transparent;
   border-bottom: 1px solid token('border-color-light');
 }
 
+/* While a row's actions are hidden, the pinned cell is see-through so it
+ * never paints a sliver over the end of the row; it only takes a background
+ * when the row is hovered or focused and the actions appear. */
 .record-table__row-actions-cell {
   white-space: nowrap;
   padding: 0 6px;
@@ -2205,11 +2209,11 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   position: sticky;
   right: 0;
   z-index: 1;
-  background: token('bg-panel');
+  background: transparent;
   border-bottom: 1px solid token('border-color-light');
 }
 
-.record-table__row:hover .record-table__row-actions-cell {
+.record-table__row:is(:hover, :focus-within) .record-table__row-actions-cell {
   background: token('bg-hover');
 }
 
@@ -2432,10 +2436,23 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* Touch selection is opt-in; the ordinary phone table keeps its frozen name column. */
 @media (max-width: 760px) {
+  /* A quiet right-aligned toggle rather than a full row with a 44px button. */
   .record-table__mobile-selection-controls {
     display: flex;
-    padding: 8px 0;
-    .btn { min-height: 44px; }
+    justify-content: flex-end;
+    padding: 2px 0 6px;
+    .btn {
+      min-height: 32px;
+      border-color: transparent;
+      background: transparent;
+      color: token('accent');
+      font-weight: 500;
+    }
+    .btn[aria-pressed="true"] {
+      border-color: token('border');
+      background: token('bg-panel');
+      color: token('text-primary');
+    }
   }
   .record-table__mobile-selection-checkbox {
     position: absolute;
@@ -2521,5 +2538,52 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__header-menu button,
   .record-table__aggregate-menu button {
     min-height: 40px;
+  }
+}
+
+/* Phones: segmented view switch + Filter + Sort + Options fit one line at
+ * 390px instead of dropping "Options" onto a row of its own. */
+@media (max-width: 560px) {
+  .record-table__toolbar-right {
+    gap: 2px;
+  }
+  .record-table__toolbar .record-table__toolbar-button {
+    padding: 0 6px;
+    gap: 4px;
+  }
+  .record-table__segmented button {
+    min-width: 34px;
+  }
+}
+
+/* Phone toolbar tools: search + selection toggles share the view pill's row. */
+.record-table__mobile-tools {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.record-table__icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid token('border-color-medium');
+  border-radius: token('r-pill');
+  background: token('bg-primary');
+  color: token('text-secondary');
+  cursor: pointer;
+  &:hover { color: token('text-primary'); background: token('bg-transparent-light'); }
+  &.is-active {
+    border-color: token('accent');
+    background: token('accent-soft');
+    color: token('accent');
+  }
+}
+@media (max-width: 760px) {
+  .record-table__toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: token('s-2');
   }
 }

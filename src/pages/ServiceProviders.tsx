@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation } from "convex/react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -10,12 +11,22 @@ import { Briefcase, Plus } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/platform/record-engine";
+import type { Id } from "../../convex/_generated/dataModel";
 
 /**
  * External service-provider register — lawyers, accountants, bankers and the
  * like. A row with no removedOn (or a removedOn in the future) is still
- * active. The "Show active only (today)" toggle filters client-side, so it
- * works without the activeAsOf query.
+ * active. Each row carries a derived `status` (active/former) so the seeded
+ * "Active providers" view filters on it like any other field.
  */
 export function ServiceProvidersPage() {
   const society = useSociety();
@@ -42,12 +53,33 @@ export function ServiceProvidersPage() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
-  const [activeOnly, setActiveOnly] = useState(false);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "serviceProvider",
+    viewId: currentViewId,
+  });
+  // Workspaces seeded before this register became a table get its metadata
+  // once; the seed mutation is idempotent.
+  const ensureMetadata = useMutation(api.seedRecordTableMetadata.ensureForSociety);
+  const metadataHealRef = useRef<string | null>(null);
+  const needsMetadata = !tableData.loading && !tableData.objectMetadata;
+  useEffect(() => {
+    if (!society?._id || !needsMetadata || !loaded || !can("settings:write")) return;
+    if (metadataHealRef.current === String(society._id)) return;
+    metadataHealRef.current = String(society._id);
+    void ensureMetadata({ societyId: society._id }).catch(() => undefined);
+  }, [society?._id, needsMetadata, loaded, can, ensureMetadata]);
+
+  const today = todayDateOnly();
+  const records = useMemo(
+    () => (items ?? []).map((row) => ({ ...row, status: !row.removedOn || row.removedOn > today ? "active" : "former" })),
+    [items, today],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-
-  const today = todayDateOnly();
 
   const openNew = () => {
     if (!canWrite) return;
@@ -91,22 +123,13 @@ export function ServiceProvidersPage() {
     setOpen(false);
   };
 
-  const labelFor = (value: string) =>
-    catalog?.find((c) => c.value === value)?.label ?? value;
-
-  const isActive = (row: { removedOn?: string }) =>
-    !row.removedOn || row.removedOn > today;
-
-  const rows = items ?? [];
-  const visible = activeOnly ? rows.filter(isActive) : rows;
-
   return (
     <div className="page">
       <PageHeader
         title="Service providers"
         icon={<Briefcase size={16} />}
         iconColor="purple"
-        subtitle="External professionals engaged by the society — lawyers, accountants, bankers and other advisers — with their appointment and removal dates."
+        subtitle="Lawyers, accountants, bankers and other advisers, with when each was appointed and removed."
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New provider
@@ -114,70 +137,37 @@ export function ServiceProvidersPage() {
         }
       />
 
-      <label
-        className="checkbox"
-        style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}
-      >
-        <input
-          type="checkbox"
-          checked={activeOnly}
-          onChange={(e) => setActiveOnly(e.target.checked)}
-        />{" "}
-        Show active only (today)
-      </label>
-
-      <div className="card">
-        {items === undefined ? (
-          <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
-        ) : visible.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>No service providers yet.</p>
-        ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {visible.map((row: any) => {
-              const active = isActive(row);
-              return (
-                <li
-                  key={row._id}
-                  className="row"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "8px 0",
-                    borderBottom: "1px solid var(--border)",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => openEdit(row)}
-                >
-                  <span
-                    title={active ? "Active" : "Removed"}
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      background: active
-                        ? "var(--accent, #16a34a)"
-                        : "var(--text-tertiary)",
-                    }}
-                  />
-                  <span style={{ minWidth: 140, color: "var(--text-secondary)" }}>
-                    {labelFor(row.function)}
-                  </span>
-                  <span style={{ flex: 1, fontWeight: 500 }}>{row.firmName}</span>
-                  {row.contactName ? (
-                    <span style={{ color: "var(--text-secondary)" }}>{row.contactName}</span>
-                  ) : null}
-                  <span style={{ color: "var(--text-tertiary)", fontSize: 13 }}>
-                    {row.appointedOn ? `Appointed ${row.appointedOn}` : "—"}
-                    {row.removedOn ? ` · Removed ${row.removedOn}` : ""}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      {needsMetadata ? (
+        <RecordTableMetadataEmpty societyId={society._id} objectLabel="service provider" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="service-providers"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_, record) => openEdit(record)}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Briefcase size={14} />}
+            label="Service providers"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable loading={tableData.loading || items === undefined} />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="record-table__loading-row" />
+          ))}
+        </div>
+      )}
 
       <Drawer
         open={open}

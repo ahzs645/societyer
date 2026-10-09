@@ -79,7 +79,7 @@ export function TimelinePage() {
         date: period.effectiveFrom,
         kind: "Member fee",
         title: `${period.label} — ${money(period.priceCents)} / ${period.interval}`,
-        sub: period.effectiveTo ? `Ends ${period.effectiveTo}` : period.status,
+        sub: period.effectiveTo ? `Ends ${formatDate(period.effectiveTo)}` : capitalize(period.status),
         to: "/app/membership",
         past: isPastDue(period.effectiveFrom, now),
       });
@@ -90,7 +90,7 @@ export function TimelinePage() {
           date: event.eventDate,
           kind: "Funding",
           title: event.label,
-          sub: `${source.name}${event.amountCents != null ? ` · ${money(event.amountCents)}` : ""}${event.attributionStatus ? ` · ${event.attributionStatus}` : ""}`,
+          sub: `${source.name}${event.amountCents != null ? ` · ${money(event.amountCents)}` : ""}${event.attributionStatus ? ` · ${capitalize(String(event.attributionStatus).replace(/_/g, " "))}` : ""}`,
           to: "/app/treasurer",
           past: isPastDue(event.eventDate, now),
         });
@@ -115,7 +115,7 @@ export function TimelinePage() {
           date: election.opensAtISO,
           kind: "Election",
           title: `${election.title} — voting opens`,
-          sub: election.status,
+          sub: capitalize(election.status),
           to: `/app/elections/${election._id}`,
           past: new Date(election.opensAtISO).getTime() < now,
         });
@@ -125,7 +125,7 @@ export function TimelinePage() {
           date: election.closesAtISO,
           kind: "Election",
           title: `${election.title} — voting closes`,
-          sub: election.status,
+          sub: capitalize(election.status),
           to: `/app/elections/${election._id}`,
           past: new Date(election.closesAtISO).getTime() < now,
         });
@@ -184,7 +184,8 @@ export function TimelinePage() {
         title="Timeline"
         icon={<GitBranch size={16} />}
         iconColor="purple"
-        subtitle="Meetings, filings, deadlines, elections, bylaw milestones, commitments, member-fee changes and funding events on one spine."
+        subtitle="Past and upcoming events in date order."
+        info={<p>Meetings, filings, deadlines, elections, bylaw milestones, commitments, member-fee changes and funding events on one spine.</p>}
       />
 
       <div className="card">
@@ -194,7 +195,7 @@ export function TimelinePage() {
               <div className="timeline-vertical__item is-past" key={`past-${i}-${e.date}`}>
                 <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
                 <div className="row">
-                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{timelineDate(e.date)}</span>
+                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{timelineDate(e.date)}</span>
                   <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                 </div>
                 <div className="timeline-vertical__title">
@@ -215,7 +216,7 @@ export function TimelinePage() {
               <div className="timeline-vertical__item is-future" key={`future-${i}-${e.date}`}>
                 <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
                 <div className="row">
-                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{timelineDate(e.date)}</span>
+                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{timelineDate(e.date)}</span>
                   <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                 </div>
                 <div className="timeline-vertical__title">
@@ -233,6 +234,11 @@ export function TimelinePage() {
       </div>
     </div>
   );
+}
+
+function capitalize(value?: string) {
+  const text = String(value ?? "");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 function eventTone(kind: string) {

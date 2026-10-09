@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Field, SettingsShell } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { DatePicker } from "../components/DatePicker";
 import { LiveBrowserView } from "../components/LiveBrowserView";
 import { useSociety } from "../hooks/useSociety";
@@ -1028,12 +1029,12 @@ export function BrowserConnectorsPage() {
             </div>
             <Field label="GCOS export JSON" hint="Paste the Chrome extension output, or choose its downloaded JSON/ZIP file.">
               <textarea
-                className="input"
+                className="input input--compact"
                 value={gcosExportJson}
                 onChange={(event) => setGcosExportJson(event.target.value)}
                 placeholder='{"source":"societyer-gcos-chrome-extension", ...}'
                 rows={5}
-                style={{ resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}
+                style={{ resize: "vertical", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
               />
             </Field>
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -1131,8 +1132,8 @@ export function BrowserConnectorsPage() {
         icon={<MonitorPlay size={16} />}
         iconColor="orange"
         description={workspaceConnector
-          ? `Technical setup area. Live browser workspace for ${workspaceConnector.name}.`
-          : "Technical setup area. Open an installed browser app for imports, downloads, and page utilities — typically configured once by an administrator, not a page a board member needs to visit."}
+          ? `Live browser workspace for ${workspaceConnector.name}.`
+          : "Browser apps for imports and downloads — usually set up by an admin."}
         tabs={[
           { id: "apps", label: "Apps", icon: <MonitorPlay size={14} /> },
           { id: "runtime", label: "Runtime" },
@@ -1157,13 +1158,9 @@ export function BrowserConnectorsPage() {
         }
       >
 
-      {localOnly && <p className="muted" role="status">Browser connectors require a connected workspace. You can review available connector workflows here; this local workspace does not contact the runner or open hosted browser sessions.</p>}
+      {localOnly && <p className="muted" role="status">Browser connectors require a connected workspace; this preview does not contact the runner.</p>}
       {!workspaceConnector && activeTab === "apps" && (
         <>
-          <div className="card__head" style={{ marginBottom: 8 }}>
-            <h2 className="card__title">Installed apps</h2>
-            <span className="card__subtitle">Choose an app to open its live browser workspace.</span>
-          </div>
           <div
             style={{
               display: "grid",
@@ -1180,13 +1177,13 @@ export function BrowserConnectorsPage() {
                   <div className="card__head">
                     <h2 className="card__title">{connector.name}</h2>
                     <span className="card__subtitle">{connector.category ?? "Browser app"}</span>
+                    {appSession ? (
+                      <span style={{ marginLeft: "auto" }}><Badge tone="success">Running</Badge></span>
+                    ) : isRegistered ? (
+                      <span style={{ marginLeft: "auto" }}><Badge tone="info">Installed</Badge></span>
+                    ) : null}
                   </div>
                   <div className="card__body col" style={{ gap: 12 }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      {appSession && <Badge tone="success">Running</Badge>}
-                      {!isRegistered && <Badge tone="gray">Template</Badge>}
-                      {isRegistered && !appSession && <Badge tone="info">Installed</Badge>}
-                    </div>
                     <div className="muted">{connector.description}</div>
                     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                       <button className="btn btn--accent btn--sm" disabled={busy} onClick={() => openWorkspace(connector.id)}>
@@ -1205,7 +1202,10 @@ export function BrowserConnectorsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Browser runtime</h2>
-              <span className="card__subtitle">Local runner status and active app sessions.</span>
+              <InfoPopover label="About the browser runtime">
+                <p>Runner status and active app sessions.</p>
+                <p>For administrators: if the runner is unavailable, start it on the server with <code>npm run docker:connectors</code>.</p>
+              </InfoPopover>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
@@ -1214,17 +1214,13 @@ export function BrowserConnectorsPage() {
               </div>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <span className="muted">Provider</span>
-                <Badge tone="info">{health?.browser?.provider ?? "blitz"}</Badge>
+                <Badge tone="info">{providerLabel(health?.browser?.provider)}</Badge>
               </div>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <span className="muted">Active sessions</span>
                 <span className="mono">{health?.activeSessions ?? sessions.length}</span>
               </div>
-              {health?.browser?.detail && <div className="alert alert--danger">{health.browser.detail}</div>}
-              <div className="muted">
-                If the runner is unavailable, an administrator can start it by running{" "}
-                <code className="mono">npm run docker:connectors</code> in a terminal on the server (technical — not something to run from this page).
-              </div>
+              {health?.browser?.detail && !localOnly && <div className="alert alert--danger">{health.browser.detail}</div>}
             </div>
           </div>
         </>
@@ -1232,7 +1228,7 @@ export function BrowserConnectorsPage() {
 
       {!workspaceConnector && activeTab === "runtime" && <section role="tabpanel" aria-label="Runtime" className="card">
         <div className="card__head"><h2 className="card__title">Browser runtime</h2><Badge tone={runnerReady ? "success" : "danger"}>{runnerReady ? "Ready" : "Unavailable"}</Badge></div>
-        <div className="card__body col" style={{ gap: 12 }}><p>{health?.browser?.detail ?? "Checking the connector runner…"}</p><span>Provider: {health?.browser?.provider ?? "blitz"}</span><span>Active sessions: {sessions.length}</span></div>
+        <div className="card__body col" style={{ gap: 12 }}><p>{health?.browser?.detail ?? "Checking the connector runner…"}</p><span>Provider: {providerLabel(health?.browser?.provider)}</span><span>Active sessions: {sessions.length}</span></div>
       </section>}
       {!workspaceConnector && activeTab === "sessions" && <section role="tabpanel" aria-label="Sessions" className="card">
         <div className="card__head"><h2 className="card__title">Browser sessions</h2><Badge>{sessions.length}</Badge></div>
@@ -1468,6 +1464,11 @@ export function BrowserConnectorsPage() {
       </SettingsShell>
     </div>
   );
+}
+
+function providerLabel(provider?: string) {
+  const value = provider ?? "blitz";
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function localConnectorHealth(demo: boolean): RunnerHealth {

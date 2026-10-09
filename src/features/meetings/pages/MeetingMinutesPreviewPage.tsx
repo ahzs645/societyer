@@ -10,7 +10,9 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { ArrowLeft, FileDown, FileText, Printer } from "lucide-react";
 import { Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
-import { SeedPrompt } from "../../../pages/_helpers";
+import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
+import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
+import { useIsMobile } from "../../../lib/useIsMobile";
 import { useSociety } from "../../../hooks/useSociety";
 import { formatDate } from "../../../lib/format";
 import { exportWordDocx } from "../../../lib/docx";
@@ -31,6 +33,7 @@ import {
 import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../lib/sourceAgendaNavigation";
 
 export function MeetingMinutesPreviewPage() {
+  const isPhone = useIsMobile();
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const { loaded, can } = usePermissions();
@@ -258,33 +261,46 @@ export function MeetingMinutesPreviewPage() {
     });
   };
 
+  const exportDisabled = !canDownload || formalExportBlockers.length > 0;
+
   return (
     <div className="page page--wide meeting-preview-page">
-      <div className="meeting-preview-page__header">
-        <div>
-          <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>
-            <ArrowLeft size={12} /> Back to meeting
-          </Link>
-          <h1>{meeting.title}</h1>
-          <p>{selectedMinutesExportStyle.label} · {selectedMinutesExportStyle.source}</p>
-        </div>
-        <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-          <button className="btn-action" onClick={() => window.close()}>Close page</button>
-          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord} disabled={!canDownload || formalExportBlockers.length > 0}>
-            <FileDown size={12} /> Export Word
-          </button>
-          <button className="btn-action" onClick={exportPreviewToPdf} disabled={!canDownload || formalExportBlockers.length > 0}>
-            <FileDown size={12} /> Download PDF
-          </button>
-          <button className="btn-action" onClick={printPreview} disabled={!canDownload || formalExportBlockers.length > 0}>
-            <Printer size={12} /> Print
-          </button>
-        </div>
-      </div>
+      <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>
+        <ArrowLeft size={12} /> Back to meeting
+      </Link>
+      <PageHeader
+        title={meeting.title}
+        subtitle={selectedMinutesExportStyle.label}
+        actions={
+          <>
+            <button className="btn-action btn-action--primary" onClick={exportPreviewToPdf} disabled={exportDisabled} aria-label="Download PDF">
+              <FileDown size={12} /> {isPhone ? "PDF" : "Download PDF"}
+            </button>
+            {isPhone ? (
+              <MoreActionsMenu
+                label=""
+                items={[
+                  { id: "word", label: "Export Word", icon: <FileDown size={12} />, disabled: exportDisabled, onSelect: exportPreviewToWord },
+                  { id: "print", label: "Print", icon: <Printer size={12} />, disabled: exportDisabled, onSelect: () => { void printPreview(); } },
+                ]}
+              />
+            ) : (
+              <>
+                <button className="btn-action" onClick={exportPreviewToWord} disabled={exportDisabled}>
+                  <FileDown size={12} /> Export Word
+                </button>
+                <button className="btn-action" onClick={printPreview} disabled={exportDisabled}>
+                  <Printer size={12} /> Print
+                </button>
+              </>
+            )}
+          </>
+        }
+      />
 
       <div className="meeting-preview-page__layout">
         <aside className="meeting-preview-page__settings">
-          {!minutes.approvedAt && <p className="muted">{minutes.sourceMeetingRecord || minutes.sourceTransposition ? "Source record · approval not recorded" : "Draft minutes · approval not recorded"}</p>}
+          {!minutes.approvedAt && <p className="muted" style={{ margin: "0 0 10px" }}>{minutes.sourceMeetingRecord || minutes.sourceTransposition ? "Source record · approval not recorded" : "Draft minutes · approval not recorded"}</p>}
           {formalExportBlockers.length > 0 && (
             <div className="callout callout--warn" role="status">
               <div className="callout__body callout__body--list">

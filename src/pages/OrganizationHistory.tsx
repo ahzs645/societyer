@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { CreateMenu } from "../components/CreateMenu";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
@@ -7,6 +8,8 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
@@ -91,6 +94,11 @@ function newSourceForm() {
     notes: "",
     url: "",
   };
+}
+
+/** The current section's record type first, so "+ Add" reads as the obvious next step. */
+function orderCreateItems<T extends { id: string }>(section: string, items: T[]): T[] {
+  return [...items.filter((item) => item.id === section), ...items.filter((item) => item.id !== section)];
 }
 
 function newFactForm() {
@@ -415,15 +423,28 @@ export function OrganizationHistoryPage() {
         title="Org history"
         icon={<Newspaper size={16} />}
         iconColor="purple"
-        subtitle="Build an editable, source-backed organization profile from Paperless, archive, registry, and meeting records."
+        subtitle="A source-backed profile of the organization's history."
+        info={<p>Build an editable organization profile from Paperless, archive, registry and meeting records. Each fact, board term, motion and budget links back to its sources.</p>}
         actions={
           <>
-            <button className="btn-action" onClick={() => setImportOpen(true)} disabled={!canWrite}>
-              <Upload size={12} /> Import JSON
-            </button>
-            <button className="btn-action btn-action--primary" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add source
-            </button>
+            <MoreActionsMenu
+              items={[
+                { id: "import", label: "Import JSON", icon: <Upload size={14} />, disabled: !canWrite, onSelect: () => setImportOpen(true) },
+                { id: "workflow", label: "How it works", icon: <BookOpen size={14} />, onSelect: () => setWorkflowOpen(true) },
+              ]}
+            />
+            <CreateMenu
+              label="Add"
+              disabled={!canWrite}
+              items={orderCreateItems(section, [
+                { id: "sources", label: "Source", onSelect: () => setSourceForm(newSourceForm()) },
+                { id: "facts", label: "Fact", onSelect: () => setFactForm(newFactForm()) },
+                { id: "people", label: "Board term", onSelect: () => setBoardTermForm(newBoardTermForm()) },
+                { id: "motions", label: "Motion", onSelect: () => setMotionForm(newMotionForm()) },
+                { id: "budgets", label: "Budget snapshot", onSelect: () => setBudgetForm(newBudgetForm()) },
+                { id: "timeline", label: "Timeline event", onSelect: () => setEventForm(newEventForm()) },
+              ])}
+            />
           </>
         }
       />
@@ -450,20 +471,6 @@ export function OrganizationHistoryPage() {
 
       {section === "facts" && (
         <div className="card">
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">Profile facts</h2>
-              <span className="card__subtitle">Paged, searchable claims with source-document links</span>
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn-action" onClick={() => setWorkflowOpen(true)} disabled={!canWrite}>
-                <BookOpen size={12} /> Workflow
-              </button>
-              <button className="btn-action" onClick={() => setFactForm(newFactForm())} disabled={!canWrite}>
-                <Plus size={12} /> Add fact
-              </button>
-            </div>
-          </div>
           {!factsTableData.loading && !factsTableData.objectMetadata ? (
             <RecordTableMetadataEmpty societyId={society?._id} objectLabel="profile-fact" />
           ) : factsTableData.objectMetadata ? (
@@ -551,11 +558,6 @@ export function OrganizationHistoryPage() {
                     : "Editable service terms with linked source documents"}
                 </span>
               </div>
-              {peopleSection === "terms" && (
-                <button className="btn-action" onClick={() => setBoardTermForm(newBoardTermForm())} disabled={!canWrite}>
-                  <Plus size={12} /> Add term
-                </button>
-              )}
             </div>
 
             <div className="org-history__inline-tabs" role="tablist" aria-label="People history views">
@@ -659,9 +661,6 @@ export function OrganizationHistoryPage() {
               <h2 className="card__title">Converted motions</h2>
               <span className="card__subtitle">Paperless minute motions merged with editable org-history records</span>
             </div>
-            <button className="btn-action" onClick={() => setMotionForm(newMotionForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add motion
-            </button>
           </div>
           <DataTable<any>
             label="Converted motions"
@@ -741,9 +740,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Budget snapshots</h2>
-            <button className="btn-action" onClick={() => setBudgetForm(newBudgetForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add budget
-            </button>
           </div>
           <TableScroll>
             <table className="table">
@@ -812,9 +808,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">History timeline</h2>
-            <button className="btn-action" onClick={() => setEventForm(newEventForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add event
-            </button>
           </div>
           <div className="card__body">
             {events.length > 0 ? (
@@ -858,9 +851,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Source records</h2>
-            <button className="btn-action" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add source
-            </button>
           </div>
           {sources.length > 0 ? (
             <TableScroll>
@@ -1257,26 +1247,7 @@ export function OrganizationHistoryBudgetPage() {
   if (data === undefined) return <PageLoading />;
 
   if (!budget) {
-    return (
-      <div className="page">
-        <PageHeader
-          title="Budget snapshot"
-          icon={<Archive size={16} />}
-          iconColor="purple"
-          subtitle="The requested budget snapshot could not be found."
-          actions={<Link className="btn-action" to="/app/org-history?section=budgets"><ArrowLeft size={12} /> Org history</Link>}
-        />
-        <div className="card">
-          <div className="card__body">
-            <EmptyCallout
-              title="Budget not found"
-              body="Return to Org history and open a current budget snapshot."
-              action={<Link className="btn-action" to="/app/org-history?section=budgets"><ArrowLeft size={12} /> Back to Org history</Link>}
-            />
-          </div>
-        </div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Budget snapshot" backTo="/app/org-history?section=budgets" backLabel="Org history" icon={<Archive size={16} />} description="It may have been deleted." />;
   }
 
   return (
