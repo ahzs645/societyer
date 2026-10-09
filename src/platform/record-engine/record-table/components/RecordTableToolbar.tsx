@@ -118,23 +118,18 @@ export function RecordTableToolbar({
   const resolvedIcon: ReactNode = routeIdentity
     ? createElement(routeIdentity.icon, { size: 14 })
     : icon;
-  // The view-options dropdown only configures kanban/calendar grouping fields,
-  // so it's hidden in plain table view where it would otherwise be empty.
-  const showViewOptions = viewType === "kanban" || viewType === "board" || viewType === "calendar";
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
-  const viewOptionsRef = useRef<HTMLDivElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
 
   // Click-outside for dropdowns.
   useEffect(() => {
-    if (!columnMenuOpen && !viewMenuOpen && !viewOptionsOpen) return;
+    if (!columnMenuOpen && !viewMenuOpen) return;
     const onDown = (e: MouseEvent) => {
       // Portaled Select menus inside these dropdowns count as inside.
       if (columnMenuOpen && columnMenuRef.current && isOutsidePointerEvent(e, columnMenuRef)) {
@@ -143,13 +138,10 @@ export function RecordTableToolbar({
       if (viewMenuOpen && viewMenuRef.current && isOutsidePointerEvent(e, viewMenuRef)) {
         setViewMenuOpen(false);
       }
-      if (viewOptionsOpen && viewOptionsRef.current && isOutsidePointerEvent(e, viewOptionsRef)) {
-        setViewOptionsOpen(false);
-      }
     };
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
-  }, [columnMenuOpen, viewMenuOpen, viewOptionsOpen]);
+  }, [columnMenuOpen, viewMenuOpen]);
 
   const activeViewName =
     (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
@@ -381,19 +373,47 @@ export function RecordTableToolbar({
           </button>
         </div>
 
-        {showViewOptions && (
-        <div className="record-table__view-switcher" ref={viewOptionsRef}>
+        {onOpenFilter && (
+          <button
+            type="button"
+            className={
+              "record-table__toolbar-button" +
+              (filters.length > 0 ? " record-table__toolbar-button--active" : "")
+            }
+            onClick={onOpenFilter}
+          >
+            <Filter size={12} />
+            <span>{t("common.filter", "Filter")}{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          className={
+            "record-table__toolbar-button" +
+            (sorts.length > 0 ? " record-table__toolbar-button--active" : "")
+          }
+          ref={sortButtonRef}
+          aria-haspopup="dialog"
+          aria-expanded={sortMenuOpen}
+          onClick={() => setSortMenuOpen((x) => !x)}
+        >
+          <ArrowDownUp size={12} />
+          <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
+        </button>
+        <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
+
+        <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button
             type="button"
             className="record-table__toolbar-button"
-            onClick={() => setViewOptionsOpen((x) => !x)}
-            title="View options"
+            onClick={() => setColumnMenuOpen((x) => !x)}
           >
             <SlidersHorizontal size={12} />
             <span>{t("common.options", "Options")}</span>
           </button>
-          {viewOptionsOpen && (
-            <ViewportPopover open onClose={() => setViewOptionsOpen(false)} anchorRef={viewOptionsRef} label="View options" className="record-table__menu record-table__menu--right record-table__menu--wide">
+          {columnMenuOpen && (
+            <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
                   <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
@@ -439,52 +459,6 @@ export function RecordTableToolbar({
                   </select>
                 </div>
               )}
-            </ViewportPopover>
-          )}
-        </div>
-        )}
-
-        {onOpenFilter && (
-          <button
-            type="button"
-            className={
-              "record-table__toolbar-button" +
-              (filters.length > 0 ? " record-table__toolbar-button--active" : "")
-            }
-            onClick={onOpenFilter}
-          >
-            <Filter size={12} />
-            <span>{t("common.filter", "Filter")}{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          className={
-            "record-table__toolbar-button" +
-            (sorts.length > 0 ? " record-table__toolbar-button--active" : "")
-          }
-          ref={sortButtonRef}
-          aria-haspopup="dialog"
-          aria-expanded={sortMenuOpen}
-          onClick={() => setSortMenuOpen((x) => !x)}
-        >
-          <ArrowDownUp size={12} />
-          <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
-        </button>
-        <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
-
-        <div className="record-table__view-switcher" ref={columnMenuRef}>
-          <button
-            type="button"
-            className="record-table__toolbar-button"
-            onClick={() => setColumnMenuOpen((x) => !x)}
-          >
-            <SlidersHorizontal size={12} />
-            <span>{t("common.options", "Options")}</span>
-          </button>
-          {columnMenuOpen && (
-            <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
               <div className="record-table__menu-section">
                 <span className="record-table__menu-label">Density</span>
                 <div className="record-table__density-options" role="radiogroup" aria-label="Row density">

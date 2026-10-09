@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { withHiddenObjectFields } from "../utils/hiddenObjectFields";
 import { useSearchParams } from "react-router-dom";
 import {
   RecordTableStoreContext,
@@ -49,6 +50,12 @@ export function RecordTableScope({
   // switch even when the route's tableId stays the same.
   const actorId = useCurrentUserId();
   const hasAuthorizedView = hydratedView !== null;
+  // Every field of the object is available to filters, sorts and the column
+  // picker; fields the view doesn't show ride along as hidden columns.
+  const loadableView = useMemo(
+    () => withHiddenObjectFields(hydratedView, objectMetadata.fields),
+    [hydratedView, objectMetadata.fields],
+  );
   const scopeIdentity = `${tableId}:${objectMetadata._id}:${actorId ?? "unbound"}:${hasAuthorizedView}`;
   const store = useMemo<RecordTableStore>(
     () => {
@@ -60,7 +67,7 @@ export function RecordTableScope({
       // The first render for a different actor must not retain the previous
       // actor's filters, saved view, selection, cells or drawer record. Hydrate
       // a newly scoped store immediately from the current authorized snapshot.
-      if (hydratedView) next.getState().loadView(hydratedView);
+      if (loadableView) next.getState().loadView(loadableView);
       return next;
     },
     [tableId, objectMetadata._id, objectMetadata.labelIdentifierFieldName, actorId, hasAuthorizedView],
@@ -101,8 +108,8 @@ export function RecordTableScope({
 
   // Pipe view + records into the store when they change.
   useEffect(() => {
-    if (hydratedView) store.getState().loadView(hydratedView);
-  }, [hydratedView, store]);
+    if (loadableView) store.getState().loadView(loadableView);
+  }, [loadableView, store]);
   useEffect(() => {
     store.getState().setRecords(records);
   }, [records, store]);

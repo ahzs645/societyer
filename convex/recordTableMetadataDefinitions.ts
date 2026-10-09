@@ -3448,6 +3448,24 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         },
       },
       {
+        name: "linkedTo",
+        label: "Linked to",
+        fieldType: FIELD_TYPES.MULTI_SELECT,
+        icon: "Link",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "meeting", label: "Meeting", color: "blue" },
+            { value: "goal", label: "Goal", color: "green" },
+            { value: "filing", label: "Filing", color: "orange" },
+            { value: "workflow", label: "Workflow", color: "purple" },
+            { value: "document", label: "Document", color: "gray" },
+            { value: "commitment", label: "Commitment", color: "yellow" },
+            { value: "event", label: "Event", color: "red" },
+          ],
+        },
+      },
+      {
         name: "goalId",
         label: "Goal",
         fieldType: FIELD_TYPES.RELATION,

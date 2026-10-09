@@ -1,5 +1,5 @@
 import { ActionRegisterCard } from "../components/ActionRegisterCard";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowUpRight, Check, History, ListTodo, MoreHorizontal, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
@@ -19,7 +19,10 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
-import { useRecordTableState } from "../platform/record-engine/record-table/state/recordTableStore";
+import {
+  useRecordTableState,
+  useRecordTableStoreHandle,
+} from "../platform/record-engine/record-table/state/recordTableStore";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
@@ -55,6 +58,7 @@ type TaskRecord = Doc<"tasks"> & {
   documentIdLabel?: string;
   commitmentIdLabel?: string;
   completedByUserIdLabel?: string;
+  linkedTo: TaskLinkKind[];
 };
 
 export function taskStatusLabel(status: string) {
@@ -88,10 +92,6 @@ export function TasksPage() {
   const register: TaskRegister = searchParams.get("register") === "historical" ? "historical" : "current";
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filterCommittee, setFilterCommittee] = useState(requestedCommitteeId);
-  const [filterGoal, setFilterGoal] = useState(requestedGoalId);
-  const [filterLink, setFilterLink] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<EditableTaskForm | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -102,6 +102,41 @@ export function TasksPage() {
     nameSingular: "task",
     viewId: currentViewId,
   });
+
+  // Workspaces seeded before the "Linked to" column existed get it once; the
+  // seed mutation is idempotent and reconciles new fields.
+  const ensureMetadata = useMutation(api.seedRecordTableMetadata.ensureForSociety);
+  const metadataHealRef = useRef<string | null>(null);
+  useEffect(() => {
+    const metadata = tableData.objectMetadata;
+    if (!society?._id || !metadata || !loaded || !can("settings:write")) return;
+    if (metadata.fields.some((field) => field.name === "linkedTo")) return;
+    if (metadataHealRef.current === String(society._id)) return;
+    metadataHealRef.current = String(society._id);
+    void ensureMetadata({ societyId: society._id }).catch(() => undefined);
+  }, [society?._id, tableData.objectMetadata, loaded, can, ensureMetadata]);
+
+  // Committee and goal filters pick from a list instead of typing an id.
+  const relationOptions = useMemo<Record<string, { value: string; label: string }[]>>(
+    () => ({
+      committeeId: ((committees ?? []) as Doc<"committees">[]).map((c) => ({ value: String(c._id), label: c.name })),
+      goalId: ((goals ?? []) as Doc<"goals">[]).map((g) => ({ value: String(g._id), label: g.title })),
+    }),
+    [committees, goals],
+  );
+  const objectMetadata = useMemo(() => {
+    const metadata = tableData.objectMetadata;
+    if (!metadata) return metadata;
+    return { ...metadata, fields: metadata.fields.map((field) => withRelationOptions(field, relationOptions)) };
+  }, [tableData.objectMetadata, relationOptions]);
+  const hydratedView = useMemo(() => {
+    const view = tableData.hydratedView;
+    if (!view) return view;
+    return {
+      ...view,
+      columns: view.columns.map((column) => ({ ...column, field: withRelationOptions(column.field, relationOptions) })),
+    };
+  }, [tableData.hydratedView, relationOptions]);
 
   const committeeById = useMemo(
     () => recordsById((committees ?? []) as Doc<"committees">[]),
@@ -185,6 +220,7 @@ export function TasksPage() {
           ]
             .filter((value): value is string => typeof value === "string" && value.length > 0)
             .join(" "),
+          linkedTo: linkedKinds(task),
           responsibleUserIdsLabel,
           committeeIdLabel,
           meetingIdLabel,
@@ -209,15 +245,11 @@ export function TasksPage() {
     ],
   );
 
+  // Committee, goal and link filtering is the table's own Filter (see
+  // TaskUrlFilters for deep links); only the register split stays here.
   const pageFilteredRecords = useMemo(
-    () =>
-      records.filter((task) => {
-        if (filterCommittee && String(task.committeeId ?? "") !== filterCommittee) return false;
-        if (filterGoal && String(task.goalId ?? "") !== filterGoal) return false;
-        if ((register === "historical") !== isHistoricalSourceAction(task)) return false;
-        return !filterLink || matchesLinkFilter(task, filterLink);
-      }),
-    [records, filterCommittee, filterGoal, filterLink, register],
+    () => records.filter((task) => (register === "historical") === isHistoricalSourceAction(task)),
+    [records, register],
   );
   const registerCounts = useMemo(() => {
     const historical = records.filter(isHistoricalSourceAction).length;
@@ -228,21 +260,13 @@ export function TasksPage() {
     if (!canManage) return;
     setForm({
       ...makeTaskFormDefaults({
-        committeeId: filterCommittee || undefined,
-        goalId: filterGoal || undefined,
+        committeeId: requestedCommitteeId || undefined,
+        goalId: requestedGoalId || undefined,
       }),
       tags: [],
     });
     setOpen(true);
-  }, [filterCommittee, filterGoal, canManage]);
-
-  useEffect(() => {
-    setFilterGoal(requestedGoalId);
-  }, [requestedGoalId]);
-
-  useEffect(() => {
-    if (requestedCommitteeId) setFilterCommittee(requestedCommitteeId);
-  }, [requestedCommitteeId]);
+  }, [requestedCommitteeId, requestedGoalId, canManage]);
 
   useEffect(() => {
     if (!canManage || !openNewFromUrl || open || society === undefined || society === null) return;
@@ -268,20 +292,6 @@ export function TasksPage() {
         else params.delete("register");
         params.delete("new");
         return params;
-      },
-      { replace: true },
-    );
-  };
-
-  const changeGoalFilter = (goalId: string) => {
-    setFilterGoal(goalId);
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        if (goalId) next.set("goalId", goalId);
-        else next.delete("goalId");
-        next.delete("new");
-        return next;
       },
       { replace: true },
     );
@@ -585,70 +595,6 @@ export function TasksPage() {
   };
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
-  const activePageFilterCount = [filterCommittee, filterGoal, filterLink].filter(Boolean).length;
-
-  const pageFilterControls = (
-          <>
-            <Select
-              value={filterCommittee}
-              onChange={setFilterCommittee}
-              clearable
-              clearLabel="All committees"
-              placeholder="All committees"
-              size="sm"
-              style={{ width: isMobile ? "100%" : 200, maxWidth: "100%" }}
-              options={((committees ?? []) as Doc<"committees">[]).map((committee) => ({
-                value: committee._id,
-                label: committee.name,
-              }))}
-            />
-            <Select
-              value={filterGoal}
-              onChange={changeGoalFilter}
-              clearable
-              clearLabel="All goals"
-              placeholder="All goals"
-              size="sm"
-              style={{ width: isMobile ? "100%" : 220, maxWidth: "100%" }}
-              options={((goals ?? []) as Doc<"goals">[]).map((goal) => ({
-                value: goal._id,
-                label: goal.title,
-              }))}
-            />
-            <Select
-              value={filterLink}
-              onChange={setFilterLink}
-              clearable
-              clearLabel="All links"
-              placeholder="All links"
-              size="sm"
-              style={{ width: isMobile ? "100%" : 180, maxWidth: "100%" }}
-              options={[
-                { value: "linked", label: "Any linked record" },
-                { value: "meeting", label: "Meeting linked" },
-                { value: "goal", label: "Goal linked" },
-                { value: "filing", label: "Filing linked" },
-                { value: "workflow", label: "Workflow linked" },
-                { value: "document", label: "Document linked" },
-                { value: "commitment", label: "Commitment linked" },
-                { value: "event", label: "Event linked" },
-              ]}
-            />
-          </>
-  );
-  const pageFilterCount = activePageFilterCount > 0 ? (
-          <div
-            className="muted"
-            style={{
-              marginLeft: isMobile ? 0 : "auto",
-              fontSize: "var(--fs-sm)",
-              flexShrink: 0,
-            }}
-          >
-            {pageFilteredRecords.length} of {register === "historical" ? registerCounts.historical : registerCounts.current}
-          </div>
-  ) : null;
-
   return (
     <div className="page">
       <PageHeader
@@ -675,19 +621,6 @@ export function TasksPage() {
           <History size={12} /> History ({registerCounts.historical})
         </button>
       </div>
-        {!isMobile && pageFilterControls}
-        {!isMobile && pageFilterCount}
-        {isMobile && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            style={{ marginLeft: "auto" }}
-            onClick={() => setFiltersOpen((value) => !value)}
-            aria-expanded={filtersOpen}
-          >
-            Filters{activePageFilterCount ? ` (${activePageFilterCount})` : ""}
-          </button>
-        )}
       </div>
       {register === "historical" && (
         <div className="card" style={{ marginBottom: 12 }}>
@@ -707,20 +640,14 @@ export function TasksPage() {
         </div>
       )}
       {register === "historical" && <ActionRegisterCard societyId={society._id} tasks={pageFilteredRecords} />}
-      {isMobile && filtersOpen && (
-        <div className="row" style={{ marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
-          {pageFilterControls}
-          {pageFilterCount}
-        </div>
-      )}
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society._id} objectLabel="task" />
-      ) : tableData.objectMetadata ? (
+      ) : objectMetadata ? (
         <RecordTableScope
           tableId="tasks"
-          objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
+          objectMetadata={objectMetadata}
+          hydratedView={hydratedView}
           records={pageFilteredRecords}
           onRecordClick={(_recordId, record) => openEdit(record as TaskRecord)}
           onUpdate={canManage ? ({ recordId, fieldName, value }) =>
@@ -729,7 +656,7 @@ export function TasksPage() {
         >
           <RecordTableViewToolbar
             societyId={society._id}
-            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            objectMetadataId={objectMetadata._id as Id<"objectMetadata">}
             icon={<ListTodo size={14} />}
             label="All tasks"
             views={tableData.views}
@@ -741,6 +668,7 @@ export function TasksPage() {
             open={filterOpen}
             onClose={() => setFilterOpen(false)}
           />
+          <TaskUrlFilters committeeId={requestedCommitteeId} goalId={requestedGoalId} />
           <RecordTableFilterChips />
 
           {isMobile ? (
@@ -1092,26 +1020,85 @@ function userNames(
     .join(", ");
 }
 
-function matchesLinkFilter(task: TaskRecord, filter: string) {
-  if (filter === "linked") {
-    return Boolean(
-      task.goalId ||
-        task.meetingId ||
-        task.filingId ||
-        task.workflowId ||
-        task.documentId ||
-        task.commitmentId ||
-        task.eventId,
+const TASK_LINK_KINDS = ["meeting", "goal", "filing", "workflow", "document", "commitment", "event"] as const;
+type TaskLinkKind = (typeof TASK_LINK_KINDS)[number];
+
+/** What a task is linked to, as values of the read-only "Linked to" column. */
+function linkedKinds(task: Doc<"tasks">): TaskLinkKind[] {
+  const present: Record<TaskLinkKind, unknown> = {
+    meeting: task.meetingId,
+    goal: task.goalId,
+    filing: task.filingId,
+    workflow: task.workflowId,
+    document: task.documentId,
+    commitment: task.commitmentId,
+    event: task.eventId,
+  };
+  return TASK_LINK_KINDS.filter((kind) => Boolean(present[kind]));
+}
+
+function withRelationOptions<F extends { name: string; config?: unknown }>(
+  field: F,
+  optionsByField: Record<string, { value: string; label: string }[]>,
+): F {
+  const options = optionsByField[field.name];
+  if (!options?.length) return field;
+  return { ...field, config: { ...((field.config as object | undefined) ?? {}), options } };
+}
+
+const NOT_APPLIED = Symbol("not applied");
+
+/**
+ * Other pages link here as /app/tasks?committeeId=… or ?goalId=…. Those land
+ * as ordinary table filters (removable chips). They are re-applied whenever
+ * the view reloads, and removing the chip drops the parameter from the address.
+ */
+function TaskUrlFilters({ committeeId, goalId }: { committeeId: string; goalId: string }) {
+  const handle = useRecordTableStoreHandle();
+  const columns = useRecordTableState((s) => s.columns);
+  const filters = useRecordTableState((s) => s.filters);
+  const savedView = useRecordTableState((s) => s.savedView);
+  const [, setSearchParams] = useSearchParams();
+  const appliedFor = useRef<unknown>(NOT_APPLIED);
+  useEffect(() => {
+    const wanted = [
+      { fieldName: "committeeId", value: committeeId },
+      { fieldName: "goalId", value: goalId },
+    ].filter((entry) => entry.value);
+    if (wanted.length === 0) return;
+    if (appliedFor.current === savedView) {
+      const removed = wanted.filter((entry) => !filters.some((filter) => filter.id === `url-${entry.fieldName}`));
+      if (removed.length === 0) return;
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          for (const entry of removed) next.delete(entry.fieldName);
+          return next;
+        },
+        { replace: true },
+      );
+      return;
+    }
+    const additions = wanted.flatMap((entry) => {
+      const column = columns.find((c) => c.field.name === entry.fieldName);
+      return column ? [{ ...entry, fieldMetadataId: column.fieldMetadataId }] : [];
+    });
+    if (additions.length < wanted.length) return; // wait for the view to load
+    appliedFor.current = savedView;
+    const existing = handle.get().filters.filter(
+      (filter) => !additions.some((addition) => addition.fieldMetadataId === filter.fieldMetadataId),
     );
-  }
-  if (filter === "meeting") return Boolean(task.meetingId);
-  if (filter === "goal") return Boolean(task.goalId);
-  if (filter === "filing") return Boolean(task.filingId);
-  if (filter === "workflow") return Boolean(task.workflowId);
-  if (filter === "document") return Boolean(task.documentId);
-  if (filter === "commitment") return Boolean(task.commitmentId);
-  if (filter === "event") return Boolean(task.eventId);
-  return true;
+    handle.get().setFilters([
+      ...existing,
+      ...additions.map((addition) => ({
+        id: `url-${addition.fieldName}`,
+        fieldMetadataId: addition.fieldMetadataId,
+        operator: "eq" as const,
+        value: addition.value,
+      })),
+    ]);
+  }, [columns, committeeId, filters, goalId, handle, savedView, setSearchParams]);
+  return null;
 }
 
 function cleanPatch<T extends Record<string, unknown>>(source: T): T {

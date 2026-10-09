@@ -903,3 +903,19 @@
   > .page__title { min-width: 0; }
 }
 .annual-filings__note { margin: 0 0 token(s-3); font-size: token(fs-sm); }
+
+/* Standalone "Page not found" (unknown address outside the workspace). */
+.not-found-standalone {
+  display: grid;
+  justify-items: center;
+  gap: token(s-3);
+  max-width: 520px;
+  margin: 12vh auto 0;
+  padding: 0 token(s-4);
+  text-align: center;
+}
+.not-found-standalone__title {
+  margin: 0;
+  font-size: token(fs-lg);
+  font-weight: 600;
+}
