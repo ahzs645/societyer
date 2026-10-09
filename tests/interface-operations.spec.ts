@@ -138,7 +138,7 @@ test("insurance policy save opens the corresponding detail without losing entere
   await page.getByText("Operations Audit Mutual", { exact: true }).first().click();
   await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
   await expect(page).toHaveURL(/insurance\//);
-  await expect(page.getByText("OPS-AUDIT-001", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("OPS-AUDIT-001", { exact: false }).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText("$100,000", { exact: true }).first()).toBeVisible();
   await fits(page);
   await page.reload();
