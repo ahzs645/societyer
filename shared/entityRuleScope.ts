@@ -1,3 +1,5 @@
+import { legalGovernanceProfile } from "./legalGovernanceProfiles";
+import { hasApplicablePrivacyLaw, resolvePrivacyProfile, type PrivacyLawId } from "./privacyRuleProfiles";
 import {
   canonicalizeJurisdictionCode,
   DEFAULT_HOME_JURISDICTION_CODE,
@@ -12,11 +14,11 @@ import {
  *
  * - `bc_society`: BC Societies Act / Societies Regulation (model bylaws). Only a
  *   BC society — never a corporation, and never a society formed elsewhere.
- * - `bc_organization`: BC private-sector law that is not entity-specific (PIPA,
- *   BC OIPC guidance). Any organization whose home jurisdiction is BC.
+ * - `bc_organization`: BC PIPA and BC OIPC guidance. Applies only to activities assessed as
+ *   covered by BC PIPA; a BC incorporation address alone is insufficient.
  * - `general`: federal or cross-entity sources (CASL, CRA, OPC). Every workspace.
  */
-export type RuleAudience = "bc_society" | "bc_organization" | "general";
+export type RuleAudience = "bc_society" | "bc_organization" | "general" | `governance:${string}` | `privacy:${PrivacyLawId}`;
 
 export type OrganizationRuleScope = {
   kind: OrganizationKind;
@@ -28,7 +30,7 @@ export type OrganizationRuleScope = {
   isCorporation: boolean;
   /** BC Societies Act rules, warnings and citations apply. */
   isBcSociety: boolean;
-  /** BC private-sector rules (PIPA) apply because the home jurisdiction is BC. */
+  /** The home incorporation jurisdiction is BC; this does not determine privacy-law applicability. */
   isBcHome: boolean;
 };
 
@@ -89,7 +91,10 @@ export function audienceAppliesToOrganization(audience: RuleAudience, organizati
   if (audience === "general") return true;
   const scope = organizationRuleScope(organization);
   if (audience === "bc_society") return scope.isBcSociety;
-  return scope.isBcHome;
+  if (audience === "bc_organization") return hasApplicablePrivacyLaw(organization, "bc_pipa");
+  if (audience.startsWith("governance:")) return legalGovernanceProfile(organization)?.id === audience.slice(11);
+  if (audience.startsWith("privacy:")) return hasApplicablePrivacyLaw(organization, audience.slice(8) as PrivacyLawId);
+  return false;
 }
 
 /** BC Societies Act warnings, rules and citations apply. */
@@ -99,7 +104,7 @@ export function appliesBcSocietyRules(organization?: LegalEntityLike | null): bo
 
 /** BC PIPA (private-sector privacy) rules and citations apply. */
 export function appliesBcPrivacyRules(organization?: LegalEntityLike | null): boolean {
-  return organizationRuleScope(organization).isBcHome;
+  return hasApplicablePrivacyLaw(organization, "bc_pipa");
 }
 
 /**
@@ -107,8 +112,9 @@ export function appliesBcPrivacyRules(organization?: LegalEntityLike | null): bo
  * compliance card subtitles. Never names a statute that does not apply.
  */
 export function automatedComplianceChecksLabel(organization?: LegalEntityLike | null): string {
-  const scope = organizationRuleScope(organization);
-  if (scope.isBcSociety) return "Automated checks against the Societies Act and BC PIPA";
-  if (scope.isBcHome) return "Automated BC PIPA privacy checks; corporate-law checks are not automated yet";
-  return "No automated statutory checks are configured for this entity and jurisdiction yet";
+  const profile = legalGovernanceProfile(organization);
+  const privacy = resolvePrivacyProfile(organization);
+  if (!organization) return "Loading the organization’s legal profile";
+  const governance = profile ? `${profile.name}: configured governance evidence checks` : "Governing Act requires a reviewed profile";
+  return `${governance}; ${privacy.applicableLawIds.length ? privacy.label : "privacy applicability needs assessment"}`;
 }

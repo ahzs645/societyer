@@ -1,10 +1,10 @@
-// @ts-nocheck
+import { privacyAssessmentValidators } from "./lib/privacyValidators";
 import { normalizeAddressText } from "../shared/structuredAddress";
 import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../shared/onboarding";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { entitySetupFields, validateEntitySetup, validateFormationEvidence, certificateAnniversaryDate } from "../shared/entitySetup";
 import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../shared/organizationDomain";
-import { query, mutation } from "./_generated/server";
+import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { integrationSettingsValidator } from "./lib/integrationSettings";
 import { disabledModulesValidator } from "./lib/moduleSettings";
@@ -164,6 +164,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
     privacyProgramStatus: v.optional(v.string()),
     privacyProgramReviewedAtISO: v.optional(v.string()),
     privacyProgramNotes: v.optional(v.string()),
+    ...privacyAssessmentValidators,
     memberDataAccessStatus: v.optional(v.string()),
     memberDataGapDocumented: v.optional(v.boolean()),
     memberDataAccessReviewedAtISO: v.optional(v.string()),

@@ -41,7 +41,12 @@ for (const field of ["board", "upcomingFilings", "overdueFilings", "goals", "evi
 for (const field of ["directors", "bcResidents", "overdueFilings", "openDeadlines", "openConflicts", "committees", "openGoals"]) assert.equal(member.counts[field], 0, field);
 assert.ok(!JSON.stringify(member).includes("Restricted"), "Composite cannot bypass forbidden resource endpoints");
 assert.ok(!member.complianceFlags.some((flag: any) => flag.ruleId.startsWith("BC-SOC-DIRECTOR") || flag.ruleId === "DASHBOARD-COMPLIANCE-OK"), "Unreadable board must not create false failure or overall-compliance claims");
-assert.ok(member.complianceFlags.some((flag: any) => flag.ruleId === "PIPA-POLICY-DOCUMENTED"), "Authorized document/society checks still run");
+assert.ok(member.complianceFlags.some((flag: any) => flag.ruleId === "PRIVACY-APPLICABILITY"), "Authorized society/document checks request privacy facts before choosing a law");
+assert.ok(!member.complianceFlags.some((flag: any) => flag.ruleId.startsWith("PIPA-")), "Incorporation alone cannot establish PIPA applicability");
+await test.run(async ctx => ctx.db.patch(fixture.societyId, { privacyOperatingJurisdictions: ["CA-BC"], privacyFederalWork: "no", privacySectorSpecific: "none" }));
+const assessedMember = await actors.Member.query(api.dashboard.summary, { societyId: fixture.societyId });
+assert.ok(assessedMember.complianceFlags.some((flag: any) => flag.ruleId === "PIPA-POLICY-DOCUMENTED"), "Assessed BC privacy/document checks remain available to an authorized member");
+assert.ok(!JSON.stringify(assessedMember).includes("Restricted"), "Privacy applicability cannot expand resource access");
 const badges = await actors.Member.query(api.dashboard.navCounts, { societyId: fixture.societyId });
 assert.equal(badges.members, 1); assert.equal(badges.openTasks, 1); assert.equal(badges.directors, 0); assert.equal(badges.openDeadlines, 0);
 await test.run(async ctx => {

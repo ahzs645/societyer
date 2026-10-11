@@ -7,8 +7,20 @@ import {
   signPortable,
   markFailedPortable,
   removePortable,
+  previewPortable,
+  recordNoticePortable,
 } from "../shared/functions/writtenResolutions";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+
+const body = v.optional(v.union(v.literal("members"), v.literal("shareholders"), v.literal("directors")));
+const kind = v.union(v.literal("Ordinary"), v.literal("Special"));
+const specialMajority = v.optional(v.union(v.literal("two_thirds"), v.literal("three_quarters")));
+
+export const preview = authorizedQuery("writtenResolutions:preview", query)({
+  args: { societyId: v.id("societies"), body, kind: v.optional(kind), recordDateISO: v.optional(v.string()), specialMajority },
+  returns: v.any(),
+  handler: async (ctx, args) => previewPortable(await toPortableQueryCtx(ctx), args),
+});
 
 export const list = authorizedQuery("writtenResolutions:list", query)({
   args: { societyId: v.id("societies") },
@@ -21,8 +33,16 @@ export const create = authorizedMutation("writtenResolutions:create", mutation)(
     societyId: v.id("societies"),
     title: v.string(),
     text: v.string(),
-    kind: v.string(),
-    requiredCount: v.number(),
+    kind,
+    body,
+    recordDateISO: v.optional(v.string()),
+    specialMajority,
+    requiredCount: v.optional(v.number()),
+    governingInstrumentEvidence: v.string(),
+    electorateEvidence: v.string(),
+    circulationEvidence: v.string(),
+    circulatedAtISO: v.string(),
+    authorityReviewed: v.boolean(),
     notes: v.optional(v.string()),
   },
   returns: v.any(),
@@ -32,11 +52,25 @@ export const create = authorizedMutation("writtenResolutions:create", mutation)(
 export const sign = authorizedMutation("writtenResolutions:sign", mutation)({
   args: {
     id: v.id("writtenResolutions"),
-    signerName: v.string(),
+    electorKey: v.string(),
+    signedAtISO: v.string(),
+    consentEvidence: v.string(),
+    consentDocumentId: v.optional(v.id("documents")),
+    signerName: v.optional(v.string()),
     memberId: v.optional(v.id("members")),
   },
   returns: v.any(),
   handler: async (ctx, args) => signPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const recordNotice = authorizedMutation("writtenResolutions:recordNotice", mutation)({
+  args: { id: v.id("writtenResolutions"),
+    notices: v.array(v.object({ electorKey: v.string(), givenAtISO: v.string(), evidence: v.string(), documentId: v.optional(v.id("documents")) })),
+    dueDateISO: v.optional(v.string()), calendarEvidence: v.optional(v.string()),
+    timeZone: v.optional(v.union(v.literal("America/Toronto"), v.literal("America/Winnipeg"))),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => recordNoticePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markFailed = authorizedMutation("writtenResolutions:markFailed", mutation)({

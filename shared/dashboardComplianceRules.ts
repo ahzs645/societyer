@@ -12,6 +12,8 @@
  * BC-home organizations. Use `dashboardComplianceRulePackForOrganization` to get
  * the rules that apply to a workspace; do not evaluate the full pack directly.
  */
+import { legalGovernanceProfile, LEGAL_GOVERNANCE_PROFILES, minimumLegalDirectors, requiredResidentCanadianDirectors, type GovernanceOrganization } from "./legalGovernanceProfiles";
+import { resolvePrivacyProfile, hasApplicablePrivacyLaw, PRIVACY_LAWS, type PrivacyAssessmentFacts } from "./privacyRuleProfiles";
 import type { LegalEntityLike } from "./organizationDomain";
 import { audienceAppliesToOrganization, type RuleAudience } from "./entityRuleScope";
 
@@ -37,7 +39,9 @@ export type DashboardComplianceFlag = {
   remediationUpdatedAtISO?: string;
 };
 
-export type ComplianceSociety = {
+export type ComplianceSociety = GovernanceOrganization & PrivacyAssessmentFacts & {
+  privacyOfficerName?: string;
+  privacyOfficerEmail?: string;
   isMemberFunded: boolean;
   privacyPolicyDocId?: string;
   privacyProgramStatus?: string;
@@ -50,6 +54,7 @@ export type ComplianceSociety = {
 export type ComplianceDirector = {
   consentOnFile: boolean;
   isBCResident: boolean;
+  residentCanadianStatus?: "yes" | "no" | "unknown";
 };
 
 export type DashboardComplianceContext = {
@@ -153,9 +158,9 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       id: "BC-SOC-DIRECTORS-MIN",
       audience: "bc_society",
       jurisdiction: "BC",
-      societyType: "non-member-funded society",
+      societyType: "society, with a member-funded exception",
       effectiveDate: "2016-11-28",
-      ruleText: "Non-member-funded societies should have at least three active directors.",
+      ruleText: "Ordinary societies need at least three directors; member-funded societies need at least one.",
       citation: "Societies Act ss.40, 197",
       evidenceRequired: ["Active director register", "Society member-funded status"],
       remediationActions: [
@@ -165,11 +170,11 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       ],
       passFail(context) {
         if (!context.society) return null;
-        if (!context.society.isMemberFunded && context.activeDirectors.length < 3) {
+        if (context.activeDirectors.length < (context.society.isMemberFunded ? 1 : 3)) {
           return flag(this, {
             level: "err",
-            text: "Fewer than 3 active directors (s.40 Societies Act; s.197 member-funded exception).",
-            citationId: "BC-SOC-DIRECTORS-MIN",
+            text: context.society.isMemberFunded ? "No active director recorded; a member-funded society needs at least one director (s. 197)." : "Fewer than 3 active directors recorded (Societies Act s. 40).",
+            citationId: context.society.isMemberFunded ? "BC-SOC-MEMBER-FUNDED-DIRECTORS" : "BC-SOC-DIRECTORS-MIN",
           });
         }
         return null;
@@ -290,7 +295,7 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       evidenceRequired: ["Privacy program status"],
       remediationActions: [
         { id: "create-policy-template", label: "Create from template", intent: "createPipaPolicyDraft" },
-        { id: "open-privacy-workflow", label: "Open PIPA workflow", intent: "navigate", to: "/app/privacy" },
+        { id: "open-privacy-workflow", label: "Open privacy workflow", intent: "navigate", to: "/app/privacy" },
         { id: "assign-review", label: "Assign review", intent: "createPrivacyReviewTask" },
         { id: "mark-reviewed", label: "Mark reviewed", intent: "markPrivacyProgramReviewed" },
       ],
@@ -360,10 +365,10 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       societyType: "society",
       effectiveDate: "2016-11-28",
       ruleText: "Member data access status should be documented.",
-      citation: "Societies Act records requirements and PIPA",
+      citation: "Societies Act records requirements; privacy law requires a separate activity assessment",
       evidenceRequired: ["Member data access status"],
       remediationActions: [
-        { id: "open-privacy-workflow", label: "Open PIPA workflow", intent: "navigate", to: "/app/privacy" },
+        { id: "open-privacy-workflow", label: "Open privacy workflow", intent: "navigate", to: "/app/privacy" },
         { id: "open-society-data-access", label: "Record data access", intent: "navigate", to: "/app/society" },
         { id: "create-member-data-memo", label: "Create data memo", intent: "createMemberDataGapMemoDraft" },
         { id: "assign-review", label: "Assign review", intent: "createPrivacyReviewTask" },
@@ -396,11 +401,11 @@ export const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack
       societyType: "society",
       effectiveDate: "2016-11-28",
       ruleText: "When member data is not fully controlled by the society, the access gap should be documented.",
-      citation: "Societies Act records requirements and PIPA",
+      citation: "Societies Act records requirements; privacy law requires a separate activity assessment",
       evidenceRequired: ["Member data access status", "Gap memo or equivalent document"],
       remediationActions: [
         { id: "create-member-data-memo", label: "Create data memo", intent: "createMemberDataGapMemoDraft" },
-        { id: "open-privacy-workflow", label: "Open PIPA workflow", intent: "navigate", to: "/app/privacy" },
+        { id: "open-privacy-workflow", label: "Open privacy workflow", intent: "navigate", to: "/app/privacy" },
         { id: "assign-review", label: "Assign review", intent: "createPrivacyReviewTask" },
         { id: "mark-reviewed", label: "Mark reviewed", intent: "markMemberDataAccessReviewed" },
       ],
@@ -548,14 +553,11 @@ export function evaluateDashboardComplianceRules(
   });
 
   if (complete && flags.length === 0 && context.society && rulePack.rules.length > 0) {
-    const societyChecks = rulePack.rules.some((rule) => rule.audience === "bc_society");
     return [
       {
         ruleId: "DASHBOARD-COMPLIANCE-OK",
         level: "ok",
-        text: societyChecks
-          ? "No compliance issues detected."
-          : "No issues detected in the automated privacy checks for this entity.",
+        text: "No gaps detected in the configured evidence checks. This does not certify overall legal compliance.",
         evidenceRequired: [],
         remediationActions: [
           { id: "open-evidence", label: "Review evidence", intent: "navigate", to: "/app/documents" },
@@ -574,6 +576,61 @@ export function dashboardComplianceRulePackForOrganization(
 ): DashboardComplianceRulePack {
   return {
     ...rulePack,
-    rules: rulePack.rules.filter((rule) => audienceAppliesToOrganization(rule.audience, organization)),
+    rules: [...rulePack.rules, ...(rulePack === bcSocietiesDashboardComplianceRulePack ? extendedDashboardRules(organization) : [])]
+      .filter((rule) => audienceAppliesToOrganization(rule.audience, organization))
+      .map((rule) => ({ ...rule, passFail(context) {
+        const result = rule.passFail(context);
+        if (!result || hasApplicablePrivacyLaw(organization, "bc_pipa")) return result;
+        return { ...result, citationId: result.citationId?.startsWith("PIPA-") ? undefined : result.citationId,
+          ...(result.citationIds ? { citationIds: result.citationIds.filter((id) => !id.startsWith("PIPA-")) } : {}) };
+      } })),
   };
+}
+
+
+/** Corporate profiles reuse one evaluator; source IDs, minima and exceptions are data. */
+function extendedDashboardRules(organization?: LegalEntityLike | null): DashboardComplianceRule[] {
+  if (!organization) return [];
+  const out: DashboardComplianceRule[] = [];
+  const profile = legalGovernanceProfile(organization);
+  const make = (id: string, text: string, citationIds: readonly string[], audience: RuleAudience, check: (context: DashboardComplianceContext) => { text: string; level: ComplianceFlagLevel } | null, to = "/app/directors"): DashboardComplianceRule => ({
+    id, audience, jurisdiction: profile?.jurisdictionCode ?? "CA", societyType: profile?.name ?? "organization", effectiveDate: "2026-10-11",
+    ruleText: text, citation: citationIds.join(", ") || "Applicability assessment; no statutory conclusion",
+    evidenceRequired: ["Current legal identity and authoritative register or document evidence"],
+    remediationActions: [{ id: "review-evidence", label: "Review evidence", intent: "navigate", to }],
+    passFail(context) { const result = check(context); return result ? flag(this, { ...result, citationIds: [...citationIds] }) : null; },
+    fixtures: [],
+  });
+  if (profile?.kind === 'corporation') {
+    const audience: RuleAudience = `governance:${profile.id}`;
+    out.push(make(`LEGAL-${profile.id}-DIRECTORS-MIN`, 'Minimum directors in the active register', profile.directors.sourceIds, audience, ctx => {
+      const minimum = minimumLegalDirectors(ctx.society) ?? profile.directors.minimum;
+      return ctx.activeDirectors.length < minimum ? { level: 'err', text: `Fewer than ${minimum} active legal directors are recorded for this ${profile.name}. Confirm the register and applicable articles.` } : null;
+    }));
+    out.push(make(`LEGAL-${profile.id}-DIRECTOR-CONSENT`, 'Director consent evidence', profile.directors.consentSourceIds, audience, ctx => {
+      const missing = ctx.activeDirectors.filter(d => !d.consentOnFile).length;
+      return missing ? { level: 'warn', text: `${missing} director${missing === 1 ? '' : 's'} lack linked consent evidence. ${profile.directors.consent}` } : null;
+    }));
+    if (profile.directors.residency === 'canadian_25_percent') out.push(make(`LEGAL-${profile.id}-DIRECTORS-RESIDENCY`, 'Resident Canadian director requirement', profile.directors.sourceIds, audience, ctx => {
+      const required = requiredResidentCanadianDirectors(ctx.activeDirectors.length);
+      const confirmed = ctx.activeDirectors.filter(d => d.residentCanadianStatus === 'yes').length;
+      const unknown = ctx.activeDirectors.filter(d => !d.residentCanadianStatus || d.residentCanadianStatus === 'unknown').length;
+      return confirmed < required ? { level: unknown ? 'warn' : 'err', text: `${confirmed} confirmed resident Canadian director${confirmed === 1 ? '' : 's'}; at least ${required} required for the recorded board. ${unknown ? `${unknown} residency assessment${unknown === 1 ? '' : 's'} outstanding. ` : ''}Review stricter regulated-sector exceptions.` } : null;
+    }));
+    out.push(make(`LEGAL-${profile.id}-CLASSIFICATION`, 'Public/private classification', profile.directors.sourceIds, audience, ctx => ctx.society?.distributing === undefined ? { level: 'warn', text: 'Confirm the applicable public, distributing or offering classification; director minima and governance exceptions depend on it.' } : null, '/app/society'));
+    out.push(make(`LEGAL-${profile.id}-GOVERNING-DOCUMENTS`, 'Governing-document evidence', profile.records[0]?.sourceIds ?? [], audience, ctx => !ctx.society?.bylawsDocId && !ctx.society?.constitutionDocId ? { level: 'warn', text: `Link the current ${profile.id === 'bc_company' ? 'articles and notice of articles' : 'articles and by-laws'} and review the entity-specific minute-book checklist.` } : null, '/app/minute-book'));
+  }
+  const privacy = resolvePrivacyProfile(organization);
+  out.push(make('PRIVACY-APPLICABILITY', 'Assess privacy applicability', [], 'general', () => privacy.status !== 'assessed' && privacy.status !== 'no-general-law-identified' ? { level: 'warn', text: 'Assess privacy law using operating locations and activities. Incorporation jurisdiction alone does not establish which privacy duties apply.' } : null, '/app/privacy'));
+  for (const lawId of privacy.applicableLawIds) {
+    const law = PRIVACY_LAWS[lawId];
+    const audience: RuleAudience = `privacy:${lawId}`;
+    const officerSources = law.rules.find(r => r.key === 'officer')?.citationIds ?? [];
+    out.push(make(`PRIVACY-${lawId}-OFFICER`, 'Accountable privacy person', officerSources, audience, ctx => !ctx.society?.privacyOfficerName ? { level: 'warn', text: `No accountable privacy person is recorded for ${law.label}.` } : null, '/app/privacy'));
+    if (lawId !== 'bc_pipa') {
+      const sources = law.rules.find(r => r.key === 'policy')?.citationIds ?? [];
+      out.push(make(`PRIVACY-${lawId}-POLICY`, 'Privacy practices and policy evidence', sources, audience, ctx => !ctx.society?.privacyPolicyDocId || ctx.society?.privacyProgramStatus !== 'Documented' ? { level: 'warn', text: `Review and link the documented policy and practices for ${law.label}. A document upload alone does not establish compliance.` } : null, '/app/privacy'));
+    }
+  }
+  return out;
 }

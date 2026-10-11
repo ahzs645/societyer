@@ -1,4 +1,5 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
 /* eslint-disable max-lines-per-function */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -252,11 +253,12 @@ export function MinuteBookPage() {
       </div>
 
       <RecordBundlesCard rows={recordBundles} partial={partial} />
+      <LegalRecordsRequirements organization={society} />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">{partial ? "Accessible completeness checks" : "Completeness checks"}</h2>
-          <Badge tone={openCheckCount ? "warn" : partial ? "neutral" : "success"}>{openCheckCount ? `${openCheckCount} visible open` : partial ? "Access limited" : "Clear"}</Badge>
+          <h2 className="card__title">{partial ? "Accessible evidence checks" : "Configured evidence checks"}</h2>
+          <Badge tone={openCheckCount ? "warn" : partial ? "neutral" : "success"}>{openCheckCount ? `${openCheckCount} visible open` : partial ? "Access limited" : "No configured gaps"}</Badge>
         </div>
         <div className="card__body">
           <div className="grid two">

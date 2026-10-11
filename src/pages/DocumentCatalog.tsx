@@ -20,6 +20,7 @@ import { isCorporation } from "../../shared/organizationDomain";
 import { triggerBlobDownload } from "../lib/zip";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { humanizeKey } from "../../shared/documentProvenance";
+import { pathwayForPacket } from "../../shared/pathways/registry";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -106,9 +107,12 @@ export function DocumentCatalogPage() {
   if (society === null) return <SeedPrompt />;
 
   const preparation = entityPreparationDecision(society);
+  const allowedPacketKeys = new Set([...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].filter(packet => {
+    try { pathwayForPacket(society, packet); return true; } catch { return false; }
+  }).map(packet => packet.key));
 
   const onSeedCatalog = async () => {
-    if (seeding || !preparation.allowed || !permissions.can("documents:write")) return;
+    if (seeding || !allowedPacketKeys.size || !permissions.can("documents:write")) return;
     setSeeding(true);
     try {
       await seedCatalog({ societyId: society._id });
@@ -190,7 +194,7 @@ export function DocumentCatalogPage() {
       />
 
       <RelatedDocumentViews current="/app/document-catalog" />
-      {!preparation.allowed && <Banner tone="warn">Route review required. {preparation.message}</Banner>}
+      {!preparation.allowed && <Banner tone="warn">Incorporation route review required. {preparation.message}{allowedPacketKeys.size > 0 ? " Individually reviewed preparation drafts are available below." : ""}</Banner>}
       {generationError && <p role="alert">{generationError}</p>}
 
       {templates === undefined ? (
@@ -201,7 +205,7 @@ export function DocumentCatalogPage() {
         <div className="card">
           <div className="card__body doc-catalog-empty">
             <span className="muted">No templates yet. Your existing files are in <Link className="doc-catalog-link" to="/app/documents">Documents</Link>.</span>
-            {preparation.allowed && permissions.loaded && permissions.can("documents:write") && (
+            {allowedPacketKeys.size > 0 && permissions.loaded && permissions.can("documents:write") && (
               <button className="btn-action btn-action--primary" disabled={seeding} onClick={onSeedCatalog}>
                 {seeding ? "Initializing…" : "Initialize document catalog"}
               </button>
@@ -223,7 +227,8 @@ export function DocumentCatalogPage() {
                   const packet = [...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].find((candidate) => candidate.key === key);
                   const compatibleJurisdiction = !packet || packet.jurisdictions.some((code) => canonicalizeJurisdictionCode(code) === canonicalizeJurisdictionCode(homeJurisdictionCode(society)));
                   const compatibleEntity = !packet || (key?.startsWith("society-") ? isSociety(society) : !isSociety(society));
-                  const canPrepare = preparation.allowed && compatibleJurisdiction && compatibleEntity;
+                  const canPrepare = Boolean(key && allowedPacketKeys.has(key));
+                  const signatureRequired = packet?.signatureRequired ?? t.signatureRequired;
                   return (
                     <div
                       key={t._id}
@@ -240,16 +245,16 @@ export function DocumentCatalogPage() {
                           flexWrap: "wrap",
                         }}
                       >
-                        <strong>{t.name}</strong>
+                        <strong>{packet?.preparationOnly ? packet.templateName : t.name}</strong>
                         <span
                           style={{
                             fontSize: 12,
-                            color: t.signatureRequired
+                            color: signatureRequired
                               ? "var(--orange-11)"
                               : "var(--text-tertiary)",
                           }}
                         >
-                          {t.signatureRequired
+                          {signatureRequired
                             ? "Signature required"
                             : "No signature required"}
                         </span>
@@ -263,7 +268,7 @@ export function DocumentCatalogPage() {
                               className="btn btn--accent"
                               disabled={busyKey === t._id || !permissions.loaded || !permissions.can("documents:write") || !packetKeyOf(t) || !canPrepare || !packetApplies(t)}
                               onClick={() => onGenerate(t)}
-                              title={!permissions.can("documents:write") ? "Document editing permission is required" : !preparation.allowed ? preparation.message : !compatibleJurisdiction || !compatibleEntity ? "Choose a template for this entity and home jurisdiction" : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
+                              title={!permissions.can("documents:write") ? "Document editing permission is required" : !canPrepare ? preparation.message : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
                             >
                               {busyKey === t._id ? "Preparing…" : "Prepare draft"}
                             </button>

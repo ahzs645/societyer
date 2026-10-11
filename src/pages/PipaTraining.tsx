@@ -56,7 +56,7 @@ export function PipaTrainingPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  // PIPA is BC privacy law; other jurisdictions log general privacy training.
+  // The saved activity assessment controls the BC-specific training label.
   const bcPrivacy = appliesBcPrivacyRules(society);
 
   const openNew = () => {
@@ -87,8 +87,8 @@ export function PipaTrainingPage() {
         iconColor="green"
         subtitle="Privacy and anti-spam training for directors, staff and volunteers."
         info={bcPrivacy
-          ? <p>Training records for BC's Personal Information Protection Act (PIPA) and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>
-          : <p>Training records for the privacy law that applies to this organization and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>}
+          ? <p>Training records for BC's Personal Information Protection Act (PIPA) and Canada's anti-spam law (CASL). Set refresher dates from the roles, risks and organizational policy; annual renewal is an optional practice.</p>
+          : <p>Privacy and Canada's anti-spam law (CASL) training records. Confirm the applicable rules and set refresher dates from the roles, risks and organizational policy; annual renewal is an optional practice.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log training
@@ -97,7 +97,7 @@ export function PipaTrainingPage() {
       />
 
       {showMetadataWarning ? (
-        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="PIPA-training" />
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel={bcPrivacy ? "PIPA-training" : "privacy-training"} />
       ) : tableData.objectMetadata ? (
         <RecordTableScope
           tableId="pipa-training"

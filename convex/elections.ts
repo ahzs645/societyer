@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { corporateElectionReviewValidator } from "./lib/electionValidators";
 import {
   listPortable,
   getPortable,
@@ -65,6 +66,7 @@ export const create = authorizedMutation("elections:create", mutation)({
     nominationsOpenAtISO: v.optional(v.string()),
     nominationsCloseAtISO: v.optional(v.string()),
     eligibilityCutoffISO: v.optional(v.string()),
+    corporateReview: v.optional(corporateElectionReviewValidator),
     scrutineerUserIds: v.optional(v.array(v.id("users"))),
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
@@ -82,6 +84,7 @@ export const create = authorizedMutation("elections:create", mutation)({
 export const updateSettings = authorizedMutation("elections:updateSettings", mutation)({
   args: {
     electionId: v.id("elections"),
+    corporateReview: v.optional(corporateElectionReviewValidator),
     nominationsOpenAtISO: v.optional(v.string()),
     nominationsCloseAtISO: v.optional(v.string()),
     scrutineerUserIds: v.optional(v.array(v.id("users"))),
@@ -167,10 +170,12 @@ export const snapshotEligibleVoters = authorizedMutation("elections:snapshotElig
 export const castBallot = authorizedMutation("elections:castBallot", mutation)({
   args: {
     electionId: v.id("elections"),
+    eligibilityId: v.optional(v.id("electionEligibleVoters")),
     choices: v.array(
       v.object({
         questionId: v.id("electionQuestions"),
         optionIds: v.array(v.string()),
+        allocations: v.optional(v.array(v.object({ optionId: v.string(), votes: v.number() }))),
       }),
     ),
     actingUserId: v.optional(v.id("users")),

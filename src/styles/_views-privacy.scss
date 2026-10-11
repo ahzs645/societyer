@@ -6,6 +6,13 @@
   margin-top: token('s-4');
 }
 
+// Applicability questions must remain readable at every field width.
+.privacy-scope-assessment .field__label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .privacy-setup-card .card__head {
   align-items: flex-start;
 }

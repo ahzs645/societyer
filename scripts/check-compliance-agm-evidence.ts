@@ -108,17 +108,26 @@ assert.equal(derived.find((d) => d.key === "agm")?.dueDate, "2026-12-31");
 // --- G-12: annual reports belong to one cycle and late filings are flagged ----
 const lateFiling = { _id: "f1", kind: "AnnualReport", status: "Filed", dueDate: "2026-04-01", filedAt: "2026-04-14", periodLabel: "FY2025-2026" };
 const onTime = { _id: "f2", kind: "AnnualReport", status: "Filed", dueDate: "2025-07-19", filedAt: "2025-07-08", periodLabel: "2025" };
-const lateMatch = annualReportForAgm([lateFiling], "2025-06-19");
+assert.equal(annualReportForAgm([lateFiling], "2025-06-19"), null, "ambiguous fiscal ranges need an explicit registry reporting year");
+const lateMatch = annualReportForAgm([{ ...lateFiling, reportingYear: 2025 }], "2025-06-19");
 assert.equal(lateMatch?.filed, true);
-assert.equal(lateMatch?.late, true, "a report filed ~9 months after the AGM is late");
+assert.equal(lateMatch?.late, undefined, "calendar review is required before a legal lateness conclusion");
+assert.equal(lateMatch?.timingReviewRequired, true);
 assert.equal(lateMatch?.dueDate, "2025-07-19");
-assert.equal(lateMatch?.daysLate, 269);
+assert.equal(lateMatch?.nominalDaysPastDue, 269);
 assert.equal(annualReportForAgm([onTime], "2025-06-19")?.late, false);
 assert.equal(annualReportForAgm([lateFiling], "2025-06-19", { nextAgmDate: "2026-03-01" }), null, "a filing after the next AGM belongs to that AGM");
 assert.equal(annualReportForAgm([onTime], "2026-06-19"), null, "a 2025 filing never satisfies the 2026 AGM's report");
 assert.equal(annualReportForAgm([onTime], "2025-06-19", { claimed: new Set(["f2"]) }), null, "claimed filings are not double counted");
-const noAgm = noAgmAnnualReportForYear([{ _id: "f3", kind: "BCSocietyAnnualReport", status: "Filed", filedAt: "2026-01-20" }], 2025);
+const noAgm = noAgmAnnualReportForYear([{ _id: "f3", kind: "BCSocietyAnnualReport", status: "Filed", filedAt: "2026-01-20", reportingYear: 2025 }], 2025);
 assert.equal(noAgm?.dueDate, "2026-01-31");
 assert.equal(noAgm?.late, false);
+for (const foreign of [{ ...onTime, contextKind: 'extra_provincial' }, { ...onTime, jurisdictionCode: 'CA-ON' }, { ...onTime, jurisdictionCode: 'unreviewed-jurisdiction' }]) {
+  assert.equal(annualReportForAgm([foreign], '2025-06-19'), null, 'An explicit foreign context cannot discharge a home BC society report');
+}
 
+assert.equal(noAgmAnnualReportForYear([{ kind: "BCSocietyAnnualReport", status: "Filed", filedAt: "2026-01-20" }], 2025), null, "a filed date alone cannot identify a reporting year");
+assert.equal(isHeldMeeting({ type: "AGM", scheduledAt: "2025-01-01" }, "2026-10-06"), false, "a past unknown meeting is not completion evidence");
+assert.equal(isHeldMeeting({ type: "AGM", heldAt: "2025-01-01" }, "2026-10-06"), true);
+assert.deepEqual(deriveAgmFacts({ ...society, annualMeetingYear: 2025 }, [], "2026-10-06").agmYears, [], "a year alone cannot establish a held meeting");
 console.log("compliance AGM evidence checks passed");

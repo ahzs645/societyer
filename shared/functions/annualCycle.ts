@@ -25,6 +25,11 @@ import { annualReportForAgm, isAgmMeeting, isHeldMeeting, noAgmAnnualReportForYe
 import { localDateKey } from "../dateOnly";
 import { organizationRuleScope } from "../entityRuleScope";
 import { entityMeetingWording } from "../entityMeetingWording";
+import { legalGovernanceProfile, minimumLegalDirectors, requiredResidentCanadianDirectors } from "../legalGovernanceProfiles";
+import { resolvePrivacyProfile } from "../privacyRuleProfiles";
+import { earliestPermittedNoticeDate, latestPermittedNoticeDate, NOTICE_CALENDAR_REVIEW_CAVEAT } from "../legalMeetingNotice";
+import { annualGovernanceSettings, assessAnnualGovernanceReturnCycle } from "../annualGovernanceEvidence";
+import { assessAnnualMeetingDeadline, withAnnualMeetingCompletion, type DeadlineAssessment } from "../corporationSettings";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -35,6 +40,7 @@ type CycleItem = {
   detail: string;
   status: ItemStatus;
   evidence: string[];
+  sourceIds?: readonly string[];
   dueDate?: string;
   to: string;
   actionLabel: string;
@@ -96,6 +102,8 @@ export async function summaryPortable(
   // annual report) and BC PIPA wording are gated on the workspace's entity
   // type and home jurisdiction.
   const scope = organizationRuleScope(society);
+  const profile = legalGovernanceProfile(society);
+  const privacy = resolvePrivacyProfile(society);
   const corporation = scope.isCorporation;
   const holderNoun = corporation ? "shareholder" : "member";
   // "AGM" for societies; "annual meeting" for corporations and custom entities.
@@ -114,14 +122,37 @@ export async function summaryPortable(
     votingMembers.length > 0 ||
     (memberRegisterIsInstitutionHeld && Boolean(society?.memberDataGapDocumented));
   const activeDirectors = directors.filter((director) => director.status === "Active" && !director.resignedAt);
+  const minimumDirectors = minimumLegalDirectors(society);
+  const canadianResidencyRequired = profile?.directors.residency === "canadian_25_percent";
+  const canadianDirectors = activeDirectors.filter((director) => director.residentCanadianStatus === "yes").length;
+  const requiredCanadianDirectors = requiredResidentCanadianDirectors(activeDirectors.length);
+  const directorsCompositionReady = minimumDirectors !== undefined && activeDirectors.length >= minimumDirectors &&
+    (!requiresBcResidentDirector || activeDirectors.some((director) => director.isBCResident)) &&
+    (!canadianResidencyRequired || canadianDirectors >= requiredCanadianDirectors);
   const allAgms = meetings
     .filter((meeting) => isAgmMeeting(meeting as any) && !/^cancel/i.test(String(meeting.status ?? "")))
     .sort((a, b) => String(a.scheduledAt).localeCompare(String(b.scheduledAt)));
-  const agms = allAgms.filter((meeting) => inYear(meeting.scheduledAt, cycleYear));
+  const annualSettings = annualGovernanceSettings(society ?? {}, allAgms as any[], filings, today);
+  const completionYear = (meeting: any) => annualSettings.annualMeetingCompletions?.find(item => item.date === dateOnly(meeting.heldAt ?? meeting.scheduledAt))?.cycleYear ?? Number(dateOnly(meeting.heldAt ?? meeting.scheduledAt).slice(0, 4));
+  const agms = allAgms.filter((meeting) => isHeldMeeting(meeting as any, today) ? completionYear(meeting) === cycleYear : inYear(meeting.scheduledAt, cycleYear));
   const selectedAgm =
     agms.find((meeting) => new Date(meeting.scheduledAt).getTime() >= now.getTime()) ??
     agms[agms.length - 1] ??
     null;
+  const heldAgmForCycle = agms.filter((meeting) => isHeldMeeting(meeting as any, today)).at(-1);
+  const heldAgmDate = heldAgmForCycle ? dateOnly(heldAgmForCycle.heldAt ?? heldAgmForCycle.scheduledAt) : "";
+  const firstCompletion = annualSettings.annualMeetingCompletions?.find(item => (item.cycleYear ?? Number(item.date.slice(0, 4))) === cycleYear);
+  const priorCutoff = firstCompletion?.date ?? `${cycleYear + 1}-01-01`;
+  const meetingAssessmentBase = assessAnnualMeetingDeadline({ ...annualSettings, annualMeetingAssessmentYear: cycleYear,
+    ...(scope.isBcSociety ? {} : { annualMeetingCompletions: annualSettings.annualMeetingCompletions?.filter(item => item.date < priorCutoff), heldAgmYears: undefined,
+      annualReferenceDate: annualSettings.annualReferenceDate && annualSettings.annualReferenceDate < priorCutoff ? annualSettings.annualReferenceDate : undefined }),
+  }, today);
+  const meetingAssessment: DeadlineAssessment = firstCompletion && !scope.isBcSociety && (meetingAssessmentBase.status !== "review_required" || meetingAssessmentBase.timingReviewRequired)
+    ? { ...withAnnualMeetingCompletion(meetingAssessmentBase, firstCompletion.date), basis: `${meetingAssessmentBase.basis} ${firstCompletion.kind === "held" ? "Held annual meeting" : "Reviewed written annual-business completion"} evidenced on ${firstCompletion.date}; the remaining annual-business records are checked separately.` }
+    : meetingAssessmentBase;
+  const reportAssessment = assessAnnualGovernanceReturnCycle(annualSettings, cycleYear, today);
+  const requiresAnnualCycle = meetingAssessment.status !== "not_applicable";
+  const extensionDate = scope.isBcSociety && society?.agmExtensionEvidence && Number(String(society.agmExtensionDate).slice(0, 4)) === cycleYear + 1 ? dateOnly(society.agmExtensionDate) : undefined;
   const minutesRaw = selectedAgm
     ? minutesRows.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null
     : null;
@@ -135,25 +166,25 @@ export async function summaryPortable(
     ? agmRuns.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null
     : null;
   // Annual reports belong to one cycle only (G-12): the report that follows
-  // this cycle's AGM (BC Societies Act s.73(1)(a): within 30 days after the
+  // this cycle's held AGM (BC Societies Act s.73(1): within 30 days after the
   // AGM), or — for a past year with no AGM — the no-AGM report due January 31
-  // of the following year (s.73(1)(b)). A filing is never counted in two
+  // of the following year (s.73(2)); s.73(3) handles a missed extension.
   // cycles because it must fall between this AGM and the next one.
-  const dueDays = rules?.annualReportDueDaysAfterMeeting ?? 30;
+  const dueDays = scope.isBcSociety ? 30 : rules?.annualReportDueDaysAfterMeeting ?? 0;
   const selectedAgmDate = selectedAgm ? dateOnly(selectedAgm.scheduledAt) : "";
-  const nextAgmAfterSelected = selectedAgm
-    ? allAgms.find((meeting) => dateOnly(meeting.scheduledAt) > selectedAgmDate && isHeldMeeting(meeting as any, today))
+  const nextAgmAfterSelected = heldAgmForCycle
+    ? allAgms.find((meeting) => dateOnly(meeting.scheduledAt) > heldAgmDate && isHeldMeeting(meeting as any, today))
     : undefined;
-  // The AGM-anchored report (s.73(1)(a)) applies to societies; the no-AGM
-  // January 31 report (s.73(1)(b)) is BC Societies Act only. A corporation's
-  // annual report or return follows its registry anniversary instead.
-  const annualReportMatch = selectedAgm && scope.isSociety
-    ? annualReportForAgm(filings as any[], selectedAgmDate, { nextAgmDate: nextAgmAfterSelected?.scheduledAt, dueDays })
-    : !selectedAgm && scope.isBcSociety && today > endISO
-      ? noAgmAnnualReportForYear(filings as any[], cycleYear)
+  // BC societies use s.73(1), (2) or (3). Corporate filings follow their
+  // own recognition-anniversary or taxation-period deadline.
+  const annualReportMatch = heldAgmForCycle && scope.isBcSociety
+    ? annualReportForAgm(filings as any[], heldAgmDate, { nextAgmDate: nextAgmAfterSelected?.scheduledAt, dueDays, cycleYear, asOfISO: today })
+    : !heldAgmForCycle && scope.isBcSociety && requiresAnnualCycle && today > (extensionDate ?? endISO)
+      ? noAgmAnnualReportForYear(filings as any[], cycleYear, { extensionDate, asOfISO: today })
       : null;
-  const annualReport: any = annualReportMatch?.filing ?? null;
-  const noAgmReportDueDate = !selectedAgm && scope.isBcSociety ? `${cycleYear + 1}-01-31` : undefined;
+  const annualReport: any = annualReportMatch?.filing ?? (reportAssessment.status === "satisfied" ? filings.find(row =>
+    annualSettings.annualReturnFilings?.some(evidence => evidence.evidenceRef === String(row._id) && evidence.cycleYear === cycleYear && evidence.filedAt === reportAssessment.filedAt)) : null) ?? null;
+  const noAgmReportDueDate = !heldAgmForCycle && scope.isBcSociety && requiresAnnualCycle ? extensionDate ? addDays(extensionDate, 30) : `${cycleYear + 1}-01-31` : undefined;
   // Presentation evidence must point at THIS cycle's AGM: a statement record
   // presented at last year's AGM is not evidence for this cycle (G-12).
   const presentedFinancial = selectedAgm
@@ -163,25 +194,26 @@ export async function summaryPortable(
   const annualMaintenance = annualMaintenanceRecords
     .filter((row) => row.yearFilingFor === String(cycleYear) || inYear(row.lastAgmDate, cycleYear) || inYear(row.filingDate, cycleYear))
     .sort((a, b) => String(b.updatedAtISO).localeCompare(String(a.updatedAtISO)))[0] ?? null;
-  const selectedFinancial = financials
-    .filter((row) => inYear(row.periodEnd, cycleYear) || row.fiscalYear === String(cycleYear))
+  const selectedFinancial = presentedFinancial ?? financials
+    .filter((row) => row.periodEnd && dateOnly(row.periodEnd) <= (selectedAgmDate || endISO) && dateOnly(row.periodEnd) >= `${cycleYear - 1}-01-01`)
     .sort((a, b) => String(b.periodEnd).localeCompare(String(a.periodEnd)))[0] ?? null;
 
   // A society's annual report follows its AGM. A corporation's annual report or
   // return follows the registry anniversary (compliance obligations), not the AGM.
-  const annualReportDueDate = selectedAgm && scope.isSociety
-    ? addDays(selectedAgmDate, dueDays)
-    : annualReportMatch?.dueDate ?? noAgmReportDueDate;
+  const annualReportDueDate = reportAssessment.dueDate ?? annualReportMatch?.dueDate ?? noAgmReportDueDate;
+  const annualReportTimingReview = Boolean(reportAssessment.timingReviewRequired || (reportAssessment.calendarReviewStatus !== "reviewed" && annualReportMatch?.timingReviewRequired));
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
-  const noticeWindowOpen = selectedAgm ? addDays(dateOnly(selectedAgm.scheduledAt), -noticeMaxDays) : undefined;
-  const noticeWindowClose = selectedAgm ? addDays(dateOnly(selectedAgm.scheduledAt), -noticeMinDays) : undefined;
+  const noticeWindowOpen = selectedAgm ? earliestPermittedNoticeDate(dateOnly(selectedAgm.scheduledAt), noticeMaxDays, rules.noticeUsesCalendarMonthsMaximum ? 2 : undefined) ?? undefined : undefined;
+  const noticeWindowClose = selectedAgm ? latestPermittedNoticeDate(dateOnly(selectedAgm.scheduledAt), noticeMinDays, rules.noticeRequiresClearDays) ?? undefined : undefined;
   const noticeSent = Boolean(selectedAgm?.noticeSentAt || agmRun?.noticeSentAt);
-  const agmHeld = Boolean(minutes || (selectedAgm && new Date(selectedAgm.scheduledAt).getTime() < now.getTime()));
+  const agmHeld = Boolean(selectedAgm && isHeldMeeting(selectedAgm as any, today));
   const currentStage = deriveStage({
     selectedAgm,
     annualReport,
-    annualReportLate: Boolean(annualReportMatch?.late),
+    annualReportLate: Boolean(reportAssessment.late),
+    annualReportTimingReview,
+    annualReportOverdue: reportAssessment.status === "overdue",
     annualReportDueDate,
     agmHeld,
     noticeSent,
@@ -209,7 +241,7 @@ export async function summaryPortable(
   const directorReadinessStatus: ItemStatus =
     directorsTermExpiring.length > 0
       ? (today > directorTermDeadline ? "blocked" : "attention")
-      : directorAttestationsComplete ? "complete" : "attention";
+      : directorsCompositionReady && activeDirectors.every((director) => director.consentOnFile) ? "complete" : "attention";
   const pipaTrainingThisYear = pipaTrainings.filter((row) => inYear(row.completedAtISO, cycleYear));
   const directorElection = selectedAgm
     ? elections.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null
@@ -235,13 +267,14 @@ export async function summaryPortable(
       phase: "before",
       title: `Schedule the ${am}`,
       detail: selectedAgm
-        ? `${selectedAgm.title} is on ${dateOnly(selectedAgm.scheduledAt)}.`
-        : `No ${am} is scheduled for this cycle year.`,
-      status: selectedAgm ? "complete" : today > endISO ? "blocked" : "attention",
+        ? `${selectedAgm.title} ${isHeldMeeting(selectedAgm as any, today) ? "was held" : "is planned"} on ${dateOnly(selectedAgm.heldAt ?? selectedAgm.scheduledAt)}. ${meetingAssessment.basis}${meetingAssessment.late ? " The held date was after the reviewed deadline." : ""}${meetingAssessment.timingReviewRequired ? " Completion timing requires calendar review." : ""}`
+        : `${meetingAssessment.basis}${meetingAssessment.issues.length ? ` Review: ${meetingAssessment.issues.join(" ")}` : ""}`,
+      status: meetingAssessment.status === "not_applicable" ? "upcoming" : meetingAssessment.status === "overdue" ? "blocked" : meetingAssessment.status === "review_required" || meetingAssessment.late || meetingAssessment.timingReviewRequired ? "attention" : selectedAgm || meetingAssessment.status === "satisfied" ? "complete" : "attention",
+      sourceIds: meetingAssessment.sourceIds,
       evidence: wording.isSociety
         ? ["AGM meeting record", "Active bylaw rule set"]
         : ["Annual meeting record", `Meeting rules from the ${wording.governingDocuments}`],
-      dueDate: selectedAgm?.scheduledAt,
+      dueDate: meetingAssessment.dueDate ?? selectedAgm?.scheduledAt,
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/meetings",
       actionLabel: selectedAgm ? `Open ${am}` : `Schedule ${am}`,
     },
@@ -280,9 +313,9 @@ export async function summaryPortable(
       id: "director-readiness",
       phase: "before",
       title: "Check directors and terms",
-      detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${currentDirectorAttestations.length} annual attestation${currentDirectorAttestations.length === 1 ? "" : "s"} for ${cycleYear}${directorsTermExpiring.length > 0 ? `; ${directorsTermExpiring.length} term${directorsTermExpiring.length === 1 ? "" : "s"} expire on/before the ${am}` : ""}.`,
+      detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${currentDirectorAttestations.length} optional annual attestation${currentDirectorAttestations.length === 1 ? "" : "s"} for ${cycleYear}${directorsTermExpiring.length > 0 ? `; ${directorsTermExpiring.length} term${directorsTermExpiring.length === 1 ? "" : "s"} expire on/before the ${am}` : ""}.`,
       status: directorReadinessStatus,
-      evidence: ["Director register", "Consents and annual eligibility attestations", "Term and vacancy review"],
+      evidence: ["Director register", "Consent or other lawful appointment evidence", "Term, qualifications and vacancy review"],
       to: "/directors",
       actionLabel: "Review directors",
     },
@@ -292,10 +325,10 @@ export async function summaryPortable(
       title: `Send ${holderNoun} notice package`,
       detail: selectedAgm
         ? noticeSent
-          ? `Notice is recorded for the ${am}.`
-          : `Notice window: ${noticeWindowOpen} to ${noticeWindowClose}.`
+          ? `Notice is recorded for the ${am}. ${NOTICE_CALENDAR_REVIEW_CAVEAT}`
+          : `Nominal notice window: ${noticeWindowOpen} to ${noticeWindowClose}. ${NOTICE_CALENDAR_REVIEW_CAVEAT}`
         : `Schedule the ${am} before sending notice.`,
-      status: !selectedAgm ? "blocked" : noticeSent ? "complete" : today > (noticeWindowClose ?? endISO) ? "blocked" : "attention",
+      status: !selectedAgm ? "blocked" : "attention",
       evidence: ["Notice delivery log", "Agenda", "Motions and special resolutions", "Electronic participation instructions"],
       dueDate: noticeWindowClose,
       to: selectedAgm ? `/meetings/${selectedAgm._id}/agm` : "/meetings",
@@ -386,23 +419,12 @@ export async function summaryPortable(
     {
       id: "annual-report",
       phase: "after",
-      title: "File annual report",
-      detail: annualReport
-        ? annualReport.status === "Filed"
-          ? annualReportMatch?.late
-            ? `Filed ${dateOnly(annualReport.filedAt)}, ${annualReportMatch.daysLate} day${annualReportMatch.daysLate === 1 ? "" : "s"} after the ${annualReportMatch.dueDate} due date. Keep the late-filing explanation with the filing evidence.`
-            : `Filed ${dateOnly(annualReport.filedAt) || "with evidence"}.`
-          : `Tracked; due ${annualReportDueDate ?? annualReport.dueDate}.`
-        : selectedAgm && scope.isSociety
-          ? `No annual report filing record; due ${annualReportDueDate} (${dueDays} days after the AGM).`
-          : noAgmReportDueDate
-            ? `No AGM ${today > endISO ? "was held" : "is on record yet"} in ${cycleYear}. Without an AGM in ${cycleYear}, the annual report is due ${humanDate(noAgmReportDueDate)}.`
-            : scope.isSociety
-              ? "Schedule the AGM to compute the annual report filing deadline."
-              : "Annual registry filing deadlines follow the anniversary date; review Compliance obligations.",
-      status: annualReport?.status === "Filed" ? (annualReportMatch?.late ? "attention" : "complete") : annualReportDueDate && today > annualReportDueDate ? "blocked" : annualReport ? "attention" : "upcoming",
+      title: `File ${profile?.annualReturn.label.toLowerCase() ?? "annual registry return"}`,
+      sourceIds: reportAssessment.sourceIds,
+      detail: `${reportAssessment.basis}${reportAssessment.filedAt || annualReportMatch?.filed ? ` Filed ${reportAssessment.filedAt ?? dateOnly(annualReport?.filedAt)}${reportAssessment.late ? " after the reviewed deadline" : ""}.` : annualReport ? ` Filing tracked; completion evidence remains outstanding.` : ""}${reportAssessment.issues.length ? ` Review: ${reportAssessment.issues.join(" ")}` : ""}${annualReportTimingReview ? " Review the applicable calendar before assessing filing timeliness." : ""}`,
+      status: reportAssessment.status === "satisfied" || annualReportMatch?.filed ? (annualReportTimingReview || reportAssessment.late ? "attention" : "complete") : reportAssessment.status === "review_required" ? "attention" : reportAssessment.status === "overdue" ? "blocked" : annualReport ? "attention" : "upcoming",
       evidence: ["Annual report filing", "Confirmation number", "Receipt or submission evidence"],
-      dueDate: annualReport?.dueDate ?? annualReportDueDate,
+      dueDate: annualReportDueDate,
       to: annualReport ? "/filings" : scope.isSociety ? "/formation-maintenance" : "/compliance-obligations",
       actionLabel: annualReport?.status === "Filed" ? "Open filing" : "Prepare filing",
     },
@@ -420,10 +442,9 @@ export async function summaryPortable(
       id: "post-agm-directors",
       phase: "after",
       title: "Reflect director and registry changes",
-      detail: requiresBcResidentDirector
-        ? `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${activeDirectors.filter((director) => director.isBCResident).length} BC resident director${activeDirectors.filter((director) => director.isBCResident).length === 1 ? "" : "s"}.`
-        : `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}.`,
-      status: activeDirectors.length > 0 && (!requiresBcResidentDirector || activeDirectors.some((director) => director.isBCResident)) ? "complete" : "blocked",
+      detail: `${activeDirectors.length} active directors; ${minimumDirectors === undefined ? "minimum requires governing-Act review" : `minimum ${minimumDirectors}`}${requiresBcResidentDirector ? `; ${activeDirectors.filter(director => director.isBCResident).length} BC residents, at least one required` : ""}${canadianResidencyRequired ? `; ${canadianDirectors} of ${requiredCanadianDirectors} required resident Canadian directors confirmed` : ""}.`,
+      sourceIds: profile?.directors.sourceIds,
+      status: directorsCompositionReady ? "complete" : "attention",
       evidence: ["Director register", `${amTitle} election result`, "Registry filing evidence if changed"],
       to: "/directors",
       actionLabel: "Review directors",
@@ -431,9 +452,9 @@ export async function summaryPortable(
     {
       id: "pipa-review",
       phase: "ongoing",
-      title: scope.isBcHome ? "Review PIPA privacy program" : "Review privacy program",
-      detail: `${society?.privacyProgramStatus ?? "Unknown"} privacy program; ${pipaTrainingThisYear.length} ${scope.isBcHome ? "PIPA" : "privacy"} training record${pipaTrainingThisYear.length === 1 ? "" : "s"} this cycle.`,
-      status: society?.privacyPolicyDocId && society?.privacyProgramStatus === "Documented" ? "complete" : "attention",
+      title: `Review ${privacy.applicableLawIds.length ? privacy.label : "privacy applicability"}`,
+      detail: `${privacy.label}; ${society?.privacyProgramStatus ?? "Unknown"} privacy program; ${pipaTrainingThisYear.length} privacy training record${pipaTrainingThisYear.length === 1 ? "" : "s"} this cycle.`,
+      status: privacy.status === "assessed" && society?.privacyPolicyDocId && society?.privacyProgramStatus === "Documented" && society?.privacyOfficerName ? "complete" : "attention",
       evidence: ["Privacy policy evidence", "Privacy officer", "Complaint process", "Training or review record"],
       to: "/privacy",
       actionLabel: "Open privacy",
@@ -497,6 +518,8 @@ export async function summaryPortable(
     annualReport,
     annualMaintenance,
     annualReportDueDate,
+    meetingAssessment,
+    reportAssessment,
     noticeWindowOpen,
     noticeWindowClose,
     counts: {
@@ -533,14 +556,17 @@ function deriveStage(args: {
   selectedAgm: any;
   annualReport: any;
   annualReportLate?: boolean;
+  annualReportTimingReview?: boolean;
+  annualReportOverdue?: boolean;
   annualReportDueDate?: string;
   agmHeld: boolean;
   noticeSent: boolean;
   today: string;
   annualMeeting: string;
 }) {
-  if (args.annualReport?.status === "Filed") return args.annualReportLate ? "Annual report filed late" : "Annual report filed";
-  if (args.annualReportDueDate && args.today > args.annualReportDueDate) return `Overdue post-${args.annualMeeting} work`;
+  if (/^(filed|accepted)$/i.test(String(args.annualReport?.status ?? ''))) return args.annualReportTimingReview ? "Annual report filed; timing review" : args.annualReportLate ? "Annual report filed late" : "Annual report filed";
+  if (args.annualReportOverdue) return `Overdue post-${args.annualMeeting} work`;
+  if (args.annualReportTimingReview) return "Annual filing deadline review";
   if (args.agmHeld) return `Post-${args.annualMeeting} work`;
   if (args.noticeSent) return `Ready for ${args.annualMeeting}`;
   if (args.selectedAgm) return "Planning and notice";

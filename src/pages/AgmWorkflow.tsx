@@ -2,7 +2,6 @@ import { minutesQuorumLabel, recordedMinutesQuorum } from "../../shared/minutesQ
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../components/Toast";
-import { noticeWindowSatisfied } from "../features/meetings/lib/noticeWindow";
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -32,7 +31,7 @@ import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { AGM_STEP_ORDER, type AgmStep as Step } from "../features/meetings/components/MeetingDetailSupport";
-import { calendarDaysBetween, daysUntil, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
+import { assessNoticeWindow, noticeWindowLabel, calendarDaysBetween, daysUntil, pastNoticeDateValue } from "../features/meetings/lib/noticeWindow";
 import { formatMeetingDate } from "../../shared/meetingDates";
 import { annualReportForAgm, dateOnly as agmDateOnly } from "../../shared/agmEvidence";
 import { Undo2 } from "lucide-react";
@@ -86,8 +85,8 @@ export function AgmWorkflowPage() {
   const minutes = useQuery(api.minutes.getByMeeting, meetingId ? { meetingId } : "skip");
   const run = useQuery(api.agm.runForMeeting, meetingId ? { meetingId } : "skip");
   const deliveries = useQuery(api.agm.noticeDeliveries, meetingId ? { meetingId } : "skip");
-  // Who is entitled to notice: voting members for a society, voting
-  // shareholders (share register, then shareholder role holders) for a corporation.
+  // Statutory recipients come from the legal member/shareholder audience,
+  // with the applicable director and appointed-auditor rights.
   const coverage = useQuery(api.agm.noticeCoverage, meetingId ? { meetingId } : "skip") as
     | { value: string; detail: string; tone: "success" | "info" | "warn" }
     | undefined;
@@ -226,7 +225,7 @@ export function AgmWorkflowPage() {
   ) ?? 0;
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
-  const noticeWithinWindow = noticeWindowSatisfied(recordedNoticeAt ?? (meetingHeld ? meeting.scheduledAt : new Date()), meeting.scheduledAt, noticeMinDays, noticeMaxDays, rules) && !(meetingHeld && !recordedNoticeAt);
+  const noticeAssessment = assessNoticeWindow(recordedNoticeAt ?? (meetingHeld ? meeting.scheduledAt : new Date()), meeting.scheduledAt, noticeMinDays, noticeMaxDays, rules);
   const meetingDate = agmDateOnly(meeting.scheduledAt);
   const annualReport = meetingDate ? annualReportForAgm(filings ?? [], meetingDate, { dueDays: rules?.annualReportDueDaysAfterMeeting ?? 30 }) : null;
   const votingMemberCount = (members ?? []).filter((member: any) => member.status === "Active" && member.votingRights).length;
@@ -264,17 +263,20 @@ export function AgmWorkflowPage() {
       <div className="card">
         <div className="card__head"><h2 className="card__title">Compliance posture</h2></div>
         <div className="card__body col" style={{ gap: 8 }}>
-          <Item label="Notice window"
+          <Item label="Notice timing"
             value={
               meetingHeld && !recordedNoticeAt
                 ? "Notice date not recorded"
                 : rules?.governanceAutomationBlocked
                   ? `${recordedNoticeAt ? `Sent ${noticeDaysBeforeMeeting} days before · ` : ""}not checked: the notice rules wait on a bylaw review`
-                  : noticeWithinWindow
-                  ? `Within ${noticeMinDays}–${noticeMaxDays} day range${recordedNoticeAt ? ` · sent ${noticeDaysBeforeMeeting} days before` : ""}`
-                  : `Outside the ${noticeMinDays}–${noticeMaxDays} day range`
+                  : noticeAssessment.position === "not_assessed"
+                    ? "Notice timing not assessed: review the recorded dates"
+                    : noticeAssessment.position === "within_nominal_window"
+                      ? `Within nominal calendar window: ${noticeWindowLabel(noticeMinDays, noticeMaxDays, rules)}${recordedNoticeAt ? ` · sent ${noticeDaysBeforeMeeting} days before` : ""}`
+                      : `Outside nominal calendar window: ${noticeWindowLabel(noticeMinDays, noticeMaxDays, rules)}`
             }
-            tone={noticeWithinWindow ? "success" : "warn"}
+            tone={meetingHeld && !recordedNoticeAt ? "warn" : noticeAssessment.tone}
+            detail={noticeAssessment.caveat}
           />
           <Item label="Notice coverage"
             value={coverage?.value ?? (votingMemberCount
@@ -292,16 +294,16 @@ export function AgmWorkflowPage() {
           <Item label="Annual report"
             value={
               annualReport?.filed
-                ? annualReport.late
-                  ? `Filed ${formatDate(String(annualReport.filing.filedAt))} · ${annualReport.daysLate} days late (due ${formatDate(annualReport.dueDate)})`
+                ? annualReport.timingReviewRequired
+                  ? `Filed ${formatDate(String(annualReport.filing.filedAt))} · timeliness review required (nominal due ${formatDate(annualReport.dueDate)})`
                   : `Filed ${formatDate(String(annualReport.filing.filedAt))}`
                 : annualReport
-                  ? `Tracked · due ${formatDate(annualReport.dueDate)}`
+                  ? `Tracked · nominal due ${formatDate(annualReport.dueDate)}; holiday/office calendar review required`
                   : meetingDate
-                    ? `Not filed · due ${formatDate(agmDueDate(meetingDate, rules?.annualReportDueDaysAfterMeeting ?? 30))}`
+                    ? `Not filed · nominal due ${formatDate(agmDueDate(meetingDate, rules?.annualReportDueDaysAfterMeeting ?? 30))}; holiday/office calendar review required`
                     : "Not filed"
             }
-            tone={annualReport?.filed ? (annualReport.late ? "warn" : "success") : "warn"}
+            tone={annualReport?.filed ? (annualReport.timingReviewRequired ? "warn" : "success") : "warn"}
           />
           ) : (
             <Item label="Annual filing" value="Deadline set by the registry; track it in Compliance obligations" tone="info" />
@@ -393,7 +395,7 @@ export function AgmWorkflowPage() {
                               if (!canSendNotice || sendingNotice) return;
                               const ok = await confirm({
                                 title: "Send AGM notice?",
-                                message: `This will send AGM notice by ${noticeChannel}. Confirm the notice window, participation details, agenda, and ${vocab.voterNoun} recipient list are correct.`,
+                                message: `This will send AGM notice by ${noticeChannel}. Confirm the notice dates have been reviewed against the applicable holiday and office-opening rules, and that the participation details, agenda and required recipient list are correct.`,
                                 confirmLabel: "Send notice",
                                 tone: "warn",
                               });
@@ -409,7 +411,7 @@ export function AgmWorkflowPage() {
                               } catch (error) { toast.error("Notice could not be sent", error instanceof Error ? error.message : "Please try again."); }
                               finally { setSendingNotice(false); }
                             }}>
-                              <Send size={12} /> Send notice to all voting {vocab.voterNounPlural}
+                              <Send size={12} /> Send notice to required recipients
                             </button>
                           </>
                         ) : (

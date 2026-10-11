@@ -3,7 +3,7 @@
  *
  * A workspace can be a BC society, a BC/federal/Ontario business corporation, or
  * a custom existing entity. Societies Act warnings and citations must reach only
- * BC societies; BC PIPA reaches only BC-home organizations. This check covers
+ * BC societies; privacy rules depend on assessed operations and activities. This check covers
  * the pure helpers and runs the real dashboard / annual-cycle / minute-book
  * queries through the convex-test oracle for each entity type.
  */
@@ -38,18 +38,28 @@ import { entityMeetingWording } from "../shared/entityMeetingWording";
 import { deriveComplianceDeadlines } from "../shared/corporationSettings";
 import { meetingNoticeCoverage, votingShareholderNoticeAudience } from "../shared/meetingNoticeAudience";
 import { pipaSetupMotionsFor } from "../shared/functions/motionBacklog";
+import { resolvePrivacyProfile, type PrivacyAssessmentFacts } from "../shared/privacyRuleProfiles";
+import { legalGovernanceProfile } from "../shared/legalGovernanceProfiles";
+import { organizationVocabulary } from "../src/lib/organizationVocabulary";
+
+const BC_HANDLING = {
+  privacyOperatingJurisdictions: ["CA-BC"], privacyFederalWork: "no",
+  privacyCommercialActivity: "no", privacyCrossBorderCommercial: "no", privacySectorSpecific: "none",
+} satisfies PrivacyAssessmentFacts;
 
 const ENTITIES = {
-  bcSociety: { name: "Riverside Community Society", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act" },
+  bcSociety: { ...BC_HANDLING, name: "Riverside Community Society", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act" },
   legacyBcSociety: { name: "Legacy Society", jurisdictionCode: "CA-BC" },
-  bcCompany: { name: "Example Provincial Inc.", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_" },
+  bcCompany: { ...BC_HANDLING, privacyCommercialActivity: "yes", name: "Example Provincial Inc.", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_" },
   federalCbca: { name: "Northwind Ltd.", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act" },
   ontarioObca: { name: "Contoso Inc.", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_" },
   albertaSociety: { name: "Prairie Society", jurisdictionCode: "alberta", entityType: "society", actFormedUnder: "societies_act__alberta_" },
   bcCustomEntity: { name: "Custom BC Entity", jurisdictionCode: "CA-BC", entityType: "cooperative" },
+  federalNfp: { name: "Federal Membership Association", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__nfp_", actFormedUnder: "canada_not_for_profit_corporations_act" },
+  ontarioNfp: { name: "Ontario Membership Association", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__nfp_", actFormedUnder: "not_for_profit_corporations_act_2010__ontario_" },
 } as const;
 const CORPORATIONS = ["bcCompany", "federalCbca", "ontarioObca"] as const;
-const NON_BC_SOCIETY = [...CORPORATIONS, "albertaSociety", "bcCustomEntity"] as const;
+const NON_BC_SOCIETY = [...CORPORATIONS, "albertaSociety", "bcCustomEntity", "federalNfp", "ontarioNfp"] as const;
 
 /* ------------------------------ scope helpers ----------------------------- */
 
@@ -58,11 +68,20 @@ assert.equal(appliesBcSocietyRules(ENTITIES.legacyBcSociety), true, "legacy BC w
 assert.equal(organizationRuleScope({ name: "No identity" }).isBcSociety, true, "no recorded identity uses the BC society default");
 for (const key of NON_BC_SOCIETY) assert.equal(appliesBcSocietyRules(ENTITIES[key]), false, `${key}: no Societies Act rules`);
 assert.equal(appliesBcSocietyRules(null), false, "a missing profile shows no society rules");
-assert.equal(appliesBcPrivacyRules(ENTITIES.bcCompany), true, "BC PIPA applies to a BC company");
+assert.equal(appliesBcPrivacyRules(ENTITIES.bcCompany), true, "BC PIPA applies to the assessed private-sector BC handling");
 assert.equal(appliesBcPrivacyRules(ENTITIES.federalCbca), false);
+assert.equal(appliesBcPrivacyRules(ENTITIES.legacyBcSociety), false, "legacy incorporation alone never certifies privacy scope");
+assert.equal(resolvePrivacyProfile(ENTITIES.legacyBcSociety).status, "unassessed");
+assert.equal(organizationVocabulary(ENTITIES.legacyBcSociety).privacyLabel, "Privacy");
+assert.match(organizationVocabulary(ENTITIES.bcCompany).privacyLabel, /BC PIPA/);
+for (const key of ["federalNfp", "ontarioNfp"] as const) {
+  assert.equal(legalGovernanceProfile(ENTITIES[key]), undefined, `${key}: no business-corporation profile`);
+  assert.equal(organizationVocabulary(ENTITIES[key]).isCorporation, false, `${key}: membership entity does not get shareholder wording`);
+  assert.equal(getJurisdictionGuidePack(resolveJurisdictionCode(ENTITIES[key])).rules.length, 0, `${key}: no business-Act guide`);
+}
 assert.equal(appliesBcPrivacyRules(ENTITIES.ontarioObca), false);
 for (const key of NON_BC_SOCIETY) assert.doesNotMatch(automatedComplianceChecksLabel(ENTITIES[key]), /Societies Act/);
-assert.match(automatedComplianceChecksLabel(ENTITIES.bcSociety), /Societies Act/);
+assert.match(automatedComplianceChecksLabel(ENTITIES.bcSociety), /BC society/);
 
 /* -------------------------------- citations ------------------------------- */
 
@@ -104,14 +123,15 @@ assert.doesNotMatch(legalMeetingQuorum({ entityType: "society", jurisdiction: "C
 
 const societyCopy = legalCopyForOrganization(ENTITIES.bcSociety);
 assert.deepEqual(societyCopy.recordsInspectionGuidance, RECORDS_INSPECTION_GUIDANCE);
-assert.equal(societyCopy.privacyLawLabel, "PIPA");
+assert.equal(societyCopy.privacyLawLabel, "Privacy (BC PIPA)");
 for (const key of CORPORATIONS) {
   const copy = legalCopyForOrganization(ENTITIES[key]);
-  assert.deepEqual(copy.recordsInspectionGuidance, [], `${key}: no Societies Act records guidance`);
+  assert.ok(copy.recordsInspectionGuidance.length > 0, `${key}: own-Act records guidance is present`);
+  assert.doesNotMatch(copy.recordsInspectionGuidance.join(" "), /Societies Act|member register/, `${key}: no society records guidance`);
   assert.doesNotMatch(JSON.stringify([copy.intakeNotice, copy.directorAttestation, copy.templateResources, copy.policyRequirements]), /\bsociety\b|Member notice/i, `${key}: no society wording`);
 }
 assert.ok(legalCopyForOrganization(ENTITIES.federalCbca).templateResources.every((resource) => !/BC OIPC/.test(resource.title)), "BC OIPC resources stay BC-only");
-assert.equal(legalCopyForOrganization(ENTITIES.federalCbca).privacyLawLabel, "applicable privacy law");
+assert.equal(legalCopyForOrganization(ENTITIES.federalCbca).privacyLawLabel, "Privacy — applicability needs assessment");
 
 /* -------------------- annual-meeting wording (server) -------------------- */
 
@@ -129,13 +149,17 @@ const deadlineBasis = (organization: any) => deriveComplianceDeadlines(
   { agmMonth: 6, agmDay: 15, fiscalYearEnd: "12-31", anniversaryDate: "2020-03-10", entityType: organization.entityType, jurisdictionCode: organization.jurisdictionCode },
   "2026-01-01",
 ).map((deadline) => deadline.basis ?? "").join(" | ");
-assert.match(deadlineBasis(ENTITIES.bcSociety), /financial statements for the AGM\./);
+assert.match(deadlineBasis(ENTITIES.bcSociety), /statements required for the AGM\./);
 for (const key of CORPORATIONS) {
   const basis = deadlineBasis(ENTITIES[key]);
-  assert.match(basis, /financial statements for the annual meeting of shareholders\./, `${key}: ${basis}`);
+  assert.match(basis, /statements required for the annual meeting\./, `${key}: ${basis}`);
   assert.doesNotMatch(basis, /\bAGM\b/, `${key}: no AGM in derived deadline basis`);
 }
-assert.match(deadlineBasis(ENTITIES.bcCustomEntity), /financial statements for the annual meeting\./);
+assert.match(deadlineBasis(ENTITIES.bcCompany), /within 2 calendar months after/);
+assert.match(deadlineBasis(ENTITIES.federalCbca), /within 60 days after/);
+assert.match(deadlineBasis(ENTITIES.ontarioObca), /taxation year.*six months/);
+assert.match(deadlineBasis(ENTITIES.bcCustomEntity), /statements required for the annual meeting\./);
+assert.match(deadlineBasis(ENTITIES.bcCustomEntity), /Statutory deadline remains unverified/);
 
 // Starter privacy-policy resource: member data for societies only.
 assert.match(JSON.stringify(legalCopyForOrganization(ENTITIES.bcSociety).templateResources), /member-data situation/);
@@ -164,12 +188,12 @@ const memberRows = [
   { _id: "m2", firstName: "Ben", lastName: "Voter", status: "Active", votingRights: true },
   { _id: "m3", firstName: "Cy", lastName: "Nonvoting", status: "Active", votingRights: false },
 ];
-const societyCoverage = meetingNoticeCoverage({ organization: ENTITIES.bcSociety, members: memberRows, deliveries: [{ status: "sent" }, { status: "bounced" }], recordedRecipientCount: 0 });
-assert.deepEqual(
-  { value: societyCoverage.value, detail: societyCoverage.detail, tone: societyCoverage.tone },
-  { value: "1 notified · 2 voting members", detail: "1 delivery record logged", tone: "warn" },
-);
-assert.equal(meetingNoticeCoverage({ organization: ENTITIES.bcSociety, members: [] }).value, "No voting member register");
+const societyCoverage = meetingNoticeCoverage({ organization: ENTITIES.bcSociety, members: memberRows, deliveries: [{ memberId: "m1", status: "sent" }, { memberId: "m2", status: "bounced" }], recordedRecipientCount: 0 });
+assert.equal(societyCoverage.value, "1 dispatched · 3 notice recipients", "non-voting society members still receive notice");
+assert.equal(societyCoverage.deliveredCount, 1, "only identified dispatch evidence counts");
+assert.equal(societyCoverage.tone, "warn");
+assert.match(societyCoverage.detail, /non-voting members/);
+assert.equal(meetingNoticeCoverage({ organization: ENTITIES.bcSociety, members: [] }).value, "No notice audience established");
 const ledger = {
   classes: [{ _id: "common", classType: "share", votingRights: "One vote per share." }, { _id: "pref", classType: "share", votingRights: "Non-voting." }],
   holdings: [
@@ -185,13 +209,13 @@ const ledger = {
 const shareholders = votingShareholderNoticeAudience(ledger);
 assert.equal(shareholders.source, "share_register");
 assert.deepEqual(shareholders.recipients.map((row) => row.name), ["Paper Holder", "Sera Shareholder"], "non-voting holders get no meeting notice");
-const corporationCoverage = meetingNoticeCoverage({ organization: ENTITIES.federalCbca, members: memberRows, shareholders, deliveries: [{ status: "sent" }] });
+const corporationCoverage = meetingNoticeCoverage({ organization: ENTITIES.federalCbca, members: memberRows, shareholders, deliveries: [{ roleHolderId: "r1", status: "sent" }] });
 assert.equal(corporationCoverage.basis, "shareholders");
-assert.equal(corporationCoverage.value, "1 notified · 2 voting shareholders");
-assert.match(corporationCoverage.detail, /share register/);
-assert.match(corporationCoverage.detail, /1 shareholder has no email or mailing address on file/, "missing shareholder contact details are stated, not hidden");
+assert.equal(corporationCoverage.value, "1 dispatched · 2 notice recipients");
+assert.equal(corporationCoverage.source, "share_register");
+assert.match(corporationCoverage.detail, /1 recipients have no email or mailing address recorded/, "missing shareholder contact details are stated, not hidden");
 assert.doesNotMatch(`${corporationCoverage.value} ${corporationCoverage.detail}`, /\bmember/);
-assert.equal(meetingNoticeCoverage({ organization: ENTITIES.bcCompany, shareholders: votingShareholderNoticeAudience({}) }).value, "No shareholders recorded");
+assert.equal(meetingNoticeCoverage({ organization: ENTITIES.bcCompany, shareholders: votingShareholderNoticeAudience({}) }).value, "No notice audience established");
 const roleOnly = votingShareholderNoticeAudience({ roleHolders: ledger.roleHolders });
 assert.equal(roleOnly.source, "shareholder_role_holders", "no share register positions: fall back to shareholder role holders");
 assert.equal(roleOnly.recipients.length, 2);
@@ -199,11 +223,15 @@ assert.equal(roleOnly.recipients.length, 2);
 /* ------------------------------ rule pack -------------------------------- */
 
 const ruleIds = (organization: any) => dashboardComplianceRulePackForOrganization(organization).rules.map((rule) => rule.id);
-assert.equal(ruleIds(ENTITIES.bcSociety).length, bcSocietiesDashboardComplianceRulePack.rules.length);
-assert.deepEqual(ruleIds(ENTITIES.bcCompany), ["PIPA-POLICY-DOCUMENTED", "PIPA-POLICY-EVIDENCE"]);
-assert.deepEqual(ruleIds(ENTITIES.federalCbca), []);
-assert.deepEqual(ruleIds(ENTITIES.ontarioObca), []);
-assert.deepEqual(ruleIds(ENTITIES.albertaSociety), []);
+for (const id of bcSocietiesDashboardComplianceRulePack.rules.map((rule) => rule.id)) assert.ok(ruleIds(ENTITIES.bcSociety).includes(id), `BC society retains ${id}`);
+assert.ok(ruleIds(ENTITIES.bcCompany).includes("PIPA-POLICY-DOCUMENTED"));
+for (const [key, profile] of [["bcCompany", "bc_company"], ["federalCbca", "federal_cbca"], ["ontarioObca", "ontario_obca"]] as const) {
+  assert.ok(ruleIds(ENTITIES[key]).includes(`LEGAL-${profile}-DIRECTORS-MIN`), `${key}: own-Act minimum is configured`);
+  assert.ok(ruleIds(ENTITIES[key]).includes(`LEGAL-${profile}-DIRECTOR-CONSENT`));
+  assert.ok(!ruleIds(ENTITIES[key]).some((id) => id.startsWith("BC-SOC-")), `${key}: no Society Act checks`);
+}
+for (const key of ["albertaSociety", "bcCustomEntity", "federalNfp", "ontarioNfp"] as const) assert.deepEqual(ruleIds(ENTITIES[key]), ["PRIVACY-APPLICABILITY"]);
+assert.ok(!ruleIds(ENTITIES.legacyBcSociety).some((id) => id.startsWith("PIPA-")), "unassessed legacy society gets applicability guidance instead of a guessed privacy law");
 
 /* --------------------- live queries via convex-test ---------------------- */
 
@@ -253,7 +281,7 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
     }
     assert.ok(citations.includes("BC-SOC-DIRECTORS-MIN"), `${key}: society still gets Societies Act citations`);
     assert.ok(cycleItems.some((item) => item.id === "member-register"));
-    assert.equal(cycleItems.find((item) => item.id === "post-agm-directors").status, "blocked", `${key}: BC society needs a BC-resident director`);
+    assert.equal(cycleItems.find((item) => item.id === "post-agm-directors").status, "attention", `${key}: BC society needs its minimum and a BC-resident director`);
     assert.match(coreCheck.label, /constitution/i);
     assert.ok(continuityCitations.some((citation: string) => /Societies Act/.test(citation)), `${key}: continuity checks keep Societies Act citations`);
     continue;
@@ -266,11 +294,21 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
     assert.ok(citationAppliesToOrganization(id, ENTITIES[key]), `${key}: inapplicable citation ${id}`);
   }
   for (const citation of continuityCitations) assert.doesNotMatch(citation, /Societies Act/, `${key}: continuity citation ${citation} leaked`);
-  if (appliesBcPrivacyRules(ENTITIES[key])) assert.deepEqual(ids, ["PIPA-POLICY-DOCUMENTED", "PIPA-POLICY-EVIDENCE"], `${key}: BC-home entity keeps only BC PIPA checks`);
-  else assert.deepEqual(ids, [], `${key}: no automated checks are configured, so none run`);
+  const governance = legalGovernanceProfile(ENTITIES[key]);
+  if (governance?.kind === "corporation") {
+    assert.ok(ids.includes(`LEGAL-${governance.id}-DIRECTOR-CONSENT`), `${key}: own-Act consent evidence check`);
+    assert.ok(ids.includes(`LEGAL-${governance.id}-GOVERNING-DOCUMENTS`), `${key}: own-Act document check`);
+  }
+  if (appliesBcPrivacyRules(ENTITIES[key])) {
+    assert.ok(ids.includes("PIPA-POLICY-DOCUMENTED") && ids.includes("PIPA-POLICY-EVIDENCE"), `${key}: assessed BC handling keeps BC PIPA checks`);
+    assert.ok(!ids.includes("PRIVACY-APPLICABILITY"), `${key}: complete privacy scope is recognized`);
+  } else {
+    assert.ok(ids.includes("PRIVACY-APPLICABILITY"), `${key}: unknown privacy scope remains visible`);
+    assert.ok(!ids.some((id: string) => id.startsWith("PIPA-")), `${key}: no guessed BC PIPA check`);
+  }
 
   assert.ok(!cycleItems.some((item) => /BC resident/.test(item.detail)), `${key}: no BC-resident director copy`);
-  assert.equal(cycleItems.find((item) => item.id === "post-agm-directors").status, "complete", `${key}: no BC-resident director requirement`);
+  assert.equal(cycleItems.find((item) => item.id === "post-agm-directors").status, key === "bcCompany" || key === "ontarioObca" ? "complete" : "attention", `${key}: own-profile composition; federal residency and unknown governing Acts remain unresolved`);
   if (!appliesBcPrivacyRules(ENTITIES[key])) assert.ok(!cycleItems.some((item) => /PIPA/.test(`${item.title} ${item.detail}`)), `${key}: no PIPA wording`);
   if ((CORPORATIONS as readonly string[]).includes(key)) {
     assert.ok(!cycleItems.some((item) => item.id === "member-register"), `${key}: no member register step`);
@@ -344,18 +382,18 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
     }
   });
   const societyNotice = await test.withIdentity({ subject: "bcSociety", issuer }).query(api.agm.noticeCoverage, { meetingId: societyMeetingId });
-  assert.equal(societyNotice.value, "0 notified · 1 voting member", "society notice coverage still counts voting members");
-  assert.equal(societyNotice.detail, "0 delivery records logged");
+  assert.equal(societyNotice.value, "0 dispatched · 1 notice recipients", "society notice coverage counts all recorded members");
+  assert.match(societyNotice.detail, /0 distinct recipients have dispatch evidence/);
   const corporationNotice = await test.withIdentity({ subject: "federalCbca", issuer }).query(api.agm.noticeCoverage, { meetingId: corporationMeetingId });
   assert.equal(corporationNotice.basis, "shareholders");
-  assert.equal(corporationNotice.value, "0 notified · 2 voting shareholders", "corporation notice coverage counts voting shareholders, not members");
-  assert.match(corporationNotice.detail, /1 shareholder has no email or mailing address on file/);
+  assert.equal(corporationNotice.value, "0 dispatched · 3 notice recipients", "corporation notice coverage includes voting shareholders and its director");
+  assert.match(corporationNotice.detail, /2 recipients have no email or mailing address recorded/);
   assert.doesNotMatch(corporationNotice.value, /member register/);
 
   // Queued notice records go to the corporation's shareholders, not its members table.
   await test.withIdentity({ subject: "federalCbca", issuer }).mutation(api.agm.queueNoticeToAllVotingMembers, { societyId: corporation, meetingId: corporationMeetingId, channel: "mail" });
   const queued = await test.run((ctx) => ctx.db.query("noticeDeliveries").withIndex("by_meeting", (q: any) => q.eq("meetingId", corporationMeetingId)).collect());
-  assert.deepEqual(queued.map((row: any) => row.recipientName).sort(), ["Sera Shareholder", "Una Unreachable"]);
+  assert.deepEqual(queued.map((row: any) => row.recipientName).sort(), ["Only Director", "Sera Shareholder", "Una Unreachable"]);
 
   // Privacy setup motions seeded for a corporation leave out the member-data memo.
   const seeded = await test.withIdentity({ subject: "federalCbca", issuer }).mutation(api.motionBacklog.seedPipaSetup, { societyId: corporation });
@@ -370,10 +408,12 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
 
   // Privacy policy starter draft: shareholder records, not member records, for a corporation.
   const draft = await test.withIdentity({ subject: "federalCbca", issuer }).mutation(api.documents.createPipaPolicyDraft, { societyId: corporation });
-  assert.match(draft.document.content, /## 8\. Shareholder Records/);
+  assert.match(draft.document.content, /shareholder and securities records/i);
   assert.doesNotMatch(draft.document.content, /society records|member register|member-data|communicate with members/i);
   const societyDraft = await test.withIdentity({ subject: "bcSociety", issuer }).mutation(api.documents.createPipaPolicyDraft, { societyId: society });
-  assert.match(societyDraft.document.content, /## 8\. Member Records and Institution-Held Data/, "society draft unchanged");
+  assert.match(societyDraft.document.content, /member register/i, "society draft includes member records");
+  assert.match(societyDraft.document.content, /BC PIPA/, "saved activity assessment scopes the society draft");
+  assert.doesNotMatch(draft.document.content, /### BC PIPA/, "unassessed federal incorporation never selects BC requirements");
 
   // Public intake context carries the registry identity so the form wording switches.
   await test.run((ctx) => ctx.db.patch(corporation, { publicSlug: "northwind", publicTransparencyEnabled: true, publicVolunteerIntakeEnabled: true } as any));
@@ -387,4 +427,4 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
   assert.equal(legalCopyForOrganization(intake.society).entityNoun, "corporation", "intake pages word their copy for a corporation");
 }
 
-console.log("Entity rule scope passed: BC societies keep Societies Act warnings and citations; BC/federal/Ontario corporations, non-BC societies and custom entities receive none (dashboard, annual cycle, minute book, guide tracks, citations, legal copy, decision warnings); year-end readiness, annual-cycle summary, derived deadlines, notice coverage, privacy setup motions, meeting templates and public intake use annual-meeting and shareholder wording for corporations.");
+console.log("Entity scope passed: governing-Act profiles, activity-based privacy, nonprofit/custom exclusions, source and guide scope, dashboards, evidence readiness, distinct notice recipients, authored privacy drafts, setup motions and public intake projection.");

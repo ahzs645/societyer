@@ -1,3 +1,5 @@
+import { earliestPermittedNoticeDate, NOTICE_CALENDAR_REVIEW_CAVEAT } from "../../../../shared/legalMeetingNotice";
+
 /** Notice-window helpers for general meetings (AGM/SGM), shared by the
  *  Meetings page drawer and the schedule-from-template modal. */
 
@@ -30,7 +32,8 @@ export function meetingScheduleConflicts<T extends {
  *  unparseable. Day granularity so a suggested default of "now + minDays"
  *  passes its own check after datetime-local truncates the seconds. */
 function localDayNumber(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
+  const date = value instanceof Date ? value : /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10))) : new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
   return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
 }
@@ -58,26 +61,55 @@ export function noticeDaysUntil(value: string, rules?: NoticeRules, now: string 
   return days == null ? null : days - (rules?.noticeRequiresClearDays ? 1 : 0);
 }
 
-export function noticeWindowSatisfied(notice: string | Date, meeting: string, minDays: number, maxDays: number, rules?: NoticeRules) {
+/** Compare nominal calendar arithmetic only. This does not establish that
+ * notice was legally sufficient after holiday, office or delivery review. */
+export function withinNominalNoticeWindow(notice: string | Date, meeting: string, minDays: number, maxDays: number, rules?: NoticeRules) {
   if (rules?.governanceAutomationBlocked) return false;
   const calendarDays = calendarDaysBetween(meeting, notice);
   if (calendarDays == null || calendarDays - (rules?.noticeRequiresClearDays ? 1 : 0) < minDays) return false;
   if (!rules?.noticeUsesCalendarMonthsMaximum) return calendarDays <= maxDays;
-  const source = notice instanceof Date ? notice : new Date(notice);
-  const limit = new Date(source.getFullYear(), source.getMonth() + 2, 1);
-  const last = new Date(limit.getFullYear(), limit.getMonth() + 1, 0).getDate();
-  limit.setDate(Math.min(source.getDate(), last));
-  return (localDayNumber(meeting) ?? Infinity) <= (localDayNumber(limit) ?? -Infinity);
+  const dateOnly = (value: string | Date) => {
+    const day = localDayNumber(value);
+    return day == null ? "" : new Date(day * 864e5).toISOString().slice(0, 10);
+  };
+  const earliest = earliestPermittedNoticeDate(dateOnly(meeting), maxDays, 2);
+  return !!earliest && dateOnly(notice) >= earliest;
 }
 
-export function meetsNoticeWindow(value: string, minDays: number, maxDays: number, rules?: NoticeRules) {
-  return noticeWindowSatisfied(new Date(), value, minDays, maxDays, rules);
+/** @deprecated Use withinNominalNoticeWindow for planning or assessNoticeWindow
+ * for a displayed posture. A true result is not verified legal notice timing. */
+export const noticeWindowSatisfied = withinNominalNoticeWindow;
+
+/** A successful raw date comparison must not become a green legal conclusion.
+ * There is deliberately no guessed holiday calendar or automatic adjustment. */
+export function assessNoticeWindow(notice: string | Date, meeting: string, minDays: number, maxDays: number, rules?: NoticeRules) {
+  const unavailable = rules?.governanceAutomationBlocked || calendarDaysBetween(meeting, notice) == null;
+  const within = !unavailable && withinNominalNoticeWindow(notice, meeting, minDays, maxDays, rules);
+  return {
+    position: unavailable ? "not_assessed" as const : within ? "within_nominal_window" as const : "outside_nominal_window" as const,
+    calendarReviewStatus: "required" as const,
+    legallyVerified: false as const,
+    tone: within ? "info" as const : "warn" as const,
+    caveat: NOTICE_CALENDAR_REVIEW_CAVEAT,
+  };
 }
+
+export function noticeWindowLabel(minDays: number, maxDays: number, rules?: NoticeRules) {
+  const minimum = `${minDays}${rules?.noticeRequiresClearDays ? " clear" : ""} days`;
+  const period = rules?.noticeUsesCalendarMonthsMaximum ? `at least ${minimum}, no earlier than 2 calendar months before the meeting` : `${minimum} minimum, ${maxDays} days maximum`;
+  return `nominal ${period}; holiday/office calendar review required`;
+}
+
+export function meetsNominalNoticeWindow(value: string, minDays: number, maxDays: number, rules?: NoticeRules) {
+  return withinNominalNoticeWindow(new Date(), value, minDays, maxDays, rules);
+}
+
+/** @deprecated This is only a nominal planning comparison. */
+export const meetsNoticeWindow = meetsNominalNoticeWindow;
 
 /**
- * Default start for a new meeting: the first day that satisfies the notice
- * period, at 6:00 PM local time (a usual board meeting hour) rather than the
- * current minute.
+ * Nominal planning start for a new meeting at 6:00 PM local time. Actual
+ * notice timing still needs the applicable holiday/office and delivery review.
  */
 export function defaultNewMeetingStart(noticeDays: number, now: Date = new Date()): Date {
   const start = new Date(now);
@@ -126,7 +158,7 @@ export function isPastMeeting(value: string, now: string | Date = new Date()) {
 export function newGeneralMeetingNoticeProblem(value: string, minDays: number, rules?: NoticeRules, now: string | Date = new Date()) {
   if (isPastMeeting(value, now)) return null;
   const days = noticeDaysUntil(value, rules, now);
-  return days == null || days < minDays ? `General meetings need at least ${minDays} days of notice.` : null;
+  return days == null || days < minDays ? `General meetings need at least ${minDays} days of notice under the nominal calendar calculation. Review the applicable holiday and office-opening rules.` : null;
 }
 
 /** New meetings dated before today are recorded as held, not scheduled. */

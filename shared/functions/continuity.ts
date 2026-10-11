@@ -187,7 +187,7 @@ async function loadSnapshot(ctx: PortableQueryCtx, societyId: string): Promise<{
   ]);
   const snapshot: ContinuitySnapshot = {
     today: todayISO(),
-    society: society ? { incorporationDate: society.incorporationDate, jurisdictionCode: society.jurisdictionCode, entityType: society.entityType, isMemberFunded: society.isMemberFunded, fiscalYearEnd: society.fiscalYearEnd } : null,
+    society: society ? { incorporationDate: society.incorporationDate, jurisdictionCode: society.jurisdictionCode, homeJurisdictionCode: society.homeJurisdictionCode, entityType: society.entityType, actFormedUnder: society.actFormedUnder, legalSubtype: society.legalSubtype, distributing: society.distributing, isMemberFunded: society.isMemberFunded, fiscalYearEnd: society.fiscalYearEnd, agmExtensionDate: society.agmExtensionDate, agmExtensionEvidence: society.agmExtensionEvidence, annualMeetingDate: society.annualMeetingDate, annualMeetingYear: society.annualMeetingYear } : null,
     committees: committees.map((row: any) => snapshotCommittee(row, meetings)),
     meetings: meetings.map((row: any) => ({ _id: String(row._id), type: row.type, title: row.title, scheduledAt: String(row.scheduledAt ?? ""), status: row.status, committeeId: row.committeeId ? String(row.committeeId) : undefined, minutesId: row.minutesId ? String(row.minutesId) : undefined })),
     minutes: minutes.map((row: any) => ({ _id: String(row._id), meetingId: String(row.meetingId), heldAt: row.heldAt, approvedAt: row.approvedAt, approvedInMeetingId: row.approvedInMeetingId ? String(row.approvedInMeetingId) : undefined, status: row.status })),
@@ -283,8 +283,8 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
     checks.push({
       id: "CONTINUITY-ANNUAL-REPORT-FILED",
       level,
-      title: `Annual report filed after the ${am}`,
-      text: !latest ? `No ${am} recorded in the last two years, so no annual report is expected yet.` : latest.status === "satisfied" ? `Filed for ${latest.label}${latest.note ? ` (${latest.note})` : ""}.` : latest.status === "upcoming" ? `Annual report for ${latest.label} due ${latest.dueDate}.` : `No filing evidence for the ${latest.label} ${am} (due ${latest.dueDate}).`,
+      title: "Annual report filing evidence",
+      text: !latest ? "No applicable annual reporting cycle is identified; review incorporation and filing history." : latest.status === "satisfied" ? `Filed for ${latest.label}${latest.note ? ` (${latest.note})` : ""}.` : latest.status === "upcoming" ? `Annual report for ${latest.label} due ${latest.dueDate}.` : `No filing evidence for the ${latest.label} cycle (due ${latest.dueDate}).`,
       to: "/app/filings",
       citation: filingRow.expectation.citation,
     });
@@ -525,7 +525,7 @@ export async function seedRulePackPortable(ctx: PortableMutationCtx, { societyId
   const existing = new Set(stored.map((row: any) => row.ruleKey).filter(Boolean));
   const implicit = effectiveExpectations([], {
     today: todayISO(),
-    society: society ? { incorporationDate: society.incorporationDate, jurisdictionCode: society.jurisdictionCode, entityType: society.entityType, isMemberFunded: society.isMemberFunded } : null,
+    society: society ? { incorporationDate: society.incorporationDate, jurisdictionCode: society.jurisdictionCode, homeJurisdictionCode: society.homeJurisdictionCode, entityType: society.entityType, actFormedUnder: society.actFormedUnder, legalSubtype: society.legalSubtype, distributing: society.distributing, isMemberFunded: society.isMemberFunded } : null,
     meetings: meetings.map((row: any) => ({ _id: String(row._id), scheduledAt: String(row.scheduledAt ?? "") })),
   });
   const nowISO = new Date().toISOString();
@@ -579,7 +579,8 @@ export async function deriveFromBylawRulesPortable(ctx: PortableMutationCtx, { s
       kind: "annual_filing",
       bodyKind: "organization",
       rule: { frequency: "after_event", anchor: "agm", offsetDays: Number(active.annualReportDueDaysAfterMeeting ?? 30) },
-      include: Number(active.annualReportDueDaysAfterMeeting ?? 30) !== 30,
+      // Bylaws do not change the registry's statutory filing deadline.
+      include: false,
     },
     {
       ruleKey: "BYLAW-FS-AT-AGM",

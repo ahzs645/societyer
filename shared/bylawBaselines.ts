@@ -1,4 +1,5 @@
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, organizationEntityType } from "./organizationDomain";
+import { legalGovernanceProfile } from "./legalGovernanceProfiles";
 
 /** Operational draft defaults. This is never evidence of adopting model bylaws. */
 export const DEFAULT_BYLAW_RULES = {
@@ -7,7 +8,7 @@ export const DEFAULT_BYLAW_RULES = {
   allowElectronicMeetings: true, allowHybridMeetings: true, allowElectronicVoting: false,
   allowProxyVoting: false, proxyHolderMustBeMember: false, proxyLimitPerGrantorPerMeeting: 1,
   quorumType: "fixed", quorumValue: 3, quorumMinimumCount: 3,
-  memberProposalThresholdPct: 5, memberProposalMinSignatures: 1, memberProposalLeadDays: 7,
+  memberProposalThresholdPct: 5, memberProposalMinSignatures: 2, memberProposalLeadDays: 7,
   requisitionMeetingThresholdPct: 10, annualReportDueDaysAfterMeeting: 30,
   requireAgmFinancialStatements: true, requireAgmElections: true, ballotIsAnonymous: true,
   voterMustBeMemberAtRecordDate: true, inspectionMemberRegisterByMembers: true,
@@ -20,18 +21,21 @@ export const DEFAULT_BYLAW_RULES = {
 export function bylawBaselineForOrganization<SocietyId extends string>(organization: any, societyId: SocietyId) {
   const rawJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const entityType = organizationEntityType(organization);
-  const legacyBcSociety = Boolean(organization && entityType === "organization" && !organization.entityType && !organization.kind && !organization.organizationKind &&
-    (organization.actFormedUnder === "societies_act" || /^S\d/i.test(organization.incorporationNumber ?? "") || rawJurisdiction === "CA-BC"));
-  const jurisdictionCode = legacyBcSociety && rawJurisdiction === "unknown" ? "CA-BC" : rawJurisdiction;
-  const society = (entityType === "society" || legacyBcSociety) && jurisdictionCode === "CA-BC";
-  const company = entityType === "corporation__business_";
-  const supported = society || (company && ["CA-BC", "CA-FED-CBCA"].includes(jurisdictionCode));
-  const bcCompany = company && jurisdictionCode === "CA-BC";
-  const baselineLabel = !supported ? "Governance review required for this entity and jurisdiction" : company ? bcCompany ? "BC BCA statutory draft baseline; articles review required" : jurisdictionCode === "CA-FED-CBCA" ? "CBCA statutory draft baseline; articles/bylaws review required" : "Ontario governance review required" : "BC Societies Act statutory draft baseline; filed bylaws review required";
+  const profile = legalGovernanceProfile(organization);
+  // Use the resolver's authority consistently, including its deliberate empty
+  // legacy BC compatibility. An explicit unknown retains the review state.
+  const jurisdictionCode = profile?.jurisdictionCode ?? rawJurisdiction;
+  const company = profile?.kind === "corporation" || entityType === "corporation__business_";
+  const supported = !!profile;
+  const bcCompany = profile?.id === "bc_company";
+  const baselineLabel = !profile ? "Governance review required for this entity and jurisdiction" : `${profile.name} statutory draft baseline; governing documents review required`;
   return {
     ...DEFAULT_BYLAW_RULES, societyId,
     ...(company ? {
-      generalNoticeMinDays: 21, generalNoticeMaxDays: bcCompany ? 62 : 60,
+      generalNoticeMinDays: profile?.id === "ontario_obca" && organization?.distributing ? 21 : profile?.meetings.noticeMinDays ?? 21,
+      // Compatibility field for stored day-based rules; BC uses the separate
+      // calendar-month maximum in every statutory notice assessment.
+      generalNoticeMaxDays: profile?.meetings.noticeMaxDays ?? 62,
       allowProxyVoting: true,
       quorumType: bcCompany ? "fixed" : "percentage",
       quorumValue: bcCompany ? 2 : 50,
@@ -42,7 +46,7 @@ export function bylawBaselineForOrganization<SocietyId extends string>(organizat
     } : {}),
     updatedAtISO: new Date().toISOString(),
     isFallback: true, requiresLegalReview: true, jurisdictionCode,
-    baselineLabel, authorityCitation: !supported ? "No reviewed legal authority for this entity and jurisdiction" : company ? bcCompany ? "BCA ss.169,172; Regulation; applicable articles" : jurisdictionCode === "CA-FED-CBCA" ? "CBCA ss.135,139; CBCR; applicable by-laws" : "OBCA; unverified governance configuration" : "Societies Act ss.67,77; applicable bylaws",
+    baselineLabel, authorityCitation: !supported ? "No reviewed legal authority for this entity and jurisdiction" : company ? bcCompany ? "BCA ss.169,172; Regulation s.3; applicable articles" : jurisdictionCode === "CA-FED-CBCA" ? "CBCA ss.135,139; CBCR; applicable by-laws" : "OBCA ss.96,101; applicable bylaws" : "Societies Act ss.77,82; applicable bylaws",
     quorumDenominator: !supported ? "review_required" : company ? bcCompany ? "legal_shareholders" : "issued_voting_shares" : "legal_voting_members",
     quorumRequiresLegalRegister: company || !supported,
     governanceAutomationBlocked: !supported || organization?.formationStatus === "preparing" || organization?.formationStatus === "submitted" || organization?.formationStatus === "unverified_existing",

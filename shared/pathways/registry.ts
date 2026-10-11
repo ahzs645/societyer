@@ -27,6 +27,8 @@ export type PathwayDefinition = {
   preparation?: IncorporationPreparationGuide;
   flow?: PostIncorporationFlow;
   packetKeys: string[];
+  /** Individually reviewed drafts may be available while incorporation stays gated. */
+  reviewedPreparationPacketKeys?: string[];
   packetContexts?: Record<string, { kind: "extra_provincial"; jurisdictions: string[] }>;
   pipeline?: PipelineGraph;
 };
@@ -96,6 +98,7 @@ export const PATHWAY_REGISTRY: readonly PathwayDefinition[] = createPathwayRegis
   }),
   incorporationPathway({
     key: "ontario_obca", title: "Ontario OBCA business incorporation", availability: "review_required",
+    reviewedPreparationPacketKeys: ["annual-resolutions"],
     eligibility: { jurisdictions: ["CA-ON-OBCA"], entityTypes: ["corporation__business_"], acts: ["business_corporations_act__ontario_"], subtypes: [] },
     setup: { label: "Ontario business corporation (OBCA)", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_", hint: "Filed with the Ontario Business Registry; preparation guidance is still under review." },
     message: "Ontario preparation remains under review. Confirm the Ontario rules and document forms before using a packet.",
@@ -116,6 +119,11 @@ export function validatePathwayRegistry(entries: readonly PathwayDefinition[]): 
     if (entry.eligibility.jurisdictions.some((code) => canonicalizeJurisdictionCode(code) !== code)) throw new Error("Pathway registration requires canonical jurisdiction codes.");
     if (!entry.eligibility.jurisdictions.includes(entry.setup.jurisdictionCode) || !entry.eligibility.entityTypes.includes(entry.setup.entityType) || !entry.eligibility.acts.includes(entry.setup.actFormedUnder)) throw new Error("Setup choices must agree with pathway eligibility.");
     if (new Set(entry.packetKeys).size !== entry.packetKeys.length) throw new Error("Pathway packet keys must be unique.");
+    if (new Set(entry.reviewedPreparationPacketKeys ?? []).size !== (entry.reviewedPreparationPacketKeys ?? []).length ||
+      (entry.reviewedPreparationPacketKeys ?? []).some(key => !entry.packetKeys.includes(key) ||
+        ![...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].some(packet => packet.key === key && packet.preparationOnly))) {
+      throw new Error("Reviewed packet exceptions must name registered preparation-only catalog drafts.");
+    }
     for (const [packetKey, context] of Object.entries(entry.packetContexts ?? {})) {
       if (!entry.packetKeys.includes(packetKey) || context.kind !== "extra_provincial" || !context.jurisdictions.length || context.jurisdictions.some((code) => !code.trim() || code === "unknown" || canonicalizeJurisdictionCode(code) !== code)) throw new Error("Registration packet context must name a registered packet and explicit target jurisdictions.");
     }
@@ -180,7 +188,8 @@ export function resolvePathway(entity?: PathwayEntity | null, registry: readonly
 
 export function pathwayForPacket(entity: PathwayEntity, packet: { key: string; preparationOnly?: boolean; jurisdictions: string[] }, registry: readonly PathwayDefinition[] = PATHWAY_REGISTRY) {
   const result = resolvePathway(entity, registry);
-  if (!result.allowed || !result.pathway) throw new Error(result.message);
+  const reviewedDraft = packet.preparationOnly === true && result.pathway?.reviewedPreparationPacketKeys?.includes(packet.key);
+  if ((!result.allowed && !reviewedDraft) || !result.pathway) throw new Error(result.message);
   const context = result.pathway.packetContexts?.[packet.key];
   const permitted = context && !packet.preparationOnly ? context.jurisdictions : result.pathway.eligibility.jurisdictions;
   if (!packet.jurisdictions.some((code) => permitted.includes(canonicalizeJurisdictionCode(code)))) throw new Error("This document template does not apply to the selected home jurisdiction or registered target context.");

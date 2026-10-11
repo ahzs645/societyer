@@ -215,6 +215,7 @@ export function DocumentWorkbenchPage() {
           </>
         }
       />
+      {document.preparationReviewWarning && <p className="muted" role="alert">{document.preparationReviewWarning}</p>}
       {document.archivedAtISO && <p className="muted" role="status">Archived {formatDate(document.archivedAtISO)}{document.archivedReason ? ` — ${document.archivedReason}` : ""}</p>}
       {permissions.loaded && !canEdit && <p className="muted">Your role can read this document. Document editing permission is required to change review status or comments.</p>}
 

@@ -1,3 +1,4 @@
+import { LegalGovernanceGuidance } from "../components/LegalGovernanceGuidance";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useState } from "react";
 import { useQuery } from "convex/react";
@@ -32,6 +33,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
  */
 export function AuditorsPage() {
   const society = useSociety();
+  const toast = useToast();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("auditors:write");
   const items = useQuery(api.auditors.list, society ? { societyId: society._id } : "skip");
@@ -59,15 +61,19 @@ export function AuditorsPage() {
       firmName: "",
       engagementType: "ReviewEngagement",
       fiscalYear: new Date().getFullYear().toString(),
-      appointedBy: "Directors",
+      appointedBy: "",
       appointedAtISO: todayDateOnly(),
-      independenceAttested: true,
+      independenceAttested: false,
       status: "Active",
     });
     setOpen(true);
   };
   const save = async () => {
     if (!canWrite) return;
+    if (!form.firmName?.trim() || !form.appointedBy || !form.appointedAtISO) {
+      toast.error("Record the auditor or firm, appointment authority and date.");
+      return;
+    }
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -83,15 +89,15 @@ export function AuditorsPage() {
         icon={<Calculator size={16} />}
         iconColor="green"
         subtitle={`Who audits or reviews the ${vocab.organizationNoun}'s financial statements.`}
-        info={vocab.societyLaw
-          ? <p>First auditor appointed by directors; subsequent appointments made by members at the AGM. Only independent CPAs or CPA firms may serve as auditors.</p>
-          : <p>Record who audits or reviews the financial statements and how they were appointed. Confirm appointment, qualification and any audit exemption under the governing Act and the {vocab.governingDocuments}.</p>}
+        info={<p>Record the engagement type and actual appointment authority. An audit, review engagement and compilation engagement have different purposes. Confirm any statutory audit requirement or valid waiver before treating an engagement as sufficient.</p>}
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New appointment
           </button>
         }
       />
+
+      <LegalGovernanceGuidance organization={society} topic="auditors" />
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="auditor-appointment" />
@@ -157,7 +163,7 @@ export function AuditorsPage() {
       >
         {form && (
           <div>
-            <Field label="Firm name"><input className="input" value={form.firmName} onChange={(e) => setForm({ ...form, firmName: e.target.value })} /></Field>
+            <Field label="Auditor or firm name"><input className="input" value={form.firmName} onChange={(e) => setForm({ ...form, firmName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Engagement">
                 <Select value={form.engagementType} onChange={(value) => setForm({ ...form, engagementType: value })}
@@ -171,8 +177,10 @@ export function AuditorsPage() {
               <Field label="Appointed by">
                 <Select value={form.appointedBy} onChange={(value) => setForm({ ...form, appointedBy: value })}
                   options={[
+                    { value: "", label: "Select appointment authority" },
                     { value: "Directors", label: "Directors" },
-                    { value: "Members", label: "Members" },
+                    { value: vocab.isCorporation ? "Shareholders" : "Members", label: vocab.isCorporation ? "Shareholders" : "Members" },
+                    { value: "Court", label: "Court" },
                   ]} />
               </Field>
             </div>
@@ -182,7 +190,7 @@ export function AuditorsPage() {
                 options={[{ value: "", label: "— none —" }, ...(documents ?? []).map((d: any) => ({ value: d._id, label: d.title }))]} />
             </Field>
             <label className="checkbox">
-              <input type="checkbox" checked={form.independenceAttested} onChange={(e) => setForm({ ...form, independenceAttested: e.target.checked })} /> Firm has confirmed independence from the society
+              <input type="checkbox" checked={form.independenceAttested} onChange={(e) => setForm({ ...form, independenceAttested: e.target.checked })} /> Auditor or firm has confirmed independence from the {vocab.organizationNoun}
             </label>
           </div>
         )}

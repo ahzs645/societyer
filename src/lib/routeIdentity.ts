@@ -1,3 +1,5 @@
+import { organizationVocabulary } from "./organizationVocabulary";
+import { hasApplicablePrivacyLaw } from "../../shared/privacyRuleProfiles";
 /**
  * Single source of truth for the icon, color, and group every nav route
  * belongs to. Both the sidebar (`Layout.tsx`) and the page-level headers
@@ -179,6 +181,8 @@ export type RouteIdentity = {
    * `routeLabelForOrganization`.
    */
   labelOutsideBc?: string;
+  /** Privacy titles resolve from activity facts, independently of incorporation. */
+  privacyMode?: "policy" | "training";
   /** Label for a BC company, whose articles replace by-laws (BC Business Corporations Act). */
   labelForBcCompany?: string;
   /** Optional module gate; page is hidden when the module is disabled. */
@@ -227,9 +231,11 @@ export function routeLabelForEntityKind(
  * workspace loads, the default label is shown.
  */
 export function routeLabelForOrganization(
-  identity: Pick<RouteIdentity, "label" | "labelByEntityKind" | "labelOutsideBc" | "labelForBcCompany">,
+  identity: Pick<RouteIdentity, "label" | "labelByEntityKind" | "labelOutsideBc" | "labelForBcCompany" | "privacyMode">,
   organization: LegalEntityLike | null | undefined,
 ): string {
+  if (identity.privacyMode === "policy") return organizationVocabulary(organization).privacyLabel;
+  if (identity.privacyMode === "training") return hasApplicablePrivacyLaw(organization, "bc_pipa") ? "PIPA training" : "Privacy training";
   if (!organization) return identity.label;
   const scope = organizationRuleScope(organization);
   if (identity.labelOutsideBc && !scope.isBcHome) return identity.labelOutsideBc;
@@ -331,9 +337,9 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/retention": { icon: Timer, group: "compliance", label: "Records retention", module: "recordsInspection" },
   "/app/records-archive": { icon: Archive, group: "compliance", label: "Records archive" },
   "/app/inspections": { icon: Eye, group: "compliance", label: "Records inspections", module: "recordsInspection" },
-  // PIPA is BC privacy law; other jurisdictions see a neutral label.
-  "/app/privacy": { icon: Shield, group: "compliance", label: "Privacy (PIPA)", labelOutsideBc: "Privacy" },
-  "/app/pipa-training": { icon: ShieldCheck, group: "compliance", label: "PIPA training", labelOutsideBc: "Privacy training", module: "pipaTraining" },
+  // Privacy labels use the saved activity assessment, including while loading.
+  "/app/privacy": { icon: Shield, group: "compliance", label: "Privacy", privacyMode: "policy" },
+  "/app/pipa-training": { icon: ShieldCheck, group: "compliance", label: "Privacy training", privacyMode: "training", module: "pipaTraining" },
   "/app/insurance": { icon: Umbrella, group: "compliance", label: "Insurance", module: "insurance" },
   "/app/access-custody": { icon: KeyRound, group: "compliance", label: "Access custody", module: "secrets" },
   "/app/transparency": { icon: Globe, group: "compliance", label: "Public transparency", module: "transparency" },

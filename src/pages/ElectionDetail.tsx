@@ -73,6 +73,10 @@ export function ElectionDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const [selected, setSelected] = useState<Record<string, string[]>>({});
+  const [allocations, setAllocations] = useState<Record<string, Record<string, number>>>({});
+  const [selectedEligibilityId, setSelectedEligibilityId] = useState("");
+  const [reviewDraft, setReviewDraft] = useState<any | null>(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [nominationDraft, setNominationDraft] = useState({
     nomineeName: "",
     nomineeEmail: currentUser?.email ?? "",
@@ -87,14 +91,22 @@ export function ElectionDetailPage() {
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const election = electionBundle?.election;
-  const myEligibility = useMemo(() => {
-    if (!currentUser?.memberId || !electionBundle?.eligible) return null;
-    return (
-      electionBundle.eligible.find(
-        (row: any) => row.memberId === currentUser.memberId,
-      ) ?? null
-    );
-  }, [currentUser?.memberId, electionBundle?.eligible]);
+  const isCorporation = electionBundle?.isCorporation === true;
+  const myEligibilities = useMemo(() => (electionBundle?.eligible ?? []).filter((row: any) => row.voterKind === "shareholder"
+    ? row.userId === currentUser?._id
+    : !!currentUser?.memberId && row.memberId === currentUser.memberId && (!row.userId || row.userId === currentUser._id)), [currentUser, electionBundle?.eligible]);
+  const myEligibility = myEligibilities.find((row: any) => row._id === selectedEligibilityId) ?? myEligibilities[0] ?? null;
+  const cumulative = election?.corporateReview?.votingMethod === "cumulative";
+
+  useEffect(() => {
+    if (!election || !isCorporation) return;
+    setReviewDraft((current: any) => current?.electionId === election._id ? current : {
+      electionId: election._id, recordDateISO: election.corporateReview?.recordDateISO ?? new Date().toISOString().slice(0, 10),
+      recordDateBasis: election.corporateReview?.recordDateBasis ?? "", rightsBasis: election.corporateReview?.rightsBasis ?? "",
+      ledgerBasis: election.corporateReview?.ledgerBasis ?? "", votingMethod: election.corporateReview?.votingMethod ?? "per_share",
+      classIds: election.corporateReview?.classIds, representatives: election.corporateReview?.representatives ?? [],
+    });
+  }, [election, isCorporation]);
 
   useEffect(() => {
     if (!election) return;
@@ -123,28 +135,24 @@ export function ElectionDetailPage() {
     isAuthenticatedAuthMode() &&
     election.status === "Open" &&
     isWindowOpen(election.opensAtISO, election.closesAtISO) &&
-    !!currentUser?.memberId &&
     myEligibility &&
-    myEligibility.status !== "Voted";
+    !myEligibility.revokedAtISO &&
+    ["Eligible", "Confirmed"].includes(myEligibility.status);
   // Explain exactly why this viewer cannot vote (G-16: everyone who could not
   // vote was told their vote was "already recorded").
   const votingUnavailableReason = !isAuthenticatedAuthMode()
-    ? "Ballots can only be cast by signed-in members. This workspace is not using member sign-in, so you can review the ballot but not vote here."
+    ? "Ballots require a signed-in account with verified voting authority."
     : !isWindowOpen(election.opensAtISO, election.closesAtISO)
       ? `Voting is open from ${formatDateTime(election.opensAtISO)} to ${formatDateTime(election.closesAtISO)}.`
-      : !currentUser?.memberId
-        ? "Your user account is not linked to a member record, so you cannot vote."
-        : !myEligibility
-          ? "Voting is limited to confirmed members on the eligibility list."
-          : myEligibility.status === "Voted"
-            ? "You can review the ballot, but your vote is already recorded."
-            : "You cannot vote in this election.";
+      : !myEligibility ? "This account is not assigned to an eligible voter in the frozen register."
+        : myEligibility.status === "Voted" ? "Your ballot for this voter is already recorded."
+          : "This voter's eligibility has been revoked or is awaiting confirmation.";
   const tallyRows = tally ?? [];
   const nominationRows = nominations ?? [];
   const canNominate =
     isAuthenticatedAuthMode() &&
     ["Draft", "Open"].includes(election.status) &&
-    !!currentUser?.memberId &&
+    (isCorporation ? !!electionBundle.canNominate : !!currentUser?.memberId) &&
     isWindowOpen(
       election.nominationsOpenAtISO ?? election.createdAtISO,
       election.nominationsCloseAtISO ?? election.closesAtISO,
@@ -156,11 +164,14 @@ export function ElectionDetailPage() {
     try {
       await castBallot({
       electionId: election._id,
-      choices: electionBundle.questions.map((question: any) => ({
-        questionId: question._id,
-        optionIds: selected[question._id] ?? [],
-      })),
+      eligibilityId: myEligibility._id,
+      choices: electionBundle.questions.map((question: any) => {
+        const allocation = Object.entries(allocations[question._id] ?? {}).filter(([, votes]) => votes > 0).map(([optionId, votes]) => ({ optionId, votes }));
+        return { questionId: question._id, optionIds: cumulative ? allocation.map((row) => row.optionId) : selected[question._id] ?? [], ...(cumulative ? { allocations: allocation } : {}) };
+      }),
       });
+      setSelectedEligibilityId(myEligibility._id);
+      setSelected({}); setAllocations({});
       toast.success("Ballot submitted");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not submit the ballot. Your selections are retained.");
@@ -231,6 +242,22 @@ export function ElectionDetailPage() {
       toast.error(error instanceof Error ? error.message : "Could not add the ballot question. Your draft is retained.");
     } finally { setSavingQuestion(false); }
   };
+
+  const saveElectorateReview = async () => {
+    if (!canManage || !reviewDraft || reviewSaving || election.status !== "Draft") return;
+    setReviewSaving(true);
+    try {
+      const { electionId: _id, ...corporateReview } = reviewDraft;
+      corporateReview.representatives = corporateReview.representatives.filter((row: any) => row.userId).map((row: any) => ({ ...row, authorityDocumentId: row.authorityDocumentId || undefined }));
+      await updateSettings({ electionId: election._id, corporateReview });
+      toast.success("Record date, rights and account authority review saved. Check the refreshed electorate before opening.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save the electorate review."); }
+    finally { setReviewSaving(false); }
+  };
+  const setRepresentative = (roleHolderId: string, patch: Record<string, any>) => setReviewDraft((current: any) => {
+    const existing = current.representatives.find((row: any) => row.roleHolderId === roleHolderId) ?? { roleHolderId, userId: "", authorityBasis: "" };
+    return { ...current, representatives: [...current.representatives.filter((row: any) => row.roleHolderId !== roleHolderId), { ...existing, ...patch }] };
+  });
 
   const openElection = async () => {
     if (!canManage || election.status !== "Draft" || openingElection) return;
@@ -322,8 +349,13 @@ export function ElectionDetailPage() {
             <div className="card__body" style={{ display: "grid", gap: 16 }}>
               {!isAuthenticatedAuthMode() && (
                 <div className="muted">
-                  Real anonymous member voting is disabled in no-auth mode.
+                  Casting a ballot requires authenticated voter accounts.
                 </div>
+              )}
+              {myEligibilities.length > 0 && (
+                <Field label={isCorporation ? "Voting for shareholder" : "Voting identity"} hint={isCorporation ? "The account acts only for the selected holder. Each holder's voting weight was frozen when this election opened." : undefined}>
+                  <Select value={myEligibility?._id ?? ""} onChange={(value) => { setSelectedEligibilityId(value); setSelected({}); setAllocations({}); }} options={myEligibilities.map((row: any) => ({ value: row._id, label: `${row.fullName} · ${row.voteWeight ?? 1} votes · ${row.status}` }))} />
+                </Field>
               )}
               {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
               {electionBundle.questions.map((question: any) => (
@@ -359,10 +391,15 @@ export function ElectionDetailPage() {
                       {question.description}
                     </div>
                   )}
+                  {cumulative && <p className="muted">Allocate up to {(myEligibility?.voteWeight ?? 0) * question.maxSelections} votes across candidates ({question.maxSelections} seats × {myEligibility?.voteWeight ?? 0} base votes).</p>}
                   <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
                     {question.options.map((option: any) => {
                       const values = selected[question._id] ?? [];
                       const checked = values.includes(option.id);
+                      if (cumulative) return <Field key={option.id} label={option.label}>
+                        <input className="input" type="number" min={0} step="any" value={allocations[question._id]?.[option.id] ?? 0} disabled={!canVote || participantSaving}
+                          onChange={(event) => setAllocations((current) => ({ ...current, [question._id]: { ...current[question._id], [option.id]: Number(event.target.value) } }))} />
+                      </Field>;
                       return (
                         <label
                           key={option.id}
@@ -400,7 +437,7 @@ export function ElectionDetailPage() {
                 <fieldset disabled={savingQuestion || openingElection} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: 10 }}>
                   <Field label="New ballot question"><input className="input" value={questionDraft.title} onChange={(event) => setQuestionDraft({ ...questionDraft, title: event.target.value })} /></Field>
                   <Field label="Ballot options" hint="One candidate or choice per line."><textarea className="input" rows={4} value={questionDraft.options} onChange={(event) => setQuestionDraft({ ...questionDraft, options: event.target.value })} /></Field>
-                  <Field label="Maximum selections"><input className="input" type="number" min={1} step={1} value={questionDraft.maxSelections} onChange={(event) => setQuestionDraft({ ...questionDraft, maxSelections: Number(event.target.value) })} /></Field>
+                  <Field label={reviewDraft?.votingMethod === "cumulative" ? "Seats to fill (cumulative multiplier)" : "Maximum selections"}><input className="input" type="number" min={1} step={1} value={questionDraft.maxSelections} onChange={(event) => setQuestionDraft({ ...questionDraft, maxSelections: Number(event.target.value) })} /></Field>
                   <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
                     <button className="btn" onClick={saveQuestion} disabled={!questionDraft.title.trim() || !questionDraft.options.trim()}><Plus size={12} /> {savingQuestion ? "Adding…" : "Add ballot question"}</button>
                     <button className="btn btn--accent" onClick={openElection} disabled={electionBundle.questions.length === 0}><Users size={12} /> {openingElection ? "Opening…" : "Snapshot + open"}</button>
@@ -410,8 +447,8 @@ export function ElectionDetailPage() {
               )}
 
               {canVote && (
-                <button className="btn btn--accent" onClick={saveBallot} disabled={participantSaving || !electionBundle.questions.length || electionBundle.questions.some((question: any) => !(selected[question._id]?.length))}>
-                  Submit anonymous ballot
+                <button className="btn btn--accent" onClick={saveBallot} disabled={participantSaving || !electionBundle.questions.length || electionBundle.questions.some((question: any) => cumulative ? !Object.values(allocations[question._id] ?? {}).some((votes) => votes > 0) : !(selected[question._id]?.length))}>
+                  Submit ballot
                 </button>
               )}
               {!canVote && election.status === "Open" && (
@@ -570,7 +607,7 @@ export function ElectionDetailPage() {
             <div className="card__head">
               <h2 className="card__title">Eligibility</h2>
               <InfoPopover label="About eligibility">
-                <p>Eligibility is verified against the member register. The ballot itself is stored without a member identifier.</p>
+                <p>{isCorporation ? "Eligibility follows the reviewed share register, class rights, record date and authorized representative. Unique voting weights can reveal identity even when ballots are stored separately." : "Eligibility follows the member register. Ballots do not contain the member identifier; administrative audit data is retained separately."}</p>
               </InfoPopover>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 8 }}>
@@ -579,8 +616,8 @@ export function ElectionDetailPage() {
                 value={<Badge tone={election.status === "Open" ? "success" : "warn"}>{election.status}</Badge>}
               />
               <Row
-                label="Anonymous ballot"
-                value={<Badge tone={election.anonymousBallot ? "success" : "warn"}>{election.anonymousBallot ? "Yes" : "No"}</Badge>}
+                label="Ballot identity storage"
+                value={<Badge tone="info">Separate eligibility ledger</Badge>}
               />
               <Row
                 label="Results visibility"
@@ -606,6 +643,37 @@ export function ElectionDetailPage() {
               />
             </div>
           </div>
+
+          {canManage && isCorporation && reviewDraft && election.status === "Draft" && (
+            <section className="card">
+              <div className="card__head"><h2 className="card__title">Shareholder electorate review</h2></div>
+              <div className="card__body" style={{ display: "grid", gap: 12 }}>
+                <p className="muted">Review the legal record date, articles, class rights and authority of the person acting for each registered holder. The server calculates votes from the share register. Historical dates require posted transactions that reconcile to the current register.</p>
+                <Field label="Record date" hint="Positions at the end of this calendar date; verify the statutory or board-selected cutoff."><input className="input" type="date" value={reviewDraft.recordDateISO} onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateISO: event.target.value })} /></Field>
+                <Field label="Record-date authority"><textarea className="input" rows={2} value={reviewDraft.recordDateBasis} placeholder="Board resolution or statutory default, notice/voting distinction and meeting date reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateBasis: event.target.value })} /></Field>
+                <Field label="Articles and voting-rights review"><textarea className="input" rows={2} value={reviewDraft.rightsBasis} placeholder="Articles/version, class or series rights, statutory class votes, cumulative voting and election terms reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, rightsBasis: event.target.value })} /></Field>
+                <Field label="Share register review"><textarea className="input" rows={2} value={reviewDraft.ledgerBasis} placeholder="Register/evidence reference, completed transactions and any transferee demands reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, ledgerBasis: event.target.value })} /></Field>
+                <Field label="Voting method"><Select value={reviewDraft.votingMethod} onChange={(value) => setReviewDraft({ ...reviewDraft, votingMethod: value })} options={[{ value: "per_share", label: "Votes per share for each selected option" }, { value: "cumulative", label: "Cumulative director election (articles require it)" }]} /></Field>
+                <Field label="Class scope" hint="Use a separate election for a class vote. Class-specific statutory exceptions must be reflected in reviewed class rights.">
+                  <label className="checkbox"><input type="checkbox" checked={!reviewDraft.classIds} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? undefined : [] })} /> All voting classes</label>
+                  {reviewDraft.classIds && (electionBundle.corporatePreview?.classes ?? []).map((cls: any) => <label className="checkbox" key={cls._id}><input type="checkbox" checked={reviewDraft.classIds.includes(cls._id)} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? [...reviewDraft.classIds, cls._id] : reviewDraft.classIds.filter((id: string) => id !== cls._id) })} />{cls.className}</label>)}
+                </Field>
+                {(electionBundle.corporatePreview?.issues ?? []).map((issue: string) => <p className="muted" key={issue}>{issue}</p>)}
+                <p><strong>{electionBundle.corporatePreview?.votingHolders?.length ?? 0} registered voting holders · {electionBundle.corporatePreview?.totalVotes ?? 0} base votes</strong></p>
+                {(electionBundle.corporatePreview?.votingHolders ?? []).map((holder: any) => {
+                  const assignment = reviewDraft.representatives.find((row: any) => row.roleHolderId === holder.roleHolderId);
+                  return <fieldset key={holder.holderKey} style={{ display: "grid", gap: 8, border: "1px solid var(--border)", padding: 12 }}>
+                    <legend>{holder.fullName} · {holder.totalShares} shares · {holder.totalVotes} votes</legend>
+                    <Field label="Authorized voting account"><Select value={assignment?.userId ?? ""} onChange={(value) => setRepresentative(holder.roleHolderId, { userId: value })} options={[{ value: "", label: "Select a verified active account" }, ...(users ?? []).filter((row: any) => row.status === "Active").map((row: any) => ({ value: row._id, label: row.displayName }))]} /></Field>
+                    <Field label="Identity and authority evidence"><textarea className="input" rows={2} value={assignment?.authorityBasis ?? ""} placeholder="Verified personal identity, or corporate authorization / proxy instrument, scope and expiry…" onChange={(event) => setRepresentative(holder.roleHolderId, { authorityBasis: event.target.value })} /></Field>
+                    <Field label="Supporting document"><Select value={assignment?.authorityDocumentId ?? ""} onChange={(value) => setRepresentative(holder.roleHolderId, { authorityDocumentId: value })} options={[{ value: "", label: "Reference recorded above" }, ...(documents ?? []).map((row: any) => ({ value: row._id, label: row.title }))]} /></Field>
+                  </fieldset>;
+                })}
+                <button className="btn btn--accent" disabled={reviewSaving} onClick={saveElectorateReview}>{reviewSaving ? "Saving…" : "Save review and refresh electorate"}</button>
+                <p className="muted">Opening freezes the reviewed date, class scope, representative authority and voting weights. Later share transfers do not change ballots. Ties and elected terms must be determined under the applicable Act and governing documents.</p>
+              </div>
+            </section>
+          )}
 
           {canManage && adminDraft && (
             <div className="card">
@@ -692,7 +760,7 @@ export function ElectionDetailPage() {
             <div className="card__head">
               <h2 className="card__title">Tally</h2>
               <span className="card__subtitle">
-                {electionBundle.ballotCount} anonymous ballot(s)
+                {electionBundle.ballotCount} ballot(s) · {election.totalEligibleVotes ?? "—"} eligible base votes
               </span>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>

@@ -5,6 +5,7 @@ import { evaluateLegalDecision, type LegalDecisionInput } from "../../shared/leg
 import { Select } from "./Select";
 import { Field, Badge } from "./ui";
 import { InfoPopover } from "./InfoPopover";
+import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 
 /** Plain-language versions of the evaluator's validation messages. */
 const PLAIN_WARNINGS: Record<string, string> = {
@@ -29,7 +30,7 @@ export function DecisionAssessmentCard({ organization }: { organization: any }) 
   // custom entity (co-operative, partnership, ...) must not be evaluated as a
   // business corporation, so the card is hidden for it.
   const society = vocab.isSociety;
-  const supportedEntity = society || vocab.isCorporation;
+  const supportedEntity = !!legalGovernanceProfile(organization);
   const [body, setBody] = useState<LegalDecisionInput["body"]>(society ? "members" : "shareholders");
   const [mode, setMode] = useState<LegalDecisionInput["mode"]>("meeting");
   const [resolution, setResolution] = useState<LegalDecisionInput["resolution"]>("ordinary");
@@ -40,6 +41,7 @@ export function DecisionAssessmentCard({ organization }: { organization: any }) 
   const [quorumMet, setQuorumMet] = useState(false);
   const [circulated, setCirculated] = useState(false);
   const [specialMajority, setSpecialMajority] = useState<"two_thirds" | "three_quarters">("two_thirds");
+  const [authorityReviewed, setAuthorityReviewed] = useState(false);
   const jurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   if (!supportedEntity || !["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA"].includes(jurisdiction)) return null;
   const result = evaluateLegalDecision({
@@ -51,8 +53,12 @@ export function DecisionAssessmentCard({ organization }: { organization: any }) 
     eligibleVotes: eligible === "" ? undefined : Number(eligible),
     governingInstrumentEvidence: instrument.trim() || undefined,
     quorumMet, circulatedToAll: circulated, specialMajority,
+    offeringCorporation: organization.distributing,
+    directorAuthorityReviewed: authorityReviewed,
+    votingShareCountsConfirmed: authorityReviewed,
   });
   return <section className="card decision-assessment" style={{ marginBottom: 16 }}>
+    {mode === "written" && (body === "directors" || (jurisdiction === "CA-ON-OBCA" && organization.distributing === false)) && <label className="row" style={{ padding: 16, gap: 8 }}><input type="checkbox" checked={authorityReviewed} onChange={(event) => setAuthorityReviewed(event.target.checked)} />{body === "directors" ? "I reviewed director eligibility and conflict exceptions." : "These counts are entitled voting shares; I reviewed the notice to non-signing shareholders required within ten business days."}</label>}
     <div className="card__head">
       <h2 className="card__title">Decision threshold preview</h2>
       <InfoPopover label="About the decision threshold preview">

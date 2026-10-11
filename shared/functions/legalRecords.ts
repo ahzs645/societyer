@@ -12,6 +12,7 @@
 
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
+import { hasRecordedExecution, isAnnualPacketRecord, preparationDocumentUpdate } from "../preparationDocumentState";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import type { PortableDoc, TableName } from "../portable/ctx";
 import {
@@ -343,7 +344,12 @@ export async function upsertGeneratedLegalDocumentPortable(
   { id, ...args }: UpsertGeneratedLegalDocumentArgs,
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
-  if (id) await getOwned(ctx, "generatedLegalDocuments", id, args.societyId);
+  const existing = id ? await getOwned(ctx, "generatedLegalDocuments", id, args.societyId) : null;
+  const preparation = preparationDocumentUpdate(existing?.dataJson, args.dataJson, args.status, existing ?? undefined);
+  const executedLegacy = existing && isAnnualPacketRecord(existing) && hasRecordedExecution(existing);
+  if (preparation.preparationOnly && (args.signedDocumentId || args.signersWhoSignedIds?.length || args.signerTagsSigned?.length)) {
+    throw new Error("Execution evidence belongs to a separately reviewed execution document, not this preparation draft.");
+  }
   await requireOwnedIds(
     ctx,
     "documents",
@@ -369,32 +375,36 @@ export async function upsertGeneratedLegalDocumentPortable(
   const payload = {
     societyId: args.societyId,
     title: cleanText(args.title) || "Untitled generated document",
-    status: cleanText(args.status) || "draft",
-    draftDocumentId: args.draftDocumentId,
-    signedDocumentId: args.signedDocumentId,
-    draftFileUrl: cleanText(args.draftFileUrl),
-    sourceTemplateId: args.sourceTemplateId,
-    sourceTemplateName: cleanText(args.sourceTemplateName),
-    precedentRunId: args.precedentRunId,
-    eventId: cleanText(args.eventId),
-    effectiveDate: cleanText(args.effectiveDate),
-    documentTag: cleanText(args.documentTag),
-    dataJson: cleanText(args.dataJson),
-    subloopJsonList: args.subloopJsonList ?? [],
-    syngrafiiFileId: cleanText(args.syngrafiiFileId),
-    syngrafiiDocumentId: cleanText(args.syngrafiiDocumentId),
-    syngrafiiPackageId: cleanText(args.syngrafiiPackageId),
-    signersRequiredRoleHolderIds: args.signersRequiredRoleHolderIds ?? [],
-    signersWhoSignedIds: args.signersWhoSignedIds ?? [],
-    signerTagsRequired: cleanList(args.signerTagsRequired),
-    signerTagsSigned: cleanList(args.signerTagsSigned),
-    sourceDocumentIds: args.sourceDocumentIds ?? [],
-    sourceExternalIds: cleanList(args.sourceExternalIds),
-    notes: cleanText(args.notes),
+    status: executedLegacy ? existing.status : preparation.legacyAnnualReview && args.status !== "void" ? "needs_review" : cleanText(args.status) || (preparation.preparationOnly ? "needs_review" : "draft"),
+    draftDocumentId: executedLegacy ? existing.draftDocumentId : args.draftDocumentId ?? (preparation.legacyAnnualReview ? existing?.draftDocumentId : undefined),
+    signedDocumentId: executedLegacy ? existing.signedDocumentId : args.signedDocumentId,
+    draftFileUrl: executedLegacy ? existing.draftFileUrl : cleanText(args.draftFileUrl),
+    sourceTemplateId: executedLegacy ? existing.sourceTemplateId : args.sourceTemplateId,
+    sourceTemplateName: executedLegacy ? existing.sourceTemplateName : cleanText(args.sourceTemplateName),
+    precedentRunId: executedLegacy ? existing.precedentRunId : args.precedentRunId,
+    eventId: executedLegacy ? existing.eventId : cleanText(args.eventId),
+    effectiveDate: executedLegacy ? existing.effectiveDate : cleanText(args.effectiveDate),
+    documentTag: executedLegacy ? existing.documentTag : cleanText(args.documentTag),
+    dataJson: executedLegacy ? existing.dataJson : preparation.dataJson,
+    subloopJsonList: executedLegacy ? existing.subloopJsonList ?? [] : args.subloopJsonList ?? [],
+    syngrafiiFileId: executedLegacy ? existing.syngrafiiFileId : cleanText(args.syngrafiiFileId),
+    syngrafiiDocumentId: executedLegacy ? existing.syngrafiiDocumentId : cleanText(args.syngrafiiDocumentId),
+    syngrafiiPackageId: executedLegacy ? existing.syngrafiiPackageId : cleanText(args.syngrafiiPackageId),
+    signersRequiredRoleHolderIds: executedLegacy ? existing.signersRequiredRoleHolderIds ?? [] : preparation.preparationOnly ? [] : args.signersRequiredRoleHolderIds ?? [],
+    signersWhoSignedIds: executedLegacy ? existing.signersWhoSignedIds ?? [] : args.signersWhoSignedIds ?? [],
+    signerTagsRequired: executedLegacy ? existing.signerTagsRequired : preparation.preparationOnly ? [] : cleanList(args.signerTagsRequired),
+    signerTagsSigned: executedLegacy ? existing.signerTagsSigned : cleanList(args.signerTagsSigned),
+    sourceDocumentIds: executedLegacy ? existing.sourceDocumentIds ?? [] : args.sourceDocumentIds ?? [],
+    sourceExternalIds: executedLegacy ? existing.sourceExternalIds ?? [] : cleanList(args.sourceExternalIds ?? (preparation.legacyAnnualReview ? existing?.sourceExternalIds : undefined)),
+    notes: preparation.reviewWarning ? (String(args.notes ?? existing?.notes ?? '').includes(preparation.reviewWarning) ? String(args.notes ?? existing?.notes) : [cleanText(args.notes ?? existing?.notes), preparation.reviewWarning].filter(Boolean).join("\n")) : cleanText(args.notes ?? (executedLegacy ? existing.notes : undefined)),
     updatedAtISO: now,
   };
   if (id) {
     await ctx.db.patch(id, payload);
+    if (preparation.legacyAnnualReview && existing?.draftDocumentId) {
+      const legacyDraft = await getOwned(ctx, "documents", String(existing.draftDocumentId), args.societyId);
+      if (legacyDraft) await ctx.db.patch(legacyDraft._id, { reviewStatus: "needs_review" });
+    }
     return id;
   }
   return await ctx.db.insert("generatedLegalDocuments", { ...payload, createdAtISO: now });

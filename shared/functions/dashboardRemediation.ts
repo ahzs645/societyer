@@ -45,14 +45,14 @@ export async function createPrivacyReviewTaskPortable(
 ) {
   return await createReviewTaskForFlag(ctx, {
     ...args,
-    title: "Review PIPA remediation workflow",
+    title: "Review privacy remediation workflow",
     description: [
-      `Dashboard rule ${args.ruleId} needs a PIPA remediation review.`,
+      `Dashboard rule ${args.ruleId} needs a privacy remediation review.`,
       "",
-      "Review the privacy policy, role-based access, retention/disposal, training, breach response, service-provider terms, and member-data access evidence.",
+      "Confirm the applicable law and actual activities, then review privacy practices, access controls, retention/disposal, training, incident handling, provider terms and evidence for the records held.",
       `Evidence expected: ${args.evidenceRequired.join(", ") || "None listed"}`,
     ].join("\n"),
-    tags: ["compliance", "dashboard-flag", "privacy", "pipa", args.ruleId],
+    tags: ["compliance", "dashboard-flag", "privacy", args.ruleId],
   });
 }
 
@@ -86,7 +86,7 @@ export async function markPrivacyProgramReviewedPortable(
     // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: args.societyId,
     action: "privacy-program-reviewed",
-    summary: "Marked PIPA privacy program reviewed from dashboard remediation.",
+    summary: "Marked privacy program reviewed from dashboard remediation.",
     createdAtISO: nowISO,
   });
   return { remediationId, reviewedAtISO: nowISO };

@@ -1,3 +1,4 @@
+import { noticeWindowLabel } from "../features/meetings/lib/noticeWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MEETING_STATUS_LABELS, MEETING_STATUS_OPTIONS, meetingStatusTone as sharedMeetingStatusTone } from "../../shared/meetingStatus";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -354,7 +355,7 @@ export function MeetingsPage() {
             onClick={() => openNew()}
             disabled={!canManage}
             aria-label="New meeting"
-            title={`New meeting — general meetings need ${noticeMinDays}–${noticeMaxDays} days of notice`}
+            title={`New meeting — ${noticeWindowLabel(noticeMinDays, noticeMaxDays, data.rules)}`}
           >
             <Plus size={14} />
             <span className="meetings-page__new-label">New meeting</span>

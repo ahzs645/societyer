@@ -1,3 +1,4 @@
+import { privacyAssessmentValidators } from "./lib/privacyValidators";
 import {personHistoryTables} from './tables/personHistory';
 import { reviewEvidenceTables } from "./tables/reviewEvidence";
 import { defineSchema, defineTable } from "convex/server";
@@ -109,6 +110,7 @@ export default defineSchema({
     privacyProgramStatus: v.optional(v.string()), // Unknown | Documented | Needs review | Not started
     privacyProgramReviewedAtISO: v.optional(v.string()),
     privacyProgramNotes: v.optional(v.string()),
+    ...privacyAssessmentValidators,
     memberDataAccessStatus: v.optional(v.string()), // Unknown | Society-controlled | Partially available | Institution-held | Not applicable
     memberDataGapDocumented: v.optional(v.boolean()),
     memberDataAccessReviewedAtISO: v.optional(v.string()),

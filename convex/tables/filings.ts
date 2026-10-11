@@ -13,6 +13,8 @@ export const filingTables = {
     contextKind: v.optional(v.string()),
     sourceRegistrationId: v.optional(v.string()),
     periodLabel: v.optional(v.string()),
+    reportingYear: v.optional(v.number()),
+    reportingPeriodEnd: v.optional(v.string()),
     dueDate: v.string(),
     filedAt: v.optional(v.string()),
     submissionMethod: v.optional(v.string()),

@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { corporateElectionReviewValidator } from "../lib/electionValidators";
 
 /**
  * Insurance, training, proxies, auditors, proposals, elections, donations, employees, court orders, bylaw amendments.
@@ -249,6 +250,11 @@ export const electionsMiscTables = {
     nominationsOpenAtISO: v.optional(v.string()),
     nominationsCloseAtISO: v.optional(v.string()),
     eligibilityCutoffISO: v.optional(v.string()),
+    eligibilityBasis: v.optional(v.string()), // member | shareholder
+    corporateReview: v.optional(corporateElectionReviewValidator),
+    eligibilityReviewedByUserId: v.optional(v.id("users")),
+    eligibilitySnapshottedAtISO: v.optional(v.string()),
+    totalEligibleVotes: v.optional(v.number()),
     anonymousBallot: v.boolean(),
     scrutineerUserIds: v.optional(v.array(v.id("users"))),
     createdByUserId: v.optional(v.id("users")),
@@ -287,7 +293,12 @@ export const electionsMiscTables = {
   electionEligibleVoters: defineTable({
     societyId: v.id("societies"),
     electionId: v.id("elections"),
-    memberId: v.id("members"),
+    memberId: v.optional(v.id("members")),
+    voterKind: v.optional(v.string()), // member | shareholder
+    holderKey: v.optional(v.string()),
+    roleHolderId: v.optional(v.id("roleHolders")),
+    voteWeight: v.optional(v.number()),
+    classVotes: v.optional(v.array(v.object({ rightsClassId: v.id("rightsClasses"), quantity: v.number(), votesPerShare: v.number(), votes: v.number() }))),
     userId: v.optional(v.id("users")),
     email: v.optional(v.string()),
     fullName: v.string(),
@@ -301,17 +312,21 @@ export const electionsMiscTables = {
     .index("by_society", ["societyId"])
     .index("by_election", ["electionId"])
     .index("by_member", ["memberId"])
-    .index("by_election_member", ["electionId", "memberId"]),
+    .index("by_election_member", ["electionId", "memberId"])
+    .index("by_user", ["userId"])
+    .index("by_election_user", ["electionId", "userId"]),
 
   electionBallots: defineTable({
     societyId: v.id("societies"),
     electionId: v.id("elections"),
     receiptCode: v.string(),
+    voteWeight: v.optional(v.number()), // server-copied frozen electorate weight
     submittedAtISO: v.string(),
     choices: v.array(
       v.object({
         questionId: v.id("electionQuestions"),
         optionIds: v.array(v.string()),
+        allocations: v.optional(v.array(v.object({ optionId: v.string(), votes: v.number() }))),
       }),
     ),
     spoiledAtISO: v.optional(v.string()),

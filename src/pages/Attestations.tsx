@@ -1,3 +1,4 @@
+import { LegalGovernanceGuidance } from "../components/LegalGovernanceGuidance";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -6,11 +7,11 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
+import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/ui";
 import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
 import { legalCopyForOrganization } from "../lib/legalCopy";
-import { citationIdForOrganization } from "../lib/regulatoryCitations";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -86,10 +87,10 @@ export function AttestationsPage() {
     setForm({
       directorId,
       year,
-      isAtLeast18: true,
-      notBankrupt: true,
-      notDisqualified: true,
-      stillResidentOrEligible: true,
+      isAtLeast18: false,
+      notBankrupt: false,
+      notDisqualified: false,
+      stillResidentOrEligible: false,
       notes: "",
     });
     setOpen(true);
@@ -128,12 +129,13 @@ export function AttestationsPage() {
         info={<p>{DIRECTOR_ATTESTATION_COPY.info}</p>}
       />
 
+      <LegalGovernanceGuidance organization={society} topic="qualifications" />
+
       {missing && missing.length > 0 && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          {/* BC Societies Act s.44(2); suppressed for entities it does not govern. */}
-          <Flag level="warn" citationId={citationIdForOrganization("BC-SOC-DIRECTOR-QUALIFICATIONS", society)}>
-            {missing.length} director{missing.length === 1 ? "" : "s"} have not yet attested for {year}.
-          </Flag>
+          <InspectorNote tone="info">
+            {missing.length} director{missing.length === 1 ? "" : "s"} have no optional annual attestation recorded for {year}. Review any separate policy requirement.
+          </InspectorNote>
         </div>
       )}
 
@@ -173,7 +175,7 @@ export function AttestationsPage() {
                 if (record.allTrue) {
                   return <Badge tone="success">Attested {formatDate(record.signedAtISO)}</Badge>;
                 }
-                return <Badge tone="danger">Attested with issues</Badge>;
+                return <Badge tone="warn">Attested — review recorded answers</Badge>;
               }
               return undefined;
             }}
@@ -208,7 +210,8 @@ export function AttestationsPage() {
             <InspectorNote tone="warn" title="Qualification check">
               {DIRECTOR_ATTESTATION_COPY.note}
             </InspectorNote>
-            <label className="checkbox"><input type="checkbox" checked={form.isAtLeast18} onChange={(e) => setForm({ ...form, isAtLeast18: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.age}</label>
+            <label className="checkbox"><input type="checkbox" checked={form.isAtLeast18} onChange={(e) => setForm({ ...form, isAtLeast18: e.target.checked })} /> I am at least 18 years old.</label>
+            {organizationRuleScope(society).isBcSociety && <p className="muted">If the statutory youth-director exception applies, leave the age statement unchecked and record its authority and the bylaw evidence in the notes.</p>}
             <label className="checkbox"><input type="checkbox" checked={form.notBankrupt} onChange={(e) => setForm({ ...form, notBankrupt: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.bankruptcy}</label>
             <label className="checkbox"><input type="checkbox" checked={form.notDisqualified} onChange={(e) => setForm({ ...form, notDisqualified: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.disqualification}</label>
             <label className="checkbox"><input type="checkbox" checked={form.stillResidentOrEligible} onChange={(e) => setForm({ ...form, stillResidentOrEligible: e.target.checked })} /> {DIRECTOR_ATTESTATION_COPY.statements.residency}</label>

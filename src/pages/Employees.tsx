@@ -97,8 +97,8 @@ export function EmployeesPage() {
         icon={<Users size={16} />}
         iconColor="blue"
         subtitle="Staff records for payroll and remuneration disclosure."
-        info={organizationVocabulary(society).societyLaw
-          ? <p>The payroll source of truth for T4/T4A slips, remuneration disclosure under s.36 of the Societies Act (pay of $75,000 or more), and the Employment Standards Act 4-year record retention.</p>
+        info={organizationVocabulary(society).societyLaw && !society.isMemberFunded
+          ? <p>Societies Act s.36 requires a financial-statement note for all director remuneration and employees or contractors receiving at least $75,000. Employee/contractor names are optional and the regulation permits aggregate reporting. Payroll tax and employment-record retention are separate obligations.</p>
           : <p>The payroll source of truth for T4/T4A slips and employment-standards record retention.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>

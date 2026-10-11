@@ -21,6 +21,9 @@ import {
 import { deriveAgmFacts } from "../../shared/agmEvidence";
 import { formatDate } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { annualGovernanceSettings } from "../../shared/annualGovernanceEvidence";
+import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
+import { CitationBadge } from "../components/CitationTooltip";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -54,6 +57,8 @@ export function ComplianceSettingsPage() {
     society ? { societyId: society._id } : "skip",
   ) as Array<{ type?: string; status?: string; scheduledAt?: string }> | undefined;
   const todayISO = calendarDateKey(new Date());
+  const canReadFilings = permissions.loaded && permissions.can("filings:read");
+  const filings = useQuery(api.filings.list, society && canReadFilings ? { societyId: society._id } : "skip");
   // Only held AGMs are evidence (a scheduled or draft AGM is not).
   const agmFacts = deriveAgmFacts(society ?? null, meetings ?? [], todayISO);
   const lastAgmDay = agmFacts.annualMeetingDate
@@ -96,6 +101,7 @@ export function ComplianceSettingsPage() {
   if (society === null) return <SeedPrompt />;
 
   const settings: ComplianceSettings = {
+    ...annualGovernanceSettings(society, meetings ?? [], filings ?? [], todayISO),
     agmMonth: agmMonth === "" ? undefined : Number(agmMonth),
     agmDay: agmDay === "" ? undefined : Number(agmDay),
     fiscalYearEnd: society.fiscalYearEnd ?? undefined,
@@ -104,14 +110,15 @@ export function ComplianceSettingsPage() {
     waivePrepFinancials: waive,
     jurisdictionCode: society.jurisdictionCode,
     entityType: society.entityType,
-    annualMeetingDate: agmFacts.annualMeetingDate,
-    heldAgmYears: agmFacts.agmYears,
+    actFormedUnder: society.actFormedUnder,
+
   };
   const today = todayDateOnly();
-  // Deadlines anchored to an old AGM can land well in the past; a list of
-  // "deadlines from these settings" should not offer to add those.
-  const staleCutoff = shiftDateOnly(today, -30);
-  const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today).filter((d) => !d.dueDate || d.dueDate >= staleCutoff);
+  const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today).map(deadline =>
+    deadline.key === "annual-report" && (!canReadFilings || filings === undefined)
+      ? { ...deadline, status: "review_required", basis: `${deadline.basis} Filing evidence is not available in this view; completion and overdue status require someone with filing access to review the register.` }
+      : deadline);
+  const generatable = derived.filter(deadline => deadline.status !== "review_required");
 
   const onSave = async () => {
     if (!canSaveSettings || saving) return;
@@ -145,7 +152,7 @@ export function ComplianceSettingsPage() {
     setGenerating(true);
     try {
       let added = 0;
-      for (const d of derived) {
+      for (const d of generatable) {
         if (existingKeys.has(deadlineKey(d))) continue;
         await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.deadlineCategory, description: d.basis });
         added += 1;
@@ -155,7 +162,7 @@ export function ComplianceSettingsPage() {
     finally { setGenerating(false); }
   };
 
-  const pendingCount = derived.filter((d) => !existingKeys.has(deadlineKey(d))).length;
+  const pendingCount = generatable.filter((d) => !existingKeys.has(deadlineKey(d))).length;
   const entity = organizationVocabulary(society);
   const meetingLabel = entity.annualMeetingTitle;
 
@@ -165,7 +172,7 @@ export function ComplianceSettingsPage() {
         title="Compliance settings"
         icon={<CalendarClock size={16} />}
         iconColor="orange"
-        subtitle={`Your ${entity.annualMeeting} date and fiscal year end set the annual deadlines.`}
+        subtitle={`Plan the ${entity.annualMeeting} and review deadlines calculated from the governing Act and recorded evidence.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving || !canSaveSettings}>
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
@@ -207,12 +214,12 @@ export function ComplianceSettingsPage() {
               <span>{society.fiscalYearEnd ? formatMonthDay(society.fiscalYearEnd) : "Not set"}</span>
               <Link to="/app/society" className="settings-section__fact-link">Change in profile</Link>
             </div>
-            <Checkbox
+            {(legalGovernanceProfile(society)?.id === "bc_company" || waive) && <Checkbox
               checked={waive}
               onChange={setWaive}
-              label="Financial-statement preparation waiver"
-              hint="Recorded for review. It doesn't waive registry filings."
-            />
+              label="Financial-statement preparation waiver proposed"
+              hint="Requires a separate review of the Act, eligibility and unanimous annual consent. This setting alone completes no annual business."
+            />}
           </section>
 
           <section className="card settings-section">
@@ -306,9 +313,12 @@ export function ComplianceSettingsPage() {
                   <span className="settings-deadlines__date">{formatDate(d.dueDate)}</span>
                   <span className="settings-deadlines__title">
                     {d.title}
+                    {d.status === "overdue" && <span className="settings-deadlines__added"> · overdue cycle</span>}
+                    {d.status === "review_required" && <span className="settings-deadlines__added"> · evidence review needed</span>}
                     {existingKeys.has(deadlineKey(d)) && <span className="settings-deadlines__added"> · added</span>}
                   </span>
                   {d.basis ? <span className="settings-deadlines__basis">{d.basis}</span> : null}
+                  {d.sourceIds?.map((id) => <CitationBadge key={id} citationId={id} />)}
                 </li>
               ))}
             </ul>
@@ -318,11 +328,3 @@ export function ComplianceSettingsPage() {
     </div>
   );
 }
-
-function shiftDateOnly(dateOnly: string, days: number) {
-  const date = new Date(`${dateOnly}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-export default ComplianceSettingsPage;

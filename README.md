@@ -1,8 +1,8 @@
 # Societyer
 
-A React + Convex app for tracking **BC Societies Act** compliance — registers, meetings & minutes, filings, deadlines, documents, conflicts of interest, financial statements, and PIPA privacy.
+A React + Convex app for governance records, meetings, filings, deadlines, documents, conflicts, financial statements and privacy. Reviewed legal profiles cover **BC societies, BC companies, federal CBCA corporations and Ontario OBCA corporations**, with explicit review boundaries for other entities.
 
-> Not legal advice. Statutory references (s.11, s.20, s.40, s.42, s.56, s.36 etc.) are based on the BC Societies Act as summarised in the accompanying compliance notes — verify against the current Act and your bylaws before acting.
+The app distinguishes statutory rules, governing-document choices and recorded evidence. Privacy applicability follows actual operating activities. See the [102-question legal research and implementation record](docs/legal-research/README.md), [extension guide](docs/legal-research/extending-legal-profiles.md) and [verification results](docs/legal-research/verification.md), reviewed 11 October 2026.
 
 ---
 
@@ -218,12 +218,14 @@ Preparation panels collect the required information, link to official registry s
 and offer a downloadable intake worksheet. These are planning aids, not government
 forms, articles, bylaws, or an incorporation agreement. Existing document packets support
 later governance work and cannot be generated for the wrong organization mode.
-Corporation meeting rules must be configured from the company's articles and bylaws;
-the inherited operational fallback is not a reviewed corporation rule set.
+Corporation meeting rules use the reviewed Act profile and require the company's
+articles, bylaws, share rights and authority evidence. Ontario's reviewed annual
+preparation packet is separate from its broader incorporation workflow, which remains
+under review. Custom or contradictory Acts do not inherit a business-company rule set.
 
 Current filing channels, paper or mail availability, and fees must be checked with the
-registry. Government sites were unavailable in this development environment; the
-preparation guidance retains existing source dates without claiming a new legal review.
+registry. The legal research records the official sources actually checked, their
+consolidation currency, and the specific Ontario/Alberta retrieval limitations.
 
 ## Live integrations
 

@@ -33,7 +33,7 @@ for (const rule of BC_SOCIETIES_EXPECTATION_PACK.rules) {
   assert.ok(rule.caveat.length > 20, `${rule.ruleKey} carries a caveat`);
 }
 assert.deepEqual(BC_SOCIETIES_EXPECTATION_PACK.rules.map((rule) => rule.ruleKey).sort(), ["BC-SOC-AGM-ANNUAL", "BC-SOC-ANNUAL-REPORT", "BC-SOC-DIRECTOR-CONSENT", "BC-SOC-DIRECTORS-MIN", "BC-SOC-FS-AT-AGM"]);
-assert.equal(BC_SOCIETIES_EXPECTATION_PACK.sources[0].currentTo, "2026-09-22");
+assert.equal(BC_SOCIETIES_EXPECTATION_PACK.sources[0].currentTo, "2026-10-06");
 
 /* ---------------------------- cadence rules ------------------------------ */
 
@@ -95,8 +95,8 @@ const snapshot: ContinuitySnapshot = {
   ],
   adoptedMinutesIds: ["m22"],
   filings: [
-    { _id: "f21", kind: "AnnualReport", filedAt: "2021-06-01", status: "Filed" },
-    { _id: "f22", kind: "AnnualReport", filedAt: "2022-07-30", status: "Filed" },
+    { _id: "f21", kind: "AnnualReport", periodLabel: "2021", filedAt: "2021-06-01", status: "Filed" },
+    { _id: "f22", kind: "AnnualReport", periodLabel: "2022", filedAt: "2022-07-30", status: "Filed" },
     { _id: "f23", kind: "AnnualReport", periodLabel: "2023", dueDate: "2023-06-15", status: "Draft" },
   ],
   financials: [{ _id: "fs20", fiscalYear: "2020", periodEnd: "2020-12-31" }, { _id: "fs22", fiscalYear: "2022", periodEnd: "2022-12-31", presentedAtMeetingId: "agm23" }],
@@ -123,7 +123,7 @@ assert.equal(classifyMeeting(snapshot.meetings[4], minutesByMeeting, new Set()),
 const expectations = effectiveExpectations([], snapshot);
 assert.deepEqual(expectations.map((row) => row.key).sort(), ["BC-SOC-AGM-ANNUAL", "BC-SOC-ANNUAL-REPORT", "BC-SOC-DIRECTOR-CONSENT", "BC-SOC-DIRECTORS-MIN", "BC-SOC-FS-AT-AGM"]);
 assert.equal(expectations.find((row) => row.key === "BC-SOC-AGM-ANNUAL")?.effectiveFrom, "2016-01-01", "no AGM required in the incorporation year (s.71(2))");
-assert.equal(effectiveExpectations([], { ...snapshot, society: { ...snapshot.society!, isMemberFunded: true } }).some((row) => row.key === "BC-SOC-DIRECTORS-MIN"), false, "member-funded exception");
+assert.equal(effectiveExpectations([], { ...snapshot, society: { ...snapshot.society!, isMemberFunded: true } }).find((row) => row.key === "BC-SOC-DIRECTORS-MIN")?.rule.minimumCount, 1, "member-funded minimum remains one director");
 assert.equal(effectiveExpectations([], { ...snapshot, society: { jurisdictionCode: "CA-ON", entityType: "society" } }).length, 0, "no pack outside BC");
 const overridden = effectiveExpectations([{ ...base({ key: "stored-agm", ruleKey: "BC-SOC-AGM-ANNUAL", kind: "agm", bodyKind: "members", status: "archived" }) }], snapshot);
 assert.equal(overridden.some((row) => row.ruleKey === "BC-SOC-AGM-ANNUAL"), false, "archived stored row switches the rule off");
@@ -149,13 +149,13 @@ assert.equal(statusOf("BC-SOC-AGM-ANNUAL", "2025").foundCount, 1);
 
 assert.equal(statusOf("BC-SOC-ANNUAL-REPORT", "2021").status, "satisfied");
 assert.equal(statusOf("BC-SOC-ANNUAL-REPORT", "2022").status, "satisfied");
-assert.match(statusOf("BC-SOC-ANNUAL-REPORT", "2022").note ?? "", /day\(s\) after/, "late filing is noted");
+assert.match(statusOf("BC-SOC-ANNUAL-REPORT", "2022").note ?? "", /days after/, "late filing is noted");
 assert.equal(statusOf("BC-SOC-ANNUAL-REPORT", "2023").status, "draft_only", "filing row not marked filed");
 assert.equal(statusOf("BC-SOC-ANNUAL-REPORT", "2024").status, "record_missing");
-assert.match(statusOf("BC-SOC-ANNUAL-REPORT", "2024").note ?? "", /evidence missing is not proof/);
-assert.equal(statusOf("BC-SOC-ANNUAL-REPORT", "2018").status, "not_applicable");
+assert.match(statusOf("BC-SOC-ANNUAL-REPORT", "2024").note ?? "", /missing evidence does not prove/);
+assert.equal(statusOf("BC-SOC-ANNUAL-REPORT", "2018").status, "record_missing");
 
-assert.equal(statusOf("BC-SOC-FS-AT-AGM", "2021").status, "satisfied", "FY2020 official statements");
+assert.equal(statusOf("BC-SOC-FS-AT-AGM", "2021").status, "source_only", "a statement file does not prove presentation at this AGM");
 assert.equal(statusOf("BC-SOC-FS-AT-AGM", "2022").status, "draft_only", "unverified import");
 assert.equal(statusOf("BC-SOC-FS-AT-AGM", "2023").status, "satisfied");
 assert.equal(statusOf("BC-SOC-FS-AT-AGM", "2024").status, "record_missing");
@@ -338,10 +338,9 @@ await assert.rejects(() => owner.runMutation("continuity:deriveFromBylawRules", 
 db.dump("societies");
 await db.insert("bylawRuleSets", { societyId: "soc", version: 2, status: "Active", effectiveFromISO: "2021-01-01T00:00:00Z", annualReportDueDaysAfterMeeting: 21, requireAgmFinancialStatements: true, generalNoticeMinDays: 14, generalNoticeMaxDays: 60, allowElectronicMeetings: true, allowHybridMeetings: true, allowElectronicVoting: false, allowProxyVoting: false, proxyHolderMustBeMember: true, proxyLimitPerGrantorPerMeeting: 1, quorumType: "fixed", quorumValue: 3, memberProposalThresholdPct: 5, memberProposalMinSignatures: 2, memberProposalLeadDays: 7, requisitionMeetingThresholdPct: 10, requireAgmElections: true, ballotIsAnonymous: true, voterMustBeMemberAtRecordDate: true, inspectionMemberRegisterByMembers: true, inspectionMemberRegisterByPublic: false, inspectionDirectorRegisterByMembers: true, inspectionCopiesAllowed: true, ordinaryResolutionThresholdPct: 50, specialResolutionThresholdPct: 66.67, unanimousWrittenSpecialResolution: true, updatedAtISO: "2021-01-01" });
 const derived: any = await owner.runMutation("continuity:deriveFromBylawRules", { societyId: "soc" });
-assert.deepEqual([derived.created, derived.updated], [2, 0]);
+assert.deepEqual([derived.created, derived.updated], [1, 0]);
 const bylawReport = db.dump("governanceExpectations").find((row: any) => row.ruleKey === "BYLAW-ANNUAL-REPORT") as any;
-assert.equal(bylawReport.rule.offsetDays, 21);
-assert.equal(bylawReport.severity, "bylaw");
+assert.equal(bylawReport, undefined, "bylaws cannot shorten or extend the statutory annual-report deadline");
 
 const checks: any = await owner.runQuery("continuity:dashboardChecks", { societyId: "soc" });
 assert.deepEqual(checks.checks.map((check: any) => check.id).sort(), ["CONTINUITY-ANNUAL-REPORT-FILED", "CONTINUITY-DIRECTOR-CONSENT", "CONTINUITY-MINUTES-APPROVED"].sort(), "AGM rule archived, so no AGM card");

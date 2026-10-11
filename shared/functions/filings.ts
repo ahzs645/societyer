@@ -11,6 +11,7 @@
  * is ported here alongside the rest of the domain.
  */
 
+import { parseComplianceDate } from "../corporationSettings";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requireDocumentAccess } from "./documents";
 import { requirePermissionPortable } from "./permissions";
@@ -19,11 +20,14 @@ import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } 
 
 /** These are user-recorded filing facts, never registry verification. */
 export function validateFiledFacts(record: Record<string, any>) {
+  if (record.reportingYear !== undefined && (!Number.isInteger(record.reportingYear) || record.reportingYear < 1 || record.reportingYear > 9999)) throw new Error("Reporting year must be a four-digit calendar year.");
+  if (record.reportingPeriodEnd !== undefined && !parseComplianceDate(record.reportingPeriodEnd)) throw new Error("Reporting period end must be a valid date.");
+  if (record.reportingYear !== undefined && record.reportingPeriodEnd && record.reportingYear !== Number(record.reportingPeriodEnd.slice(0, 4))) throw new Error("Reporting year and period-end year must agree.");
   if (record.status !== "Filed") return;
   const date = record.filedAt;
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)
     || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date
-    || !record.submissionMethod?.trim()) {
+    || date > new Date().toISOString().slice(0, 10) || !record.submissionMethod?.trim()) {
     throw new Error("A valid filed date and submission method are required.");
   }
   if (!record.confirmationNumber?.trim() && !record.receiptDocumentId
@@ -80,6 +84,8 @@ export async function createPortable(
     contextKind?: string;
     sourceRegistrationId?: string;
     periodLabel?: string;
+    reportingYear?: number;
+    reportingPeriodEnd?: string;
     dueDate: string;
     status: string;
     submissionMethod?: string;
@@ -114,6 +120,8 @@ export async function markFiledPortable(
   { id, ...rest }: {
     id: string;
     filedAt: string;
+    reportingYear?: number;
+    reportingPeriodEnd?: string;
     submissionMethod?: string;
     submittedByUserId?: string;
     confirmationNumber?: string;
@@ -182,6 +190,8 @@ export async function updatePortable(
       contextKind?: string;
       sourceRegistrationId?: string;
       periodLabel?: string;
+      reportingYear?: number;
+      reportingPeriodEnd?: string;
       dueDate?: string;
       status?: string;
       filedAt?: string;
@@ -266,6 +276,8 @@ export async function importBcRegistryHistoryPortable(
       contextKind?: string;
       sourceRegistrationId?: string;
       periodLabel?: string;
+      reportingYear?: number;
+      reportingPeriodEnd?: string;
       dueDate: string;
       filedAt?: string;
       submissionMethod?: string;

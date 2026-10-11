@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 import {
   getJurisdictionGuidePack,
+  getPrivacyLegalGuideRules,
+  formatGuideDateRange,
   getLegalGuideRules,
   JURISDICTION_GUIDE_PACKS,
   JURISDICTION_OPTIONS,
@@ -32,7 +34,7 @@ for (const pack of JURISDICTION_GUIDE_PACKS) {
 
 const bc = getJurisdictionGuidePack("CA-BC");
 assert.equal(bc.code, "CA-BC");
-assert.ok(bc.rules.some((rule) => rule.citationLabel.includes("BC Societies Act")));
+assert.ok(bc.rules.some((rule) => rule.instrument === "Societies Act"));
 
 const federal = getJurisdictionGuidePack("CA-FED-CBCA");
 assert.equal(federal.code, "CA-FED-CBCA");
@@ -58,4 +60,24 @@ assert.equal(resolveJurisdictionCode({ jurisdictionCode: "CA-FED-CBCA" }), "CA-F
 assert.ok(JURISDICTION_OPTIONS.some((option) => option.value === "CA-FED-CBCA"));
 assert.ok(JURISDICTION_OPTIONS.some((option) => option.value === "CA-ON-OBCA"));
 
-console.log("Jurisdiction guide track checks passed.");
+// A current consolidation cannot prove historical wording or commencement.
+for (const code of ["CA-BC-BCA", "CA-FED-CBCA", "CA-ON-OBCA"]) {
+  const current = getLegalGuideRules({ jurisdictionCode: code, dateISO: "2026-10-11", topics: ["records"] });
+  assert.ok(current.length > 0);
+  assert.ok(current.every((rule) => !rule.effectiveFromISO && !!rule.currentAsOfISO));
+  assert.deepEqual(getLegalGuideRules({ jurisdictionCode: code, dateISO: "2000-01-01", topics: ["records"] }), [], `${code}: no false historical application of modern transparency/ISC rules`);
+  assert.match(formatGuideDateRange(current[0]), /reviewed.*commencement not established/);
+}
+const federalRecords = getLegalGuideRules({ jurisdictionCode: "CA-FED-CBCA", dateISO: "2026-10-11", topics: ["records"] });
+assert.ok(federalRecords.some((rule) => rule.sourceCurrentToISO === "2026-09-21" && rule.currentAsOfISO === "2026-10-11"), "source currency and review dates remain separate");
+assert.equal(getJurisdictionGuidePack(resolveJurisdictionCode({ jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__nfp_", actFormedUnder: "canada_not_for_profit_corporations_act" })).rules.length, 0);
+assert.deepEqual(getPrivacyLegalGuideRules({ organization: { jurisdictionCode: "CA-BC", entityType: "society" } }), [], "privacy guides never infer activity from incorporation");
+const bcHandling = { privacyOperatingJurisdictions: ["CA-BC"], privacyFederalWork: "no" as const, privacyCommercialActivity: "yes" as const, privacyCrossBorderCommercial: "yes" as const, privacySectorSpecific: "none" as const };
+const privacy = getPrivacyLegalGuideRules({ organization: bcHandling });
+assert.ok(privacy.some((rule) => rule.statuteKey === "bc_pipa"));
+assert.ok(privacy.some((rule) => rule.statuteKey === "pipeda"));
+assert.ok(privacy.every((rule) => rule.currentAsOfISO === "2026-10-11" && !rule.effectiveFromISO));
+assert.equal(privacy.find((rule) => rule.id === "privacy-bc_pipa-breach")?.ruleKind, "policy_guidance", "BC recommended private breach practice is not presented as a general mandatory report");
+assert.ok(!privacy.some((rule) => /C-36|CPPA/.test(rule.citationLabel)), "proposed reforms never become operative guides");
+
+console.log("Jurisdiction guide track checks passed: correct Act, shared sources, historical boundaries, separate review and consolidation dates, activity-scoped privacy, recommendations and proposed-law exclusion.");

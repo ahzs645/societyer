@@ -21,6 +21,8 @@ export interface DirectorCreateArgs {
   aliases?: string[];
   position: string;
   isBCResident: boolean;
+  residentCanadianStatus?: "yes" | "no" | "unknown";
+  residentCanadianEvidence?: string;
   termStart: string;
   termEnd?: string;
   consentOnFile: boolean;
@@ -37,6 +39,8 @@ export interface DirectorPatch {
   aliases?: string[];
   position?: string;
   isBCResident?: boolean;
+  residentCanadianStatus?: "yes" | "no" | "unknown";
+  residentCanadianEvidence?: string;
   termStart?: string;
   termEnd?: string;
   consentOnFile?: boolean;

@@ -84,18 +84,26 @@ export function organizationKind(organization?: LegalEntityLike | null): Organiz
   const entityType = organizationEntityType(organization).toLowerCase();
   const act = cleanText(organization?.actFormedUnder).toLowerCase();
 
+  // Non-share corporations and cooperatives use member authority. A province
+  // or the word "corporations" in their Act must never select a share ledger.
+  if (isMemberBasedCorporation(organization) || /co.?operativ/.test(`${entityType} ${act}`)) return "organization";
   if (entityType.includes("corporation")) return "corporation";
   if (entityType.includes("society")) return "society";
   if (act.includes("societies_act")) {
     return "society";
   }
-  if (entityType.includes("corporation") || act.includes("corporations_act")) {
+  if (act.includes("business_corporations_act")) {
     return "corporation";
   }
   if (isFederalCbca(organization) || isOntarioObca(organization)) {
     return "corporation";
   }
   return "organization";
+}
+
+export function isMemberBasedCorporation(organization?: LegalEntityLike | null): boolean {
+  const identity = `${organizationEntityType(organization)} ${cleanText(organization?.actFormedUnder)}`.toLowerCase().replace(/[-\s]+/g, "_");
+  return /corporation__nfp_|not_for_profit|non_profit|nonprofit|non_share/.test(identity);
 }
 
 export function isCorporation(organization?: LegalEntityLike | null): boolean {
@@ -107,9 +115,11 @@ export function isSociety(organization?: LegalEntityLike | null): boolean {
 }
 
 export function isFederalCbca(organization?: LegalEntityLike | null): boolean {
+  if (isMemberBasedCorporation(organization)) return false;
   const jurisdiction = homeJurisdictionCode(organization);
   const act = cleanText(organization?.actFormedUnder).toLowerCase();
   const entityType = organizationEntityType(organization).toLowerCase();
+  if (act && act !== "canada_business_corporations_act") return false;
   return (
     jurisdiction === "CA-FED-CBCA" ||
     act === "canada_business_corporations_act" ||
@@ -118,9 +128,11 @@ export function isFederalCbca(organization?: LegalEntityLike | null): boolean {
 }
 
 export function isOntarioObca(organization?: LegalEntityLike | null): boolean {
+  if (isMemberBasedCorporation(organization)) return false;
   const jurisdiction = homeJurisdictionCode(organization);
   const act = cleanText(organization?.actFormedUnder).toLowerCase();
   const entityType = organizationEntityType(organization).toLowerCase();
+  if (act && act !== "business_corporations_act__ontario_") return false;
   return (
     jurisdiction === "CA-ON-OBCA" ||
     act === "business_corporations_act__ontario_" ||

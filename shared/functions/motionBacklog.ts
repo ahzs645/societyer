@@ -23,6 +23,7 @@ import {
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { organizationRuleScope } from "../entityRuleScope";
+import { hasApplicablePrivacyLaw } from "../privacyRuleProfiles";
 
 // Lifecycle statuses that make a motion show up in the backlog UI.
 const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
@@ -67,12 +68,13 @@ const PIPA_SETUP_MOTIONS = [
  */
 export function pipaSetupMotionsFor(organization?: Record<string, any> | null) {
   const scope = organizationRuleScope(organization as any);
-  if (scope.isSociety && scope.isBcHome) return PIPA_SETUP_MOTIONS;
+  const bcPrivacy = hasApplicablePrivacyLaw(organization, "bc_pipa");
+  if (scope.isSociety && bcPrivacy) return PIPA_SETUP_MOTIONS;
   const title = scope.isSociety ? "Society" : scope.isCorporation ? "Corporation" : "Organization";
   const lower = title.toLowerCase();
   const reword = (text: string) => {
     let next = text.replace(/\bSociety\b/g, title).replace(/\bsociety\b/g, lower);
-    if (!scope.isBcHome) next = next.replace(/\bPIPA privacy policy\b/g, "privacy policy");
+    if (!bcPrivacy) next = next.replace(/\bPIPA privacy policy\b/g, "privacy policy");
     return next;
   };
   return PIPA_SETUP_MOTIONS

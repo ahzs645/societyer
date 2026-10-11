@@ -1,11 +1,36 @@
 import assert from "node:assert/strict";
 import { bylawBaselineForOrganization, clearNoticeDays, contextualBylawRules } from "../shared/bylawBaselines";
+import { legalGovernanceProfile } from "../shared/legalGovernanceProfiles";
 import { noticeWindowSatisfied } from "../src/features/meetings/lib/noticeWindow";
 import { computedQuorumMet } from "../src/features/meetings/lib/meetingDetailHelpers";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 assert.equal(bylawBaselineForOrganization({ entityType: "society", jurisdictionCode: "CA-FED-CBCA" }, "wrong").governanceAutomationBlocked, true);
 assert.equal(bylawBaselineForOrganization({ entityType: "corporation__non_profit_", jurisdictionCode: "CA-BC" }, "nfp").governanceAutomationBlocked, true);
-assert.equal(bylawBaselineForOrganization({}, "unknown").governanceAutomationBlocked, true);
+const emptyLegacy = bylawBaselineForOrganization({}, "empty-legacy");
+assert.equal(emptyLegacy.governanceAutomationBlocked, false, "An absent legacy identity retains the established BC compatibility default");
+assert.equal(emptyLegacy.jurisdictionCode, "CA-BC");
+assert.equal(emptyLegacy.noticeRequiresClearDays, true, "Legacy BC compatibility must apply the same clear-day rule as an explicit BC society");
+assert.equal(bylawBaselineForOrganization(null, "missing-record").governanceAutomationBlocked, true);
+for (const override of [
+  { jurisdictionCode: "unknown" },
+  { homeJurisdictionCode: "unknown" },
+  { homeJurisdiction: "unknown" },
+  { jurisdiction: "unknown" },
+  { jurisdictionCode: "unknown", homeJurisdictionCode: "CA-BC" },
+  { jurisdictionCode: "unknown", incorporationNumber: "S1234" },
+  { jurisdictionCode: "unknown", entityType: "society", actFormedUnder: "societies_act" },
+  { jurisdictionCode: "unknown", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act" },
+  { jurisdictionCode: "unreviewed_jurisdiction", entityType: "society", actFormedUnder: "societies_act" },
+]) {
+  const baseline = bylawBaselineForOrganization(override, "explicit-unknown");
+  assert.equal(legalGovernanceProfile(override), undefined, "An explicit unknown jurisdiction must not acquire an inferred legal profile");
+  assert.equal(baseline.governanceAutomationBlocked, true);
+  assert.equal(baseline.quorumDenominator, "review_required");
+  assert.match(baseline.authorityCitation, /No reviewed legal authority/);
+  const stored = contextualBylawRules(override, "explicit-unknown", { status: "Active", governanceAutomationBlocked: false, jurisdictionCode: "CA-BC" });
+  assert.equal(stored.governanceAutomationBlocked, true, "Stored draft rules cannot undo an explicit jurisdiction-review requirement");
+  assert.equal(stored.quorumDenominator, "review_required");
+}
 assert.equal(bylawBaselineForOrganization({ incorporationNumber: "S1234", name: "Legacy BC society" }, "legacy").governanceAutomationBlocked, false);
 assert.equal(bylawBaselineForOrganization({ entityType: "corporation__business_", homeJurisdiction: "federal__canada_" }, "alias").jurisdictionCode, "CA-FED-CBCA");
 const society = bylawBaselineForOrganization({ entityType: "society", jurisdictionCode: "CA-BC" }, "society");
@@ -21,7 +46,10 @@ const fed = bylawBaselineForOrganization({ entityType: "corporation__business_",
 assert.equal(fed.generalNoticeMinDays, 21);
 assert.equal(fed.quorumDenominator, "issued_voting_shares");
 assert.equal(fed.quorumRequiresLegalRegister, true);
-assert.equal(bylawBaselineForOrganization({ entityType: "corporation__business_", jurisdictionCode: "CA-ON-OBCA" }, "on").governanceAutomationBlocked, true);
+const ontario = bylawBaselineForOrganization({ entityType: "corporation__business_", jurisdictionCode: "CA-ON-OBCA" }, "on");
+assert.equal(ontario.governanceAutomationBlocked, false, "The reviewed Ontario corporate profile is now supported");
+assert.equal(ontario.quorumRequiresLegalRegister, true);
+assert.equal(bylawBaselineForOrganization({ entityType: "corporation__business_", jurisdictionCode: "CA-ON-OBCA", actFormedUnder: "unreviewed_act" }, "on-unknown-act").governanceAutomationBlocked, true);
 assert.equal(clearNoticeDays("2026-07-13", "2026-07-27"), 13);
 assert.equal(clearNoticeDays("2026-07-13", "2026-07-28"), 14);
 assert.equal(clearNoticeDays("2026-03-07", "2026-03-23"), 15, "DST does not reduce full calendar days");
@@ -50,4 +78,4 @@ assert.equal(active.isFallback, true);
 assert.equal(active._id, undefined, "reset does not manufacture adopted operative bylaws");
 const history = await client.query("bylawRules:list", { societyId: societyWorkspace.societyId });
 assert.equal(history.at(-1).status, "Baseline", "reset has an audit marker");
-console.log("Jurisdiction-aware bylaw baselines, share-quorum gates, reset provenance and clear/calendar-month notice boundary checks passed.");
+console.log("Jurisdiction-aware bylaw baselines passed: empty legacy compatibility, explicit-unknown overrides blocked, share-quorum gates, reset provenance and clear/calendar-month notice boundaries.");

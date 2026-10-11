@@ -1,3 +1,4 @@
+import { statedReportingYear } from "../../shared/agmEvidence";
 import { serverActionErrorMessage, serverActionsUnavailable, serverConnectionMessage } from "../lib/serverConnection";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -102,6 +103,8 @@ export function FilingsPage() {
       jurisdictionCode: filing.jurisdictionCode,
       contextKind: filing.contextKind,
       sourceRegistrationId: filing.sourceRegistrationId,
+      reportingYear: filing.reportingYear ?? statedReportingYear(filing),
+      reportingPeriodEnd: filing.reportingPeriodEnd ?? "",
       filedAt: calendarDateKey(new Date()),
       submissionMethod: filing.submissionMethod ?? "ManualPortal",
       confirmationNumber: filing.confirmationNumber ?? "",
@@ -441,6 +444,10 @@ export function FilingsPage() {
               </Field>
             )}
             <Field label="Period / label" hint="Required. For example 2026, FY2025-26 or 2026 AGM"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>
+            {['AnnualReport', 'BCSocietyAnnualReport', 'BCCompanyAnnualReport', 'FederalAnnualReturn', 'OntarioAnnualReturn'].includes(form.kind) && <>
+              <Field label="Reporting year" hint="Year covered by this registry filing, as stated on its receipt or form. A fiscal-year range alone is ambiguous."><input className="input" type="number" min={1} max={9999} value={form.reportingYear ?? ''} onChange={(e) => setForm({ ...form, reportingYear: e.target.value ? Number(e.target.value) : undefined })} /></Field>
+              {form.kind === 'OntarioAnnualReturn' && <Field label="Taxation year end" hint="Exact period end covered by the Ontario annual return."><DatePicker value={form.reportingPeriodEnd ?? ''} onChange={(value) => setForm({ ...form, reportingPeriodEnd: value || undefined })} /></Field>}
+            </>}
             <Field label="Due date">
               <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
             </Field>
@@ -466,6 +473,8 @@ export function FilingsPage() {
             )}
             <div><span className="muted">Status:</span> {viewFiled.status}</div>
             <div><span className="muted">Due:</span> {viewFiled.dueDate ?? "—"}</div>
+            {viewFiled.reportingYear && <div><span className="muted">Reporting year:</span> {viewFiled.reportingYear}</div>}
+            {viewFiled.reportingPeriodEnd && <div><span className="muted">Period end:</span> {viewFiled.reportingPeriodEnd}</div>}
             {viewFiled.filedAt && <div><span className="muted">Filed:</span> {viewFiled.filedAt}{viewFiled.dueDate && String(viewFiled.filedAt).slice(0, 10) > String(viewFiled.dueDate).slice(0, 10) ? " (after the due date)" : ""}</div>}
             {viewFiled.submissionMethod && <div><span className="muted">Method:</span> {viewFiled.submissionMethod}</div>}
             {viewFiled.confirmationNumber && <div><span className="muted">Confirmation:</span> {viewFiled.confirmationNumber}</div>}
@@ -522,6 +531,8 @@ export function FilingsPage() {
                 await markFiled({
                   id: completeDraft.id,
                   filedAt: completeDraft.filedAt,
+                  reportingYear: completeDraft.reportingYear || undefined,
+                  reportingPeriodEnd: completeDraft.reportingPeriodEnd || undefined,
                   submissionMethod: completeDraft.submissionMethod || undefined,
                   submittedByUserId: actingUserId,
                   confirmationNumber: completeDraft.confirmationNumber || undefined,
@@ -563,6 +574,10 @@ export function FilingsPage() {
               Filing context: {contextKindLabel(completeDraft.contextKind)} · {completeDraft.jurisdictionCode ?? society.jurisdictionCode}
               {completeDraft.sourceRegistrationId ? ` · registration ${completeDraft.sourceRegistrationId}` : ""}
             </div>
+            {['AnnualReport', 'BCSocietyAnnualReport', 'BCCompanyAnnualReport', 'FederalAnnualReturn', 'OntarioAnnualReturn'].includes(completeDraft.kind) && <>
+              <Field label="Reporting year" hint="Identify the covered cycle from the filing evidence. An unknown period remains unverified in annual-cycle checks."><input className="input" type="number" min={1} max={9999} value={completeDraft.reportingYear ?? ''} onChange={(e) => setCompleteDraft({ ...completeDraft, reportingYear: e.target.value ? Number(e.target.value) : undefined })} /></Field>
+              {completeDraft.kind === 'OntarioAnnualReturn' && <Field label="Taxation year end"><DatePicker value={completeDraft.reportingPeriodEnd ?? ''} onChange={(value) => setCompleteDraft({ ...completeDraft, reportingPeriodEnd: value || undefined })} /></Field>}
+            </>}
             <Field label="Filed date"><DatePicker value={completeDraft.filedAt} onChange={(value) => setCompleteDraft({ ...completeDraft, filedAt: value })} /></Field>
             <Field label="Submission method">
               <Select

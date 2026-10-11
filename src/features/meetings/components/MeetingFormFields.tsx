@@ -22,7 +22,8 @@ import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
 import { useSociety } from "@/hooks/useSociety";
 import { organizationVocabulary } from "@/lib/organizationVocabulary";
-import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow, defaultNewMeetingStart } from "../lib/noticeWindow";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNominalNoticeWindow, noticeWindowLabel, defaultNewMeetingStart } from "../lib/noticeWindow";
+import { NOTICE_CALENDAR_REVIEW_CAVEAT } from "../../../../shared/legalMeetingNotice";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
@@ -267,16 +268,20 @@ export function MeetingFormFields({
       )}
       {isGeneralMeeting(value.type) &&
       (daysUntil(value.scheduledAt) ?? 0) >= 0 &&
-      !meetsNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules) ? (
+      !meetsNominalNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules) ? (
         <div className="flag flag--warn" style={{ marginBottom: 12 }}>
           <AlertTriangle />
           <div>
-            General meetings should be scheduled with {effectiveNoticeMinDays}–
-            {effectiveNoticeMaxDays} days of notice under the rule set effective on this meeting
-            date.
+            The proposed date is outside the nominal planning window if notice is given today:
+            {" "}{noticeWindowLabel(effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules)}.
           </div>
         </div>
       ) : null}
+      {isGeneralMeeting(value.type) && (
+        <p className="muted" role="status" style={{ marginBottom: 12 }}>
+          {NOTICE_CALENDAR_REVIEW_CAVEAT}
+        </p>
+      )}
       {!editingId && (
         <div className="meeting-template-picker">
           <Field label="Template">

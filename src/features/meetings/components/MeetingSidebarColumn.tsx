@@ -27,6 +27,7 @@ import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
 import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
 import { meetingDatePrecision } from "../../../../shared/meetingDates";
 import { SourceOriginalDownload } from "./SourceOriginalDownload";
+import { NOTICE_CALENDAR_REVIEW_CAVEAT } from "../../../../shared/legalMeetingNotice";
 
 export function MeetingSidebarColumn({
   meeting,
@@ -431,11 +432,14 @@ export function MeetingSidebarColumn({
                   is the authoritative source; always defer to it over this card
                   when the two disagree.
                 */}
-                <Check ok={!!meeting.noticeSentAt}>{societyLaw ? "Notice sent 14–60 days in advance" : "Notice sent within the required notice window"}</Check>
+                <Check ok={!!meeting.noticeSentAt}>Notice dispatch recorded</Check>
                 <Check ok={meeting.status === "Held"}>Meeting held</Check>
                 <Check ok={minutesRecorded}>Minutes recorded</Check>
                 <Check ok={!!minutes?.approvedAt}>Minutes approved at next meeting</Check>
-                <Check ok={isAgmStepDone(agmRun, "annualReportFiled")}>{societyLaw ? "Annual report filed within 30 days" : "Annual registry filing recorded"}</Check>
+                <Check ok={isAgmStepDone(agmRun, "annualReportFiled")}>{societyLaw ? "Annual report filing recorded" : "Annual registry filing recorded"}</Check>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
+                  Notice timing requires a separate review. {NOTICE_CALENDAR_REVIEW_CAVEAT}
+                </div>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
                   See the <Link to={`/app/meetings/${meeting._id}/agm`}>AGM workflow</Link> for the authoritative,
                   step-by-step status of this meeting.

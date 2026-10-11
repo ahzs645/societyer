@@ -1,3 +1,4 @@
+import { LegalGovernanceGuidance } from "../components/LegalGovernanceGuidance";
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -86,8 +87,8 @@ export function ConflictsPage() {
       declaredAt: todayDateOnly(),
       contractOrMatter: "",
       natureOfInterest: "",
-      abstainedFromVote: true,
-      leftRoom: true,
+      abstainedFromVote: false,
+      leftRoom: false,
     });
     setOpen(true);
   }, [canWrite, directors, toast]);
@@ -119,16 +120,16 @@ export function ConflictsPage() {
         title="Conflicts of interest"
         icon={<AlertTriangle size={16} />}
         iconColor="red"
-        subtitle={vocab.societyLaw ? "Disclosures of directors' material interests (s.56)." : "Disclosures of directors' and officers' material interests."}
-        info={vocab.societyLaw
-          ? <p>Directors and senior managers must disclose material interests, leave the room, and abstain.</p>
-          : <p>Record each disclosed interest and how the board handled it. Confirm disclosure and abstention rules under the governing Act and the {vocab.governingDocuments}.</p>}
+        subtitle="Directors’ disclosed interests and the recorded handling of each matter."
+        info={<p>Record the interest, disclosure timing, decision and any applicable exception under the governing Act and the {vocab.governingDocuments}. The checkboxes record what happened; they do not decide whether participation was permitted.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New disclosure
           </button>
         }
       />
+
+      <LegalGovernanceGuidance organization={society} topic="conflicts" />
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="conflict disclosure" />
@@ -203,7 +204,7 @@ export function ConflictsPage() {
               onChange={(v) => setForm({ ...form, leftRoom: v })}
               label="Left room during discussion"
             />
-            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
+            <Field label="Participation basis, exception and decision-record reference"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

@@ -1,0 +1,3558 @@
+{
+  "schemaVersion": "1.0.0",
+  "recordedAt": "2026-10-11T19:51:40.646788+00:00",
+  "branch": "codex/entity-law-2026-10-11",
+  "foundationCommit": "24500708d8a61678aedcf1e90d20f9d0df566b01",
+  "environment": {
+    "node": "v24.19.0",
+    "chromium": "147.0.7727.0",
+    "browserDependencyAddedToProject": false
+  },
+  "research": {
+    "questions": 102,
+    "groups": 9,
+    "coverageManifest": "coverage.json"
+  },
+  "legalGates": {
+    "ranAt": "2026-10-11T19:50:10.993Z",
+    "node": "v24.19.0",
+    "results": [
+      {
+        "script": "check-legal-research-coverage.ts",
+        "passed": true,
+        "durationMs": 226
+      },
+      {
+        "script": "check-legal-profile-registry.ts",
+        "passed": true,
+        "durationMs": 208
+      },
+      {
+        "script": "check-privacy-profiles.ts",
+        "passed": true,
+        "durationMs": 734
+      },
+      {
+        "script": "check-legal-guidance.ts",
+        "passed": true,
+        "durationMs": 885
+      },
+      {
+        "script": "check-corporate-legal-deadlines.ts",
+        "passed": true,
+        "durationMs": 294
+      },
+      {
+        "script": "check-annual-governance-evidence.ts",
+        "passed": true,
+        "durationMs": 415
+      },
+      {
+        "script": "check-legal-deadline-calendars.ts",
+        "passed": true,
+        "durationMs": 211
+      },
+      {
+        "script": "check-filing-period-evidence.ts",
+        "passed": true,
+        "durationMs": 737
+      },
+      {
+        "script": "check-notice-calendar-review.ts",
+        "passed": true,
+        "durationMs": 240
+      },
+      {
+        "script": "check-bylaw-jurisdiction-baselines.ts",
+        "passed": true,
+        "durationMs": 1371
+      },
+      {
+        "script": "check-written-resolution-evidence.ts",
+        "passed": true,
+        "durationMs": 989
+      },
+      {
+        "script": "check-shareholder-election-notices.ts",
+        "passed": true,
+        "durationMs": 539
+      },
+      {
+        "script": "check-annual-resolution.ts",
+        "passed": true,
+        "durationMs": 1065
+      },
+      {
+        "script": "check-corporation-document-packets.ts",
+        "passed": true,
+        "durationMs": 808
+      },
+      {
+        "script": "check-corporation-settings.ts",
+        "passed": true,
+        "durationMs": 188
+      },
+      {
+        "script": "check-annual-filings.ts",
+        "passed": true,
+        "durationMs": 192
+      },
+      {
+        "script": "check-entity-rule-scope.ts",
+        "passed": true,
+        "durationMs": 773
+      },
+      {
+        "script": "check-organization-domain.ts",
+        "passed": true,
+        "durationMs": 755
+      },
+      {
+        "script": "check-organization-vocabulary.ts",
+        "passed": true,
+        "durationMs": 302
+      },
+      {
+        "script": "check-dashboard-compliance-rules.ts",
+        "passed": true,
+        "durationMs": 183
+      },
+      {
+        "script": "check-jurisdiction-guide-tracks.ts",
+        "passed": true,
+        "durationMs": 299
+      },
+      {
+        "script": "validate-jurisdiction-guide-packs.ts",
+        "passed": true,
+        "durationMs": 298
+      },
+      {
+        "script": "check-research-legal-boundaries.ts",
+        "passed": true,
+        "durationMs": 334
+      },
+      {
+        "script": "check-compliance-agm-evidence.ts",
+        "passed": true,
+        "durationMs": 318
+      },
+      {
+        "script": "check-continuity.ts",
+        "passed": true,
+        "durationMs": 545
+      },
+      {
+        "script": "check-meeting-governance.ts",
+        "passed": true,
+        "durationMs": 423
+      },
+      {
+        "script": "check-governance-quorum.ts",
+        "passed": true,
+        "durationMs": 524
+      },
+      {
+        "script": "check-governance-timezone.ts",
+        "passed": true,
+        "durationMs": 448
+      },
+      {
+        "script": "check-election-lifecycle.ts",
+        "passed": true,
+        "durationMs": 657
+      },
+      {
+        "script": "check-election-participant-authority.ts",
+        "passed": true,
+        "durationMs": 456
+      },
+      {
+        "script": "check-register-history.ts",
+        "passed": true,
+        "durationMs": 171
+      },
+      {
+        "script": "check-register-projection-authority.ts",
+        "passed": true,
+        "durationMs": 511
+      },
+      {
+        "script": "check-dashboard-resource-authority.ts",
+        "passed": true,
+        "durationMs": 444
+      },
+      {
+        "script": "check-meeting-package-projection.ts",
+        "passed": true,
+        "durationMs": 531
+      },
+      {
+        "script": "check-authorization-policy.ts",
+        "passed": true,
+        "durationMs": 969
+      },
+      {
+        "script": "check-generated-document-access.ts",
+        "passed": true,
+        "durationMs": 604
+      },
+      {
+        "script": "check-filing-preparation-integration.ts",
+        "passed": true,
+        "durationMs": 908
+      },
+      {
+        "script": "check-filing-ledger-handoffs.ts",
+        "passed": true,
+        "durationMs": 945
+      }
+    ]
+  },
+  "build": {
+    "command": "npm run build",
+    "passed": true,
+    "stages": [
+      "Convex TypeScript",
+      "Project TypeScript",
+      "Vite production"
+    ],
+    "viteBuildSeconds": 39.85,
+    "warnings": [
+      "Vite reported chunks larger than 1000 kB after minification."
+    ]
+  },
+  "portableManifest": {
+    "passed": true,
+    "scannerTestsPassed": 5,
+    "portable": 966,
+    "capabilityBacked": 19,
+    "serverOnly": 92,
+    "staticFallback": 65,
+    "convexFunctions": 1142,
+    "registryEntries": 987,
+    "localVariants": 2
+  },
+  "staticParity": {
+    "passed": true,
+    "frontendWrites": 347,
+    "handled": 329,
+    "intentionalOfflineNoOps": 18,
+    "pendingOrUnimplemented": 0
+  },
+  "recordValidation": {
+    "passed": true,
+    "command": "node --import tsx scripts/check-record-validation.ts"
+  },
+  "browser": {
+    "passed": true,
+    "generatedAt": "2026-10-11T19:47:59.595Z",
+    "strict": true,
+    "testsPassed": 22,
+    "testsTotal": 22,
+    "guidedSetups": 5,
+    "routeCoverageGuards": 1,
+    "routeShards": 15,
+    "verdictTests": 1,
+    "totalRouteVisits": 540,
+    "perWorkspace": {
+      "bc-corp": {
+        "matches": 25,
+        "leaks": 0,
+        "leakRoutes": 0,
+        "routesVisited": 108,
+        "pageErrors": 0
+      },
+      "cbca-corp": {
+        "matches": 28,
+        "leaks": 0,
+        "leakRoutes": 0,
+        "routesVisited": 108,
+        "pageErrors": 0
+      },
+      "obca-corp": {
+        "matches": 30,
+        "leaks": 0,
+        "leakRoutes": 0,
+        "routesVisited": 108,
+        "pageErrors": 0
+      },
+      "custom": {
+        "matches": 25,
+        "leaks": 0,
+        "leakRoutes": 0,
+        "routesVisited": 108,
+        "pageErrors": 0
+      },
+      "bc-society": {
+        "matches": 536,
+        "leaks": 0,
+        "leakRoutes": 0,
+        "routesVisited": 108,
+        "pageErrors": 0
+      }
+    },
+    "uncaughtPageErrors": 0,
+    "unallowlistedLeaks": 0,
+    "knownLeakBaselineEntries": 0,
+    "newLeaks": 0,
+    "staleEntries": 0,
+    "visitedRoutes": {
+      "bc-corp": [
+        {
+          "route": "/app",
+          "finalPath": "/app",
+          "chars": 2519,
+          "ms": 6792
+        },
+        {
+          "route": "/app/agreements",
+          "finalPath": "/app/agreements",
+          "chars": 251,
+          "ms": 773
+        },
+        {
+          "route": "/app/annual-filings",
+          "finalPath": "/app/annual-filings",
+          "chars": 202,
+          "ms": 591
+        },
+        {
+          "route": "/app/audit",
+          "finalPath": "/app/audit",
+          "chars": 417,
+          "ms": 662
+        },
+        {
+          "route": "/app/bylaw-diff",
+          "finalPath": "/app/bylaw-diff",
+          "chars": 345,
+          "ms": 759
+        },
+        {
+          "route": "/app/calendar-sync",
+          "finalPath": "/app/calendar-sync",
+          "chars": 437,
+          "ms": 680
+        },
+        {
+          "route": "/app/committees",
+          "finalPath": "/app/committees",
+          "chars": 227,
+          "ms": 643
+        },
+        {
+          "route": "/app/compliance-settings",
+          "finalPath": "/app/compliance-settings",
+          "chars": 2035,
+          "ms": 540
+        },
+        {
+          "route": "/app/court-orders",
+          "finalPath": "/app/court-orders",
+          "chars": 1170,
+          "ms": 643
+        },
+        {
+          "route": "/app/deadlines",
+          "finalPath": "/app/deadlines",
+          "chars": 173,
+          "ms": 638
+        },
+        {
+          "route": "/app/document-catalog",
+          "finalPath": "/app/document-catalog",
+          "chars": 13723,
+          "ms": 645
+        },
+        {
+          "route": "/app/employees",
+          "finalPath": "/app/employees",
+          "chars": 132,
+          "ms": 603
+        },
+        {
+          "route": "/app/filings/prefill",
+          "finalPath": "/app/filings/prefill",
+          "chars": 218,
+          "ms": 729
+        },
+        {
+          "route": "/app/financials/accounting",
+          "finalPath": "/app/financials/accounting",
+          "chars": 1486,
+          "ms": 886
+        },
+        {
+          "route": "/app/goals",
+          "finalPath": "/app/goals",
+          "chars": 100,
+          "ms": 504
+        },
+        {
+          "route": "/app/grants/sources",
+          "finalPath": "/app/grants/sources",
+          "chars": 4298,
+          "ms": 541
+        },
+        {
+          "route": "/app/insurance",
+          "finalPath": "/app/insurance",
+          "chars": 321,
+          "ms": 650
+        },
+        {
+          "route": "/app/inventory",
+          "finalPath": "/app/inventory",
+          "chars": 387,
+          "ms": 840
+        },
+        {
+          "route": "/app/meeting-templates",
+          "finalPath": "/app/meeting-templates",
+          "chars": 214,
+          "ms": 597
+        },
+        {
+          "route": "/app/meetings/offline",
+          "finalPath": "/app/meetings/offline",
+          "chars": 91,
+          "ms": 790
+        },
+        {
+          "route": "/app/minute-book",
+          "finalPath": "/app/minute-book",
+          "chars": 2751,
+          "ms": 656
+        },
+        {
+          "route": "/app/motion-library",
+          "finalPath": "/app/motions",
+          "chars": 157,
+          "ms": 627
+        },
+        {
+          "route": "/app/org-chart",
+          "finalPath": "/app/org-chart",
+          "chars": 223,
+          "ms": 753
+        },
+        {
+          "route": "/app/outbox",
+          "finalPath": "/app/outbox",
+          "chars": 193,
+          "ms": 634
+        },
+        {
+          "route": "/app/people-history",
+          "finalPath": "/app/people-history",
+          "chars": 171,
+          "ms": 671
+        },
+        {
+          "route": "/app/policies",
+          "finalPath": "/app/policies",
+          "chars": 154,
+          "ms": 703
+        },
+        {
+          "route": "/app/privacy",
+          "finalPath": "/app/privacy",
+          "chars": 5457,
+          "ms": 1411
+        },
+        {
+          "route": "/app/receipts",
+          "finalPath": "/app/receipts",
+          "chars": 306,
+          "ms": 512
+        },
+        {
+          "route": "/app/research-library",
+          "finalPath": "/app/research-library",
+          "chars": 10866,
+          "ms": 584
+        },
+        {
+          "route": "/app/role-holders",
+          "finalPath": "/app/role-holders",
+          "chars": 495,
+          "ms": 707
+        },
+        {
+          "route": "/app/settings",
+          "finalPath": "/app/settings",
+          "chars": 991,
+          "ms": 753
+        },
+        {
+          "route": "/app/significant-individuals",
+          "finalPath": "/app/significant-individuals",
+          "chars": 227,
+          "ms": 610
+        },
+        {
+          "route": "/app/tasks",
+          "finalPath": "/app/tasks",
+          "chars": 539,
+          "ms": 882
+        },
+        {
+          "route": "/app/transparency",
+          "finalPath": "/app/transparency",
+          "chars": 921,
+          "ms": 783
+        },
+        {
+          "route": "/app/volunteers",
+          "finalPath": "/app/volunteers",
+          "chars": 290,
+          "ms": 676
+        },
+        {
+          "route": "/app/workflow-runs",
+          "finalPath": "/app/workflow-runs",
+          "chars": 139,
+          "ms": 631
+        },
+        {
+          "route": "/app/access-custody",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 1133
+        },
+        {
+          "route": "/app/ai-agents",
+          "finalPath": "/app/ai-agents",
+          "chars": 820,
+          "ms": 974
+        },
+        {
+          "route": "/app/assets",
+          "finalPath": "/app/assets",
+          "chars": 247,
+          "ms": 984
+        },
+        {
+          "route": "/app/auditors",
+          "finalPath": "/app/auditors",
+          "chars": 1484,
+          "ms": 745
+        },
+        {
+          "route": "/app/bylaw-rules",
+          "finalPath": "/app/bylaw-rules",
+          "chars": 3025,
+          "ms": 778
+        },
+        {
+          "route": "/app/certificate-register",
+          "finalPath": "/app/certificate-register",
+          "chars": 151,
+          "ms": 619
+        },
+        {
+          "route": "/app/communications",
+          "finalPath": "/app/communications",
+          "chars": 247,
+          "ms": 745
+        },
+        {
+          "route": "/app/conflicts",
+          "finalPath": "/app/conflicts",
+          "chars": 1158,
+          "ms": 714
+        },
+        {
+          "route": "/app/coverage",
+          "finalPath": "/app/coverage",
+          "chars": 608,
+          "ms": 880
+        },
+        {
+          "route": "/app/directors",
+          "finalPath": "/app/directors",
+          "chars": 765,
+          "ms": 748
+        },
+        {
+          "route": "/app/documents",
+          "finalPath": "/app/documents",
+          "chars": 377,
+          "ms": 775
+        },
+        {
+          "route": "/app/exports",
+          "finalPath": "/app/exports",
+          "chars": 492,
+          "ms": 975
+        },
+        {
+          "route": "/app/finance-imports",
+          "finalPath": "/app/finance-imports",
+          "chars": 316,
+          "ms": 902
+        },
+        {
+          "route": "/app/financials/year-end",
+          "finalPath": "/app/financials/year-end",
+          "chars": 870,
+          "ms": 675
+        },
+        {
+          "route": "/app/governance-registers",
+          "finalPath": "/app/governance-registers",
+          "chars": 326,
+          "ms": 670
+        },
+        {
+          "route": "/app/imports",
+          "finalPath": "/app/imports",
+          "chars": 509,
+          "ms": 951
+        },
+        {
+          "route": "/app/intake",
+          "finalPath": "/app/intake",
+          "chars": 661,
+          "ms": 862
+        },
+        {
+          "route": "/app/library",
+          "finalPath": "/app/library",
+          "chars": 412,
+          "ms": 576
+        },
+        {
+          "route": "/app/meeting-templates/new",
+          "finalPath": "/app/meeting-templates/new",
+          "chars": 958,
+          "ms": 931
+        },
+        {
+          "route": "/app/members",
+          "finalPath": "/app/members",
+          "chars": 298,
+          "ms": 495
+        },
+        {
+          "route": "/app/minutes",
+          "finalPath": "/app/minutes",
+          "chars": 193,
+          "ms": 498
+        },
+        {
+          "route": "/app/motions",
+          "finalPath": "/app/motions",
+          "chars": 230,
+          "ms": 583
+        },
+        {
+          "route": "/app/org-history",
+          "finalPath": "/app/org-history",
+          "chars": 377,
+          "ms": 762
+        },
+        {
+          "route": "/app/paperless",
+          "finalPath": "/app/paperless",
+          "chars": 1270,
+          "ms": 813
+        },
+        {
+          "route": "/app/pipa-training",
+          "finalPath": "/app/pipa-training",
+          "chars": 166,
+          "ms": 620
+        },
+        {
+          "route": "/app/portfolio",
+          "finalPath": "/app/portfolio",
+          "chars": 1313,
+          "ms": 620
+        },
+        {
+          "route": "/app/proposals",
+          "finalPath": "/app/proposals",
+          "chars": 289,
+          "ms": 483
+        },
+        {
+          "route": "/app/reconciliation",
+          "finalPath": "/app/reconciliation",
+          "chars": 344,
+          "ms": 535
+        },
+        {
+          "route": "/app/retention",
+          "finalPath": "/app/retention",
+          "chars": 139,
+          "ms": 643
+        },
+        {
+          "route": "/app/secrets",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 574
+        },
+        {
+          "route": "/app/settings/api-keys",
+          "finalPath": "/app/settings/api-keys",
+          "chars": 289,
+          "ms": 676
+        },
+        {
+          "route": "/app/society",
+          "finalPath": "/app/society",
+          "chars": 815,
+          "ms": 625
+        },
+        {
+          "route": "/app/template-engine",
+          "finalPath": "/app/template-engine",
+          "chars": 13072,
+          "ms": 633
+        },
+        {
+          "route": "/app/treasurer",
+          "finalPath": "/app/treasurer",
+          "chars": 1180,
+          "ms": 782
+        },
+        {
+          "route": "/app/webhooks",
+          "finalPath": "/app/webhooks",
+          "chars": 301,
+          "ms": 591
+        },
+        {
+          "route": "/app/workflows",
+          "finalPath": "/app/workflows",
+          "chars": 443,
+          "ms": 686
+        },
+        {
+          "route": "/app/agendas",
+          "finalPath": "/app/agendas",
+          "chars": 260,
+          "ms": 888
+        },
+        {
+          "route": "/app/annual-cycle",
+          "finalPath": "/app/annual-cycle",
+          "chars": 3913,
+          "ms": 849
+        },
+        {
+          "route": "/app/attestations",
+          "finalPath": "/app/attestations",
+          "chars": 1469,
+          "ms": 742
+        },
+        {
+          "route": "/app/browser-connectors",
+          "finalPath": "/app/browser-connectors",
+          "chars": 673,
+          "ms": 711
+        },
+        {
+          "route": "/app/bylaws-history",
+          "finalPath": "/app/bylaws-history",
+          "chars": 244,
+          "ms": 736
+        },
+        {
+          "route": "/app/commitments",
+          "finalPath": "/app/commitments",
+          "chars": 382,
+          "ms": 679
+        },
+        {
+          "route": "/app/compliance-obligations",
+          "finalPath": "/app/compliance-obligations",
+          "chars": 1032,
+          "ms": 646
+        },
+        {
+          "route": "/app/corporate-history",
+          "finalPath": "/app/corporate-history",
+          "chars": 158,
+          "ms": 678
+        },
+        {
+          "route": "/app/custom-fields",
+          "finalPath": "/app/custom-fields",
+          "chars": 163,
+          "ms": 771
+        },
+        {
+          "route": "/app/dividends",
+          "finalPath": "/app/dividends",
+          "chars": 105,
+          "ms": 700
+        },
+        {
+          "route": "/app/elections",
+          "finalPath": "/app/elections",
+          "chars": 361,
+          "ms": 804
+        },
+        {
+          "route": "/app/filings",
+          "finalPath": "/app/filings",
+          "chars": 130,
+          "ms": 705
+        },
+        {
+          "route": "/app/financials",
+          "finalPath": "/app/financials",
+          "chars": 746,
+          "ms": 857
+        },
+        {
+          "route": "/app/formation-maintenance",
+          "finalPath": "/app/formation-maintenance",
+          "chars": 480,
+          "ms": 755
+        },
+        {
+          "route": "/app/grants",
+          "finalPath": "/app/grants",
+          "chars": 417,
+          "ms": 799
+        },
+        {
+          "route": "/app/inspections",
+          "finalPath": "/app/inspections",
+          "chars": 1401,
+          "ms": 582
+        },
+        {
+          "route": "/app/integrations",
+          "finalPath": "/app/integrations",
+          "chars": 1322,
+          "ms": 602
+        },
+        {
+          "route": "/app/meeting-evidence",
+          "finalPath": "/app/meeting-evidence",
+          "chars": 210,
+          "ms": 728
+        },
+        {
+          "route": "/app/meetings",
+          "finalPath": "/app/meetings",
+          "chars": 282,
+          "ms": 736
+        },
+        {
+          "route": "/app/membership",
+          "finalPath": "/app/membership",
+          "chars": 313,
+          "ms": 484
+        },
+        {
+          "route": "/app/motion-backlog",
+          "finalPath": "/app/motions",
+          "chars": 215,
+          "ms": 732
+        },
+        {
+          "route": "/app/notifications",
+          "finalPath": "/app/notifications",
+          "chars": 251,
+          "ms": 591
+        },
+        {
+          "route": "/app/organization-details",
+          "finalPath": "/app/society",
+          "chars": 815,
+          "ms": 883
+        },
+        {
+          "route": "/app/people-directory",
+          "finalPath": "/app/people-directory",
+          "chars": 198,
+          "ms": 633
+        },
+        {
+          "route": "/app/point-in-time-register",
+          "finalPath": "/app/point-in-time-register",
+          "chars": 216,
+          "ms": 627
+        },
+        {
+          "route": "/app/post-incorporation",
+          "finalPath": "/app/post-incorporation",
+          "chars": 3667,
+          "ms": 744
+        },
+        {
+          "route": "/app/proxies",
+          "finalPath": "/app/proxies",
+          "chars": 119,
+          "ms": 625
+        },
+        {
+          "route": "/app/records-archive",
+          "finalPath": "/app/records-archive",
+          "chars": 299,
+          "ms": 685
+        },
+        {
+          "route": "/app/rights-ledger",
+          "finalPath": "/app/rights-ledger",
+          "chars": 641,
+          "ms": 592
+        },
+        {
+          "route": "/app/service-providers",
+          "finalPath": "/app/service-providers",
+          "chars": 185,
+          "ms": 588
+        },
+        {
+          "route": "/app/setup",
+          "finalPath": "/app/setup",
+          "chars": 142,
+          "ms": 589
+        },
+        {
+          "route": "/app/source-model-coverage",
+          "finalPath": "/app/coverage",
+          "chars": 219,
+          "ms": 703
+        },
+        {
+          "route": "/app/timeline",
+          "finalPath": "/app/timeline",
+          "chars": 95,
+          "ms": 680
+        },
+        {
+          "route": "/app/users",
+          "finalPath": "/app/users",
+          "chars": 3058,
+          "ms": 789
+        },
+        {
+          "route": "/app/workflow-packages",
+          "finalPath": "/app/workflow-packages",
+          "chars": 134,
+          "ms": 615
+        },
+        {
+          "route": "/app/written-resolutions",
+          "finalPath": "/app/written-resolutions",
+          "chars": 193,
+          "ms": 675
+        }
+      ],
+      "cbca-corp": [
+        {
+          "route": "/app",
+          "finalPath": "/app",
+          "chars": 2785,
+          "ms": 6903
+        },
+        {
+          "route": "/app/agreements",
+          "finalPath": "/app/agreements",
+          "chars": 251,
+          "ms": 689
+        },
+        {
+          "route": "/app/annual-filings",
+          "finalPath": "/app/annual-filings",
+          "chars": 202,
+          "ms": 577
+        },
+        {
+          "route": "/app/audit",
+          "finalPath": "/app/audit",
+          "chars": 416,
+          "ms": 684
+        },
+        {
+          "route": "/app/bylaw-diff",
+          "finalPath": "/app/bylaw-diff",
+          "chars": 330,
+          "ms": 702
+        },
+        {
+          "route": "/app/calendar-sync",
+          "finalPath": "/app/calendar-sync",
+          "chars": 437,
+          "ms": 673
+        },
+        {
+          "route": "/app/committees",
+          "finalPath": "/app/committees",
+          "chars": 227,
+          "ms": 630
+        },
+        {
+          "route": "/app/compliance-settings",
+          "finalPath": "/app/compliance-settings",
+          "chars": 739,
+          "ms": 515
+        },
+        {
+          "route": "/app/court-orders",
+          "finalPath": "/app/court-orders",
+          "chars": 1106,
+          "ms": 667
+        },
+        {
+          "route": "/app/deadlines",
+          "finalPath": "/app/deadlines",
+          "chars": 173,
+          "ms": 603
+        },
+        {
+          "route": "/app/document-catalog",
+          "finalPath": "/app/document-catalog",
+          "chars": 13723,
+          "ms": 661
+        },
+        {
+          "route": "/app/employees",
+          "finalPath": "/app/employees",
+          "chars": 132,
+          "ms": 620
+        },
+        {
+          "route": "/app/filings/prefill",
+          "finalPath": "/app/filings/prefill",
+          "chars": 218,
+          "ms": 735
+        },
+        {
+          "route": "/app/financials/accounting",
+          "finalPath": "/app/financials/accounting",
+          "chars": 1486,
+          "ms": 810
+        },
+        {
+          "route": "/app/goals",
+          "finalPath": "/app/goals",
+          "chars": 100,
+          "ms": 518
+        },
+        {
+          "route": "/app/grants/sources",
+          "finalPath": "/app/grants/sources",
+          "chars": 4298,
+          "ms": 586
+        },
+        {
+          "route": "/app/insurance",
+          "finalPath": "/app/insurance",
+          "chars": 321,
+          "ms": 640
+        },
+        {
+          "route": "/app/inventory",
+          "finalPath": "/app/inventory",
+          "chars": 387,
+          "ms": 880
+        },
+        {
+          "route": "/app/meeting-templates",
+          "finalPath": "/app/meeting-templates",
+          "chars": 214,
+          "ms": 577
+        },
+        {
+          "route": "/app/meetings/offline",
+          "finalPath": "/app/meetings/offline",
+          "chars": 91,
+          "ms": 751
+        },
+        {
+          "route": "/app/minute-book",
+          "finalPath": "/app/minute-book",
+          "chars": 2446,
+          "ms": 695
+        },
+        {
+          "route": "/app/motion-library",
+          "finalPath": "/app/motions",
+          "chars": 157,
+          "ms": 609
+        },
+        {
+          "route": "/app/org-chart",
+          "finalPath": "/app/org-chart",
+          "chars": 222,
+          "ms": 711
+        },
+        {
+          "route": "/app/outbox",
+          "finalPath": "/app/outbox",
+          "chars": 193,
+          "ms": 662
+        },
+        {
+          "route": "/app/people-history",
+          "finalPath": "/app/people-history",
+          "chars": 171,
+          "ms": 672
+        },
+        {
+          "route": "/app/policies",
+          "finalPath": "/app/policies",
+          "chars": 154,
+          "ms": 675
+        },
+        {
+          "route": "/app/privacy",
+          "finalPath": "/app/privacy",
+          "chars": 5152,
+          "ms": 1501
+        },
+        {
+          "route": "/app/receipts",
+          "finalPath": "/app/receipts",
+          "chars": 305,
+          "ms": 515
+        },
+        {
+          "route": "/app/research-library",
+          "finalPath": "/app/research-library",
+          "chars": 9149,
+          "ms": 575
+        },
+        {
+          "route": "/app/role-holders",
+          "finalPath": "/app/role-holders",
+          "chars": 501,
+          "ms": 688
+        },
+        {
+          "route": "/app/settings",
+          "finalPath": "/app/settings",
+          "chars": 991,
+          "ms": 703
+        },
+        {
+          "route": "/app/significant-individuals",
+          "finalPath": "/app/significant-individuals",
+          "chars": 227,
+          "ms": 647
+        },
+        {
+          "route": "/app/tasks",
+          "finalPath": "/app/tasks",
+          "chars": 631,
+          "ms": 888
+        },
+        {
+          "route": "/app/transparency",
+          "finalPath": "/app/transparency",
+          "chars": 933,
+          "ms": 741
+        },
+        {
+          "route": "/app/volunteers",
+          "finalPath": "/app/volunteers",
+          "chars": 290,
+          "ms": 721
+        },
+        {
+          "route": "/app/workflow-runs",
+          "finalPath": "/app/workflow-runs",
+          "chars": 139,
+          "ms": 588
+        },
+        {
+          "route": "/app/access-custody",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 802
+        },
+        {
+          "route": "/app/ai-agents",
+          "finalPath": "/app/ai-agents",
+          "chars": 820,
+          "ms": 1055
+        },
+        {
+          "route": "/app/assets",
+          "finalPath": "/app/assets",
+          "chars": 247,
+          "ms": 703
+        },
+        {
+          "route": "/app/auditors",
+          "finalPath": "/app/auditors",
+          "chars": 1404,
+          "ms": 768
+        },
+        {
+          "route": "/app/bylaw-rules",
+          "finalPath": "/app/bylaw-rules",
+          "chars": 2987,
+          "ms": 737
+        },
+        {
+          "route": "/app/certificate-register",
+          "finalPath": "/app/certificate-register",
+          "chars": 151,
+          "ms": 667
+        },
+        {
+          "route": "/app/communications",
+          "finalPath": "/app/communications",
+          "chars": 247,
+          "ms": 724
+        },
+        {
+          "route": "/app/conflicts",
+          "finalPath": "/app/conflicts",
+          "chars": 1064,
+          "ms": 617
+        },
+        {
+          "route": "/app/coverage",
+          "finalPath": "/app/coverage",
+          "chars": 567,
+          "ms": 702
+        },
+        {
+          "route": "/app/directors",
+          "finalPath": "/app/directors",
+          "chars": 1074,
+          "ms": 651
+        },
+        {
+          "route": "/app/documents",
+          "finalPath": "/app/documents",
+          "chars": 377,
+          "ms": 684
+        },
+        {
+          "route": "/app/exports",
+          "finalPath": "/app/exports",
+          "chars": 492,
+          "ms": 801
+        },
+        {
+          "route": "/app/finance-imports",
+          "finalPath": "/app/finance-imports",
+          "chars": 316,
+          "ms": 795
+        },
+        {
+          "route": "/app/financials/year-end",
+          "finalPath": "/app/financials/year-end",
+          "chars": 886,
+          "ms": 631
+        },
+        {
+          "route": "/app/governance-registers",
+          "finalPath": "/app/governance-registers",
+          "chars": 326,
+          "ms": 700
+        },
+        {
+          "route": "/app/imports",
+          "finalPath": "/app/imports",
+          "chars": 509,
+          "ms": 648
+        },
+        {
+          "route": "/app/intake",
+          "finalPath": "/app/intake",
+          "chars": 661,
+          "ms": 774
+        },
+        {
+          "route": "/app/library",
+          "finalPath": "/app/library",
+          "chars": 412,
+          "ms": 539
+        },
+        {
+          "route": "/app/meeting-templates/new",
+          "finalPath": "/app/meeting-templates/new",
+          "chars": 958,
+          "ms": 788
+        },
+        {
+          "route": "/app/members",
+          "finalPath": "/app/members",
+          "chars": 297,
+          "ms": 493
+        },
+        {
+          "route": "/app/minutes",
+          "finalPath": "/app/minutes",
+          "chars": 193,
+          "ms": 508
+        },
+        {
+          "route": "/app/motions",
+          "finalPath": "/app/motions",
+          "chars": 230,
+          "ms": 602
+        },
+        {
+          "route": "/app/org-history",
+          "finalPath": "/app/org-history",
+          "chars": 377,
+          "ms": 613
+        },
+        {
+          "route": "/app/paperless",
+          "finalPath": "/app/paperless",
+          "chars": 1270,
+          "ms": 844
+        },
+        {
+          "route": "/app/pipa-training",
+          "finalPath": "/app/pipa-training",
+          "chars": 166,
+          "ms": 558
+        },
+        {
+          "route": "/app/portfolio",
+          "finalPath": "/app/portfolio",
+          "chars": 1320,
+          "ms": 565
+        },
+        {
+          "route": "/app/proposals",
+          "finalPath": "/app/proposals",
+          "chars": 288,
+          "ms": 483
+        },
+        {
+          "route": "/app/reconciliation",
+          "finalPath": "/app/reconciliation",
+          "chars": 344,
+          "ms": 511
+        },
+        {
+          "route": "/app/retention",
+          "finalPath": "/app/retention",
+          "chars": 139,
+          "ms": 576
+        },
+        {
+          "route": "/app/secrets",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 564
+        },
+        {
+          "route": "/app/settings/api-keys",
+          "finalPath": "/app/settings/api-keys",
+          "chars": 289,
+          "ms": 601
+        },
+        {
+          "route": "/app/society",
+          "finalPath": "/app/society",
+          "chars": 1055,
+          "ms": 693
+        },
+        {
+          "route": "/app/template-engine",
+          "finalPath": "/app/template-engine",
+          "chars": 13072,
+          "ms": 598
+        },
+        {
+          "route": "/app/treasurer",
+          "finalPath": "/app/treasurer",
+          "chars": 1180,
+          "ms": 644
+        },
+        {
+          "route": "/app/webhooks",
+          "finalPath": "/app/webhooks",
+          "chars": 301,
+          "ms": 565
+        },
+        {
+          "route": "/app/workflows",
+          "finalPath": "/app/workflows",
+          "chars": 443,
+          "ms": 600
+        },
+        {
+          "route": "/app/agendas",
+          "finalPath": "/app/agendas",
+          "chars": 260,
+          "ms": 665
+        },
+        {
+          "route": "/app/annual-cycle",
+          "finalPath": "/app/annual-cycle",
+          "chars": 3076,
+          "ms": 979
+        },
+        {
+          "route": "/app/attestations",
+          "finalPath": "/app/attestations",
+          "chars": 1621,
+          "ms": 772
+        },
+        {
+          "route": "/app/browser-connectors",
+          "finalPath": "/app/browser-connectors",
+          "chars": 673,
+          "ms": 658
+        },
+        {
+          "route": "/app/bylaws-history",
+          "finalPath": "/app/bylaws-history",
+          "chars": 242,
+          "ms": 748
+        },
+        {
+          "route": "/app/commitments",
+          "finalPath": "/app/commitments",
+          "chars": 382,
+          "ms": 735
+        },
+        {
+          "route": "/app/compliance-obligations",
+          "finalPath": "/app/compliance-obligations",
+          "chars": 948,
+          "ms": 645
+        },
+        {
+          "route": "/app/corporate-history",
+          "finalPath": "/app/corporate-history",
+          "chars": 158,
+          "ms": 625
+        },
+        {
+          "route": "/app/custom-fields",
+          "finalPath": "/app/custom-fields",
+          "chars": 163,
+          "ms": 661
+        },
+        {
+          "route": "/app/dividends",
+          "finalPath": "/app/dividends",
+          "chars": 105,
+          "ms": 604
+        },
+        {
+          "route": "/app/elections",
+          "finalPath": "/app/elections",
+          "chars": 373,
+          "ms": 801
+        },
+        {
+          "route": "/app/filings",
+          "finalPath": "/app/filings",
+          "chars": 130,
+          "ms": 572
+        },
+        {
+          "route": "/app/financials",
+          "finalPath": "/app/financials",
+          "chars": 746,
+          "ms": 637
+        },
+        {
+          "route": "/app/formation-maintenance",
+          "finalPath": "/app/formation-maintenance",
+          "chars": 480,
+          "ms": 601
+        },
+        {
+          "route": "/app/grants",
+          "finalPath": "/app/grants",
+          "chars": 417,
+          "ms": 582
+        },
+        {
+          "route": "/app/inspections",
+          "finalPath": "/app/inspections",
+          "chars": 1096,
+          "ms": 605
+        },
+        {
+          "route": "/app/integrations",
+          "finalPath": "/app/integrations",
+          "chars": 1322,
+          "ms": 661
+        },
+        {
+          "route": "/app/meeting-evidence",
+          "finalPath": "/app/meeting-evidence",
+          "chars": 210,
+          "ms": 730
+        },
+        {
+          "route": "/app/meetings",
+          "finalPath": "/app/meetings",
+          "chars": 282,
+          "ms": 589
+        },
+        {
+          "route": "/app/membership",
+          "finalPath": "/app/membership",
+          "chars": 312,
+          "ms": 484
+        },
+        {
+          "route": "/app/motion-backlog",
+          "finalPath": "/app/motions",
+          "chars": 215,
+          "ms": 679
+        },
+        {
+          "route": "/app/notifications",
+          "finalPath": "/app/notifications",
+          "chars": 251,
+          "ms": 564
+        },
+        {
+          "route": "/app/organization-details",
+          "finalPath": "/app/society",
+          "chars": 1055,
+          "ms": 970
+        },
+        {
+          "route": "/app/people-directory",
+          "finalPath": "/app/people-directory",
+          "chars": 198,
+          "ms": 600
+        },
+        {
+          "route": "/app/point-in-time-register",
+          "finalPath": "/app/point-in-time-register",
+          "chars": 216,
+          "ms": 565
+        },
+        {
+          "route": "/app/post-incorporation",
+          "finalPath": "/app/post-incorporation",
+          "chars": 7421,
+          "ms": 618
+        },
+        {
+          "route": "/app/proxies",
+          "finalPath": "/app/proxies",
+          "chars": 119,
+          "ms": 566
+        },
+        {
+          "route": "/app/records-archive",
+          "finalPath": "/app/records-archive",
+          "chars": 299,
+          "ms": 700
+        },
+        {
+          "route": "/app/rights-ledger",
+          "finalPath": "/app/rights-ledger",
+          "chars": 641,
+          "ms": 569
+        },
+        {
+          "route": "/app/service-providers",
+          "finalPath": "/app/service-providers",
+          "chars": 185,
+          "ms": 515
+        },
+        {
+          "route": "/app/setup",
+          "finalPath": "/app/setup",
+          "chars": 142,
+          "ms": 518
+        },
+        {
+          "route": "/app/source-model-coverage",
+          "finalPath": "/app/coverage",
+          "chars": 219,
+          "ms": 643
+        },
+        {
+          "route": "/app/timeline",
+          "finalPath": "/app/timeline",
+          "chars": 95,
+          "ms": 603
+        },
+        {
+          "route": "/app/users",
+          "finalPath": "/app/users",
+          "chars": 3056,
+          "ms": 679
+        },
+        {
+          "route": "/app/workflow-packages",
+          "finalPath": "/app/workflow-packages",
+          "chars": 134,
+          "ms": 573
+        },
+        {
+          "route": "/app/written-resolutions",
+          "finalPath": "/app/written-resolutions",
+          "chars": 193,
+          "ms": 568
+        }
+      ],
+      "obca-corp": [
+        {
+          "route": "/app",
+          "finalPath": "/app",
+          "chars": 2460,
+          "ms": 6692
+        },
+        {
+          "route": "/app/agreements",
+          "finalPath": "/app/agreements",
+          "chars": 251,
+          "ms": 664
+        },
+        {
+          "route": "/app/annual-filings",
+          "finalPath": "/app/annual-filings",
+          "chars": 202,
+          "ms": 541
+        },
+        {
+          "route": "/app/audit",
+          "finalPath": "/app/audit",
+          "chars": 420,
+          "ms": 614
+        },
+        {
+          "route": "/app/bylaw-diff",
+          "finalPath": "/app/bylaw-diff",
+          "chars": 330,
+          "ms": 705
+        },
+        {
+          "route": "/app/calendar-sync",
+          "finalPath": "/app/calendar-sync",
+          "chars": 437,
+          "ms": 674
+        },
+        {
+          "route": "/app/committees",
+          "finalPath": "/app/committees",
+          "chars": 227,
+          "ms": 582
+        },
+        {
+          "route": "/app/compliance-settings",
+          "finalPath": "/app/compliance-settings",
+          "chars": 1205,
+          "ms": 528
+        },
+        {
+          "route": "/app/court-orders",
+          "finalPath": "/app/court-orders",
+          "chars": 1153,
+          "ms": 520
+        },
+        {
+          "route": "/app/deadlines",
+          "finalPath": "/app/deadlines",
+          "chars": 173,
+          "ms": 570
+        },
+        {
+          "route": "/app/document-catalog",
+          "finalPath": "/app/document-catalog",
+          "chars": 13897,
+          "ms": 576
+        },
+        {
+          "route": "/app/employees",
+          "finalPath": "/app/employees",
+          "chars": 132,
+          "ms": 570
+        },
+        {
+          "route": "/app/filings/prefill",
+          "finalPath": "/app/filings/prefill",
+          "chars": 224,
+          "ms": 584
+        },
+        {
+          "route": "/app/financials/accounting",
+          "finalPath": "/app/financials/accounting",
+          "chars": 1486,
+          "ms": 779
+        },
+        {
+          "route": "/app/goals",
+          "finalPath": "/app/goals",
+          "chars": 100,
+          "ms": 515
+        },
+        {
+          "route": "/app/grants/sources",
+          "finalPath": "/app/grants/sources",
+          "chars": 4298,
+          "ms": 545
+        },
+        {
+          "route": "/app/insurance",
+          "finalPath": "/app/insurance",
+          "chars": 321,
+          "ms": 542
+        },
+        {
+          "route": "/app/inventory",
+          "finalPath": "/app/inventory",
+          "chars": 387,
+          "ms": 637
+        },
+        {
+          "route": "/app/meeting-templates",
+          "finalPath": "/app/meeting-templates",
+          "chars": 214,
+          "ms": 529
+        },
+        {
+          "route": "/app/meetings/offline",
+          "finalPath": "/app/meetings/offline",
+          "chars": 91,
+          "ms": 649
+        },
+        {
+          "route": "/app/minute-book",
+          "finalPath": "/app/minute-book",
+          "chars": 2577,
+          "ms": 746
+        },
+        {
+          "route": "/app/motion-library",
+          "finalPath": "/app/motions",
+          "chars": 157,
+          "ms": 634
+        },
+        {
+          "route": "/app/org-chart",
+          "finalPath": "/app/org-chart",
+          "chars": 226,
+          "ms": 641
+        },
+        {
+          "route": "/app/outbox",
+          "finalPath": "/app/outbox",
+          "chars": 193,
+          "ms": 587
+        },
+        {
+          "route": "/app/people-history",
+          "finalPath": "/app/people-history",
+          "chars": 171,
+          "ms": 587
+        },
+        {
+          "route": "/app/policies",
+          "finalPath": "/app/policies",
+          "chars": 154,
+          "ms": 561
+        },
+        {
+          "route": "/app/privacy",
+          "finalPath": "/app/privacy",
+          "chars": 5283,
+          "ms": 1190
+        },
+        {
+          "route": "/app/receipts",
+          "finalPath": "/app/receipts",
+          "chars": 309,
+          "ms": 477
+        },
+        {
+          "route": "/app/research-library",
+          "finalPath": "/app/research-library",
+          "chars": 9149,
+          "ms": 575
+        },
+        {
+          "route": "/app/role-holders",
+          "finalPath": "/app/role-holders",
+          "chars": 500,
+          "ms": 640
+        },
+        {
+          "route": "/app/settings",
+          "finalPath": "/app/settings",
+          "chars": 991,
+          "ms": 572
+        },
+        {
+          "route": "/app/significant-individuals",
+          "finalPath": "/app/significant-individuals",
+          "chars": 227,
+          "ms": 625
+        },
+        {
+          "route": "/app/tasks",
+          "finalPath": "/app/tasks",
+          "chars": 545,
+          "ms": 694
+        },
+        {
+          "route": "/app/transparency",
+          "finalPath": "/app/transparency",
+          "chars": 933,
+          "ms": 693
+        },
+        {
+          "route": "/app/volunteers",
+          "finalPath": "/app/volunteers",
+          "chars": 290,
+          "ms": 601
+        },
+        {
+          "route": "/app/workflow-runs",
+          "finalPath": "/app/workflow-runs",
+          "chars": 139,
+          "ms": 554
+        },
+        {
+          "route": "/app/access-custody",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 809
+        },
+        {
+          "route": "/app/ai-agents",
+          "finalPath": "/app/ai-agents",
+          "chars": 820,
+          "ms": 839
+        },
+        {
+          "route": "/app/assets",
+          "finalPath": "/app/assets",
+          "chars": 247,
+          "ms": 674
+        },
+        {
+          "route": "/app/auditors",
+          "finalPath": "/app/auditors",
+          "chars": 1443,
+          "ms": 635
+        },
+        {
+          "route": "/app/bylaw-rules",
+          "finalPath": "/app/bylaw-rules",
+          "chars": 2980,
+          "ms": 683
+        },
+        {
+          "route": "/app/certificate-register",
+          "finalPath": "/app/certificate-register",
+          "chars": 151,
+          "ms": 565
+        },
+        {
+          "route": "/app/communications",
+          "finalPath": "/app/communications",
+          "chars": 247,
+          "ms": 594
+        },
+        {
+          "route": "/app/conflicts",
+          "finalPath": "/app/conflicts",
+          "chars": 1068,
+          "ms": 654
+        },
+        {
+          "route": "/app/coverage",
+          "finalPath": "/app/coverage",
+          "chars": 608,
+          "ms": 702
+        },
+        {
+          "route": "/app/directors",
+          "finalPath": "/app/directors",
+          "chars": 792,
+          "ms": 658
+        },
+        {
+          "route": "/app/documents",
+          "finalPath": "/app/documents",
+          "chars": 377,
+          "ms": 645
+        },
+        {
+          "route": "/app/exports",
+          "finalPath": "/app/exports",
+          "chars": 492,
+          "ms": 773
+        },
+        {
+          "route": "/app/finance-imports",
+          "finalPath": "/app/finance-imports",
+          "chars": 316,
+          "ms": 937
+        },
+        {
+          "route": "/app/financials/year-end",
+          "finalPath": "/app/financials/year-end",
+          "chars": 886,
+          "ms": 616
+        },
+        {
+          "route": "/app/governance-registers",
+          "finalPath": "/app/governance-registers",
+          "chars": 326,
+          "ms": 690
+        },
+        {
+          "route": "/app/imports",
+          "finalPath": "/app/imports",
+          "chars": 509,
+          "ms": 647
+        },
+        {
+          "route": "/app/intake",
+          "finalPath": "/app/intake",
+          "chars": 661,
+          "ms": 719
+        },
+        {
+          "route": "/app/library",
+          "finalPath": "/app/library",
+          "chars": 412,
+          "ms": 522
+        },
+        {
+          "route": "/app/meeting-templates/new",
+          "finalPath": "/app/meeting-templates/new",
+          "chars": 958,
+          "ms": 793
+        },
+        {
+          "route": "/app/members",
+          "finalPath": "/app/members",
+          "chars": 301,
+          "ms": 482
+        },
+        {
+          "route": "/app/minutes",
+          "finalPath": "/app/minutes",
+          "chars": 193,
+          "ms": 504
+        },
+        {
+          "route": "/app/motions",
+          "finalPath": "/app/motions",
+          "chars": 230,
+          "ms": 599
+        },
+        {
+          "route": "/app/org-history",
+          "finalPath": "/app/org-history",
+          "chars": 377,
+          "ms": 580
+        },
+        {
+          "route": "/app/paperless",
+          "finalPath": "/app/paperless",
+          "chars": 1270,
+          "ms": 704
+        },
+        {
+          "route": "/app/pipa-training",
+          "finalPath": "/app/pipa-training",
+          "chars": 166,
+          "ms": 581
+        },
+        {
+          "route": "/app/portfolio",
+          "finalPath": "/app/portfolio",
+          "chars": 1308,
+          "ms": 583
+        },
+        {
+          "route": "/app/proposals",
+          "finalPath": "/app/proposals",
+          "chars": 292,
+          "ms": 492
+        },
+        {
+          "route": "/app/reconciliation",
+          "finalPath": "/app/reconciliation",
+          "chars": 344,
+          "ms": 552
+        },
+        {
+          "route": "/app/retention",
+          "finalPath": "/app/retention",
+          "chars": 139,
+          "ms": 632
+        },
+        {
+          "route": "/app/secrets",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 528
+        },
+        {
+          "route": "/app/settings/api-keys",
+          "finalPath": "/app/settings/api-keys",
+          "chars": 289,
+          "ms": 614
+        },
+        {
+          "route": "/app/society",
+          "finalPath": "/app/society",
+          "chars": 844,
+          "ms": 617
+        },
+        {
+          "route": "/app/template-engine",
+          "finalPath": "/app/template-engine",
+          "chars": 13072,
+          "ms": 591
+        },
+        {
+          "route": "/app/treasurer",
+          "finalPath": "/app/treasurer",
+          "chars": 1180,
+          "ms": 703
+        },
+        {
+          "route": "/app/webhooks",
+          "finalPath": "/app/webhooks",
+          "chars": 301,
+          "ms": 597
+        },
+        {
+          "route": "/app/workflows",
+          "finalPath": "/app/workflows",
+          "chars": 443,
+          "ms": 628
+        },
+        {
+          "route": "/app/agendas",
+          "finalPath": "/app/agendas",
+          "chars": 260,
+          "ms": 658
+        },
+        {
+          "route": "/app/annual-cycle",
+          "finalPath": "/app/annual-cycle",
+          "chars": 3402,
+          "ms": 860
+        },
+        {
+          "route": "/app/attestations",
+          "finalPath": "/app/attestations",
+          "chars": 1481,
+          "ms": 691
+        },
+        {
+          "route": "/app/browser-connectors",
+          "finalPath": "/app/browser-connectors",
+          "chars": 673,
+          "ms": 596
+        },
+        {
+          "route": "/app/bylaws-history",
+          "finalPath": "/app/bylaws-history",
+          "chars": 242,
+          "ms": 645
+        },
+        {
+          "route": "/app/commitments",
+          "finalPath": "/app/commitments",
+          "chars": 382,
+          "ms": 659
+        },
+        {
+          "route": "/app/compliance-obligations",
+          "finalPath": "/app/compliance-obligations",
+          "chars": 1096,
+          "ms": 614
+        },
+        {
+          "route": "/app/corporate-history",
+          "finalPath": "/app/corporate-history",
+          "chars": 158,
+          "ms": 621
+        },
+        {
+          "route": "/app/custom-fields",
+          "finalPath": "/app/custom-fields",
+          "chars": 163,
+          "ms": 672
+        },
+        {
+          "route": "/app/dividends",
+          "finalPath": "/app/dividends",
+          "chars": 105,
+          "ms": 604
+        },
+        {
+          "route": "/app/elections",
+          "finalPath": "/app/elections",
+          "chars": 373,
+          "ms": 733
+        },
+        {
+          "route": "/app/filings",
+          "finalPath": "/app/filings",
+          "chars": 136,
+          "ms": 601
+        },
+        {
+          "route": "/app/financials",
+          "finalPath": "/app/financials",
+          "chars": 746,
+          "ms": 631
+        },
+        {
+          "route": "/app/formation-maintenance",
+          "finalPath": "/app/formation-maintenance",
+          "chars": 480,
+          "ms": 608
+        },
+        {
+          "route": "/app/grants",
+          "finalPath": "/app/grants",
+          "chars": 417,
+          "ms": 717
+        },
+        {
+          "route": "/app/inspections",
+          "finalPath": "/app/inspections",
+          "chars": 1227,
+          "ms": 631
+        },
+        {
+          "route": "/app/integrations",
+          "finalPath": "/app/integrations",
+          "chars": 1322,
+          "ms": 586
+        },
+        {
+          "route": "/app/meeting-evidence",
+          "finalPath": "/app/meeting-evidence",
+          "chars": 210,
+          "ms": 748
+        },
+        {
+          "route": "/app/meetings",
+          "finalPath": "/app/meetings",
+          "chars": 282,
+          "ms": 555
+        },
+        {
+          "route": "/app/membership",
+          "finalPath": "/app/membership",
+          "chars": 316,
+          "ms": 502
+        },
+        {
+          "route": "/app/motion-backlog",
+          "finalPath": "/app/motions",
+          "chars": 215,
+          "ms": 684
+        },
+        {
+          "route": "/app/notifications",
+          "finalPath": "/app/notifications",
+          "chars": 251,
+          "ms": 552
+        },
+        {
+          "route": "/app/organization-details",
+          "finalPath": "/app/society",
+          "chars": 844,
+          "ms": 998
+        },
+        {
+          "route": "/app/people-directory",
+          "finalPath": "/app/people-directory",
+          "chars": 198,
+          "ms": 623
+        },
+        {
+          "route": "/app/point-in-time-register",
+          "finalPath": "/app/point-in-time-register",
+          "chars": 216,
+          "ms": 578
+        },
+        {
+          "route": "/app/post-incorporation",
+          "finalPath": "/app/post-incorporation",
+          "chars": 531,
+          "ms": 598
+        },
+        {
+          "route": "/app/proxies",
+          "finalPath": "/app/proxies",
+          "chars": 119,
+          "ms": 571
+        },
+        {
+          "route": "/app/records-archive",
+          "finalPath": "/app/records-archive",
+          "chars": 299,
+          "ms": 666
+        },
+        {
+          "route": "/app/rights-ledger",
+          "finalPath": "/app/rights-ledger",
+          "chars": 641,
+          "ms": 584
+        },
+        {
+          "route": "/app/service-providers",
+          "finalPath": "/app/service-providers",
+          "chars": 185,
+          "ms": 559
+        },
+        {
+          "route": "/app/setup",
+          "finalPath": "/app/setup",
+          "chars": 142,
+          "ms": 540
+        },
+        {
+          "route": "/app/source-model-coverage",
+          "finalPath": "/app/coverage",
+          "chars": 219,
+          "ms": 660
+        },
+        {
+          "route": "/app/timeline",
+          "finalPath": "/app/timeline",
+          "chars": 95,
+          "ms": 656
+        },
+        {
+          "route": "/app/users",
+          "finalPath": "/app/users",
+          "chars": 3064,
+          "ms": 700
+        },
+        {
+          "route": "/app/workflow-packages",
+          "finalPath": "/app/workflow-packages",
+          "chars": 134,
+          "ms": 633
+        },
+        {
+          "route": "/app/written-resolutions",
+          "finalPath": "/app/written-resolutions",
+          "chars": 193,
+          "ms": 582
+        }
+      ],
+      "custom": [
+        {
+          "route": "/app",
+          "finalPath": "/app",
+          "chars": 2023,
+          "ms": 6487
+        },
+        {
+          "route": "/app/agreements",
+          "finalPath": "/app/agreements",
+          "chars": 251,
+          "ms": 678
+        },
+        {
+          "route": "/app/annual-filings",
+          "finalPath": "/app/annual-filings",
+          "chars": 202,
+          "ms": 547
+        },
+        {
+          "route": "/app/audit",
+          "finalPath": "/app/audit",
+          "chars": 416,
+          "ms": 614
+        },
+        {
+          "route": "/app/bylaw-diff",
+          "finalPath": "/app/bylaw-diff",
+          "chars": 330,
+          "ms": 693
+        },
+        {
+          "route": "/app/calendar-sync",
+          "finalPath": "/app/calendar-sync",
+          "chars": 437,
+          "ms": 716
+        },
+        {
+          "route": "/app/committees",
+          "finalPath": "/app/committees",
+          "chars": 227,
+          "ms": 593
+        },
+        {
+          "route": "/app/compliance-settings",
+          "finalPath": "/app/compliance-settings",
+          "chars": 739,
+          "ms": 515
+        },
+        {
+          "route": "/app/court-orders",
+          "finalPath": "/app/court-orders",
+          "chars": 531,
+          "ms": 531
+        },
+        {
+          "route": "/app/deadlines",
+          "finalPath": "/app/deadlines",
+          "chars": 173,
+          "ms": 561
+        },
+        {
+          "route": "/app/document-catalog",
+          "finalPath": "/app/document-catalog",
+          "chars": 14347,
+          "ms": 565
+        },
+        {
+          "route": "/app/employees",
+          "finalPath": "/app/employees",
+          "chars": 132,
+          "ms": 567
+        },
+        {
+          "route": "/app/filings/prefill",
+          "finalPath": "/app/filings/prefill",
+          "chars": 198,
+          "ms": 568
+        },
+        {
+          "route": "/app/financials/accounting",
+          "finalPath": "/app/financials/accounting",
+          "chars": 1486,
+          "ms": 730
+        },
+        {
+          "route": "/app/goals",
+          "finalPath": "/app/goals",
+          "chars": 100,
+          "ms": 488
+        },
+        {
+          "route": "/app/grants/sources",
+          "finalPath": "/app/grants/sources",
+          "chars": 4298,
+          "ms": 541
+        },
+        {
+          "route": "/app/insurance",
+          "finalPath": "/app/insurance",
+          "chars": 321,
+          "ms": 573
+        },
+        {
+          "route": "/app/inventory",
+          "finalPath": "/app/inventory",
+          "chars": 387,
+          "ms": 667
+        },
+        {
+          "route": "/app/meeting-templates",
+          "finalPath": "/app/meeting-templates",
+          "chars": 214,
+          "ms": 531
+        },
+        {
+          "route": "/app/meetings/offline",
+          "finalPath": "/app/meetings/offline",
+          "chars": 91,
+          "ms": 594
+        },
+        {
+          "route": "/app/minute-book",
+          "finalPath": "/app/minute-book",
+          "chars": 1759,
+          "ms": 607
+        },
+        {
+          "route": "/app/motion-library",
+          "finalPath": "/app/motions",
+          "chars": 157,
+          "ms": 629
+        },
+        {
+          "route": "/app/org-chart",
+          "finalPath": "/app/org-chart",
+          "chars": 222,
+          "ms": 662
+        },
+        {
+          "route": "/app/outbox",
+          "finalPath": "/app/outbox",
+          "chars": 193,
+          "ms": 633
+        },
+        {
+          "route": "/app/people-history",
+          "finalPath": "/app/people-history",
+          "chars": 171,
+          "ms": 577
+        },
+        {
+          "route": "/app/policies",
+          "finalPath": "/app/policies",
+          "chars": 154,
+          "ms": 556
+        },
+        {
+          "route": "/app/privacy",
+          "finalPath": "/app/privacy",
+          "chars": 4459,
+          "ms": 1146
+        },
+        {
+          "route": "/app/receipts",
+          "finalPath": "/app/receipts",
+          "chars": 305,
+          "ms": 493
+        },
+        {
+          "route": "/app/research-library",
+          "finalPath": "/app/research-library",
+          "chars": 184,
+          "ms": 520
+        },
+        {
+          "route": "/app/role-holders",
+          "finalPath": "/app/role-holders",
+          "chars": 497,
+          "ms": 647
+        },
+        {
+          "route": "/app/settings",
+          "finalPath": "/app/settings",
+          "chars": 991,
+          "ms": 542
+        },
+        {
+          "route": "/app/significant-individuals",
+          "finalPath": "/app/significant-individuals",
+          "chars": 227,
+          "ms": 641
+        },
+        {
+          "route": "/app/tasks",
+          "finalPath": "/app/tasks",
+          "chars": 528,
+          "ms": 693
+        },
+        {
+          "route": "/app/transparency",
+          "finalPath": "/app/transparency",
+          "chars": 933,
+          "ms": 702
+        },
+        {
+          "route": "/app/volunteers",
+          "finalPath": "/app/volunteers",
+          "chars": 290,
+          "ms": 594
+        },
+        {
+          "route": "/app/workflow-runs",
+          "finalPath": "/app/workflow-runs",
+          "chars": 139,
+          "ms": 533
+        },
+        {
+          "route": "/app/access-custody",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 693
+        },
+        {
+          "route": "/app/ai-agents",
+          "finalPath": "/app/ai-agents",
+          "chars": 820,
+          "ms": 896
+        },
+        {
+          "route": "/app/assets",
+          "finalPath": "/app/assets",
+          "chars": 247,
+          "ms": 682
+        },
+        {
+          "route": "/app/auditors",
+          "finalPath": "/app/auditors",
+          "chars": 405,
+          "ms": 638
+        },
+        {
+          "route": "/app/bylaw-rules",
+          "finalPath": "/app/bylaw-rules",
+          "chars": 2404,
+          "ms": 714
+        },
+        {
+          "route": "/app/certificate-register",
+          "finalPath": "/app/certificate-register",
+          "chars": 151,
+          "ms": 600
+        },
+        {
+          "route": "/app/communications",
+          "finalPath": "/app/communications",
+          "chars": 247,
+          "ms": 609
+        },
+        {
+          "route": "/app/conflicts",
+          "finalPath": "/app/conflicts",
+          "chars": 591,
+          "ms": 606
+        },
+        {
+          "route": "/app/coverage",
+          "finalPath": "/app/coverage",
+          "chars": 474,
+          "ms": 675
+        },
+        {
+          "route": "/app/directors",
+          "finalPath": "/app/directors",
+          "chars": 466,
+          "ms": 664
+        },
+        {
+          "route": "/app/documents",
+          "finalPath": "/app/documents",
+          "chars": 377,
+          "ms": 663
+        },
+        {
+          "route": "/app/exports",
+          "finalPath": "/app/exports",
+          "chars": 492,
+          "ms": 783
+        },
+        {
+          "route": "/app/finance-imports",
+          "finalPath": "/app/finance-imports",
+          "chars": 316,
+          "ms": 823
+        },
+        {
+          "route": "/app/financials/year-end",
+          "finalPath": "/app/financials/year-end",
+          "chars": 886,
+          "ms": 644
+        },
+        {
+          "route": "/app/governance-registers",
+          "finalPath": "/app/governance-registers",
+          "chars": 326,
+          "ms": 701
+        },
+        {
+          "route": "/app/imports",
+          "finalPath": "/app/imports",
+          "chars": 509,
+          "ms": 683
+        },
+        {
+          "route": "/app/intake",
+          "finalPath": "/app/intake",
+          "chars": 661,
+          "ms": 751
+        },
+        {
+          "route": "/app/library",
+          "finalPath": "/app/library",
+          "chars": 412,
+          "ms": 536
+        },
+        {
+          "route": "/app/meeting-templates/new",
+          "finalPath": "/app/meeting-templates/new",
+          "chars": 958,
+          "ms": 855
+        },
+        {
+          "route": "/app/members",
+          "finalPath": "/app/members",
+          "chars": 297,
+          "ms": 506
+        },
+        {
+          "route": "/app/minutes",
+          "finalPath": "/app/minutes",
+          "chars": 193,
+          "ms": 499
+        },
+        {
+          "route": "/app/motions",
+          "finalPath": "/app/motions",
+          "chars": 230,
+          "ms": 585
+        },
+        {
+          "route": "/app/org-history",
+          "finalPath": "/app/org-history",
+          "chars": 377,
+          "ms": 599
+        },
+        {
+          "route": "/app/paperless",
+          "finalPath": "/app/paperless",
+          "chars": 1270,
+          "ms": 700
+        },
+        {
+          "route": "/app/pipa-training",
+          "finalPath": "/app/pipa-training",
+          "chars": 166,
+          "ms": 568
+        },
+        {
+          "route": "/app/portfolio",
+          "finalPath": "/app/portfolio",
+          "chars": 1304,
+          "ms": 585
+        },
+        {
+          "route": "/app/proposals",
+          "finalPath": "/app/proposals",
+          "chars": 288,
+          "ms": 507
+        },
+        {
+          "route": "/app/reconciliation",
+          "finalPath": "/app/reconciliation",
+          "chars": 344,
+          "ms": 538
+        },
+        {
+          "route": "/app/retention",
+          "finalPath": "/app/retention",
+          "chars": 139,
+          "ms": 604
+        },
+        {
+          "route": "/app/secrets",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 595
+        },
+        {
+          "route": "/app/settings/api-keys",
+          "finalPath": "/app/settings/api-keys",
+          "chars": 289,
+          "ms": 620
+        },
+        {
+          "route": "/app/society",
+          "finalPath": "/app/society",
+          "chars": 837,
+          "ms": 653
+        },
+        {
+          "route": "/app/template-engine",
+          "finalPath": "/app/template-engine",
+          "chars": 13072,
+          "ms": 683
+        },
+        {
+          "route": "/app/treasurer",
+          "finalPath": "/app/treasurer",
+          "chars": 1180,
+          "ms": 668
+        },
+        {
+          "route": "/app/webhooks",
+          "finalPath": "/app/webhooks",
+          "chars": 301,
+          "ms": 583
+        },
+        {
+          "route": "/app/workflows",
+          "finalPath": "/app/workflows",
+          "chars": 443,
+          "ms": 657
+        },
+        {
+          "route": "/app/agendas",
+          "finalPath": "/app/agendas",
+          "chars": 260,
+          "ms": 590
+        },
+        {
+          "route": "/app/annual-cycle",
+          "finalPath": "/app/annual-cycle",
+          "chars": 2798,
+          "ms": 875
+        },
+        {
+          "route": "/app/attestations",
+          "finalPath": "/app/attestations",
+          "chars": 553,
+          "ms": 667
+        },
+        {
+          "route": "/app/browser-connectors",
+          "finalPath": "/app/browser-connectors",
+          "chars": 673,
+          "ms": 586
+        },
+        {
+          "route": "/app/bylaws-history",
+          "finalPath": "/app/bylaws-history",
+          "chars": 242,
+          "ms": 590
+        },
+        {
+          "route": "/app/commitments",
+          "finalPath": "/app/commitments",
+          "chars": 382,
+          "ms": 594
+        },
+        {
+          "route": "/app/compliance-obligations",
+          "finalPath": "/app/compliance-obligations",
+          "chars": 1081,
+          "ms": 548
+        },
+        {
+          "route": "/app/corporate-history",
+          "finalPath": "/app/corporate-history",
+          "chars": 158,
+          "ms": 547
+        },
+        {
+          "route": "/app/custom-fields",
+          "finalPath": "/app/custom-fields",
+          "chars": 163,
+          "ms": 581
+        },
+        {
+          "route": "/app/dividends",
+          "finalPath": "/app/dividends",
+          "chars": 105,
+          "ms": 571
+        },
+        {
+          "route": "/app/elections",
+          "finalPath": "/app/elections",
+          "chars": 373,
+          "ms": 777
+        },
+        {
+          "route": "/app/filings",
+          "finalPath": "/app/filings",
+          "chars": 119,
+          "ms": 589
+        },
+        {
+          "route": "/app/financials",
+          "finalPath": "/app/financials",
+          "chars": 746,
+          "ms": 667
+        },
+        {
+          "route": "/app/formation-maintenance",
+          "finalPath": "/app/formation-maintenance",
+          "chars": 480,
+          "ms": 636
+        },
+        {
+          "route": "/app/grants",
+          "finalPath": "/app/grants",
+          "chars": 417,
+          "ms": 629
+        },
+        {
+          "route": "/app/inspections",
+          "finalPath": "/app/inspections",
+          "chars": 403,
+          "ms": 639
+        },
+        {
+          "route": "/app/integrations",
+          "finalPath": "/app/integrations",
+          "chars": 1322,
+          "ms": 581
+        },
+        {
+          "route": "/app/meeting-evidence",
+          "finalPath": "/app/meeting-evidence",
+          "chars": 210,
+          "ms": 683
+        },
+        {
+          "route": "/app/meetings",
+          "finalPath": "/app/meetings",
+          "chars": 282,
+          "ms": 571
+        },
+        {
+          "route": "/app/membership",
+          "finalPath": "/app/membership",
+          "chars": 312,
+          "ms": 489
+        },
+        {
+          "route": "/app/motion-backlog",
+          "finalPath": "/app/motions",
+          "chars": 215,
+          "ms": 725
+        },
+        {
+          "route": "/app/notifications",
+          "finalPath": "/app/notifications",
+          "chars": 251,
+          "ms": 561
+        },
+        {
+          "route": "/app/organization-details",
+          "finalPath": "/app/society",
+          "chars": 837,
+          "ms": 926
+        },
+        {
+          "route": "/app/people-directory",
+          "finalPath": "/app/people-directory",
+          "chars": 198,
+          "ms": 668
+        },
+        {
+          "route": "/app/point-in-time-register",
+          "finalPath": "/app/point-in-time-register",
+          "chars": 216,
+          "ms": 614
+        },
+        {
+          "route": "/app/post-incorporation",
+          "finalPath": "/app/post-incorporation",
+          "chars": 535,
+          "ms": 631
+        },
+        {
+          "route": "/app/proxies",
+          "finalPath": "/app/proxies",
+          "chars": 119,
+          "ms": 595
+        },
+        {
+          "route": "/app/records-archive",
+          "finalPath": "/app/records-archive",
+          "chars": 299,
+          "ms": 661
+        },
+        {
+          "route": "/app/rights-ledger",
+          "finalPath": "/app/rights-ledger",
+          "chars": 641,
+          "ms": 625
+        },
+        {
+          "route": "/app/service-providers",
+          "finalPath": "/app/service-providers",
+          "chars": 185,
+          "ms": 551
+        },
+        {
+          "route": "/app/setup",
+          "finalPath": "/app/setup",
+          "chars": 142,
+          "ms": 531
+        },
+        {
+          "route": "/app/source-model-coverage",
+          "finalPath": "/app/coverage",
+          "chars": 219,
+          "ms": 683
+        },
+        {
+          "route": "/app/timeline",
+          "finalPath": "/app/timeline",
+          "chars": 95,
+          "ms": 603
+        },
+        {
+          "route": "/app/users",
+          "finalPath": "/app/users",
+          "chars": 3056,
+          "ms": 727
+        },
+        {
+          "route": "/app/workflow-packages",
+          "finalPath": "/app/workflow-packages",
+          "chars": 134,
+          "ms": 610
+        },
+        {
+          "route": "/app/written-resolutions",
+          "finalPath": "/app/written-resolutions",
+          "chars": 193,
+          "ms": 623
+        }
+      ],
+      "bc-society": [
+        {
+          "route": "/app",
+          "finalPath": "/app",
+          "chars": 2824,
+          "ms": 6757
+        },
+        {
+          "route": "/app/agreements",
+          "finalPath": "/app/agreements",
+          "chars": 251,
+          "ms": 700
+        },
+        {
+          "route": "/app/annual-filings",
+          "finalPath": "/app/annual-filings",
+          "chars": 202,
+          "ms": 567
+        },
+        {
+          "route": "/app/audit",
+          "finalPath": "/app/audit",
+          "chars": 423,
+          "ms": 566
+        },
+        {
+          "route": "/app/bylaw-diff",
+          "finalPath": "/app/bylaw-diff",
+          "chars": 326,
+          "ms": 613
+        },
+        {
+          "route": "/app/calendar-sync",
+          "finalPath": "/app/calendar-sync",
+          "chars": 437,
+          "ms": 584
+        },
+        {
+          "route": "/app/committees",
+          "finalPath": "/app/committees",
+          "chars": 227,
+          "ms": 550
+        },
+        {
+          "route": "/app/compliance-settings",
+          "finalPath": "/app/compliance-settings",
+          "chars": 1735,
+          "ms": 530
+        },
+        {
+          "route": "/app/court-orders",
+          "finalPath": "/app/court-orders",
+          "chars": 1213,
+          "ms": 522
+        },
+        {
+          "route": "/app/deadlines",
+          "finalPath": "/app/deadlines",
+          "chars": 162,
+          "ms": 563
+        },
+        {
+          "route": "/app/document-catalog",
+          "finalPath": "/app/document-catalog",
+          "chars": 4588,
+          "ms": 537
+        },
+        {
+          "route": "/app/employees",
+          "finalPath": "/app/employees",
+          "chars": 132,
+          "ms": 548
+        },
+        {
+          "route": "/app/filings/prefill",
+          "finalPath": "/app/filings/prefill",
+          "chars": 329,
+          "ms": 559
+        },
+        {
+          "route": "/app/financials/accounting",
+          "finalPath": "/app/financials/accounting",
+          "chars": 1486,
+          "ms": 752
+        },
+        {
+          "route": "/app/goals",
+          "finalPath": "/app/goals",
+          "chars": 100,
+          "ms": 523
+        },
+        {
+          "route": "/app/grants/sources",
+          "finalPath": "/app/grants/sources",
+          "chars": 4298,
+          "ms": 545
+        },
+        {
+          "route": "/app/insurance",
+          "finalPath": "/app/insurance",
+          "chars": 321,
+          "ms": 555
+        },
+        {
+          "route": "/app/inventory",
+          "finalPath": "/app/inventory",
+          "chars": 387,
+          "ms": 668
+        },
+        {
+          "route": "/app/meeting-templates",
+          "finalPath": "/app/meeting-templates",
+          "chars": 214,
+          "ms": 540
+        },
+        {
+          "route": "/app/meetings/offline",
+          "finalPath": "/app/meetings/offline",
+          "chars": 91,
+          "ms": 645
+        },
+        {
+          "route": "/app/minute-book",
+          "finalPath": "/app/minute-book",
+          "chars": 2361,
+          "ms": 644
+        },
+        {
+          "route": "/app/motion-library",
+          "finalPath": "/app/motions",
+          "chars": 157,
+          "ms": 621
+        },
+        {
+          "route": "/app/org-chart",
+          "finalPath": "/app/org-chart",
+          "chars": 229,
+          "ms": 632
+        },
+        {
+          "route": "/app/outbox",
+          "finalPath": "/app/outbox",
+          "chars": 193,
+          "ms": 599
+        },
+        {
+          "route": "/app/people-history",
+          "finalPath": "/app/people-history",
+          "chars": 171,
+          "ms": 567
+        },
+        {
+          "route": "/app/policies",
+          "finalPath": "/app/policies",
+          "chars": 154,
+          "ms": 526
+        },
+        {
+          "route": "/app/privacy",
+          "finalPath": "/app/privacy",
+          "chars": 5648,
+          "ms": 1225
+        },
+        {
+          "route": "/app/receipts",
+          "finalPath": "/app/receipts",
+          "chars": 206,
+          "ms": 565
+        },
+        {
+          "route": "/app/research-library",
+          "finalPath": "/app/research-library",
+          "chars": 7564,
+          "ms": 588
+        },
+        {
+          "route": "/app/role-holders",
+          "finalPath": "/app/role-holders",
+          "chars": 234,
+          "ms": 647
+        },
+        {
+          "route": "/app/settings",
+          "finalPath": "/app/settings",
+          "chars": 991,
+          "ms": 546
+        },
+        {
+          "route": "/app/significant-individuals",
+          "finalPath": "/app/significant-individuals",
+          "chars": 262,
+          "ms": 639
+        },
+        {
+          "route": "/app/tasks",
+          "finalPath": "/app/tasks",
+          "chars": 531,
+          "ms": 681
+        },
+        {
+          "route": "/app/transparency",
+          "finalPath": "/app/transparency",
+          "chars": 892,
+          "ms": 686
+        },
+        {
+          "route": "/app/volunteers",
+          "finalPath": "/app/volunteers",
+          "chars": 290,
+          "ms": 582
+        },
+        {
+          "route": "/app/workflow-runs",
+          "finalPath": "/app/workflow-runs",
+          "chars": 139,
+          "ms": 531
+        },
+        {
+          "route": "/app/access-custody",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 807
+        },
+        {
+          "route": "/app/ai-agents",
+          "finalPath": "/app/ai-agents",
+          "chars": 820,
+          "ms": 868
+        },
+        {
+          "route": "/app/assets",
+          "finalPath": "/app/assets",
+          "chars": 247,
+          "ms": 702
+        },
+        {
+          "route": "/app/auditors",
+          "finalPath": "/app/auditors",
+          "chars": 821,
+          "ms": 692
+        },
+        {
+          "route": "/app/bylaw-rules",
+          "finalPath": "/app/bylaw-rules",
+          "chars": 2742,
+          "ms": 727
+        },
+        {
+          "route": "/app/certificate-register",
+          "finalPath": "/app/certificate-register",
+          "chars": 151,
+          "ms": 553
+        },
+        {
+          "route": "/app/communications",
+          "finalPath": "/app/communications",
+          "chars": 238,
+          "ms": 598
+        },
+        {
+          "route": "/app/conflicts",
+          "finalPath": "/app/conflicts",
+          "chars": 1337,
+          "ms": 592
+        },
+        {
+          "route": "/app/coverage",
+          "finalPath": "/app/coverage",
+          "chars": 833,
+          "ms": 677
+        },
+        {
+          "route": "/app/directors",
+          "finalPath": "/app/directors",
+          "chars": 656,
+          "ms": 656
+        },
+        {
+          "route": "/app/documents",
+          "finalPath": "/app/documents",
+          "chars": 377,
+          "ms": 622
+        },
+        {
+          "route": "/app/exports",
+          "finalPath": "/app/exports",
+          "chars": 492,
+          "ms": 752
+        },
+        {
+          "route": "/app/finance-imports",
+          "finalPath": "/app/finance-imports",
+          "chars": 316,
+          "ms": 795
+        },
+        {
+          "route": "/app/financials/year-end",
+          "finalPath": "/app/financials/year-end",
+          "chars": 824,
+          "ms": 648
+        },
+        {
+          "route": "/app/governance-registers",
+          "finalPath": "/app/governance-registers",
+          "chars": 326,
+          "ms": 725
+        },
+        {
+          "route": "/app/imports",
+          "finalPath": "/app/imports",
+          "chars": 509,
+          "ms": 681
+        },
+        {
+          "route": "/app/intake",
+          "finalPath": "/app/intake",
+          "chars": 661,
+          "ms": 752
+        },
+        {
+          "route": "/app/library",
+          "finalPath": "/app/library",
+          "chars": 412,
+          "ms": 526
+        },
+        {
+          "route": "/app/meeting-templates/new",
+          "finalPath": "/app/meeting-templates/new",
+          "chars": 958,
+          "ms": 778
+        },
+        {
+          "route": "/app/members",
+          "finalPath": "/app/members",
+          "chars": 139,
+          "ms": 669
+        },
+        {
+          "route": "/app/minutes",
+          "finalPath": "/app/minutes",
+          "chars": 193,
+          "ms": 590
+        },
+        {
+          "route": "/app/motions",
+          "finalPath": "/app/motions",
+          "chars": 230,
+          "ms": 568
+        },
+        {
+          "route": "/app/org-history",
+          "finalPath": "/app/org-history",
+          "chars": 377,
+          "ms": 597
+        },
+        {
+          "route": "/app/paperless",
+          "finalPath": "/app/paperless",
+          "chars": 1270,
+          "ms": 754
+        },
+        {
+          "route": "/app/pipa-training",
+          "finalPath": "/app/pipa-training",
+          "chars": 166,
+          "ms": 581
+        },
+        {
+          "route": "/app/portfolio",
+          "finalPath": "/app/portfolio",
+          "chars": 1314,
+          "ms": 552
+        },
+        {
+          "route": "/app/proposals",
+          "finalPath": "/app/proposals",
+          "chars": 139,
+          "ms": 606
+        },
+        {
+          "route": "/app/reconciliation",
+          "finalPath": "/app/reconciliation",
+          "chars": 344,
+          "ms": 588
+        },
+        {
+          "route": "/app/retention",
+          "finalPath": "/app/retention",
+          "chars": 139,
+          "ms": 625
+        },
+        {
+          "route": "/app/secrets",
+          "finalPath": "/app/access-custody",
+          "chars": 236,
+          "ms": 549
+        },
+        {
+          "route": "/app/settings/api-keys",
+          "finalPath": "/app/settings/api-keys",
+          "chars": 289,
+          "ms": 598
+        },
+        {
+          "route": "/app/society",
+          "finalPath": "/app/society",
+          "chars": 915,
+          "ms": 634
+        },
+        {
+          "route": "/app/template-engine",
+          "finalPath": "/app/template-engine",
+          "chars": 4417,
+          "ms": 566
+        },
+        {
+          "route": "/app/treasurer",
+          "finalPath": "/app/treasurer",
+          "chars": 1180,
+          "ms": 649
+        },
+        {
+          "route": "/app/webhooks",
+          "finalPath": "/app/webhooks",
+          "chars": 301,
+          "ms": 533
+        },
+        {
+          "route": "/app/workflows",
+          "finalPath": "/app/workflows",
+          "chars": 432,
+          "ms": 567
+        },
+        {
+          "route": "/app/agendas",
+          "finalPath": "/app/agendas",
+          "chars": 260,
+          "ms": 630
+        },
+        {
+          "route": "/app/annual-cycle",
+          "finalPath": "/app/annual-cycle",
+          "chars": 3612,
+          "ms": 799
+        },
+        {
+          "route": "/app/attestations",
+          "finalPath": "/app/attestations",
+          "chars": 996,
+          "ms": 716
+        },
+        {
+          "route": "/app/browser-connectors",
+          "finalPath": "/app/browser-connectors",
+          "chars": 673,
+          "ms": 582
+        },
+        {
+          "route": "/app/bylaws-history",
+          "finalPath": "/app/bylaws-history",
+          "chars": 240,
+          "ms": 615
+        },
+        {
+          "route": "/app/commitments",
+          "finalPath": "/app/commitments",
+          "chars": 382,
+          "ms": 569
+        },
+        {
+          "route": "/app/compliance-obligations",
+          "finalPath": "/app/compliance-obligations",
+          "chars": 1073,
+          "ms": 546
+        },
+        {
+          "route": "/app/corporate-history",
+          "finalPath": "/app/corporate-history",
+          "chars": 158,
+          "ms": 556
+        },
+        {
+          "route": "/app/custom-fields",
+          "finalPath": "/app/custom-fields",
+          "chars": 162,
+          "ms": 582
+        },
+        {
+          "route": "/app/dividends",
+          "finalPath": "/app/dividends",
+          "chars": 140,
+          "ms": 617
+        },
+        {
+          "route": "/app/elections",
+          "finalPath": "/app/elections",
+          "chars": 244,
+          "ms": 669
+        },
+        {
+          "route": "/app/filings",
+          "finalPath": "/app/filings",
+          "chars": 146,
+          "ms": 597
+        },
+        {
+          "route": "/app/financials",
+          "finalPath": "/app/financials",
+          "chars": 746,
+          "ms": 651
+        },
+        {
+          "route": "/app/formation-maintenance",
+          "finalPath": "/app/formation-maintenance",
+          "chars": 469,
+          "ms": 588
+        },
+        {
+          "route": "/app/grants",
+          "finalPath": "/app/grants",
+          "chars": 417,
+          "ms": 607
+        },
+        {
+          "route": "/app/inspections",
+          "finalPath": "/app/inspections",
+          "chars": 992,
+          "ms": 609
+        },
+        {
+          "route": "/app/integrations",
+          "finalPath": "/app/integrations",
+          "chars": 1322,
+          "ms": 589
+        },
+        {
+          "route": "/app/meeting-evidence",
+          "finalPath": "/app/meeting-evidence",
+          "chars": 210,
+          "ms": 696
+        },
+        {
+          "route": "/app/meetings",
+          "finalPath": "/app/meetings",
+          "chars": 267,
+          "ms": 571
+        },
+        {
+          "route": "/app/membership",
+          "finalPath": "/app/membership",
+          "chars": 600,
+          "ms": 666
+        },
+        {
+          "route": "/app/motion-backlog",
+          "finalPath": "/app/motions",
+          "chars": 215,
+          "ms": 710
+        },
+        {
+          "route": "/app/notifications",
+          "finalPath": "/app/notifications",
+          "chars": 251,
+          "ms": 563
+        },
+        {
+          "route": "/app/organization-details",
+          "finalPath": "/app/society",
+          "chars": 915,
+          "ms": 850
+        },
+        {
+          "route": "/app/people-directory",
+          "finalPath": "/app/people-directory",
+          "chars": 188,
+          "ms": 635
+        },
+        {
+          "route": "/app/point-in-time-register",
+          "finalPath": "/app/point-in-time-register",
+          "chars": 211,
+          "ms": 570
+        },
+        {
+          "route": "/app/post-incorporation",
+          "finalPath": "/app/post-incorporation",
+          "chars": 3655,
+          "ms": 611
+        },
+        {
+          "route": "/app/proxies",
+          "finalPath": "/app/proxies",
+          "chars": 256,
+          "ms": 568
+        },
+        {
+          "route": "/app/records-archive",
+          "finalPath": "/app/records-archive",
+          "chars": 299,
+          "ms": 647
+        },
+        {
+          "route": "/app/rights-ledger",
+          "finalPath": "/app/rights-ledger",
+          "chars": 362,
+          "ms": 554
+        },
+        {
+          "route": "/app/service-providers",
+          "finalPath": "/app/service-providers",
+          "chars": 185,
+          "ms": 534
+        },
+        {
+          "route": "/app/setup",
+          "finalPath": "/app/setup",
+          "chars": 142,
+          "ms": 498
+        },
+        {
+          "route": "/app/source-model-coverage",
+          "finalPath": "/app/coverage",
+          "chars": 219,
+          "ms": 632
+        },
+        {
+          "route": "/app/timeline",
+          "finalPath": "/app/timeline",
+          "chars": 95,
+          "ms": 602
+        },
+        {
+          "route": "/app/users",
+          "finalPath": "/app/users",
+          "chars": 3070,
+          "ms": 665
+        },
+        {
+          "route": "/app/workflow-packages",
+          "finalPath": "/app/workflow-packages",
+          "chars": 134,
+          "ms": 583
+        },
+        {
+          "route": "/app/written-resolutions",
+          "finalPath": "/app/written-resolutions",
+          "chars": 173,
+          "ms": 548
+        }
+      ]
+    }
+  },
+  "limits": [
+    "Synthetic fixtures and a native Convex harness do not constitute production acceptance or a legal opinion.",
+    "The strict browser sweep preceded only two behaviour-preserving TypeScript narrowing/array annotations; the final production build and all 38 legal gates include those annotations.",
+    "Some external source retrieval and legal applicability limits are documented in README.md and the detailed answers."
+  ]
+}

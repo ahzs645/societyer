@@ -1,3 +1,5 @@
+import { legalGovernanceProfile, minimumLegalDirectors, type GovernanceOrganization } from "./legalGovernanceProfiles";
+import { legalSourceById } from "./legalSources";
 /**
  * Governance-expectation rule pack for record continuity (finding A15).
  *
@@ -132,8 +134,8 @@ export const BC_SOCIETIES_EXPECTATION_PACK: ExpectationRulePack = {
       title: "Societies Act",
       citation: "Societies Act, SBC 2015, c. 18",
       url: "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
-      retrievedAt: "2026-10-06",
-      currentTo: "2026-09-22",
+      retrievedAt: "2026-10-11",
+      currentTo: "2026-10-06",
     },
   ],
   rules: [
@@ -187,7 +189,7 @@ export const BC_SOCIETIES_EXPECTATION_PACK: ExpectationRulePack = {
       citation: "Societies Act, SBC 2015, c. 18, s. 40",
       sourceIds: ["bc-societies-act"],
       status: "draft",
-      caveat: "Member-funded societies may have fewer directors (Part 11, s. 197). At least one director must be ordinarily resident in BC; residency is checked on the dashboard.",
+      caveat: "A member-funded society needs at least one director under Part 12, s.197; the ordinary minimum is three, with at least one ordinarily resident in BC. Governing bylaws may require more.",
       startsYearsAfterIncorporation: 0,
     },
     {
@@ -206,13 +208,24 @@ export const BC_SOCIETIES_EXPECTATION_PACK: ExpectationRulePack = {
   ],
 };
 
-export const EXPECTATION_RULE_PACKS: readonly ExpectationRulePack[] = [BC_SOCIETIES_EXPECTATION_PACK];
+export const EXPECTATION_RULE_PACKS: readonly ExpectationRulePack[] = [
+  BC_SOCIETIES_EXPECTATION_PACK,
+  ...["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA"].map(jurisdictionCode => rulePackForSociety({ jurisdictionCode, entityType: "corporation__business_" })!).filter(Boolean),
+];
 
-export function rulePackForSociety(society: { jurisdictionCode?: string | null; entityType?: string | null } | null | undefined): ExpectationRulePack | undefined {
-  if (!society) return undefined;
-  const jurisdiction = String(society.jurisdictionCode ?? "").toUpperCase();
-  const entityType = String(society.entityType ?? "society").toLowerCase();
-  return EXPECTATION_RULE_PACKS.find((pack) => pack.jurisdictionCode === jurisdiction && pack.entityTypes.includes(entityType));
+export function rulePackForSociety(society: GovernanceOrganization | null | undefined): ExpectationRulePack | undefined {
+  const profile = legalGovernanceProfile(society);
+  if (!profile) return undefined;
+  const minimum = minimumLegalDirectors(society) ?? 1;
+  if (profile.id === "bc_society") return { ...BC_SOCIETIES_EXPECTATION_PACK, rules: BC_SOCIETIES_EXPECTATION_PACK.rules.map((rule) => rule.kind === "director_count" ? { ...rule, title: `At least ${minimum} director${minimum === 1 ? "" : "s"}`, rule: { ...rule.rule, minimumCount: minimum } } : rule) };
+  const sourceIds = [...profile.directors.sourceIds, ...profile.directors.consentSourceIds];
+  const sources = sourceIds.map((id) => legalSourceById.get(id)).filter((source) => !!source).map((source) => ({ sourceId: source.id, title: source.instrument, citation: source.fullCitation, url: source.url, retrievedAt: source.reviewedOn, currentTo: source.consolidatedThrough }));
+  return { packId: `${profile.id}-record-continuity`, version: 1, jurisdictionCode: profile.jurisdictionCode, entityTypes: ["corporation__business_"], title: `${profile.name} record continuity`, sources,
+    rules: [
+      { ruleKey: `${profile.id}-DIRECTORS-MIN`, title: `At least ${minimum} director${minimum === 1 ? "" : "s"}`, kind: "director_count", bodyKind: "board", rule: { frequency: "continuous", minimumCount: minimum }, severity: "statutory", citation: sources[0]?.citation ?? profile.name, sourceIds: [...profile.directors.sourceIds], status: "draft", caveat: `${profile.directors.caveat ?? ""} Historical periods require the law and governing documents then in force.` },
+      { ruleKey: `${profile.id}-DIRECTOR-CONSENT`, title: "Director appointment and consent evidence", kind: "director_consent", bodyKind: "board", rule: { frequency: "continuous" }, severity: "statutory", citation: sources.at(-1)?.citation ?? profile.name, sourceIds: [...profile.directors.consentSourceIds], status: "draft", caveat: profile.directors.consent },
+    ],
+  };
 }
 
 /** Validates a cadence rule from a form or import; throws on nonsense input. */

@@ -17,21 +17,22 @@ import {
   meetingNoticeCoverage,
   votingMemberNoticeRecipients,
   votingShareholderNoticeAudience,
+  auditorNoticeRecipients,
   type NoticeRecipient,
 } from "../meetingNoticeAudience";
-import { filterRoleHolderRegisters } from "./roleHolderReadAccess";
 
 /** Voting shareholders from the share register / shareholder role holders. */
 async function shareholderNoticeAudience(ctx: PortableQueryCtx, societyId: string) {
-  const [classes, holdings, roleHolders] = await Promise.all([
+  const [classes, holdings, roleHolders, directors, auditors, organization] = await Promise.all([
     ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("rightsHoldings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.get(societyId, "societies"),
   ]);
   return votingShareholderNoticeAudience({
-    classes,
-    holdings,
-    roleHolders: await filterRoleHolderRegisters(ctx, societyId, roleHolders),
+    classes, holdings, roleHolders, directors, auditors, organization,
   });
 }
 
@@ -54,6 +55,7 @@ export async function noticeCoverage(ctx: PortableQueryCtx, { meetingId }: { mee
       ? []
       : await ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     shareholders: corporation ? await shareholderNoticeAudience(ctx, societyId) : null,
+    additionalRecipients: corporation ? [] : auditorNoticeRecipients(await ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()),
     deliveries,
     recordedRecipientCount: runs[0]?.noticeRecipientCount,
   });
@@ -124,6 +126,10 @@ export async function logNoticeDelivery(
     recipientName: string;
     recipientEmail?: string;
     memberId?: string;
+    recipientKey?: string;
+    roleHolderId?: string;
+    directorId?: string;
+    auditorAppointmentId?: string;
     channel: string;
     provider?: string;
     providerMessageId?: string;
@@ -140,6 +146,11 @@ export async function logNoticeDelivery(
     await getOwned(ctx, "communicationCampaigns", args.campaignId, args.societyId);
   }
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
+  if (args.roleHolderId) await getOwned(ctx, "roleHolders", args.roleHolderId, args.societyId);
+  if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
+  if (args.auditorAppointmentId) await getOwned(ctx, "auditorAppointments", args.auditorAppointmentId, args.societyId);
+  const validKeys = [args.memberId && `member:${args.memberId}`, args.roleHolderId && `roleHolder:${args.roleHolderId}`, args.directorId && `director:${args.directorId}`, args.auditorAppointmentId && `auditor:${args.auditorAppointmentId}`].filter(Boolean);
+  if (args.recipientKey && !validKeys.includes(args.recipientKey)) throw new Error("The notice recipient key must match its verified register identity.");
   return ctx.db.insert("noticeDeliveries", {
     ...args,
     sentAtISO: new Date().toISOString(),
@@ -177,6 +188,8 @@ export async function queueNoticeToAllVotingMembers(
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
         .collect(),
     );
+  if (!organizationRuleScope(society).isCorporation) voting.push(...auditorNoticeRecipients(await ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()));
+  if (!["email", "mail", "in-person"].includes(channel)) throw new Error("Choose email, mail or in-person notice.");
   const now = new Date().toISOString();
   const isEmail = channel === "email";
   for (const m of voting) {
@@ -187,17 +200,23 @@ export async function queueNoticeToAllVotingMembers(
       recipientName: m.name,
       recipientEmail: m.email,
       memberId: m.memberId,
+      recipientKey: m.recipientKey,
+      roleHolderId: m.roleHolderId,
+      directorId: m.directorId,
+      auditorAppointmentId: m.auditorAppointmentId,
       channel,
       provider: isEmail ? "pending" : "manual",
       subject: undefined,
       sentAtISO: now,
       // No fabricated proof for un-dispatched email notices.
       proofOfNotice: isEmail ? undefined : `manual:${channel}:${now}`,
-      status: isEmail ? "queued" : "sent",
+      status: isEmail ? (m.email ? "queued" : "skipped") : "sent",
+      errorMessage: isEmail && !m.email ? "No email address; arrange notice by another lawful method." : undefined,
     });
   }
   return {
-    queued: isEmail ? voting.length : 0,
+    queued: isEmail ? voting.filter((row) => row.email).length : 0,
+    missingEmail: isEmail ? voting.filter((row) => !row.email).length : 0,
     recorded: isEmail ? 0 : voting.length,
     channel,
   };

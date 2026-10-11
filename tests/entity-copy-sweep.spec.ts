@@ -276,10 +276,34 @@ async function settle(page: Page) {
 }
 
 async function expandSidebar(page: Page) {
+  // Workspace identity can resolve before the permission/module navigation.
+  // A zero-link sidebar is not evidence that an entity has no member register.
+  await expect(page.locator(".sidebar a[href]").first()).toBeVisible({ timeout: 30_000 });
   for (let i = 0; i < 25; i += 1) {
     const closed = page.locator('.sidebar__group-toggle[aria-expanded="false"]').first();
     if (!(await closed.count())) break;
     await closed.click().catch(() => undefined);
+  }
+}
+
+async function assertUnassessedPrivacyScope(page: Page, workspace: Workspace) {
+  // Fresh guided-setup fixtures deliberately contain no privacy activity facts.
+  // Possible laws belong inside the scope assessment, never in operative nav
+  // or policy claims based solely on incorporation.
+  const assessment = page.getByRole("region", { name: "Privacy-law scope", exact: true });
+  await expect(assessment).toBeVisible();
+  await expect(assessment).toContainText("Record where personal information is handled and which activities it supports.");
+  await expect(assessment).toContainText("Multiple laws can apply to different records or transactions.");
+  await expect(assessment).toContainText("applicability needs assessment");
+  await expect(assessment).toContainText("Record the provinces or territories where personal information is handled.");
+  await expect(assessment.locator("summary").filter({ hasText: /^(?:BC|Alberta) PIPA Conditional$/ })).toHaveCount(2);
+  await expect(assessment.locator("details[open]")).toHaveCount(0);
+  await expect(assessment).not.toContainText("Assessed as applicable");
+  await expect(page.locator(".sidebar")).not.toContainText(/\bPIPA\b/);
+  await expect(page.locator("#main-content h1")).toHaveText("Privacy — applicability needs assessment");
+  if (!workspace.society) {
+    await expect(page.locator("#main-content")).not.toContainText("Members may inspect the member register");
+    await expect(page.locator("#main-content")).not.toContainText("Members may inspect the director register");
   }
 }
 
@@ -405,7 +429,7 @@ test.describe("entity copy sweep", () => {
         const baseURL = String(testInfo.project.use.baseURL);
         const { context, page } = await openWorkspace(browser, baseURL, workspace);
         const errors: string[] = [];
-        page.on("pageerror", (error) => errors.push(error.message));
+        page.on("pageerror", (error) => errors.push(`${new URL(page.url()).pathname}: ${error.message}\n${error.stack ?? ""}`));
         const findings: Finding[] = [];
         const visited: Array<{ route: string; finalPath: string; chars: number; ms: number }> = [];
         let navHrefs = new Set<string>();
@@ -427,6 +451,10 @@ test.describe("entity copy sweep", () => {
           await visit(page, route);
           await workspaceButton(page, workspace).waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
           await settle(page);
+          if (route === "/app/privacy") {
+            await assertUnassessedPrivacyScope(page, workspace);
+            if (workspace.key === "cbca-corp") await page.screenshot({ path: path.join(OUT_DIR, "cbca-corp-privacy.png") });
+          }
           const text = await collect(page);
           const popovers = await collectPopovers(page);
           const finalPath = new URL(page.url()).pathname;
@@ -562,6 +590,10 @@ test.describe("entity copy verdict", () => {
     expect(
       newLeaks.map((finding) => `${leakKey(finding)} [${finding.channel}] ${finding.snippet}`),
       "Society-only copy in a non-society workspace. Fix the source, or add a justified entry to tests/fixtures/entity-copy-allowlist.json",
+    ).toEqual([]);
+    expect(
+      Object.entries(pageErrors).flatMap(([workspace, errors]) => errors.map((error) => `${workspace}: ${error}`)),
+      "Every route must render without an uncaught browser error; see findings.json for route and stack details",
     ).toEqual([]);
   });
 });

@@ -1,3 +1,6 @@
+import { legalGovernanceProfile } from "./legalGovernanceProfiles";
+import { canonicalizeJurisdictionCode } from "./organizationDomain";
+
 /**
  * AGM EVIDENCE — one source of truth for "when did this organization actually
  * hold its annual general meetings, and which annual report belongs to which
@@ -38,6 +41,10 @@ export type AnnualReportFilingLike = {
   filedAt?: string | null;
   periodLabel?: string | null;
   title?: string | null;
+  reportingYear?: number;
+  reportingPeriodEnd?: string;
+  contextKind?: string;
+  jurisdictionCode?: string;
 };
 
 /** Filing kinds that discharge the BC society annual report duty (s.73). */
@@ -46,7 +53,7 @@ export const ANNUAL_REPORT_FILING_KINDS: ReadonlySet<string> = new Set([
   "BCSocietyAnnualReport",
 ]);
 
-const HELD_STATUSES = new Set(["held", "completed", "complete", "closed", "minuted", "approved", "adjourned"]);
+const HELD_STATUSES = new Set(["held", "completed", "complete", "closed", "minuted", "approved", "adjourned", "heldminutesmissing"]);
 const NOT_HELD_STATUSES = new Set(["draft", "cancelled", "canceled", "postponed", "scheduled", "planned", "proposed"]);
 
 /** Strict YYYY-MM-DD prefix of an ISO date/datetime, or "" when unparseable. */
@@ -76,17 +83,15 @@ export function isAgmMeeting(meeting: AgmMeetingLike): boolean {
   return /\b(annual general meeting|agm)\b/i.test(String(meeting.title ?? ""));
 }
 
-/** Whether a meeting record is evidence that the meeting actually took place.
- *  A meeting explicitly marked Held/Completed counts; so does a past meeting
- *  whose status is not one of the "not held" states. Draft/Scheduled/Cancelled
- *  rows never count, even when dated in the past. */
+/** An explicit held/completed state or actual held date is evidence. A past
+ * scheduled date alone never proves that a meeting took place. */
 export function isHeldMeeting(meeting: AgmMeetingLike, today: string): boolean {
   const status = String(meeting.status ?? "").trim().toLowerCase();
   const date = dateOnly(meeting.heldAt ?? meeting.scheduledAt);
   if (!date) return false;
   if (HELD_STATUSES.has(status)) return date <= today;
   if (NOT_HELD_STATUSES.has(status)) return false;
-  return date < today;
+  return Boolean(dateOnly(meeting.heldAt)) && date <= today;
 }
 
 /** Held AGM dates (YYYY-MM-DD, ascending, de-duplicated). */
@@ -124,7 +129,7 @@ export function deriveAgmFacts(
   meetings: readonly AgmMeetingLike[] | null | undefined,
   today: string,
 ): AgmFacts {
-  const organization = organizationInput as { annualMeetingDate?: string | null; annualMeetingYear?: number | null } | null | undefined;
+  const organization = organizationInput as { annualMeetingDate?: string | null; annualMeetingYear?: number | null; agmExtensionDate?: string; agmExtensionEvidence?: string } | null | undefined;
   const meetingDates = heldAgmDates(meetings, today);
   const profileDate = dateOnly(organization?.annualMeetingDate ?? undefined);
   const dates = new Set(meetingDates);
@@ -133,7 +138,14 @@ export function deriveAgmFacts(
   const latest = agmDates[agmDates.length - 1];
   const years = new Set(agmDates.map((date) => Number(date.slice(0, 4))));
   const profileYear = Number(organization?.annualMeetingYear);
-  if (Number.isInteger(profileYear) && profileYear > 0) years.add(profileYear);
+  // An authorized postponed AGM counts for its attributed year only. A year
+  // with no actual meeting date does not establish completed annual business.
+  const extension = dateOnly(organization?.agmExtensionDate);
+  if (legalGovernanceProfile(organizationInput ?? undefined)?.id === "bc_society" && profileDate && profileDate <= today && organization?.agmExtensionEvidence?.trim() && extension &&
+    profileYear === Number(profileDate.slice(0, 4)) - 1 && Number(extension.slice(0, 4)) === profileYear + 1 && profileDate <= extension) {
+    if (!agmDates.some(date => date !== profileDate && Number(date.slice(0, 4)) === profileYear + 1)) years.delete(profileYear + 1);
+    years.add(profileYear);
+  }
   const agmYears = [...years].sort((a, b) => a - b);
   let operatingSinceDate: string | undefined;
   for (const meeting of meetings ?? []) {
@@ -160,92 +172,111 @@ export function agmHeldInYear(facts: Pick<AgmFacts, "agmYears">, year: number): 
 
 export type AnnualReportMatch = {
   filing: AnnualReportFilingLike;
-  /** The statutory due date this filing is measured against. */
+  /** Nominal Act arithmetic; holiday/office adjustments are reviewed separately. */
   dueDate: string;
   filed: boolean;
-  /** Filed after the statutory due date. */
-  late: boolean;
-  /** Days late (0 when on time or not filed). */
-  daysLate: number;
+  /** Only false is inferred here; a later filing requires calendar review. */
+  late?: boolean;
+  nominalDaysPastDue: number;
+  timingReviewRequired: boolean;
 };
 
 function daysBetween(start: string, end: string): number {
   return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
 }
 
+/** A unique stated year or explicit field identifies a reporting cycle. */
+export function statedReportingYear(filing: AnnualReportFilingLike): number | undefined {
+  if (Number.isInteger(filing.reportingYear) && filing.reportingYear! >= 1 && filing.reportingYear! <= 9999) return filing.reportingYear;
+  const label = String(filing.periodLabel ?? "");
+  // Financial ranges, including shortened FY2025-26, are ambiguous AGM years.
+  if (/\d{4}\s*[-–/]\s*\d{2,4}(?!\d)/.test(label) && !/^\d{4}-\d{2}-\d{2}$/.test(label.trim())) return undefined;
+  const years = [...new Set([...label.matchAll(/(?:^|[^\d])((?:19|20)\d{2})(?!\d)/g)].map(match => match[1]))];
+  return years.length === 1 ? Number(years[0]) : undefined;
+}
+
+function belongsToYear(filing: AnnualReportFilingLike, year: number, dueDate: string): boolean {
+  const stated = statedReportingYear(filing);
+  if (stated !== undefined) return stated === year;
+  // A dated, exact statutory due date is a usable legacy cycle anchor only
+  // when no conflicting or ambiguous year label is present.
+  return !/\b\d{4}\b/.test(String(filing.periodLabel ?? "")) && dateOnly(filing.dueDate) === dueDate;
+}
+
+function isHomeBcAnnualReport(filing: AnnualReportFilingLike): boolean {
+  const context = String(filing.contextKind ?? '').trim().toLowerCase();
+  return ANNUAL_REPORT_FILING_KINDS.has(String(filing.kind ?? '')) && (!context || context === 'home') &&
+    (!String(filing.jurisdictionCode ?? '').trim() || canonicalizeJurisdictionCode(filing.jurisdictionCode) === 'CA-BC');
+}
+
+function reportMatch(filing: AnnualReportFilingLike, dueDate: string, filed: boolean): AnnualReportMatch {
+  const nominalDaysPastDue = filed ? Math.max(0, daysBetween(dueDate, dateOnly(filing.filedAt))) : 0;
+  return { filing, dueDate, filed, late: nominalDaysPastDue ? undefined : false, nominalDaysPastDue, timingReviewRequired: nominalDaysPastDue > 0 };
+}
+
 /**
  * Find the annual report filing that belongs to the AGM held on `agmDate`.
  *
- * A filed report belongs to the AGM it follows: filed on/after `agmDate` and
- * before the next evidenced AGM. An unfiled (tracked) report belongs to the
- * AGM whose 30-day deadline it carries, or whose year it names. Filings listed
+ * The stated reporting year or exact nominal due-date anchor must identify the
+ * cycle. Filed dates must also be on/after `agmDate` and before the next
+ * evidenced AGM; a filed date alone cannot identify the cycle. Filings listed
  * in `claimed` (already attributed to another cycle) are skipped, so one filing
  * is never counted in two cycles.
  */
 export function annualReportForAgm(
   filings: readonly AnnualReportFilingLike[] | null | undefined,
   agmDate: string,
-  options: { nextAgmDate?: string; dueDays?: number; claimed?: ReadonlySet<string> } = {},
+  options: { nextAgmDate?: string; dueDays?: number; cycleYear?: number; asOfISO?: string; claimed?: ReadonlySet<string> } = {},
 ): AnnualReportMatch | null {
   const agm = dateOnly(agmDate);
   if (!agm) return null;
   const dueDate = addDaysToDate(agm, options.dueDays ?? 30);
   const nextAgm = dateOnly(options.nextAgmDate);
-  const year = agm.slice(0, 4);
+  const year = options.cycleYear ?? Number(agm.slice(0, 4));
   const candidates = (filings ?? []).filter((filing) =>
-    ANNUAL_REPORT_FILING_KINDS.has(String(filing.kind ?? "")) &&
-    !(filing._id && options.claimed?.has(String(filing._id))),
+    isHomeBcAnnualReport(filing) &&
+    !(filing._id && options.claimed?.has(String(filing._id))) && belongsToYear(filing, year, dueDate),
   );
   const filed = candidates
-    .filter((filing) => String(filing.status ?? "") === "Filed" && dateOnly(filing.filedAt))
+    .filter((filing) => /^(filed|accepted)$/i.test(String(filing.status ?? "")) && dateOnly(filing.filedAt))
     .filter((filing) => {
       const filedAt = dateOnly(filing.filedAt);
-      return filedAt >= agm && (!nextAgm || filedAt < nextAgm);
+      return filedAt >= agm && (!nextAgm || filedAt < nextAgm) && (!options.asOfISO || filedAt <= options.asOfISO);
     })
     .sort((a, b) => dateOnly(a.filedAt).localeCompare(dateOnly(b.filedAt)))[0];
-  if (filed) {
-    const filedAt = dateOnly(filed.filedAt);
-    const daysLate = Math.max(0, daysBetween(dueDate, filedAt));
-    return { filing: filed, dueDate, filed: true, late: daysLate > 0, daysLate };
-  }
+  if (filed) return reportMatch(filed, dueDate, true);
   const tracked = candidates
-    .filter((filing) => String(filing.status ?? "") !== "Filed")
-    .filter((filing) => {
-      const due = dateOnly(filing.dueDate);
-      if (due && due >= agm && due <= addDaysToDate(agm, 90)) return true;
-      return /\b\d{4}\b/.test(String(filing.periodLabel ?? "")) && String(filing.periodLabel).match(/\b\d{4}\b/g)?.at(-1) === year;
-    })
+    .filter((filing) => !/^(filed|accepted)$/i.test(String(filing.status ?? "")))
     .sort((a, b) => dateOnly(a.dueDate).localeCompare(dateOnly(b.dueDate)))[0];
-  if (tracked) return { filing: tracked, dueDate, filed: false, late: false, daysLate: 0 };
+  if (tracked) return reportMatch(tracked, dueDate, false);
   return null;
 }
 
 /**
- * The no-AGM annual report (s.73(1)(b)): when no AGM was held in calendar year
+ * The no-AGM annual report (s.73(2)): when no AGM was held in calendar year
  * `year`, the report for that year is due January 31 of the next year. Returns
- * the matching filing (filed in the following January window or tracked with
- * that due date), or null.
+ * the matching reporting-year filing, including a later filing, or null.
+ * A matching filed date does not alone establish timeliness.
  */
 export function noAgmAnnualReportForYear(
   filings: readonly AnnualReportFilingLike[] | null | undefined,
   year: number,
-  options: { claimed?: ReadonlySet<string> } = {},
+  options: { claimed?: ReadonlySet<string>; extensionDate?: string; asOfISO?: string } = {},
 ): AnnualReportMatch | null {
-  const dueDate = `${year + 1}-01-31`;
+  const extension = dateOnly(options.extensionDate);
+  const earliestFiling = extension || `${year + 1}-01-01`;
+  const dueDate = extension ? addDaysToDate(extension, 30) : `${year + 1}-01-31`;
   const candidates = (filings ?? []).filter((filing) =>
-    ANNUAL_REPORT_FILING_KINDS.has(String(filing.kind ?? "")) &&
-    !(filing._id && options.claimed?.has(String(filing._id))),
+    isHomeBcAnnualReport(filing) &&
+    !(filing._id && options.claimed?.has(String(filing._id))) && belongsToYear(filing, year, dueDate),
   );
   const filed = candidates.find((filing) => {
     const filedAt = dateOnly(filing.filedAt);
-    return String(filing.status ?? "") === "Filed" && filedAt >= `${year + 1}-01-01` && filedAt <= `${year + 1}-12-31` && !/\bAGM\b/i.test(String(filing.periodLabel ?? ""));
+    return /^(filed|accepted)$/i.test(String(filing.status ?? "")) && Boolean(filedAt) && filedAt >= earliestFiling && (!options.asOfISO || filedAt <= options.asOfISO) && !/\bAGM\b/i.test(String(filing.periodLabel ?? "").replace(/no[ -]?AGM/gi, ""));
   });
-  if (filed) {
-    const daysLate = Math.max(0, daysBetween(dueDate, dateOnly(filed.filedAt)));
-    return { filing: filed, dueDate, filed: true, late: daysLate > 0, daysLate };
-  }
-  const tracked = candidates.find((filing) => String(filing.status ?? "") !== "Filed" && dateOnly(filing.dueDate) === dueDate);
-  return tracked ? { filing: tracked, dueDate, filed: false, late: false, daysLate: 0 } : null;
+  if (filed) return reportMatch(filed, dueDate, true);
+  const tracked = candidates.find((filing) => !/^(filed|accepted)$/i.test(String(filing.status ?? "")));
+  return tracked ? reportMatch(tracked, dueDate, false) : null;
 }
 
 /**

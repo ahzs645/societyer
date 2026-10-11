@@ -1,3 +1,4 @@
+import { buildPrivacyPolicyDraft, privacyPolicyDraftTitle, privacyPolicyDraftTags } from "../privacyPolicyTemplate";
 /**
  * PORTABLE FUNCTIONS: the documents domain (list / get / getMany / create /
  * markOpened / updateReviewStatus / reviewQueues / PIPA + member-data-gap draft
@@ -25,6 +26,7 @@ import {
 } from "./access";
 import { todayDateOnly } from "../dateOnly";
 import { organizationRuleScope } from "../entityRuleScope";
+import { documentPreparationReviewView, isAnnualPacketRecord } from "../preparationDocumentState";
 
 // Documents are listed whatever their category (finding D-04): categories are
 // an open, normalized model (shared/documentCategories.ts). Only Societyer's
@@ -300,6 +302,12 @@ export async function listSummariesPortable(
   return listVisibleDocuments(ctx, args, DOCUMENT_SUMMARY_OMITTED_FIELDS);
 }
 
+async function withPreparationReview(ctx: PortableQueryCtx, societyId: string, documents: any[]): Promise<any[]> {
+  if (!documents.some(isAnnualPacketRecord)) return documents;
+  const generated = await ctx.db.query("generatedLegalDocuments").withIndex("by_society", q => q.eq("societyId", societyId)).collect();
+  return documents.map(document => documentPreparationReviewView(document, generated));
+}
+
 async function listVisibleDocuments(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string; actingUserId?: string },
@@ -321,10 +329,11 @@ async function listVisibleDocuments(
       .collect(),
     documentAccessContextForActor(ctx, societyId, principalId),
   ]);
-  return docs
+  const visible = docs
     .filter((doc) => !isInternalDocumentRecord(doc))
     .filter((doc) => accessContext && canAccessDocument(doc, linkedMaterials, accessContext))
     .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
+  return withPreparationReview(ctx, societyId, visible);
 }
 
 export async function getPortable(
@@ -343,14 +352,14 @@ export async function getPortable(
       .collect(),
     documentAccessContextForActor(ctx, document.societyId, principalId),
   ]);
-  return accessContext && canAccessDocument(document, linkedMaterials, accessContext) ? document : null;
+  return accessContext && canAccessDocument(document, linkedMaterials, accessContext) ? (await withPreparationReview(ctx, String(document.societyId), [document]))[0] : null;
 }
 
 export async function getManyPortable(
   ctx: PortableQueryCtx,
   { ids, actingUserId }: { ids: string[]; actingUserId?: string },
 ) {
-  const documents = [];
+  const documents: any[] = [];
   for (const id of ids) {
     const candidate = await ctx.db.get(id, "documents");
     if (!candidate) continue;
@@ -374,11 +383,14 @@ export async function getManyPortable(
     materialsBySociety.set(societyId, materials);
     contextBySociety.set(societyId, accessContext);
   }
-  return documents.filter((document: any) => {
+  const visible = documents.filter((document: any) => {
     const societyId = String(document.societyId);
     const accessContext = contextBySociety.get(societyId);
     return accessContext && canAccessDocument(document, materialsBySociety.get(societyId) ?? [], accessContext);
   });
+  const reviewed = (await Promise.all(societyIds.map(societyId => withPreparationReview(ctx, societyId, visible.filter(document => String(document.societyId) === societyId))))).flat();
+  const byId = new Map(reviewed.map(document => [String(document._id), document]));
+  return visible.map(document => byId.get(String(document._id)));
 }
 
 export async function createPortable(
@@ -463,7 +475,9 @@ export async function updateReviewStatusPortable(
   if (!candidate) throw new Error("documents not found.");
   const user = await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
-  const stored = storedDocumentReviewStatus(reviewStatus);
+  const projected = (await withPreparationReview(ctx, String(document.societyId), [document]))[0];
+  const requested = storedDocumentReviewStatus(reviewStatus);
+  const stored = projected.preparationReviewWarning ? "needs_review" : requested;
   reviewStatus = stored;
   await ctx.db.patch(id, { reviewStatus: stored });
   await ctx.db.insert("activity", {
@@ -553,7 +567,7 @@ export async function reviewQueuesPortable(
     }
   }
 
-  const docs = [...documentsById.values()];
+  const docs = await withPreparationReview(ctx, societyId, [...documentsById.values()]);
   const annotate = (doc: any) => ({
     _id: doc._id,
     title: doc.title,
@@ -561,6 +575,7 @@ export async function reviewQueuesPortable(
     createdAtISO: doc.createdAtISO,
     lastOpenedAtISO: doc.lastOpenedAtISO,
     reviewStatus: normalizeDocumentReviewStatus(doc.reviewStatus),
+    preparationReviewWarning: doc.preparationReviewWarning,
     tags: Array.isArray(doc.tags) ? doc.tags : [],
     meetingId: doc.meetingId,
     openTaskCount: taskCounts.get(String(doc._id)) ?? 0,
@@ -637,15 +652,15 @@ export async function createPipaPolicyDraftPortable(
   const nowISO = new Date().toISOString();
   const documentId = await ctx.db.insert("documents", {
     societyId,
-    title: `Draft PIPA privacy policy - ${society.name}`,
+    title: privacyPolicyDraftTitle(society),
     category: "Policy",
-    fileName: "pipa-privacy-policy-draft.md",
+    fileName: "privacy-policy-draft.md",
     mimeType: "text/markdown",
-    content: buildPipaPolicyDraft(society),
+    content: buildPrivacyPolicyDraft(society),
     retentionYears: 10,
     createdAtISO: nowISO,
     flaggedForDeletion: false,
-    tags: ["privacy", "privacy-policy", "pipa", "draft", "societyer-template"],
+    tags: privacyPolicyDraftTags(society),
   });
 
   await ctx.db.insert("activity", {
@@ -656,7 +671,7 @@ export async function createPipaPolicyDraftPortable(
     // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: documentId,
     action: "document-created",
-    summary: "Created a draft PIPA privacy policy from the Societyer starter template.",
+    summary: "Created a privacy policy draft using the recorded activity and jurisdiction assessment.",
     createdAtISO: nowISO,
   });
 
@@ -675,18 +690,11 @@ export async function rebuildPipaPolicyDraftFromSocietyPortable(
   const society = await ctx.db.get(String(document.societyId), "societies");
   if (!society) throw new Error("Society not found.");
 
-  const title = `Draft PIPA privacy policy - ${society.name}`;
+  const title = privacyPolicyDraftTitle(society);
   await ctx.db.patch(id, {
     title,
-    content: buildPipaPolicyDraft(society),
-    tags: withTags(document.tags, [
-      "privacy",
-      "privacy-policy",
-      "pipa",
-      "draft",
-      "societyer-template",
-      "society-filled",
-    ]),
+    content: buildPrivacyPolicyDraft(society),
+    tags: withTags(document.tags, [...privacyPolicyDraftTags(society), "society-filled"]),
   });
   await ctx.db.insert("activity", {
     societyId: document.societyId,
@@ -1125,18 +1133,11 @@ async function findExistingPrivacyDraft(ctx: PortableMutationCtx, societyId: str
 
 async function refreshGenericPipaPolicyDraft(ctx: PortableMutationCtx, document: any, society: any) {
   if (!isGenericPipaPolicyTemplate(document)) return null;
-  const title = `Draft PIPA privacy policy - ${society.name}`;
+  const title = privacyPolicyDraftTitle(society);
   await ctx.db.patch(document._id, {
     title,
-    content: buildPipaPolicyDraft(society),
-    tags: withTags(document.tags, [
-      "privacy",
-      "privacy-policy",
-      "pipa",
-      "draft",
-      "societyer-template",
-      "society-filled",
-    ]),
+    content: buildPrivacyPolicyDraft(society),
+    tags: withTags(document.tags, [...privacyPolicyDraftTags(society), "society-filled"]),
   });
   await ctx.db.insert("activity", {
     societyId: document.societyId,
@@ -1194,188 +1195,6 @@ function topDocumentIds(countMaps: Map<string, number>[], materialDocIds: Set<st
     .map(([id]) => id);
 }
 
-
-/**
- * The privacy policy draft below is written for a society (member register,
- * society records). A corporation keeps a shareholder register instead, so
- * its draft names shareholders and replaces the member-records section; no
- * statute is added beyond what the society draft already cites.
- */
-function adaptPrivacyPolicyDraftForEntity(text: string, society: any) {
-  if (!organizationRuleScope(society).isCorporation) return text;
-  return text
-    .replace("- membership or eligibility information;", "- shareholder register and share ownership information;")
-    .replace("- maintain required society records;", "- maintain required corporate records;")
-    .replace("- manage memberships, eligibility, and voting where applicable;", "- maintain the shareholder register and administer shareholder meetings, votes, and resolutions;")
-    .replace("- communicate with members, directors,", "- communicate with shareholders, directors,")
-    .replace(
-      /## 8\. Member Records and Institution-Held Data[\s\S]*?(?=## 9\. Safeguards)/,
-      "## 8. Shareholder Records\n\nThe organization maintains its shareholder register and related corporate records. Access to these records is restricted to authorized people and handled under the governing Act, the organization's articles or by-laws, and privacy rules.\n\n",
-    );
-}
-
-function buildPipaPolicyDraft(society: any) {
-  return adaptPrivacyPolicyDraftForEntity(buildSocietyPipaPolicyDraft(society), society);
-}
-
-function buildSocietyPipaPolicyDraft(society: any) {
-  const today = todayDateOnly();
-  const legalName = valueOrPlaceholder(society.name, "Legal organization name");
-  const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
-  const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");
-  const mailingAddress = valueOrPlaceholder(society.mailingAddress, "mailing address");
-  const generalContactEmail = valueOrPlaceholder(society.officialEmail ?? society.publicContactEmail, "general contact email");
-  const memberDataStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Society-controlled / Partially available / Institution-held / Not applicable");
-
-  return `# ${legalName} Privacy Policy
-
-Draft created: ${today}
-
-Status: Draft - not adopted until approved by the authorized board, executive, or officer.
-
-This draft is a Societyer starter template based on BC PIPA guidance. It is not legal advice and it is not an official BC OIPC template. Replace bracketed text and remove options that do not apply before adoption.
-
-## 1. Organization
-
-${legalName} collects, uses, discloses, stores, and disposes of personal information in accordance with British Columbia's Personal Information Protection Act (PIPA) and other applicable laws.
-
-- Legal name: ${legalName}
-- Incorporation number: ${valueOrPlaceholder(society.incorporationNumber, "incorporation number, if applicable")}
-- Mailing address: ${mailingAddress}
-- General contact: ${generalContactEmail}
-
-## 2. Privacy Officer
-
-The privacy officer is responsible for privacy questions, access and correction requests, privacy complaints, and maintaining this policy.
-
-- Privacy officer: ${privacyOfficerName}
-- Email: ${privacyOfficerEmail}
-- Mailing address: ${mailingAddress}
-
-## 3. Personal Information We Collect
-
-We collect only the personal information that is reasonable for our purposes. Depending on the activity, this may include:
-
-- name and contact information;
-- membership or eligibility information;
-- director, officer, staff, contractor, and volunteer records;
-- event registration and attendance information;
-- communication preferences and mailing-list records;
-- payment, reimbursement, grant, funding, accounting, or payroll records;
-- application, intake, complaint, dispute, access-request, and correction-request records;
-- meeting, election, referendum, filing, insurance, governance, and legal-compliance records; and
-- technical information generated when people use our websites, forms, email systems, document systems, or other tools.
-
-We do not intentionally collect sensitive personal information unless it is needed for a specific purpose and the collection is reasonable in the circumstances.
-
-## 4. Why We Collect Personal Information
-
-We may collect personal information to:
-
-- administer the organization and its governance;
-- maintain required society records;
-- manage memberships, eligibility, and voting where applicable;
-- communicate with members, directors, staff, volunteers, applicants, funders, partners, and the public;
-- run meetings, elections, referenda, events, programs, and services;
-- process payments, reimbursements, grants, donations, invoices, payroll, accounting, and tax records;
-- recruit, onboard, manage, and support staff, contractors, directors, and volunteers;
-- respond to questions, complaints, access requests, and correction requests;
-- protect the safety, security, and legal interests of the organization and individuals; and
-- meet legal, regulatory, audit, funding, insurance, and reporting obligations.
-
-## 5. Consent and Notice
-
-When we collect personal information directly from an individual, we explain the purpose for collection at or before collection unless the purpose is obvious and the individual voluntarily provides the information for that purpose.
-
-We collect, use, and disclose personal information with consent unless PIPA or another law authorizes collection, use, or disclosure without consent. Consent may be express, implied, deemed, or opt-out depending on the information, the context, and legal requirements.
-
-An individual may withdraw consent by contacting the privacy officer, subject to legal, contractual, funding, governance, audit, or operational limits.
-
-## 6. Use and Disclosure
-
-We use personal information only for the purposes for which it was collected, for purposes reasonably related to those purposes, or for other purposes authorized by law.
-
-Access is limited to people who need the information for their role, such as authorized directors, officers, staff, contractors, volunteers, committee members, or service providers.
-
-We may disclose personal information when the individual consents, when disclosure is needed for an authorized purpose, when a service provider acts for us, when disclosure is required or authorized by law, or when disclosure is needed for safety, legal, audit, insurance, funding, accounting, or governance purposes.
-
-We do not sell personal information.
-
-## 7. Service Providers
-
-We may use service providers for email, cloud storage, accounting, forms, payments, websites, communications, voting, records management, security, document storage, and other operations.
-
-When service providers handle personal information for us, we take reasonable steps to ensure they protect the information and use it only for authorized purposes.
-
-## 8. Member Records and Institution-Held Data
-
-Current member-data access status in Societyer: ${memberDataStatus}.
-
-Choose and adapt one option before adoption.
-
-Option A - society-controlled member records:
-
-The organization maintains its own member register and related member records. Access to member records is restricted to authorized people and handled under applicable statutes, bylaws, and privacy rules.
-
-Option B - institution-held or partially available member records:
-
-Some member or eligibility information may be held by [university / parent institution / other body]. The organization is responsible for personal information it collects or controls. Institution-held records are not treated as organization-controlled unless the organization has access to them, a copy of them, a contractual right to obtain them, a shared system, or the practical or legal ability to direct their use or disclosure.
-
-The organization maintains the member records it can lawfully maintain and keeps a separate member-data access gap memo where the institution does not provide a full member list.
-
-## 9. Safeguards
-
-We protect personal information using safeguards appropriate to the sensitivity and amount of information. These may include:
-
-- role-limited access;
-- password protection and multi-factor authentication where practical;
-- restricted cloud folders and document permissions;
-- locked physical storage for paper records;
-- secure deletion or disposal;
-- training for staff, directors, and volunteers;
-- service-provider controls; and
-- access review after role changes.
-
-## 10. Retention and Disposal
-
-We keep personal information only as long as needed for the purpose for which it was collected, or as long as needed for legal, governance, funding, audit, insurance, tax, accounting, dispute-resolution, or business purposes.
-
-If personal information is used to make a decision that directly affects an individual, we retain that information for at least one year after the decision so the individual has a reasonable opportunity to request access.
-
-When retention is no longer needed, we securely destroy records or remove the means by which the information can be associated with an identifiable individual.
-
-## 11. Access and Correction Requests
-
-Individuals may ask for access to their own personal information under the organization's control. They may also ask how their information has been used and disclosed, and may request correction if they believe it is inaccurate.
-
-Requests should be sent to the privacy officer. We may ask for information needed to confirm identity and locate records. We respond within the timelines required by law unless an extension or exception applies.
-
-## 12. Complaints
-
-Privacy complaints should be sent to the privacy officer. The organization will review the complaint, gather relevant information, respond within a reasonable time, and take appropriate corrective steps where needed.
-
-If a complaint is not resolved, the individual may contact the Office of the Information and Privacy Commissioner for British Columbia.
-
-## 13. Electronic Communications
-
-Where electronic messages are subject to Canada's Anti-Spam Legislation (CASL), we send them only with an applicable consent basis, include required sender identification, and provide unsubscribe handling where required.
-
-## 14. Review
-
-This policy will be reviewed at least annually and whenever the organization changes how it collects, uses, stores, or discloses personal information; adopts a new system or service provider; starts a new program; has a privacy complaint or breach; or receives new legal, regulatory, funder, or institutional requirements.
-
-## 15. Adoption
-
-Policy adopted by: [board / executive / authorized officer]
-
-Adoption date: [YYYY-MM-DD]
-
-Last review date: ${today}
-
-Next review date: [YYYY-MM-DD]
-
-`;
-}
 
 function buildMemberDataGapMemoDraft(society: any) {
   const today = todayDateOnly();

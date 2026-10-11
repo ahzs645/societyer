@@ -1,0 +1,28 @@
+name: Legal governance and evidence
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legal-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Source coverage, profiles, evidence and authorization
+        run: npm run test:legal
+      - name: Portable manifest drift
+        run: npm run test:portable-manifest
+      - name: Convex, TypeScript and production build
+        run: npm run build

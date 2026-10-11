@@ -1,60 +1,50 @@
-import { canonicalizeJurisdictionCode, type OrganizationKind } from "./organizationDomain";
+import { canonicalizeJurisdictionCode, type OrganizationKind } from './organizationDomain';
+import { legalGovernanceProfile, minimumLegalDirectors, type GovernanceOrganization } from './legalGovernanceProfiles';
 
-/**
- * Statutory governance rules for an organization's director register, expressed as
- * data instead of jurisdiction `if`-branches. To support a new jurisdiction's director
- * rules, add a row to DIRECTOR_GOVERNANCE_RULES keyed by `<canonical jurisdiction>:<kind>`
- * — see CONTRIBUTING.md → "Adding a jurisdiction or entity type".
- */
+/** Compatibility view of the central legal profiles. Add a governing Act to
+ * that registry rather than creating another jurisdiction-specific rules map. */
 export type DirectorGovernanceRule = {
-  /** Minimum number of active directors the statute requires, if any. */
   minimumActiveDirectors?: number;
-  /** Whether at least one resident director is required (residency basis is jurisdiction copy). */
   requiresResidentDirector: boolean;
-  /** Whether the Directors workspace should surface a per-director residency field. */
   trackResidentDirectorField: boolean;
-  /** Register subtitle shown at the top of the Directors workspace. */
+  /** A boolean cannot express the federal percentage or its sector exceptions. */
+  residentDirectorRule: 'bc_ordinary' | 'canadian_25_percent' | 'none' | 'review_required';
   subtitle: string;
-  /** Short subtext under the active-directors metric. */
   activeDirectorsSubtext: string;
+  sourceIds: readonly string[];
 };
 
-const CORPORATION_DEFAULT_RULE: DirectorGovernanceRule = {
-  requiresResidentDirector: false,
-  trackResidentDirectorField: false,
-  subtitle:
-    "Director register for the corporation workspace. Review the governing statute, articles, by-laws, consents, and registry notices for each change.",
-  activeDirectorsSubtext: "Review governing statute, articles, and by-laws.",
-};
-
-const ORGANIZATION_DEFAULT_RULE: DirectorGovernanceRule = {
-  requiresResidentDirector: false,
-  trackResidentDirectorField: false,
-  subtitle:
-    "Director or governing-person register for this organization. Review the governing statute, formation documents, consents, and registry notices for each change.",
-  activeDirectorsSubtext: "Review governing documents and applicable law.",
-};
-
-/** Keyed `<canonical jurisdiction code>:<OrganizationKind>`. */
-const DIRECTOR_GOVERNANCE_RULES: Record<string, DirectorGovernanceRule> = {
-  "CA-BC:society": {
-    minimumActiveDirectors: 3,
-    requiresResidentDirector: true,
-    trackResidentDirectorField: true,
-    subtitle:
-      "Register of directors under BC Societies Act s.20. Section 40 requires at least 3 directors and at least 1 BC resident unless the s.197 member-funded exception applies.",
-    activeDirectorsSubtext: "Minimum 3 for regular societies.",
-  },
-};
-
-/** Resolve the director governance rule for a jurisdiction + organization kind. */
+/** Pass the actual organization when available so custom Acts and subtypes do
+ * not inherit a province's ordinary-company or regular-society assumptions. */
 export function directorGovernanceRule(
   jurisdictionCode: string | null | undefined,
   kind: OrganizationKind,
+  organization?: GovernanceOrganization | null,
 ): DirectorGovernanceRule {
-  const key = `${canonicalizeJurisdictionCode(jurisdictionCode)}:${kind}`;
-  const exact = DIRECTOR_GOVERNANCE_RULES[key];
-  if (exact) return exact;
-  if (kind === "corporation") return CORPORATION_DEFAULT_RULE;
-  return ORGANIZATION_DEFAULT_RULE;
+  const entity: GovernanceOrganization = organization ?? {
+    jurisdictionCode: canonicalizeJurisdictionCode(jurisdictionCode),
+    entityType: kind === 'corporation' ? 'corporation__business_' : kind === 'society' ? 'society' : 'custom',
+    kind,
+  };
+  const profile = legalGovernanceProfile(entity);
+  if (!profile) return {
+    requiresResidentDirector: false,
+    trackResidentDirectorField: false,
+    residentDirectorRule: 'review_required',
+    subtitle: `Director or governing-person register for this ${kind === 'corporation' ? 'corporation' : 'organization'}. Review the governing Act, formation documents, consents and registry notices.`,
+    activeDirectorsSubtext: 'Review the governing Act and documents.',
+    sourceIds: [],
+  };
+  const memberFunded = profile.id === 'bc_society' && entity.isMemberFunded;
+  const residency = memberFunded ? 'none' : profile.directors.residency;
+  const minimum = minimumLegalDirectors(entity);
+  return {
+    minimumActiveDirectors: minimum,
+    requiresResidentDirector: residency !== 'none',
+    trackResidentDirectorField: residency !== 'none',
+    residentDirectorRule: residency,
+    subtitle: `${profile.name}: ${profile.directors.consent} ${profile.directors.caveat ?? ''}`.trim(),
+    activeDirectorsSubtext: `Statutory minimum ${minimum}; review any higher governing-document requirement.`,
+    sourceIds: memberFunded ? ['BC-SOC-MEMBER-FUNDED-DIRECTORS'] : profile.directors.sourceIds,
+  };
 }

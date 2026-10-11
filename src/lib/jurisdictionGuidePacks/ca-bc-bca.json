@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "2.0.0",
+  "schemaVersion": "2.1.0",
   "packId": "ca-bc-bca",
   "status": "draft",
-  "version": "2026.10.04-research-draft",
-  "reviewedAt": "2026-06-05",
+  "version": "2026-10-11",
+  "reviewedAt": "2026-10-11",
   "maintainers": [
     {
       "name": "Societyer",
@@ -21,35 +21,158 @@
     "corporation__business_"
   ],
   "title": "British Columbia Business Corporations Act guide pack",
-  "description": "BC company and extra-provincial company guide tracks for annual reports, records, and registry evidence.",
+  "description": "BC company and extra-provincial company guide tracks for annual reports, records, and registry evidence. Current registered rules are reviewed snapshots; historical application requires a separately verified effective period. Privacy scope is assessed from operations and activities on the Privacy page.",
   "defaultForJurisdiction": false,
   "sources": [
     {
-      "sourceId": "bc-business-corporations-act-current",
+      "sourceId": "BC-BCA-ANNUAL-REPORT",
       "type": "statute",
-      "title": "Business Corporations Act",
-      "citation": "Business Corporations Act, SBC 2002, c.57",
-      "publisher": "BC Laws",
-      "retrievedAt": "2026-06-05",
-      "language": "en-CA",
-      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 51, 422",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
     },
     {
-      "sourceId": "bc-registry-annual-report-company",
-      "type": "registry_guidance",
-      "title": "Annual Report - BC Company",
-      "citation": "BC Registry annual report guidance",
-      "publisher": "BC Registry Services",
-      "retrievedAt": "2026-06-05",
-      "language": "en-CA",
-      "canonicalUrl": "https://www.corporateonline.gov.bc.ca/WebHelp/overview_annbc.htm"
+      "sourceId": "BC-BCA-RECORDS",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 42–44",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section42",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-AGM",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, s. 182",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section182",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-RESOLUTIONS",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, s. 1 (ordinary, special and unanimous resolution; special majority), s. 140(3)",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section1",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-QUORUM",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 140, 172",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section140",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-TRANSPARENCY",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 119.1–119.11, 119.2–119.5",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.1",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-MEETING-NOTICE",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 169–170, 219(1)",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section169",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-NOTICE-REGULATION",
+      "type": "regulation",
+      "title": "Business Corporations Regulation (British Columbia)",
+      "citation": "Business Corporations Regulation, B.C. Reg. 65/2004, s. 3",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section3",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-RECORD-ACCESS",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 43, 46–48",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section43",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-TRANSPARENCY-ACCESS",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 119.4, 119.61–119.8, 426(4.1), 427.1, 428(2.1)",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.4",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-TRANSPARENCY-EXEMPTIONS",
+      "type": "regulation",
+      "title": "Business Corporations Regulation (British Columbia)",
+      "citation": "Business Corporations Regulation, B.C. Reg. 65/2004, ss. 47–52",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section47",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-SECURITIES-REGISTER",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 111–112",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section111",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "BC-BCA-ALTERATIONS",
+      "type": "statute",
+      "title": "Business Corporations Act (British Columbia)",
+      "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 257, 259, 263–265",
+      "publisher": "www.bclaws.gov.bc.ca",
+      "canonicalUrl": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section257",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-06",
+      "language": "en-CA"
     }
   ],
   "rules": [
     {
       "ruleId": "ca-bc-bca-annual-report",
       "stableKey": "annual_report.company",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "annual_report"
@@ -62,37 +185,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "2004-03-29"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "bc-business-corporations-act-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "BC-BCA-ANNUAL-REPORT",
+        "registrySourceIds": [
+          "BC-BCA-ANNUAL-REPORT"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
         "sections": [
           {
-            "label": "s.51",
-            "citation": "BC Business Corporations Act s.51",
-            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_02"
+            "label": "ss. 51, 422",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 51, 422",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-05",
-        "verifiedAt": "2026-06-05",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Home BC companies file within two calendar months after each recognition anniversary. BC extra-provincial companies use their BC registration anniversary.",
-        "tooltip": "Use this guide for BC company and extra-provincial company annual-report tracking.",
-        "caveat": "Annual report and AGM clocks differ. Registration, recognition and annual reference dates must be recorded independently.",
-        "displayCitation": "BC Business Corporations Act s.51"
+        "summary": "A BC company files its annual report within two calendar months after each recognition anniversary, reporting information current at that anniversary. Missing reports do not automatically move the deadline to next year. Two consecutive years of default can trigger the registrar’s notice-based dissolution process.",
+        "tooltip": "A BC company files its annual report within two calendar months after each recognition anniversary, reporting information current at that anniversary. Missing reports do not automatically move the deadline to next year. Two consecutive years of default can trigger the registrar’s notice-based dissolution process.",
+        "caveat": "Dissolution requires statutory notice/opportunity to remedy and a registrar entry. An AGM, financial waiver or planned filing is not evidence an annual report was filed.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 51, 422"
       },
       "priority": 30
     },
     {
       "ruleId": "ca-bc-bca-records",
       "stableKey": "records.company",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "records"
@@ -105,37 +233,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "2004-03-29"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "bc-business-corporations-act-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "BC-BCA-RECORDS",
+        "registrySourceIds": [
+          "BC-BCA-RECORDS"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
         "sections": [
           {
-            "label": "ss.42-49",
-            "citation": "BC Business Corporations Act ss.42-49",
-            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_02"
+            "label": "ss. 42–44",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 42–44",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section42"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-05",
-        "verifiedAt": "2026-06-05",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "BC companies keep core records including certificates, orders, securities registers, director records, minutes, resolutions, financial statements, articles, and incorporation agreement.",
-        "tooltip": "Use this guide for BC company records and evidence checklists.",
-        "caveat": "Inspection rights and subtype-specific records can vary.",
-        "displayCitation": "BC Business Corporations Act ss.42-49"
+        "summary": "Keep the statutory corporate records, including governing articles and predecessors, incorporation agreement, certificates and orders, director and securities records, shareholder and board proceedings, received consents/resignations/dissents, disclosures, financial statements and auditor representations, and conditional subtype reports. Deposit required records promptly.",
+        "tooltip": "Keep the statutory corporate records, including governing articles and predecessors, incorporation agreement, certificates and orders, director and securities records, shareholder and board proceedings, received consents/resignations/dissents, disclosures, financial statements and auditor representations, and conditional subtype reports. Deposit required records promptly.",
+        "caveat": "Each category is conditional on the underlying record or event existing. Section 42(1)(b) is repealed; retain the notice of articles as a governing registry record and to satisfy s. 48(2), without attributing it to that repealed paragraph.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 42–44"
       },
       "priority": 60
     },
     {
       "ruleId": "ca-bc-bca-agm-timing",
       "stableKey": "agm_timing.company",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "agm_timing"
@@ -148,38 +281,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "2004-03-29"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "bc-business-corporations-act-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "BC-BCA-AGM",
+        "registrySourceIds": [
+          "BC-BCA-AGM"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
         "sections": [
           {
-            "label": "ss.182-185",
-            "citation": "BC Business Corporations Act ss.182-185",
-            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+            "label": "s. 182",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, s. 182",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section182"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-05",
-        "verifiedAt": "2026-06-05",
-        "verificationMethod": "manual_review",
-        "confidence": "medium",
-        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "First AGM within 18 months after recognition; later AGMs each calendar year and within 15 months of the preceding annual reference date.",
-        "tooltip": "First AGM within 18 months after recognition; later AGMs each calendar year and within 15 months of the preceding annual reference date.",
-        "caveat": "Supported unanimous waiver/deferral must establish the annual reference date; it does not remove annual filing.",
-        "displayCitation": "BC Business Corporations Act ss.182-185"
+        "summary": "The first AGM is due within 18 months of recognition. Thereafter an AGM is required in every calendar year and no later than 15 months after the preceding annual reference date. All AGM voting shareholders may use the statutory unanimous defer, annual-business consent or waiver routes with the applicable annual reference date.",
+        "tooltip": "The first AGM is due within 18 months of recognition. Thereafter an AGM is required in every calendar year and no later than 15 months after the preceding annual reference date. All AGM voting shareholders may use the statutory unanimous defer, annual-business consent or waiver routes with the applicable annual reference date.",
+        "caveat": "An extension or written alternative must be evidenced and legally applicable; a planned meeting does not reset the clock. Annual business and registry reporting remain separate.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, s. 182"
       },
       "priority": 60
     },
     {
       "ruleId": "ca-bc-bca-resolutions",
       "stableKey": "special_resolution.company",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "special_resolution"
@@ -192,38 +329,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "2004-03-29"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "bc-business-corporations-act-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "BC-BCA-RESOLUTIONS",
+        "registrySourceIds": [
+          "BC-BCA-RESOLUTIONS"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
         "sections": [
           {
-            "label": "s.1, ss.167-175",
-            "citation": "BC Business Corporations Act s.1, ss.167-175",
-            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+            "label": "s. 1 (ordinary, special and unanimous resolution; special majority), s. 140(3)",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, s. 1 (ordinary, special and unanimous resolution; special majority), s. 140(3)",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section1"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-05",
-        "verifiedAt": "2026-06-05",
-        "verificationMethod": "manual_review",
-        "confidence": "medium",
-        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Meeting ordinary resolutions use a majority of votes cast; written ordinary resolutions use the applicable special majority of eligible votes after circulation to all. Written special resolutions require every entitled holder.",
-        "tooltip": "Meeting ordinary resolutions use a majority of votes cast; written ordinary resolutions use the applicable special majority of eligible votes after circulation to all. Written special resolutions require every entitled holder.",
-        "caveat": "Articles may require a special majority between two-thirds and three-quarters. Pre-existing company rules, class rights, proxies, conflicts and all-shareholder matters need separate assessment.",
-        "displayCitation": "BC Business Corporations Act s.1, ss.167-175"
+        "summary": "An ordinary meeting resolution uses a simple majority of votes cast. An ordinary written resolution is circulated to every eligible holder and needs the special majority of all entitled votes, normally at least two-thirds. A special written resolution requires all eligible general-voting shareholders. Board written resolutions default to all directors entitled to vote.",
+        "tooltip": "An ordinary meeting resolution uses a simple majority of votes cast. An ordinary written resolution is circulated to every eligible holder and needs the special majority of all entitled votes, normally at least two-thirds. A special written resolution requires all eligible general-voting shareholders. Board written resolutions default to all directors entitled to vote.",
+        "caveat": "Articles may set the special majority from two-thirds to three-quarters; specified legacy companies use three-quarters. Section 140(3) permits another board-consent manner authorized by the Act or articles. Class voting and transaction-specific rules also apply.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, s. 1 (ordinary, special and unanimous resolution; special majority), s. 140(3)"
       },
       "priority": 60
     },
     {
       "ruleId": "ca-bc-bca-quorum",
       "stableKey": "quorum.company",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "quorum"
@@ -236,38 +377,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "2004-03-29"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "bc-business-corporations-act-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "BC-BCA-QUORUM",
+        "registrySourceIds": [
+          "BC-BCA-QUORUM"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
         "sections": [
           {
-            "label": "s.172",
-            "citation": "BC Business Corporations Act s.172",
-            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+            "label": "ss. 140, 172",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 140, 172",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section140"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-05",
-        "verifiedAt": "2026-06-05",
-        "verificationMethod": "manual_review",
-        "confidence": "medium",
-        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Articles govern quorum; statutory default is two eligible shareholders personally or by proxy, reduced to all when fewer exist.",
-        "tooltip": "Articles govern quorum; statutory default is two eligible shareholders personally or by proxy, reduced to all when fewer exist.",
-        "caveat": "Adopted Table 1 article 8.2 separately requires qualifying persons representing at least 5% of issued voting shares; sole-holder and adjournment rules require evidence.",
-        "displayCitation": "BC Business Corporations Act s.172"
+        "summary": "Unless the articles provide otherwise, shareholder quorum is two entitled shareholders present personally or by proxy; where fewer entitled holders exist, all suffice. Board quorum must be resolved from the operative articles and any authorized directors’ determination.",
+        "tooltip": "Unless the articles provide otherwise, shareholder quorum is two entitled shareholders present personally or by proxy; where fewer entitled holders exist, all suffice. Board quorum must be resolved from the operative articles and any authorized directors’ determination.",
+        "caveat": "Table 1 articles apply only where adopted/applicable. Their shareholder percentage and board-majority defaults are not universal statutory defaults.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 140, 172"
       },
       "priority": 60
     },
     {
       "ruleId": "ca-bc-bca-transparency",
       "stableKey": "records.transparency",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "records"
@@ -280,33 +425,387 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "2004-03-29"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "bc-business-corporations-act-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "BC-BCA-TRANSPARENCY",
+        "registrySourceIds": [
+          "BC-BCA-TRANSPARENCY"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
         "sections": [
           {
-            "label": "ss.119.1-119.21",
-            "citation": "BC Business Corporations Act ss.119.1-119.21",
-            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+            "label": "ss. 119.1–119.11, 119.2–119.5",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 119.1–119.11, 119.2–119.5",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.1"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-05",
-        "verifiedAt": "2026-06-05",
-        "verificationMethod": "manual_review",
-        "confidence": "medium",
-        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Applicable private BC companies maintain a restricted internal transparency register, confirm annually in the anniversary-to-two-month window, enter awareness changes within 30 days and notify status entries within ten days.",
-        "tooltip": "Applicable private BC companies maintain a restricted internal transparency register, confirm annually in the anniversary-to-two-month window, enter awareness changes within 30 days and notify status entries within ten days.",
-        "caveat": "Prescribed exemptions require evidence. Destroy former-individual records within one year after the sixth anniversary of cessation entry. A future public registry announcement does not establish an active filing duty.",
-        "displayCitation": "BC Business Corporations Act ss.119.1-119.21"
+        "summary": "An in-scope private company maintains a transparency register identifying significant individuals and prescribed identity, residence, citizenship, tax-residence and control particulars. Review in the two months after each incorporation anniversary, update within 30 days of awareness and notify individuals within ten days of entering that they became or ceased to be significant.",
+        "tooltip": "An in-scope private company maintains a transparency register identifying significant individuals and prescribed identity, residence, citizenship, tax-residence and control particulars. Review in the two months after each incorporation anniversary, update within 30 days of awareness and notify individuals within ten days of entering that they became or ceased to be significant.",
+        "caveat": "Significance includes 25% of issued shares or general-meeting voting rights, majority-director appointment/removal control and prescribed indirect/joint control. Applicable exclusions must be checked.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 119.1–119.11, 119.2–119.5"
       },
       "priority": 60
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-meeting-notice",
+      "stableKey": "bc-bca-meeting-notice",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "general_meeting_notice"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-MEETING-NOTICE",
+        "registrySourceIds": [
+          "BC-BCA-MEETING-NOTICE"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
+        "sections": [
+          {
+            "label": "ss. 169–170, 219(1)",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 169–170, 219(1)",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section169"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Send shareholder-meeting notice to those entitled, directors and the auditor within the prescribed minimum and no more than two calendar months before the meeting. Notice waivers/reductions and electronic-meeting instructions have specific rules.",
+        "tooltip": "Send shareholder-meeting notice to those entitled, directors and the auditor within the prescribed minimum and no more than two calendar months before the meeting. Notice waivers/reductions and electronic-meeting instructions have specific rules.",
+        "caveat": "The upper limit is two calendar months, not a fixed 60 days. Special business and resolutions require adequate notice content.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 169–170, 219(1)"
+      }
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-notice-regulation",
+      "stableKey": "bc-bca-notice-regulation",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "general_meeting_notice"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-NOTICE-REGULATION",
+        "registrySourceIds": [
+          "BC-BCA-NOTICE-REGULATION"
+        ],
+        "instrument": "Business Corporations Regulation (British Columbia)",
+        "sections": [
+          {
+            "label": "s. 3",
+            "citation": "Business Corporations Regulation, B.C. Reg. 65/2004, s. 3",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section3"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "The default minimum shareholder-meeting notice is 21 days. A non-public company may specify a period of at least ten days in its articles. A public company requires at least 21 days, or the longer period its articles specify.",
+        "tooltip": "The default minimum shareholder-meeting notice is 21 days. A non-public company may specify a period of at least ten days in its articles. A public company requires at least 21 days, or the longer period its articles specify.",
+        "displayCitation": "Business Corporations Regulation, B.C. Reg. 65/2004, s. 3"
+      }
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-record-access",
+      "stableKey": "bc-bca-record-access",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-RECORD-ACCESS",
+        "registrySourceIds": [
+          "BC-BCA-RECORD-ACCESS"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
+        "sections": [
+          {
+            "label": "ss. 43, 46–48",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 43, 46–48",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section43"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Current directors have broad inspection rights. Shareholders generally inspect shareholder-level records free; board minutes and accounting/confidential layers are not a blanket shareholder entitlement. Public companies and specified subtypes have wider public access. Copies, permitted fees and archived-record production follow separate rules.",
+        "tooltip": "Current directors have broad inspection rights. Shareholders generally inspect shareholder-level records free; board minutes and accounting/confidential layers are not a blanket shareholder entitlement. Public companies and specified subtypes have wider public access. Copies, permitted fees and archived-record production follow separate rules.",
+        "caveat": "The transparency register has its own restricted access regime. Section 43 permits relocation of specified records after seven years, not their destruction.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 43, 46–48"
+      }
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-transparency-access",
+      "stableKey": "bc-bca-transparency-access",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-TRANSPARENCY-ACCESS",
+        "registrySourceIds": [
+          "BC-BCA-TRANSPARENCY-ACCESS"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
+        "sections": [
+          {
+            "label": "ss. 119.4, 119.61–119.8, 426(4.1), 427.1, 428(2.1)",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 119.4, 119.61–119.8, 426(4.1), 427.1, 428(2.1)",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.4"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Only directors and authorized inspecting officials receive statutory transparency-register access. Dispose of former-individual personal information in the year after the sixth anniversary of the cessation entry. Corporate and individual offence maxima can reach $100,000 and $50,000 respectively.",
+        "tooltip": "Only directors and authorized inspecting officials receive statutory transparency-register access. Dispose of former-individual personal information in the year after the sixth anniversary of the cessation entry. Corporate and individual offence maxima can reach $100,000 and $50,000 respectively.",
+        "caveat": "Ordinary shareholder/public record access does not extend to this register. Offence elements, defences and lawful retention duties must be considered; a maximum fine is not an automatic penalty.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 119.4, 119.61–119.8, 426(4.1), 427.1, 428(2.1)"
+      }
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-transparency-exemptions",
+      "stableKey": "bc-bca-transparency-exemptions",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-TRANSPARENCY-EXEMPTIONS",
+        "registrySourceIds": [
+          "BC-BCA-TRANSPARENCY-EXEMPTIONS"
+        ],
+        "instrument": "Business Corporations Regulation (British Columbia)",
+        "sections": [
+          {
+            "label": "ss. 47–52",
+            "citation": "Business Corporations Regulation, B.C. Reg. 65/2004, ss. 47–52",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section47"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Prescribed exclusions include qualifying wholly owned subsidiaries of public issuers, certain insurance/trust and government entities, specified schools, wholly Indigenous-nation-owned companies and wholly professional-LLP-owned companies. The Regulation also defines indirect and joint control.",
+        "tooltip": "Prescribed exclusions include qualifying wholly owned subsidiaries of public issuers, certain insurance/trust and government entities, specified schools, wholly Indigenous-nation-owned companies and wholly professional-LLP-owned companies. The Regulation also defines indirect and joint control.",
+        "caveat": "The January 12, 2026 amendments matter. Do not use an old exemption list or apply exclusions to an entity without ownership/status evidence.",
+        "displayCitation": "Business Corporations Regulation, B.C. Reg. 65/2004, ss. 47–52"
+      }
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-securities-register",
+      "stableKey": "bc-bca-securities-register",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-SECURITIES-REGISTER",
+        "registrySourceIds": [
+          "BC-BCA-SECURITIES-REGISTER"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
+        "sections": [
+          {
+            "label": "ss. 111–112",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 111–112",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section111"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Maintain the central securities register with issued and transferred shares, holders and addresses, classes/series, numbers and transaction dates/particulars. Replicate branch-register particulars promptly. The central register must remain available for statutory inspection in BC.",
+        "tooltip": "Maintain the central securities register with issued and transferred shares, holders and addresses, classes/series, numbers and transaction dates/particulars. Replicate branch-register particulars promptly. The central register must remain available for statutory inspection in BC.",
+        "caveat": "The Act permits specified alternative physical locations with records-office information and inspection arrangements; it does not impose a universal numeric 15-day entry rule.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 111–112"
+      }
+    },
+    {
+      "ruleId": "ca-bc-bca-bc-bca-alterations",
+      "stableKey": "bc-bca-alterations",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "bylaw_requirements",
+        "bylaw_effective_date"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "BC-BCA-ALTERATIONS",
+        "registrySourceIds": [
+          "BC-BCA-ALTERATIONS"
+        ],
+        "instrument": "Business Corporations Act (British Columbia)",
+        "sections": [
+          {
+            "label": "ss. 257, 259, 263–265",
+            "citation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 257, 259, 263–265",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section257"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-06",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Articles/notice alterations follow the Act’s specified resolution, then the articles’ applicable resolution, then the special-resolution default. A notice-of-articles or special-rights alteration requires the prescribed filing and takes effect at the applicable registry time. Other article changes generally take effect when the alteration resolution is deposited at the records office.",
+        "tooltip": "Articles/notice alterations follow the Act’s specified resolution, then the articles’ applicable resolution, then the special-resolution default. A notice-of-articles or special-rights alteration requires the prescribed filing and takes effect at the applicable registry time. Other article changes generally take effect when the alteration resolution is deposited at the records office.",
+        "caveat": "Changing the special majority itself requires a special resolution. Class rights, names, future-effective dates and restricted provisions require their own checks; passing a resolution alone may not make an amendment effective.",
+        "displayCitation": "Business Corporations Act, S.B.C. 2002, c. 57, ss. 257, 259, 263–265"
+      }
     }
   ]
 }

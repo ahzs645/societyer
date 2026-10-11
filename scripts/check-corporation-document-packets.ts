@@ -34,7 +34,7 @@ assert.equal(engine.precedents.length, CORPORATION_DOCUMENT_PACKETS.length);
 for (const title of [
   "Organize corporation / initial resolutions",
   "Issue shares",
-  "Annual resolutions",
+  "Annual resolutions — preparation draft",
   "ISC register update",
   "Extra-provincial registration evidence packet",
 ]) {
@@ -46,7 +46,7 @@ assert.equal(shareTemplate.documentTag, "9___transfer_register");
 assert.ok(shareTemplate.requiredSigners.includes("transfer_participants"));
 assert.ok(shareTemplate.requiredDataFields.includes("ShareClass"));
 
-const annualPrecedent = engine.precedents.find((row: any) => row.packageName === "Annual resolutions and return packet");
+const annualPrecedent = engine.precedents.find((row: any) => row.packageName === "Annual business and return preparation");
 assert.equal(annualPrecedent.requiresAnnualMaintenanceRecord, true);
 assert.ok(annualPrecedent.templateFilingNames.includes("Annual return"));
 

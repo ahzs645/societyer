@@ -1,3 +1,4 @@
+import { requiredResidentCanadianDirectors } from "../../shared/legalGovernanceProfiles";
 import { calendarDateKey } from "../lib/calendarDates";
 import { BoardRosterCard } from "../features/people/BoardRosterCard";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
@@ -105,7 +106,12 @@ export function DirectorsPage() {
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
   const missingConsent = active.filter((d: any) => !d.consentOnFile);
-  const isBcSocietyWorkspace = directorProfile.minimumActiveDirectors != null || directorProfile.requiresBcResidentDirector;
+  const canadianResidents = active.filter((d: any) => d.residentCanadianStatus === "yes").length;
+  const canadianRequired = requiredResidentCanadianDirectors(active.length);
+  const canadianUnknown = active.filter((d: any) => !d.residentCanadianStatus || d.residentCanadianStatus === "unknown").length;
+  const minimumMissing = directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors;
+  const residencyMissing = directorProfile.requiresBcResidentDirector && bcResidents < 1;
+  const canadianMissing = directorProfile.showCanadianResidentField && canadianResidents < canadianRequired;
   // While the directors query is still resolving, every count is 0 and the
   // compliance flags would flash red for a frame before real data arrives.
   // Skip the warning UI until we know the actual numbers.
@@ -136,7 +142,7 @@ export function DirectorsPage() {
   const openNew = () => {
     setSelected({
       firstName: "", lastName: "", email: "",
-      position: "Director", isBCResident: directorProfile.showBcResidentField,
+      position: "Director", isBCResident: false, residentCanadianStatus: "unknown",
       termStart: todayDateOnly(),
       consentOnFile: false, status: "Active", aliases: [],
     });
@@ -149,7 +155,7 @@ export function DirectorsPage() {
     const name = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() || "this unnamed director";
     const ok = await confirm({
       title: `Delete ${name}?`,
-      message: `${name} will be removed from the director register and from active-director and BC-residency counts. To record that a real director left office, use Resign instead so the term history is kept.`,
+      message: `${name} will be removed from the director register and from active-director and residency counts. To record that a real director left office, use Resign instead so the term history is kept.`,
       confirmLabel: "Delete director",
       tone: "danger",
     });
@@ -208,33 +214,34 @@ export function DirectorsPage() {
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
-          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors && !society.isMemberFunded ? "var(--danger)" : undefined }}>{directorsLoaded ? active.length : "—"}</div>
+          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors ? "var(--danger)" : undefined }}>{directorsLoaded ? active.length : "—"}</div>
           <div className="stat__sub">{directorProfile.activeDirectorsSubtext}</div>
         </div>
         <div className="stat">
           <div className="stat__label">{directorProfile.residencyMetricLabel}</div>
-          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.requiresBcResidentDirector && bcResidents < 1 && !society.isMemberFunded ? "var(--danger)" : undefined }}>
-            {directorsLoaded ? (directorProfile.showBcResidentField ? bcResidents : "Review") : "—"}
+          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.requiresBcResidentDirector && bcResidents < 1 ? "var(--danger)" : undefined }}>
+            {directorsLoaded ? (directorProfile.showCanadianResidentField ? `${canadianResidents}/${canadianRequired}` : directorProfile.showBcResidentField ? bcResidents : directorProfile.minimumActiveDirectors === undefined ? "Review" : "Not required") : "—"}
           </div>
-          <div className="stat__sub">{society.isMemberFunded && directorProfile.requiresBcResidentDirector ? "No s.40 residency requirement." : directorProfile.residencyMetricSubtext}</div>
+          <div className="stat__sub">{directorProfile.residencyMetricSubtext}</div>
         </div>
         <div className="stat">
           <div className="stat__label">Consent evidence</div>
           <div className="stat__value" style={{ color: directorsLoaded && missingConsent.length ? "var(--warn)" : undefined }}>{directorsLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}</div>
-          <div className="stat__sub">Written consent or meeting record.</div>
+          <div className="stat__sub">{directorProfile.consentExplanation}</div>
         </div>
         <div className="stat">
           <div className="stat__label">Change of directors</div>
-          <div className="stat__value">{directorProfile.showBcResidentField ? "30d" : "Track"}</div>
+          <div className="stat__value">{directorProfile.directorChangeMetric}</div>
           <div className="stat__sub">{directorProfile.directorChangeSubtext}</div>
         </div>
       </div>
 
-      {directorsLoaded && ((isBcSocietyWorkspace && !society.isMemberFunded && ((directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors) || (directorProfile.requiresBcResidentDirector && bcResidents < 1))) || missingConsent.length > 0) && (
+      {directorsLoaded && (minimumMissing || residencyMissing || canadianMissing || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          {directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors && !society.isMemberFunded && <Flag level="err">Fewer than {directorProfile.minimumActiveDirectors} active directors — regular societies must have at least {directorProfile.minimumActiveDirectors}.</Flag>}
-          {directorProfile.requiresBcResidentDirector && bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
-          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length === 1 ? "1 director has" : `${missingConsent.length} directors have`} no consent evidence on file.</Flag>}
+          {minimumMissing && <Flag level="err" citationId={directorProfile.citationIds[0]}>Fewer than {directorProfile.minimumActiveDirectors} active legal directors are recorded.</Flag>}
+          {residencyMissing && <Flag level="err" citationId="BC-SOC-DIRECTORS-BC-RESIDENT">Record at least one director ordinarily resident in BC.</Flag>}
+          {canadianMissing && <Flag level={canadianUnknown ? "warn" : "err"} citationId={directorProfile.citationIds[0]}>{canadianResidents} confirmed resident Canadians; at least {canadianRequired} required for this board. {canadianUnknown} assessment(s) outstanding. Check regulated-sector exceptions.</Flag>}
+          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) lack linked consent evidence. {directorProfile.consentExplanation}</Flag>}
         </div>
       )}
 
@@ -417,6 +424,12 @@ export function DirectorsPage() {
                 label="BC resident"
               />
             )}
+            {directorProfile.showCanadianResidentField && <>
+              <Field label="Resident Canadian under the CBCA" hint="Apply the statutory definition in s. 2(1). A BC address or citizenship alone does not answer every part of the test.">
+                <Select value={selected.residentCanadianStatus ?? "unknown"} onChange={value => setSelected({ ...selected, residentCanadianStatus: value })} options={[{ value: "unknown", label: "Not assessed" }, { value: "yes", label: "Confirmed resident Canadian" }, { value: "no", label: "Not a resident Canadian" }]} />
+              </Field>
+              <Field label="Residency assessment evidence"><input className="input" value={selected.residentCanadianEvidence ?? ""} onChange={e => setSelected({ ...selected, residentCanadianEvidence: e.target.value })} /></Field>
+            </>}
             <Checkbox
               checked={!!selected.consentOnFile}
               onChange={(v) => setSelected({ ...selected, consentOnFile: v })}

@@ -163,7 +163,7 @@ export function Dashboard() {
     try {
       if (action.intent === "createPipaPolicyDraft") {
         const result = await createPipaPolicyDraft({ societyId: society._id });
-        toast.success(result?.reused ? "Opened existing PIPA policy draft" : "PIPA policy draft created");
+        toast.success(result?.reused ? "Opened existing privacy policy draft" : "Privacy policy draft created");
         navigate("/app/privacy");
         return;
       }
@@ -175,7 +175,7 @@ export function Dashboard() {
       }
       if (action.intent === "createPrivacyReviewTask") {
         const result = await createPrivacyReviewTask(payload);
-        toast.success(result?.reused ? "Existing PIPA review task reused" : "PIPA review task assigned");
+        toast.success(result?.reused ? "Existing privacy review task reused" : "Privacy review task assigned");
         return;
       }
       if (action.intent === "createComplianceReviewTask") {

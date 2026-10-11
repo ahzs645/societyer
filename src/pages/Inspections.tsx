@@ -25,6 +25,8 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { LegalRecordsRequirements } from "../components/LegalRecordsRequirements";
+import { legalCopyForOrganization } from "../lib/legalCopy";
 
 export function InspectionsPage() {
   const society = useSociety();
@@ -105,15 +107,15 @@ export function InspectionsPage() {
         icon={<Eye size={16} />}
         iconColor="gray"
         subtitle="Who inspected official records and what fees were charged."
-        info={vocab.societyLaw
-          ? <p>Societies Act s.24: the public may be charged up to $10 per day for inspection, plus $0.50 per page for copies ($0.10 per page electronic).</p>
-          : <p>Confirm inspection rights and any fee limits under the governing Act and the {vocab.isCorporation ? "articles or by-laws" : "governing documents"}.</p>}
+        info={<>{legalCopyForOrganization(society).recordsInspectionGuidance.map((text) => <p key={text}>{text}</p>)}</>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log inspection
           </button>
         }
       />
+
+      <LegalRecordsRequirements organization={society} inspection />
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="records inspection" />

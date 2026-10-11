@@ -1,3 +1,4 @@
+import { CitationBadge } from "../components/CitationTooltip";
 import { calendarDateKey } from "../lib/calendarDates";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -31,6 +32,7 @@ type CycleItem = {
   detail: string;
   status: "complete" | "attention" | "blocked" | "upcoming";
   evidence: string[];
+  sourceIds?: readonly string[];
   dueDate?: string;
   to: string;
   actionLabel: string;
@@ -65,7 +67,7 @@ const PHASES: Phase[] = [
   {
     id: "ongoing",
     title: "Ongoing",
-    subtitle: "PIPA, conflicts, retention, policy reviews, deadlines, member register updates.",
+    subtitle: "Privacy, conflicts, retention, policy reviews, deadlines, member register updates.",
     icon: ShieldCheck,
   },
 ];
@@ -273,6 +275,7 @@ function CycleCard({ item }: { item: CycleItem }) {
               Due {formatDate(item.dueDate)} · {relative(item.dueDate)}
             </div>
           )}
+          {!!item.sourceIds?.length && <div>{item.sourceIds.map(id => <CitationBadge key={id} citationId={id} />)}</div>}
           {item.evidence.length > 0 && (
             <details className="annual-cycle-evidence">
               <summary>Evidence ({item.evidence.length})</summary>

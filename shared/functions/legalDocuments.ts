@@ -62,8 +62,9 @@ import {
 } from "../packetOperativeData";
 import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../executionBlock";
 import { activeAsOf, type IntervalRow } from "../registerHistory";
-import { buildAnnualResolutionContext } from "../annualResolution";
+import { annualResolutionDataWithAuthority, buildAnnualResolutionContext, type AnnualResolutionContext } from "../annualResolution";
 import { buildDividendResolutionContext } from "../dividendResolution";
+import { generatedPreparationReviewView } from "../preparationDocumentState";
 
 export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<any> {
   await requireSocietyMembership(ctx, societyId);
@@ -80,7 +81,7 @@ export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId 
     templates: templates.sort((a, b) => String(a.name).localeCompare(String(b.name))),
     precedents: precedents.sort((a, b) => String(a.packageName).localeCompare(String(b.packageName))),
     runs: (await filterDocumentLinkedRows(ctx, societyId, runs, "legalPrecedentRuns")).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
-    generatedDocuments: (await filterDocumentLinkedRows(ctx, societyId, generatedDocuments, "generatedLegalDocuments")).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
+    generatedDocuments: (await filterDocumentLinkedRows(ctx, societyId, generatedDocuments, "generatedLegalDocuments")).map(generatedPreparationReviewView).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
     signers: (await filterDocumentLinkedRows(ctx, societyId, signers, "legalSigners")).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
   };
 }
@@ -807,7 +808,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
   notes?: string;
 }) {
   const now = new Date().toISOString();
-  const signerRoleHolderIds = args.signerRoleHolderIds?.length
+  const signerRoleHolderIds = args.packet.preparationOnly || !args.packet.signatureRequired ? [] : args.signerRoleHolderIds?.length
     ? args.signerRoleHolderIds
     : await defaultPacketSignerRoleHolderIds(ctx, args.societyId);
   const run = await ctx.db.get(args.runId);
@@ -821,7 +822,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
   // shared/societyRenderContext.ts.
   const society = await ctx.db.get(args.societyId);
   assertPacketCompatible(society, args.packet);
-  const provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
+  let provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
   const roleHolders = await ctx.db
     .query("roleHolders")
     .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
@@ -859,7 +860,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
     }
     const resolutionsPlural =
       args.packet.sections.reduce((sum, section) => sum + section.body.length, 0) > 1;
-    const execution = buildExecutionBlock({
+    const execution = args.packet.preparationOnly || !args.packet.signatureRequired ? undefined : buildExecutionBlock({
       shortName: renderCtx.org.shortName,
       legislation: renderCtx.org.legislation,
       noun: body.noun,
@@ -877,7 +878,10 @@ async function createPacketRunArtifacts(ctx: any, args: {
       runData = undefined;
     }
     const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx, runData);
-    context = { ...renderCtx, execution, ...dataContext };
+    context = { ...renderCtx, ...(execution ? { execution } : {}), ...dataContext };
+    if (args.packet.key === "annual-resolutions" && dataContext.annual) {
+      provenanceData = annualResolutionDataWithAuthority(provenanceData, dataContext.annual as AnnualResolutionContext, now);
+    }
   }
   // Deterministic file name (YCN ENT-DOCTYPE-DATE) + optional doc-ID header.
   const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate ?? now };
@@ -896,9 +900,8 @@ async function createPacketRunArtifacts(ctx: any, args: {
     content: corporationPacketTemplateHtml(args.packet),
     url: docxDataUrl,
     fileSizeBytes: docxDataUrl.length,
-    retentionYears: 7,
     createdAtISO: now,
-    reviewStatus: "needs_signature",
+    reviewStatus: args.packet.preparationOnly || !args.packet.signatureRequired ? "needs_review" : "needs_signature",
     librarySection: "governance",
     flaggedForDeletion: false,
     sourceExternalIds,
@@ -922,7 +925,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
   const generatedDocumentId = await ctx.db.insert("generatedLegalDocuments", {
     societyId: args.societyId,
     title: args.packet.packageName,
-    status: "draft",
+    status: args.packet.preparationOnly ? "needs_review" : "draft",
     draftDocumentId,
     sourceTemplateName: args.packet.templateName,
     precedentRunId: args.runId,
@@ -933,7 +936,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
     subloopJsonList: [],
     signersRequiredRoleHolderIds: signerRoleHolderIds,
     signersWhoSignedIds: [],
-    signerTagsRequired: args.packet.requiredSigners ?? [],
+    signerTagsRequired: args.packet.preparationOnly ? [] : args.packet.requiredSigners ?? [],
     signerTagsSigned: [],
     sourceDocumentIds: [draftDocumentId],
     sourceExternalIds: cleanList([
@@ -941,7 +944,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
       `societyer:editable-document:${draftDocumentId}`,
       `societyer:document-version:${draftDocumentVersionId}`,
     ]),
-    notes: args.notes,
+    notes: args.packet.preparationOnly ? [args.notes, "Preparation draft only: complete review and prepare a separate execution copy with the lawful electorate. No signatures, meeting completion or filing acceptance are inferred."].filter(Boolean).join("\n") : args.notes,
     createdAtISO: now,
     updatedAtISO: now,
   });
@@ -964,7 +967,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
     targetId: String(generatedDocumentId),
     sensitivity: "standard",
     accessLevel: "internal",
-    summary: `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
+    summary: args.packet.preparationOnly ? `Editable preparation draft and provenance staged for ${args.packet.packageName}; execution and filing remain separate.` : `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
     status: "Linked",
     notes: args.notes,
     createdAtISO: now,
@@ -1085,7 +1088,6 @@ async function createSubscriptionAnnexes(
       content: `Subscription for Shares for ${subscriberName}.`,
       url: dataUrl,
       fileSizeBytes: dataUrl.length,
-      retentionYears: 7,
       createdAtISO: args.now,
       reviewStatus: "needs_signature",
       librarySection: "governance",
@@ -1193,8 +1195,14 @@ async function buildPacketDataContext(
   if (packet.key === "annual-resolutions") {
     return {
       annual: buildAnnualResolutionContext({
+        organization: society,
         waivePrepFinancials: society?.waivePrepFinancials,
+        waiveAuditor: runData?.waiveAuditor === true,
+        auditorName: typeof runData?.auditorName === "string" ? runData.auditorName : undefined,
         fiscalYearEnd: society?.fiscalYearEnd,
+        financialPeriodEnd: typeof runData?.financialPeriodEnd === "string" ? runData.financialPeriodEnd : undefined,
+        annualBusinessYear: typeof runData?.annualBusinessYear === "number" ? runData.annualBusinessYear : undefined,
+        annualReferenceDate: typeof runData?.annualReferenceDate === "string" ? runData.annualReferenceDate : undefined,
         directors: renderCtx.dir.list,
       }),
     };

@@ -16,6 +16,13 @@ export const legalGuideTopicSchema = z.enum([
   "model_bylaws_quorum",
   "model_bylaws_proxy",
   "directors_quorum",
+  "privacy_officer",
+  "privacy_policy",
+  "privacy_consent",
+  "privacy_access",
+  "privacy_retention",
+  "privacy_breach",
+  "privacy_pia",
 ]);
 
 export const legalGuideRuleKindSchema = z.enum([
@@ -88,19 +95,24 @@ export const jurisdictionGuideRuleSchema = z
       .strict(),
     validity: z
       .object({
-        effectiveFrom: dateSchema,
+        effectiveFrom: dateSchema.optional(),
         effectiveTo: dateSchema.nullable().optional(),
+        /** Review of current wording; never represents legal commencement. */
+        currentAsOf: dateSchema.optional(),
       })
       .strict()
       .refine(
-        (validity) =>
-          !validity.effectiveTo ||
-          Date.parse(validity.effectiveTo) > Date.parse(validity.effectiveFrom),
-        "effectiveTo must be after effectiveFrom",
+        (validity) => Boolean(validity.effectiveFrom) !== Boolean(validity.currentAsOf),
+        "Provide a verified effectiveFrom or a currentAsOf review date, never substitute one for the other",
+      )
+      .refine(
+        (validity) => !validity.effectiveTo || Boolean(validity.effectiveFrom && Date.parse(validity.effectiveTo) > Date.parse(validity.effectiveFrom)),
+        "effectiveTo needs a verified effectiveFrom and must be later",
       ),
     authority: z
       .object({
         sourceId: nonEmptyStringSchema,
+        registrySourceIds: z.array(nonEmptyStringSchema).min(1).optional(),
         instrument: nonEmptyStringSchema,
         sections: z.array(authoritySectionSchema).min(1),
       })
@@ -134,7 +146,7 @@ export const jurisdictionGuideRuleSchema = z
 
 export const jurisdictionGuidePackSchema = z
   .object({
-    schemaVersion: z.literal("2.0.0"),
+    schemaVersion: z.enum(["2.0.0", "2.1.0"]),
     packId: nonEmptyStringSchema,
     status: z.enum(["draft", "reviewed", "accepted", "deprecated"]),
     version: nonEmptyStringSchema,

@@ -5,6 +5,7 @@ import {
   organizationLabel,
 } from "../../../shared/organizationDomain";
 import { deriveAgmFacts, type AgmMeetingLike } from "../../../shared/agmEvidence";
+import { legalGovernanceProfile } from "../../../shared/legalGovernanceProfiles";
 import type { ComplianceFacts } from "./engine";
 import { todayDateOnly } from "../../../shared/dateOnly";
 
@@ -45,7 +46,7 @@ export function complianceFactsForOrganization(
   // A preparation workspace has no confirmed legal entity or registry obligations yet.
   if (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated" && !formationInferredFromRecords) return [];
   const entityType = organizationEntityType(organization);
-  const homeJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
+  const homeJurisdiction = legalGovernanceProfile(organization)?.jurisdictionCode ?? canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const homeFacts: ComplianceFacts = {
     jurisdictionCode: homeJurisdiction,
     entityType,
@@ -55,6 +56,7 @@ export function complianceFactsForOrganization(
     formationStatus: formationInferredFromRecords ? "unverified" : organization.formationStatus ?? "unverified",
     formationInferredFromRecords: formationInferredFromRecords || undefined,
     contextKind: "home",
+    actFormedUnder: organization.actFormedUnder,
     registrationType: "home",
     status: cleanText(organization.status) || undefined,
     asOfDate,

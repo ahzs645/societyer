@@ -1,5 +1,7 @@
-import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "../../shared/organizationDomain";
-import { organizationRuleScope } from "../../shared/entityRuleScope";
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, type LegalEntityLike } from "../../shared/organizationDomain";
+import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
+import { legalSourceById } from "../../shared/legalSources";
+import { resolvePrivacyProfile, PRIVACY_LAWS, PRIVACY_CITATIONS, PRIVACY_REVIEWED_ON, type PrivacyAssessmentInput, type PrivacyRule } from "../../shared/privacyRuleProfiles";
 import { JURISDICTION_GUIDE_PACK_JSON } from "./jurisdictionGuidePackRegistry";
 import {
   jurisdictionGuidePackSchema,
@@ -23,13 +25,21 @@ export type LegalGuideTopic =
   | "records"
   | "model_bylaws_quorum"
   | "model_bylaws_proxy"
-  | "directors_quorum";
+  | "directors_quorum"
+  | "privacy_officer"
+  | "privacy_policy"
+  | "privacy_consent"
+  | "privacy_access"
+  | "privacy_retention"
+  | "privacy_breach"
+  | "privacy_pia";
 
 export type LegalGuideRuleKind =
   | "statutory_minimum"
   | "default_rule"
   | "model_bylaw"
-  | "historical_caveat";
+  | "historical_caveat"
+  | "policy_guidance";
 
 export type LegalGuideRule = {
   id: string;
@@ -40,7 +50,11 @@ export type LegalGuideRule = {
   sectionLabel: string;
   citationLabel: string;
   topics: LegalGuideTopic[];
-  effectiveFromISO: string;
+  /** Present only when this rule wording's commencement has been verified. */
+  effectiveFromISO?: string;
+  /** Current wording reviewed on this date; does not establish historical validity. */
+  currentAsOfISO?: string;
+  reviewedAtISO?: string;
   /** Exclusive end timestamp. Omit for current rules. */
   effectiveToISO?: string;
   sourceUrl: string;
@@ -89,18 +103,19 @@ export const JURISDICTION_OPTIONS = JURISDICTION_GUIDE_PACKS.filter((pack, index
 /** Internal guide track for a BC entity that is neither a BC society nor a BC company. */
 export const BC_ENTITY_REVIEW_GUIDE_CODE = "CA-BC-ENTITY-REVIEW";
 
-/**
- * Resolve an internal legal-guide track; stored home jurisdiction remains CA-BC.
- * The CA-BC pack is the BC Societies Act pack, so it is returned only for a BC
- * society (including legacy workspaces with no recorded entity type). BC
- * corporations get the BCA pack; any other BC entity gets an empty review track
- * rather than Societies Act guidance.
- */
+/** Resolve the governing Act first. Incorporation location alone cannot select
+ * a business-corporation guide for an explicit nonprofit or custom entity. */
 export function resolveJurisdictionCode(organization?: LegalEntityLike | null): JurisdictionCode {
   const code = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
-  if (code !== "CA-BC") return code;
-  if (isCorporation(organization)) return "CA-BC-BCA";
-  return organizationRuleScope(organization).isBcSociety ? code : BC_ENTITY_REVIEW_GUIDE_CODE;
+  if (!organization || code === "unknown") return code;
+  const profile = legalGovernanceProfile(organization);
+  if (profile?.id === "bc_company") return "CA-BC-BCA";
+  if (profile?.id === "bc_society") return "CA-BC";
+  if (profile) return profile.jurisdictionCode;
+  // An untyped jurisdiction selector may preview a pack; an explicit unmatched
+  // Act/entity must not inherit that preview as applicable guidance.
+  if (!organization.entityType && !organization.kind && !organization.organizationKind && !organization.actFormedUnder) return code;
+  return code === "CA-BC" ? BC_ENTITY_REVIEW_GUIDE_CODE : `${code}-ENTITY-REVIEW`;
 }
 
 export function getJurisdictionGuidePack(
@@ -142,13 +157,17 @@ export function getPrimaryLegalGuide(args: {
 }
 
 export function formatGuideDateRange(rule: LegalGuideRule) {
+  if (!rule.effectiveFromISO) return rule.currentAsOfISO
+    ? `current wording reviewed ${shortISODate(rule.currentAsOfISO)}; commencement not established by this guide`
+    : "effective period not established";
   const from = shortISODate(rule.effectiveFromISO);
   if (!rule.effectiveToISO) return `effective from ${from}`;
   return `${from} to before ${shortISODate(rule.effectiveToISO)}`;
 }
 
 function isEffective(rule: LegalGuideRule, dateTime: number) {
-  const from = timestamp(rule.effectiveFromISO) ?? Number.NEGATIVE_INFINITY;
+  // A current-source review cannot prove what the statute said at an earlier meeting.
+  const from = timestamp(rule.effectiveFromISO ?? rule.currentAsOfISO) ?? Number.NEGATIVE_INFINITY;
   const to = timestamp(rule.effectiveToISO) ?? Number.POSITIVE_INFINITY;
   return dateTime >= from && dateTime < to;
 }
@@ -173,15 +192,15 @@ function shortISODate(value: string) {
 function unsupportedJurisdictionGuidePack(
   jurisdictionCode: JurisdictionCode,
 ): JurisdictionGuidePack {
-  if (jurisdictionCode === BC_ENTITY_REVIEW_GUIDE_CODE) {
+  if (jurisdictionCode.endsWith("-ENTITY-REVIEW")) {
     return {
       code: jurisdictionCode,
-      name: "British Columbia — entity-specific review required",
+      name: `${jurisdictionCode.replace("-ENTITY-REVIEW", "")} — entity-specific review required`,
       countryCode: "CA",
-      subdivisionCode: "BC",
+      subdivisionCode: jurisdictionCode === BC_ENTITY_REVIEW_GUIDE_CODE ? "BC" : undefined,
       default: false,
       description:
-        "No source-backed statutory guide pack is configured for this BC entity type. The BC Societies Act and Business Corporations Act packs do not apply.",
+        "No reviewed statutory guide pack is configured for this governing Act and entity type. Confirm the legal identity before relying on jurisdiction guidance.",
       sources: [],
       rules: [],
     };
@@ -228,24 +247,35 @@ function adaptGuidePack(pack: JurisdictionGuidePackV2): JurisdictionGuidePack {
     rules: pack.rules.map((rule) => {
       const source = sourcesById.get(rule.authority.sourceId);
       const section = rule.authority.sections[0];
+      const registrySources = (rule.authority.registrySourceIds ?? []).map((id) => {
+        const record = legalSourceById.get(id);
+        if (!record) throw new Error(`${rule.ruleId}: unknown shared legal source ${id}`);
+        if (record.status === "proposed") throw new Error(`${rule.ruleId}: proposed law cannot supply an operative guide`);
+        return record;
+      });
+      const primary = registrySources[0];
+      const summary = registrySources.length ? registrySources.map((record) => record.summary).join(" ") : rule.content.summary;
+      const sourceCaveats = registrySources.map((record) => record.caveat).filter(Boolean).join(" ");
       return {
         id: rule.ruleId,
         jurisdictionCode: pack.jurisdiction.code,
         jurisdictionName: pack.jurisdiction.name,
         statuteKey: rule.authority.sourceId,
-        instrument: rule.authority.instrument,
-        sectionLabel: section.label,
-        citationLabel: rule.content.displayCitation,
+        instrument: primary?.instrument ?? rule.authority.instrument,
+        sectionLabel: primary?.section ?? section.label,
+        citationLabel: primary?.fullCitation ?? rule.content.displayCitation,
         topics: rule.topics,
         effectiveFromISO: rule.validity.effectiveFrom,
         effectiveToISO: rule.validity.effectiveTo ?? undefined,
-        sourceUrl: section.url,
+        currentAsOfISO: rule.validity.currentAsOf,
+        reviewedAtISO: primary?.reviewedOn ?? rule.provenance.verifiedAt,
+        sourceUrl: primary?.url ?? section.url,
         pointInTimeUrl: section.pointInTimeUrl ?? source?.pointInTimeUrl,
-        sourceCurrentToISO: rule.provenance.sourceCurrentTo ?? source?.currentTo,
+        sourceCurrentToISO: primary ? primary.consolidatedThrough : rule.provenance.sourceCurrentTo ?? source?.currentTo,
         ruleKind: legacyRuleKind(rule.ruleType),
-        summary: rule.content.summary,
-        tooltipText: rule.content.tooltip,
-        caveatText: rule.content.caveat,
+        summary,
+        tooltipText: primary ? summary : rule.content.tooltip,
+        caveatText: sourceCaveats || rule.content.caveat,
         priority: rule.priority,
       };
     }),
@@ -257,10 +287,45 @@ function legacyRuleKind(ruleKind: string): LegalGuideRuleKind {
     ruleKind === "statutory_minimum" ||
     ruleKind === "default_rule" ||
     ruleKind === "model_bylaw" ||
-    ruleKind === "historical_caveat"
+    ruleKind === "historical_caveat" ||
+    ruleKind === "policy_guidance"
   ) {
     return ruleKind;
   }
   if (ruleKind === "transitional_rule") return "historical_caveat";
   return "statutory_minimum";
+}
+
+/** Privacy guidance has its own activity-based resolver and never lives in an
+ * incorporation guide pack. Conditional profiles remain in the assessment UI;
+ * this API returns requirements only for recorded applicable handling. */
+export function getPrivacyLegalGuideRules({ organization, topics }: {
+  organization?: PrivacyAssessmentInput | null;
+  topics?: PrivacyRule["key"][];
+}): LegalGuideRule[] {
+  const topicSet = topics ? new Set(topics) : null;
+  return resolvePrivacyProfile(organization).applicableLawIds.flatMap((lawId) => {
+    const law = PRIVACY_LAWS[lawId];
+    return law.rules.filter((rule) => !topicSet || topicSet.has(rule.key)).map((rule) => {
+      const source = PRIVACY_CITATIONS[rule.citationIds[0]];
+      return {
+        id: `privacy-${lawId}-${rule.key}`,
+        jurisdictionCode: law.jurisdiction,
+        jurisdictionName: law.label,
+        statuteKey: lawId,
+        instrument: source.instrument,
+        sectionLabel: source.section,
+        citationLabel: source.fullCitation,
+        topics: [`privacy_${rule.key}` as LegalGuideTopic],
+        currentAsOfISO: PRIVACY_REVIEWED_ON,
+        reviewedAtISO: PRIVACY_REVIEWED_ON,
+        sourceUrl: source.url,
+        sourceCurrentToISO: source.sourceCurrentToISO,
+        ruleKind: rule.obligation === "recommended" ? "policy_guidance" as const : "statutory_minimum" as const,
+        summary: rule.body,
+        tooltipText: rule.body,
+        caveatText: source.caveat,
+      };
+    });
+  });
 }

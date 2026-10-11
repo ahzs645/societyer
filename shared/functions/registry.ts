@@ -421,6 +421,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "documentComments:remove", handler: documentCommentsFns.removePortable }),
 
   // writtenResolutions
+  definePortableQuery({ name: "writtenResolutions:preview", handler: writtenResolutionsFns.previewPortable }),
+  definePortableMutation({ name: "writtenResolutions:recordNotice", handler: writtenResolutionsFns.recordNoticePortable }),
   definePortableQuery({ name: "writtenResolutions:list", handler: writtenResolutionsFns.listPortable }),
   definePortableMutation({ name: "writtenResolutions:create", handler: writtenResolutionsFns.createPortable }),
   definePortableMutation({ name: "writtenResolutions:sign", handler: writtenResolutionsFns.signPortable }),

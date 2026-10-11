@@ -10,6 +10,14 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { getActiveBylawRuleSet } from "./bylawRules";
 import { normalizeElectionWindow, validateElectionQuestion, type ElectionQuestionInput } from "../electionValidation";
+import { organizationRuleScope } from "../entityRuleScope";
+import { corporateElectionPreview, validateCorporateElectionReview, type CorporateElectionReview } from "./electionElectorate";
+
+function accountMayVote(row: Record<string, any>, actor: Record<string, any> | null) {
+  if (!actor) return false;
+  if (row.voterKind === "shareholder") return !!row.userId && row.userId === actor._id;
+  return !!actor.memberId && row.memberId === actor.memberId && (!row.userId || row.userId === actor._id);
+}
 
 // Portable, dep-free copy of the role hierarchy from `convex/users.ts`.
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
@@ -54,11 +62,9 @@ async function logAudit(
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  await requireSocietyMembership(ctx, societyId);
-  return ctx.db
-    .query("elections")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+  const actor = await requireSocietyMembership(ctx, societyId);
+  const rows = await ctx.db.query("elections").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  return canActAs(actor?.role as any, "Director") ? rows : rows.map(({ corporateReview, ...row }) => row);
 }
 
 export async function getPortable(
@@ -90,16 +96,23 @@ export async function getPortable(
     !!actor &&
     actor.societyId === election.societyId &&
     canActAs(actor.role as any, "Director");
-  const viewerEligibility =
-    actor?.memberId && !canSeeSensitive
-      ? eligible.filter((row) => row.memberId === actor.memberId)
-      : [];
+  const viewerEligibility = eligible.filter((row) => accountMayVote(row, actor));
+  const society = await ctx.db.get(societyId, "societies");
+  const isCorporation = organizationRuleScope(society).isCorporation;
+  const corporatePreview = isCorporation && canSeeSensitive && election.status === "Draft"
+    ? await corporateElectionPreview(ctx, societyId, election.corporateReview) : null;
+  const visibleElection = !canSeeSensitive && election.corporateReview
+    ? { ...election, corporateReview: { recordDateISO: election.corporateReview.recordDateISO, votingMethod: election.corporateReview.votingMethod } }
+    : election;
   return {
-    election,
+    election: visibleElection,
+    isCorporation,
+    canNominate: isCorporation ? !!election.corporateReview?.representatives?.some((row: any) => row.userId === actor?._id) : !!actor?.memberId,
+    corporatePreview,
     questions: questions.sort((a, b) => a.order - b.order),
     eligible: canSeeSensitive ? eligible : viewerEligibility,
     ballots: canSeeSensitive ? ballots : [],
-    ballotCount: ballots.length,
+    ballotCount: ballots.filter((row) => !row.spoiledAtISO).length,
     audit: canSeeSensitive ? audit.sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO)) : [],
     canSeeSensitive,
   };
@@ -133,23 +146,21 @@ export async function listMinePortable(
   ctx: PortableQueryCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
-  if (!userId) return [];
-  const user = await getOwned(ctx, "users", userId, societyId);
-  if (!user?.memberId) return [];
-  const eligibility = await ctx.db
-    .query("electionEligibleVoters")
-    .withIndex("by_member", (q) => q.eq("memberId", user.memberId!))
-    .collect();
-  const electionIds = [...new Set(eligibility.map((row) => row.electionId))];
-  const elections = await Promise.all(electionIds.map((id) => getOwned(ctx, "elections", String(id), societyId)));
-  return elections
-    .filter((row): row is NonNullable<typeof row> => !!row && row.societyId === societyId)
-    .map((election) => ({
-      election,
-      eligibility:
-        eligibility.find((row) => row.electionId === election._id) ?? null,
-    }));
+  const user = await requireSocietyMembership(ctx, societyId);
+  if (!user || (userId && userId !== user._id)) throw new Error("You can only read your own voting eligibility.");
+  const [byUser, byMember] = await Promise.all([
+    ctx.db.query("electionEligibleVoters").withIndex("by_user", (q) => q.eq("userId", user._id)).collect(),
+    user.memberId ? ctx.db.query("electionEligibleVoters").withIndex("by_member", (q) => q.eq("memberId", user.memberId)).collect() : [],
+  ]);
+  const eligibility = [...new Map([...byUser, ...byMember].map((row) => [row._id, row])).values()]
+    .filter((row) => row.societyId === societyId && accountMayVote(row, user));
+  const result: { election: Record<string, any>; eligibility: Record<string, any> }[] = [];
+  for (const entry of eligibility) {
+    const election = await getOwned(ctx, "elections", String(entry.electionId), societyId);
+    const { corporateReview, ...visibleElection } = election;
+    result.push({ election: visibleElection, eligibility: entry });
+  }
+  return result;
 }
 
 export async function submitNominationPortable(
@@ -167,9 +178,18 @@ export async function submitNominationPortable(
   const societyId = String(election.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
   if (args.actingUserId && args.actingUserId !== actor?._id) throw new Error("Authenticated actor does not match the current principal.");
-  if (!actor?.memberId) throw new Error("Only confirmed members can submit nominations.");
+  const society = await ctx.db.get(societyId, "societies");
+  const corporation = organizationRuleScope(society).isCorporation;
+  if (corporation) {
+    const assignment = election.corporateReview?.representatives?.find((row: any) => row.userId === actor?._id);
+    if (!assignment) throw new Error("Only a shareholder's verified authorized account can submit a nomination.");
+    const register = await corporateElectionPreview(ctx, societyId, election.corporateReview);
+    if (!register.complete || !register.votingHolders.some((holder) => holder.roleHolderId === assignment.roleHolderId)) throw new Error("The nomination account must represent an identified voting shareholder in the reviewed register.");
+  } else {
+    if (!actor?.memberId) throw new Error("Only confirmed members can submit nominations.");
+    await getOwned(ctx, "members", actor.memberId, societyId);
+  }
   if (!args.nomineeName.trim()) throw new Error("Enter the nominee's name.");
-  await getOwned(ctx, "members", actor.memberId, societyId);
   if (args.questionId) {
     const question = await getOwned(ctx, "electionQuestions", args.questionId, societyId);
     if (question.electionId !== args.electionId) throw new Error("Election question not found.");
@@ -206,9 +226,10 @@ export async function submitNominationPortable(
 
 export async function castBallotPortable(
   ctx: PortableMutationCtx,
-  { electionId, choices, actingUserId }: {
+  { electionId, eligibilityId, choices, actingUserId }: {
     electionId: string;
-    choices: { questionId: string; optionIds: string[] }[];
+    eligibilityId?: string;
+    choices: { questionId: string; optionIds: string[]; allocations?: { optionId: string; votes: number }[] }[];
     actingUserId?: string;
   },
 ) {
@@ -223,26 +244,21 @@ export async function castBallotPortable(
   }
   const user = await requireSocietyMembership(ctx, societyId);
   if (actingUserId && actingUserId !== user?._id) throw new Error("Authenticated actor does not match the current principal.");
-  if (!user?.memberId) {
-    throw new Error("Only confirmed members can cast a ballot.");
+  const society = await ctx.db.get(societyId, "societies");
+  if (organizationRuleScope(society).isCorporation && election.eligibilityBasis !== "shareholder") {
+    throw new Error("This legacy corporate election has a member-based electorate. Create a reviewed shareholder election before accepting ballots.");
   }
-
-  const eligibility = (
-    await ctx.db
-      .query("electionEligibleVoters")
-      .withIndex("by_election_member", (q) =>
-        q.eq("electionId", electionId).eq("memberId", user.memberId!),
-      )
-      .collect()
-  )[0];
-
-  if (!eligibility || eligibility.revokedAtISO) {
-    throw new Error("This member is not eligible to vote in this election.");
+  const entries = await ctx.db.query("electionEligibleVoters").withIndex("by_election", (q) => q.eq("electionId", electionId)).collect();
+  const mine = entries.filter((row) => row.societyId === societyId && accountMayVote(row, user));
+  const eligibility = eligibilityId ? mine.find((row) => row._id === eligibilityId) : mine.length === 1 ? mine[0] : null;
+  if (!eligibility || eligibility.revokedAtISO || eligibility.status === "Revoked") {
+    throw new Error(mine.length > 1 && !eligibilityId ? "Select the shareholder whose ballot you are casting." : "This account is not eligible to vote in this election.");
   }
-  if (eligibility.status === "Voted") {
-    throw new Error("A ballot has already been cast for this member.");
-  }
-
+  if (eligibility.status === "Voted") throw new Error("A ballot has already been cast for this voter.");
+  if (!["Eligible", "Confirmed"].includes(eligibility.status)) throw new Error("This voter is not eligible to cast a ballot.");
+  const voteWeight = eligibility.voteWeight ?? 1;
+  if (!Number.isFinite(voteWeight) || voteWeight <= 0 || voteWeight > Number.MAX_SAFE_INTEGER) throw new Error("The frozen voting weight is invalid; refer this election to its administrator.");
+  const cumulative = election.corporateReview?.votingMethod === "cumulative";
   const questions = await ctx.db
     .query("electionQuestions")
     .withIndex("by_election", (q) => q.eq("electionId", electionId))
@@ -256,8 +272,14 @@ export async function castBallotPortable(
     if (choice.optionIds.length === 0) {
       throw new Error("Each question must have at least one selection.");
     }
+    if (cumulative) {
+      const allocations = choice.allocations ?? [];
+      if (allocations.length !== choice.optionIds.length || new Set(allocations.map((row) => row.optionId)).size !== allocations.length || allocations.some((row) => !choice.optionIds.includes(row.optionId) || !Number.isFinite(row.votes) || row.votes <= 0)) throw new Error("Provide one positive vote allocation for each selected candidate.");
+      const budget = voteWeight * question.maxSelections;
+      if (!Number.isFinite(budget) || budget > Number.MAX_SAFE_INTEGER || allocations.reduce((sum, row) => sum + row.votes, 0) > budget) throw new Error("The cumulative allocation exceeds this shareholder's votes multiplied by the seats to be filled.");
+    } else if (choice.allocations?.length) throw new Error("Vote allocations are only permitted for a reviewed cumulative election.");
     if (new Set(choice.optionIds).size !== choice.optionIds.length) throw new Error("A ballot option can only be selected once.");
-    if (choice.optionIds.length > question.maxSelections) {
+    if (!cumulative && choice.optionIds.length > question.maxSelections) {
       throw new Error(
         `Question "${question.title}" allows at most ${question.maxSelections} selection(s).`,
       );
@@ -274,6 +296,7 @@ export async function castBallotPortable(
     societyId: election.societyId,
     electionId,
     receiptCode: receiptCode(),
+    voteWeight,
     submittedAtISO,
     choices,
   });
@@ -292,7 +315,7 @@ export async function castBallotPortable(
     electionId,
     actorName: user.displayName,
     action: "ballot-cast",
-    detail: "Anonymous ballot stored; voter linkage kept in eligibility ledger only.",
+    detail: "Ballot stored separately from the voter eligibility ledger.",
   });
   return ballotId;
 }
@@ -325,10 +348,14 @@ export async function tallyPortable(
     const counts = new Map<string, number>();
     for (const option of question.options) counts.set(option.id, 0);
     for (const ballot of ballots) {
+      if (ballot.spoiledAtISO) continue;
       const choice = ballot.choices.find((row: Record<string, any>) => row.questionId === question._id);
       if (!choice) continue;
       for (const optionId of choice.optionIds) {
-        counts.set(optionId, (counts.get(optionId) ?? 0) + 1);
+        const votes = election.corporateReview?.votingMethod === "cumulative"
+          ? choice.allocations?.find((row: any) => row.optionId === optionId)?.votes ?? 0
+          : ballot.voteWeight ?? 1;
+        counts.set(optionId, (counts.get(optionId) ?? 0) + votes);
       }
     }
     return {
@@ -355,6 +382,7 @@ export async function createPortable(
     nominationsOpenAtISO?: string;
     nominationsCloseAtISO?: string;
     eligibilityCutoffISO?: string;
+    corporateReview?: CorporateElectionReview;
     scrutineerUserIds?: string[];
     notes?: string;
     actingUserId?: string;
@@ -378,6 +406,11 @@ export async function createPortable(
       getOwned(ctx, "users", userId, args.societyId)),
   ]);
   const rules = await getActiveBylawRuleSet(ctx, args.societyId);
+  if (args.corporateReview) {
+    const society = await ctx.db.get(args.societyId, "societies");
+    if (!organizationRuleScope(society).isCorporation) throw new Error("A share-weighted review only applies to a share-capital corporation.");
+    await validateCorporateElectionReview(ctx, args.societyId, args.corporateReview);
+  }
   const id = await ctx.db.insert("elections", {
     societyId: args.societyId,
     meetingId: args.meetingId,
@@ -388,7 +421,8 @@ export async function createPortable(
     closesAtISO: votingWindow.end,
     nominationsOpenAtISO: nominationsWindow?.start,
     nominationsCloseAtISO: nominationsWindow?.end,
-    eligibilityCutoffISO: args.eligibilityCutoffISO,
+    eligibilityCutoffISO: args.corporateReview?.recordDateISO ?? args.eligibilityCutoffISO,
+    corporateReview: args.corporateReview,
     anonymousBallot: rules.ballotIsAnonymous,
     scrutineerUserIds: args.scrutineerUserIds,
     createdByUserId: await principalUserId(ctx, args.societyId),
@@ -411,6 +445,7 @@ export async function updateSettingsPortable(
   ctx: PortableMutationCtx,
   args: {
     electionId: string;
+    corporateReview?: CorporateElectionReview;
     nominationsOpenAtISO?: string;
     nominationsCloseAtISO?: string;
     scrutineerUserIds?: string[];
@@ -438,14 +473,18 @@ export async function updateSettingsPortable(
       ? getOwned(ctx, "documents", args.evidenceDocumentId, societyId)
       : Promise.resolve(),
   ]);
-  await ctx.db.patch(args.electionId, {
-    nominationsOpenAtISO: args.nominationsOpenAtISO,
-    nominationsCloseAtISO: args.nominationsCloseAtISO,
-    scrutineerUserIds: args.scrutineerUserIds,
-    resultsSummary: args.resultsSummary,
-    evidenceDocumentId: args.evidenceDocumentId,
-    updatedAtISO: new Date().toISOString(),
-  });
+  if (args.corporateReview) {
+    const society = await ctx.db.get(societyId, "societies");
+    if (!organizationRuleScope(society).isCorporation) throw new Error("A share-weighted review only applies to a share-capital corporation.");
+    if (election.status !== "Draft") throw new Error("The electorate review is frozen after voting opens.");
+    await validateCorporateElectionReview(ctx, societyId, args.corporateReview);
+  }
+  const patch: Record<string, any> = { updatedAtISO: new Date().toISOString() };
+  for (const field of ["nominationsOpenAtISO", "nominationsCloseAtISO", "scrutineerUserIds", "resultsSummary", "evidenceDocumentId", "corporateReview"] as const) {
+    if (args[field] !== undefined) patch[field] = args[field];
+  }
+  if (args.corporateReview) patch.eligibilityCutoffISO = args.corporateReview.recordDateISO;
+  await ctx.db.patch(args.electionId, patch);
   await logAudit(ctx, {
     societyId: election.societyId,
     electionId: args.electionId,
@@ -623,61 +662,52 @@ export async function snapshotEligibleVotersPortable(
   const questions = await ctx.db.query("electionQuestions").withIndex("by_election", (q) => q.eq("electionId", electionId)).collect();
   if (!questions.length) throw new Error("Add a ballot question before opening the election.");
   questions.forEach((question) => validateElectionQuestion({ title: question.title, maxSelections: question.maxSelections, options: question.options }));
-  const rules = await getActiveBylawRuleSet(ctx, societyId);
-  const members = await ctx.db
-    .query("members")
-    .withIndex("by_society", (q) => q.eq("societyId", election.societyId))
-    .collect();
-  const users = await ctx.db
-    .query("users")
-    .withIndex("by_society", (q) => q.eq("societyId", election.societyId))
-    .collect();
-  const existing = await ctx.db
-    .query("electionEligibleVoters")
-    .withIndex("by_election", (q) => q.eq("electionId", electionId))
-    .collect();
-  for (const row of existing) await ctx.db.delete(row._id);
-
-  const eligibleMembers = members.filter((member) =>
-    rules.voterMustBeMemberAtRecordDate
-      ? member.status === "Active" && member.votingRights
-      : member.votingRights,
-  );
-
-  for (const member of eligibleMembers) {
-    const linkedUser =
-      users.find((candidate) => candidate.memberId === member._id) ??
-      users.find(
-        (candidate) =>
-          candidate.email &&
-          member.email &&
-          candidate.email.toLowerCase() === member.email.toLowerCase(),
-      );
-    await ctx.db.insert("electionEligibleVoters", {
-      societyId: election.societyId,
-      electionId,
-      memberId: member._id,
-      userId: linkedUser?._id,
-      email: member.email,
-      fullName: fullName(member as any),
-      status: "Eligible",
-      eligibilityReason: "Active voting member at snapshot time",
-      createdAtISO: new Date().toISOString(),
-    });
+  const society = await ctx.db.get(societyId, "societies");
+  const corporation = organizationRuleScope(society).isCorporation;
+  const nowISO = new Date().toISOString();
+  const snapshot: Record<string, any>[] = [];
+  if (corporation) {
+    const review = election.corporateReview as CorporateElectionReview | undefined;
+    if (!review) throw new Error("Review the record date, share rights and authorized shareholder accounts before opening this election.");
+    await validateCorporateElectionReview(ctx, societyId, review);
+    const electorate = await corporateElectionPreview(ctx, societyId, review);
+    if (!electorate.complete) throw new Error(electorate.issues.join(" "));
+    for (const holder of electorate.votingHolders) {
+      const assignment = review.representatives.find((row) => row.roleHolderId === holder.roleHolderId);
+      if (!assignment) throw new Error(`Assign and verify an authorized voting account for ${holder.fullName}.`);
+      snapshot.push({
+        voterKind: "shareholder", holderKey: holder.holderKey, roleHolderId: holder.roleHolderId,
+        userId: assignment.userId, email: holder.email, fullName: holder.fullName,
+        voteWeight: holder.totalVotes, classVotes: holder.classVotes,
+        eligibilityReason: `Reviewed share register at the end of ${review.recordDateISO}; ${holder.totalVotes} votes before any cumulative multiplier`,
+      });
+    }
+  } else {
+    const rules = await getActiveBylawRuleSet(ctx, societyId);
+    const [members, users] = await Promise.all([
+      ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const eligibleMembers = members.filter((member) => rules.voterMustBeMemberAtRecordDate ? member.status === "Active" && member.votingRights : member.votingRights);
+    for (const member of eligibleMembers) {
+      const linkedUsers = users.filter((candidate) => candidate.memberId === member._id && candidate.status === "Active");
+      if (linkedUsers.length > 1) throw new Error(`More than one active account is linked to ${fullName(member as any)}; resolve its voting identity before opening.`);
+      snapshot.push({ voterKind: "member", memberId: member._id, userId: linkedUsers[0]?._id,
+        email: member.email, fullName: fullName(member as any), voteWeight: 1, eligibilityReason: "Voting member in the reviewed member register at snapshot time" });
+    }
   }
-
+  if (!snapshot.length) throw new Error("The reviewed register contains no eligible voters.");
+  const existing = await ctx.db.query("electionEligibleVoters").withIndex("by_election", (q) => q.eq("electionId", electionId)).collect();
+  for (const row of existing) await ctx.db.delete(row._id);
+  for (const row of snapshot) await ctx.db.insert("electionEligibleVoters", { ...row, societyId, electionId, status: "Eligible", createdAtISO: nowISO });
+  const totalEligibleVotes = snapshot.reduce((sum, row) => sum + row.voteWeight, 0);
   await ctx.db.patch(electionId, {
-    updatedAtISO: new Date().toISOString(),
-    status: election.status === "Draft" ? "Open" : election.status,
+    updatedAtISO: nowISO, status: "Open", eligibilityBasis: corporation ? "shareholder" : "member",
+    eligibilityReviewedByUserId: user?._id, eligibilitySnapshottedAtISO: nowISO, totalEligibleVotes,
+    ...(corporation ? { anonymousBallot: false } : {}),
   });
-  await logAudit(ctx, {
-    societyId: election.societyId,
-    electionId,
-    actorName: user?.displayName ?? "System",
-    action: "eligibility-snapshotted",
-    detail: `${eligibleMembers.length} eligible voters`,
-  });
-  return { eligibleCount: eligibleMembers.length };
+  await logAudit(ctx, { societyId, electionId, actorName: user?.displayName ?? "System", action: "eligibility-snapshotted", detail: `${snapshot.length} eligible ${corporation ? "shareholders" : "members"}; ${totalEligibleVotes} base votes; record and authority review frozen` });
+  return { eligibleCount: snapshot.length, totalEligibleVotes };
 }
 
 export async function closePortable(

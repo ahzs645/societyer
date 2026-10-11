@@ -1,9 +1,9 @@
 {
-  "schemaVersion": "2.0.0",
+  "schemaVersion": "2.1.0",
   "packId": "ca-on-obca",
   "status": "draft",
-  "version": "2026.06.02",
-  "reviewedAt": "2026-06-02",
+  "version": "2026-10-11",
+  "reviewedAt": "2026-10-11",
   "maintainers": [
     {
       "name": "Societyer",
@@ -21,30 +21,9 @@
     "corporation__business_"
   ],
   "title": "Ontario OBCA guide pack",
-  "description": "Ontario business corporation guide tracks for OBR filings, corporate records, securities registers, and beneficial ownership records.",
+  "description": "Ontario business corporation guide tracks for OBR filings, corporate records, securities registers, and beneficial ownership records. Current registered rules are reviewed snapshots; historical application requires a separately verified effective period. Privacy scope is assessed from operations and activities on the Privacy page.",
   "defaultForJurisdiction": false,
   "sources": [
-    {
-      "sourceId": "on-obca-current",
-      "type": "statute",
-      "title": "Business Corporations Act",
-      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16",
-      "publisher": "Ontario e-Laws",
-      "retrievedAt": "2026-06-02",
-      "currentTo": "2025-10-01",
-      "language": "en-CA",
-      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16"
-    },
-    {
-      "sourceId": "ontario-business-registry-services",
-      "type": "registry_guidance",
-      "title": "Ontario Business Registry: all services",
-      "citation": "Ontario Business Registry services",
-      "publisher": "Ontario.ca",
-      "retrievedAt": "2026-06-02",
-      "language": "en-CA",
-      "canonicalUrl": "https://www.ontario.ca/page/ontario-business-registry-all-services"
-    },
     {
       "sourceId": "ontario-corporation-profile-report-guide",
       "type": "registry_guidance",
@@ -54,13 +33,134 @@
       "retrievedAt": "2026-06-02",
       "language": "en-CA",
       "canonicalUrl": "https://www.ontario.ca/page/guide-corporation-profile-report"
+    },
+    {
+      "sourceId": "OBCA-ANNUAL-MEETING",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 94, 104, 154(1)",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-RECORDS",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 139–141, 144",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-QUORUM",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 101, 126",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-RESOLUTIONS",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 1(1), 104, 129",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "ON-CIA-RETURNS-CHANGES",
+      "type": "statute",
+      "title": "Corporations Information Act (Ontario)",
+      "citation": "Corporations Information Act, R.S.O. 1990, c. C.39, ss. 2–4",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90c39",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-MEETING-NOTICE",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 96, 98",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-RECORD-ACCESS",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 144–146",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-ISC",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 1.1, 140.2–140.3, 258.1",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-LAND-REGISTER",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, s. 140.1",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "ON-CIA-ANNUAL-RETURN-REGULATION",
+      "type": "regulation",
+      "title": "General Regulation under the Corporations Information Act",
+      "citation": "General, O. Reg. 400/21, ss. 3, 11, under the Corporations Information Act",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/regulation/210400",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
+    },
+    {
+      "sourceId": "OBCA-BYLAWS",
+      "type": "statute",
+      "title": "Business Corporations Act (Ontario)",
+      "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, s. 116",
+      "publisher": "www.ontario.ca",
+      "canonicalUrl": "https://www.ontario.ca/laws/statute/90b16",
+      "retrievedAt": "2026-10-11",
+      "currentTo": "2026-10-07",
+      "language": "en-CA"
     }
   ],
   "rules": [
     {
       "ruleId": "ca-on-obca-agm-timing",
       "stableKey": "agm_timing.timing",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "agm_timing",
@@ -74,38 +174,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "1990-12-31"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "on-obca-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "OBCA-ANNUAL-MEETING",
+        "registrySourceIds": [
+          "OBCA-ANNUAL-MEETING"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
         "sections": [
           {
-            "label": "ss.94, 154",
-            "citation": "OBCA ss.94, 154",
+            "label": "ss. 94, 104, 154(1)",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 94, 104, 154(1)",
             "url": "https://www.ontario.ca/laws/statute/90b16"
           }
         ]
       },
       "provenance": {
-        "sourceCurrentTo": "2025-10-01",
-        "retrievedAt": "2026-06-02",
-        "verifiedAt": "2026-06-02",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Ontario OBCA annual workflows include annual shareholders meeting timing and financial statements placed before the annual meeting.",
-        "tooltip": "Use this for Ontario AGM timing and financial-document presentation checks, then track OBR filings separately.",
-        "caveat": "Ontario annual return/profile filings are registry workflows and should be checked against Ontario Business Registry instructions.",
-        "displayCitation": "OBCA ss.94, 154"
+        "summary": "The first annual shareholder meeting must be called within 18 months of incorporation and subsequently within 15 months of the last annual meeting. A qualifying written annual-business route may replace the meeting.",
+        "tooltip": "The first annual shareholder meeting must be called within 18 months of incorporation and subsequently within 15 months of the last annual meeting. A qualifying written annual-business route may replace the meeting.",
+        "caveat": "Section 94 does not impose the CBCA’s separate six-month-after-financial-year-end meeting rule. Financial-statement freshness under s. 154 is a separate obligation. Private majority written business does not waive unanimous-only matters.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 94, 104, 154(1)"
       },
       "priority": 30
     },
     {
       "ruleId": "ca-on-obca-corporate-records",
       "stableKey": "records.records",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "records"
@@ -118,38 +222,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "1990-12-31"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "on-obca-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "OBCA-RECORDS",
+        "registrySourceIds": [
+          "OBCA-RECORDS"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
         "sections": [
           {
-            "label": "ss.139-140",
-            "citation": "OBCA ss.139-140",
+            "label": "ss. 139–141, 144",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 139–141, 144",
             "url": "https://www.ontario.ca/laws/statute/90b16"
           }
         ]
       },
       "provenance": {
-        "sourceCurrentTo": "2025-10-01",
-        "retrievedAt": "2026-06-02",
-        "verifiedAt": "2026-06-02",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Ontario corporations maintain corporate records, including articles, by-laws, minutes/resolutions, securities registers, and significant-control information.",
-        "tooltip": "Use this citation track for Ontario minute-book completeness, securities register support, beneficial-ownership review, and registered/head-office record storage.",
-        "caveat": "Some records are inspected under different access rules, and Ontario land ownership records may require separate tracking.",
-        "displayCitation": "OBCA ss.139-140"
+        "summary": "Maintain articles/bylaws/amendments, known unanimous shareholder agreements, shareholder proceedings, director and securities registers, Ontario land-ownership records, applicable ISC register, accounting and board/committee proceedings. Records may use any form with safeguards and accurate intelligible reproduction. Accounting records have a six-year minimum subject to tax requirements.",
+        "tooltip": "Maintain articles/bylaws/amendments, known unanimous shareholder agreements, shareholder proceedings, director and securities registers, Ontario land-ownership records, applicable ISC register, accounting and board/committee proceedings. Records may use any form with safeguards and accurate intelligible reproduction. Accounting records have a six-year minimum subject to tax requirements.",
+        "caveat": "The Ontario land-ownership register is an often-missed additional category. Offsite/electronic access conditions and director/shareholder access differ; constitutional records do not expire after six years.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 139–141, 144"
       },
       "priority": 60
     },
     {
       "ruleId": "ca-on-obca-directors-quorum",
       "stableKey": "directors_quorum.quorum",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "default_rule",
       "topics": [
         "directors_quorum"
@@ -162,50 +270,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "1990-12-31"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "on-obca-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "OBCA-QUORUM",
+        "registrySourceIds": [
+          "OBCA-QUORUM"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
         "sections": [
           {
-            "label": "s.126(3)-(5)",
-            "citation": "OBCA s.126(3)-(5)",
+            "label": "ss. 101, 126",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 101, 126",
             "url": "https://www.ontario.ca/laws/statute/90b16"
           }
         ]
       },
       "provenance": {
-        "sourceCurrentTo": "2025-10-01",
-        "retrievedAt": "2026-06-02",
-        "verifiedAt": "2026-06-02",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Subject to the articles or by-laws, a majority of the directors, or the minimum number required by the articles, constitutes directors' quorum; if fewer than three directors, all directors must be present.",
-        "tooltip": "Use the articles and by-laws first, then apply the OBCA directors' quorum default and the all-directors rule for boards under three.",
-        "caveat": "Vacancies and articles/by-laws can affect whether remaining directors may act.",
-        "displayCitation": "OBCA s.126(3)-(5)"
+        "summary": "Subject to the bylaws, shareholder quorum is holders of a majority of shares entitled to vote, present personally or by proxy. Board quorum is governed by s. 126 and the articles/bylaws.",
+        "tooltip": "Subject to the bylaws, shareholder quorum is holders of a majority of shares entitled to vote, present personally or by proxy. Board quorum is governed by s. 126 and the articles/bylaws.",
+        "caveat": "Quorum counts voting shares rather than people; class votes, conflicts and sole-director/sole-shareholder provisions require their own assessment.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 101, 126"
       },
-      "priority": 34,
-      "parameters": [
-        {
-          "key": "directors_quorum.default_formula",
-          "type": "string",
-          "value": "majority_of_directors_or_articles_minimum"
-        },
-        {
-          "key": "directors_quorum.under_three_directors_formula",
-          "type": "string",
-          "value": "all_directors_present"
-        }
-      ]
+      "priority": 34
     },
     {
       "ruleId": "ca-on-obca-special-resolution",
       "stableKey": "special_resolution.resolution",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "special_resolution"
@@ -218,52 +318,42 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "1990-12-31"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "on-obca-current",
-        "instrument": "Business Corporations Act",
+        "sourceId": "OBCA-RESOLUTIONS",
+        "registrySourceIds": [
+          "OBCA-RESOLUTIONS"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
         "sections": [
           {
-            "label": "s.1(1)",
-            "citation": "OBCA s.1(1)",
+            "label": "ss. 1(1), 104, 129",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 1(1), 104, 129",
             "url": "https://www.ontario.ca/laws/statute/90b16"
           }
         ]
       },
       "provenance": {
-        "sourceCurrentTo": "2025-10-01",
-        "retrievedAt": "2026-06-02",
-        "verifiedAt": "2026-06-02",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "An OBCA special resolution generally requires at least two-thirds of votes cast, or written consent by every shareholder entitled to vote.",
-        "tooltip": "Use this for Ontario special-resolution vote-threshold checks and unanimous written-consent checks.",
-        "caveat": "Some OBCA actions require additional class, article, by-law, or dissent-right analysis.",
-        "displayCitation": "OBCA s.1(1)"
+        "summary": "Ordinary meeting resolutions use a majority and special meeting resolutions at least two-thirds of votes cast. Written special resolutions require all entitled shareholders; board/committee written resolutions require all entitled directors. Non-offering corporations may pass an ordinary written resolution by holders of a majority of entitled voting shares.",
+        "tooltip": "Ordinary meeting resolutions use a majority and special meeting resolutions at least two-thirds of votes cast. Written special resolutions require all entitled shareholders; board/committee written resolutions require all entitled directors. Non-offering corporations may pass an ordinary written resolution by holders of a majority of entitled voting shares.",
+        "caveat": "The Ontario private majority route is subject to higher articles/unanimous-shareholder-agreement thresholds and requires notice with the resolution and reasons to non-signing entitled holders within ten business days. It does not waive all-shareholder auditor consent.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 1(1), 104, 129"
       },
-      "priority": 50,
-      "parameters": [
-        {
-          "key": "shareholder_vote.special_resolution.min_fraction",
-          "type": "number",
-          "value": 0.6666666667,
-          "unit": "votes_cast",
-          "operator": ">="
-        },
-        {
-          "key": "shareholder_written_resolution.unanimous_required",
-          "type": "boolean",
-          "value": true
-        }
-      ]
+      "priority": 50
     },
     {
       "ruleId": "ca-on-obca-obr-filings",
       "stableKey": "annual_report.filings",
-      "status": "draft",
+      "status": "reviewed",
       "ruleType": "statutory_minimum",
       "topics": [
         "annual_report",
@@ -277,30 +367,35 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "1990-12-31"
+        "currentAsOf": "2026-10-11"
       },
       "authority": {
-        "sourceId": "ontario-business-registry-services",
-        "instrument": "Ontario Business Registry",
+        "sourceId": "ON-CIA-RETURNS-CHANGES",
+        "registrySourceIds": [
+          "ON-CIA-RETURNS-CHANGES"
+        ],
+        "instrument": "Corporations Information Act (Ontario)",
         "sections": [
           {
-            "label": "Initial Return / Notice of Change / Annual Return",
-            "citation": "Ontario Business Registry filings",
-            "url": "https://www.ontario.ca/page/ontario-business-registry-all-services"
+            "label": "ss. 2–4",
+            "citation": "Corporations Information Act, R.S.O. 1990, c. C.39, ss. 2–4",
+            "url": "https://www.ontario.ca/laws/statute/90c39"
           }
         ]
       },
       "provenance": {
-        "retrievedAt": "2026-06-02",
-        "verifiedAt": "2026-06-02",
-        "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
       },
       "content": {
-        "summary": "Ontario corporations use the Ontario Business Registry for initial returns, notices of change, annual returns, and articles amendments.",
-        "tooltip": "Track the Ontario company key, profile accuracy, initial-return status, annual returns, notices of change, and filing confirmations as registry-maintenance records.",
-        "caveat": "Ontario registry filing deadlines and available forms can depend on entity type and filing history.",
-        "displayCitation": "Ontario Business Registry filings"
+        "summary": "Ontario corporations file the prescribed initial and annual returns and generally notify changes in filed information within 15 days. Extraprovincial corporations normally file their initial return within 60 days of starting to carry on business in Ontario.",
+        "tooltip": "Ontario corporations file the prescribed initial and annual returns and generally notify changes in filed information within 15 days. Extraprovincial corporations normally file their initial return within 60 days of starting to carry on business in Ontario.",
+        "caveat": "Initial/name-registration timing, uninterrupted re-election, agent-for-service and other statutory exceptions matter. A change notice does not itself authorize an articles amendment or corporate appointment.",
+        "displayCitation": "Corporations Information Act, R.S.O. 1990, c. C.39, ss. 2–4"
       },
       "priority": 31
     },
@@ -320,7 +415,7 @@
         "conditions": []
       },
       "validity": {
-        "effectiveFrom": "1990-12-31"
+        "currentAsOf": "2026-06-02"
       },
       "authority": {
         "sourceId": "ontario-corporation-profile-report-guide",
@@ -337,7 +432,8 @@
         "retrievedAt": "2026-06-02",
         "verifiedAt": "2026-06-02",
         "verificationMethod": "manual_review",
-        "confidence": "medium"
+        "confidence": "medium",
+        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
       },
       "content": {
         "summary": "Ontario profile reports expose registry identity and status fields that can be archived as source evidence for the organization profile.",
@@ -346,6 +442,307 @@
         "displayCitation": "Ontario corporation profile report"
       },
       "priority": 65
+    },
+    {
+      "ruleId": "ca-on-obca-obca-meeting-notice",
+      "stableKey": "obca-meeting-notice",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "general_meeting_notice"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "OBCA-MEETING-NOTICE",
+        "registrySourceIds": [
+          "OBCA-MEETING-NOTICE"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
+        "sections": [
+          {
+            "label": "ss. 96, 98",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 96, 98",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Give shareholder-meeting notice at least ten and not more than 50 days before a non-offering corporation’s meeting; an offering corporation requires at least 21 and not more than 50 days. Lawful notice waivers and special-business/electronic-meeting particulars are separate.",
+        "tooltip": "Give shareholder-meeting notice at least ten and not more than 50 days before a non-offering corporation’s meeting; an offering corporation requires at least 21 and not more than 50 days. Lawful notice waivers and special-business/electronic-meeting particulars are separate.",
+        "caveat": "Do not substitute federal 21–60-day notice or permit articles to reduce the Ontario statutory minimum absent an applicable legal waiver.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 96, 98"
+      }
+    },
+    {
+      "ruleId": "ca-on-obca-obca-record-access",
+      "stableKey": "obca-record-access",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "OBCA-RECORD-ACCESS",
+        "registrySourceIds": [
+          "OBCA-RECORD-ACCESS"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
+        "sections": [
+          {
+            "label": "ss. 144–146",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 144–146",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Directors inspect the broader statutory books. Shareholders/creditors and authorized representatives have access to the specified shareholder-level records, with public-offering and copy/list provisions governed separately.",
+        "tooltip": "Directors inspect the broader statutory books. Shareholders/creditors and authorized representatives have access to the specified shareholder-level records, with public-offering and copy/list provisions governed separately.",
+        "caveat": "The ISC register is expressly outside the general shareholder/creditor inspection list; board minutes and accounting records do not become generally inspectable by all shareholders.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 144–146"
+      }
+    },
+    {
+      "ruleId": "ca-on-obca-obca-isc",
+      "stableKey": "obca-isc",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "OBCA-ISC",
+        "registrySourceIds": [
+          "OBCA-ISC"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
+        "sections": [
+          {
+            "label": "ss. 1.1, 140.2–140.3, 258.1",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 1.1, 140.2–140.3, 258.1",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "An in-scope corporation maintains an ISC register with identity, tax residence, control dates/description and diligence steps, reviews it each financial year and enters changes within 15 days after awareness. Prescribed enforcement bodies can request information. Personal information is disposed of in the year after six years from cessation unless longer legal retention applies.",
+        "tooltip": "An in-scope corporation maintains an ISC register with identity, tax residence, control dates/description and diligence steps, reviews it each financial year and enters changes within 15 days after awareness. Prescribed enforcement bodies can request information. Personal information is disposed of in the year after six years from cessation unless longer legal retention applies.",
+        "caveat": "Offering, public-exchange and qualifying wholly owned subsidiaries have exclusions. Current Ontario corporate law does not make the entire ISC register public or impose the federal filing schedule. Knowing offences and maximum fines require the statutory elements.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, ss. 1.1, 140.2–140.3, 258.1"
+      }
+    },
+    {
+      "ruleId": "ca-on-obca-obca-land-register",
+      "stableKey": "obca-land-register",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "OBCA-LAND-REGISTER",
+        "registrySourceIds": [
+          "OBCA-LAND-REGISTER"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
+        "sections": [
+          {
+            "label": "s. 140.1",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, s. 140.1",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Maintain the Ontario ownership-interest register identifying each property, acquisition/disposal dates and supporting deeds/transfers or similar records with prescribed property particulars.",
+        "tooltip": "Maintain the Ontario ownership-interest register identifying each property, acquisition/disposal dates and supporting deeds/transfers or similar records with prescribed property particulars.",
+        "caveat": "Applies to ownership interests in land in Ontario, not merely to corporations primarily engaged in real estate. Determine actual interests before treating an empty register as noncompliance.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, s. 140.1"
+      }
+    },
+    {
+      "ruleId": "ca-on-obca-on-cia-annual-return-regulation",
+      "stableKey": "on-cia-annual-return-regulation",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "annual_report"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "ON-CIA-ANNUAL-RETURN-REGULATION",
+        "registrySourceIds": [
+          "ON-CIA-ANNUAL-RETURN-REGULATION"
+        ],
+        "instrument": "General Regulation under the Corporations Information Act",
+        "sections": [
+          {
+            "label": "ss. 3, 11",
+            "citation": "General, O. Reg. 400/21, ss. 3, 11, under the Corporations Information Act",
+            "url": "https://www.ontario.ca/laws/regulation/210400"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "An OBCA corporation files its annual return within the prescribed corporate-income-tax return period, normally six months after its taxation year-end. Other corporate classes have specified rules/exemptions. Ontario filing is separate from the CRA tax return.",
+        "tooltip": "An OBCA corporation files its annual return within the prescribed corporate-income-tax return period, normally six months after its taxation year-end. Other corporate classes have specified rules/exemptions. Ontario filing is separate from the CRA tax return.",
+        "caveat": "Use current O. Reg. 400/21, not revoked R.R.O. 1990, Reg. 182. A recurring fiscal month/day does not prove which taxation year was filed.",
+        "displayCitation": "General, O. Reg. 400/21, ss. 3, 11, under the Corporations Information Act"
+      }
+    },
+    {
+      "ruleId": "ca-on-obca-obca-bylaws",
+      "stableKey": "obca-bylaws",
+      "status": "reviewed",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "bylaw_requirements",
+        "bylaw_effective_date"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-ON-OBCA",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": [
+          "Confirm entity-specific exceptions and current governing documents."
+        ]
+      },
+      "priority": 80,
+      "authority": {
+        "sourceId": "OBCA-BYLAWS",
+        "registrySourceIds": [
+          "OBCA-BYLAWS"
+        ],
+        "instrument": "Business Corporations Act (Ontario)",
+        "sections": [
+          {
+            "label": "s. 116",
+            "citation": "Business Corporations Act, R.S.O. 1990, c. B.16, s. 116",
+            "url": "https://www.ontario.ca/laws/statute/90b16"
+          }
+        ]
+      },
+      "validity": {
+        "currentAsOf": "2026-10-11"
+      },
+      "provenance": {
+        "sourceCurrentTo": "2026-10-07",
+        "retrievedAt": "2026-10-11",
+        "verifiedAt": "2026-10-11",
+        "verificationMethod": "official_source_review",
+        "confidence": "high",
+        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+      },
+      "content": {
+        "summary": "Subject to articles/bylaws/unanimous shareholder agreement, directors make/amend/repeal bylaws effective immediately, then submit them to the next shareholder meeting for confirmation/amendment/rejection. Failure to submit or rejection terminates their effect.",
+        "tooltip": "Subject to articles/bylaws/unanimous shareholder agreement, directors make/amend/repeal bylaws effective immediately, then submit them to the next shareholder meeting for confirmation/amendment/rejection. Failure to submit or rejection terminates their effect.",
+        "caveat": "Ordinary bylaws remain corporate records and are not routinely filed in the Ontario Business Registry. Articles amendments require their separate approval and filing.",
+        "displayCitation": "Business Corporations Act, R.S.O. 1990, c. B.16, s. 116"
+      }
     }
   ]
 }

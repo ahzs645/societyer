@@ -16,7 +16,7 @@ import {
   assert.equal(nextAgmDate(settings, "2026-01-01"), "2026-06-15", "AGM later this year");
   assert.equal(nextAgmDate(settings, "2026-06-15"), "2026-06-15", "AGM on the day (inclusive)");
   assert.equal(nextAgmDate(settings, "2026-07-01"), "2027-06-15", "AGM rolls to next year");
-  assert.equal(nextAgmDate(settings, "2026-06-16T10:00:00Z"), "2027-06-15", "ISO with time, day after");
+  assert.equal(nextAgmDate(settings, "2026-06-16T10:00:00Z"), null, "date-only APIs reject timestamps until explicitly normalized");
 }
 
 // --- nextAgmDate missing config -> null ------------------------------------
@@ -72,6 +72,7 @@ import {
     anniversaryDate: "2020-03-10",
     entityType: "corporation__business_",
     jurisdictionCode: "CA-BC",
+    annualReturnCycleYear: 2026,
     agmMonth: 6,
     agmDay: 15,
   };
@@ -82,8 +83,8 @@ import {
   );
   assert.equal(
     nextAnnualReportDueDate(withAnniv, "2026-04-01"),
-    "2027-05-10",
-    "anniversary rolls over",
+    "2026-05-10",
+    "the open reporting cycle remains due after its anniversary",
   );
 
   const noAnniv: ComplianceSettings = { agmMonth: 6, agmDay: 15 };
@@ -109,6 +110,8 @@ function isValidISODate(s: string): boolean {
     anniversaryDate: "2020-03-10",
     entityType: "corporation__business_",
     jurisdictionCode: "CA-BC",
+    annualReturnCycleYear: 2026,
+    annualMeetingDate: "2025-06-15",
   };
   const deadlines = deriveComplianceDeadlines(full, "2026-01-01");
   const byKey = new Map(deadlines.map((d: DerivedDeadline) => [d.key, d]));
@@ -121,7 +124,8 @@ function isValidISODate(s: string): boolean {
   assert.equal(byKey.get("fiscal-year-end")!.category, "financial");
   assert.equal(byKey.get("annual-report")!.category, "annual-report");
 
-  assert.equal(byKey.get("agm")!.dueDate, "2026-06-15");
+  assert.equal(byKey.get("agm")!.dueDate, "2026-09-15", "15 months from actual preceding annual meeting");
+  assert.equal(byKey.get("agm")!.plannedDate, "2026-06-15", "plan is retained separately");
   assert.equal(byKey.get("fiscal-year-end")!.dueDate, "2026-12-31");
   assert.equal(byKey.get("annual-report")!.dueDate, "2026-05-10");
 

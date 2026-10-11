@@ -157,8 +157,8 @@ export function ElectionsPage() {
         title="Elections"
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={vocab.isCorporation ? "Shareholder elections with anonymous ballots." : "Member elections with anonymous ballots."}
-        info={<p>Verified {vocab.voterNoun} eligibility with anonymous ballot storage. Voter identity stays in the eligibility ledger; ballots are stored separately.</p>}
+        subtitle={vocab.isCorporation ? "Shareholder elections with verified representation and share-weighted ballots." : "Member elections with verified eligibility."}
+        info={<p>Voter identity stays in the eligibility ledger; ballots are stored separately. Corporate voting weights come from a frozen, reviewed share register. Unique share weights can make a ballot identifiable.</p>}
         actions={
           canManage ? (
             <button className="btn-action btn-action--primary" onClick={openCreate}>
@@ -198,7 +198,7 @@ export function ElectionsPage() {
           <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
             <span>{voters.label}.</span>
             <InfoPopover label="About shareholder voter lists">
-              <p>The eligible-voter snapshot is taken from workspace voter accounts. Confirm it against the share register before opening a shareholder ballot.</p>
+              <p>Open a draft to review the share register, record date, class voting rights and authorized account for each shareholder. The server freezes share weights when voting opens and applies them to the tally; cumulative voting is available when the articles require it.</p>
             </InfoPopover>
           </div>
         </div>
@@ -213,7 +213,7 @@ export function ElectionsPage() {
           <div className="card__body" style={{ display: "grid", gap: 10 }}>
             {myElections.map((row: any) => (
               <Link
-                key={row.election._id}
+                key={row.eligibility?._id ?? row.election._id}
                 to={`/app/elections/${row.election._id}`}
                 className="panel"
                 style={{ padding: 12, borderRadius: 8 }}
@@ -287,16 +287,15 @@ export function ElectionsPage() {
                     </Link>
                     {canManage && (
                       <>
-                        {election.status === "Draft" && (
+                        {election.status === "Draft" && vocab.isCorporation && <Link to={`/app/elections/${election._id}`} className="btn btn--ghost btn--sm">Review electorate</Link>}
+                        {election.status === "Draft" && !vocab.isCorporation && (
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
-                              const result = await snapshotEligibleVoters({
-                                electionId: election._id,
-                              });
-                              toast.success(
-                                `Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`,
-                              );
+                              try {
+                                const result = await snapshotEligibleVoters({ electionId: election._id });
+                                toast.success(`Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`);
+                              } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open this election."); }
                             }}
                           >
                             <Users size={12} /> Snapshot + open

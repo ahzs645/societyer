@@ -20,6 +20,8 @@
  * `organizationVocabulary` from here.
  */
 import { organizationRuleScope } from "../../shared/entityRuleScope";
+import { resolvePrivacyProfile } from "../../shared/privacyRuleProfiles";
+import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import type { LegalEntityLike, OrganizationKind } from "../../shared/organizationDomain";
 
 export type OrganizationVocabulary = {
@@ -30,7 +32,7 @@ export type OrganizationVocabulary = {
   isCorporation: boolean;
   /** BC Societies Act references (sections, Societies Online, BC-SOC citations) may be shown. */
   societyLaw: boolean;
-  /** Home jurisdiction is BC, so BC PIPA applies. */
+  /** Home incorporation jurisdiction is BC; privacy depends on the activity assessment. */
   bcHome: boolean;
   /** BC company: the articles take the place of separate by-laws. */
   bcCompany: boolean;
@@ -73,7 +75,8 @@ export type OrganizationVocabulary = {
 
 export function organizationVocabulary(organization?: LegalEntityLike | null): OrganizationVocabulary {
   const scope = organizationRuleScope(organization);
-  const bcCompany = scope.isCorporation && scope.jurisdictionCode === "CA-BC";
+  const bcCompany = legalGovernanceProfile(organization)?.id === "bc_company";
+  const privacy = resolvePrivacyProfile(organization);
   const common = {
     kind: scope.kind,
     jurisdictionCode: scope.jurisdictionCode,
@@ -82,7 +85,7 @@ export function organizationVocabulary(organization?: LegalEntityLike | null): O
     societyLaw: scope.isBcSociety,
     bcHome: scope.isBcHome,
     bcCompany,
-    privacyLabel: scope.isBcHome ? "Privacy (PIPA)" : "Privacy",
+    privacyLabel: privacy.applicableLawIds.length ? privacy.label : "Privacy",
   };
   if (scope.isSociety) {
     return {

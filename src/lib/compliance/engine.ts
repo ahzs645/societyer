@@ -1,4 +1,6 @@
 import { loadComplianceRulePacks } from "./registry";
+import { addFiscalFilingMonths } from "../../../shared/corporationSettings";
+import { legalGovernanceProfile } from "../../../shared/legalGovernanceProfiles";
 import type {
   ComplianceContextKind,
   ComplianceDateOffset,
@@ -11,6 +13,7 @@ import type {
 export type ComplianceFacts = {
   jurisdictionCode: string;
   entityType: string;
+  actFormedUnder?: string;
   entitySubtype?: string;
   homeJurisdictionCode?: string;
   contextKind?: ComplianceContextKind;
@@ -45,6 +48,7 @@ export type ComplianceFacts = {
   formationStatus?: string;
 };
 
+/** Scheduling status against nominal arithmetic, not a legal timeliness finding. */
 export type ComplianceObligationStatus = "upcoming" | "due_today" | "overdue";
 
 export type ComplianceObligation = {
@@ -55,6 +59,8 @@ export type ComplianceObligation = {
   title: string;
   scheduleKind: ComplianceObligationSchedule["kind"];
   dueDate: string;
+  dateBasis: 'nominal_calendar';
+  calendarReviewRequired: true;
   occurrenceKey: string;
   status: ComplianceObligationStatus;
   windowStartDate?: string;
@@ -135,18 +141,25 @@ function addYears(value: string, years: number): string {
   return addComplianceDateOffset(value, { years });
 }
 
-function computeAnnualDueDate(schedule: Extract<ComplianceObligationSchedule, { kind: "annual" }>, facts: ComplianceFacts, asOfDate: string): string | undefined {
+function scheduledOffset(value: string, offset: ComplianceDateOffset, anchorFact: string, rule: ComplianceRule): string {
+  // Ontario registry returns use the fiscal filing month-end convention. Meeting
+  // deadlines and internal review dates retain ordinary calendar-month arithmetic.
+  if (rule.obligationKey === "registry.annual_return" && anchorFact === "fiscalYearEnd" && offset.months && !offset.years && !offset.days) return addFiscalFilingMonths(value, offset.months) ?? addComplianceDateOffset(value, offset);
+  return addComplianceDateOffset(value, offset);
+}
+
+function computeAnnualDueDate(schedule: Extract<ComplianceObligationSchedule, { kind: "annual" }>, facts: ComplianceFacts, asOfDate: string, rule: ComplianceRule): string | undefined {
   const anchor = getFactDate(facts, schedule.anchorFact);
   if (!anchor) return undefined;
   // Select the latest commenced cycle, preserving its overdue status. A
   // calendar tick is never evidence that last year's obligation was completed.
   let yearsFromAnchor = Math.max(0, Number(asOfDate.slice(0, 4)) - Number(anchor.slice(0, 4)));
   while (yearsFromAnchor > 0 && addYears(anchor, yearsFromAnchor) > asOfDate) yearsFromAnchor -= 1;
-  const dueDate = addComplianceDateOffset(addYears(anchor, yearsFromAnchor), schedule.dueOffset);
+  const dueDate = scheduledOffset(addYears(anchor, yearsFromAnchor), schedule.dueOffset, schedule.anchorFact, rule);
   return dueDate;
 }
 
-function computeWindowDates(schedule: Extract<ComplianceObligationSchedule, { kind: "window" }>, facts: ComplianceFacts, asOfDate: string): { dueDate: string; windowStartDate: string } | undefined {
+function computeWindowDates(schedule: Extract<ComplianceObligationSchedule, { kind: "window" }>, facts: ComplianceFacts, asOfDate: string, rule: ComplianceRule): { dueDate: string; windowStartDate: string } | undefined {
   const openAnchor = getFactDate(facts, schedule.opens.anchorFact);
   const closeAnchor = getFactDate(facts, schedule.closes.anchorFact);
   if (!openAnchor || !closeAnchor) return undefined;
@@ -154,14 +167,14 @@ function computeWindowDates(schedule: Extract<ComplianceObligationSchedule, { ki
   if (schedule.recurrence === "once") {
     return {
       windowStartDate: addComplianceDateOffset(openAnchor, schedule.opens.offset),
-      dueDate: addComplianceDateOffset(closeAnchor, schedule.closes.offset),
+      dueDate: scheduledOffset(closeAnchor, schedule.closes.offset, schedule.closes.anchorFact, rule),
     };
   }
 
   let yearsFromAnchor = Math.max(0, Number(asOfDate.slice(0, 4)) - Number(openAnchor.slice(0, 4)));
   while (yearsFromAnchor > 0 && addComplianceDateOffset(addYears(openAnchor, yearsFromAnchor), schedule.opens.offset) > asOfDate) yearsFromAnchor -= 1;
   const windowStartDate = addComplianceDateOffset(addYears(openAnchor, yearsFromAnchor), schedule.opens.offset);
-  const dueDate = addComplianceDateOffset(addYears(closeAnchor, yearsFromAnchor), schedule.closes.offset);
+  const dueDate = scheduledOffset(addYears(closeAnchor, yearsFromAnchor), schedule.closes.offset, schedule.closes.anchorFact, rule);
   return { windowStartDate, dueDate };
 }
 
@@ -202,14 +215,14 @@ function computeRuleDates(rule: ComplianceRule, facts: ComplianceFacts, asOfDate
   }
   if (rule.obligationKey === "agm.first_meeting" && facts.annualReferenceDate) return undefined;
   if (schedule.kind === "annual") {
-    const dueDate = computeAnnualDueDate(schedule, facts, asOfDate);
+    const dueDate = computeAnnualDueDate(schedule, facts, asOfDate, rule);
     return dueDate ? { dueDate } : undefined;
   }
   if (schedule.kind === "offset") {
     const anchor = getFactDate(facts, schedule.anchorFact);
-    return anchor ? { dueDate: addComplianceDateOffset(anchor, schedule.dueOffset) } : undefined;
+    return anchor ? { dueDate: scheduledOffset(anchor, schedule.dueOffset, schedule.anchorFact, rule) } : undefined;
   }
-  return computeWindowDates(schedule, facts, asOfDate);
+  return computeWindowDates(schedule, facts, asOfDate, rule);
 }
 
 function computeRuleOccurrences(rule: ComplianceRule, facts: ComplianceFacts, asOfDate: string): { dueDate: string; windowStartDate?: string }[] {
@@ -228,22 +241,26 @@ function computeRuleOccurrences(rule: ComplianceRule, facts: ComplianceFacts, as
     if (schedule.kind === "annual") {
       const shifted = addYears(anchor, year);
       if (shifted > asOfDate && results.length) break;
-      results.push({ dueDate: addComplianceDateOffset(shifted, schedule.dueOffset) });
+      results.push({ dueDate: scheduledOffset(shifted, schedule.dueOffset, schedule.anchorFact, rule) });
     } else {
       const closeAnchor = getFactDate(facts, schedule.closes.anchorFact);
       if (!closeAnchor) return [];
       const windowStartDate = addComplianceDateOffset(addYears(anchor, year), schedule.opens.offset);
       if (windowStartDate > asOfDate && results.length) break;
-      results.push({ windowStartDate, dueDate: addComplianceDateOffset(addYears(closeAnchor, year), schedule.closes.offset) });
+      results.push({ windowStartDate, dueDate: scheduledOffset(addYears(closeAnchor, year), schedule.closes.offset, schedule.closes.anchorFact, rule) });
     }
   }
   return results;
 }
 
-export function filterApplicableCompliancePacks(facts: Pick<ComplianceFacts, "jurisdictionCode" | "entityType">, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceRulePack[] {
+export function filterApplicableCompliancePacks(facts: Pick<ComplianceFacts, "jurisdictionCode" | "entityType" | "actFormedUnder" | "contextKind">, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceRulePack[] {
+  const home = !facts.contextKind || facts.contextKind === "home";
+  const profile = home ? legalGovernanceProfile(facts) : undefined;
+  if (facts.actFormedUnder && home && !profile) return [];
+  const jurisdictionCode = profile?.jurisdictionCode ?? facts.jurisdictionCode;
   return packs.filter(
     (pack) =>
-      pack.jurisdictionCode === facts.jurisdictionCode &&
+      pack.jurisdictionCode === jurisdictionCode &&
       pack.entityTypes.includes(facts.entityType) &&
       pack.status !== "deprecated",
   );
@@ -279,6 +296,9 @@ function sourcesForRule(rule: ComplianceRule, pack: ComplianceRulePack): Complia
 
 export function computeComplianceObligations(facts: ComplianceFacts, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceObligation[] {
   if (facts.formationStatus === "preparing" || facts.formationStatus === "submitted" || facts.formationStatus === "unverified_existing") return [];
+  const profile = (!facts.contextKind || facts.contextKind === "home") ? legalGovernanceProfile(facts) : undefined;
+  if (profile && profile.jurisdictionCode !== facts.jurisdictionCode) facts = { ...facts, jurisdictionCode: profile.jurisdictionCode,
+    homeJurisdictionCode: !facts.homeJurisdictionCode || facts.homeJurisdictionCode === facts.jurisdictionCode ? profile.jurisdictionCode : facts.homeJurisdictionCode };
   const asOfDate = facts.asOfDate ?? formatDate(new Date());
   const contextKind = facts.contextKind ?? "home";
   const applicablePacks = filterApplicableCompliancePacks(facts, packs);
@@ -300,13 +320,15 @@ export function computeComplianceObligations(facts: ComplianceFacts, packs: Comp
           title: rule.title,
           scheduleKind: rule.schedule.kind,
           dueDate: dates.dueDate,
+          dateBasis: 'nominal_calendar',
+          calendarReviewRequired: true,
           occurrenceKey,
           windowStartDate: dates.windowStartDate,
           status: statusFor(dates.dueDate, asOfDate),
           authority: rule.authority,
           sources: sourcesForRule(rule, pack),
           creates: rule.creates,
-          caveat: [rule.caveat, facts.formationStatus === "unverified" ? "Formation status is unverified; confirm the certificate before relying on this legacy deadline." : undefined].filter(Boolean).join(" ") || undefined,
+          caveat: [rule.caveat, 'Calculated dates and scheduling statuses are nominal. Review the applicable statutory holidays, locality, and filing-office or channel rules before deciding legal timeliness.', facts.formationStatus === "unverified" ? "Formation status is unverified; confirm the certificate before relying on this legacy deadline." : undefined].filter(Boolean).join(" "),
           jurisdictionCode: facts.jurisdictionCode,
           contextKind,
           contextKey: facts.contextKey ? `${facts.contextKey}:${rule.ruleId}` : rule.ruleId,

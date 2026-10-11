@@ -115,6 +115,7 @@ function labelForRuleKind(kind: LegalGuideRule["ruleKind"]) {
   if (kind === "statutory_minimum") return "Statute";
   if (kind === "default_rule") return "Default";
   if (kind === "model_bylaw") return "Model bylaw";
+  if (kind === "policy_guidance") return "Recommended practice";
   return "Historical";
 }
 

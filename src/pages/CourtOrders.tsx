@@ -1,3 +1,4 @@
+import { LegalGovernanceGuidance } from "../components/LegalGovernanceGuidance";
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { usePermissions } from "../hooks/usePermissions";
@@ -61,7 +62,7 @@ export function CourtOrdersPage() {
     setForm({
       title: "",
       orderDate: todayDateOnly(),
-      court: "Supreme Court of British Columbia",
+      court: "",
       description: "",
       status: "Active",
     });
@@ -84,15 +85,15 @@ export function CourtOrdersPage() {
         title="Court orders"
         icon={<Gavel size={16} />}
         iconColor="red"
-        subtitle={vocab.societyLaw
-          ? "Court orders affecting the society — required to be kept with governance records under s.20."
-          : `Court orders affecting the ${vocab.organizationNoun}, kept with its governance records.`}
+        subtitle={`Orders affecting the ${vocab.organizationNoun}, with the actual terms and supporting record.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Record order
           </button>
         }
       />
+
+      <LegalGovernanceGuidance organization={society} topic="court_orders" />
 
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="court-order" />

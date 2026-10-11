@@ -50,10 +50,11 @@ assert.equal(organizationKind(federalCorporation), "corporation");
 assert.equal(isFederalCbca(federalCorporation), true);
 assert.equal(isCorporation(federalCorporation), true);
 const federalDirectorProfile = directorComplianceProfile(federalCorporation);
-assert.equal(federalDirectorProfile.minimumActiveDirectors, undefined);
+assert.equal(federalDirectorProfile.minimumActiveDirectors, 1);
 assert.equal(federalDirectorProfile.requiresBcResidentDirector, false);
 assert.equal(federalDirectorProfile.showBcResidentField, false);
-assert.match(federalDirectorProfile.subtitle, /corporation workspace/i);
+assert.equal(federalDirectorProfile.showCanadianResidentField, true);
+assert.match(federalDirectorProfile.subtitle, /Federal business corporation/i);
 
 const ontarioCorporation = {
   legalName: "Contoso Inc.",

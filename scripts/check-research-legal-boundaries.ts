@@ -14,7 +14,11 @@ assert.equal(evaluateLegalDecision({ ...written, votesFor: 3, deemedAgm: true, f
 assert.equal(evaluateLegalDecision({ ...written, votesFor: 3, deemedAgm: true, financialStatementsProvided: true, annualBusinessComplete: true }).carries, true);
 assert.equal(evaluateLegalDecision({ ...written, entityType: "corporation__business_", body: "shareholders" }).carries, true);
 assert.equal(evaluateLegalDecision({ ...written, entityType: "corporation__business_", body: "shareholders", jurisdiction: "CA-FED-CBCA" }).carries, false);
-assert.equal(evaluateLegalDecision({ ...written, entityType: "corporation__business_", body: "shareholders", jurisdiction: "CA-ON-OBCA", votesFor: 3 }).carries, null);
+assert.equal(evaluateLegalDecision({ ...written, entityType: "corporation__business_", body: "shareholders", jurisdiction: "CA-ON-OBCA", votesFor: 3 }).carries, true);
+const privateOntario = { ...written, entityType: "corporation__business_", body: "shareholders", jurisdiction: "CA-ON-OBCA", offeringCorporation: false, votingShareCountsConfirmed: true, votesFor: 50, eligibleVotes: 100 } as const;
+assert.equal(evaluateLegalDecision(privateOntario).carries, false);
+assert.equal(evaluateLegalDecision({ ...privateOntario, votesFor: 51 }).carries, true);
+assert.equal(evaluateLegalDecision({ ...privateOntario, votesFor: 51, votingShareCountsConfirmed: false }).carries, null);
 assert.equal(legalMeetingQuorum({ entityType: "society", jurisdiction: "CA-BC", eligiblePeople: 2, presentPeople: 2 }).met, true);
 assert.equal(legalMeetingQuorum({ entityType: "society", jurisdiction: "CA-BC", eligiblePeople: 41, presentPeople: 4, adoptedModel: "bc_society" }).met, false);
 assert.equal(legalMeetingQuorum({ entityType: "corporation__business_", jurisdiction: "CA-BC", eligiblePeople: 10, presentPeople: 2, adoptedModel: "bc_table_1", eligibleVotingShares: 100, presentVotingShares: 4 }).met, false);
@@ -49,4 +53,10 @@ const existingSociety = { ...society, incorporationDate: "2020-01-01", asOfDate:
 assert.equal(computeComplianceObligations(existingSociety).find(o => o.ruleId === "compliance-ca-bc-societies-annual-report")?.dueDate, "2027-01-30");
 assert.equal(computeComplianceObligations({ ...existingSociety, annualMeetingDate: undefined }).find(o => o.ruleId === "compliance-ca-bc-societies-no-agm-annual-report")?.dueDate, "2027-01-31");
 assert.equal(computeComplianceObligations({ ...existingSociety, annualMeetingDate: "2027-02-01", annualMeetingYear: 2026, agmExtensionDate: "2027-02-15", agmExtensionEvidence: "Registrar approval" }).some(o => o.ruleId === "compliance-ca-bc-societies-no-agm-annual-report"), false);
+const ontarioMonthEnd = computeComplianceObligations({ ...company, jurisdictionCode: "CA-ON-OBCA", fiscalYearEnd: "2026-02-28", asOfDate: "2026-06-01" });
+assert.equal(ontarioMonthEnd.find(o => o.ruleId === "compliance-ca-on-obca-annual-return-window")?.dueDate, "2026-08-31");
+assert.equal(computeComplianceObligations({ ...company, jurisdictionCode: "CA-ON", actFormedUnder: "business_corporations_act__ontario_", fiscalYearEnd: "2026-02-28", asOfDate: "2026-06-01" }).find(o => o.ruleId === "compliance-ca-on-obca-annual-return-window")?.dueDate, "2026-08-31", "An explicit OBCA Act disambiguates the generic Ontario province code");
+const federalMonthEnd = computeComplianceObligations({ ...company, jurisdictionCode: "CA-FED-CBCA", fiscalYearEnd: "2026-02-28", asOfDate: "2026-06-01" });
+assert.equal(federalMonthEnd.find(o => o.ruleId === "compliance-ca-fed-cbca-financials-to-shareholders")?.dueDate, "2026-08-28", "calendar months for the AGM constraint, not fiscal-filing months");
+assert.equal(computeComplianceObligations({ ...company, actFormedUnder: "a_custom_corporation_act" }).length, 0, "a custom Act does not inherit BC company duties");
 console.log("Research legal boundary checks passed: modes, electorates, clear statutory anchors, overdue history and month/leap dates.");

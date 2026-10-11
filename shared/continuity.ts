@@ -18,6 +18,8 @@ import {
   type ExpectationOrigin,
   type ExpectationSeverity,
 } from "./continuityRules";
+import { legalGovernanceProfile, type GovernanceOrganization } from "./legalGovernanceProfiles";
+import { annualReportForAgm, noAgmAnnualReportForYear, isHeldMeeting } from "./agmEvidence";
 
 export const CONTINUITY_STATUSES = [
   "satisfied",
@@ -125,7 +127,7 @@ export type SnapshotMinutesText = { minutesId: string; meetingId: string; heldAt
 
 export type ContinuitySnapshot = {
   today: string;
-  society: { incorporationDate?: string; jurisdictionCode?: string; entityType?: string; isMemberFunded?: boolean; fiscalYearEnd?: string } | null;
+  society: (GovernanceOrganization & { agmExtensionDate?: string; agmExtensionEvidence?: string; annualMeetingDate?: string; annualMeetingYear?: number }) | null;
   committees: SnapshotCommittee[];
   meetings: SnapshotMeeting[];
   minutes: SnapshotMinutes[];
@@ -237,14 +239,19 @@ export function effectiveExpectations(
   stored: readonly EffectiveExpectation[],
   snapshot: Pick<ContinuitySnapshot, "society" | "meetings" | "today"> & { committees?: readonly SnapshotCommittee[] },
 ): EffectiveExpectation[] {
-  const byRuleKey = new Map(stored.filter((row) => row.ruleKey).map((row) => [row.ruleKey as string, row]));
-  const implicit: EffectiveExpectation[] = [];
   const pack = rulePackForSociety(snapshot.society);
+  const activePackKeys = new Set(pack?.rules.map(rule => rule.ruleKey) ?? []);
+  const scopedStored = stored.filter(row => {
+    if (row.ruleKey === "BYLAW-ANNUAL-REPORT") return false;
+    if (row.ruleKey && /^(BC-SOC-|bc_company-|federal_cbca-|ontario_obca-)/.test(row.ruleKey)) return activePackKeys.has(row.ruleKey);
+    return true;
+  });
+  const byRuleKey = new Map(scopedStored.filter((row) => row.ruleKey).map((row) => [row.ruleKey as string, row]));
+  const implicit: EffectiveExpectation[] = [];
   const incorporated = yearOf(snapshot.society?.incorporationDate);
   const firstYear = inceptionYear(snapshot);
   for (const rule of pack?.rules ?? []) {
     if (byRuleKey.has(rule.ruleKey)) continue;
-    if (rule.ruleKey === "BC-SOC-DIRECTORS-MIN" && snapshot.society?.isMemberFunded) continue;
     // Without an incorporation date the first recorded year stands in for it
     // (it usually is, or follows, the incorporation year).
     const startYear = (incorporated || firstYear) + (rule.startsYearsAfterIncorporation ?? 0);
@@ -265,8 +272,8 @@ export function effectiveExpectations(
       status: "active",
     });
   }
-  const fromCommittees = committeeCadenceExpectations(snapshot.committees, stored);
-  return [...implicit, ...fromCommittees, ...stored].filter((row) => row.status === "active");
+  const fromCommittees = committeeCadenceExpectations(snapshot.committees, scopedStored);
+  return [...implicit, ...fromCommittees, ...scopedStored].filter((row) => row.status === "active");
 }
 
 /* --------------------------- period expansion ---------------------------- */
@@ -441,41 +448,42 @@ function heldAgms(snapshot: ContinuitySnapshot, index: MeetingIndex) {
     .filter((meeting) => (meeting.type === "AGM" || /annual general/i.test(String(meeting.title ?? ""))) && !meeting.committeeId)
     .filter((meeting) => {
       const klass = index.classOf.get(meeting._id);
-      return klass === "approved" || klass === "draft" || klass === "minutes_missing";
+      return klass === "approved" || isHeldMeeting(meeting, snapshot.today);
     })
     .sort((a, b) => dateOnly(a.scheduledAt).localeCompare(dateOnly(b.scheduledAt)));
 }
 
 function evaluateAnnualFiling(expectation: EffectiveExpectation, period: ExpectedPeriod, snapshot: ContinuitySnapshot, agms: SnapshotMeeting[]) {
   const year = Number(period.periodKey);
-  const agm = agms.filter((meeting) => yearOf(meeting.scheduledAt) === year).at(-1);
-  if (!agm) return { status: "not_applicable" as ContinuityStatus, foundCount: 0, evidence: [], note: `No AGM recorded for ${year}; see the AGM row` };
-  const agmDate = dateOnly(agm.scheduledAt);
-  const offset = expectation.rule.offsetDays ?? 30;
-  const due = addDays(agmDate, offset);
-  const filings = snapshot.filings.filter((filing) => /annual/i.test(filing.kind) && !/insurance/i.test(filing.kind));
-  const matches = filings.filter((filing) => {
-    const filed = dateOnly(filing.filedAt);
-    if (filed && filed >= addDays(agmDate, -14) && filed <= addDays(agmDate, 365)) return true;
-    return yearsIn(filing.periodLabel).includes(year);
-  });
+  if (legalGovernanceProfile(snapshot.society)?.id !== "bc_society") return { status: "source_only" as ContinuityStatus, foundCount: 0, evidence: [], note: "Review the registry filing against its own anniversary or fiscal-year cycle; a meeting date does not establish that deadline." };
+  const attributedYear = (meeting: SnapshotMeeting) => snapshot.society?.agmExtensionEvidence &&
+    dateOnly(snapshot.society.annualMeetingDate) === dateOnly(meeting.scheduledAt) &&
+    snapshot.society.annualMeetingYear === yearOf(meeting.scheduledAt) - 1 && dateOnly(meeting.scheduledAt) <= dateOnly(snapshot.society.agmExtensionDate)
+    ? snapshot.society.annualMeetingYear : yearOf(meeting.scheduledAt);
+  const agm = agms.filter((meeting) => attributedYear(meeting) === year).at(-1);
+  const agmDate = agm ? dateOnly(agm.scheduledAt) : "";
+  const nextAgm = agm ? agms.find((meeting) => dateOnly(meeting.scheduledAt) > agmDate) : undefined;
+  const extension = snapshot.society?.agmExtensionEvidence && yearOf(snapshot.society.agmExtensionDate) === year + 1 ? snapshot.society.agmExtensionDate : undefined;
+  const due = agm ? addDays(agmDate, 30) : extension ? addDays(extension, 30) : `${year + 1}-01-31`;
+  const match = agm ? annualReportForAgm(snapshot.filings, agmDate, { nextAgmDate: nextAgm?.scheduledAt, cycleYear: year, asOfISO: snapshot.today }) : noAgmAnnualReportForYear(snapshot.filings, year, { extensionDate: extension, asOfISO: snapshot.today });
+  const filing = match?.filing;
   const evidence: EvidenceRef[] = [
-    { table: "meetings", id: agm._id, label: `AGM ${agmDate}`, date: agmDate, status: "anchor" },
-    ...matches.map((filing) => ({ table: "filings", id: filing._id, label: `${filing.kind}${filing.periodLabel ? ` ${filing.periodLabel}` : ""}${filing.filedAt ? ` filed ${dateOnly(filing.filedAt)}` : " (not marked filed)"}`, date: dateOnly(filing.filedAt) || dateOnly(filing.dueDate), status: filing.status })),
+    ...(agm ? [{ table: "meetings", id: agm._id, label: `AGM ${agmDate}`, date: agmDate, status: "anchor" }] : []),
+    ...(filing?._id ? [{ table: "filings", id: filing._id, label: `${filing.kind} ${filing.periodLabel ?? ""}`, date: filing.filedAt ?? filing.dueDate ?? undefined, status: filing.status ?? undefined }] : []),
   ];
-  const filed = matches.filter((filing) => filing.filedAt).sort((a, b) => dateOnly(a.filedAt).localeCompare(dateOnly(b.filedAt)))[0];
-  if (filed) {
-    const late = daysBetween(due, dateOnly(filed.filedAt));
-    return { status: "satisfied" as ContinuityStatus, foundCount: 1, evidence, note: late > 0 ? `Filed ${late} day(s) after the ${offset}-day deadline` : undefined, dueDate: due };
-  }
-  if (due >= snapshot.today) return { status: "upcoming" as ContinuityStatus, foundCount: 0, evidence, note: `Due ${due}`, dueDate: due };
-  if (matches.length) return { status: "draft_only" as ContinuityStatus, foundCount: 0, evidence, note: "Filing recorded but not marked filed", dueDate: due };
-  return { status: "record_missing" as ContinuityStatus, foundCount: 0, evidence, note: "No filing evidence on file (evidence missing is not proof it was not filed)", dueDate: due };
+  if (match?.filed) return { status: "satisfied" as ContinuityStatus, foundCount: 1, evidence, note: match.timingReviewRequired ? `Filed ${match.nominalDaysPastDue} days after the nominal date; review statutory holidays and the filing-office calendar before assessing legal timeliness` : undefined, dueDate: due };
+  if (due >= snapshot.today) return { status: "upcoming" as ContinuityStatus, foundCount: 0, evidence, note: `${agm ? "Report after AGM" : extension ? "Report if the extended AGM deadline is missed" : "No held AGM is evidenced; report without an AGM"}: nominal date ${due}, subject to statutory holiday and filing-office calendar review`, dueDate: due };
+  if (filing) return { status: "draft_only" as ContinuityStatus, foundCount: 0, evidence, note: "Filing tracked but not evidenced as filed", dueDate: due };
+  return { status: "record_missing" as ContinuityStatus, foundCount: 0, evidence, note: "No filing evidence for this cycle; missing evidence does not prove non-filing", dueDate: due };
 }
 
 function evaluateFinancialStatement(period: ExpectedPeriod, snapshot: ContinuitySnapshot, agms: SnapshotMeeting[]) {
   const year = Number(period.periodKey);
-  const agm = agms.filter((meeting) => yearOf(meeting.scheduledAt) === year).at(-1);
+  const attributedYear = (meeting: SnapshotMeeting) => snapshot.society?.agmExtensionEvidence &&
+    dateOnly(snapshot.society.annualMeetingDate) === dateOnly(meeting.scheduledAt) &&
+    snapshot.society.annualMeetingYear === yearOf(meeting.scheduledAt) - 1 && dateOnly(meeting.scheduledAt) <= dateOnly(snapshot.society.agmExtensionDate)
+    ? snapshot.society.annualMeetingYear : yearOf(meeting.scheduledAt);
+  const agm = agms.filter((meeting) => attributedYear(meeting) === year).at(-1);
   if (!agm) return { status: "not_applicable" as ContinuityStatus, foundCount: 0, evidence: [], note: `No AGM recorded for ${year}` };
   const agmDate = dateOnly(agm.scheduledAt);
   const fiscalMatch = (fiscalYear: string, periodEnd?: string) => {
@@ -488,12 +496,12 @@ function evaluateFinancialStatement(period: ExpectedPeriod, snapshot: Continuity
   const presented = snapshot.financials.filter((row) => row.presentedAtMeetingId === agm._id);
   const official = presented.length ? presented : snapshot.financials.filter((row) => fiscalMatch(row.fiscalYear, row.periodEnd));
   if (official.length) {
-    return { status: "satisfied" as ContinuityStatus, foundCount: official.length, evidence: [anchor, ...official.map((row) => ({ table: "financials", id: row._id, label: `Financial statements FY ${row.fiscalYear}`, date: dateOnly(row.periodEnd) }))], note: presented.length ? undefined : "Matched by fiscal year; presentation at the AGM is not linked" };
+    return { status: (presented.length ? "satisfied" : "source_only") as ContinuityStatus, foundCount: official.length, evidence: [anchor, ...official.map((row) => ({ table: "financials", id: row._id, label: `Financial statements FY ${row.fiscalYear}`, date: dateOnly(row.periodEnd) }))], note: presented.length ? undefined : "Statement record found; presentation at this AGM is not evidenced" };
   }
   const imports = snapshot.statementImports.filter((row) => fiscalMatch(row.fiscalYear, row.periodEnd));
   if (imports.length) {
     const verified = imports.some((row) => /verified/i.test(String(row.status ?? "")));
-    return { status: (verified ? "satisfied" : "draft_only") as ContinuityStatus, foundCount: imports.length, evidence: [anchor, ...imports.map((row) => ({ table: "financialStatementImports", id: row._id, label: row.title ?? `Statement FY ${row.fiscalYear}`, date: dateOnly(row.periodEnd), status: row.status }))], note: verified ? "Imported statement (not linked to the AGM)" : "Imported statement not yet verified" };
+    return { status: (verified ? "source_only" : "draft_only") as ContinuityStatus, foundCount: imports.length, evidence: [anchor, ...imports.map((row) => ({ table: "financialStatementImports", id: row._id, label: row.title ?? `Statement FY ${row.fiscalYear}`, date: dateOnly(row.periodEnd), status: row.status }))], note: verified ? "Verified imported statement; presentation at this AGM is not evidenced" : "Imported statement not yet verified" };
   }
   return { status: "record_missing" as ContinuityStatus, foundCount: 0, evidence: [anchor], note: "No financial statements for the fiscal year before this AGM" };
 }

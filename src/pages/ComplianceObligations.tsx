@@ -23,7 +23,7 @@ import {
 } from "../../shared/organizationDomain";
 import { corporationPacketForComplianceObligation } from "../../shared/corporationDocumentPackets";
 import { isCorporation } from "../../shared/organizationDomain";
-import { annualReportForAgm, deriveAgmFacts, noAgmAnnualReportForYear } from "../../shared/agmEvidence";
+import { annualReportForAgm, dateOnly, deriveAgmFacts, noAgmAnnualReportForYear } from "../../shared/agmEvidence";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { usePermissions } from "../hooks/usePermissions";
@@ -79,30 +79,35 @@ export function ComplianceObligationsPage() {
   const filingMatches = new Map(
     (filings ?? []).map((filing) => [filingMatchKey(filing.kind, filing.dueDate, filing.sourceRegistrationId), filing]),
   );
-  // Annual reports are matched to the AGM they follow, not only by an exact
-  // due-date key, so a filing tracked with a slightly different due date (or a
-  // late filing) still discharges the obligation and is shown as late.
-  const filingForObligation = (obligation: (typeof obligations)[number]): { filing: any; late: boolean } | null => {
+  // Filing completion is factual. This compatibility schedule does not decide
+  // statutory timeliness from an unreviewed calendar-date comparison.
+  const filingForObligation = (obligation: (typeof obligations)[number]): { filing: any; late?: boolean; nominalDaysPastDue: number; timingReviewRequired: boolean } | null => {
     const filingKind = obligation.creates?.filingKind;
     if (!filingKind) return null;
     const exact = filingMatches.get(filingMatchKey(filingKind, obligation.dueDate, obligation.sourceRegistrationId));
-    if (exact) return { filing: exact, late: Boolean(exact.filedAt && String(exact.filedAt).slice(0, 10) > obligation.dueDate) };
+    if (exact) {
+      const filedAt = dateOnly(exact.filedAt);
+      const nominalDaysPastDue = exact.status === "Filed" && filedAt
+        ? Math.max(0, Math.round((Date.parse(`${filedAt}T00:00:00Z`) - Date.parse(`${obligation.dueDate}T00:00:00Z`)) / 86_400_000)) : 0;
+      return { filing: exact, late: filedAt && nominalDaysPastDue === 0 ? false : undefined, nominalDaysPastDue,
+        timingReviewRequired: exact.status === "Filed" && (!filedAt || nominalDaysPastDue > 0) };
+    }
     if (obligation.ruleId === "compliance-ca-bc-societies-annual-report" && agmFacts.annualMeetingDate) {
       const match = annualReportForAgm(filings ?? [], agmFacts.annualMeetingDate);
-      return match ? { filing: match.filing, late: match.late } : null;
+      return match;
     }
     if (obligation.ruleId === "compliance-ca-bc-societies-no-agm-annual-report") {
       const match = noAgmAnnualReportForYear(filings ?? [], Number(obligation.dueDate.slice(0, 4)) - 1);
-      return match ? { filing: match.filing, late: match.late } : null;
+      return match;
     }
     return null;
   };
   const filingIsComplete = (obligation: (typeof obligations)[number]) => filingForObligation(obligation)?.filing?.status === "Filed";
   const decisionsByRuleId = new Map((decisions ?? []).map((decision) => [decision.ruleId, decision]));
-  // Dismissed obligations no longer count toward the overdue/due-today tiles.
+  // Dismissed obligations no longer count toward the calculated-date tiles.
   const isDismissedObligation = (obligation: (typeof obligations)[number]) => decisionsByRuleId.get(obligation.occurrenceKey)?.status === "dismissed";
   // A review-only obligation (no filing to submit) is done once someone records
-  // the review; it must stop reading "Overdue". Filing obligations stay open
+  // the review; it leaves the open-workflow count. Filing obligations stay open
   // until the filing itself is marked filed.
   const isReviewedWorkflow = (obligation: (typeof obligations)[number]) => !obligation.creates?.filingKind && decisionsByRuleId.get(obligation.occurrenceKey)?.status === "resolved";
   const countable = (obligation: (typeof obligations)[number]) => !filingIsComplete(obligation) && !isDismissedObligation(obligation) && !isReviewedWorkflow(obligation);
@@ -140,6 +145,7 @@ export function ComplianceObligationsPage() {
         `Rule: ${obligation.ruleId}`,
         obligation.sourceRegistrationId ? `Registration: ${obligation.sourceRegistrationId}` : "",
         `Source: ${obligation.authority.displayCitation}`,
+        "This is a nominal calculated date. Review statutory holidays, location, filing-office closures and submission-channel rules before treating it as the final deadline.",
       ].filter(Boolean).join("\n"),
     });
     await markObligationReviewed(obligation, {
@@ -172,7 +178,7 @@ export function ComplianceObligationsPage() {
       targetId: result.runId,
       notes: `Document packet staged from compliance obligation ${obligation.obligationKey}.`,
     });
-    toast.success("Packet staged", `${obligation.title} is ready in Template Engine.`);
+    toast.success("Packet staged", `Open ${obligation.title} in Template Engine to review the documents.`);
     } catch (error) {
       toast.error("Could not stage the document packet", error instanceof Error ? error.message : String(error));
     }
@@ -193,7 +199,7 @@ export function ComplianceObligationsPage() {
   const acknowledgeWorkflow = async (obligation: (typeof obligations)[number]) => {
     try {
       await markObligationReviewed(obligation);
-      toast.success("Obligation reviewed", obligation.title);
+      toast.success("Workflow reviewed", obligation.title);
     } catch (error) {
       toast.error("Could not review obligation", error instanceof Error ? error.message : String(error));
     }
@@ -202,7 +208,7 @@ export function ComplianceObligationsPage() {
   const dismissObligation = async (obligation: (typeof obligations)[number]) => {
     const ok = await confirm({
       title: `Dismiss "${obligation.title}"?`,
-      message: `The ${formatDate(obligation.dueDate)} occurrence will be hidden from the overdue and due-today counts. The statutory duty itself is not waived; you can reopen it later.`,
+      message: `The ${formatDate(obligation.dueDate)} occurrence will be hidden from the calculated-date counts. The statutory duty itself is not waived; you can reopen it later.`,
       confirmLabel: "Dismiss",
       tone: "warn",
     });
@@ -225,13 +231,18 @@ export function ComplianceObligationsPage() {
         title="Compliance obligations"
         icon={<ClipboardList size={16} />}
         iconColor="green"
-        subtitle={`Computed from draft rule packs for ${jurisdictionCopy.entityLabel} workspaces.`}
+        subtitle={`Nominal dates computed from draft rule packs for ${jurisdictionCopy.entityLabel} workspaces.`}
         actions={
           <Link className="btn-action" to="/app/filings">
             <ExternalLink size={12} /> Open filings
           </Link>
         }
       />
+
+      <p className="muted" role="status">
+        These calculated dates require review of statutory holidays, the applicable location, filing-office closures and submission-channel rules.
+        A rule-pack or workflow review does not establish the final legal deadline. Filing completion is recorded separately from its timeliness.
+      </p>
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <div className="stat">
@@ -243,11 +254,11 @@ export function ComplianceObligationsPage() {
           <strong className="stat__value">{obligations.length}</strong>
         </div>
         <div className="stat">
-          <span className="stat__label">Due today</span>
+          <span className="stat__label">Calculated for today</span>
           <strong className="stat__value">{dueToday}</strong>
         </div>
         <div className="stat">
-          <span className="stat__label">Overdue</span>
+          <span className="stat__label">Past calculated date</span>
           <strong className="stat__value">{overdue}</strong>
         </div>
       </div>
@@ -287,7 +298,7 @@ export function ComplianceObligationsPage() {
             </p>
           ) : (
             <p className="muted" style={{ marginTop: 0 }}>
-              All the dates needed to work out these obligations are recorded.
+              The date inputs for this schedule are recorded. The legal calendar boundary still requires review.
             </p>
           )}
           {jurisdictionModule.compliancePackIds.length ? (
@@ -307,7 +318,7 @@ export function ComplianceObligationsPage() {
         <div className="card__head">
           <div>
             <h2 className="card__title">Obligation results</h2>
-            <span className="card__subtitle">Working dates with the source behind each one.</span>
+            <span className="card__subtitle">Nominal dates and sources; legal calendar review is separate.</span>
           </div>
           {sharedRuleStatus && <Badge tone={ruleStatusTone(sharedRuleStatus)}>{sharedRuleStatus === "draft" ? "Draft rules" : ruleStatusLabel(sharedRuleStatus)}</Badge>}
         </div>
@@ -317,7 +328,7 @@ export function ComplianceObligationsPage() {
               <thead>
                 <tr>
                   <th>Obligation</th>
-                  <th>Due date</th>
+                  <th>Calculated date</th>
                   <th>Status</th>
                   <th>Source</th>
                   <th className="table__actions-col">Action</th>
@@ -371,14 +382,17 @@ export function ComplianceObligationsPage() {
                           <div className="muted" style={{ fontSize: 12 }}>{contextSummary}</div>
                         )}
                       </td>
-                      <td data-label="Due date">
+                      <td data-label="Calculated date">
                         {formatDate(obligation.dueDate)}
-                        <div className="muted" style={{ fontSize: 12 }}>{relative(obligation.dueDate)}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>Nominal · {relative(obligation.dueDate)}</div>
                       </td>
                       <td data-label="Status">
-                        <Badge tone={existingFiling?.status === "Filed" ? (filingMatch?.late ? "warn" : "success") : isDismissed ? "neutral" : isReviewedWorkflow(obligation) ? "success" : statusTone(obligation.status)}>
-                          {existingFiling?.status === "Filed" ? (filingMatch?.late ? "Filed late" : "Filed") : isDismissed ? "Dismissed" : isReviewedWorkflow(obligation) ? "Reviewed" : statusLabel(obligation.status)}
+                        <Badge tone={existingFiling?.status === "Filed" ? (filingMatch?.timingReviewRequired ? "warn" : "success") : isDismissed ? "neutral" : isReviewedWorkflow(obligation) ? "success" : statusTone(obligation.status)}>
+                          {existingFiling?.status === "Filed" ? (filingMatch?.timingReviewRequired ? "Filed — timing review" : "Filed") : isDismissed ? "Dismissed" : isReviewedWorkflow(obligation) ? "Workflow reviewed" : statusLabel(obligation.status)}
                         </Badge>
+                        {filingMatch?.timingReviewRequired && filingMatch.nominalDaysPastDue > 0 && (
+                          <div className="muted" style={{ fontSize: 12 }}>{filingMatch.nominalDaysPastDue} days after the nominal date; legal calendar review required.</div>
+                        )}
                         {decision?.updatedAtISO ? (
                           <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO)}</div>
                         ) : null}
@@ -463,7 +477,7 @@ function decisionPayload(societyId: any, obligation: ReturnType<typeof computeCo
   return {
     societyId,
     ruleId: obligation.occurrenceKey,
-    flagLevel: obligation.status === "overdue" ? "err" : obligation.status === "due_today" ? "warn" : "info",
+    flagLevel: obligation.status === "overdue" || obligation.status === "due_today" ? "warn" : "info",
     flagText: obligation.title,
     evidenceRequired: obligation.creates?.requiredEvidence ?? [],
   };
@@ -481,14 +495,15 @@ function requiredFactLabels(facts: ComplianceFacts | null) {
 }
 
 function statusTone(status: ComplianceObligationStatus) {
-  if (status === "overdue") return "danger";
+  if (status === "overdue") return "warn";
   if (status === "due_today") return "warn";
   return "info";
 }
 
 function statusLabel(status: ComplianceObligationStatus) {
-  if (status === "due_today") return "Due today";
-  return status[0].toUpperCase() + status.slice(1);
+  if (status === "due_today") return "Calculated for today";
+  if (status === "overdue") return "Past calculated date";
+  return "Upcoming calculated date";
 }
 
 function ruleStatusTone(status: ReturnType<typeof computeComplianceObligations>[number]["ruleStatus"]) {

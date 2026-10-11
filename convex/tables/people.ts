@@ -48,6 +48,8 @@ export const peopleTables = {
     aliases: v.optional(v.array(v.string())),
     position: v.string(),
     isBCResident: v.boolean(),
+    residentCanadianStatus: v.optional(v.union(v.literal("yes"), v.literal("no"), v.literal("unknown"))),
+    residentCanadianEvidence: v.optional(v.string()),
     termStart: v.string(),
     termEnd: v.optional(v.string()),
     consentOnFile: v.boolean(),

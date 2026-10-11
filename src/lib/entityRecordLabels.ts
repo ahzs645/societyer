@@ -1,3 +1,4 @@
+import { hasApplicablePrivacyLaw } from "../../shared/privacyRuleProfiles";
 /**
  * Entity-aware record-table labels, applied at render time.
  *
@@ -23,7 +24,7 @@ type ObjectRule = {
   options?: Record<string, Record<string, Relabel>>;
 };
 
-function rulesFor(vocab: OrganizationVocabulary): Record<string, ObjectRule> {
+function rulesFor(vocab: OrganizationVocabulary, organization?: LegalEntityLike | null): Record<string, ObjectRule> {
   const rules: Record<string, ObjectRule> = {};
   const add = (name: string, rule: ObjectRule) => {
     const current = rules[name] ?? {};
@@ -52,8 +53,8 @@ function rulesFor(vocab: OrganizationVocabulary): Record<string, ObjectRule> {
     });
     add("roleHolder", { fields: { membershipClassName: { from: "Membership / right class", to: "Share / right class" } } });
   }
-  // PIPA is BC privacy law; other home jurisdictions see neutral wording.
-  if (!vocab.bcHome) {
+  // Only assessed BC PIPA handling gets a BC-law label.
+  if (!hasApplicablePrivacyLaw(organization, "bc_pipa")) {
     add("pipaTraining", {
       singular: { from: "PIPA training record", to: "Privacy training record" },
       plural: { from: "PIPA training", to: "Privacy training" },
@@ -94,7 +95,7 @@ export function applyEntityObjectLabels<F extends FieldLike, O extends ObjectLik
   organization?: LegalEntityLike | null,
 ): O | null {
   if (!objectMetadata || !organization) return objectMetadata;
-  const rule = rulesFor(organizationVocabulary(organization))[objectMetadata.nameSingular];
+  const rule = rulesFor(organizationVocabulary(organization), organization)[objectMetadata.nameSingular];
   if (!rule) return objectMetadata;
   return {
     ...objectMetadata,
@@ -111,7 +112,7 @@ export function applyEntityViewLabels<F extends FieldLike, V extends ViewLike<F>
   organization?: LegalEntityLike | null,
 ): V | null {
   if (!view || !organization) return view;
-  const rule = rulesFor(organizationVocabulary(organization))[nameSingular];
+  const rule = rulesFor(organizationVocabulary(organization), organization)[nameSingular];
   if (!rule) return view;
   return { ...view, columns: view.columns.map((column) => ({ ...column, field: relabelField(column.field, rule) })) };
 }

@@ -1,0 +1,2724 @@
+{
+  "schemaVersion": "1.0.0",
+  "reviewedOn": "2026-10-11",
+  "briefPath": "docs/legal-research/brief.md",
+  "briefSha256": "fecd7062ac6adfdf86f02a3330d8432d7d38651b8b24c8c1d00e77c924347927",
+  "counts": {
+    "SOC": 16,
+    "BCC": 17,
+    "FED": 16,
+    "ONT": 12,
+    "PRV": 9,
+    "MTG": 10,
+    "REC": 7,
+    "OTH": 6,
+    "TRM": 9
+  },
+  "total": 102,
+  "questions": [
+    {
+      "id": "SOC-1",
+      "question": "What are the director minimums for an ordinary vs member-funded society, and what exactly does s. 197 relax?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-DIRECTORS-MIN",
+        "BC-SOC-MEMBER-FUNDED-DIRECTORS"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section197",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section40"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-2",
+      "question": "Is \"ordinarily resident in BC\" the test, and does it apply to member-funded societies?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-DIRECTORS-BC-RESIDENT"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section40"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-3",
+      "question": "Which subsection requires written consent, and what counts as consent (in writing, at a meeting, electronic)? How long must it be kept?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-DIRECTOR-CONSENT",
+        "BC-SOC-RETENTION"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section42",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/01010_01",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section21"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-4",
+      "question": "Does s. 44(2) set a qualification rule only, or any attestation or renewal duty? Is an annual attestation a best practice rather than a requirement?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-DIRECTOR-QUALIFICATIONS"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section44",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015#section10",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section43"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-5",
+      "question": "Confirm the s. 20 list of records a society must keep, including court orders, and the retention period for each.",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-RECORDS",
+        "BC-SOC-RETENTION"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section20",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section21"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-6",
+      "question": "What may a society charge members vs non-members to inspect or copy records, and which records can bylaws restrict?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-INSPECTION"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section24",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015#section4"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-7",
+      "question": "Confirm the threshold, who it covers (directors, employees, contractors) and where it must be disclosed (financial statements?).",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-REMUNERATION"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section36",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015#section8"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-8",
+      "question": "Confirm what s. 56 requires: disclosure, abstention, leaving the meeting, recording in minutes.",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-CONFLICTS"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section56"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-9",
+      "question": "Is the deadline \"once in each calendar year\", and what are the first-AGM and deferral (s. 71(1)-(3)?) rules?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-AGM",
+        "BC-IA-TIME"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section71",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96238_01"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-10",
+      "question": "Confirm both deadlines and what the annual report must contain.",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-10",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-IA-TIME",
+        "BC-SOC-ANNUAL-REPORT",
+        "BC-SOC-DIRECTOR-CHANGE-FILING"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section73",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96238_01",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section51"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-11",
+      "question": "When does an alteration take effect: on passing or on filing? Which special resolution threshold applies?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-11",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-ALTERATIONS"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section15",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section1"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-12",
+      "question": "Under the s. 1 definitions, what written consent does an ordinary and a special resolution need? The app's \"majority\" default may be wrong.",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-12",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-WRITTEN-RESOLUTIONS",
+        "BC-SOC-DIRECTORS-WRITTEN",
+        "BC-SOC-AGM"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section1",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section71",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section54"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-13",
+      "question": "Is 14-60 days in the Act, the Regulation or the model bylaws, and can bylaws change it?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-13",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-MEETING-NOTICE",
+        "BC-IA-TIME"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section77",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96238_01"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-14",
+      "question": "Confirm the model bylaws quorum for general and directors' meetings, and the current model bylaws version.",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-14",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-MODEL-BYLAWS-QUORUM",
+        "BC-SOC-QUORUM"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section82"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-15",
+      "question": "What is the filing deadline for a director change, and is it a Societies Online filing?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-15",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-DIRECTOR-CHANGE-FILING",
+        "BC-SOC-ANNUAL-REPORT"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section51",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section73"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "SOC-16",
+      "question": "For each, confirm the section still says what the app's surrounding text implies; flag any renumbering.",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/societies.md",
+      "anchor": "soc-16",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-FINANCIALS",
+        "BC-SOC-DIRECTOR-CHANGE-FILING",
+        "BC-SOC-MEETING-NOTICE",
+        "BC-SOC-QUORUM",
+        "BC-SOC-MODEL-BYLAWS-QUORUM"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section77",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section82",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section51",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section35",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/216_2015"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/societyLegalProfile.ts",
+          "shared/legalGovernanceProfiles.ts",
+          "shared/dashboardComplianceRules.ts",
+          "shared/continuityRules.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-1",
+      "question": "Minimum number of directors for a private (non-reporting) company vs a public company. Is there any BC or Canadian residency requirement for directors today?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-DIRECTORS-MIN",
+        "BC-BCA-CCC"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section120",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.91"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-2",
+      "question": "Does a director's consent to act have to be in writing, by when, and kept where (records office)?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-DIRECTOR-CONSENT"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section121"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-3",
+      "question": "Full list of records a company must keep at its records office (s. 42): articles, notice of articles, registers, minutes, resolutions, financial statements. Which may be kept electronically, and for how long?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RECORDS",
+        "BC-BCA-RECORD-REGULATION"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section42",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-4",
+      "question": "Transparency register (s. 119.1): who must keep it, what it records, when it is updated, who may inspect it, and the penalties",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-TRANSPARENCY",
+        "BC-BCA-TRANSPARENCY-ACCESS",
+        "BC-BCA-TRANSPARENCY-EXEMPTIONS"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.1",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.4",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section47"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-5",
+      "question": "Central securities register: required contents and when entries must be made",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-SECURITIES-REGISTER"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section111"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-6",
+      "question": "Annual report (s. 51): due date relative to the recognition anniversary, contents, and the effect of late filing (dissolution timeline)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-ANNUAL-REPORT"
+      ],
+      "sourceUrls": [
+        "https://www.corporateonline.gov.bc.ca/WebHelp/overview_annbc.htm",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-7",
+      "question": "Annual general meeting (s. 182): timing (first and later AGMs), and when shareholders can waive it or hold it by unanimous resolution",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-AGM"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section182"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-8",
+      "question": "Notice of shareholder meetings (s. 169?): minimum and maximum notice for a non-reporting company, and whether articles can change it",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-MEETING-NOTICE",
+        "BC-BCA-NOTICE-REGULATION"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section169",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section3"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-9",
+      "question": "Quorum for shareholder meetings when the articles are silent, and for directors' meetings",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-QUORUM"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section140"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-10",
+      "question": "Consent resolutions: what written consent an ordinary and a special resolution of shareholders need; same for directors' resolutions",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-10",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RESOLUTIONS"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section1"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-11",
+      "question": "Special resolution threshold when the articles are silent (2/3 or up to 3/4), and which acts need one",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-11",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RESOLUTIONS",
+        "BC-BCA-ALTERATIONS"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section1",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section257"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-12",
+      "question": "Altering the articles and notice of articles: what needs a special resolution, what must be filed, and when it takes effect",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-12",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-ALTERATIONS"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section257"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-13",
+      "question": "Director change filings (notice of change of directors): deadline after the change",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-13",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-DIRECTOR-CHANGES"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section127"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-14",
+      "question": "Director conflicts of interest (disclosable interests): disclosure, abstention, recording, and the section numbers",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-14",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-CONFLICTS"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section147"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-15",
+      "question": "Shareholder and public inspection rights over records, and permitted fees",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-15",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RECORD-ACCESS",
+        "BC-BCA-RECORD-REGULATION"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section43",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-16",
+      "question": "Auditor: when a company can waive the appointment of an auditor (unanimous resolution), and what must be recorded",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-16",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-AUDITOR-WAIVER"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section200"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "BCC-17",
+      "question": "Benefit companies, community contribution companies and ULCs: which extra obligations differ from an ordinary company (benefit statement, dividend caps, ULC disclosure)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "bcc-17",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-BENEFIT-COMPANY",
+        "BC-BCA-CCC",
+        "BC-BCA-CCC-REGULATION",
+        "BC-BCA-ULC"
+      ],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.991",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.91",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/63_2013",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.11"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "FED-1",
+      "question": "Minimum number of directors for a non-distributing vs a distributing corporation; is there any Canadian residency requirement today (the 25% rule was removed in 2023: confirm the date and scope)?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-DIRECTORS-MIN"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-2",
+      "question": "Director consent (s. 106(2)?): written consent requirements and timing for a director elected or appointed",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-DIRECTOR-CONSENT"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-3",
+      "question": "Records at the registered office (s. 20): exact list, electronic records, retention",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-RECORDS",
+        "CBCA-RECORD-ACCESS"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-4",
+      "question": "Register of individuals with significant control (ss. 21.1-21.4): contents, update deadline (15 days?), annual review, inspection rights, and the 2024 filing with Corporations Canada",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-ISC",
+        "CBCA-ISC-FILING",
+        "CBCA-ISC-REGISTRY"
+      ],
+      "sourceUrls": [
+        "https://ised-isde.canada.ca/site/corporations-canada/en/individuals-significant-control/individuals-significant-control-file-your-information",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-5",
+      "question": "Annual return (s. 263): filing window after the anniversary, contents, and consequences of not filing",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-ANNUAL-RETURN",
+        "CBCA-ANNUAL-RETURN-REGISTRY"
+      ],
+      "sourceUrls": [
+        "https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/policy-annual-filings-canada-business-corporations-act",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-6",
+      "question": "Annual meeting (s. 133): first meeting within 18 months, later meetings within 15 months and 6 months after year end; can it be replaced by a written resolution?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-ANNUAL-MEETING"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-7",
+      "question": "Notice of shareholder meetings (s. 135 and Regulations): 21-60 days for non-distributing corporations? Can the by-laws change it?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-MEETING-NOTICE",
+        "CBCA-NOTICE-REGULATION"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2001-512/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-8",
+      "question": "Written resolutions (s. 142, directors s. 117): unanimous only?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-RESOLUTIONS"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-9",
+      "question": "Special resolution threshold and which changes need one",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-RESOLUTIONS",
+        "CBCA-ARTICLES"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-10",
+      "question": "By-laws (s. 103): how directors make, amend or repeal by-laws, and when shareholders must confirm them",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-10",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-BYLAWS"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-11",
+      "question": "Directors' changes and registered office changes: filing deadlines (15 days?)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-11",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-DIRECTOR-CHANGES"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-12",
+      "question": "Director conflicts (s. 120): disclosure timing, abstention, minute requirements",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-12",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-CONFLICTS"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-13",
+      "question": "Auditor exemption (s. 163): who may waive the auditor, and the consent required",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-13",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-AUDITOR-WAIVER"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-14",
+      "question": "Shareholder and creditor access to records (s. 21) and permitted fees",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-14",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-RECORD-ACCESS"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-15",
+      "question": "Extra-provincial registration: which provinces a CBCA corporation must register in when it carries on business there, with the BC and Ontario forms and deadlines",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-15",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-EXTRAPROVINCIAL",
+        "ON-CIA-RETURNS-CHANGES",
+        "ON-EXTRAPROVINCIAL-FEDERAL"
+      ],
+      "sourceUrls": [
+        "https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/provincial-registration-federal-business-corporations",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section375",
+        "https://www.ontario.ca/laws/statute/90c39",
+        "https://www.ontario.ca/laws/statute/90e27"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "FED-16",
+      "question": "\"Annual meeting\" vs \"annual general meeting\": which term the CBCA and Corporations Canada forms use",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "fed-16",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "CBCA-ANNUAL-MEETING"
+      ],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-1",
+      "question": "Minimum directors (non-offering vs offering corporation); confirm the resident Canadian requirement was repealed in 2021 and from what date",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-DIRECTORS-MIN"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-2",
+      "question": "Director consent to act (s. 119?): form and timing",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-DIRECTOR-CONSENT"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-3",
+      "question": "Records (s. 140): list, location, electronic records",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-RECORDS",
+        "OBCA-LAND-REGISTER",
+        "OBCA-RECORD-ACCESS"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-4",
+      "question": "Register of individuals with significant control (s. 140.2): contents, updates, inspection",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-ISC",
+        "ON-CIA-ISC-NOT-COMMENCED"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/page/beneficial-ownership-information-requirements",
+        "https://www.ontario.ca/laws/statute/90b16",
+        "https://www.ontario.ca/laws/statute/90c39"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-5",
+      "question": "Annual return filed with the Ontario Business Registry: deadline (within 6 months after the tax year end?), and how it relates to the CRA T2",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "ON-CIA-RETURNS-CHANGES",
+        "ON-CIA-ANNUAL-RETURN-REGULATION"
+      ],
+      "sourceUrls": [
+        "https://forms.mgcs.gov.on.ca/dataset/6c1fdc85-c100-493d-93ca-d86ef2c6a260/resource/a1e78643-e06e-403f-9aec-f26c10b26712/download/on00229e.pdf",
+        "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/corporations/corporation-income-tax-return/when-file-your-corporation-income-tax-return.html",
+        "https://www.ontario.ca/laws/statute/90c39",
+        "https://www.ontario.ca/laws/regulation/210400"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-6",
+      "question": "Annual meeting (s. 94): timing and when it can be replaced by a written resolution",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-ANNUAL-MEETING"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-7",
+      "question": "Notice of meetings (s. 96): 10-50 days for a non-offering corporation?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-MEETING-NOTICE"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-8",
+      "question": "Written resolutions (s. 104, s. 129) and the special resolution threshold",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-RESOLUTIONS"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-9",
+      "question": "By-laws (s. 116): making, amending, shareholder confirmation",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-BYLAWS"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-10",
+      "question": "Notices of change (Corporations Information Act): deadline for director and office changes",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-10",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "ON-CIA-RETURNS-CHANGES"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90c39"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-11",
+      "question": "Director conflicts (s. 132) and auditor exemption (s. 148)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-11",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-CONFLICTS",
+        "OBCA-AUDITOR-WAIVER"
+      ],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "ONT-12",
+      "question": "Which incorporation documents (Form 1 articles, consents) the Ontario Business Registry now requires, so the pathway can lose its \"review required\" label",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/corporations.md",
+      "anchor": "ont-12",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-INCORPORATION",
+        "OBCA-INCORPORATION-REGISTRY"
+      ],
+      "sourceUrls": [
+        "https://forms.mgcs.gov.on.ca/en/dataset/on00224",
+        "https://forms.mgcs.gov.on.ca/en/dataset/5351",
+        "https://forms.mgcs.gov.on.ca/en/dataset/5260",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/corporateLegalProfiles.ts",
+          "shared/corporateLegalSources.ts",
+          "shared/corporationSettings.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-1",
+      "question": "Which private-sector privacy law applies to an organization headquartered in BC, Alberta, Quebec, Ontario or elsewhere, and when does PIPEDA apply instead (interprovincial activity, federal works)?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "AB-PIPA-NONPROFIT"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2004-220/FullText.html?txthl=exemption",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2004-219/page-1.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2003-374/page-1.html?txthl=exemption",
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/pipeda_brief/",
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/r_o_p/02_05_d_26/",
+        "https://kings-printer.alberta.ca/documents/Acts/P06P5.pdf"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-2",
+      "question": "Does PIPEDA apply to a nonprofit's non-commercial activity, e.g. a society's member data? Does BC PIPA cover societies' member records?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "AB-PIPA-NONPROFIT"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/r_o_p/02_05_d_19/",
+        "https://www.oipc.bc.ca/for-private-organizations/",
+        "https://oipc.ab.ca/resource/minor-sports-associations/",
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/information-entreprises-privees/champ-application-loi_entreprises",
+        "https://kings-printer.alberta.ca/documents/Acts/P06P5.pdf"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-3",
+      "question": "PIPEDA equivalents of the five PIPA checks: privacy officer, policy, consent, access within 30 days, retention",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "PIPEDA-OFFICER",
+        "PIPEDA-POLICY",
+        "PIPEDA-CONSENT",
+        "PIPEDA-ACCESS",
+        "PIPEDA-RETENTION"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/P-8.6/FullText.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-4",
+      "question": "Quebec Law 25: person in charge of personal information, privacy impact assessments, incident register, and the 2024 portability rules. What is mandatory for a small business?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "QC-PRIVACY-OFFICER",
+        "QC-PRIVACY-POLICY",
+        "QC-PRIVACY-ACCESS",
+        "QC-PRIVACY-RETENTION",
+        "QC-PRIVACY-PIA",
+        "QC-PRIVACY-INCIDENT"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/information-entreprises-privees/responsable-protection-renseignements-personnels-entreprise",
+        "https://www.cai.gouv.qc.ca/actualites/evaluation-facteurs-relatifs-vie-privee-guide-plus-convivial",
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/information-entreprises-privees/utilisation-communication-renseignements-personnels",
+        "https://www.cai.gouv.qc.ca/actualites/entree-en-vigueur-dispositions-portabilite-renseignements-personnels-informatises",
+        "https://www.legisquebec.gouv.qc.ca/en/document/cs/P-39.1"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-5",
+      "question": "Alberta PIPA: differences from BC PIPA that change the checks (breach notification to the Commissioner)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "AB-PIPA-OFFICER",
+        "AB-PIPA-POLICY",
+        "AB-PIPA-CONSENT",
+        "AB-PIPA-ACCESS",
+        "AB-PIPA-RETENTION",
+        "AB-PIPA-BREACH",
+        "AB-PIPA-NONPROFIT"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://oipc.ab.ca/how-to-make-an-access-request/",
+        "https://oipc.ab.ca/decisions/orders/",
+        "https://oipc.ab.ca/p2010-ir-02/",
+        "https://oipc.ab.ca/breach-notification/",
+        "https://kings-printer.alberta.ca/documents/Acts/P06P5.pdf"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-6",
+      "question": "Breach notification and record-keeping duties in each regime (PIPEDA breach records kept 24 months, Alberta notification, BC rules)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "PIPA-SAFEGUARDS",
+        "PIPEDA-BREACH",
+        "PIPEDA-BREACH-RECORDS",
+        "AB-PIPA-BREACH",
+        "QC-PRIVACY-INCIDENT",
+        "QC-PRIVACY-INCIDENT-RECORDS"
+      ],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-for-businesses/privacy-breaches-at-your-business/gd_pb_201810/",
+        "https://oipc.ab.ca/breach-notification/",
+        "https://www.oipc.bc.ca/resources/breach-notification-representatives-of-organizations-and-public-bodies/",
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/information-entreprises-privees/incidents-confidentialite-mesures-securite-entreprises",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/00_03063_01",
+        "https://laws-lois.justice.gc.ca/eng/acts/P-8.6/FullText.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2018-64/FullText.html",
+        "https://kings-printer.alberta.ca/documents/Acts/P06P5.pdf",
+        "https://www.legisquebec.gouv.qc.ca/en/document/cs/P-39.1",
+        "https://www.legisquebec.gouv.qc.ca/en/document/cr/A-2.1,%20r.%203.1"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-7",
+      "question": "Status of Bill C-27 / CPPA (died on the order paper?) and any successor bill. Should the app say anything about it?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.parl.ca/legisinfo/en/bill/44-1/c-27",
+        "https://www.parl.ca/legisinfo/en/bill/45-1/c-36",
+        "https://www.parl.ca/DocumentViewer/en/45-1/bill/C-36/first-reading"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-8",
+      "question": "CASL: consent rules for member and shareholder newsletters vs transactional notices (meeting notices). Do the nonprofit exemptions differ from a corporation's?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://crtc.gc.ca/eng/com500/faq500.htm",
+        "https://crtc.gc.ca/eng/com500/guide.htm?wbdisable=true",
+        "https://crtc.gc.ca/eng/internet/infograph.htm"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "PRV-9",
+      "question": "Which official guides to link for each regime (OPC, OIPC BC, OIPC Alberta, CAI Quebec), with current URLs",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/privacy.md",
+      "anchor": "prv-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/society-privacy-source-bindings.json",
+      "sourceUrls": [
+        "https://www.oipc.bc.ca/for-private-organizations/",
+        "https://www.oipc.bc.ca/resources/breach-notification-representatives-of-organizations-and-public-bodies/",
+        "https://oipc.ab.ca/legislation/pipa/",
+        "https://oipc.ab.ca/breach-notification/",
+        "https://oipc.ab.ca/how-to-make-an-access-request/",
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/sujets-et-domaines-dinteret/principaux-changements-loi-25",
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/information-entreprises-privees/incidents-confidentialite-mesures-securite-entreprises",
+        "https://www.cai.gouv.qc.ca/protection-renseignements-personnels/information-entreprises-privees/champ-application-loi_entreprises",
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/pipeda_brief/",
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/r_o_p/02_05_d_19/",
+        "https://services.priv.gc.ca/outil-tool",
+        "https://www.priv.gc.ca/en/privacy-topics/privacy-for-businesses/privacy-breaches-at-your-business/gd_pb_201810/",
+        "https://crtc.gc.ca/eng/com500/faq500.htm"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/privacyRuleProfiles.ts",
+          "shared/privacyPolicyTemplate.ts",
+          "src/components/PrivacyScopeAssessment.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-1",
+      "question": "Who is entitled to notice of an annual meeting: all shareholders or only voting shareholders, plus directors and the auditor?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-MEETING-NOTICE",
+        "BC-BCA-MEETING-NOTICE",
+        "CBCA-MEETING-NOTICE",
+        "OBCA-MEETING-NOTICE"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-135.html",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section77",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section169",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-2",
+      "question": "Acceptable notice methods (email, posting, electronic notice-and-access) and what proof of notice should be kept",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-IA-TIME",
+        "FED-IA-TIME",
+        "ON-LEGISLATION-TIME",
+        "OBCA-TIME",
+        "BC-SOC-MEETING-NOTICE",
+        "BC-BCA-MEETING-NOTICE",
+        "BC-BCA-NOTICE-REGULATION",
+        "CBCA-MEETING-NOTICE",
+        "CBCA-NOTICE-REGULATION",
+        "OBCA-MEETING-NOTICE"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-252.3.html",
+        "https://www.ontario.ca/laws/statute/00e17",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section77",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section169",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004#section3",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2001-512/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96238_01",
+        "https://laws-lois.justice.gc.ca/eng/acts/I-21/FullText.html",
+        "https://www.ontario.ca/laws/statute/06l21"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-3",
+      "question": "Electronic and hybrid meetings: allowed by default, or only if the articles or by-laws permit?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "OBCA-ANNUAL-MEETING"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-132.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-4",
+      "question": "Proxies: are they allowed by default, how many per holder, and what must a proxy form contain? For a society, does the bylaw default forbid proxies?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-148.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-5",
+      "question": "Who votes in a corporation: shares by class, record date rules, and how ties are broken",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RESOLUTIONS",
+        "CBCA-RESOLUTIONS",
+        "OBCA-RESOLUTIONS"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-134.html",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-138.html",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-140.html",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section1",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-6",
+      "question": "Director elections at an annual meeting: cumulative voting defaults and staggered terms",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-107.html"
+      ],
+      "implementation": {
+        "level": "core_rules_and_workflows",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-7",
+      "question": "Shareholder proposals: eligibility thresholds and deadlines (CBCA s. 137 and equivalents) vs society member proposals (5% of voting members?)",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-137.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2001-512/section-49.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-8",
+      "question": "Requisitioned meetings: thresholds (5% of shares?) and timelines for each entity",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-143.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-9",
+      "question": "Financial statements at the annual meeting: what must be placed before shareholders vs members, and the audit or review engagement default",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-FINANCIALS",
+        "BC-SOC-AUDITOR",
+        "BC-BCA-ANNUAL-FINANCIALS",
+        "BC-BCA-AUDITOR-WAIVER",
+        "CBCA-ANNUAL-FINANCIALS",
+        "CBCA-AUDITOR-APPOINTMENT",
+        "CBCA-AUDITOR-WAIVER",
+        "OBCA-ANNUAL-FINANCIALS",
+        "OBCA-AUDITOR-APPOINTMENT",
+        "OBCA-AUDITOR-WAIVER"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-155.html",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-159.html",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section110",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section35",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section200",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section185",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "MTG-10",
+      "question": "Minutes: what each Act requires minutes to record and who must sign them",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "mtg-10",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-RECORDS",
+        "BC-BCA-RECORDS",
+        "CBCA-RECORDS",
+        "CBCA-RESOLUTIONS",
+        "OBCA-RECORDS",
+        "OBCA-RESOLUTIONS"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section20",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section42",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/meetingNoticeAudience.ts",
+          "shared/legalMeetingNotice.ts",
+          "shared/shareholderElectorate.ts",
+          "shared/functions/elections.ts",
+          "shared/functions/writtenResolutions.ts"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-1",
+      "question": "For each corporate Act, the full minute book contents a lawyer would expect: articles, by-laws, registers (directors, officers, shareholders, transfers, ISC or transparency), minutes, resolutions, unanimous shareholder agreements",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-RECORDS",
+        "BC-BCA-RECORDS",
+        "BC-BCA-SECURITIES-REGISTER",
+        "BC-BCA-TRANSPARENCY",
+        "BC-BCA-BENEFIT-COMPANY",
+        "BC-BCA-CCC",
+        "CBCA-RECORDS",
+        "CBCA-ISC",
+        "OBCA-RECORDS",
+        "OBCA-LAND-REGISTER",
+        "OBCA-ISC"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section20",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section42",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section111",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.1",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.991",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.91",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-2",
+      "question": "Retention periods for corporate records and for CRA books and records (6 years after the tax year?), and whether the two conflict",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RECORD-ACCESS",
+        "BC-BCA-RECORD-REGULATION",
+        "CBCA-RECORDS",
+        "OBCA-RECORDS",
+        "BC-BCA-TRANSPARENCY-ACCESS",
+        "CBCA-ISC",
+        "OBCA-ISC"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/keeping-records.html",
+        "https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/books-records.html",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section43",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.4",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-3",
+      "question": "Who may inspect which records (shareholders, creditors, directors, the public), with fees and response times, per Act",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RECORD-ACCESS",
+        "BC-BCA-RECORD-REGULATION",
+        "BC-BCA-TRANSPARENCY-ACCESS",
+        "CBCA-RECORD-ACCESS",
+        "CBCA-ISC-FILING",
+        "OBCA-RECORD-ACCESS"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section43",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section119.4",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-4",
+      "question": "Securities registers: what a share certificate or DRS notice must state, and when certificates are optional",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-SECURITIES-REGISTER",
+        "CBCA-RECORDS",
+        "OBCA-RECORDS"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-49.html",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section111",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-5",
+      "question": "Court orders, consents and waivers: which Acts require these to be kept with corporate records",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-BCA-RECORDS",
+        "BC-BCA-DIRECTOR-CONSENT",
+        "BC-BCA-MEETING-NOTICE",
+        "BC-BCA-AGM",
+        "BC-BCA-AUDITOR-WAIVER",
+        "BC-BCA-RESOLUTIONS",
+        "CBCA-RECORDS",
+        "CBCA-DIRECTOR-CONSENT",
+        "CBCA-MEETING-NOTICE",
+        "CBCA-AUDITOR-WAIVER",
+        "CBCA-RESOLUTIONS",
+        "OBCA-RECORDS",
+        "OBCA-DIRECTOR-CONSENT",
+        "OBCA-AUDITOR-WAIVER",
+        "OBCA-RESOLUTIONS",
+        "ON-LEGISLATION-TIME",
+        "OBCA-TIME"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/06l21",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section121",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section42",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section182",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section169",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section1",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section200",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/FullText.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-6",
+      "question": "Remuneration disclosure: does any corporate Act require something like the Societies Act s. 36 disclosure for private corporations?",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [
+        "BC-SOC-REMUNERATION",
+        "BC-BCA-CCC",
+        "BC-BCA-CCC-REGULATION"
+      ],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/63_2013",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01#section36",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00_multi#section51.91"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "REC-7",
+      "question": "Employment standards record retention by province (BC 4 years?) for the Employees page",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/meetings-records.md",
+      "anchor": "rec-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceBindingPath": "docs/legal-research/meeting-record-source-bindings.json",
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96113_01",
+        "https://www2.gov.bc.ca/gov/content/employment-business/employment-standards-advice/employment-standards/forms-resources/igm/esa-part-3-section-28",
+        "https://www.ontario.ca/laws/statute/00e41",
+        "https://www.ontario.ca/document/your-guide-employment-standards-act-0/record-keeping",
+        "https://www.alberta.ca/payment-earnings",
+        "https://www.cnesst.gouv.qc.ca/sites/default/files/documents/2446501sst.pdf",
+        "https://laws-lois.justice.gc.ca/eng/regulations/C.R.C.%2C_c._986/section-24.html"
+      ],
+      "implementation": {
+        "level": "scoped_guidance",
+        "modules": [
+          "shared/legalGovernanceTypes.ts",
+          "src/components/LegalRecordsRequirements.tsx",
+          "src/pages/MinuteBook.tsx"
+        ],
+        "limits": "General law is implemented or exposed as scoped guidance. Governing documents, status, historical law, class rights and factual evidence remain inputs for review; see the answer for specific limits."
+      }
+    },
+    {
+      "id": "OTH-1",
+      "question": "Federal nonprofit: Canada Not-for-profit Corporations Act",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "oth-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-7.75/",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2011-223/section-61.html",
+        "https://ised-isde.canada.ca/site/corporations-canada/en/not-profit-corporations/information-annual-return-filings-not-profit-corporations",
+        "https://laws-lois.justice.gc.ca/eng/regulations/SOR-2011-223/section-16.html",
+        "https://ised-isde.canada.ca/site/corporations-canada/en/not-profit-corporations/requirements-soliciting-corporations-under-canada-not-profit-corporations-act-nfp-act",
+        "https://ised-isde.canada.ca/site/corporations-canada/en/not-profit-corporations/financial-statements-and-review"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/organizationDomain.ts",
+          "shared/legalGovernanceProfiles.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "OTH-2",
+      "question": "Ontario nonprofit: Not-for-Profit Corporations Act, 2010",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "oth-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.ontario.ca/laws/statute/10n15",
+        "https://www.ontario.ca/page/guide-not-profit-corporations-act-2010",
+        "https://www.ontario.ca/page/rules-not-profit-and-charitable-corporations",
+        "https://www.ontario.ca/page/not-profit-corporations-act-2010-transition-considerations",
+        "https://www.ontario.ca/laws/statute/90c38"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/organizationDomain.ts",
+          "shared/legalGovernanceProfiles.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "OTH-3",
+      "question": "Quebec: Business Corporations Act (Quebec) and the Enterprise Register",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "oth-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.legisquebec.gouv.qc.ca/fr/pdf/lc/S-31.1.pdf",
+        "https://www.legisquebec.gouv.qc.ca/en/document/cs/P-44.1",
+        "https://www.quebec.ca/entreprises-et-travailleurs-autonomes/mettre-a-jour-informations/declaration-mise-a-jour/annuelle",
+        "https://www.legisquebec.gouv.qc.ca/en/document/cs/C-11"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/organizationDomain.ts",
+          "shared/legalGovernanceProfiles.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "OTH-4",
+      "question": "Societies in other provinces: Alberta Societies Act, Nova Scotia Societies Act, Saskatchewan Non-Profit Corporations Act",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "oth-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.alberta.ca/legal-responsibilities-of-non-profits",
+        "https://www.alberta.ca/corporations-cooperatives-organizations-annual-returns",
+        "https://open.alberta.ca/dataset/768a0630-488c-4655-9422-db43a9ba2648/resource/305444a4-594c-449c-a882-4f0de4417337/download/2011-How-Form-Society-Tipsheet-2011-01-28.pdf",
+        "https://www.novascotia.ca/society-registry-joint-stock-companies-requirements",
+        "https://www.novascotia.ca/file-your-societys-financial-statements-registry-joint-stock-companies",
+        "https://www.novascotia.ca/notice-officers-and-directors-society",
+        "https://www.saskregistries.ca/corporateregistry/maintainandamendyourbusinessinformation/maintaininganon-profitcorporation",
+        "https://pubsaskdev.blob.core.windows.net/pubsask-prod/104140/Annual%252BReturn.pdf",
+        "https://publications.saskatchewan.ca/api/v1/products/118165/formats/135838/download",
+        "https://www.saskregistries.ca/corporateregistry/actsandregulations/the-non-profit-corporations-act"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/organizationDomain.ts",
+          "shared/legalGovernanceProfiles.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "OTH-5",
+      "question": "Legacy BC: \"Business Corporations Act (British Columbia, legacy alias)\" and old Society Act (pre-2016) societies",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "oth-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/organizationDomain.ts",
+          "shared/legalGovernanceProfiles.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "OTH-6",
+      "question": "Registered charities on top of any entity",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "oth-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-149.1.html",
+        "https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/filing-t3010-charity-return/when-file.html",
+        "https://laws-lois.justice.gc.ca/eng/acts/I-3.3/section-230.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/C.R.C.,_c._945/section-5800.html",
+        "https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/books-records.html",
+        "https://laws-lois.justice.gc.ca/eng/regulations/C.R.C.,_c._945/section-3501.html",
+        "https://www.canada.ca/en/revenue-agency/services/charities-giving/charities/operating-a-registered-charity/issuing-receipts/what-information-must-on-official-donation-receipt-a-registered-charity.html"
+      ],
+      "implementation": {
+        "level": "extension_boundary",
+        "modules": [
+          "shared/organizationDomain.ts",
+          "shared/legalGovernanceProfiles.ts"
+        ],
+        "limits": "Research and explicit review boundary delivered. This entity or subtype does not receive unsupported business-corporation automation."
+      }
+    },
+    {
+      "id": "TRM-1",
+      "question": "BC company: \"Annual General Meeting\"; CBCA and OBCA: \"Annual Meeting\"",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-1",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_06",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-133.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-2",
+      "question": "BC company: \"articles\" only (no by-laws); CBCA and OBCA: \"articles and by-laws\"",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-2",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-103.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-3",
+      "question": "BC company sidebar: \"Governance rules\", \"Articles alterations\", \"Articles history\"",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-3",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-4",
+      "question": "CBCA and OBCA: \"By-law amendments\", \"By-laws history\"",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-4",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-103.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-5",
+      "question": "Corporations: \"special meeting\" for the SGM type",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-5",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_06",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/65_2004",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-135.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-6",
+      "question": "Corporations: \"Ordinary\" and \"Special\" resolution kinds; the app avoids \"majority\" and \"unanimous\" labels",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-6",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_01",
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-2.html",
+        "https://www.ontario.ca/laws/statute/90b16"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-7",
+      "question": "\"Privacy (PIPA)\" for BC workspaces, \"Privacy\" elsewhere",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-7",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/03063_01",
+        "https://www.legisquebec.gouv.qc.ca/en/document/cs/P-39.1"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      },
+      "supplementalAnswers": [
+        "docs/legal-research/privacy.md#trm-7"
+      ]
+    },
+    {
+      "id": "TRM-8",
+      "question": "\"Shareholders holding voting shares\" as the voter count",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-8",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/eng/acts/C-44/section-138.html",
+        "https://www.ontario.ca/laws/statute/90b16",
+        "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_06"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    },
+    {
+      "id": "TRM-9",
+      "question": "French labels such as \"Modifications des statuts\" and \"Règlements administratifs\"",
+      "researchStatus": "answered",
+      "answerPath": "docs/legal-research/other-entities-terminology.md",
+      "anchor": "trm-9",
+      "authorityMode": "Paraphrase; source currency and retrieval limitations in answer and report source register",
+      "sourceIds": [],
+      "sourceUrls": [
+        "https://laws-lois.justice.gc.ca/fra/lois/C-44/section-103.html",
+        "https://laws-lois.justice.gc.ca/fra/lois/c-44/page-19.html?wbdisable=true",
+        "https://www.ised-isde.canada.ca/site/corporations-canada/fr/glossaire-loi-canadienne-pour-societes-actions",
+        "https://cdn-contenu.quebec.ca/cdn-contenu/adm/min/emploi-solidarite-sociale/registraire_entreprises/REQ_GUI_Statuts_Modification_RE-500.G.pdf",
+        "https://www.legisquebec.gouv.qc.ca/fr/document/lc/S-31.1"
+      ],
+      "implementation": {
+        "level": "terminology_and_boundary",
+        "modules": [
+          "src/lib/organizationVocabulary.ts",
+          "src/lib/entityRecordLabels.ts",
+          "src/lib/routeIdentity.ts"
+        ],
+        "limits": "Core vocabulary is scoped; jurisdiction-specific translation and other terminology boundaries are stated in the answer."
+      }
+    }
+  ]
+}

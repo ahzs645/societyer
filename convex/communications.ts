@@ -23,7 +23,7 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 import { organizationRuleScope } from "../shared/entityRuleScope";
-import { votingShareholderNoticeAudience } from "../shared/meetingNoticeAudience";
+import { votingShareholderNoticeAudience, auditorNoticeRecipients } from "../shared/meetingNoticeAudience";
 
 const DEFAULT_TEMPLATE_SLUGS = [
   {
@@ -31,7 +31,7 @@ const DEFAULT_TEMPLATE_SLUGS = [
     name: "AGM notice",
     kind: "notice",
     channel: "email",
-    audience: "voting_members",
+    audience: "all_members",
     subject: "{{societyName}} AGM notice — {{meetingTitle}} on {{meetingDate}}",
     bodyText:
       "Hello {{memberName}},\n\nThis is formal notice of {{societyName}}'s meeting: {{meetingTitle}}.\nDate: {{meetingDate}}\nLocation: {{meetingLocation}}\n\nIf electronic participation is allowed, the joining details must be included in the notice package.\n\nMember portal: {{portalUrl}}",
@@ -79,6 +79,10 @@ type Audience =
   | `member_status:${string}`;
 
 type Recipient = {
+  recipientKey?: string;
+  roleHolderId?: string;
+  directorId?: string;
+  auditorAppointmentId?: string;
   memberId?: string;
   name: string;
   email?: string;
@@ -122,7 +126,7 @@ function mergeRecipients(rows: Recipient[]) {
   const deduped = new Map<string, Recipient>();
   for (const row of rows) {
     const key =
-      row.memberId ||
+      row.recipientKey || row.roleHolderId || row.directorId || row.auditorAppointmentId || row.memberId ||
       row.email?.trim().toLowerCase() ||
       `${row.name.trim().toLowerCase()}:${row.role ?? ""}`;
     if (!key) continue;
@@ -180,16 +184,13 @@ async function resolveAudienceRecipients(
   // A corporation's meeting notice goes to its voting shareholders: the share
   // register, or the shareholder role holders when the register is empty.
   if (args.audience === "voting_shareholders") {
-    const ledger = await ctx.runQuery(api.legalOperations.rightsLedger, { societyId: args.societyId as any });
-    return mergeRecipients(
-      votingShareholderNoticeAudience(ledger ?? {}).recipients.map((recipient) => ({
-        name: recipient.name,
-        email: recipient.email,
-        phone: recipient.phone,
-        address: recipient.address,
-        role: recipient.role,
-      })),
-    );
+    const [ledger, directors, auditors, societies] = await Promise.all([
+      ctx.runQuery(api.legalOperations.rightsLedger, { societyId: args.societyId as any }),
+      ctx.runQuery(api.directors.list, { societyId: args.societyId as any }),
+      ctx.runQuery(api.auditors.list, { societyId: args.societyId as any }),
+      ctx.runQuery(api.society.list, {}),
+    ]);
+    return mergeRecipients(votingShareholderNoticeAudience({ ...ledger, directors, auditors, organization: societies.find((row: any) => row._id === args.societyId) }).recipients);
   }
 
   const [members, directors, subscriptions, volunteers, committees] = await Promise.all([
@@ -653,10 +654,13 @@ async function sendCampaignInternal(
   if (!society) throw new Error("Society not found.");
   if (society.disabledModules?.includes("communications")) throw new Error("Communications is disabled for this workspace.");
 
-  const recipients = await resolveAudienceRecipients(ctx, {
-    societyId: args.societyId,
-    audience: args.audience,
-  });
+  const meetingNotice = args.kind === "notice" && !!args.meetingId;
+  const noticeAudience = meetingNotice ? (organizationRuleScope(society).isCorporation ? "voting_shareholders" : "all_members") : args.audience;
+  const recipients = await resolveAudienceRecipients(ctx, { societyId: args.societyId, audience: noticeAudience });
+  if (meetingNotice && !organizationRuleScope(society).isCorporation) {
+    const auditors = await ctx.runQuery(api.auditors.list, { societyId: args.societyId as any });
+    recipients.push(...auditorNoticeRecipients(auditors));
+  }
   const prefByMemberId = new Map(
     (prefs ?? []).map((pref: any) => [String(pref.memberId), pref]),
   );
@@ -921,6 +925,10 @@ async function sendCampaignInternal(
           recipientName: recipient.name,
           recipientEmail: recipient.email,
           memberId: recipient.memberId as any,
+          recipientKey: recipient.recipientKey,
+          roleHolderId: recipient.roleHolderId,
+          directorId: recipient.directorId,
+          auditorAppointmentId: recipient.auditorAppointmentId,
           channel: campaignChannel,
           provider: sent.provider,
           providerMessageId: sent.id,
@@ -953,6 +961,10 @@ async function sendCampaignInternal(
           recipientName: recipient.name,
           recipientEmail: recipient.email,
           memberId: recipient.memberId as any,
+          recipientKey: recipient.recipientKey,
+          roleHolderId: recipient.roleHolderId,
+          directorId: recipient.directorId,
+          auditorAppointmentId: recipient.auditorAppointmentId,
           channel: campaignChannel,
           provider: "resend",
           subject,
@@ -1056,7 +1068,7 @@ export const sendMeetingNotice = authorizedAction("communications:sendMeetingNot
       meetingId: args.meetingId as any,
       templateId: template?._id as any,
       actingUserId: args.actingUserId as any,
-      audience: corporation ? "voting_shareholders" : "voting_members",
+      audience: corporation ? "voting_shareholders" : "all_members",
       kind: template?.kind ?? "notice",
       channel: args.channel,
       subject: corporation && usesSocietyDefault ? CORPORATION_MEETING_NOTICE.subject : template?.subject,

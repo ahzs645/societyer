@@ -1,0 +1,106 @@
+{
+  "SOC-1": [
+    "BC-SOC-DIRECTORS-MIN",
+    "BC-SOC-MEMBER-FUNDED-DIRECTORS"
+  ],
+  "SOC-2": [
+    "BC-SOC-DIRECTORS-BC-RESIDENT"
+  ],
+  "SOC-3": [
+    "BC-SOC-DIRECTOR-CONSENT",
+    "BC-SOC-RETENTION"
+  ],
+  "SOC-4": [
+    "BC-SOC-DIRECTOR-QUALIFICATIONS"
+  ],
+  "SOC-5": [
+    "BC-SOC-RECORDS",
+    "BC-SOC-RETENTION"
+  ],
+  "SOC-6": [
+    "BC-SOC-INSPECTION"
+  ],
+  "SOC-7": [
+    "BC-SOC-REMUNERATION"
+  ],
+  "SOC-8": [
+    "BC-SOC-CONFLICTS"
+  ],
+  "SOC-9": [
+    "BC-SOC-AGM",
+    "BC-IA-TIME"
+  ],
+  "SOC-10": [
+    "BC-SOC-ANNUAL-REPORT",
+    "BC-SOC-DIRECTOR-CHANGE-FILING",
+    "BC-IA-TIME"
+  ],
+  "SOC-11": [
+    "BC-SOC-ALTERATIONS"
+  ],
+  "SOC-12": [
+    "BC-SOC-WRITTEN-RESOLUTIONS",
+    "BC-SOC-DIRECTORS-WRITTEN",
+    "BC-SOC-AGM"
+  ],
+  "SOC-13": [
+    "BC-SOC-MEETING-NOTICE",
+    "BC-IA-TIME"
+  ],
+  "SOC-14": [
+    "BC-SOC-MODEL-BYLAWS-QUORUM",
+    "BC-SOC-QUORUM"
+  ],
+  "SOC-15": [
+    "BC-SOC-DIRECTOR-CHANGE-FILING",
+    "BC-SOC-ANNUAL-REPORT"
+  ],
+  "SOC-16": [
+    "BC-SOC-FINANCIALS",
+    "BC-SOC-DIRECTOR-CHANGE-FILING",
+    "BC-SOC-MEETING-NOTICE",
+    "BC-SOC-QUORUM",
+    "BC-SOC-MODEL-BYLAWS-QUORUM"
+  ],
+  "PRV-1": [
+    "AB-PIPA-NONPROFIT"
+  ],
+  "PRV-2": [
+    "AB-PIPA-NONPROFIT"
+  ],
+  "PRV-3": [
+    "PIPEDA-OFFICER",
+    "PIPEDA-POLICY",
+    "PIPEDA-CONSENT",
+    "PIPEDA-ACCESS",
+    "PIPEDA-RETENTION"
+  ],
+  "PRV-4": [
+    "QC-PRIVACY-OFFICER",
+    "QC-PRIVACY-POLICY",
+    "QC-PRIVACY-ACCESS",
+    "QC-PRIVACY-RETENTION",
+    "QC-PRIVACY-PIA",
+    "QC-PRIVACY-INCIDENT"
+  ],
+  "PRV-5": [
+    "AB-PIPA-OFFICER",
+    "AB-PIPA-POLICY",
+    "AB-PIPA-CONSENT",
+    "AB-PIPA-ACCESS",
+    "AB-PIPA-RETENTION",
+    "AB-PIPA-BREACH",
+    "AB-PIPA-NONPROFIT"
+  ],
+  "PRV-6": [
+    "PIPA-SAFEGUARDS",
+    "PIPEDA-BREACH",
+    "PIPEDA-BREACH-RECORDS",
+    "AB-PIPA-BREACH",
+    "QC-PRIVACY-INCIDENT",
+    "QC-PRIVACY-INCIDENT-RECORDS"
+  ],
+  "PRV-7": [],
+  "PRV-8": [],
+  "PRV-9": []
+}

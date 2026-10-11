@@ -368,13 +368,14 @@ export async function summaryPortable(
   // Only rules written for this entity type and home jurisdiction apply.
   const applicableRulePack = dashboardComplianceRulePackForOrganization(society);
   const visibleRules = applicableRulePack.rules.filter(rule => {
-    if (rule.id.startsWith("BC-SOC-DIRECTOR")) return readAccess.has("directors:read");
+    if (rule.id.startsWith("BC-SOC-DIRECTOR") || /-DIRECTOR/.test(rule.id)) return readAccess.has("directors:read");
     if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
     return readAccess.has("documents:read");
   });
   const complianceFlags = evaluateDashboardComplianceRules({
     society: society
       ? {
+          ...society,
           isMemberFunded: society.isMemberFunded,
           privacyPolicyDocId: society.privacyPolicyDocId,
           privacyProgramStatus: society.privacyProgramStatus,
@@ -387,6 +388,7 @@ export async function summaryPortable(
     activeDirectors: activeDirectors.map((director: Record<string, any>) => ({
       consentOnFile: director.consentOnFile,
       isBCResident: director.isBCResident,
+      residentCanadianStatus: director.residentCanadianStatus,
     })),
     rulesConfigured: Boolean(rules?._id),
   }, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length).map((flag) => {

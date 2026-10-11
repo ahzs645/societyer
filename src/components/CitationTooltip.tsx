@@ -325,13 +325,13 @@ const CitationPopover = forwardRef<HTMLDivElement, CitationPopoverProps>(
             <BookMarked size={12} aria-hidden="true" />
             <span>{citation.source}</span>
           </div>
-          <blockquote className="citation-popover__quote">
-            &ldquo;{citation.quote}&rdquo;
-          </blockquote>
+          {citation.quoteKind === "summary" ? <div className="citation-popover__quote"><strong>Rule summary. </strong>{citation.quote}</div> : <blockquote className="citation-popover__quote">&ldquo;{citation.quote}&rdquo;</blockquote>}
           {citation.caveat && (
             <div className="citation-popover__caveat">{citation.caveat}</div>
           )}
           <div className="citation-popover__meta">{citation.fullCitation}</div>
+          {citation.sourceCurrentToISO && <div className="citation-popover__meta">Source current to {citation.sourceCurrentToISO}</div>}
+          {citation.reviewedOnISO && <div className="citation-popover__meta">Reviewed {citation.reviewedOnISO}{citation.sourceStatus === "proposed" ? " · Proposed; not in force" : ""}</div>}
           <div className="citation-popover__actions">
             <a
               className="citation-popover__link"

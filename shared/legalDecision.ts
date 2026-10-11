@@ -17,6 +17,10 @@ export type LegalDecisionInput = {
   financialStatementsProvided?: boolean;
   annualBusinessComplete?: boolean;
   deemedAgm?: boolean;
+  offeringCorporation?: boolean;
+  directorAuthorityReviewed?: boolean;
+  /** Ontario s.104 ordinary majority uses entitled voting shares, even where votes per share differ. */
+  votingShareCountsConfirmed?: boolean;
 };
 export type LegalDecisionResult = {
   carries: boolean | null;
@@ -36,12 +40,11 @@ export function evaluateLegalDecision(input: LegalDecisionInput): LegalDecisionR
   const written = input.mode === "written";
   const directors = input.body === "directors";
   const warnings: string[] = [];
-  if (input.jurisdiction === "CA-ON-OBCA") warnings.push("Ontario governance automation remains gated pending review of the operative articles, bylaws and applicable statute.");
   let numerator = input.resolution === "special" ? 2 : 1;
   let divisor = input.resolution === "special" ? 3 : input.resolution === "ordinary" ? 2 : 1;
   let strict = input.resolution === "ordinary";
   let denominator: LegalDecisionResult["denominator"] = "votes_cast";
-  const citation = society ? (bc ? "BC Societies Act ss.1, 54, 67-71; applicable bylaws" : "Review the governing statute and bylaws for this society") : bc
+  const citation = society ? (bc ? "BC Societies Act ss.1, 54, 71-72, 82; applicable bylaws" : "Review the governing statute and bylaws for this society") : bc
     ? "BC Business Corporations Act ss.1, 167-175, 182; applicable articles"
     : input.jurisdiction === "CA-FED-CBCA" ? "CBCA ss.117, 139, 142; articles/by-laws" : "OBCA ss.129, 101, 104; articles/by-laws";
   if (society && (!bc || input.body === "shareholders")) warnings.push("This entity and decision body combination is unsupported.");
@@ -57,7 +60,11 @@ export function evaluateLegalDecision(input: LegalDecisionInput): LegalDecisionR
     if (directors || input.resolution !== "ordinary" || (!bc && !society)) { numerator = 1; divisor = 1; }
     else if (!(bc && !society && (input.preExistingCompany || input.specialMajority === "three_quarters"))) { numerator = 2; divisor = 3; }
     if (!input.circulatedToAll) warnings.push("Written resolutions must be distributed to every person entitled to vote; distribution evidence is missing.");
-    if (directors) warnings.push(society
+    if (input.jurisdiction === "CA-ON-OBCA" && !directors && input.resolution === "ordinary" && input.offeringCorporation === false) {
+      numerator = 1; divisor = 2; strict = true;
+      if (!input.votingShareCountsConfirmed) warnings.push("Ontario private ordinary written resolutions count entitled voting shares, not weighted votes; confirm this denominator and the ten-business-day notice obligation to non-signers.");
+    }
+    if (directors && !input.directorAuthorityReviewed) warnings.push(society
       ? "Confirm director eligibility, conflicts and any society bylaw exception to the unanimous written baseline."
       : "Confirm director eligibility and conflicts before relying on the unanimous written baseline.");
   } else if (input.quorumMet !== true) warnings.push("A meeting result requires evidenced quorum.");
@@ -99,11 +106,12 @@ export function legalMeetingQuorum(input: {
     if (input.jurisdiction !== "CA-BC") return { met: null, minimumPeople: 0, citation: "Review the governing statute and bylaws for this society" };
     const configured = input.configuredMinimum ?? (input.adoptedModel === "bc_society" ? Math.max(3, Math.ceil(eligiblePeople / 10)) : 3);
     const minimumPeople = Math.min(eligiblePeople, Math.max(3, configured));
-    return { met: presentPeople >= minimumPeople, minimumPeople, citation: "Societies Act s.67; adopted Model Bylaw 3.7 where applicable" };
+    return { met: presentPeople >= minimumPeople, minimumPeople, citation: "Societies Act s.82; adopted Model Bylaw 3.7 where applicable" };
   }
   if (input.jurisdiction !== "CA-BC") {
-    if (input.jurisdiction === "CA-ON-OBCA" || input.eligibleVotingShares === undefined || input.presentVotingShares === undefined || input.eligibleVotingShares <= 0) return { met: null, minimumPeople: 1, citation: "CBCA s.139 / OBCA s.101; applicable by-laws and issued voting shares required" };
-    return { met: presentPeople > 0 && input.presentVotingShares * 2 > input.eligibleVotingShares, minimumPeople: 1, citation: "CBCA s.139; verify any by-law departure" };
+    const citation = input.jurisdiction === "CA-ON-OBCA" ? "OBCA s.101; verify any by-law departure" : "CBCA s.139; verify any by-law departure";
+    if (input.eligibleVotingShares === undefined || input.presentVotingShares === undefined || input.eligibleVotingShares <= 0) return { met: null, minimumPeople: 1, citation: `${citation}; issued voting shares required` };
+    return { met: presentPeople > 0 && BigInt(input.presentVotingShares) * 2n > BigInt(input.eligibleVotingShares), minimumPeople: 1, citation };
   }
   const minimumPeople = Math.min(eligiblePeople, input.configuredMinimum ?? 2);
   if (input.adoptedModel === "bc_table_1" && eligiblePeople > 1) {

@@ -19,6 +19,8 @@ import {
   corporationPacketDocxMimeType,
 } from "../../shared/corporationPacketDocx";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
+import { buildSocietyRenderContext } from "../../shared/societyRenderContext";
+import { annualResolutionDataWithAuthority, buildAnnualResolutionContext } from "../../shared/annualResolution";
 
 type DocStoreLike = {
   transaction: (fn: () => void) => void;
@@ -198,7 +200,7 @@ export function staticCreatePacketRunArtifacts(
 ) {
   const now = new Date().toISOString();
   const run = store?.getRow("legalPrecedentRuns", args.runId);
-  const signerRoleHolderIds = args.signerRoleHolderIds?.length
+  const signerRoleHolderIds = args.packet.preparationOnly || !args.packet.signatureRequired ? [] : args.signerRoleHolderIds?.length
     ? args.signerRoleHolderIds
     : (store?.listRows("roleHolders", { societyId: args.societyId }) ?? [])
       .filter((row: any) => row.status === "current" && ["director", "officer", "authorized_representative"].includes(row.roleType))
@@ -210,9 +212,27 @@ export function staticCreatePacketRunArtifacts(
   ]);
   const society = store?.getRow("societies", args.societyId);
   assertPacketCompatible(society, args.packet);
-  const provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
+  let provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
   const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate };
-  const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
+  const roles = store?.listRows("roleHolders", { societyId: args.societyId }) ?? [];
+  const renderContext = buildSocietyRenderContext(society, roles, args.effectiveDate ?? now);
+  const runData = JSON.parse(provenanceData) as Record<string, unknown>;
+  const context = args.packet.key === "annual-resolutions" ? {
+    ...renderContext,
+    annual: buildAnnualResolutionContext({
+      organization: society,
+      waivePrepFinancials: society?.waivePrepFinancials,
+      waiveAuditor: runData.waiveAuditor === true,
+      auditorName: typeof runData.auditorName === "string" ? runData.auditorName : undefined,
+      fiscalYearEnd: society?.fiscalYearEnd,
+      financialPeriodEnd: typeof runData.financialPeriodEnd === "string" ? runData.financialPeriodEnd : undefined,
+      annualBusinessYear: typeof runData.annualBusinessYear === "number" ? runData.annualBusinessYear : undefined,
+      annualReferenceDate: typeof runData.annualReferenceDate === "string" ? runData.annualReferenceDate : undefined,
+      directors: renderContext.dir.list,
+    }),
+  } : renderContext;
+  if ('annual' in context) provenanceData = annualResolutionDataWithAuthority(provenanceData, context.annual, now);
+  const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context as unknown as Record<string, unknown>);
   const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = staticLocalId("document", `${args.packet.key}_editable_docx`);
@@ -234,9 +254,8 @@ export function staticCreatePacketRunArtifacts(
       content: corporationPacketTemplateHtml(args.packet),
       url: docxDataUrl,
       fileSizeBytes: docxDataUrl.length,
-      retentionYears: 7,
       createdAtISO: now,
-      reviewStatus: "needs_signature",
+      reviewStatus: args.packet.preparationOnly || !args.packet.signatureRequired ? "needs_review" : "needs_signature",
       librarySection: "governance",
       flaggedForDeletion: false,
       sourceExternalIds,
@@ -264,7 +283,7 @@ export function staticCreatePacketRunArtifacts(
       _creationTime: Date.now(),
       societyId: args.societyId,
       title: args.packet.packageName,
-      status: "draft",
+      status: args.packet.preparationOnly ? "needs_review" : "draft",
       draftDocumentId,
       sourceTemplateName: args.packet.templateName,
       precedentRunId: args.runId,
@@ -275,7 +294,7 @@ export function staticCreatePacketRunArtifacts(
       subloopJsonList: [],
       signersRequiredRoleHolderIds: signerRoleHolderIds,
       signersWhoSignedIds: [],
-      signerTagsRequired: args.packet.requiredSigners ?? [],
+      signerTagsRequired: args.packet.preparationOnly ? [] : args.packet.requiredSigners ?? [],
       signerTagsSigned: [],
       sourceDocumentIds: [draftDocumentId],
       sourceExternalIds: staticUniqueStrings([
@@ -283,7 +302,7 @@ export function staticCreatePacketRunArtifacts(
         `societyer:editable-document:${draftDocumentId}`,
         `societyer:document-version:${draftDocumentVersionId}`,
       ]),
-      notes: args.notes,
+      notes: args.packet.preparationOnly ? [args.notes, "Preparation draft only: complete review and prepare a separate execution copy with the lawful electorate. No signatures, meeting completion or filing acceptance are inferred."].filter(Boolean).join("\n") : args.notes,
       createdAtISO: now,
       updatedAtISO: now,
     });
@@ -326,7 +345,7 @@ export function staticCreatePacketRunArtifacts(
       targetId: generatedDocumentId,
       sensitivity: "standard",
       accessLevel: "internal",
-      summary: `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
+      summary: args.packet.preparationOnly ? `Editable preparation draft and provenance staged for ${args.packet.packageName}; execution and filing remain separate.` : `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
       status: "Linked",
       notes: args.notes,
       createdAtISO: now,
