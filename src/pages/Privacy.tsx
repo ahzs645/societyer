@@ -450,7 +450,7 @@ export function PrivacyPage() {
                   ) : (
                     <>
                       <strong>Draft privacy setup motions</strong>
-                      <span>The starter motions adopt a BC PIPA policy, so they are not offered here. Draft officer, policy and training motions in the backlog.</span>
+                      <span>Starter motions are only provided for BC workspaces. Draft officer, policy and training motions for this organization in the backlog.</span>
                     </>
                   )}
                 </div>

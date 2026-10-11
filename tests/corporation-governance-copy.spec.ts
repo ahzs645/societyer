@@ -176,6 +176,12 @@ test("a CBCA corporation sees corporate profile, communications, workflow, resea
   await expect(page.getByTestId("election-voter-source")).toContainText("Shareholders holding voting shares on the share register: 1");
   await expect(page.getByText("Shareholder elections with anonymous ballots.", { exact: true })).toBeVisible();
 
+  await visit("/app/point-in-time-register", "Point-in-time register");
+  await expect(page.getByRole("heading", { name: /^Shareholders \(\d+\)$/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Members \(/ })).toHaveCount(0);
+  await visit("/app/minute-book", "Minute book");
+  await expect(page.getByText("Your corporation's legal records and the evidence behind them.", { exact: true })).toBeVisible();
+
   // Item 9: stored record-table labels are worded for the entity at render time.
   await visit("/app/role-holders", "Corporation people");
   await expect(page.getByText("Share / right class", { exact: true }).first()).toBeVisible();

@@ -6,6 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -223,7 +224,7 @@ export function MinuteBookPage() {
         title="Minute book"
         icon={<BookOpen size={16} />}
         iconColor="purple"
-        subtitle="Your society's legal records and the evidence behind them."
+        subtitle={`Your ${organizationVocabulary(society).organizationNoun}'s legal records and the evidence behind them.`}
         info={<p>A legal record spine tying documents, meetings, minutes, resolutions, filings, signatures, policies, and workflow packages together.</p>}
         actions={
           <>
