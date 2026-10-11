@@ -49,6 +49,35 @@ export function directorNoticeRecipients(directors?: Row[] | null, roleHolders?:
 }
 
 /**
+ * Directors can be recorded in the `directors` table, as current director role
+ * holders, or both. A verified directory link identifies the same person in both
+ * registers. When both registers hold directors and any entry lacks a match, the
+ * registers disagree and an exact board electorate cannot be frozen.
+ */
+export function directorRegisterComparison(directors?: Row[] | null, roleHolders?: Row[] | null) {
+  const active = (directors ?? []).filter((row) => row.status === "Active");
+  const current = (roleHolders ?? []).filter((row) => row.roleType === "director" && String(row.status ?? "current") === "current");
+  if (!active.length || !current.length) return { agree: true, directorsOnly: 0, roleHoldersOnly: 0 };
+  const directorLinks = new Set(active.map((row) => row.directoryPersonId).filter(Boolean).map(String));
+  const roleLinks = new Set(current.map((row) => row.directoryPersonId).filter(Boolean).map(String));
+  const directorsOnly = active.filter((row) => !row.directoryPersonId || !roleLinks.has(String(row.directoryPersonId))).length;
+  const roleHoldersOnly = current.filter((row) => !row.directoryPersonId || !directorLinks.has(String(row.directoryPersonId))).length;
+  return { agree: directorsOnly === 0 && roleHoldersOnly === 0, directorsOnly, roleHoldersOnly };
+}
+
+/** Shareholders with votes, as counted by the share-register voting summary. */
+export function votingHolderRecipients(voting: readonly { holderKey: string; holderName?: string }[], roleHolders?: Row[] | null): NoticeRecipient[] {
+  const byRole = new Map((roleHolders ?? []).map((row) => [String(row._id), row]));
+  return voting.map((holder) => {
+    const id = holder.holderKey.startsWith("roleHolder:") ? holder.holderKey.slice("roleHolder:".length) : undefined;
+    const role = id ? byRole.get(id) : undefined;
+    return { recipientKey: role ? `roleHolder:${role._id}` : holder.holderKey, roleHolderId: role ? String(role._id) : undefined,
+      name: text(role?.fullName) ?? holder.holderName ?? holder.holderKey, email: text(role?.email), phone: text(role?.phone),
+      address: roleHolderMailingAddress(role), role: "Shareholder" };
+  });
+}
+
+/**
  * CBCA/OBCA general meeting notices: voting shareholders, directors and auditor.
  * BC BCA s.169 uses entitlement to attend: include all registered holders for
  * review instead of silently excluding a non-voting class that can attend.

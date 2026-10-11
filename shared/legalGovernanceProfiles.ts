@@ -70,10 +70,38 @@ export function minimumLegalDirectors(organization?: GovernanceOrganization | nu
 export function requiredResidentCanadianDirectors(totalDirectors: number): number {
   return totalDirectors > 0 ? Math.max(1, Math.ceil(totalDirectors / 4)) : 1;
 }
-export function writtenResolutionRule(organization: GovernanceOrganization | null | undefined, kind: 'Ordinary' | 'Special', body: 'members' | 'shareholders' | 'directors' = 'members') {
+/** Reviewed departures from the default written route. Neither is ever applied silently. */
+export type WrittenResolutionOptions = {
+  /** Societies Act s. 1 (c) definitions: bylaws authorize member voting by mail or electronic means. */
+  route?: 'written_consent' | 'mail_electronic_vote';
+  /** A bylaw/articles threshold below unanimity for directors' written consent. */
+  directorsOverride?: { numerator: number; denominator: number };
+};
+export type WrittenResolutionRoute = NonNullable<WrittenResolutionOptions['route']>;
+export function validDirectorsOverride(value?: { numerator: number; denominator: number }) {
+  return !!value && Number.isSafeInteger(value.numerator) && Number.isSafeInteger(value.denominator) &&
+    value.numerator >= 1 && value.denominator <= 100 && value.numerator < value.denominator;
+}
+export function writtenResolutionRule(organization: GovernanceOrganization | null | undefined, kind: 'Ordinary' | 'Special', body: 'members' | 'shareholders' | 'directors' = 'members', options: WrittenResolutionOptions = {}) {
   const profile = legalGovernanceProfile(organization);
   if (!profile) return undefined;
   const r = profile.resolutions;
+  if (options.route === 'mail_electronic_vote') {
+    // The (c) route counts votes cast; it exists only where the profile records it.
+    const vote = r.memberMailElectronicVote;
+    if (!vote || body !== 'members') return undefined;
+    const threshold = kind === 'Special' ? vote.special : vote.ordinary;
+    return { ...threshold, unit: 'people' as const, basis: 'votes_cast' as const, unanimous: false, route: 'mail_electronic_vote' as const,
+      sourceIds: vote.sourceIds, caveat: vote.provision, noticeBusinessDays: undefined, usesSpecialMajority: false, override: undefined };
+  }
+  if (body === 'directors' && options.directorsOverride) {
+    const override = r.directorsWrittenOverride;
+    if (!override || !validDirectorsOverride(options.directorsOverride)) return undefined;
+    return { numerator: options.directorsOverride.numerator, denominator: options.directorsOverride.denominator, strict: false,
+      unit: 'people' as const, basis: 'eligible' as const, unanimous: false, route: 'written_consent' as const,
+      sourceIds: override.sourceIds, caveat: override.provision, noticeBusinessDays: undefined, usesSpecialMajority: false,
+      override: 'directors_governing_instrument' as const };
+  }
   const unanimous = body === 'directors' || kind === 'Special' ||
     (r.ordinaryWrittenNumerator === r.ordinaryWrittenDenominator && !r.ordinaryWrittenStrict) ||
     (r.ordinaryWrittenNonPublicOnly && organization?.distributing !== false);
@@ -82,11 +110,14 @@ export function writtenResolutionRule(organization: GovernanceOrganization | nul
     denominator: unanimous ? 1 : r.ordinaryWrittenDenominator,
     strict: unanimous ? false : r.ordinaryWrittenStrict,
     unit: body === 'shareholders' && !unanimous ? r.ordinaryWrittenDenominatorBasis ?? 'votes' : 'people' as const,
+    basis: 'eligible' as const,
     unanimous,
+    route: 'written_consent' as const,
     sourceIds: r.sourceIds,
     caveat: r.caveat,
     noticeBusinessDays: !unanimous ? r.ordinaryWrittenNoticeBusinessDays : undefined,
     usesSpecialMajority: !unanimous && r.ordinaryWrittenUsesSpecialMajority,
+    override: undefined,
   };
 }
 export function requiredWrittenConsents(total: number, rule: { numerator: number; denominator: number; strict: boolean }): number {

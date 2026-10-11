@@ -1,4 +1,65 @@
 /** Evidence recorded by an authorized officer; this is not a digital-signature service. */
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, organizationTimeZone, type LegalEntityLike } from "./organizationDomain";
+import { legalProfileRegistry } from "./legalGovernanceProfiles";
+
+/** New circulation records must be entered within this period after circulation. */
+export const CIRCULATION_RECORDING_WINDOW_HOURS = 72;
+
+/**
+ * The organization's local calendar for circulation and record dates:
+ * America/Vancouver for BC, America/Toronto for Ontario and federal
+ * corporations, an explicit workspace time zone when recorded, else UTC.
+ */
+export function resolutionTimeZone(organization?: (LegalEntityLike & { timeZone?: string | null }) | null): string {
+  const zone = organizationTimeZone(organization);
+  if (zone) return zone;
+  const code = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
+  // A legacy society with no recorded jurisdiction resolves to the BC profile.
+  const profileCode = legalProfileRegistry.resolve(organization)?.jurisdictionCode ?? "";
+  if (/^CA-FED(?:-|$)/.test(code) || /^CA-(?:FED|ON)(?:-|$)/.test(profileCode)) return "America/Toronto";
+  if (/^CA-BC(?:-|$)/.test(profileCode)) return "America/Vancouver";
+  return "UTC";
+}
+
+/** Circulation must be recorded promptly, so the current register still reflects the circulation-date electorate. */
+export function validateCirculationRecordingWindow(circulatedAtISO: string, nowISO: string) {
+  const elapsed = Date.parse(nowISO) - Date.parse(circulatedAtISO);
+  if (!Number.isFinite(elapsed) || elapsed < 0) throw new Error("The actual circulation date and time cannot be in the future.");
+  if (elapsed > CIRCULATION_RECORDING_WINDOW_HOURS * 3_600_000) {
+    throw new Error(`Record a new circulation within ${CIRCULATION_RECORDING_WINDOW_HOURS} hours after it occurred. Historical signed resolutions need their original reviewed electorate and supporting records; today's register cannot establish that history.`);
+  }
+}
+
+/** The nth weekday after a calendar date. Holidays only push a business-day deadline later. */
+export function weekdayAfter(dateISO: string, count: number): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO) || !Number.isSafeInteger(count) || count < 0) return undefined;
+  const date = new Date(`${dateISO}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== dateISO) return undefined;
+  let remaining = count;
+  while (remaining > 0) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    if (date.getUTCDay() !== 0 && date.getUTCDay() !== 6) remaining -= 1;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Allowance for statutory holidays and special proclamations inside one
+ * business-day period (for example Dec 25, Dec 26 and Jan 1, plus a margin).
+ */
+export const NOTICE_HOLIDAY_ALLOWANCE_DAYS = 5;
+
+/**
+ * A reviewed OBCA s. 104(3) deadline must fall between the nth weekday after
+ * the statutory-majority date (no holidays) and that date plus the holiday
+ * allowance. A later "reviewed" date would mark late notices as complete.
+ */
+export function noticeDueDateWindow(triggerDateISO: string, businessDays: number) {
+  const earliestISO = weekdayAfter(triggerDateISO, businessDays);
+  const latestISO = weekdayAfter(triggerDateISO, businessDays + NOTICE_HOLIDAY_ALLOWANCE_DAYS);
+  return earliestISO && latestISO ? { earliestISO, latestISO } : undefined;
+}
+
 export type ResolutionElector = {
   key: string;
   name: string;
@@ -14,6 +75,8 @@ export type RecordedResolutionConsent = {
   recordedByUserId?: string;
   signedAtISO: string;
   recordedAtISO?: string;
+  /** Only the Societies Act s. 1 (c) vote route records votes against. */
+  vote?: "for" | "against";
 };
 
 /** Exact UTC timestamps keep the legal event separate from its later audit entry. */
@@ -60,7 +123,8 @@ export function resolutionConsentProgress(
     if (!elector || signed.has(elector.key) || (signature.consentEvidence?.trim().length ?? 0) < 12 ||
         !signature.recordedByUserId || signature.weight !== elector.weight ||
         !Number.isSafeInteger(elector.weight) || elector.weight < 1 || !signedAt || !recordedAt ||
-        signedAt > recordedAt || !asOf || recordedAt > asOf || (circulation && signedAt < circulation)) {
+        signedAt > recordedAt || !asOf || recordedAt > asOf || (circulation && signedAt < circulation) ||
+        (signature.vote !== undefined && signature.vote !== "for")) {
       valid = false;
       continue;
     }
@@ -78,6 +142,56 @@ export function resolutionConsentProgress(
     }
   }
   return { count, people: signed.size, valid, thresholdMet: valid && count >= requiredCount, thresholdReachedAtISO };
+}
+
+/**
+ * Societies Act s. 1 (c) route: the threshold is a share of the votes cast by
+ * mail or electronic means. The result exists only after voting closes and an
+ * officer certifies that every cast vote is recorded; until then missing
+ * "against" votes could change it.
+ */
+export function resolutionVoteProgress(
+  electorate: readonly ResolutionElector[],
+  signatures: readonly RecordedResolutionConsent[],
+  rule: { numerator: number; denominator: number; strict: boolean },
+  chronology: ResolutionChronology & { closesAtISO?: string; countCertifiedAtISO?: string },
+) {
+  const electors = new Map(electorate.map((entry) => [entry.key, entry]));
+  const voted = new Set<string>();
+  const asOf = resolutionTimestamp(chronology.asOfISO ?? new Date().toISOString());
+  const circulation = resolutionTimestamp(chronology.circulatedAtISO);
+  const closes = resolutionTimestamp(chronology.closesAtISO);
+  const certified = resolutionTimestamp(chronology.countCertifiedAtISO);
+  let valid = electors.size === electorate.length && electorate.length > 0 && !!asOf && !!circulation && !!closes && closes > circulation &&
+    electorate.every((elector) => !!elector.key && !!elector.name?.trim() && elector.weight === 1);
+  let count = 0;
+  let against = 0;
+  for (const signature of signatures) {
+    const elector = signature.electorKey ? electors.get(signature.electorKey) : undefined;
+    const signedAt = resolutionTimestamp(signature.signedAtISO);
+    const recordedAt = resolutionTimestamp(signature.recordedAtISO);
+    if (!elector || voted.has(elector.key) || (signature.consentEvidence?.trim().length ?? 0) < 12 || !signature.recordedByUserId ||
+        signature.weight !== elector.weight || !signedAt || !recordedAt || signedAt > recordedAt || !asOf || recordedAt > asOf ||
+        !circulation || signedAt < circulation || !closes || signedAt > closes || !["for", "against"].includes(String(signature.vote))) {
+      valid = false;
+      continue;
+    }
+    voted.add(elector.key);
+    if (signature.vote === "for") count += elector.weight; else against += elector.weight;
+  }
+  const cast = count + against;
+  const closed = !!asOf && !!closes && asOf >= closes;
+  const countCertified = closed && !!certified && !!closes && certified >= closes && !!asOf && certified <= asOf;
+  const requiredCount = cast > 0 ? requiredVotesCast(cast, rule) : 0;
+  const thresholdMet = valid && countCertified && cast > 0 && count >= requiredCount;
+  return { count, against, cast, people: voted.size, valid, closed, countCertified, requiredCount, thresholdMet,
+    thresholdReachedAtISO: thresholdMet ? closes : undefined, decided: valid && countCertified };
+}
+
+/** Same fraction arithmetic as eligible-voter thresholds, applied to votes cast. */
+function requiredVotesCast(cast: number, rule: { numerator: number; denominator: number; strict: boolean }) {
+  const product = cast * rule.numerator;
+  return rule.strict ? Math.floor(product / rule.denominator) + 1 : Math.ceil(product / rule.denominator);
 }
 
 export function validateResolutionConsent(
@@ -106,6 +220,8 @@ export type ResolutionNoticeDeadline = {
   dueDateISO?: string;
   triggerDateISO?: string;
   timeZone?: string;
+  /** Statutory business-day period; OBCA s. 104(3) uses ten. */
+  businessDays?: number;
   calendarEvidence?: string;
   reviewedByUserId?: string;
   reviewedAtISO?: string;
@@ -149,7 +265,8 @@ export function resolutionNoticeProgress(
   const triggerDate = trigger ? resolutionCalendarDate(trigger, timeZone) : undefined;
   const dueDate = typeof deadline.dueDateISO === "string" && /^\d{4}-\d{2}-\d{2}$/.test(deadline.dueDateISO) && resolutionTimestamp(`${deadline.dueDateISO}T00:00:00Z`) ? deadline.dueDateISO : undefined;
   const reviewedAt = resolutionTimestamp(deadline.reviewedAtISO);
-  const deadlineReviewed = !!dueDate && !!triggerDate && dueDate >= triggerDate && deadline.triggerDateISO === triggerDate &&
+  const window = triggerDate ? noticeDueDateWindow(triggerDate, deadline.businessDays ?? 10) : undefined;
+  const deadlineReviewed = !!dueDate && !!triggerDate && !!window && dueDate >= window.earliestISO && dueDate <= window.latestISO && deadline.triggerDateISO === triggerDate &&
     !!deadline.reviewedByUserId && !!reviewedAt && !!asOf && reviewedAt <= asOf && (deadline.calendarEvidence?.trim().length ?? 0) >= 12;
   const today = asOf ? resolutionCalendarDate(asOf, timeZone) : undefined;
   const detail = recipients.map((elector) => {

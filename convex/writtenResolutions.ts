@@ -5,6 +5,7 @@ import {
   listPortable,
   createPortable,
   signPortable,
+  certifyVoteCountPortable,
   markFailedPortable,
   removePortable,
   previewPortable,
@@ -15,9 +16,14 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 const body = v.optional(v.union(v.literal("members"), v.literal("shareholders"), v.literal("directors")));
 const kind = v.union(v.literal("Ordinary"), v.literal("Special"));
 const specialMajority = v.optional(v.union(v.literal("two_thirds"), v.literal("three_quarters")));
+// Societies Act s. 1 (c): bylaws authorize member voting by mail or electronic means.
+const route = v.optional(v.union(v.literal("written_consent"), v.literal("mail_electronic_vote")));
+// A reviewed bylaw/articles threshold below unanimous directors' consent.
+const directorsOverride = v.optional(v.object({ numerator: v.number(), denominator: v.number() }));
 
 export const preview = authorizedQuery("writtenResolutions:preview", query)({
-  args: { societyId: v.id("societies"), body, kind: v.optional(kind), recordDateISO: v.optional(v.string()), specialMajority },
+  args: { societyId: v.id("societies"), body, kind: v.optional(kind), recordDateISO: v.optional(v.string()), specialMajority,
+    circulatedAtISO: v.optional(v.string()), route, directorsOverride },
   returns: v.any(),
   handler: async (ctx, args) => previewPortable(await toPortableQueryCtx(ctx), args),
 });
@@ -37,6 +43,11 @@ export const create = authorizedMutation("writtenResolutions:create", mutation)(
     body,
     recordDateISO: v.optional(v.string()),
     specialMajority,
+    route,
+    directorsOverride,
+    directorsOverrideEvidence: v.optional(v.string()),
+    votingRouteEvidence: v.optional(v.string()),
+    votingClosesAtISO: v.optional(v.string()),
     requiredCount: v.optional(v.number()),
     governingInstrumentEvidence: v.string(),
     electorateEvidence: v.string(),
@@ -58,9 +69,16 @@ export const sign = authorizedMutation("writtenResolutions:sign", mutation)({
     consentDocumentId: v.optional(v.id("documents")),
     signerName: v.optional(v.string()),
     memberId: v.optional(v.id("members")),
+    vote: v.optional(v.union(v.literal("for"), v.literal("against"))),
   },
   returns: v.any(),
   handler: async (ctx, args) => signPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const certifyVoteCount = authorizedMutation("writtenResolutions:certifyVoteCount", mutation)({
+  args: { id: v.id("writtenResolutions"), evidence: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => certifyVoteCountPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordNotice = authorizedMutation("writtenResolutions:recordNotice", mutation)({

@@ -23,6 +23,24 @@ export type LegalRecordRequirement = {
   access: string;
   caveat?: string;
 };
+/**
+ * How far before the event a record date may fall. `statutory` means the cited
+ * research states the limit; `conservative` means the research gives no limit
+ * for this entity and purpose, so the product applies one and flags it for review.
+ */
+export type RecordDateLimit = {
+  maxAgeDays?: number;
+  /** Calendar months counted backwards from the event (month-end clamped). */
+  maxAgeMonths?: number;
+  basis: 'statutory' | 'conservative';
+  /** Statute section as named in the research; not a source ID. */
+  section?: string;
+  /** Research report anchor supporting this entry, e.g. "meetings-records.md#mtg-5". */
+  researchAnchor: string;
+  /** Existing legal source IDs only; empty when no source record covers the section. */
+  sourceIds: readonly string[];
+  note: string;
+};
 export type LegalGovernanceProfile = {
   id: string;
   name: string;
@@ -89,8 +107,32 @@ export type LegalGovernanceProfile = {
     ordinaryWrittenDenominatorBasis?: 'votes' | 'shares';
     specialWrittenUnanimous: boolean;
     directorsWrittenUnanimous: boolean;
+    /**
+     * A governing-instrument departure from unanimous directors' written consent
+     * (Societies Act s. 54(2)(b); BC BCA s. 140(3)). Never a default: it applies
+     * only when a reviewer records the bylaw/article provision and its threshold.
+     */
+    directorsWrittenOverride?: { provision: string; sourceIds: readonly string[] };
+    /**
+     * Societies Act s. 1 "ordinary resolution" (c) / "special resolution" (c):
+     * where the bylaws authorize voting by mail or electronic means, the
+     * threshold is a share of votes cast, not of all voting members.
+     */
+    memberMailElectronicVote?: {
+      provision: string;
+      ordinary: { numerator: number; denominator: number; strict: boolean };
+      special: { numerator: number; denominator: number; strict: boolean };
+      sourceIds: readonly string[];
+    };
     sourceIds: readonly string[];
     caveat?: string;
+  };
+  /** Outer limits for a reviewed record date, measured back from the event it serves. */
+  recordDates: {
+    /** Shareholder/member meeting or election: measured from the meeting (or voting) date. */
+    meeting: RecordDateLimit;
+    /** Written resolution: measured from the circulation date. */
+    writtenResolution: RecordDateLimit;
   };
   records: readonly LegalRecordRequirement[];
   /** Public/soliciting/benefit/ULC/regulated-sector overlays must not silently inherit private-core rules. */
