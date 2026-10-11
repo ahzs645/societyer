@@ -1,4 +1,5 @@
 import { nextBcSocietyAgmDeadline } from "./agmEvidence";
+import { entityMeetingWording } from "./entityMeetingWording";
 
 /**
  * CORPORATION SETTINGS → COMPLIANCE DEADLINES (pure logic).
@@ -219,6 +220,12 @@ export function deriveComplianceDeadlines(
   fromISO: string,
 ): DerivedDeadline[] {
   const deadlines: DerivedDeadline[] = [];
+  // "AGM" for societies; "annual meeting" (of shareholders) for corporations
+  // and custom entities. Titles stay fixed: the Compliance settings page
+  // de-duplicates generated deadlines by title, so renaming them would re-offer
+  // deadlines a workspace already added.
+  const wording = entityMeetingWording({ entityType: settings.entityType, jurisdictionCode: settings.jurisdictionCode });
+  const am = wording.annualMeeting;
 
   const agmDate = nextAgmDate(settings, fromISO);
   if (agmDate) {
@@ -229,8 +236,8 @@ export function deriveComplianceDeadlines(
       category: "agm",
       deadlineCategory: "Governance",
       basis: settings.heldAgmYears
-        ? `Next AGM due; ${settings.heldAgmYears.includes(Number(fromISO.slice(0, 4))) ? "this year's AGM is on record" : "no AGM is on record for this calendar year yet"}.`
-        : "Next planned AGM date.",
+        ? `Next ${am} due; ${settings.heldAgmYears.includes(Number(fromISO.slice(0, 4))) ? `this year's ${am} is on record` : `no ${am} is on record for this calendar year yet`}.`
+        : `Next planned ${am} date.`,
     });
   }
 
@@ -242,7 +249,9 @@ export function deriveComplianceDeadlines(
       dueDate: fyEnd,
       category: "financial",
       deadlineCategory: "Governance",
-      basis: "Close the books and prepare financial statements for the AGM.",
+      basis: wording.isCorporation
+        ? "Close the books and prepare financial statements for the annual meeting of shareholders."
+        : `Close the books and prepare financial statements for the ${am}.`,
     });
   }
 
@@ -254,7 +263,7 @@ export function deriveComplianceDeadlines(
     // Act s.73). Only applied when AGM history is known (cycle-aware mode).
     if (annualReport && settings.heldAgmYears && annualReport < fromISO.slice(0, 10) && agmDate && settings.entityType !== "corporation__business_") {
       annualReport = offsetDate(agmDate, 0, 30);
-      reportBasis = "Due 30 days after the next AGM.";
+      reportBasis = `Due 30 days after the next ${am}.`;
     }
     if (annualReport) {
       deadlines.push({

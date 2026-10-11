@@ -7,6 +7,7 @@ import {
   agmMarkStep,
   logNoticeDelivery as logNoticeDeliveryPortable,
   noticeDeliveries as noticeDeliveriesPortable,
+  noticeCoverage as noticeCoveragePortable,
   queueNoticeToAllVotingMembers as queueNoticeToAllVotingMembersPortable,
 } from "../shared/functions/agm";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -69,6 +70,15 @@ export const noticeDeliveries = authorizedQuery("agm:noticeDeliveries", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => noticeDeliveriesPortable(await toPortableQueryCtx(ctx), args),
+});
+
+/** "Notice coverage" for an annual meeting: voting members for a society,
+ *  voting shareholders (share register / shareholder role holders) for a
+ *  corporation. Returns ready-to-show value/detail/tone plus the counts. */
+export const noticeCoverage = authorizedQuery("agm:noticeCoverage", query)({
+  args: { meetingId: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, args) => noticeCoveragePortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Bulk-create notice delivery records for all voting members.

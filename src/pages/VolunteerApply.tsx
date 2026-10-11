@@ -40,6 +40,7 @@ export function VolunteerApplyPage() {
     interests: "",
     notes: "",
   });
+  const entityNoun = legalCopyForOrganization(context?.society).entityNoun;
   const errors = useMemo(() => {
     const next: ErrorSummaryItem[] = [];
     if (!form.firstName.trim()) {
@@ -54,10 +55,10 @@ export function VolunteerApplyPage() {
       next.push({ fieldId: FIELD_IDS.email, label: "Email", message: "Enter a valid email address." });
     }
     if (!form.roleWanted.trim()) {
-      next.push({ fieldId: FIELD_IDS.roleWanted, label: "Role or area of interest", message: "Tell the society where you would like to help." });
+      next.push({ fieldId: FIELD_IDS.roleWanted, label: "Role or area of interest", message: `Tell the ${entityNoun} where you would like to help.` });
     }
     return next;
-  }, [form.email, form.firstName, form.lastName, form.roleWanted]);
+  }, [entityNoun, form.email, form.firstName, form.lastName, form.roleWanted]);
 
   if (context === undefined) return <PageLoading />;
   if (!context || !context.society) {
@@ -121,7 +122,7 @@ export function VolunteerApplyPage() {
             <HandHeart size={12} /> Volunteer application
           </div>
           <h1 className="intake__title">Volunteer with {context.society.name}</h1>
-          <p className="intake__lede">Tell the {legalCopyForOrganization(context.society).entityNoun} where you'd like to help. Someone will follow up by email.</p>
+          <p className="intake__lede">Tell the {entityNoun} where you'd like to help. Someone will follow up by email.</p>
         </header>
 
         {completed ? (
@@ -170,7 +171,7 @@ export function VolunteerApplyPage() {
                     <input className="input" value={form.interests} onChange={(e) => setForm({ ...form, interests: e.target.value })} />
                   </Field>
                 </div>
-                <Field label={`Anything else the ${legalCopyForOrganization(context.society).entityNoun} should know?`}>
+                <Field label={`Anything else the ${entityNoun} should know?`}>
                   <textarea className="textarea" rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                 </Field>
               </fieldset>

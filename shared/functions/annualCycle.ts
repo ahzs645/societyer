@@ -24,6 +24,7 @@ import { resolveMinutesMotions } from "./minutes";
 import { annualReportForAgm, isAgmMeeting, isHeldMeeting, noAgmAnnualReportForYear } from "../agmEvidence";
 import { localDateKey } from "../dateOnly";
 import { organizationRuleScope } from "../entityRuleScope";
+import { entityMeetingWording } from "../entityMeetingWording";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -97,6 +98,10 @@ export async function summaryPortable(
   const scope = organizationRuleScope(society);
   const corporation = scope.isCorporation;
   const holderNoun = corporation ? "shareholder" : "member";
+  // "AGM" for societies; "annual meeting" for corporations and custom entities.
+  const wording = entityMeetingWording(society);
+  const am = wording.annualMeeting;
+  const amTitle = wording.annualMeetingTitle;
   const requiresBcResidentDirector = scope.isBcSociety && !society?.isMemberFunded;
   const activeMembers = members.filter((member) => member.status === "Active");
   const votingMembers = activeMembers.filter((member) => member.votingRights);
@@ -181,6 +186,7 @@ export async function summaryPortable(
     agmHeld,
     noticeSent,
     today,
+    annualMeeting: am,
   });
 
   const isOpen = (d: any) => {
@@ -227,15 +233,17 @@ export async function summaryPortable(
     {
       id: "agm-scheduled",
       phase: "before",
-      title: "Schedule the AGM",
+      title: `Schedule the ${am}`,
       detail: selectedAgm
         ? `${selectedAgm.title} is on ${dateOnly(selectedAgm.scheduledAt)}.`
-        : "No AGM is scheduled for this cycle year.",
+        : `No ${am} is scheduled for this cycle year.`,
       status: selectedAgm ? "complete" : today > endISO ? "blocked" : "attention",
-      evidence: ["AGM meeting record", "Active bylaw rule set"],
+      evidence: wording.isSociety
+        ? ["AGM meeting record", "Active bylaw rule set"]
+        : ["Annual meeting record", `Meeting rules from the ${wording.governingDocuments}`],
       dueDate: selectedAgm?.scheduledAt,
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/meetings",
-      actionLabel: selectedAgm ? "Open AGM" : "Schedule AGM",
+      actionLabel: selectedAgm ? `Open ${am}` : `Schedule ${am}`,
     },
     corporation ? null : {
       id: "member-register",
@@ -260,7 +268,7 @@ export async function summaryPortable(
       detail: selectedFinancial
         ? `${selectedFinancial.fiscalYear} statements end ${selectedFinancial.periodEnd}; board approval ${selectedFinancial.approvedByBoardAt ? "recorded" : "not recorded"}.`
         : statementsPresentedAtAgm
-          ? "The AGM minutes record that statements were presented, but no financial statement record is linked to this cycle."
+          ? `The ${am} minutes record that statements were presented, but no financial statement record is linked to this cycle.`
           : "No financial statement record is linked to this cycle yet.",
       status: selectedFinancial?.statementsDocId && selectedFinancial?.approvedByBoardAt ? "complete" : selectedFinancial || statementsPresentedAtAgm ? "attention" : "blocked",
       evidence: ["Financial statement document", "Board approval", "Auditor or reviewer report if applicable"],
@@ -272,7 +280,7 @@ export async function summaryPortable(
       id: "director-readiness",
       phase: "before",
       title: "Check directors and terms",
-      detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${currentDirectorAttestations.length} annual attestation${currentDirectorAttestations.length === 1 ? "" : "s"} for ${cycleYear}${directorsTermExpiring.length > 0 ? `; ${directorsTermExpiring.length} term${directorsTermExpiring.length === 1 ? "" : "s"} expire on/before the AGM` : ""}.`,
+      detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${currentDirectorAttestations.length} annual attestation${currentDirectorAttestations.length === 1 ? "" : "s"} for ${cycleYear}${directorsTermExpiring.length > 0 ? `; ${directorsTermExpiring.length} term${directorsTermExpiring.length === 1 ? "" : "s"} expire on/before the ${am}` : ""}.`,
       status: directorReadinessStatus,
       evidence: ["Director register", "Consents and annual eligibility attestations", "Term and vacancy review"],
       to: "/directors",
@@ -284,14 +292,14 @@ export async function summaryPortable(
       title: `Send ${holderNoun} notice package`,
       detail: selectedAgm
         ? noticeSent
-          ? "Notice is recorded for the AGM."
+          ? `Notice is recorded for the ${am}.`
           : `Notice window: ${noticeWindowOpen} to ${noticeWindowClose}.`
-        : "Schedule the AGM before sending notice.",
+        : `Schedule the ${am} before sending notice.`,
       status: !selectedAgm ? "blocked" : noticeSent ? "complete" : today > (noticeWindowClose ?? endISO) ? "blocked" : "attention",
       evidence: ["Notice delivery log", "Agenda", "Motions and special resolutions", "Electronic participation instructions"],
       dueDate: noticeWindowClose,
       to: selectedAgm ? `/meetings/${selectedAgm._id}/agm` : "/meetings",
-      actionLabel: noticeSent ? "Open AGM workflow" : "Handle notice",
+      actionLabel: noticeSent ? `Open ${am} workflow` : "Handle notice",
     },
     {
       id: "agenda-motions",
@@ -299,7 +307,7 @@ export async function summaryPortable(
       title: "Finalize agenda, motions, and proposals",
       detail: selectedAgm
         ? `${selectedAgmHasAgenda ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked ${holderNoun} proposal${meetingProposals.length === 1 ? "" : "s"}.`
-        : "No AGM selected for agenda planning.",
+        : `No ${am} selected for agenda planning.`,
       status: selectedAgmHasAgenda ? "complete" : selectedAgm ? "attention" : "blocked",
       evidence: ["Agenda", "Motion text", corporation ? "Shareholder proposals" : "Member proposals", "Proxy and voting rules"],
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/agendas",
@@ -313,7 +321,7 @@ export async function summaryPortable(
         ? `${minutes.attendees?.length ?? 0} attendee${(minutes.attendees?.length ?? 0) === 1 ? "" : "s"}; quorum ${minutesQuorumLabel(minutes).toLowerCase()}.`
         : selectedAgm
           ? "Minutes have not captured attendance and quorum yet."
-          : "Schedule the AGM before tracking attendance.",
+          : `Schedule the ${am} before tracking attendance.`,
       status: minutes ? (recordedMinutesQuorum(minutes) === true ? "complete" : "blocked") : agmHeld ? "blocked" : "upcoming",
       evidence: ["Attendance list", "Quorum snapshot", "Proxy evidence if used"],
       dueDate: selectedAgm?.scheduledAt,
@@ -326,7 +334,7 @@ export async function summaryPortable(
       title: "Capture votes and minutes",
       detail: minutes
         ? `${minutesMotionsForDisplay(minutes as any).length} motion${(minutesMotionsForDisplay(minutes as any).length) === 1 ? "" : "s"} and ${minutes.decisions?.length ?? 0} decision${(minutes.decisions?.length ?? 0) === 1 ? "" : "s"} recorded.`
-        : "No AGM minutes are linked yet.",
+        : `No ${am} minutes are linked yet.`,
       status: minutes ? ((minutesMotionsForDisplay(minutes as any).length) > 0 || (minutes.decisions?.length ?? 0) > 0 ? "complete" : "attention") : agmHeld ? "blocked" : "upcoming",
       evidence: ["Draft minutes", "Motion outcomes", "Vote tallies and abstentions", "Election evidence"],
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/minutes",
@@ -337,12 +345,12 @@ export async function summaryPortable(
       phase: "during",
       title: "Present financial statements",
       detail: statementsPresentedAtAgm
-        ? "Financial presentation evidence is linked to the AGM."
+        ? `Financial presentation evidence is linked to the ${am}.`
         : selectedAgm
           ? "Financial presentation has not been confirmed."
-          : "No AGM in this cycle to present financial statements at.",
+          : `No ${am} in this cycle to present financial statements at.`,
       status: statementsPresentedAtAgm ? "complete" : agmHeld ? "blocked" : !selectedAgm && today > endISO ? "blocked" : "upcoming",
-      evidence: ["AGM minutes reference", "Financial statements", "Auditor report if any"],
+      evidence: [`${amTitle} minutes reference`, "Financial statements", "Auditor report if any"],
       dueDate: selectedAgm?.scheduledAt,
       to: selectedFinancial ? `/financials/fy/${encodeURIComponent(selectedFinancial.fiscalYear)}` : "/financials",
       actionLabel: "Review presentation",
@@ -352,10 +360,10 @@ export async function summaryPortable(
       phase: "during",
       title: "Record director elections",
       detail: directorElection
-        ? `${directorElection.status} election record linked to the AGM.`
+        ? `${directorElection.status} election record linked to the ${am}.`
         : minutes?.agmDetails?.directorAppointments?.length
-          ? `${minutes.agmDetails.directorAppointments.length} director appointment${minutes.agmDetails.directorAppointments.length === 1 ? "" : "s"} in AGM minutes.`
-          : "No AGM election or director appointment evidence is linked.",
+          ? `${minutes.agmDetails.directorAppointments.length} director appointment${minutes.agmDetails.directorAppointments.length === 1 ? "" : "s"} in ${am} minutes.`
+          : `No ${am} election or director appointment evidence is linked.`,
       status: directorElection || minutes?.agmDetails?.directorAppointments?.length ? "complete" : rules?.requireAgmElections ? (agmHeld ? "blocked" : "upcoming") : "attention",
       evidence: ["Election record", "Director appointments", "Consents", "Vote or acclamation evidence"],
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/elections",
@@ -369,7 +377,7 @@ export async function summaryPortable(
         ? minutes.approvedAt
           ? `Approved ${humanDate(minutes.approvedAt)}.`
           : "Minutes exist but are not approved yet."
-        : "No AGM minutes are linked yet.",
+        : `No ${am} minutes are linked yet.`,
       status: minutes?.approvedAt ? "complete" : minutes ? "attention" : agmHeld ? "blocked" : "upcoming",
       evidence: ["Approved minutes", "Approval meeting or written resolution", "Appendices"],
       to: "/minutes",
@@ -402,7 +410,7 @@ export async function summaryPortable(
       id: "minute-book",
       phase: "after",
       title: "Update minute book evidence",
-      detail: `${officialRecordEvidenceCount} core evidence link${officialRecordEvidenceCount === 1 ? "" : "s"} found for AGM, financials, filings, and governing documents.`,
+      detail: `${officialRecordEvidenceCount} core evidence link${officialRecordEvidenceCount === 1 ? "" : "s"} found for ${am}, financials, filings, and governing documents.`,
       status: officialRecordEvidenceCount >= 4 ? "complete" : officialRecordEvidenceCount > 0 ? "attention" : "blocked",
       evidence: ["Notice", "Minutes", "Financial statements", "Annual report evidence", "Director consents"],
       to: "/minute-book",
@@ -416,7 +424,7 @@ export async function summaryPortable(
         ? `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${activeDirectors.filter((director) => director.isBCResident).length} BC resident director${activeDirectors.filter((director) => director.isBCResident).length === 1 ? "" : "s"}.`
         : `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}.`,
       status: activeDirectors.length > 0 && (!requiresBcResidentDirector || activeDirectors.some((director) => director.isBCResident)) ? "complete" : "blocked",
-      evidence: ["Director register", "AGM election result", "Registry filing evidence if changed"],
+      evidence: ["Director register", `${amTitle} election result`, "Registry filing evidence if changed"],
       to: "/directors",
       actionLabel: "Review directors",
     },
@@ -511,7 +519,9 @@ export async function summaryPortable(
     },
     caveats: [
       "Compliance status means evidence readiness in Societyer, not a legal opinion.",
-      "Notice, quorum, proxy, electronic voting, and director term rules depend on the active bylaw rule set.",
+      wording.isSociety
+        ? "Notice, quorum, proxy, electronic voting, and director term rules depend on the active bylaw rule set."
+        : `Notice, quorum, proxy, electronic voting, and director term rules depend on the governing Act and the ${wording.governingDocuments}.`,
       corporation
         ? "Registry annual reports or returns, ownership-register updates, CRA returns, payroll, and GST/HST are separate obligations."
         : "BC annual reports, CRA charity returns, payroll, GST/HST, funder reports, and federal annual returns are separate obligations.",
@@ -527,11 +537,12 @@ function deriveStage(args: {
   agmHeld: boolean;
   noticeSent: boolean;
   today: string;
+  annualMeeting: string;
 }) {
   if (args.annualReport?.status === "Filed") return args.annualReportLate ? "Annual report filed late" : "Annual report filed";
-  if (args.annualReportDueDate && args.today > args.annualReportDueDate) return "Overdue post-AGM work";
-  if (args.agmHeld) return "Post-AGM work";
-  if (args.noticeSent) return "Ready for AGM";
+  if (args.annualReportDueDate && args.today > args.annualReportDueDate) return `Overdue post-${args.annualMeeting} work`;
+  if (args.agmHeld) return `Post-${args.annualMeeting} work`;
+  if (args.noticeSent) return `Ready for ${args.annualMeeting}`;
   if (args.selectedAgm) return "Planning and notice";
   return "Not scheduled";
 }

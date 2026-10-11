@@ -1058,6 +1058,22 @@
     ]
   },
   {
+    "key": "convex:agm:noticeCoverage",
+    "surface": "convex",
+    "name": "agm:noticeCoverage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agm.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:agm:noticeDeliveries",
     "surface": "convex",
     "name": "agm:noticeDeliveries",
@@ -23115,6 +23131,22 @@
         "table": "filings",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:agm:noticeCoverage",
+    "surface": "portable",
+    "name": "agm:noticeCoverage",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "meetingId",
+        "table": "meetings",
+        "array": false,
+        "optional": false
       }
     ]
   },

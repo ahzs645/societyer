@@ -22,6 +22,8 @@ import {
 } from "../shared/functions/communications";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
+import { organizationRuleScope } from "../shared/entityRuleScope";
+import { votingShareholderNoticeAudience } from "../shared/meetingNoticeAudience";
 
 const DEFAULT_TEMPLATE_SLUGS = [
   {
@@ -56,9 +58,18 @@ const DEFAULT_TEMPLATE_SLUGS = [
   },
 ];
 
+// Annual-meeting notice wording for a corporation, used when the workspace's
+// "agm-notice" template still holds the society default text above.
+const CORPORATION_MEETING_NOTICE = {
+  subject: "{{societyName}} annual meeting notice — {{meetingTitle}} on {{meetingDate}}",
+  bodyText:
+    "Hello {{memberName}},\n\nThis is formal notice of {{societyName}}'s meeting of shareholders: {{meetingTitle}}.\nDate: {{meetingDate}}\nLocation: {{meetingLocation}}\n\nIf electronic participation is allowed, the joining details must be included in the notice package.",
+};
+
 type Audience =
   | "all_members"
   | "voting_members"
+  | "voting_shareholders"
   | "directors"
   | "overdue_subscribers"
   | "volunteers"
@@ -166,6 +177,21 @@ async function resolveAudienceRecipients(
   ctx: any,
   args: { societyId: string; audience: Audience },
 ): Promise<Recipient[]> {
+  // A corporation's meeting notice goes to its voting shareholders: the share
+  // register, or the shareholder role holders when the register is empty.
+  if (args.audience === "voting_shareholders") {
+    const ledger = await ctx.runQuery(api.legalOperations.rightsLedger, { societyId: args.societyId as any });
+    return mergeRecipients(
+      votingShareholderNoticeAudience(ledger ?? {}).recipients.map((recipient) => ({
+        name: recipient.name,
+        email: recipient.email,
+        phone: recipient.phone,
+        address: recipient.address,
+        role: recipient.role,
+      })),
+    );
+  }
+
   const [members, directors, subscriptions, volunteers, committees] = await Promise.all([
     ctx.runQuery(api.members.list, { societyId: args.societyId as any }),
     ctx.runQuery(api.directors.list, { societyId: args.societyId as any }),
@@ -400,13 +426,18 @@ export const ensureDefaultTemplates = authorizedMutation("communications:ensureD
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
 
+    // A corporation's meeting-notice template addresses voting shareholders.
+    const corporation = organizationRuleScope(await ctx.db.get(societyId)).isCorporation;
     let created = 0;
     for (const template of DEFAULT_TEMPLATE_SLUGS) {
       const match = existing.find((row) => row.slug === template.slug);
       if (match) continue;
+      const fields = corporation && template.slug === "agm-notice"
+        ? { ...template, name: "Annual meeting notice", ...CORPORATION_MEETING_NOTICE }
+        : template;
       await ctx.db.insert("communicationTemplates", {
         societyId,
-        ...template,
+        ...fields,
         bodyHtml: undefined,
         system: true,
         updatedAtISO: new Date().toISOString(),
@@ -1012,16 +1043,24 @@ export const sendMeetingNotice = authorizedAction("communications:sendMeetingNot
       societyId: args.societyId,
     });
     const template = templates.find((row: any) => row.slug === "agm-notice");
+    const societies = await ctx.runQuery(api.society.list, {});
+    const society = (societies ?? []).find((row: any) => row._id === args.societyId);
+    // Societies keep notifying voting members with their template unchanged.
+    // A corporation notifies voting shareholders; its untouched default
+    // template is swapped for shareholder wording.
+    const corporation = organizationRuleScope(society).isCorporation;
+    const societyDefault = DEFAULT_TEMPLATE_SLUGS.find((row) => row.slug === "agm-notice");
+    const usesSocietyDefault = !template || (template.subject === societyDefault?.subject && template.bodyText === societyDefault?.bodyText);
     return sendCampaignInternal(ctx, {
       societyId: args.societyId as any,
       meetingId: args.meetingId as any,
       templateId: template?._id as any,
       actingUserId: args.actingUserId as any,
-      audience: "voting_members",
+      audience: corporation ? "voting_shareholders" : "voting_members",
       kind: template?.kind ?? "notice",
       channel: args.channel,
-      subject: template?.subject,
-      bodyText: template?.bodyText,
+      subject: corporation && usesSocietyDefault ? CORPORATION_MEETING_NOTICE.subject : template?.subject,
+      bodyText: corporation && usesSocietyDefault ? CORPORATION_MEETING_NOTICE.bodyText : template?.bodyText,
     });
   },
 });

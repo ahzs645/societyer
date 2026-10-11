@@ -451,6 +451,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // agm
   definePortableQuery({ name: "agm:runForMeeting", handler: agmFns.runForMeeting }),
   definePortableQuery({ name: "agm:noticeDeliveries", handler: agmFns.noticeDeliveries }),
+  definePortableQuery({ name: "agm:noticeCoverage", handler: agmFns.noticeCoverage }),
   definePortableMutation({ name: "agm:init", handler: agmFns.agmInit }),
   definePortableMutation({ name: "agm:markStep", handler: agmFns.agmMarkStep }),
   definePortableMutation({ name: "agm:logNoticeDelivery", handler: agmFns.logNoticeDelivery }),

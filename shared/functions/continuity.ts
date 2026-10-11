@@ -46,6 +46,7 @@ import {
 } from "../continuityRules";
 import { agreementGaps } from "../agreements";
 import { appliesBcSocietyRules } from "../entityRuleScope";
+import { entityMeetingWording } from "../entityMeetingWording";
 
 const READ_PERMISSIONS = ["meetings:read", "minutes:read", "motions:read", "committees:read", "filings:read", "financials:read", "directors:read", "documents:read", "agreements:read"] as const;
 
@@ -255,6 +256,10 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
   const checks: { id: string; level: "ok" | "warn" | "err" | "info"; title: string; text: string; to: string; citation?: string }[] = [];
   const periodFor = (kind: string, key: string) => rows.find((row) => row.expectation.kind === kind)?.periods.find((period) => period.periodKey === key);
   const agmRow = rows.find((row) => row.expectation.kind === "agm");
+  // "AGM" for societies, "annual meeting" for corporations and custom
+  // entities; the Dec 31 deadline is the BC Societies Act calendar-year rule.
+  const am = entityMeetingWording(snapshot.society as any).annualMeeting;
+  const calendarYearRule = appliesBcSocietyRules(snapshot.society);
   if (snapshot.readable.meetings && agmRow) {
     const current = periodFor("agm", String(year));
     const previous = periodFor("agm", String(year - 1));
@@ -263,10 +268,10 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
     checks.push({
       id: "CONTINUITY-AGM-THIS-YEAR",
       level,
-      title: `AGM held in ${year}`,
+      title: `${am === "AGM" ? "AGM" : "Annual meeting"} held in ${year}`,
       text: held
-        ? `AGM recorded on ${current!.evidence.find((item) => item.table === "meetings")?.date ?? "a date this year"}.`
-        : current?.mark ? current.note ?? "Period marked." : `No AGM recorded yet for ${year}; it must be held by Dec 31.${previous && previous.status === "record_missing" && previous.foundCount === 0 ? ` ${year - 1} also has no AGM record.` : ""}`,
+        ? `${am === "AGM" ? "AGM" : "Annual meeting"} recorded on ${current!.evidence.find((item) => item.table === "meetings")?.date ?? "a date this year"}.`
+        : current?.mark ? current.note ?? "Period marked." : `No ${am} recorded yet for ${year}${calendarYearRule ? "; it must be held by Dec 31" : ""}.${previous && previous.status === "record_missing" && previous.foundCount === 0 ? ` ${year - 1} also has no ${am} record.` : ""}`,
       to: "/app/coverage?tab=continuity",
       citation: agmRow.expectation.citation,
     });
@@ -278,8 +283,8 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
     checks.push({
       id: "CONTINUITY-ANNUAL-REPORT-FILED",
       level,
-      title: "Annual report filed after the AGM",
-      text: !latest ? "No AGM recorded in the last two years, so no annual report is expected yet." : latest.status === "satisfied" ? `Filed for ${latest.label}${latest.note ? ` (${latest.note})` : ""}.` : latest.status === "upcoming" ? `Annual report for ${latest.label} due ${latest.dueDate}.` : `No filing evidence for the ${latest.label} AGM (due ${latest.dueDate}).`,
+      title: `Annual report filed after the ${am}`,
+      text: !latest ? `No ${am} recorded in the last two years, so no annual report is expected yet.` : latest.status === "satisfied" ? `Filed for ${latest.label}${latest.note ? ` (${latest.note})` : ""}.` : latest.status === "upcoming" ? `Annual report for ${latest.label} due ${latest.dueDate}.` : `No filing evidence for the ${latest.label} ${am} (due ${latest.dueDate}).`,
       to: "/app/filings",
       citation: filingRow.expectation.citation,
     });
@@ -564,10 +569,13 @@ export async function deriveFromBylawRulesPortable(ctx: PortableMutationCtx, { s
   if (!active) throw new Error("Activate a bylaw rule set first (Governance records → Bylaw rules).");
   const nowISO = new Date().toISOString();
   const effectiveFrom = typeof active.effectiveFromISO === "string" ? active.effectiveFromISO.slice(0, 10) : undefined;
+  const wording = entityMeetingWording((await ctx.db.get(societyId, "societies")) as any);
+  const am = wording.annualMeeting;
+  const ruleLabel = wording.isSociety ? "bylaw rules" : `meeting rules from the ${wording.governingDocuments}`;
   const derived = [
     {
       ruleKey: "BYLAW-ANNUAL-REPORT",
-      title: `Annual report filed within ${active.annualReportDueDaysAfterMeeting} days after the AGM (bylaw rules)`,
+      title: `Annual report filed within ${active.annualReportDueDaysAfterMeeting} days after the ${am} (${ruleLabel})`,
       kind: "annual_filing",
       bodyKind: "organization",
       rule: { frequency: "after_event", anchor: "agm", offsetDays: Number(active.annualReportDueDaysAfterMeeting ?? 30) },
@@ -575,7 +583,7 @@ export async function deriveFromBylawRulesPortable(ctx: PortableMutationCtx, { s
     },
     {
       ruleKey: "BYLAW-FS-AT-AGM",
-      title: "Financial statements presented at each AGM (bylaw rules)",
+      title: `Financial statements presented at each ${am} (${ruleLabel})`,
       kind: "financial_statement",
       bodyKind: "members",
       rule: { frequency: "after_event", anchor: "agm", offsetDays: 0 },

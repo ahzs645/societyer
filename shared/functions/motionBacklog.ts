@@ -22,6 +22,7 @@ import {
 } from "../proceduralMotions";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { organizationRuleScope } from "../entityRuleScope";
 
 // Lifecycle statuses that make a motion show up in the backlog UI.
 const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
@@ -56,6 +57,28 @@ const PIPA_SETUP_MOTIONS = [
     notes: "Use if the society wants the training cadence approved as part of setup.",
   },
 ];
+
+/**
+ * The privacy setup motions that fit this workspace. Societies keep the full
+ * set (including the member-data access gap memo). Other entities do not keep
+ * a member register, so that memo is left out, and "the Society" becomes the
+ * entity's own noun. PIPA is named only where BC private-sector privacy law
+ * applies. Seeded keys never change, so re-seeding stays idempotent.
+ */
+export function pipaSetupMotionsFor(organization?: Record<string, any> | null) {
+  const scope = organizationRuleScope(organization as any);
+  if (scope.isSociety && scope.isBcHome) return PIPA_SETUP_MOTIONS;
+  const title = scope.isSociety ? "Society" : scope.isCorporation ? "Corporation" : "Organization";
+  const lower = title.toLowerCase();
+  const reword = (text: string) => {
+    let next = text.replace(/\bSociety\b/g, title).replace(/\bsociety\b/g, lower);
+    if (!scope.isBcHome) next = next.replace(/\bPIPA privacy policy\b/g, "privacy policy");
+    return next;
+  };
+  return PIPA_SETUP_MOTIONS
+    .filter((motion) => scope.isSociety || motion.seededKey !== "pipa-member-data-gap-memo")
+    .map((motion) => ({ ...motion, title: reword(motion.title), motionText: reword(motion.motionText), notes: reword(motion.notes) }));
+}
 
 // ----- portable motions write helpers (copied from convex/motions.ts) -------
 
@@ -323,8 +346,9 @@ export async function seedPipaSetupPortable(ctx: PortableMutationCtx, { societyI
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
   const existingKeys = new Set(existing.map((row) => row.seededKey).filter(Boolean));
+  const motions = pipaSetupMotionsFor(await ctx.db.get(societyId, "societies"));
   let inserted = 0;
-  for (const motion of PIPA_SETUP_MOTIONS) {
+  for (const motion of motions) {
     if (existingKeys.has(motion.seededKey)) continue;
     await insertMotion(ctx, {
       societyId,
@@ -338,7 +362,7 @@ export async function seedPipaSetupPortable(ctx: PortableMutationCtx, { societyI
     });
     inserted++;
   }
-  return { inserted, existing: PIPA_SETUP_MOTIONS.length - inserted };
+  return { inserted, existing: motions.length - inserted };
 }
 
 export async function addToAgendaPortable(

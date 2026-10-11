@@ -15,6 +15,24 @@ function isSocietyModuleEnabled(society: any, key: ModuleKey) {
   return normalizeModuleSettings(society)[key];
 }
 
+function publicText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * The registry identity an anonymous intake form needs to word its notice for
+ * the right kind of entity (society, corporation, other). These are the same
+ * public-registry facts the transparency page already shows alongside the
+ * incorporation number; nothing else from the workspace row is exposed.
+ */
+function publicEntityIdentity(society: Record<string, any>) {
+  return {
+    entityType: publicText(society.entityType),
+    jurisdictionCode: publicText(society.jurisdictionCode),
+    actFormedUnder: publicText(society.actFormedUnder),
+  };
+}
+
 export async function getSocietyBySlugPortable(ctx: PortableQueryCtx, { slug }: { slug: string }) {
   const society = await ctx.db
     .query("societies")
@@ -58,6 +76,7 @@ export async function volunteerIntakeContextPortable(ctx: PortableQueryCtx, { sl
       publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail,
       privacyNotice: society.publicIntakePrivacyNotice ?? null,
       privacyOfficerName: society.privacyOfficerName ?? null,
+      ...publicEntityIdentity(society),
     },
     committees: committees.map((committee: Record<string, any>) => ({
       _id: committee._id,
@@ -97,6 +116,7 @@ export async function grantIntakeContextPortable(ctx: PortableQueryCtx, { slug }
       publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail,
       privacyNotice: society.publicIntakePrivacyNotice ?? null,
       privacyOfficerName: society.privacyOfficerName ?? null,
+      ...publicEntityIdentity(society),
     },
     grants: openGrants
       .map((grant: Record<string, any>) => ({

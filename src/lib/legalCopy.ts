@@ -96,7 +96,14 @@ export type OrganizationLegalCopy = {
 export function legalCopyForOrganization(organization: LegalEntityLike | null | undefined): OrganizationLegalCopy {
   const scope = organizationRuleScope(organization);
   const entityNoun = scope.isCorporation ? "corporation" : scope.isSociety ? "society" : "organization";
-  const noun = (text: string) => text.replace(/\bsociety\b/g, entityNoun);
+  // Only a society keeps a member register; other entities describe the
+  // personal information they actually hold.
+  const holderData = scope.isSociety
+    ? "member-data situation"
+    : scope.isCorporation
+      ? "personal information it holds (including the shareholder register)"
+      : "personal information it holds";
+  const noun = (text: string) => text.replace(/\bsociety\b/g, entityNoun).replace(/member-data situation/g, holderData);
   return {
     entityNoun,
     privacyLawLabel: scope.isBcHome ? "PIPA" : "applicable privacy law",

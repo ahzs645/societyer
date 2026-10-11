@@ -10,6 +10,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions } from "./minutes";
+import { entityMeetingWording } from "../entityMeetingWording";
 
 export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -67,21 +68,25 @@ export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId
     inserted += 1;
   }
   if (!hasAgm) {
+    // A society holds an annual general meeting; a corporation an annual
+    // meeting of shareholders; a custom entity a plain "annual meeting".
+    const wording = entityMeetingWording(await ctx.db.get(societyId, "societies"));
+    const meetingName = wording.annualMeetingLong;
     await ctx.db.insert("meetingTemplates", {
       societyId,
-      name: "Annual general meeting",
-      description: "Governance-ready AGM agenda covering notice, annual reporting, elections, prior minutes, and adjournment.",
+      name: `${meetingName.charAt(0).toUpperCase()}${meetingName.slice(1)}`,
+      description: `Governance-ready ${wording.annualMeeting} agenda covering notice, annual reporting, elections, prior minutes, and adjournment.`,
       meetingType: "AGM",
       isDefault: false,
       items: [
         { title: "Call to order", depth: 0, sectionType: "discussion" },
         { title: "Notice and quorum confirmation", depth: 0, sectionType: "discussion", details: "Confirm the meeting notice, delivery window, quorum, and electronic participation arrangements." },
-        { title: "Approval of agenda", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the agenda for this annual general meeting be adopted as presented." },
+        { title: "Approval of agenda", depth: 0, sectionType: "motion", motionText: `BE IT RESOLVED THAT the agenda for this ${meetingName} be adopted as presented.` },
         { title: "Approval of prior minutes", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, as circulated, be approved.", adoptsPreviousMinutes: true },
         { title: "Financial statements and annual report", depth: 0, sectionType: "report", details: "Present the annual financial statements and auditor's report, if applicable." },
         { title: "Election of directors", depth: 0, sectionType: "discussion", details: "Record nominations, elections, appointments, and resulting terms." },
         { title: "New business", depth: 0, sectionType: "discussion" },
-        { title: "Adjournment", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the annual general meeting be adjourned." },
+        { title: "Adjournment", depth: 0, sectionType: "motion", motionText: `BE IT RESOLVED THAT the ${meetingName} be adjourned.` },
       ],
       createdAtISO: now,
       updatedAtISO: now,

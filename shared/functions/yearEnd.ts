@@ -15,6 +15,8 @@
 import { countLabel, humanDate } from "../humanDate";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { entityMeetingWording } from "../entityMeetingWording";
+import { organizationRuleScope } from "../entityRuleScope";
 import {
   buildOrgRevenueStatement,
   deriveFiscalRange as deriveRange,
@@ -265,6 +267,13 @@ export async function readinessPortable(
     tone: "complete" | "attention" | "upcoming" = ok ? "complete" : "attention",
   ) => ({ key, label, status: tone, ok, detail, href });
 
+  // Society: AGM of members. Corporation: annual meeting of shareholders.
+  // Custom entity: neutral "annual meeting" without naming who attends.
+  const wording = entityMeetingWording(society);
+  const am = wording.annualMeeting;
+  const presentedTo = wording.holders ? ` to ${wording.holders}` : "";
+  const annualReportLabel = organizationRuleScope(society).isBcHome ? "BC annual report filed" : "Annual registry report or return filed";
+
   const items = [
     item(
       "financialsApproved",
@@ -277,14 +286,16 @@ export async function readinessPortable(
     ),
     item(
       "financialsPresented",
-      "Financial statements presented to members at the AGM",
+      `Financial statements presented${presentedTo} at the ${am}`,
       Boolean(financial?.presentedAtMeetingId),
-      financial?.presentedAtMeetingId ? "Linked to an AGM meeting record." : "Not yet linked to an AGM.",
+      financial?.presentedAtMeetingId
+        ? wording.isSociety ? "Linked to an AGM meeting record." : `Linked to an ${am} record.`
+        : `Not yet linked to an ${am}.`,
       "/app/financials",
     ),
     item(
       "annualReport",
-      "BC annual report filed",
+      annualReportLabel,
       isFiled((k) => k.includes("annual")),
       isFiled((k) => k.includes("annual")) ? "Annual report marked filed." : "Annual report not marked filed.",
       "/app/filings",
@@ -304,9 +315,9 @@ export async function readinessPortable(
       : []),
     item(
       "agm",
-      "Annual general meeting held",
+      `${wording.annualMeetingLong.charAt(0).toUpperCase()}${wording.annualMeetingLong.slice(1)} held`,
       agmHeld,
-      agmHeld ? "An AGM is recorded as held." : "No held AGM found.",
+      agmHeld ? `An ${am} is recorded as held.` : `No held ${am} found.`,
       "/app/meetings",
     ),
     item(

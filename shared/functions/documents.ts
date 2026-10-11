@@ -24,6 +24,7 @@ import {
   requireSocietyMembership,
 } from "./access";
 import { todayDateOnly } from "../dateOnly";
+import { organizationRuleScope } from "../entityRuleScope";
 
 // Documents are listed whatever their category (finding D-04): categories are
 // an open, normalized model (shared/documentCategories.ts). Only Societyer's
@@ -1194,7 +1195,30 @@ function topDocumentIds(countMaps: Map<string, number>[], materialDocIds: Set<st
 }
 
 
+/**
+ * The privacy policy draft below is written for a society (member register,
+ * society records). A corporation keeps a shareholder register instead, so
+ * its draft names shareholders and replaces the member-records section; no
+ * statute is added beyond what the society draft already cites.
+ */
+function adaptPrivacyPolicyDraftForEntity(text: string, society: any) {
+  if (!organizationRuleScope(society).isCorporation) return text;
+  return text
+    .replace("- membership or eligibility information;", "- shareholder register and share ownership information;")
+    .replace("- maintain required society records;", "- maintain required corporate records;")
+    .replace("- manage memberships, eligibility, and voting where applicable;", "- maintain the shareholder register and administer shareholder meetings, votes, and resolutions;")
+    .replace("- communicate with members, directors,", "- communicate with shareholders, directors,")
+    .replace(
+      /## 8\. Member Records and Institution-Held Data[\s\S]*?(?=## 9\. Safeguards)/,
+      "## 8. Shareholder Records\n\nThe organization maintains its shareholder register and related corporate records. Access to these records is restricted to authorized people and handled under the governing Act, the organization's articles or by-laws, and privacy rules.\n\n",
+    );
+}
+
 function buildPipaPolicyDraft(society: any) {
+  return adaptPrivacyPolicyDraftForEntity(buildSocietyPipaPolicyDraft(society), society);
+}
+
+function buildSocietyPipaPolicyDraft(society: any) {
   const today = todayDateOnly();
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
