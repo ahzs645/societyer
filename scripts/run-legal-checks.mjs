@@ -10,6 +10,7 @@ const scripts = [
   'check-legal-deadline-calendars.ts', 'check-filing-period-evidence.ts',
   'check-notice-calendar-review.ts', 'check-bylaw-jurisdiction-baselines.ts',
   'check-written-resolution-evidence.ts', 'check-shareholder-election-notices.ts',
+  'check-written-resolution-routes.ts', 'check-meeting-notice-authority.ts',
   'check-annual-resolution.ts', 'check-corporation-document-packets.ts',
   'check-corporation-settings.ts', 'check-annual-filings.ts',
   'check-entity-rule-scope.ts', 'check-organization-domain.ts',
