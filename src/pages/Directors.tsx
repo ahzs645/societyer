@@ -110,6 +110,14 @@ export function DirectorsPage() {
   // compliance flags would flash red for a frame before real data arrives.
   // Skip the warning UI until we know the actual numbers.
   const directorsLoaded = directors !== undefined;
+  // The BC-resident column is the Societies Act s.40 residency check; hide it
+  // where the director rules do not track residency (e.g. corporations).
+  const showBcResidentField = directorProfile.showBcResidentField;
+  const directorsView = useMemo(() => {
+    const view = tableData.hydratedView;
+    if (!view || showBcResidentField) return view;
+    return { ...view, columns: view.columns.map((column) => column.field?.name === "isBCResident" ? { ...column, isVisible: false } : column) };
+  }, [tableData.hydratedView, showBcResidentField]);
   const roleTerms = useMemo(() => {
     return (orgHistory?.boardTerms ?? [])
       .slice()
@@ -236,7 +244,7 @@ export function DirectorsPage() {
           <RecordTableScope
             tableId="directors"
             objectMetadata={tableData.objectMetadata}
-            hydratedView={tableData.hydratedView}
+            hydratedView={directorsView}
             records={records}
             onRecordClick={(_, record) => {
               setSelected(record);
