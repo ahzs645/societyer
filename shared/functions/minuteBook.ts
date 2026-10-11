@@ -16,6 +16,7 @@ import { readableProjectionPermissions } from "./projectionPermissions";
 import type { Permission } from "./permissions";
 import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
+import { isCorporation, type LegalEntityLike } from "../organizationDomain";
 import { todayDateOnly } from "../dateOnly";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
@@ -1036,6 +1037,19 @@ function pick(row: any, keys: string[]) {
   return result;
 }
 
+/**
+ * Core governing documents expected in the binder, keyed by document category.
+ * A corporation's articles are filed in the "Constitution" slot (relabelled
+ * "Articles", see workspaceGovernanceCopy); corporations have no society
+ * constitution, and a BC company has no by-laws, so neither is demanded of them.
+ */
+function coreBinderDocuments(organization?: LegalEntityLike | null) {
+  if (isCorporation(organization)) {
+    return { label: "Missing articles/minutes", categories: [["Constitution", "Articles"], ["Minutes", "Minutes"]] as const };
+  }
+  return { label: "Missing constitution/bylaws/minutes", categories: [["Constitution", "Constitution"], ["Bylaws", "Bylaws"], ["Minutes", "Minutes"]] as const };
+}
+
 function minuteBookChecks({
   society,
   items,
@@ -1072,11 +1086,9 @@ function minuteBookChecks({
   const constitutionOnFile = categorySet.has("Constitution") || Boolean(society?.constitutionDocId);
   const bylawsOnFile = categorySet.has("Bylaws") || Boolean(society?.bylawsDocId);
   const minutesOnFile = categorySet.has("Minutes") || minutes.length > 0 || meetings.some((meeting) => meeting.minutesId);
-  const missingBasics = [
-    constitutionOnFile ? undefined : "Constitution",
-    bylawsOnFile ? undefined : "Bylaws",
-    minutesOnFile ? undefined : "Minutes",
-  ].filter((value): value is string => Boolean(value));
+  const coreDocuments = coreBinderDocuments(society);
+  const onFile: Record<string, boolean> = { Constitution: constitutionOnFile, Bylaws: bylawsOnFile, Minutes: minutesOnFile };
+  const missingBasics = coreDocuments.categories.filter(([category]) => !onFile[category]).map(([, label]) => label);
   const signatureEntityKeys = new Set(
     signatures.map((signature) => `${signature.entityType}:${signature.subjectId ?? signature.entityId}`),
   );
@@ -1120,7 +1132,7 @@ function minuteBookChecks({
   const meetingsWithoutMinutes = meetings.filter((meeting) => !meeting.minutesId && !minutesMeetingIds.has(String(meeting._id)));
 
   return [
-    check("missing_core_documents", "Missing constitution/bylaws/minutes", missingBasics.length, "danger", missingBasics.join(", ")),
+    check("missing_core_documents", coreDocuments.label, missingBasics.length, "danger", missingBasics.join(", ")),
     check("missing_signatures", "Records missing signatures", missingSignatureItems.length, "warn", "Minute-book records that appear to require signatures but have none linked."),
     check("open_filings", "Open or unfiled filings", openFilings.length, "warn", "Filings still need submission evidence or completion."),
     check("unresolved_resolutions", "Unresolved resolution evidence", unresolvedMotions.length, "warn", "Imported motions still need review or final outcomes."),

@@ -10,10 +10,21 @@
  * Usage:
  *   <Flag level="warn" citationId="PIPA-POLICY">...</Flag>
  *
+ * Citations are entity-specific. Before rendering one for a workspace, pass it
+ * through `citationIdForOrganization` / `citationIdsForOrganization` (or pick
+ * one with `pickCitationIdForOrganization`) so a Societies Act citation never
+ * reaches a corporation:
+ *   <Flag citationId={citationIdForOrganization("BC-SOC-AGM", society)}>...</Flag>
+ *
  * Keep ids stable — they are referenced from pages across the app. When a
  * statute changes, prefer adding a new id (with a caveat) over rewriting
  * an existing quote so older screens still resolve.
  */
+
+import type { LegalEntityLike } from "../../shared/organizationDomain";
+import { audienceAppliesToOrganization, organizationRuleScope, type RuleAudience } from "../../shared/entityRuleScope";
+
+export type { RuleAudience };
 
 export type RegulatoryJurisdiction =
   | "CA"
@@ -58,6 +69,13 @@ export interface RegulatoryCitation {
    * a short verbatim snippet you know appears in the source.
    */
   highlight?: string;
+  /**
+   * Optional override of which organizations this citation is written for.
+   * When omitted it is derived from the instrument and jurisdiction — see
+   * `citationAudience`. Societies Act / Societies Regulation citations are
+   * BC-society-only and must never be shown to a corporation.
+   */
+  audience?: RuleAudience;
 }
 
 const BC_LAWS_PIPA =
@@ -251,7 +269,7 @@ export const regulatoryCitations: Record<string, RegulatoryCitation> = {
     quote:
       "It is prohibited to send or cause or permit to be sent to an electronic address a commercial electronic message unless (a) the person to whom the message is sent has consented to receiving it, whether the consent is express or implied; and (b) the message complies with [prescribed form and content requirements, including sender identification and an unsubscribe mechanism].",
     caveat:
-      "Societies communicating with members, donors, volunteers, or the public by email, SMS, or direct message need a CASL basis and functioning unsubscribe handling.",
+      "Organizations communicating with members, shareholders, customers, donors, volunteers, or the public by email, SMS, or direct message need a CASL basis and functioning unsubscribe handling.",
   },
 
   // ---------------------------------------------------------------
@@ -434,6 +452,70 @@ export function getRegulatoryCitation(
 ): RegulatoryCitation | undefined {
   if (!id) return undefined;
   return regulatoryCitations[id];
+}
+
+/**
+ * Which organizations a citation is written for. Societies Act and Societies
+ * Regulation (model bylaws) citations are BC-society-only; other BC sources
+ * (PIPA, BC OIPC) apply to any BC-home organization; federal sources apply to
+ * every workspace.
+ */
+export function citationAudience(citation: Pick<RegulatoryCitation, "instrument" | "jurisdiction" | "audience">): RuleAudience {
+  if (citation.audience) return citation.audience;
+  if (/^Societies (Act|Regulation)\b/.test(citation.instrument)) return "bc_society";
+  if (citation.jurisdiction === "CA-BC") return "bc_organization";
+  return "general";
+}
+
+type CitationRef = string | RegulatoryCitation | undefined | null;
+
+function resolveCitation(ref: CitationRef): RegulatoryCitation | undefined {
+  if (!ref) return undefined;
+  return typeof ref === "string" ? getRegulatoryCitation(ref) : ref;
+}
+
+/**
+ * True when the citation applies to this organization. Unknown ids return
+ * false so a page never shows a citation it cannot resolve.
+ */
+export function citationAppliesToOrganization(
+  ref: CitationRef,
+  organization: LegalEntityLike | null | undefined,
+): boolean {
+  const citation = resolveCitation(ref);
+  return Boolean(citation && audienceAppliesToOrganization(citationAudience(citation), organization));
+}
+
+/** The citation id when it applies to this organization, otherwise undefined (suppress). */
+export function citationIdForOrganization(
+  id: string | undefined | null,
+  organization: LegalEntityLike | null | undefined,
+): string | undefined {
+  return id && citationAppliesToOrganization(id, organization) ? id : undefined;
+}
+
+/** Filter a list of citation ids down to those that apply to this organization. */
+export function citationIdsForOrganization(
+  ids: readonly (string | undefined | null)[] | undefined | null,
+  organization: LegalEntityLike | null | undefined,
+): string[] {
+  return (ids ?? []).filter((id): id is string => citationAppliesToOrganization(id, organization));
+}
+
+/**
+ * Pick the citation for this organization from per-entity candidates, e.g.
+ * `pickCitationIdForOrganization({ society: "BC-SOC-AGM" }, organization)`.
+ * Each candidate is still checked against the organization, so a BC Societies
+ * Act citation is suppressed for a corporation or a non-BC society. Returns
+ * undefined when nothing applies — render no citation rather than a wrong one.
+ */
+export function pickCitationIdForOrganization(
+  candidates: { society?: string; corporation?: string; fallback?: string },
+  organization: LegalEntityLike | null | undefined,
+): string | undefined {
+  const scope = organizationRuleScope(organization);
+  const preferred = scope.isSociety ? candidates.society : scope.isCorporation ? candidates.corporation : undefined;
+  return citationIdForOrganization(preferred, organization) ?? citationIdForOrganization(candidates.fallback, organization);
 }
 
 /** All citation ids, useful for exhaustiveness checks in tests. */
