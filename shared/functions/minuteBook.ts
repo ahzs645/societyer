@@ -10,12 +10,13 @@
  */
 
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
-import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { readableProjectionPermissions } from "./projectionPermissions";
 import type { Permission } from "./permissions";
 import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
+import { isCorporation, type LegalEntityLike } from "../organizationDomain";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
 const DOCUMENT_PREVIEW_LIMIT_PER_CATEGORY = 1;
@@ -174,6 +175,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     read("recordsLocation", CORE_RECORD_LIMIT),
   ]);
 
+  const organization = await ctx.db.get<LegalEntityLike & PortableDoc>(societyId, "societies");
   const binderPreview = readable.has("documents:read") ? await collectBinderDocumentPreviews(ctx, societyId) : { documents: [], coverageLimited: false };
   const documents = binderPreview.documents;
   const binderDocuments = documents;
@@ -269,7 +271,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
       }),
       badges: bundle.badges.map((badge: any) => (restrictedResources.length || documentCoverageLimited) && /gap/i.test(badge.label) ? { ...badge, label: "Supporting access limited", tone: "neutral" } : badge),
     })),
-    checks: minuteBookChecks({
+    checks: minuteBookChecks(organization, {
       items: visibleItems,
       documents,
       binderDocuments,
@@ -1031,7 +1033,20 @@ function pick(row: any, keys: string[]) {
   return result;
 }
 
-function minuteBookChecks({
+/**
+ * Core governing documents expected in the binder, keyed by document category.
+ * A corporation's articles are filed in the "Constitution" slot (relabelled
+ * "Articles", see workspaceGovernanceCopy); corporations have no society
+ * constitution, and a BC company has no by-laws, so neither is demanded of them.
+ */
+function coreBinderDocuments(organization?: LegalEntityLike | null) {
+  if (isCorporation(organization)) {
+    return { label: "Missing articles/minutes", categories: [["Constitution", "Articles"], ["Minutes", "Minutes"]] as const };
+  }
+  return { label: "Missing constitution/bylaws/minutes", categories: [["Constitution", "Constitution"], ["Bylaws", "Bylaws"], ["Minutes", "Minutes"]] as const };
+}
+
+function minuteBookChecks(organization: LegalEntityLike | null | undefined, {
   items,
   documents,
   binderDocuments,
@@ -1046,7 +1061,8 @@ function minuteBookChecks({
   writtenResolutions,
 }: Record<string, any[]>) {
   const categorySet = new Set(binderDocuments.map((doc) => doc.category));
-  const missingBasics = ["Constitution", "Bylaws", "Minutes"].filter((category) => !categorySet.has(category));
+  const coreDocuments = coreBinderDocuments(organization);
+  const missingBasics = coreDocuments.categories.filter(([category]) => !categorySet.has(category)).map(([, label]) => label);
   const signatureEntityKeys = new Set(
     signatures.map((signature) => `${signature.entityType}:${signature.subjectId ?? signature.entityId}`),
   );
@@ -1090,7 +1106,7 @@ function minuteBookChecks({
   const meetingsWithoutMinutes = meetings.filter((meeting) => !meeting.minutesId && !minutesMeetingIds.has(String(meeting._id)));
 
   return [
-    check("missing_core_documents", "Missing constitution/bylaws/minutes", missingBasics.length, "danger", missingBasics.join(", ")),
+    check("missing_core_documents", coreDocuments.label, missingBasics.length, "danger", missingBasics.join(", ")),
     check("missing_signatures", "Records missing signatures", missingSignatureItems.length, "warn", "Minute-book records that appear to require signatures but have none linked."),
     check("open_filings", "Open or unfiled filings", openFilings.length, "warn", "Filings still need submission evidence or completion."),
     check("unresolved_resolutions", "Unresolved resolution evidence", unresolvedMotions.length, "warn", "Imported motions still need review or final outcomes."),

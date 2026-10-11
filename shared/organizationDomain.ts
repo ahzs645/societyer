@@ -31,6 +31,13 @@ const FEDERAL_CBCA_JURISDICTIONS = new Set([
 const ONTARIO_OBCA_JURISDICTIONS = new Set(["CA-ON-OBCA", "ontario", "on"]);
 const UNKNOWN_JURISDICTION = "unknown";
 
+/**
+ * The jurisdiction assumed when a workspace or legacy snapshot does not specify one.
+ * Societyer began as a BC Societies Act tool, so historical/demo data defaults here.
+ * Change this in one place to move the product's default (e.g. to federal CBCA).
+ */
+export const DEFAULT_HOME_JURISDICTION_CODE = "CA-BC";
+
 export function organizationLabel(organization?: LegalEntityLike | null): string {
   return (
     cleanText(organization?.legalName) ||
