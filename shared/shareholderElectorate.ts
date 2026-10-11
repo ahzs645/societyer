@@ -161,6 +161,19 @@ export function recordDateLimitFor(organization: GovernanceOrganization | null |
   return legalGovernanceProfile(organization)?.recordDates?.[purpose] ?? CONSERVATIVE_RECORD_DATE_LIMIT;
 }
 
+/**
+ * How the reviewed record date was set. `fixed`: fixed in advance by the
+ * directors, so any statutory minimum interval applies. `statutory_default`:
+ * the Act's default record date when none was fixed (OBCA s. 95(3)).
+ */
+export type RecordDateSource = "fixed" | "statutory_default";
+
+/** The latest permitted fixed record date, or null when the limit has no minimum. */
+export function latestFixedRecordDate(referenceDateISO: string, limit: RecordDateLimit): string | null {
+  if (limit.minAgeDays === undefined) return null;
+  return earliestPermittedNoticeDate(referenceDateISO, limit.minAgeDays);
+}
+
 /** The earliest permitted record date, counted back from the event's calendar date. */
 export function earliestRecordDate(referenceDateISO: string, limit: RecordDateLimit): string | null {
   if (limit.maxAgeMonths !== undefined) return shiftCalendarMonths(referenceDateISO, -limit.maxAgeMonths);
@@ -172,20 +185,27 @@ function describeLimit(limit: RecordDateLimit) {
 }
 
 /**
- * Lower bound for a reviewed record date. An older date would make former
- * holders or members the electorate. `issue` blocks; `reviewNote` flags a
- * conservative bound that the research does not establish for this entity.
+ * Bounds for a reviewed record date. An older date would make former holders
+ * or members the electorate; where the research states a minimum interval
+ * (OBCA s. 95(2)), a fixed record date closer to the event is also refused.
+ * `issue` blocks; `reviewNote` flags a conservative bound that the research
+ * does not establish for this entity, or a statutory default to verify.
  */
-export function recordDateWindow(recordDateISO: string, referenceDateISO: string, limit: RecordDateLimit, eventLabel: string) {
+export function recordDateWindow(recordDateISO: string, referenceDateISO: string, limit: RecordDateLimit, eventLabel: string, source: RecordDateSource = "fixed") {
   const earliestISO = earliestRecordDate(referenceDateISO, limit);
+  const latestISO = latestFixedRecordDate(referenceDateISO, limit);
   const section = limit.section ? ` (${limit.section})` : "";
   const issue = !earliestISO
     ? `The ${eventLabel} date is not a valid calendar date, so the record-date window cannot be checked.`
     : recordDateISO < earliestISO
       ? `The record date ${recordDateISO} is more than ${describeLimit(limit)} before the ${eventLabel} on ${referenceDateISO}${section}. Choose a record date on or after ${earliestISO}; an older register can include former holders.`
-      : undefined;
-  const reviewNote = limit.basis === "conservative"
-    ? `Record-date window: ${describeLimit(limit)} before the ${eventLabel} is a conservative bound, not a verified statutory limit. ${limit.note}`
-    : undefined;
-  return { earliestISO: earliestISO ?? undefined, issue, reviewNote, limit };
+      : latestISO && source === "fixed" && recordDateISO > latestISO
+        ? `A record date fixed by the directors must be at least ${limit.minAgeDays} days before the ${eventLabel} on ${referenceDateISO}${section}; ${recordDateISO} is later than ${latestISO}. Choose a record date on or before ${latestISO}, or record that the statutory default record date applies.`
+        : undefined;
+  const notes = [
+    limit.basis === "conservative" ? `Record-date window: ${describeLimit(limit)} before the ${eventLabel} is a conservative bound, not a verified statutory limit. ${limit.note}` : undefined,
+    limit.minAgeDays !== undefined && source === "statutory_default" ? `Statutory default record date${section}: verify it is the close of business on the day before notice was given, or the ${eventLabel} day where no notice is given. The ${limit.minAgeDays}-day minimum applies only to a record date fixed by the directors.` : undefined,
+  ].filter(Boolean);
+  const reviewNote = notes.length ? notes.join(" ") : undefined;
+  return { earliestISO: earliestISO ?? undefined, latestISO: latestISO ?? undefined, issue, reviewNote, limit };
 }

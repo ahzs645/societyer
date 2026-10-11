@@ -3,6 +3,7 @@ import { v } from "convex/values";
 /** A review records the legal basis; it never supplies the voting weights. */
 export const corporateElectionReviewValidator = v.object({
   recordDateISO: v.string(),
+  recordDateSource: v.optional(v.union(v.literal("fixed"), v.literal("statutory_default"))),
   recordDateBasis: v.string(),
   rightsBasis: v.string(),
   ledgerBasis: v.string(),

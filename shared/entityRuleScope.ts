@@ -30,7 +30,7 @@ export type OrganizationRuleScope = {
   isCorporation: boolean;
   /** BC Societies Act rules, warnings and citations apply. */
   isBcSociety: boolean;
-  /** The home incorporation jurisdiction is BC; this does not determine privacy-law applicability. */
+  /** The home incorporation jurisdiction is BC. Privacy uses it only for the labelled BC PIPA presumption that recorded facts can displace (privacy.md TRM-7). */
   isBcHome: boolean;
 };
 

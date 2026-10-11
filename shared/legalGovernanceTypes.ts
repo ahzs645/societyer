@@ -32,6 +32,12 @@ export type RecordDateLimit = {
   maxAgeDays?: number;
   /** Calendar months counted backwards from the event (month-end clamped). */
   maxAgeMonths?: number;
+  /**
+   * Fewest days a record date fixed in advance by the directors may precede the
+   * event. Set only where the research states a minimum (OBCA s. 95(2): 30 days).
+   * A record date that is the statutory default instead (OBCA s. 95(3)) is exempt.
+   */
+  minAgeDays?: number;
   basis: 'statutory' | 'conservative';
   /** Statute section as named in the research; not a source ID. */
   section?: string;

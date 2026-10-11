@@ -246,6 +246,15 @@ assert.ok(!bcCustomRules.some((id) => id.startsWith("BC-SOC-")), "BC-home custom
 assert.ok(ruleIds(ENTITIES.legacyBcSociety).includes("PIPA-POLICY-DOCUMENTED"), "legacy BC society keeps presumed PIPA checks");
 assert.ok(ruleIds(ENTITIES.legacyBcSociety).includes("PRIVACY-APPLICABILITY"), "and is asked to confirm the presumption");
 assert.ok(!ruleIds({ ...ENTITIES.legacyBcSociety, privacyFederalWork: "yes" }).some((id) => id.startsWith("PIPA-")), "a recorded federal work removes BC PIPA checks");
+const privacyApplicabilityText = (organization: any) => (dashboardComplianceRulePackForOrganization(organization).rules.find((rule) => rule.id === "PRIVACY-APPLICABILITY")?.passFail({} as any) as any)?.text as string | undefined;
+for (const key of ["legacyBcSociety", "bcCustomEntity"] as const) {
+  const text = privacyApplicabilityText(ENTITIES[key]) ?? "";
+  assert.match(text, /^BC PIPA is presumed to apply to this BC organization\. Confirm the facts/, `${key}: the presumed-PIPA warning asks to confirm the displacing facts`);
+  assert.ok(!text.includes("Incorporation jurisdiction alone"), `${key}: the presumed-PIPA warning drops the unassessed wording`);
+}
+for (const key of ["albertaSociety", "federalNfp", "ontarioNfp"] as const) {
+  assert.match(privacyApplicabilityText(ENTITIES[key]) ?? "", /Incorporation jurisdiction alone does not establish which privacy duties apply\.$/, `${key}: an unassessed non-BC workspace keeps the jurisdiction-neutral warning`);
+}
 
 /* --------------------- live queries via convex-test ---------------------- */
 
