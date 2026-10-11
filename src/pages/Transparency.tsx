@@ -17,6 +17,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
+import { organizationCopy } from "../lib/organizationCopy";
 import {
   RecordTable,
   RecordTableScope,
@@ -27,11 +28,14 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 
-const PUBLICATION_PRESETS = [
+type PublicationPreset = { category: string; title: string; summary: string; entityKind?: "society" | "corporation" };
+
+const PUBLICATION_PRESETS: PublicationPreset[] = [
   { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
   { category: "FinancialSummary", title: "Financial summary", summary: "Publish approved financial statements, reviewer notes, or a plain-language annual summary." },
   { category: "Policy", title: "Public policy", summary: "Publish privacy, conflict, records inspection, code of conduct, or grant policies." },
-  { category: "Notice", title: "AGM notice", summary: "Publish an AGM notice, member inspection instructions, or other public notice." },
+  { category: "Notice", title: "AGM notice", summary: "Publish an AGM notice, member inspection instructions, or other public notice.", entityKind: "society" },
+  { category: "Notice", title: "Annual meeting notice", summary: "Publish an annual meeting notice, records inspection instructions, or other public notice.", entityKind: "corporation" },
   { category: "Grant", title: "Grant disclosure", summary: "Publish grant recipients, funding priorities, eligibility rules, or application instructions." },
 ];
 
@@ -88,6 +92,10 @@ export function TransparencyPage() {
 
   const records = (publications ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // AGM, member and bylaw wording is society vocabulary.
+  const entity = organizationCopy(society);
+  const publicationPresets = PUBLICATION_PRESETS.filter((preset) => !preset.entityKind || preset.entityKind === (entity.corporation ? "corporation" : "society"));
+  const governingDocsLabel = entity.corporation ? entity.governingDocumentsTitle : "Bylaws";
   const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
   const builderChecks = [
     { label: "Public URL", complete: Boolean(society.publicSlug), detail: society.publicSlug ? publicHref : "Add a slug" },
@@ -103,7 +111,7 @@ export function TransparencyPage() {
         title="Public transparency"
         icon={<Globe size={16} />}
         iconColor="blue"
-        subtitle="Publish board info, bylaws, annual reports, AGM materials, and contact details without exposing the private workspace."
+        subtitle={`Publish board info, ${entity.corporation ? entity.governingDocuments : "bylaws"}, annual reports, ${entity.corporation ? "annual meeting" : "AGM"} materials, and contact details without exposing the private workspace.`}
         actions={
           <>
             <MoreActionsMenu
@@ -200,7 +208,7 @@ export function TransparencyPage() {
             <Badge tone={society.publicTransparencyEnabled ? "success" : "warn"}>{society.publicTransparencyEnabled ? "Public page enabled" : "Draft only"}</Badge>
             <Badge>{society.publicSlug ?? "no slug set"}</Badge>
             <Badge tone={society.publicShowBoard ? "success" : "warn"}>{society.publicShowBoard ? "Board visible" : "Board hidden"}</Badge>
-            <Badge tone={society.publicShowBylaws ? "success" : "warn"}>{society.publicShowBylaws ? "Bylaws visible" : "Bylaws hidden"}</Badge>
+            <Badge tone={society.publicShowBylaws ? "success" : "warn"}>{society.publicShowBylaws ? `${governingDocsLabel} visible` : `${governingDocsLabel} hidden`}</Badge>
             <Badge tone={society.publicShowFinancials ? "success" : "warn"}>{society.publicShowFinancials ? "Financials visible" : "Financials hidden"}</Badge>
             <Badge tone={society.publicVolunteerIntakeEnabled ? "success" : "warn"}>{society.publicVolunteerIntakeEnabled ? "Volunteer intake on" : "Volunteer intake off"}</Badge>
             <Badge tone={society.publicGrantIntakeEnabled ? "success" : "warn"}>{society.publicGrantIntakeEnabled ? "Grant intake on" : "Grant intake off"}</Badge>
@@ -245,7 +253,7 @@ export function TransparencyPage() {
             <span className="card__subtitle">Directors are controlled by settings; documents publish as reviewed records.</span>
           </div>
           <div className="transparency-builder__presets">
-            {PUBLICATION_PRESETS.map((preset) => (
+            {publicationPresets.map((preset) => (
               <button
                 type="button"
                 className="transparency-builder__preset"
@@ -417,7 +425,7 @@ export function TransparencyPage() {
             <Field label="Public contact email"><input className="input" value={settingsDraft.publicContactEmail ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicContactEmail: e.target.value })} /></Field>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicTransparencyEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicTransparencyEnabled: e.target.checked })} /> Enable public page</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBoard} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBoard: e.target.checked })} /> Show board roster</label>
-            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show bylaws and governance records</label>
+            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show {entity.corporation ? entity.governingDocuments : "bylaws"} and governance records</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowFinancials} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowFinancials: e.target.checked })} /> Show financial publications</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicVolunteerIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicVolunteerIntakeEnabled: e.target.checked })} /> Allow public volunteer applications</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicGrantIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicGrantIntakeEnabled: e.target.checked })} /> Allow public grant applications</label>

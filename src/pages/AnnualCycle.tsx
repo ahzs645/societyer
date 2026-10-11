@@ -20,6 +20,7 @@ import { Badge } from "../components/ui";
 import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { formatDate, relative } from "../lib/format";
+import { organizationCopy, type OrganizationCopy } from "../lib/organizationCopy";
 
 type CycleItem = {
   id: string;
@@ -67,6 +68,18 @@ const PHASES: Phase[] = [
   },
 ];
 
+/** Corporations hold an annual meeting of shareholders, not a society AGM. */
+const CORPORATE_PHASE_COPY: Record<Phase["id"], Pick<Phase, "title" | "subtitle">> = {
+  before: { title: "Before annual meeting", subtitle: "Financials, notice, agenda, shareholder register, director terms, resolutions." },
+  during: { title: "During annual meeting", subtitle: "Attendance, quorum, votes, director elections, financial presentation, minutes." },
+  after: { title: "After annual meeting", subtitle: "Approved minutes, annual filing evidence, director changes, minute book." },
+  ongoing: { title: "Ongoing", subtitle: "Privacy, conflicts, retention, policy reviews, deadlines, register updates." },
+};
+
+function phasesFor(entity: OrganizationCopy): Phase[] {
+  return entity.corporation ? PHASES.map((phase) => ({ ...phase, ...CORPORATE_PHASE_COPY[phase.id] })) : PHASES;
+}
+
 export function AnnualCyclePage() {
   const society = useSociety();
   const [year, setYear] = useState(new Date().getFullYear());
@@ -81,8 +94,10 @@ export function AnnualCyclePage() {
   if (society === null) return <SeedPrompt />;
   if (!data) return <PageLoading />;
 
+  const entity = organizationCopy(society);
+  const visiblePhases = phasesFor(entity);
   const phases = data.phases ?? {};
-  const fallbackItems = PHASES.flatMap((phase) => phases[phase.id] ?? []) as CycleItem[];
+  const fallbackItems = visiblePhases.flatMap((phase) => phases[phase.id] ?? []) as CycleItem[];
   const counts = data.counts ?? {
     completed: fallbackItems.filter((item) => item.status === "complete").length,
     total: fallbackItems.length,
@@ -100,7 +115,7 @@ export function AnnualCyclePage() {
         title="Annual Cycle"
         icon={<ListChecks size={16} />}
         iconColor="orange"
-        subtitle="A guided compliance view that pulls AGM, filings, financials, records, and ongoing governance into one workflow."
+        subtitle={`A guided compliance view that pulls ${entity.corporation ? "the annual meeting" : "AGM"}, filings, financials, records, and ongoing governance into one workflow.`}
         actions={
           <Select
             value={String(year)}
@@ -113,7 +128,7 @@ export function AnnualCyclePage() {
       <section className="onboarding-flow" aria-labelledby="annual-cycle-title">
         <div className="onboarding-flow__story">
           <div>
-            <h2 id="annual-cycle-title">{data.society?.name ?? "Society"} annual compliance cycle</h2>
+            <h2 id="annual-cycle-title">{data.society?.name ?? entity.entityTitle} annual compliance cycle</h2>
             <p>
               {data.currentStage ?? "Annual cycle"}. {counts.completed}/{counts.total} evidence checks are complete,
               with {counts.blocked} blocked and {counts.attention} needing attention.
@@ -145,7 +160,8 @@ export function AnnualCyclePage() {
 
       <div className="stat-grid">
         <Stat label="Stage" value={data.currentStage ?? "Unknown"} icon={<Clock size={14} />} />
-        <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />
+        {/* votingMembers counts the society member register. */}
+        {!entity.corporation && <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
         <Stat label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
         <Stat
           label="Annual report due"
@@ -156,7 +172,7 @@ export function AnnualCyclePage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-        {PHASES.map((phase) => {
+        {visiblePhases.map((phase) => {
           const items = (phases[phase.id] ?? []) as CycleItem[];
           const complete = items.filter((item) => item.status === "complete").length;
           const Icon = phase.icon;

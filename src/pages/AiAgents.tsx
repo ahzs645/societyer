@@ -512,7 +512,7 @@ export function AiAgentsPage() {
               <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Validate a provider key before choosing a model or saving settings.</span>
             )}
             <div className="settings-pair">
-              <Field label="Temperature" hint="How predictable vs. creative replies are. Lower (e.g. 0.2) is more consistent and factual; higher is more varied. Most societies should leave this at the default.">
+              <Field label="Temperature" hint="How predictable vs. creative replies are. Lower (e.g. 0.2) is more consistent and factual; higher is more varied. Most workspaces should leave this at the default.">
                 <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupEditable} />
               </Field>
               <Field label="Max tool steps" hint="The most lookups or actions the assistant can chain together to answer one request before it must stop and reply. Higher allows more complex requests but can take longer and cost more.">

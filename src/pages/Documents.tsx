@@ -30,6 +30,7 @@ import { getRestoredFile } from "../lib/workspaceArchiveFiles";
 import { triggerBlobDownload } from "../lib/zip";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { isCorporation } from "../../shared/organizationDomain";
 
 const CATS = ["Constitution", "Bylaws", "Minutes", "FinancialStatement", "Policy", "Filing", "Agreement", "Library", "WorkflowGenerated", "Other"] as const;
 
@@ -144,7 +145,12 @@ export function DocumentsPage() {
         title="Documents"
         icon={<FolderOpen size={16} />}
         iconColor="gray"
-        subtitle="Constitution, bylaws, minutes, financial statements, policies. Records ≥ 10 years (CRA: 7 years financial)."
+        subtitle={
+          // The 10-year records default follows the society records rules.
+          isCorporation(society)
+            ? "Articles, by-laws, minutes, financial statements, policies, and other corporate records."
+            : "Constitution, bylaws, minutes, financial statements, policies. Records ≥ 10 years (CRA: 7 years financial)."
+        }
         actions={
           <>
             {nativeStorage && (

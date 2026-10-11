@@ -236,7 +236,7 @@ export function SettingsPage() {
     const messages = {
       light: { title: "Remove logo?", body: "The letter avatar will be shown instead until you upload a new logo." },
       dark: { title: "Remove dark-mode logo?", body: "The light-mode logo will be used in dark mode until you upload a new variant." },
-      letterhead: { title: "Remove letterhead?", body: "Exports will fall back to your light-mode logo plus the society name." },
+      letterhead: { title: "Remove letterhead?", body: "Exports will fall back to your light-mode logo plus the organization name." },
     } as const;
     const ok = await confirm({
       title: messages[variant].title,

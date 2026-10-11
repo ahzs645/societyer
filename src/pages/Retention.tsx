@@ -9,6 +9,7 @@ import { Archive } from "lucide-react";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { organizationCopy } from "../lib/organizationCopy";
 import {
   RecordTable,
   RecordTableScope,
@@ -70,7 +71,7 @@ export function RetentionPage() {
         title="Records retention"
         icon={<Archive size={16} />}
         iconColor="gray"
-        subtitle="Documents due for review, past their retention period. Default: 10 years for most records, 7 years for financial (CRA), indefinite for the constitution and bylaws. Review before purging."
+        subtitle={`Documents due for review, past their retention period. Default: 10 years for most records, 7 years for financial (CRA), indefinite for the ${organizationCopy(society).governingDocuments}. Review before purging.`}
       />
 
       {showMetadataWarning ? (

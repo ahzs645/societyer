@@ -392,7 +392,7 @@ function requiredFactLabels(facts: ComplianceFacts | null) {
   if (!facts.anniversaryDate) missing.push("anniversary date");
   if (!facts.fiscalYearEnd) missing.push("fiscal year end");
   if (facts.entityType === "society" && !facts.annualMeetingDate) missing.push("actual AGM/deemed AGM date to compute its report");
-  if (facts.entityType !== "society" && !facts.annualReferenceDate) missing.push("last AGM/annual reference date for subsequent meetings");
+  if (facts.entityType !== "society" && !facts.annualReferenceDate) missing.push("last annual meeting/annual reference date for subsequent meetings");
   return missing;
 }
 

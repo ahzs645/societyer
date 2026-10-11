@@ -16,6 +16,7 @@ import { isMemberHistoryDate } from "../../shared/memberHistory";
 import { Select } from "../components/Select";
 import { inspectImportBundle, prepareImportBundle } from "../lib/importBundleIntake";
 import { isActiveImportSession } from "../../shared/importSessionState";
+import { isCorporation } from "../../shared/organizationDomain";
 import {
   Archive,
   Check,
@@ -451,9 +452,13 @@ export function ImportSessionsPage() {
         subtitle="Stage reviewed source bundles, review each item, then apply approved records into app modules."
         actions={
           <>
-          <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
-            <Upload size={12} /> Import members CSV
-          </button>
+          {/* The CSV loads the society member register; corporations record
+              shareholders as role holders instead. */}
+          {!isCorporation(society) && (
+            <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
+              <Upload size={12} /> Import members CSV
+            </button>
+          )}
           <button className="btn-action btn-action--primary" onClick={() => setCreateOpen(true)} disabled={!canWrite}>
             <Plus size={12} /> New session
           </button>

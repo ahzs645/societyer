@@ -16,6 +16,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Trash2, Calendar, Archive, RotateCcw } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
+import { isCorporation } from "../../shared/organizationDomain";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -172,7 +173,7 @@ export function DeadlinesPage() {
         title="Deadlines"
         icon={<Calendar size={16} />}
         iconColor="yellow"
-        subtitle="Dates imposed by law or regulation, like filings, AGMs, and renewals. For internal work items, use Tasks; for promises made to funders or partners, use Commitments."
+        subtitle={`Dates imposed by law or regulation, like filings, ${isCorporation(society) ? "annual meetings" : "AGMs"}, and renewals. For internal work items, use Tasks; for promises made to funders or partners, use Commitments.`}
         actions={
           <>
             <Segmented<"list" | "calendar">

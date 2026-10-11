@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { organizationCopy, type OrganizationCopy } from "../lib/organizationCopy";
 import { Tooltip } from "../components/Tooltip";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
@@ -53,10 +54,16 @@ export function Dashboard() {
   const society = useSociety();
   const { can } = usePermissions();
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
+  const entityCopy = organizationCopy(society);
+  const corporation = entityCopy.corporation;
   const navigate = useNavigate();
   const toast = useToast();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
   const activity = useQuery(api.activity.list, society && can("audit:read") ? { societyId: society._id, limit: 10 } : "skip");
+  // Corporations keep directors, officers and shareholders in the role-holder
+  // register, not the society members table. The server filters the rows by
+  // the caller's register permissions.
+  const roleHolders = useQuery(api.legalOperations.listRoleHolders, society && corporation ? { societyId: society._id } : "skip") as any[] | undefined;
   const createPipaPolicyDraft = useMutation(api.documents.createPipaPolicyDraft);
   const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
   const createPrivacyReviewTask = useMutation(api.dashboardRemediation.createPrivacyReviewTask);
@@ -77,7 +84,12 @@ export function Dashboard() {
   const canRead = (permission: string) => data.readAccess?.includes(permission) ?? can(permission);
   const actionableComplianceFlags = complianceFlags.filter((flag: any) => flag.level !== "ok");
   const completeComplianceAccess = ["directors:read", "members:read", "documents:read"].every(canRead);
-  const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings }).filter(step => {
+  const currentRoleHolders = (roleHolders ?? []).filter((row: any) => (row.status ?? "current") === "current");
+  const roleHolderCounts = {
+    directors: currentRoleHolders.filter((row: any) => row.roleType === "director").length,
+    shareholders: currentRoleHolders.filter((row: any) => row.roleType === "shareholder").length,
+  };
+  const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings, entityCopy, roleHolderCounts }).filter(step => {
     const permission = interfaceRouteReadPermission(step.to);
     return !permission || canRead(permission);
   });
@@ -296,8 +308,10 @@ export function Dashboard() {
       )}
 
       <div className="stat-grid">
-        {canRead("members:read") && <Stat label="Active members" value={counts.members} icon={<Users size={14} />} tooltip="with voting rights counted separately in members list" />}
-        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
+        {corporation
+          ? roleHolders !== undefined && <Stat label="Shareholders" value={roleHolderCounts.shareholders} icon={<Users size={14} />} tooltip="Current shareholders in the role-holder register" />
+          : canRead("members:read") && <Stat label="Active members" value={counts.members} icon={<Users size={14} />} tooltip="with voting rights counted separately in members list" />}
+        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={corporation ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
         {canRead("meetings:read") && <Stat label="Meetings this year" value={counts.meetingsThisYear} icon={<Calendar size={14} />} />}
         {canRead("filings:read") && <Stat label="Overdue filings" value={counts.overdueFilings} tone={counts.overdueFilings ? "danger" : "ok"} icon={<AlertTriangle size={14} />} />}
       </div>
@@ -307,7 +321,7 @@ export function Dashboard() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Compliance posture</h2>
-              <span className="card__subtitle">Automated checks against the Societies Act</span>
+              <span className="card__subtitle">{corporation ? "Automated record and evidence checks" : "Automated checks against the Societies Act"}</span>
             </div>
             <div className="card__body dashboard-compliance">
               <div className="dashboard-compliance__summary">
@@ -479,7 +493,7 @@ export function Dashboard() {
 
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">Society</h2>
+              <h2 className="card__title">{entityCopy.entityTitle}</h2>
             </div>
             <div className="card__body col">
               <div><strong>{society.name}</strong></div>
@@ -487,8 +501,8 @@ export function Dashboard() {
               <div className="muted">Fiscal year end: {society.fiscalYearEnd ?? "—"}</div>
               <div className="muted">{society.registeredOfficeAddress}</div>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                {society.isCharity && <Badge tone="accent">CRA charity</Badge>}
-                {society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
+                {!corporation && society.isCharity && <Badge tone="accent">CRA charity</Badge>}
+                {!corporation && society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
                 {society.boardCadence && <Badge>Board meets {society.boardCadence.toLowerCase()}</Badge>}
               </div>
             </div>
@@ -640,18 +654,29 @@ function getOnboardingSteps({
   upcomingMeetings,
   upcomingFilings,
   overdueFilings,
+  entityCopy,
+  roleHolderCounts,
 }: {
   society: any;
   counts: any;
   upcomingMeetings: any[];
   upcomingFilings: any[];
   overdueFilings: any[];
+  entityCopy: OrganizationCopy;
+  roleHolderCounts: { directors: number; shareholders: number };
 }) {
+  const corporation = entityCopy.corporation;
   const hasSocietyProfile = Boolean(
     society?.name && society?.incorporationNumber && society?.registeredOfficeAddress,
   );
-  const hasPeople = counts.members > 0 && counts.directors > 0;
-  const hasCoreDocuments = Boolean(society?.constitutionDocId && society?.bylawsDocId);
+  const hasPeople = corporation
+    ? roleHolderCounts.directors > 0 && roleHolderCounts.shareholders > 0
+    : counts.members > 0 && counts.directors > 0;
+  // Corporate by-laws are optional (and a BC company has articles only), so the
+  // articles alone complete the corporate step.
+  const hasCoreDocuments = corporation
+    ? Boolean(society?.constitutionDocId)
+    : Boolean(society?.constitutionDocId && society?.bylawsDocId);
   const hasAgmTiming = Boolean(
     society?.fiscalYearEnd && upcomingMeetings.some((meeting) => meeting.type === "AGM"),
   );
@@ -663,7 +688,7 @@ function getOnboardingSteps({
   return [
     {
       id: "profile",
-      title: "Set up society profile",
+      title: `Set up ${entityCopy.entityNoun} profile`,
       description: hasSocietyProfile ? "Legal identity and registered office are recorded." : "Add the legal name, incorporation number, and registered office.",
       to: "/app/society",
       complete: hasSocietyProfile,
@@ -671,24 +696,28 @@ function getOnboardingSteps({
     },
     {
       id: "people",
-      title: "Import members/directors",
-      description: hasPeople ? "Member and director registers have active records." : "Bring in current member and director registers.",
-      to: "/app/imports",
+      title: corporation ? "Record directors and shareholders" : "Import members/directors",
+      description: corporation
+        ? hasPeople ? "Director and shareholder registers have current records." : "Add current directors, officers, and shareholders."
+        : hasPeople ? "Member and director registers have active records." : "Bring in current member and director registers.",
+      to: corporation ? "/app/role-holders" : "/app/imports",
       complete: hasPeople,
       icon: UserRoundCheck,
     },
     {
       id: "documents",
-      title: "Upload constitution/bylaws",
-      description: hasCoreDocuments ? "Core governing documents are attached." : "Attach the filed constitution and current bylaws.",
+      title: corporation ? `Upload ${entityCopy.bcCompany ? "articles" : "articles/by-laws"}` : "Upload constitution/bylaws",
+      description: hasCoreDocuments
+        ? "Core governing documents are attached."
+        : corporation ? `Attach the ${entityCopy.governingDocuments}.` : "Attach the filed constitution and current bylaws.",
       to: "/app/documents",
       complete: hasCoreDocuments,
       icon: UploadCloud,
     },
     {
       id: "timing",
-      title: "Confirm fiscal year and AGM timing",
-      description: hasAgmTiming ? "Fiscal year and the next AGM are visible." : "Set the fiscal year end and schedule the next AGM.",
+      title: `Confirm fiscal year and ${entityCopy.annualMeeting} timing`,
+      description: hasAgmTiming ? `Fiscal year and the next ${entityCopy.annualMeeting} are visible.` : `Set the fiscal year end and schedule the next ${entityCopy.annualMeeting}.`,
       to: "/app/meetings",
       complete: hasAgmTiming,
       icon: CalendarClock,

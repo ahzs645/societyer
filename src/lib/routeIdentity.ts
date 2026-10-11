@@ -213,12 +213,15 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // ---- Workspace ----
   "/app": { icon: LayoutDashboard, group: "workspace", label: "Dashboard" },
   "/app/portfolio": { icon: Layers, group: "workspace", label: "Portfolio" },
-  "/app/society": { icon: Building2, group: "workspace", label: "Society" },
+  // The page itself is the entity-neutral "Organization profile".
+  "/app/society": { icon: Building2, group: "workspace", label: "Society", labelByEntityKind: { corporation: "Corporation" } },
   "/app/org-history": { icon: Newspaper, group: "workspace", label: "Org history" },
   "/app/timeline": { icon: Hourglass, group: "workspace", label: "Timeline" },
 
   // ---- People ----
-  "/app/members": { icon: Users, group: "people", label: "Members" },
+  // The Societies Act member register. A corporation's shareholders live in
+  // Role holders and the Share register instead, so hide this for corporations.
+  "/app/members": { icon: Users, group: "people", label: "Members", entityKinds: ["society"] },
   "/app/directors": { icon: UserCog, group: "people", label: "Directors" },
   "/app/org-chart": { icon: Network, group: "people", label: "Org chart" },
   "/app/role-holders": { icon: UsersRound, group: "people", label: "Role holders" },
@@ -252,7 +255,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/motion-library": { icon: BookOpen, group: "meetings", label: "Motion library" },
   "/app/minutes": { icon: FileText, group: "meetings", label: "Minutes" },
   "/app/meeting-evidence": { icon: Paperclip, group: "meetings", label: "Meeting evidence" },
-  "/app/proposals": { icon: Lightbulb, group: "meetings", label: "Member proposals", module: "voting" },
+  "/app/proposals": { icon: Lightbulb, group: "meetings", label: "Member proposals", module: "voting", entityKinds: ["society"] },
   "/app/elections": { icon: Vote, group: "meetings", label: "Elections", module: "voting" },
   "/app/written-resolutions": { icon: PenLine, group: "meetings", label: "Written resolutions", module: "voting" },
   "/app/proxies": { icon: UserCheck, group: "meetings", label: "Proxies", module: "voting" },
@@ -314,8 +317,9 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/inventory": { icon: Package, group: "finance", label: "Inventory", module: "assets" },
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },
   "/app/reconciliation": { icon: Scale, group: "finance", label: "Reconciliation", module: "reconciliation" },
-  "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts" },
-  "/app/membership": { icon: CreditCard, group: "finance", label: "Membership & billing", module: "membershipBilling" },
+  // Charitable donation receipts and member-fee billing are society concepts.
+  "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts", entityKinds: ["society"] },
+  "/app/membership": { icon: CreditCard, group: "finance", label: "Membership & billing", module: "membershipBilling", entityKinds: ["society"] },
 
   // ---- Workflows (kept visible to everyone — plain-language automation a treasurer can use) ----
   "/app/workflows": { icon: Workflow, group: "workflows", label: "Workflows", module: "workflows" },

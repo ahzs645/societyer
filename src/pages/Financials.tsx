@@ -16,6 +16,7 @@ import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
+import { isCorporation } from "../../shared/organizationDomain";
 import {
   WaveHealthPanel,
   redactWaveHealthResult,
@@ -344,7 +345,13 @@ export function FinancialsPage() {
         title="Financials"
         icon={<PiggyBank size={16} />}
         iconColor="green"
-        subtitle="Connected bank balances, budget vs actuals, restricted funds, and the AGM financial statements. Disclose remuneration ≥ $75k (s.36)."
+        subtitle={
+          // The AGM presentation and the s.36 remuneration disclosure come from
+          // the Societies Act; a corporation sees neither.
+          isCorporation(society)
+            ? "Connected bank balances, budget vs actuals, and the annual financial statements."
+            : "Connected bank balances, budget vs actuals, restricted funds, and the AGM financial statements. Disclose remuneration ≥ $75k (s.36)."
+        }
         actions={
           activeConnection ? (
             <>
@@ -803,7 +810,7 @@ export function FinancialsPage() {
 
       {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}
 
-      {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && (
+      {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && !isCorporation(society) && (
         <>
           <div className="spacer-6" />
           <div className="card">

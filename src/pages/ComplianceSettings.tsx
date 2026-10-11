@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { organizationCopy } from "../lib/organizationCopy";
 import {
   deriveComplianceDeadlines,
   type ComplianceSettings,
@@ -141,13 +142,16 @@ export function ComplianceSettingsPage() {
     finally { setGenerating(false); }
   };
 
+  const entity = organizationCopy(society);
+  const meetingLabel = entity.annualMeetingTitle;
+
   return (
     <div className="page">
       <PageHeader
         title="Compliance settings"
         icon={<CalendarClock size={16} />}
         iconColor="orange"
-        subtitle="AGM date and fiscal year-end drive your annual compliance deadlines. Set them once, then generate the deadlines."
+        subtitle={`${meetingLabel} date and fiscal year-end drive your annual compliance deadlines. Set them once, then generate the deadlines.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving || !canSaveSettings}>
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save settings"}
@@ -157,18 +161,18 @@ export function ComplianceSettingsPage() {
 
       <div className="card" style={{ maxWidth: 520 }}>
         <div className="row" style={{ gap: 12 }}>
-          <Field label="AGM month">
+          <Field label={`${meetingLabel} month`}>
             <Select value={String(agmMonth)} onChange={(value) => setAgmMonth(value === "" ? "" : Number(value))}
               options={[{ value: "", label: "—" }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
           </Field>
-          <Field label="AGM day">
+          <Field label={`${meetingLabel} day`}>
             <input className="input" type="number" min={1} max={31} value={agmDay}
               onChange={(e) => setAgmDay(e.target.value === "" ? "" : Number(e.target.value))} />
           </Field>
         </div>
         {lastAgmDate && (agmMonth === "" || agmDay === "") && (
           <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8 }}>
-            Last AGM was held {MONTHS[lastAgmDate.getMonth()]} {lastAgmDate.getDate()}.{" "}
+            Last {entity.annualMeeting} was held {MONTHS[lastAgmDate.getMonth()]} {lastAgmDate.getDate()}.{" "}
             <button
               type="button"
               className="btn btn--ghost btn--sm"
@@ -183,7 +187,7 @@ export function ComplianceSettingsPage() {
           </p>
         )}
         <Field label="Fiscal year-end">
-          <input className="input" value={society.fiscalYearEnd ?? "(not set on society)"} disabled />
+          <input className="input" value={society.fiscalYearEnd ?? `(not set on ${entity.entityNoun})`} disabled />
         </Field>
         <label className="checkbox">
           <input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
@@ -236,7 +240,7 @@ export function ComplianceSettingsPage() {
 
       <div className="card" style={{ maxWidth: 520 }}>
         <h3 style={{ margin: "0 0 8px" }}>Contacts &amp; records</h3>
-        <Field label="Short name / defined term (e.g. &quot;the Society&quot;)">
+        <Field label={`Short name / defined term (e.g. "the ${entity.entityTitle}")`}>
           <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
         </Field>
         <div className="row" style={{ gap: 12 }}>
@@ -268,7 +272,7 @@ export function ComplianceSettingsPage() {
           </button>
         </div>
         {derived.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>Set an AGM date and/or fiscal year-end to derive deadlines.</p>
+          <p style={{ color: "var(--text-tertiary)" }}>Set an {entity.annualMeeting} date and/or fiscal year-end to derive deadlines.</p>
         ) : (
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {derived.map((d) => (

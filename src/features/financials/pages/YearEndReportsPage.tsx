@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSociety } from "../../../hooks/useSociety";
+import { isCorporation } from "../../../../shared/organizationDomain";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { Badge, Field } from "../../../components/ui";
 import { centsToDollarInput, dollarInputToCents, money } from "../../../lib/format";
@@ -273,7 +274,13 @@ export function YearEndReportsPage() {
         title="Year-end reports"
         icon={<PiggyBank size={16} />}
         iconColor="green"
-        subtitle="Assemble and export the society's year-end financial reports — annual statement, restricted funds, the BC Community Gaming Grants program actuals & budget, and a readiness checklist."
+        subtitle={
+          // BC Community Gaming Grants are a nonprofit program; keep that
+          // framing out of a corporation workspace.
+          isCorporation(society)
+            ? "Assemble and export the corporation's year-end financial reports — annual statement, restricted funds, program actuals & budget, and a readiness checklist."
+            : "Assemble and export the society's year-end financial reports — annual statement, restricted funds, the BC Community Gaming Grants program actuals & budget, and a readiness checklist."
+        }
         actions={
           <Link className="btn-action" to="/app/financials">
             <ArrowLeft size={12} /> Financials
@@ -459,7 +466,11 @@ export function YearEndReportsPage() {
               {statements === undefined ? (
                 <p className="muted">Loading…</p>
               ) : statements.length === 0 ? (
-                <p className="muted">No program statements yet. Create one to reproduce the BC Community Gaming Grants form.</p>
+                <p className="muted">
+                  {isCorporation(society)
+                    ? "No program statements yet. Create one to track grant program actuals and budget."
+                    : "No program statements yet. Create one to reproduce the BC Community Gaming Grants form."}
+                </p>
               ) : (
                 <div className="col" style={{ gap: 8 }}>
                   {statements.map((s: any) => {

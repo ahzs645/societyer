@@ -1228,6 +1228,7 @@ export function FormationMaintenancePage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+  const corporateMaintenance = isCorporation(society);
 
   const save = async () => {
     if (!draft || !canWrite) return;
@@ -1311,7 +1312,7 @@ export function FormationMaintenancePage() {
 
       <Section title="Annual maintenance" count={data?.annualRecords?.length ?? 0}>
         <SimpleTable
-          cols={["Year", "AGM", "Filing", "Financial statement", "Status", ""]}
+          cols={["Year", corporateMaintenance ? "Annual meeting" : "AGM", "Filing", "Financial statement", "Status", ""]}
           rows={(data?.annualRecords ?? []).map((row: any) => [
             row.yearFilingFor || "-",
             dateLabel(row.lastAgmDate),
@@ -1355,7 +1356,7 @@ export function FormationMaintenancePage() {
       </Section>
 
       <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={formationDraftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}>
-        {draft && <FormationDraftForm draft={draft} setDraft={setDraft} jurisdictionByCode={latestJurisdictionByCode} />}
+        {draft && <FormationDraftForm draft={draft} setDraft={setDraft} jurisdictionByCode={latestJurisdictionByCode} corporate={corporateMaintenance} />}
       </Drawer>
     </div>
   );
@@ -1440,7 +1441,7 @@ function TemplateDraftForm({ draft, setDraft }: { draft: any; setDraft: (draft: 
   );
 }
 
-function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: any; setDraft: (draft: any) => void; jurisdictionByCode: Map<any, any> }) {
+function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = false }: { draft: any; setDraft: (draft: any) => void; jurisdictionByCode: Map<any, any>; corporate?: boolean }) {
   if (draft.kind === "formation") {
     return (
       <>
@@ -1449,8 +1450,9 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: an
         {draft.jurisdiction && jurisdictionByCode.get(draft.jurisdiction) && <div className="muted">Act: {optionLabel("actsFormedUnder", jurisdictionByCode.get(draft.jurisdiction)?.actFormedUnder)}</div>}
         <div className="grid two"><Field label="NUANS number"><input className="input" value={draft.nuansNumber ?? ""} onChange={(e) => setDraft({ ...draft, nuansNumber: e.target.value })} /></Field><Field label="NUANS date"><DatePicker value={draft.nuansDate ?? ""} onChange={(value) => setDraft({ ...draft, nuansDate: value })} /></Field></div>
         <Field label="Purpose statement"><MarkdownEditor rows={4} value={draft.purposeStatement ?? ""} onChange={(markdown) => setDraft({ ...draft, purposeStatement: markdown })} /></Field>
-        <Field label="Classes of membership"><MarkdownEditor rows={4} value={draft.classesOfMembership ?? ""} onChange={(markdown) => setDraft({ ...draft, classesOfMembership: markdown })} /></Field>
-        <Field label="Distribution of property"><MarkdownEditor rows={4} value={draft.distributionOfProperty ?? ""} onChange={(markdown) => setDraft({ ...draft, distributionOfProperty: markdown })} /></Field>
+        {/* Membership classes and distribution of property are society constitution items. */}
+        {!corporate && <Field label="Classes of membership"><MarkdownEditor rows={4} value={draft.classesOfMembership ?? ""} onChange={(markdown) => setDraft({ ...draft, classesOfMembership: markdown })} /></Field>}
+        {!corporate && <Field label="Distribution of property"><MarkdownEditor rows={4} value={draft.distributionOfProperty ?? ""} onChange={(markdown) => setDraft({ ...draft, distributionOfProperty: markdown })} /></Field>}
         <Field label="Assigned staff IDs"><input className="input" value={draft.assignedStaffIdsText ?? ""} onChange={(e) => setDraft({ ...draft, assignedStaffIdsText: e.target.value })} /></Field>
         <Field label="Signing package IDs"><input className="input mono" value={draft.signingPackageIdsText ?? ""} onChange={(e) => setDraft({ ...draft, signingPackageIdsText: e.target.value })} /></Field>
       </>
@@ -1482,7 +1484,7 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode }: { draft: an
     return (
       <>
         <div className="grid two"><OptionSelect label="Status" setName="annualMaintenanceStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} /><Field label="Filing year"><input className="input" value={draft.yearFilingFor ?? ""} onChange={(e) => setDraft({ ...draft, yearFilingFor: e.target.value })} /></Field></div>
-        <div className="grid two"><Field label="Last AGM date"><DatePicker value={draft.lastAgmDate ?? ""} onChange={(value) => setDraft({ ...draft, lastAgmDate: value })} /></Field><Field label="Filing date"><DatePicker value={draft.filingDate ?? ""} onChange={(value) => setDraft({ ...draft, filingDate: value })} /></Field></div>
+        <div className="grid two"><Field label={corporate ? "Last annual meeting date" : "Last AGM date"}><DatePicker value={draft.lastAgmDate ?? ""} onChange={(value) => setDraft({ ...draft, lastAgmDate: value })} /></Field><Field label="Filing date"><DatePicker value={draft.filingDate ?? ""} onChange={(value) => setDraft({ ...draft, filingDate: value })} /></Field></div>
         <OptionSelect label="Financial statement option" setName="annualFinancialStatementOptions" value={draft.annualFinancialStatementOption ?? ""} emptyLabel="No option" onChange={(value) => setDraft({ ...draft, annualFinancialStatementOption: value })} />
         <div className="grid two"><Field label="Fiscal year end"><DatePicker value={draft.fiscalYearEndDate ?? ""} onChange={(value) => setDraft({ ...draft, fiscalYearEndDate: value })} /></Field><Field label="Income tax return date"><DatePicker value={draft.incomeTaxReturnDate ?? ""} onChange={(value) => setDraft({ ...draft, incomeTaxReturnDate: value })} /></Field></div>
         <Field label="Authorizing phone"><input className="input" value={draft.authorizingPhone ?? ""} onChange={(e) => setDraft({ ...draft, authorizingPhone: e.target.value })} /></Field>

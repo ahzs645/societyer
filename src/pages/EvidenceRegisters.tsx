@@ -281,7 +281,7 @@ export function FinanceImportsPage() {
         empty={
           <>
             No budget snapshots imported yet. This register holds verified, source-backed
-            budget snapshots from imported documents — the society's live financial data is
+            budget snapshots from imported documents — the organization's live financial data is
             on <Link to="/app/financials">Financials</Link> and{" "}
             <Link to="/app/treasurer">Treasurer</Link>. Approve budget snapshot imports after
             checking OCR amounts.
