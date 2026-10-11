@@ -28,6 +28,8 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
+import { canonicalizeJurisdictionCode, homeJurisdictionCode } from "../../shared/organizationDomain";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function DirectorsPage() {
@@ -142,7 +144,7 @@ export function DirectorsPage() {
       />
 
       <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        This is your BC director filing register. For a complete history of every governance role (officers, controllers, past terms), see{" "}
+        This is your {canonicalizeJurisdictionCode(homeJurisdictionCode(society)) === "CA-BC" || governanceVocabulary(society).societyLaw ? "BC director filing register" : "director register"}. For a complete history of every governance role (officers, controllers, past terms), see{" "}
         <Link to="/app/role-holders">Role holders</Link>.
       </p>
 

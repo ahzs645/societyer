@@ -8,6 +8,8 @@ import { Badge, Field } from "../../../components/ui";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { useToast } from "../../../components/Toast";
 import { formatDate } from "../../../lib/format";
+import { useSociety } from "../../../hooks/useSociety";
+import { governanceVocabulary } from "../../../lib/governanceVocabulary";
 import { Users, Trash2, Ban } from "lucide-react";
 
 function memberName(member: any): string {
@@ -40,6 +42,7 @@ export function MeetingProxiesCard({
   const revokeProxy = usePermissionedMutation(api.proxies.revoke, canWrite);
   const removeProxy = usePermissionedMutation(api.proxies.remove, canWrite);
   const toast = useToast();
+  const societyLaw = governanceVocabulary(useSociety()).societyLaw;
 
   const memberOptions = useMemo(
     () => (members ?? []).map(memberName).filter(Boolean).sort(),
@@ -113,7 +116,7 @@ export function MeetingProxiesCard({
       <div className="card__body">
         <div className="meeting-proxy-quorum">
           <span>
-            Members counted <strong>{presentCount}</strong>
+            {societyLaw ? "Members counted" : "Attendees counted"} <strong>{presentCount}</strong>
           </span>
           <span>
             Active proxies <strong>{activeProxies.length}</strong>

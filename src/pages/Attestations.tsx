@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
 import { ShieldCheck, PenLine } from "lucide-react";
@@ -127,7 +128,9 @@ export function AttestationsPage() {
 
       {missing && missing.length > 0 && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          <Flag level="warn" citationId="BC-SOC-DIRECTOR-QUALIFICATIONS">
+          {/* The qualification citation is BC Societies Act s.44(2); other
+              entity types have no reviewed citation, so none is shown. */}
+          <Flag level="warn" citationId={governanceVocabulary(society).societyLaw ? "BC-SOC-DIRECTOR-QUALIFICATIONS" : undefined}>
             {missing.length} director{missing.length === 1 ? "" : "s"} have not yet attested for {year}.
           </Flag>
         </div>

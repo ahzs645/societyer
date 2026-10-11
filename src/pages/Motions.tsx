@@ -7,6 +7,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -60,6 +61,7 @@ type MotionsTab = (typeof MOTIONS_TABS)[number];
 // The Motions area consolidates the master motions table, the Tabled/backlog
 // workflow, and the template library into one tabbed page (driven by ?tab=).
 export function MotionsPage() {
+  const society = useSociety();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab") as MotionsTab | null;
   const tab: MotionsTab = tabFromUrl && MOTIONS_TABS.includes(tabFromUrl) ? tabFromUrl : "motions";
@@ -80,7 +82,7 @@ export function MotionsPage() {
         title="Motions"
         icon={<Gavel size={16} />}
         iconColor="orange"
-        subtitle="Every decision your society has moved — a referenceable record across all meetings."
+        subtitle={`Every decision your ${governanceVocabulary(society).organizationNoun} has moved — a referenceable record across all meetings.`}
       />
       <Tabs<MotionsTab>
         value={tab}

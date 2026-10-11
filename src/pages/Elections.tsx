@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -175,7 +176,7 @@ export function ElectionsPage() {
           <div>
             <strong>Bylaw restriction:</strong> The active bylaw rule set currently disallows electronic voting. You can
             still prepare elections here, but opening them for remote ballots may not
-            match the society's bylaws.
+            match {governingDocumentsPhrase(society)}.
           </div>
         </div>
       )}
@@ -447,4 +448,11 @@ export function ElectionsPage() {
       </Drawer>
     </div>
   );
+}
+
+function governingDocumentsPhrase(society: any): string {
+  const vocab = governanceVocabulary(society);
+  if (vocab.societyLaw) return "the society's bylaws";
+  if (vocab.isCorporation) return "the corporation's articles and by-laws";
+  return "the organization's governing documents";
 }

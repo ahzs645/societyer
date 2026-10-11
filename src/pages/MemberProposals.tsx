@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Plus, Vote, Trash2 } from "lucide-react";
@@ -48,6 +49,7 @@ export function MemberProposalsPage() {
   if (society === null) return <SeedPrompt />;
 
   const eligibleVoters = (members ?? []).filter((m: any) => m.status === "Active" && m.votingRights).length;
+  const vocab = governanceVocabulary(society);
 
   const openNew = () => {
     if (!canWrite) return;
@@ -71,10 +73,12 @@ export function MemberProposalsPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Member proposals"
+        title={vocab.isCorporation ? "Shareholder proposals" : "Member proposals"}
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={`Proposals from members — active rule set requires at least ${rules?.memberProposalThresholdPct ?? 5}% of voting members, subject to a floor of ${rules?.memberProposalMinSignatures ?? 1}, and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before AGM notice. Current voting members: ${eligibleVoters}.`}
+        subtitle={vocab.isCorporation
+          ? `Proposals for the annual shareholder meeting. The active rule set uses a ${rules?.memberProposalThresholdPct ?? 5}% threshold with a floor of ${rules?.memberProposalMinSignatures ?? 1} signature(s) and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before notice; confirm proposal rights under the governing Act and the articles or by-laws.`
+          : `Proposals from members — active rule set requires at least ${rules?.memberProposalThresholdPct ?? 5}% of voting members, subject to a floor of ${rules?.memberProposalMinSignatures ?? 1}, and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before AGM notice. Current voting members: ${eligibleVoters}.`}
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New proposal

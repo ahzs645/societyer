@@ -9,6 +9,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
@@ -39,6 +40,26 @@ const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "minutesApproved", label: "Approve minutes", sub: "Usually at next meeting; then circulate to members", icon: Flag },
   { id: "annualReportFiled", label: "File annual report", sub: "Within the configured post-AGM filing window via Societies Online", icon: FileDown },
 ];
+
+// STEP_ORDER's notice, minutes and annual-report wording is the BC Societies
+// Act baseline (14–60 day notice, Societies Online annual report due after the
+// AGM). Other entity types get neutral wording that defers to their governing
+// Act, articles/by-laws and the compliance obligations register instead.
+function stepCopyFor(step: (typeof STEP_ORDER)[number], societyLaw: boolean, voterNounPlural: string) {
+  if (societyLaw) return step;
+  switch (step.id) {
+    case "notice":
+      return { ...step, sub: "Within the notice window required by the governing Act and the articles or by-laws" };
+    case "electionsHeld":
+      return { ...step, label: "Elect directors", sub: "If directors are to be elected at this meeting under the articles or by-laws" };
+    case "minutesApproved":
+      return { ...step, sub: `Approve and keep with the minute book; circulate to ${voterNounPlural} if required` };
+    case "annualReportFiled":
+      return { ...step, label: "Record annual registry filing", sub: "Check the annual filing deadline in Compliance obligations; it is set by the registry, not by this workflow" };
+    default:
+      return step;
+  }
+}
 
 // Keep STEP_ORDER's ids in lockstep with the shared AGM_STEP_ORDER at module
 // load time, so this page and the overview AGM checklist can never silently
@@ -72,6 +93,8 @@ export function AgmWorkflowPage() {
   const confirm = useConfirm();
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
+  const vocab = governanceVocabulary(society);
+  const steps = STEP_ORDER.map((step) => stepCopyFor(step, vocab.societyLaw, vocab.voterNounPlural));
 
   const currentIdx = useMemo(() => {
     if (!run) return 0;
@@ -200,7 +223,7 @@ export function AgmWorkflowPage() {
       <div className="card">
         <div className="card__head"><h2 className="card__title">Steps</h2></div>
         <div className="card__body" style={{ padding: 0 }}>
-          {STEP_ORDER.map((s, i) => {
+          {steps.map((s, i) => {
             const doneFromRun = i <= currentIdx && run != null;
             const doneFromRecord =
               (s.id === "notice" && Boolean(meeting.noticeSentAt)) ||
@@ -214,7 +237,7 @@ export function AgmWorkflowPage() {
             return (
               <div key={s.id} style={{
                 display: "flex", gap: 12, padding: "14px 16px",
-                borderBottom: i < STEP_ORDER.length - 1 ? "1px solid var(--border)" : "none",
+                borderBottom: i < steps.length - 1 ? "1px solid var(--border)" : "none",
                 background: active ? "var(--accent-soft)" : undefined,
               }}>
                 <div style={{ marginTop: 2 }}>
@@ -249,7 +272,7 @@ export function AgmWorkflowPage() {
                               if (!canSendNotice || sendingNotice) return;
                               const ok = await confirm({
                                 title: "Send AGM notice?",
-                                message: `This will send AGM notice by ${noticeChannel}. Confirm the notice window, participation details, agenda, and member recipient list are correct.`,
+                                message: `This will send AGM notice by ${noticeChannel}. Confirm the notice window, participation details, agenda, and ${vocab.voterNoun} recipient list are correct.`,
                                 confirmLabel: "Send notice",
                                 tone: "warn",
                               });
@@ -265,7 +288,7 @@ export function AgmWorkflowPage() {
                               } catch (error) { toast.error("Notice could not be sent", error instanceof Error ? error.message : "Please try again."); }
                               finally { setSendingNotice(false); }
                             }}>
-                              <Send size={12} /> Send notice to all voting members
+                              <Send size={12} /> Send notice to all voting {vocab.voterNounPlural}
                             </button>
                           </>
                         ) : (
@@ -329,9 +352,15 @@ export function AgmWorkflowPage() {
                     {!done && s.id === "annualReportFiled" && (
                       <>
                         <Link to="/app/filings" className="btn-action">Go to filings</Link>
-                        <button className="btn-action btn-action--primary" onClick={() => advanceWithReview("annualReportFiled", { annualReportFiledAt: new Date().toISOString() }, `Only complete this after the annual report filing record has the filed date, confirmation number or evidence, and the ${rules?.annualReportDueDaysAfterMeeting ?? 30}-day post-AGM deadline has been checked.`)}>
-                          <Flag size={12} /> Mark annual report filed ({rules?.annualReportDueDaysAfterMeeting ?? 30} day rule)
-                        </button>
+                        {vocab.societyLaw ? (
+                          <button className="btn-action btn-action--primary" onClick={() => advanceWithReview("annualReportFiled", { annualReportFiledAt: new Date().toISOString() }, `Only complete this after the annual report filing record has the filed date, confirmation number or evidence, and the ${rules?.annualReportDueDaysAfterMeeting ?? 30}-day post-AGM deadline has been checked.`)}>
+                            <Flag size={12} /> Mark annual report filed ({rules?.annualReportDueDaysAfterMeeting ?? 30} day rule)
+                          </button>
+                        ) : (
+                          <button className="btn-action btn-action--primary" onClick={() => advanceWithReview("annualReportFiled", { annualReportFiledAt: new Date().toISOString() }, "Only complete this after the annual registry filing record has the filed date and confirmation number or evidence, and its deadline has been checked in Compliance obligations.")}>
+                            <Flag size={12} /> Mark annual filing recorded
+                          </button>
+                        )}
                       </>
                     )}
                   </div>

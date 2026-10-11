@@ -18,6 +18,8 @@ import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
+import { useSociety } from "@/hooks/useSociety";
+import { governanceVocabulary } from "@/lib/governanceVocabulary";
 import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -248,6 +250,7 @@ export function MeetingFormFields({
   } = data;
   const availableTemplates = meetingTemplatesForType(meetingTemplates, value.type);
   const overlaps = meetingScheduleConflicts(meetings, value.scheduledAt, editingId);
+  const corporate = governanceVocabulary(useSociety()).isCorporation;
 
   return (
     <div className="meeting-form">
@@ -315,7 +318,7 @@ export function MeetingFormFields({
                 meetingTemplateId: editingId ? value.meetingTemplateId : template ? String(template._id) : "",
               });
             }}
-            options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: t }))}
+            options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: meetingTypeLabel(t, corporate) }))}
           />
         </Field>
         <Field label="Scheduled">
@@ -432,4 +435,12 @@ export function MeetingFormFields({
       )}
     </div>
   );
+}
+
+/** Stored meeting types stay AGM/SGM; corporations see shareholder-meeting labels. */
+function meetingTypeLabel(type: string, corporate: boolean): string {
+  if (!corporate) return type;
+  if (type === "AGM") return "Annual shareholder meeting (AGM)";
+  if (type === "SGM") return "Special shareholder meeting (SGM)";
+  return type;
 }

@@ -7,6 +7,7 @@ import { getAuthMode } from "../lib/authMode";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, EmptyState } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -244,7 +245,9 @@ export function MeetingsPage() {
         title="Meetings"
         icon={<Calendar size={16} />}
         iconColor="orange"
-        subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
+        subtitle={governanceVocabulary(society).isCorporation
+          ? "Board meetings, committee meetings, and shareholder meetings (annual and special)."
+          : "Board meetings, committee meetings, and general meetings (AGM/SGM)."}
         actions={
           <>
           {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn" to="/app/meetings/offline">Offline preparation</Link>}
