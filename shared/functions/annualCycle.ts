@@ -22,8 +22,8 @@ import { requireSocietyMembership } from "./access";
 import { minutesMotionsForDisplay } from "../minutesMotions";
 import { resolveMinutesMotions } from "./minutes";
 import { annualReportForAgm, isAgmMeeting, isHeldMeeting, noAgmAnnualReportForYear } from "../agmEvidence";
-import { isCorporation } from "../organizationDomain";
 import { localDateKey } from "../dateOnly";
+import { organizationRuleScope } from "../entityRuleScope";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -91,6 +91,13 @@ export async function summaryPortable(
   ]);
 
   const rules = await getActiveBylawRuleSet(ctx, societyId);
+  // Society-only steps (member register, BC-resident director, AGM-anchored
+  // annual report) and BC PIPA wording are gated on the workspace's entity
+  // type and home jurisdiction.
+  const scope = organizationRuleScope(society);
+  const corporation = scope.isCorporation;
+  const holderNoun = corporation ? "shareholder" : "member";
+  const requiresBcResidentDirector = scope.isBcSociety && !society?.isMemberFunded;
   const activeMembers = members.filter((member) => member.status === "Active");
   const votingMembers = activeMembers.filter((member) => member.votingRights);
   const memberDataStatus = society?.memberDataAccessStatus ?? "Unknown";
@@ -132,14 +139,16 @@ export async function summaryPortable(
   const nextAgmAfterSelected = selectedAgm
     ? allAgms.find((meeting) => dateOnly(meeting.scheduledAt) > selectedAgmDate && isHeldMeeting(meeting as any, today))
     : undefined;
-  const corporate = isCorporation(society as any);
-  const annualReportMatch = selectedAgm
+  // The AGM-anchored report (s.73(1)(a)) applies to societies; the no-AGM
+  // January 31 report (s.73(1)(b)) is BC Societies Act only. A corporation's
+  // annual report or return follows its registry anniversary instead.
+  const annualReportMatch = selectedAgm && scope.isSociety
     ? annualReportForAgm(filings as any[], selectedAgmDate, { nextAgmDate: nextAgmAfterSelected?.scheduledAt, dueDays })
-    : !corporate && today > endISO
+    : !selectedAgm && scope.isBcSociety && today > endISO
       ? noAgmAnnualReportForYear(filings as any[], cycleYear)
       : null;
   const annualReport: any = annualReportMatch?.filing ?? null;
-  const noAgmReportDueDate = !selectedAgm && !corporate ? `${cycleYear + 1}-01-31` : undefined;
+  const noAgmReportDueDate = !selectedAgm && scope.isBcSociety ? `${cycleYear + 1}-01-31` : undefined;
   // Presentation evidence must point at THIS cycle's AGM: a statement record
   // presented at last year's AGM is not evidence for this cycle (G-12).
   const presentedFinancial = selectedAgm
@@ -153,7 +162,9 @@ export async function summaryPortable(
     .filter((row) => inYear(row.periodEnd, cycleYear) || row.fiscalYear === String(cycleYear))
     .sort((a, b) => String(b.periodEnd).localeCompare(String(a.periodEnd)))[0] ?? null;
 
-  const annualReportDueDate = selectedAgm
+  // A society's annual report follows its AGM. A corporation's annual report or
+  // return follows the registry anniversary (compliance obligations), not the AGM.
+  const annualReportDueDate = selectedAgm && scope.isSociety
     ? addDays(selectedAgmDate, dueDays)
     : annualReportMatch?.dueDate ?? noAgmReportDueDate;
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
@@ -212,7 +223,7 @@ export async function summaryPortable(
     ...(annualMaintenance?.sourceDocumentIds ?? []),
   ].filter(Boolean).length;
 
-  const items: CycleItem[] = [
+  const cycleItems: (CycleItem | null)[] = [
     {
       id: "agm-scheduled",
       phase: "before",
@@ -226,7 +237,7 @@ export async function summaryPortable(
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/meetings",
       actionLabel: selectedAgm ? "Open AGM" : "Schedule AGM",
     },
-    {
+    corporation ? null : {
       id: "member-register",
       phase: "before",
       title: "Confirm voting member register",
@@ -270,7 +281,7 @@ export async function summaryPortable(
     {
       id: "notice-package",
       phase: "before",
-      title: "Send member notice package",
+      title: `Send ${holderNoun} notice package`,
       detail: selectedAgm
         ? noticeSent
           ? "Notice is recorded for the AGM."
@@ -287,10 +298,10 @@ export async function summaryPortable(
       phase: "before",
       title: "Finalize agenda, motions, and proposals",
       detail: selectedAgm
-        ? `${selectedAgmHasAgenda ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked member proposal${meetingProposals.length === 1 ? "" : "s"}.`
+        ? `${selectedAgmHasAgenda ? "Agenda is drafted" : "Agenda not yet recorded"}; ${meetingProposals.length} linked ${holderNoun} proposal${meetingProposals.length === 1 ? "" : "s"}.`
         : "No AGM selected for agenda planning.",
       status: selectedAgmHasAgenda ? "complete" : selectedAgm ? "attention" : "blocked",
-      evidence: ["Agenda", "Motion text", "Member proposals", "Proxy and voting rules"],
+      evidence: ["Agenda", "Motion text", corporation ? "Shareholder proposals" : "Member proposals", "Proxy and voting rules"],
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/agendas",
       actionLabel: "Open agenda",
     },
@@ -374,15 +385,17 @@ export async function summaryPortable(
             ? `Filed ${dateOnly(annualReport.filedAt)}, ${annualReportMatch.daysLate} day${annualReportMatch.daysLate === 1 ? "" : "s"} after the ${annualReportMatch.dueDate} due date. Keep the late-filing explanation with the filing evidence.`
             : `Filed ${dateOnly(annualReport.filedAt) || "with evidence"}.`
           : `Tracked; due ${annualReportDueDate ?? annualReport.dueDate}.`
-        : selectedAgm
+        : selectedAgm && scope.isSociety
           ? `No annual report filing record; due ${annualReportDueDate} (${dueDays} days after the AGM).`
           : noAgmReportDueDate
             ? `No AGM ${today > endISO ? "was held" : "is on record yet"} in ${cycleYear}. Without an AGM in ${cycleYear}, the annual report is due ${humanDate(noAgmReportDueDate)}.`
-            : "Schedule the AGM to compute the annual report filing deadline.",
+            : scope.isSociety
+              ? "Schedule the AGM to compute the annual report filing deadline."
+              : "Annual registry filing deadlines follow the anniversary date; review Compliance obligations.",
       status: annualReport?.status === "Filed" ? (annualReportMatch?.late ? "attention" : "complete") : annualReportDueDate && today > annualReportDueDate ? "blocked" : annualReport ? "attention" : "upcoming",
       evidence: ["Annual report filing", "Confirmation number", "Receipt or submission evidence"],
       dueDate: annualReport?.dueDate ?? annualReportDueDate,
-      to: annualReport ? "/filings" : "/formation-maintenance",
+      to: annualReport ? "/filings" : scope.isSociety ? "/formation-maintenance" : "/compliance-obligations",
       actionLabel: annualReport?.status === "Filed" ? "Open filing" : "Prepare filing",
     },
     {
@@ -399,8 +412,10 @@ export async function summaryPortable(
       id: "post-agm-directors",
       phase: "after",
       title: "Reflect director and registry changes",
-      detail: `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${activeDirectors.filter((director) => director.isBCResident).length} BC resident director${activeDirectors.filter((director) => director.isBCResident).length === 1 ? "" : "s"}.`,
-      status: activeDirectors.length > 0 && activeDirectors.some((director) => director.isBCResident) ? "complete" : "blocked",
+      detail: requiresBcResidentDirector
+        ? `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}; ${activeDirectors.filter((director) => director.isBCResident).length} BC resident director${activeDirectors.filter((director) => director.isBCResident).length === 1 ? "" : "s"}.`
+        : `${activeDirectors.length} active director${activeDirectors.length === 1 ? "" : "s"}.`,
+      status: activeDirectors.length > 0 && (!requiresBcResidentDirector || activeDirectors.some((director) => director.isBCResident)) ? "complete" : "blocked",
       evidence: ["Director register", "AGM election result", "Registry filing evidence if changed"],
       to: "/directors",
       actionLabel: "Review directors",
@@ -408,8 +423,8 @@ export async function summaryPortable(
     {
       id: "pipa-review",
       phase: "ongoing",
-      title: "Review PIPA privacy program",
-      detail: `${society?.privacyProgramStatus ?? "Unknown"} privacy program; ${pipaTrainingThisYear.length} PIPA training record${pipaTrainingThisYear.length === 1 ? "" : "s"} this cycle.`,
+      title: scope.isBcHome ? "Review PIPA privacy program" : "Review privacy program",
+      detail: `${society?.privacyProgramStatus ?? "Unknown"} privacy program; ${pipaTrainingThisYear.length} ${scope.isBcHome ? "PIPA" : "privacy"} training record${pipaTrainingThisYear.length === 1 ? "" : "s"} this cycle.`,
       status: society?.privacyPolicyDocId && society?.privacyProgramStatus === "Documented" ? "complete" : "attention",
       evidence: ["Privacy policy evidence", "Privacy officer", "Complaint process", "Training or review record"],
       to: "/privacy",
@@ -446,6 +461,7 @@ export async function summaryPortable(
       actionLabel: "Open deadlines",
     },
   ];
+  const items = cycleItems.filter((item): item is CycleItem => item !== null);
 
   const completedCount = items.filter((item) => item.status === "complete").length;
   const blockedCount = items.filter((item) => item.status === "blocked").length;
@@ -496,7 +512,9 @@ export async function summaryPortable(
     caveats: [
       "Compliance status means evidence readiness in Societyer, not a legal opinion.",
       "Notice, quorum, proxy, electronic voting, and director term rules depend on the active bylaw rule set.",
-      "BC annual reports, CRA charity returns, payroll, GST/HST, funder reports, and federal annual returns are separate obligations.",
+      corporation
+        ? "Registry annual reports or returns, ownership-register updates, CRA returns, payroll, and GST/HST are separate obligations."
+        : "BC annual reports, CRA charity returns, payroll, GST/HST, funder reports, and federal annual returns are separate obligations.",
     ],
   };
 }

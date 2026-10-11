@@ -41,7 +41,7 @@ export function evaluateLegalDecision(input: LegalDecisionInput): LegalDecisionR
   let divisor = input.resolution === "special" ? 3 : input.resolution === "ordinary" ? 2 : 1;
   let strict = input.resolution === "ordinary";
   let denominator: LegalDecisionResult["denominator"] = "votes_cast";
-  const citation = society ? "BC Societies Act ss.1, 54, 67-71; applicable bylaws" : bc
+  const citation = society ? (bc ? "BC Societies Act ss.1, 54, 67-71; applicable bylaws" : "Review the governing statute and bylaws for this society") : bc
     ? "BC Business Corporations Act ss.1, 167-175, 182; applicable articles"
     : input.jurisdiction === "CA-FED-CBCA" ? "CBCA ss.117, 139, 142; articles/by-laws" : "OBCA ss.129, 101, 104; articles/by-laws";
   if (society && (!bc || input.body === "shareholders")) warnings.push("This entity and decision body combination is unsupported.");
@@ -57,7 +57,9 @@ export function evaluateLegalDecision(input: LegalDecisionInput): LegalDecisionR
     if (directors || input.resolution !== "ordinary" || (!bc && !society)) { numerator = 1; divisor = 1; }
     else if (!(bc && !society && (input.preExistingCompany || input.specialMajority === "three_quarters"))) { numerator = 2; divisor = 3; }
     if (!input.circulatedToAll) warnings.push("Written resolutions must be distributed to every person entitled to vote; distribution evidence is missing.");
-    if (directors) warnings.push("Confirm director eligibility, conflicts and any society bylaw exception to the unanimous written baseline.");
+    if (directors) warnings.push(society
+      ? "Confirm director eligibility, conflicts and any society bylaw exception to the unanimous written baseline."
+      : "Confirm director eligibility and conflicts before relying on the unanimous written baseline.");
   } else if (input.quorumMet !== true) warnings.push("A meeting result requires evidenced quorum.");
   if (input.resolution === "unanimous") warnings.push("Identify everyone whose consent is legally required, including non-voting holders where the matter requires their consent.");
   if (input.deemedAgm && (input.mode !== "written" || input.votesFor !== input.eligibleVotes || !input.financialStatementsProvided || !input.annualBusinessComplete)) {
@@ -93,6 +95,8 @@ export function legalMeetingQuorum(input: {
   if (input.eligibleVotingShares !== undefined && input.presentVotingShares !== undefined &&
     (![input.eligibleVotingShares, input.presentVotingShares].every(n => Number.isSafeInteger(n) && n >= 0) || input.presentVotingShares > input.eligibleVotingShares)) return { met: null, minimumPeople: 0, citation: "Review issued voting share attendance totals" };
   if (input.entityType === "society") {
+    // The Societies Act quorum baseline is BC-only; never cite it elsewhere.
+    if (input.jurisdiction !== "CA-BC") return { met: null, minimumPeople: 0, citation: "Review the governing statute and bylaws for this society" };
     const configured = input.configuredMinimum ?? (input.adoptedModel === "bc_society" ? Math.max(3, Math.ceil(eligiblePeople / 10)) : 3);
     const minimumPeople = Math.min(eligiblePeople, Math.max(3, configured));
     return { met: presentPeople >= minimumPeople, minimumPeople, citation: "Societies Act s.67; adopted Model Bylaw 3.7 where applicable" };

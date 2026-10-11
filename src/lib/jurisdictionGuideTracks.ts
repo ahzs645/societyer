@@ -1,4 +1,5 @@
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "../../shared/organizationDomain";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { JURISDICTION_GUIDE_PACK_JSON } from "./jurisdictionGuidePackRegistry";
 import {
   jurisdictionGuidePackSchema,
@@ -85,10 +86,21 @@ export const JURISDICTION_OPTIONS = JURISDICTION_GUIDE_PACKS.filter((pack, index
   hint: pack.code === "CA-BC" ? "BC society and company guidance use separate governing Acts; select the matching entity setup." : pack.description,
 }));
 
-/** Resolve an internal legal-guide track; stored home jurisdiction remains CA-BC. */
+/** Internal guide track for a BC entity that is neither a BC society nor a BC company. */
+export const BC_ENTITY_REVIEW_GUIDE_CODE = "CA-BC-ENTITY-REVIEW";
+
+/**
+ * Resolve an internal legal-guide track; stored home jurisdiction remains CA-BC.
+ * The CA-BC pack is the BC Societies Act pack, so it is returned only for a BC
+ * society (including legacy workspaces with no recorded entity type). BC
+ * corporations get the BCA pack; any other BC entity gets an empty review track
+ * rather than Societies Act guidance.
+ */
 export function resolveJurisdictionCode(organization?: LegalEntityLike | null): JurisdictionCode {
   const code = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
-  return code === "CA-BC" && isCorporation(organization) ? "CA-BC-BCA" : code;
+  if (code !== "CA-BC") return code;
+  if (isCorporation(organization)) return "CA-BC-BCA";
+  return organizationRuleScope(organization).isBcSociety ? code : BC_ENTITY_REVIEW_GUIDE_CODE;
 }
 
 export function getJurisdictionGuidePack(
@@ -161,6 +173,19 @@ function shortISODate(value: string) {
 function unsupportedJurisdictionGuidePack(
   jurisdictionCode: JurisdictionCode,
 ): JurisdictionGuidePack {
+  if (jurisdictionCode === BC_ENTITY_REVIEW_GUIDE_CODE) {
+    return {
+      code: jurisdictionCode,
+      name: "British Columbia — entity-specific review required",
+      countryCode: "CA",
+      subdivisionCode: "BC",
+      default: false,
+      description:
+        "No source-backed statutory guide pack is configured for this BC entity type. The BC Societies Act and Business Corporations Act packs do not apply.",
+      sources: [],
+      rules: [],
+    };
+  }
   return {
     code: jurisdictionCode || "unknown",
     name: jurisdictionCode ? `Unsupported jurisdiction (${jurisdictionCode})` : "Unsupported jurisdiction",

@@ -1,13 +1,10 @@
 import { onboardingGovernanceSummary, readOnboardingAnswersJson } from "./onboarding";
 import { PATHWAY_REGISTRY, resolvePathway } from "./pathways/registry";
-import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "./organizationDomain";
+import { canonicalizeJurisdictionCode, DEFAULT_HOME_JURISDICTION_CODE, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "./organizationDomain";
+import { organizationRuleScope } from "./entityRuleScope";
 
-/**
- * The jurisdiction assumed when a workspace or legacy snapshot does not specify one.
- * Societyer began as a BC Societies Act tool, so historical/demo data defaults here.
- * Change this in one place to move the product's default (e.g. to federal CBCA).
- */
-export const DEFAULT_HOME_JURISDICTION_CODE = "CA-BC";
+/** Re-exported for existing callers; the constant lives in organizationDomain. */
+export { DEFAULT_HOME_JURISDICTION_CODE };
 
 export type JurisdictionWorkspaceDefaults = {
   entityType?: string;
@@ -417,6 +414,10 @@ function workspaceConfig(value: WorkspaceJurisdiction) {
   if (typeof value === "object" && value) {
     const code = canonicalizeJurisdictionCode(homeJurisdictionCode(value));
     if (code === "CA-BC" && isCorporation(value)) return BC_COMPANY_CONFIG;
+    // The CA-BC config is the BC society setup (Societies Online, BC-resident
+    // director copy). A BC entity that is neither a society nor a corporation —
+    // e.g. a custom existing entity — gets the neutral copy instead.
+    if (code === "CA-BC" && !organizationRuleScope(value).isBcSociety) return undefined;
     return findJurisdictionWorkspaceConfig(code);
   }
   return findJurisdictionWorkspaceConfig(value as string | null | undefined);
