@@ -22,7 +22,7 @@ export const documentTables = {
     createdAtISO: v.string(),
     lastOpenedAtISO: v.optional(v.string()),
     lastOpenedByUserId: v.optional(v.id("users")),
-    reviewStatus: v.optional(v.string()), // none | in_review | needs_signature | approved | blocked
+    reviewStatus: v.optional(v.string()), // none | needs_review | in_review | needs_signature | transposed | approved | blocked
     librarySection: v.optional(v.string()), // governance | policy | meeting_material | finance | other
     flaggedForDeletion: v.boolean(),
     archivedAtISO: v.optional(v.string()),
@@ -31,6 +31,12 @@ export const documentTables = {
     sourcePayloadJson: v.optional(v.string()),
     importSessionId: v.optional(v.id("documents")),
     importRecordKind: v.optional(v.string()),
+    // Version groups and duplicates (schema A8). All optional: absent means
+    // "not set by a person"; the app still detects likely groups on read.
+    versionGroupKey: v.optional(v.string()),
+    supersedesDocumentId: v.optional(v.id("documents")),
+    duplicateOfDocumentId: v.optional(v.id("documents")),
+    sourceVersionStatus: v.optional(v.string()), // draft | final | approved | signed | revised
     tags: v.array(v.string()),
   })
     .index("by_society", ["societyId"])

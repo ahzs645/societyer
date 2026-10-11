@@ -14,37 +14,23 @@
  * Convex-coupled access modules. Logic preserved exactly.
  */
 
+import { assertValid, validateDocumentInput } from "../recordValidation";
+import { isInternalDocumentRecord, normalizeDocumentCategory } from "../documentCategories";
+import { normalizeDocumentReviewStatus, storedDocumentReviewStatus } from "../documentReviewStatus";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
   getOwned,
   principalUserId,
   requireSocietyMembership,
 } from "./access";
+import { todayDateOnly } from "../dateOnly";
 
-const VISIBLE_DOCUMENT_CATEGORIES = [
-  "Constitution",
-  "Bylaws",
-  "Minutes",
-  "FinancialStatement",
-  "Policy",
-  "Filing",
-  "Agreement",
-  "Other",
-  "Insurance",
-  "Grant",
-  "Receipt",
-  "CourtOrder",
-  "WorkflowGenerated",
-  // Drafts produced by the document catalog (legalOperations:generateDocumentFromCatalog)
-  // and staged packets carry the lowercase "governance" category on every runtime
-  // (the portable handler, hosted Convex, and the legacy static mirror all agree).
-  // Without this they were silently absent from the documents list.
-  "governance",
-  "Library",
-];
+// Documents are listed whatever their category (finding D-04): categories are
+// an open, normalized model (shared/documentCategories.ts). Only Societyer's
+// own bookkeeping rows (import sessions/candidates, org history scaffolding)
+// are internal and kept out of document lists.
 
 const DOCUMENT_QUEUE_LIMIT = 8;
-const DOCUMENT_QUEUE_CATEGORY_SCAN_LIMIT = 80;
 const DOCUMENT_QUEUE_RELATED_SCAN_LIMIT = 250;
 const DOCUMENT_QUEUE_RELATED_DOC_LIMIT = 64;
 
@@ -292,24 +278,50 @@ export async function publicDocumentAccessPredicate(ctx: PortableQueryCtx, socie
 
 export async function listPortable(
   ctx: PortableQueryCtx,
-  { societyId, actingUserId }: { societyId: string; actingUserId?: string },
+  args: { societyId: string; actingUserId?: string },
+) {
+  return listVisibleDocuments(ctx, args, []);
+}
+
+/**
+ * Fields `documents:listSummaries` leaves out. `content` holds the extracted
+ * text of imported files (up to hundreds of KB per row); list screens and
+ * pickers never show it, and on the local runtime it is never even loaded.
+ * Open a single document with `documents:get` for its content.
+ */
+export const DOCUMENT_SUMMARY_OMITTED_FIELDS = ["content"] as const;
+
+/** `documents:list` without the heavy `content` field — for tables and pickers. */
+export async function listSummariesPortable(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; actingUserId?: string },
+) {
+  return listVisibleDocuments(ctx, args, DOCUMENT_SUMMARY_OMITTED_FIELDS);
+}
+
+async function listVisibleDocuments(
+  ctx: PortableQueryCtx,
+  { societyId }: { societyId: string; actingUserId?: string },
+  omitted: readonly string[],
 ) {
   const principalId = await principalUserId(ctx, societyId);
-  const [groups, linkedMaterials, accessContext] = await Promise.all([
-    Promise.all(VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
-      ctx.db
-        .query("documents")
-        .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
-        .collect(),
-    )),
+  const [docs, linkedMaterials, accessContext] = await Promise.all([
+    // Internal import rows are excluded inside the query, so the local engine
+    // never loads their (large) content; `omitted` projects heavy fields away.
+    ctx.db
+      .query("documents")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .filter((doc) => !isInternalDocumentRecord(doc))
+      .omitFields(...omitted)
+      .collect(),
     ctx.db
       .query("meetingMaterials")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect(),
     documentAccessContextForActor(ctx, societyId, principalId),
   ]);
-  return groups
-    .flat()
+  return docs
+    .filter((doc) => !isInternalDocumentRecord(doc))
     .filter((doc) => accessContext && canAccessDocument(doc, linkedMaterials, accessContext))
     .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
 }
@@ -391,8 +403,12 @@ export async function createPortable(
   if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
   if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   if (args.agendaItemId) await getOwned(ctx, "agendaItems", args.agendaItemId, args.societyId);
+  assertValid(validateDocumentInput(args));
   return ctx.db.insert("documents", {
     ...args,
+    category: normalizeDocumentCategory(args.category),
+    ...(args.reviewStatus !== undefined ? { reviewStatus: storedDocumentReviewStatus(args.reviewStatus) } : {}),
+    title: args.title.trim(),
     tags: uniqueStrings(args.tags),
     createdAtISO: new Date().toISOString(),
     flaggedForDeletion: false,
@@ -446,7 +462,9 @@ export async function updateReviewStatusPortable(
   if (!candidate) throw new Error("documents not found.");
   const user = await requireSocietyMembership(ctx, String(candidate.societyId));
   const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
-  await ctx.db.patch(id, { reviewStatus });
+  const stored = storedDocumentReviewStatus(reviewStatus);
+  reviewStatus = stored;
+  await ctx.db.patch(id, { reviewStatus: stored });
   await ctx.db.insert("activity", {
     societyId: document.societyId,
     actor: user.displayName ?? "You",
@@ -466,18 +484,18 @@ export async function reviewQueuesPortable(
 ) {
   const principalId = await principalUserId(ctx, societyId);
   const [documentGroups, recentlyOpened, tasks, comments, signatures, materials, accessContext] = await Promise.all([
-    Promise.all(
-      VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
-        ctx.db
-          .query("documents")
-          .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", category))
-          .take(DOCUMENT_QUEUE_CATEGORY_SCAN_LIMIT),
-      ),
-    ),
+    ctx.db
+      .query("documents")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .filter((doc) => !isInternalDocumentRecord(doc))
+      .omitFields(...DOCUMENT_SUMMARY_OMITTED_FIELDS)
+      .collect()
+      .then((rows) => [rows]),
     ctx.db
       .query("documents")
       .withIndex("by_last_opened", (q) => q.eq("societyId", societyId))
       .order("desc")
+      .omitFields(...DOCUMENT_SUMMARY_OMITTED_FIELDS)
       .take(DOCUMENT_QUEUE_LIMIT),
     ctx.db
       .query("tasks")
@@ -541,7 +559,7 @@ export async function reviewQueuesPortable(
     category: doc.category,
     createdAtISO: doc.createdAtISO,
     lastOpenedAtISO: doc.lastOpenedAtISO,
-    reviewStatus: doc.reviewStatus,
+    reviewStatus: normalizeDocumentReviewStatus(doc.reviewStatus),
     tags: Array.isArray(doc.tags) ? doc.tags : [],
     meetingId: doc.meetingId,
     openTaskCount: taskCounts.get(String(doc._id)) ?? 0,
@@ -551,10 +569,12 @@ export async function reviewQueuesPortable(
   });
 
   const annotated = docs.map(annotate);
-  const recent = annotated
-    .filter((doc) => doc.lastOpenedAtISO || doc.createdAtISO)
-    .sort((a, b) => String(b.lastOpenedAtISO ?? b.createdAtISO).localeCompare(String(a.lastOpenedAtISO ?? a.createdAtISO)))
-    .slice(0, DOCUMENT_QUEUE_LIMIT);
+  // Opened documents first (most recent first), then the newest additions.
+  const recent = [
+    ...annotated.filter((doc) => doc.lastOpenedAtISO).sort((a, b) => String(b.lastOpenedAtISO).localeCompare(String(a.lastOpenedAtISO))),
+    ...annotated.filter((doc) => !doc.lastOpenedAtISO && doc.createdAtISO).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)) || String(a._id).localeCompare(String(b._id))),
+  ].slice(0, DOCUMENT_QUEUE_LIMIT);
+  const recentIds = new Set(recent.map((doc) => String(doc._id)));
   const actionRequired = annotated
     .filter((doc) =>
       doc.reviewStatus === "needs_signature" ||
@@ -566,14 +586,23 @@ export async function reviewQueuesPortable(
     )
     .sort((a, b) => Number(b.openTaskCount + b.openCommentCount) - Number(a.openTaskCount + a.openCommentCount))
     .slice(0, DOCUMENT_QUEUE_LIMIT);
-  const workInProgress = annotated
-    .filter((doc) =>
-      doc.reviewStatus === "in_review" ||
-      doc.reviewStatus === "needs_signature" ||
-      doc.linkedToMeetingPackage ||
-      doc.openCommentCount > 0,
-    )
-    .sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)))
+  // In-progress work not already shown under "Recent", so the two cards differ
+  // even when every imported document is awaiting review.
+  const inProgress = annotated.filter((doc) =>
+    doc.reviewStatus === "in_review" ||
+    doc.reviewStatus === "needs_review" ||
+    doc.reviewStatus === "needs_signature" ||
+    doc.linkedToMeetingPackage ||
+    doc.openCommentCount > 0,
+  );
+  const actionIds = new Set(actionRequired.map((doc) => String(doc._id)));
+  const workInProgress = inProgress
+    .filter((doc) => !recentIds.has(String(doc._id)) && !actionIds.has(String(doc._id)))
+    .sort((a, b) =>
+      Number(b.openCommentCount + b.openTaskCount) - Number(a.openCommentCount + a.openTaskCount) ||
+      Number(b.linkedToMeetingPackage) - Number(a.linkedToMeetingPackage) ||
+      String(b.createdAtISO).localeCompare(String(a.createdAtISO)) ||
+      String(a._id).localeCompare(String(b._id)))
     .slice(0, DOCUMENT_QUEUE_LIMIT);
 
   return {
@@ -585,6 +614,7 @@ export async function reviewQueuesPortable(
       recent: recent.length,
       actionRequired: actionRequired.length,
       workInProgress: workInProgress.length,
+      inProgressTotal: inProgress.length,
     },
   };
 }
@@ -1163,20 +1193,9 @@ function topDocumentIds(countMaps: Map<string, number>[], materialDocIds: Set<st
     .map(([id]) => id);
 }
 
-function isInternalDocumentRecord(doc: any) {
-  const tags = Array.isArray(doc.tags) ? doc.tags : [];
-  return (
-    tags.includes("import-session") ||
-    tags.includes("org-history") ||
-    doc.category === "Import Session" ||
-    doc.category === "Import Candidate" ||
-    doc.category === "Org History Source" ||
-    doc.category === "Org History Item"
-  );
-}
 
 function buildPipaPolicyDraft(society: any) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
   const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");
@@ -1335,7 +1354,7 @@ Next review date: [YYYY-MM-DD]
 }
 
 function buildMemberDataGapMemoDraft(society: any) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const currentStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Institution-held / Partially available / Society-controlled / Unknown");
   return `# ${legalName} Member-Data Access Gap Memo

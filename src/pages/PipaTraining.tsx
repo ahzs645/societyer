@@ -21,6 +21,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * PIPA + CASL training records. The record table shows the date
@@ -60,7 +61,7 @@ export function PipaTrainingPage() {
       participantName: "",
       role: "Staff",
       topic: "PIPA",
-      completedAtISO: new Date().toISOString().slice(0, 10),
+      completedAtISO: todayDateOnly(),
       nextDueAtISO: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
     });
     setOpen(true);
@@ -80,7 +81,8 @@ export function PipaTrainingPage() {
         title="PIPA training"
         icon={<ShieldCheck size={16} />}
         iconColor="green"
-        subtitle="PIPA + CASL training records for directors, staff, and volunteers. Annual renewal recommended."
+        subtitle="Privacy and anti-spam training for directors, staff and volunteers."
+        info={<p>Training records for BC's Personal Information Protection Act (PIPA) and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log training
@@ -126,7 +128,7 @@ export function PipaTrainingPage() {
                 );
                 return (
                   <span className="row" style={{ gap: 6, alignItems: "center" }}>
-                    <span className="mono">{formatDate(String(value))}</span>
+                    <span>{formatDate(String(value))}</span>
                     <Badge tone={days < 0 ? "danger" : days <= 30 ? "warn" : "info"}>
                       {days < 0 ? `${-days}d overdue` : `in ${days}d`}
                     </Badge>

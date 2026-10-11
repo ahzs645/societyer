@@ -17,8 +17,13 @@ export const complianceTables = {
     // fall after this date, completing stops spawning further occurrences.
     recurrenceEndDate: v.optional(v.string()),
     linkedFilingId: v.optional(v.id("filings")),
+    // Agreements register: the agreement this obligation comes from and a
+    // stable key per obligation (deliverable / report / renewal / term end).
+    agreementId: v.optional(v.id("agreements")),
+    sourceKey: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
+    .index("by_agreement", ["agreementId"])
     .index("by_society_due", ["societyId", "dueDate"])
     .index("by_society_status", ["societyId", "status"])
     .index("by_society_done", ["societyId", "done"])

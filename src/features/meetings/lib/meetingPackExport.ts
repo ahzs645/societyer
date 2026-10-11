@@ -1,10 +1,11 @@
-import { formatDate, formatDateTime } from "../../../lib/format";
+import { formatDate, formatDateTime, formatDueDate } from "../../../lib/format";
 import { renderDocumentHeader } from "./minutesRenderer";
 import {
   accessLevelLabel,
   availabilityLabel,
   materialEffectiveStatus,
 } from "./meetingMaterialAccess";
+import { formatMeetingDate } from "../../../../shared/meetingDates";
 
 export function renderMeetingPackHtml({
   society,
@@ -44,7 +45,7 @@ export function renderMeetingPackHtml({
     })
     .join("");
   const taskHtml = tasks.length
-    ? `<ul>${tasks.map((task) => `<li>${escapeHtml(task.title)} - ${escapeHtml(task.status)}${task.dueDate ? `, due ${escapeHtml(task.dueDate)}` : ""}</li>`).join("")}</ul>`
+    ? `<ul>${tasks.map((task) => `<li>${escapeHtml(task.title)} - ${escapeHtml(task.status)}${task.dueDate ? `, due ${escapeHtml(formatDueDate(task.dueDate))}` : ""}</li>`).join("")}</ul>`
     : "<p>No linked tasks.</p>";
   const headerHtml = society ? renderDocumentHeader(society) : "";
   return `<!doctype html>
@@ -63,7 +64,7 @@ export function renderMeetingPackHtml({
   <body>
     ${headerHtml}
     <h1>${escapeHtml(meeting.title)}</h1>
-    <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatDateTime(meeting.scheduledAt))} - ${escapeHtml(meeting.location ?? "")}</div>
+    <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatMeetingDate(meeting))} - ${escapeHtml(meeting.location ?? "")}</div>
     <section>
       <h2>Join Details</h2>
       ${joinDetails.url ? (isSafeLinkUrl(joinDetails.url) ? `<p><a href="${escapeHtml(joinDetails.url)}">${escapeHtml(joinDetails.url)}</a></p>` : `<p>${escapeHtml(joinDetails.url)}</p>`) : "<p>No remote meeting link saved.</p>"}

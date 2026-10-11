@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { usePersistView } from "../hooks/usePersistView";
-import { RecordTableToolbar } from "./RecordTableToolbar";
+import { RecordTableToolbar, type TableListViewOption } from "./RecordTableToolbar";
 
 /**
  * Toolbar wrapper that wires up `usePersistView` so Save / Discard
@@ -22,6 +22,8 @@ export function RecordTableViewToolbar({
   onChangeView,
   onOpenFilter,
   actions,
+  listView,
+  onViewPicked,
 }: {
   societyId: Id<"societies">;
   objectMetadataId: Id<"objectMetadata">;
@@ -32,8 +34,31 @@ export function RecordTableViewToolbar({
   onChangeView?: (viewId: string) => void;
   onOpenFilter?: () => void;
   actions?: ReactNode;
+  /** See RecordTableToolbar: a page-owned grouped list ahead of the view types. */
+  listView?: TableListViewOption;
+  /** Called when the user picks or saves a view (not when one is restored on load). */
+  onViewPicked?: (viewId: string) => void;
 }) {
   const { saveCurrentView, saveAsNewView } = usePersistView({ societyId, objectMetadataId });
+  const storageKey = `societyer:record-view:${societyId}:${objectMetadataId}`;
+  // Pages keep the selected view in component state; remember it per browser
+  // so a reload (or coming back later) reopens the view the user picked or saved.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !views?.length || !onChangeView) return;
+    restoredRef.current = true;
+    const remembered = readRememberedView(storageKey);
+    if (remembered && remembered !== currentViewId && views.some((view) => String(view._id) === remembered)) {
+      onChangeView(remembered);
+    }
+  }, [currentViewId, onChangeView, storageKey, views]);
+  const changeView = onChangeView
+    ? (viewId: string) => {
+        rememberView(storageKey, viewId);
+        onChangeView(viewId);
+        onViewPicked?.(viewId);
+      }
+    : undefined;
 
   return (
     <RecordTableToolbar
@@ -41,15 +66,32 @@ export function RecordTableViewToolbar({
       label={label}
       views={views}
       currentViewId={currentViewId}
-      onChangeView={onChangeView}
+      onChangeView={changeView}
       onOpenFilter={onOpenFilter}
       onSaveView={saveCurrentView}
       onSaveAsView={async (name) => {
         const viewId = await saveAsNewView(name);
-        onChangeView?.(String(viewId));
+        changeView?.(String(viewId));
         return viewId;
       }}
       actions={actions}
+      listView={listView}
     />
   );
+}
+
+function readRememberedView(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function rememberView(key: string, viewId: string) {
+  try {
+    window.localStorage.setItem(key, viewId);
+  } catch {
+    // Private mode or blocked storage: the choice simply is not remembered.
+  }
 }

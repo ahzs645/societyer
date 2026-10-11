@@ -26,6 +26,7 @@ import {
   postTransactionCandidatePortable,
   postTransactionCandidateAllocationPortable,
   backfillFinancialTransactionsToJournalPortable,
+  backfillPreviewPortable,
   postOpeningBalancesPortable,
   createReconciliationRunPortable,
   setReconciliationRunStatusPortable,
@@ -292,11 +293,29 @@ export const postTransactionCandidateAllocation = authorizedMutation("accounting
   handler: async (ctx, args) => postTransactionCandidateAllocationPortable(await toPortableMutationCtx(ctx), args),
 });
 
+const backfillCategoryChoice = v.object({ category: v.string(), accountId: v.id("financialAccounts") });
+
+export const backfillPreview = authorizedQuery("accounting:backfillPreview", query)({
+  args: {
+    societyId: v.id("societies"),
+    categoryChoices: v.optional(v.array(backfillCategoryChoice)),
+    includeBeforeOpening: v.optional(v.boolean()),
+    useSuspense: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => backfillPreviewPortable(await toPortableQueryCtx(ctx), args),
+});
+
 export const backfillFinancialTransactionsToJournal = authorizedMutation("accounting:backfillFinancialTransactionsToJournal", mutation)({
   args: {
     societyId: v.id("societies"),
     fiscalYear: v.optional(v.string()),
     limit: v.optional(v.number()),
+    categoryChoices: v.optional(v.array(backfillCategoryChoice)),
+    includeBeforeOpening: v.optional(v.boolean()),
+    useSuspense: v.optional(v.boolean()),
+    transactionIds: v.optional(v.array(v.id("financialTransactions"))),
+    rememberMappings: v.optional(v.boolean()),
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),

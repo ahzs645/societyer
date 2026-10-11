@@ -71,6 +71,7 @@ export async function createPortable(
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  assertCommitmentValues(args, true);
   await assertSocietyRefs(ctx, args.societyId, {
     sourceDocumentId: args.sourceDocumentId,
   });
@@ -123,6 +124,7 @@ export async function updatePortable(
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitments not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   const commitment = await getOwned(ctx, "commitments", id, candidate.societyId);
+  assertCommitmentValues({ ...commitment, ...patch }, false);
   await assertSocietyRefs(ctx, String(commitment.societyId), {
     sourceDocumentId: patch.sourceDocumentId,
   });
@@ -230,7 +232,36 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
     await getOwned(ctx, "commitmentEvents", event._id, candidate.societyId);
   }
   await Promise.all(events.map((event) => ctx.db.delete(event._id)));
+  // Open preparation tasks exist only for this commitment; completed tasks are
+  // kept as history (G-18: deleting left orphaned "Prepare ..." tasks).
+  const tasks = await ctx.db
+    .query("tasks")
+    .withIndex("by_society", (q) => q.eq("societyId", candidate.societyId))
+    .collect();
+  for (const task of tasks) {
+    const linked = String(task.commitmentId ?? "") === String(id) || String(task.eventId ?? "") === `commitment:${id}`;
+    if (linked && task.status !== "Done") await ctx.db.delete(task._id);
+  }
   await ctx.db.delete(id);
+}
+
+/** Commitment field rules (G-18): a title, confidence as a 0-1 fraction and a
+ *  whole, non-negative notice lead time. */
+export function commitmentProblems(values: { title?: string; confidence?: number | null; noticeLeadDays?: number | null }, requireTitle: boolean): string[] {
+  const problems: string[] = [];
+  if ((requireTitle || values.title !== undefined) && !String(values.title ?? "").trim()) problems.push("Enter a title for the commitment.");
+  if (values.confidence != null && (typeof values.confidence !== "number" || !Number.isFinite(values.confidence) || values.confidence < 0 || values.confidence > 1)) {
+    problems.push("Confidence must be between 0% and 100%.");
+  }
+  if (values.noticeLeadDays != null && (!Number.isInteger(values.noticeLeadDays) || values.noticeLeadDays < 0 || values.noticeLeadDays > 3650)) {
+    problems.push("Lead time must be a whole number of days, 0 or more.");
+  }
+  return problems;
+}
+
+function assertCommitmentValues(values: any, requireTitle: boolean) {
+  const problems = commitmentProblems(values, requireTitle);
+  if (problems.length) throw new Error(`Commitment not saved: ${problems.join(" ")}`);
 }
 
 async function assertSocietyRefs(

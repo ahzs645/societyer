@@ -59,3 +59,16 @@ export const remove = authorizedMutation("directors:remove", mutation)({
   returns: v.any(),
   handler: async (ctx, args) => directorRemove(await toPortableMutationCtx(ctx), args),
 });
+
+// P16: promote source board-roster observations to the director register (pending review).
+export const rosterSuggestions = authorizedQuery("directors:rosterSuggestions", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => (await import("../shared/functions/rosterPromotion")).rosterSuggestions(await toPortableQueryCtx(ctx), args),
+});
+
+export const promoteRosterObservation = authorizedMutation("directors:promoteRosterObservation", mutation)({
+  args: { seatId: v.id("organizationSeats"), observationId: v.string(), termStart: v.optional(v.string()), position: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, args) => (await import("../shared/functions/rosterPromotion")).promoteRosterObservation(await toPortableMutationCtx(ctx), args),
+});

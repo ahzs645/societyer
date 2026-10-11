@@ -35,8 +35,10 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
     .query("societyNameHistory")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  const records = rows.map(toNameRecord);
-  return nameTimeline(records);
+  // Keep each row's id so the page can edit and remove entries (G-14: the
+  // stripped rows made every Remove button a silent no-op).
+  const records = rows.map((row) => ({ ...toNameRecord(row), _id: row._id }));
+  return nameTimeline(records) as Array<NameRecord & { _id: string }>;
 }
 
 /** The legal name in effect on a specific ISO date. */
@@ -74,8 +76,11 @@ export async function upsertPortable(
     nowISO: string;
   },
 ) {
-  const { id, societyId, name, shortName, startISO, regPosn, nowISO } = args;
+  const { id, societyId, shortName, startISO, regPosn, nowISO } = args;
+  const name = String(args.name ?? "").trim();
   await requireSocietyMembership(ctx, societyId);
+  if (!name) throw new Error("Enter the corporate name.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(startISO ?? "").slice(0, 10))) throw new Error("Enter the date the name took effect.");
   if (id) {
     await getOwned(ctx, "societyNameHistory", id, societyId);
     await ctx.db.patch(id, { name, shortName, startISO, regPosn });

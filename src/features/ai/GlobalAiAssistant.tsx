@@ -355,7 +355,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     setOpen(false);
   };
 
-  const usePrompt = (prompt: SuggestedPrompt) => {
+  const applySuggestedPrompt = (prompt: SuggestedPrompt) => {
     const variant = prompt.prefills[Math.floor(Math.random() * prompt.prefills.length)];
     setInput(variant);
     composerRef.current?.focus();
@@ -546,7 +546,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                               key={prompt.id}
                               type="button"
                               className="global-ai-suggested-prompt"
-                              onClick={() => usePrompt(prompt)}
+                              onClick={() => applySuggestedPrompt(prompt)}
                             >
                               <Icon size={13} />
                               <span>{prompt.label}</span>
@@ -630,7 +630,11 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                       placeholder="Ask the assistant to inspect this page, find records, draft tasks, or use workspace tools."
                       rows={3}
                       onKeyDown={(event) => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void submit();
+                        // Enter sends; Shift+Enter adds a line (IME composition is left alone).
+                        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault();
+                          void submit();
+                        }
                       }}
                     />
                     <div className="global-ai-composer__bar">

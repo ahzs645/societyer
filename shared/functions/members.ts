@@ -13,6 +13,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { isMemberHistoryDate } from "../memberHistory";
+import { assertValid, memberProblems } from "../registerValidation";
 
 // FK columns that point at a member. `merge` rewires each onto the surviving
 // member before deleting the dropped rows.
@@ -56,6 +57,9 @@ export interface MemberCreateArgs {
   leftAt?: string;
   votingRights: boolean;
   notes?: string;
+  /** A2: "organization" for a member organization (absent = individual). */
+  memberKind?: string;
+  organizationName?: string;
 }
 
 export interface MemberPatch {
@@ -71,6 +75,8 @@ export interface MemberPatch {
   leftAt?: string;
   votingRights?: boolean;
   notes?: string;
+  memberKind?: string;
+  organizationName?: string;
 }
 
 export async function membersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -87,7 +93,8 @@ export async function memberGet(ctx: PortableQueryCtx, { id }: { id: string }) {
 
 export async function memberCreate(ctx: PortableMutationCtx, args: MemberCreateArgs): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
-  return ctx.db.insert("members", args);
+  assertValid(memberProblems(args), "Member");
+  return ctx.db.insert("members", { ...args, firstName: args.firstName.trim(), lastName: args.lastName.trim(), email: args.email?.trim() || undefined });
 }
 
 /** CSV intake requires explicit historical dates and voting rights; never invent them. */
@@ -112,6 +119,7 @@ export async function memberUpdate(ctx: PortableMutationCtx, { id, patch }: { id
   if (!candidate) throw new Error("members not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
   await getOwned(ctx, "members", id, String(candidate.societyId));
+  assertValid(memberProblems({ ...candidate, ...patch }), "Member");
   await ctx.db.patch(id, patch);
 }
 

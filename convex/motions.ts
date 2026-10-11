@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { internalMutation, mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { motionExtensionFields } from "./validators/meetingModel";
 import {
   applyProceduralTags,
   classifyProceduralMotion,
@@ -63,6 +64,7 @@ const motionContent = {
   sourceSectionIndex: v.optional(v.number()),
   sourceDocumentIds: v.optional(v.array(v.id("documents"))),
   sourceExternalIds: v.optional(v.array(v.string())),
+  ...motionExtensionFields,
 };
 
 // ----- Phase 2 backfill -----------------------------------------------------

@@ -125,6 +125,11 @@ export const grantTables = {
     endDate: v.optional(v.string()),
     nextReportDueAtISO: v.optional(v.string()),
     notes: v.optional(v.string()),
+    // Archived grants are hidden from the pipeline but keep their ledger,
+    // journal and restricted-fund history (a grant with ledger links cannot
+    // be hard-deleted).
+    archivedAtISO: v.optional(v.string()),
+    archivedReason: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.optional(v.string()),
   })

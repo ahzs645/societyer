@@ -35,12 +35,16 @@ import { storageTables } from "./tables/storage";
 import { pathwayTables } from "./tables/pathways";
 
 import { offlineMeetingTables } from "./tables/offlineMeetings";
+import { gapTables } from "./tables/gaps";
+import { intakeTables } from "./tables/intake";
+import { agreementTables } from "./tables/agreements";
 
 export default defineSchema({
   ...reviewEvidenceTables,
   ...personHistoryTables,
   ...offlineMeetingTables,
   ...pathwayTables,
+  ...intakeTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     onboardingAnswersJson: v.optional(v.string()),
@@ -123,6 +127,9 @@ export default defineSchema({
     calendarFeedToken: v.optional(v.string()),
     publicSummary: v.optional(v.string()),
     publicContactEmail: v.optional(v.string()),
+    // Shown on public volunteer / funding forms; falls back to the reviewed
+    // default notice when unset.
+    publicIntakePrivacyNotice: v.optional(v.string()),
     publicTransparencyEnabled: v.optional(v.boolean()),
     publicShowBoard: v.optional(v.boolean()),
     publicShowBylaws: v.optional(v.boolean()),
@@ -514,4 +521,9 @@ export default defineSchema({
   // (shared registers + corporation-only registers, spread in below).
   ...ycnRegisterTables,
 
+  // Gap identification (representation gaps, expectations, continuity marks).
+  ...gapTables,
+
+  // Agreements register (schema finding A5).
+  ...agreementTables,
 });

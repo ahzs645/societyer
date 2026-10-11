@@ -1,13 +1,15 @@
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Braces, Database, ExternalLink, Link2, PiggyBank } from "lucide-react";
+import { ArrowLeft, Database, ExternalLink, FileInput, Link2, PiggyBank } from "lucide-react";
 import { useSociety } from "../../../hooks/useSociety";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { Badge } from "../../../components/ui";
 import { RecordShowPage } from "../../../components/RecordShowPage";
 import { formatDate } from "../../../lib/format";
 import { DetailCell } from "../components/WaveCacheExplorer";
+import { FinancialPresentationCard } from "../components/FinancialPresentationCard";
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 
 function auditStatusTone(status: string) {
   if (status === "Audited") return "success";
@@ -22,12 +24,14 @@ function auditStatusLabel(status: string) {
 
 export function FinancialYearDetailPage() {
   const society = useSociety();
+  const { canWrite } = useFinancePermissions();
   const { fiscalYear: routeFiscalYear } = useParams();
   const fiscalYear = routeFiscalYear ? decodeURIComponent(routeFiscalYear) : "";
   const detail = useQuery(
     api.financials.detailByFiscalYear,
     society && fiscalYear ? { societyId: society._id, fiscalYear } : "skip",
   );
+  const allFinancials = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
 
   if (society === undefined || detail === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -50,11 +54,22 @@ export function FinancialYearDetailPage() {
           subtitle="No financial statement rows or import evidence were found for this fiscal year."
           actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Back to financials</Link>}
         />
+        {(allFinancials ?? []).length > 0 && (
+          <div className="card">
+            <div className="card__head"><h2 className="card__title">Fiscal years with statements</h2></div>
+            <div className="card__body row" style={{ gap: 8, flexWrap: "wrap" }}>
+              {(allFinancials as any[]).slice().sort((a, b) => String(b.fiscalYear).localeCompare(String(a.fiscalYear))).map((row) => (
+                <Link key={row._id} className="btn-action" to={`/app/financials/fy/${encodeURIComponent(row.fiscalYear)}`}>FY {row.fiscalYear}</Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
+    <div className="page">
     <RecordShowPage
       layout={{ societyId: society._id, pageId: "financial-year-detail", objectId: fiscalYear }}
       title={`FY ${fiscalYear} financials`}
@@ -105,7 +120,7 @@ export function FinancialYearDetailPage() {
           id: "imports",
           label: "Imports",
           count: imports.length,
-          icon: <Braces size={14} />,
+          icon: <FileInput size={14} />,
           content: (
             <ImportSummaryTable
               imports={imports}
@@ -115,21 +130,22 @@ export function FinancialYearDetailPage() {
         },
       ]}
       inspector={
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">Evidence status</h2>
-          </div>
-          <div className="card__body col">
-            <DetailCell label="Financial row" value={financial?._id ?? "Not created"} mono />
+        <>
+        <FinancialPresentationCard societyId={society._id} financial={financial} canWrite={canWrite} />
+        <section className="finance-inspector__section">
+          <h2 className="finance-inspector__title">Evidence status</h2>
+          <div className="col">
+            <DetailCell label="Financial statements" value={financial ? "Recorded" : "Not created"} />
             <DetailCell label="Matched imports" value={String(exactImports.length)} />
             <DetailCell label="Related imports" value={String(relatedImports.length)} />
             <DetailCell label="Source documents" value={String(documents.length)} />
             <DetailCell label="Line items" value={String(lineCount)} />
-            <DetailCell label="Presented at meeting" value={detail.presentedAtMeeting?.title ?? "—"} />
           </div>
-        </div>
+        </section>
+        </>
       }
     />
+    </div>
   );
 }
 

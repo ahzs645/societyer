@@ -110,6 +110,7 @@ async function spawnNextOccurrence(
     recurrence: doc.recurrence,
     recurrenceEndDate: doc.recurrenceEndDate,
     linkedFilingId: doc.linkedFilingId,
+    ...(doc.agreementId ? { agreementId: doc.agreementId, sourceKey: doc.sourceKey } : {}),
   });
   return { spawnedId: String(spawnedId), spawnedDue: nextDue };
 }

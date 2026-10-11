@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useConvex } from "convex/react";
@@ -27,8 +28,10 @@ type CachedFile = { id: string; meeting_uuid: string; descriptor: string; conten
 
 export function OfflineMeetingPreparationPage() {
   const auth = useAuth();
-  if (!meetingPreparationEnabled() || auth.mode === "none" || isLocalDataRuntime()) return <div className="page"><PageHeader title="Offline meeting preparation" />
-    <p>Offline meeting preparation is not enabled for this deployment.</p><Link to="/app/meetings">Back to meetings</Link></div>;
+  if (!meetingPreparationEnabled() || auth.mode === "none" || isLocalDataRuntime()) return <div className="page">
+    <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: 12 }}><ArrowLeft size={12} /> Meetings</Link>
+    <PageHeader title="Offline meeting preparation" />
+    <p className="muted">Offline meeting preparation needs a connected server.</p></div>;
   return <MeetingPreparation />;
 }
 

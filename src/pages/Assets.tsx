@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   FileText,
   Link2,
+  MoreHorizontal,
   Package,
   PackageCheck,
   Pencil,
@@ -34,7 +35,8 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { Tabs } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { type MenuSection } from "../components/Menu";
+import { singularUnit } from "./inventory/helpers";
+import { Menu, type MenuSection } from "../components/Menu";
 import { Select as StyledSelect } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -48,6 +50,16 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
+import { RecordNotFound } from "../components/RecordNotFound";
+import {
+  hasErrors,
+  validateAssetDisposalInput,
+  validateAssetEventInput,
+  validateAssetMaintenanceInput,
+  type FieldErrors,
+} from "../../shared/recordValidation";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
 import { AssetScanner } from "../features/assets/AssetScanner";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
@@ -80,6 +92,7 @@ import {
 } from "../features/assets/assetUtils";
 
 export function AssetsPage() {
+  const confirm = useConfirm();
   const { canWrite, canExport } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
@@ -322,9 +335,13 @@ export function AssetsPage() {
 
   const removeAsset = async (row: any) => {
     if (saving) return;
-    if (!window.confirm(`Delete asset ${row.assetTag} — ${row.name}? This also removes its custody, maintenance, verification, and receipt-link history. This cannot be undone.`)) {
-      return;
-    }
+    const approved = await confirm({
+      title: `Delete asset ${row.assetTag}?`,
+      message: `${row.assetTag} — ${row.name} will be permanently deleted, together with its custody, maintenance, verification and receipt-link history. To keep the history, use Dispose instead. This cannot be undone.`,
+      confirmLabel: "Delete asset",
+      tone: "danger",
+    });
+    if (!approved) return;
     setSaving(true);
     try {
       await remove({ id: row._id });
@@ -388,7 +405,8 @@ export function AssetsPage() {
     <div className="page">
       <PageHeader
         title="Assets"
-        subtitle="Asset register, QR labels, custody, grant restrictions, maintenance, insurance, finance, verification, and disposal evidence."
+        subtitle="Equipment, custody, maintenance and labels."
+        info={<p>The asset register with QR labels, custody, grant restrictions, maintenance, insurance, finance, physical verification and disposal evidence.</p>}
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
@@ -412,7 +430,7 @@ export function AssetsPage() {
         <Stat label="Assets" value={stats.total} sub={`${stats.active} active`} />
         <Stat label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
         <Stat label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
-        <Stat label="Register value" value={money(stats.valueCents)} sub={`Book value where known, else purchase price · ${stats.dueMaintenance} due soon`} tone={stats.dueMaintenance ? "warn" : undefined} />
+        <Stat label="Register value" value={money(stats.valueCents)} sub={stats.dueMaintenance ? `${stats.dueMaintenance} maintenance due soon` : "Book value where known"} tone={stats.dueMaintenance ? "warn" : undefined} />
       </div>
 
       {stats.openRun && (
@@ -487,7 +505,7 @@ export function AssetsPage() {
                 if (field.name === "status") return <StatusBadge status={row.status} />;
                 if (field.name === "custodian") return <CustodyCell row={row} />;
                 if (field.name === "location") return <span>{row.location}</span>;
-                if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
+                if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span>{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
                 if (field.name === "value") return <ValueCell row={row} />;
                 if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
                 if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
@@ -639,7 +657,7 @@ export function AssetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const bundle = useQuery(api.assets.bundle, id ? { id: id as any } : "skip");
+  const bundle = useRecordQuery<any>(api.assets.bundle, id ? { id: id as any } : "skip");
   const society = useSociety();
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
@@ -661,13 +679,14 @@ export function AssetDetailPage() {
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });
   const [disposalForm, setDisposalForm] = useState<any>({ disposedAt: todayDate(), disposalMethod: "sold", disposalReason: "", disposalValue: "", notes: "" });
   const [labelType, setLabelType] = useState("qr");
+  const [formErrors, setFormErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     if (bundle?.asset) setLabelType(bundle.asset.preferredLabelType ?? "qr");
   }, [bundle?.asset?._id, bundle?.asset?.preferredLabelType]);
 
   if (bundle === undefined) return <PageLoading />;
-  if (bundle === null) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
+  if (bundle === null) return <RecordNotFound recordLabel="Asset" backTo="/app/assets" backLabel="All assets" />;
   // `assets.bundle` resolves to `{ asset, events, maintenance, ... }`. Some
   // runtimes hand back a transient placeholder (e.g. an empty array) before the
   // real bundle loads — treat any asset-less, non-null shape as still loading
@@ -718,15 +737,35 @@ export function AssetDetailPage() {
     }
   };
 
+  const openDrawer = (next: "custody" | "maintenance" | "disposal") => {
+    setFormErrors({});
+    setDrawer(next);
+  };
+
   const saveEvent = async () => {
-    await runSave("Could not record custody event", () => recordEvent({ assetId: asset._id, event: cleanEvent(eventForm) }), "Custody event recorded");
+    const event = cleanEvent(eventForm);
+    const errors = validateAssetEventInput(event);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    await runSave("Could not record custody event", () => recordEvent({ assetId: asset._id, event }), "Custody event recorded");
   };
 
   const saveMaintenance = async () => {
-    await runSave("Could not schedule maintenance", () => scheduleMaintenance({ assetId: asset._id, ...maintenanceForm }), "Maintenance scheduled");
+    const errors = validateAssetMaintenanceInput(maintenanceForm);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    await runSave("Could not schedule maintenance", () => scheduleMaintenance({ assetId: asset._id, ...maintenanceForm, title: String(maintenanceForm.title ?? "").trim() }), "Maintenance scheduled");
   };
 
   const saveDisposal = async () => {
+    const errors = validateAssetDisposalInput({
+      disposedAt: disposalForm.disposedAt,
+      disposalMethod: disposalForm.disposalMethod,
+      disposalReason: disposalForm.disposalReason,
+      disposalValueCents: inputToCents(disposalForm.disposalValue),
+    });
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
     await runSave(
       "Could not dispose asset",
       () => dispose({
@@ -744,8 +783,8 @@ export function AssetDetailPage() {
   return (
     <div className="page">
       <PageHeader
-        title={editing ? `Edit ${asset.assetTag}` : asset.assetTag}
-        subtitle={asset.name}
+        title={editing ? `Edit ${asset.name}` : asset.name}
+        subtitle={asset.status === "Disposed" ? `${asset.assetTag} · Disposed${asset.disposedAt ? ` ${formatDate(asset.disposedAt)}` : ""}` : asset.assetTag}
         routeKey="/app/assets"
         actions={
           editing ? (
@@ -756,9 +795,13 @@ export function AssetDetailPage() {
           ) : (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-              <button className="btn-action" onClick={() => setDrawer("custody")} disabled={!canWrite}><Repeat2 size={12} /> Log custody change</button>
-              {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")} disabled={!canWrite}><Wrench size={12} /> Schedule</button>}
-              <button className="btn-action" onClick={() => setDrawer("disposal")} disabled={!canWrite}><Trash2 size={12} /> Dispose</button>
+              <MoreActionsMenu
+                items={[
+                  ...(asset.status !== "Disposed" ? [{ id: "custody", label: "Log custody change", icon: <Repeat2 size={14} />, disabled: !canWrite, onSelect: () => openDrawer("custody") }] : []),
+                  ...(serviceable && asset.status !== "Disposed" ? [{ id: "maintenance", label: "Schedule maintenance", icon: <Wrench size={14} />, disabled: !canWrite, onSelect: () => openDrawer("maintenance") }] : []),
+                  ...(asset.status !== "Disposed" ? [{ id: "dispose", label: "Dispose", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => openDrawer("disposal") }] : []),
+                ]}
+              />
               <button className="btn-action btn-action--primary" onClick={openEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
             </div>
           )
@@ -795,9 +838,10 @@ export function AssetDetailPage() {
         {activeTab === "overview" && (
           <>
           <section className="panel">
-            <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
+            <div className="panel__head"><h2 className="card__title">Details</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
+            <div style={asset.imageUrl ? { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 16, alignItems: "start" } : undefined}>
             {asset.imageUrl ? (
-              <figure className="asset-hero">
+              <figure className="asset-hero" style={{ margin: 0 }}>
                 <img src={asset.imageUrl} alt={`Photo of ${asset.name}`} />
                 <span className="asset-hero__status"><StatusBadge status={asset.status} /></span>
               </figure>
@@ -811,10 +855,11 @@ export function AssetDetailPage() {
               <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
               <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
             </dl>
+            </div>
           </section>
           <section className="panel">
             <div className="panel__head">
-              <h2>Purchase &amp; accounting</h2>
+              <h2 className="card__title">Purchase &amp; accounting</h2>
               <Link className="btn btn--ghost btn--sm" to="/app/financials?tab=transactions"><Link2 size={12} /> Transactions</Link>
             </div>
             <dl className="record-kv">
@@ -832,7 +877,7 @@ export function AssetDetailPage() {
         {activeTab === "maintenance" && (
           <>
             <section className="panel">
-              <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
+              <div className="panel__head"><h2 className="card__title">Maintenance and warranty</h2><Wrench size={16} /></div>
               <dl className="record-kv">
                 <div><dt>Warranty expires</dt><dd>{asset.warrantyExpiresAt ? <DueDate date={asset.warrantyExpiresAt} /> : "—"}</dd></div>
                 <div><dt>Next maintenance</dt><dd>{asset.nextMaintenanceDate ? <DueDate date={asset.nextMaintenanceDate} /> : "—"}</dd></div>
@@ -857,7 +902,7 @@ export function AssetDetailPage() {
               ) : null}
             />
             <section className="panel">
-              <div className="panel__head"><h2>Documentation &amp; resources</h2><FileText size={16} /></div>
+              <div className="panel__head"><h2 className="card__title">Documentation &amp; resources</h2><FileText size={16} /></div>
               {linkedDocuments.length === 0 && resourceLinks.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>
                   No manuals, warranty documents, or resource links yet. Use <strong>Edit</strong> to attach a document or add a link.
@@ -918,7 +963,7 @@ export function AssetDetailPage() {
 
         {activeTab === "compliance" && (
           <section className="panel">
-            <div className="panel__head"><h2>Grant and compliance</h2></div>
+            <div className="panel__head"><h2 className="card__title">Grant and compliance</h2></div>
             <dl className="record-kv">
               <div><dt>Funding source</dt><dd>{asset.fundingSource || "—"}</dd></div>
               <div><dt>Grant restrictions</dt><dd>{asset.grantRestrictions || "—"}</dd></div>
@@ -931,7 +976,7 @@ export function AssetDetailPage() {
 
         {activeTab === "label" && (
           <section className="panel">
-            <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
+            <div className="panel__head"><h2 className="card__title">QR label</h2><QrCode size={16} /></div>
             <Field label="Label type">
               <StyledSelect
                 value={labelType}
@@ -947,13 +992,13 @@ export function AssetDetailPage() {
       )}
 
       <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Record"}</button></>}>
-        <CustodyForm form={eventForm} setForm={setEventForm} />
+        <CustodyForm form={eventForm} setForm={setEventForm} errors={formErrors} />
       </Drawer>
       <Drawer open={drawer === "maintenance"} onClose={() => setDrawer(null)} title="Schedule maintenance" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveMaintenance} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Schedule"}</button></>}>
-        <MaintenanceForm form={maintenanceForm} setForm={setMaintenanceForm} />
+        <MaintenanceForm form={maintenanceForm} setForm={setMaintenanceForm} errors={formErrors} />
       </Drawer>
       <Drawer open={drawer === "disposal"} onClose={() => setDrawer(null)} title="Dispose asset" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--danger" onClick={saveDisposal} disabled={!canWrite || (saving)}>{saving ? "Disposing…" : "Dispose"}</button></>}>
-        <DisposalForm form={disposalForm} setForm={setDisposalForm} />
+        <DisposalForm form={disposalForm} setForm={setDisposalForm} errors={formErrors} />
       </Drawer>
     </div>
   );
@@ -1013,7 +1058,7 @@ export function AssetVerificationPage() {
 
   if (society === undefined || (society && (runs === undefined || assets === undefined))) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!run) return <div className="page"><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><p>Physical inventory run not found.</p></div>;
+  if (!run) return <RecordNotFound recordLabel="Physical inventory run" backTo="/app/assets" backLabel="All assets" description="It may have been deleted." />;
   if (items === undefined) return <PageLoading />;
 
   const finishRun = async () => {
@@ -1143,14 +1188,15 @@ function ReceiptLineLinkForm({
     </div>
   );
 }
-function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function CustodyForm({ form, setForm, errors = {} }: { form: any; setForm: (form: any) => void; errors?: FieldErrors }) {
+  const needsCustodian = form.eventType === "checkout" || form.eventType === "transfer";
   return (
     <div className="form-grid">
       <Field label="Event"><Select value={form.eventType} options={["checkout", "checkin", "transfer", "note"]} onChange={(eventType) => setForm({ ...form, eventType })} /></Field>
       <Field label="Custodian type"><Select value={form.toCustodianType} options={CUSTODIAN_TYPES} onChange={(toCustodianType) => setForm({ ...form, toCustodianType })} /></Field>
-      <Field label="Custodian"><input className="input" value={form.toCustodianName} onChange={(event) => setForm({ ...form, toCustodianName: event.target.value })} /></Field>
+      <Field label="Custodian" required={needsCustodian} error={errors.toCustodianName}><input className="input" value={form.toCustodianName} onChange={(event) => setForm({ ...form, toCustodianName: event.target.value })} /></Field>
       <Field label="Responsible person"><input className="input" value={form.responsiblePersonName} onChange={(event) => setForm({ ...form, responsiblePersonName: event.target.value })} /></Field>
-      <Field label="Location"><input className="input" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
+      <Field label="Location" required={form.eventType === "checkin"} error={errors.location}><input className="input" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
       <Field label="Condition"><Select value={form.condition} options={ASSET_CONDITIONS} onChange={(condition) => setForm({ ...form, condition })} /></Field>
       <Field label="Expected return"><DatePicker value={form.expectedReturnDate} onChange={(value) => setForm({ ...form, expectedReturnDate: value })} /></Field>
       <Field label="Acceptance signature"><input className="input" value={form.acceptanceSignature} onChange={(event) => setForm({ ...form, acceptanceSignature: event.target.value })} /></Field>
@@ -1159,25 +1205,25 @@ function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => voi
   );
 }
 
-function MaintenanceForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function MaintenanceForm({ form, setForm, errors = {} }: { form: any; setForm: (form: any) => void; errors?: FieldErrors }) {
   return (
     <div className="form-grid">
-      <Field label="Title"><input className="input" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
-      <Field label="Kind"><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
-      <Field label="Due date"><DatePicker value={form.dueDate} onChange={(value) => setForm({ ...form, dueDate: value })} /></Field>
+      <Field label="Title" required error={errors.title}><input className="input" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
+      <Field label="Kind" required error={errors.kind}><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
+      <Field label="Due date" required error={errors.dueDate}><DatePicker value={form.dueDate} onChange={(value) => setForm({ ...form, dueDate: value })} /></Field>
       <Field label="Create task"><label className="checkbox"><input type="checkbox" checked={Boolean(form.createTask)} onChange={(event) => setForm({ ...form, createTask: event.target.checked })} /> Add to Tasks</label></Field>
       <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
 }
 
-function DisposalForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+function DisposalForm({ form, setForm, errors = {} }: { form: any; setForm: (form: any) => void; errors?: FieldErrors }) {
   return (
     <div className="form-grid">
-      <Field label="Disposed at"><DatePicker value={form.disposedAt} onChange={(value) => setForm({ ...form, disposedAt: value })} /></Field>
-      <Field label="Method"><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
-      <Field label="Disposal value"><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
-      <Field label="Reason"><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>
+      <Field label="Disposed at" required error={errors.disposedAt}><DatePicker value={form.disposedAt} onChange={(value) => setForm({ ...form, disposedAt: value })} /></Field>
+      <Field label="Method" required error={errors.disposalMethod}><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
+      <Field label="Disposal value" error={errors.disposalValueCents}><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
+      <Field label="Reason" required error={errors.disposalReason}><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>
       <Field label="Notes"><MarkdownEditor rows={3} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
   );
@@ -1225,7 +1271,24 @@ function AssetMobileCard({
           <strong>{row.name}</strong>
           <span>{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</span>
         </button>
-        <StatusBadge status={row.status} />
+        <span className="row" style={{ gap: 4, alignItems: "center", flex: "none" }}>
+          <StatusBadge status={row.status} />
+          <Menu
+            align="right"
+            trigger={
+              <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.name}`}>
+                <MoreHorizontal size={14} />
+              </button>
+            }
+            sections={[{
+              id: "asset",
+              items: [
+                { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canWrite, onSelect: onEdit },
+                ...(row.category === "Consumable" ? [{ id: "stock", label: "Add stock", icon: <Plus size={14} />, disabled: !canWrite, onSelect: onAddStock }] : []),
+              ],
+            }]}
+          />
+        </span>
       </div>
       <dl className="asset-mobile-card__facts">
         <div><dt>Location</dt><dd>{row.location || "Not set"}</dd></div>
@@ -1241,11 +1304,6 @@ function AssetMobileCard({
           <EvidenceCell row={row} documents={documents} transactions={transactions} />
         </div>
       )}
-      <div className="asset-mobile-card__actions">
-        <button className="btn btn--accent btn--sm" onClick={onOpen}>Open</button>
-        <button className="btn btn--sm" onClick={onEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
-        {row.category === "Consumable" && <button className="btn btn--sm" onClick={onAddStock} disabled={!canWrite}><Plus size={12} /> Add stock</button>}
-      </div>
     </article>
   );
 }
@@ -1307,7 +1365,7 @@ function DueDate({ date }: { date?: string }) {
 
 function formatQuantity(quantity?: number | null, unit?: string | null) {
   if (quantity == null) return "—";
-  return `${quantity.toLocaleString("en-CA")}${unit ? ` ${unit}` : ""}`;
+  return `${quantity.toLocaleString("en-CA")}${unit ? ` ${Math.abs(quantity) === 1 ? singularUnit(unit) : unit}` : ""}`;
 }
 
 function stockTotalPreview(form: { observedQuantityBefore: string; quantityAdded: string }) {

@@ -5,7 +5,7 @@ test("all research collections filter and recover from an empty result", async (
   for (const name of ["Forms and templates", "Legal rule evidence", "Research findings", "Questions to confirm", "Source register", "Implementation status"]) {
     await page.getByRole("button", { name: "Collection", exact: true }).click();
     await page.getByRole("option", { name, exact: true }).click();
-    await expect(page.locator(".page > p[aria-live]")).toHaveText(/\d+ of \d+ records/);
+    await expect(page.locator(".page > p[aria-live]")).toHaveText(/^\d+ records$/);
     await page.getByRole("searchbox").fill("no-matching-evidence-unique-92847");
     await expect(page.getByText("No records match these filters.", { exact: true })).toBeVisible();
     await expect(page.locator(".page > p[aria-live]")).toHaveText(/^0 of [1-9]\d* records$/);

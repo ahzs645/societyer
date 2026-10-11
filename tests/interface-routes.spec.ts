@@ -21,6 +21,8 @@ for (const route of INTERFACE_ROUTES) {
     }
     await expect(page.getByRole("heading", { name: "Something went wrong.", exact: true })).toHaveCount(0);
     if (route.redirectTo) await expect(page).toHaveURL(new URL(route.redirectTo, testInfo.project.use.baseURL as string).toString());
+    // Unknown addresses say so rather than silently landing on the dashboard.
+    if (route.kind === "fallback") await expect(page.getByTestId("page-not-found")).toBeVisible();
     // Two frames allow layout and hydrated local snapshots to settle without
     // networkidle, which can hang on intentional disconnected provider retries.
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -37,3 +39,11 @@ for (const route of INTERFACE_ROUTES) {
     expect(layout, `Uncontained horizontal page overflow at ${route.path}`).toEqual([]);
   });
 }
+
+test("an unknown workspace address shows Page not found inside the app shell", async ({ page }) => {
+  await page.goto("/demo/app/interface-audit-no-such-page");
+  await expect(page.locator(".app-shell")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Page not found", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Go to the dashboard", exact: true }).click();
+  await expect(page).toHaveURL(/\/demo\/app$/);
+});

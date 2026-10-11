@@ -117,3 +117,15 @@ export class EntityIdMap {
     return this.byEntity.size;
   }
 }
+
+/**
+ * System fields a `replace` keeps from the row it replaces (Convex keeps `_creationTime`; `entityId` is
+ * the row's durable application identity). A value the replacement supplies wins.
+ */
+export function preservedSystemFields(existing: Record<string, any> | null | undefined, doc: Record<string, any>): Record<string, any> {
+  const kept: Record<string, any> = {};
+  if (!existing) return kept;
+  if (doc._creationTime === undefined && existing._creationTime !== undefined) kept._creationTime = existing._creationTime;
+  if (!(typeof doc.entityId === "string" && doc.entityId) && typeof existing.entityId === "string" && existing.entityId) kept.entityId = existing.entityId;
+  return kept;
+}

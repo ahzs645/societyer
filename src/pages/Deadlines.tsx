@@ -6,8 +6,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
-import { CalendarView } from "../components/CalendarView";
 import { calendarDate, calendarDateKey } from "../lib/calendarDates";
+import { isPastDue } from "../../shared/dateOnly";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -62,7 +62,6 @@ export function DeadlinesPage() {
   const [saving, setSaving] = useState(false);
   const descriptionEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState<any>(null);
-  const [view, setView] = useState<"list" | "calendar">("list");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -164,7 +163,6 @@ export function DeadlinesPage() {
     }
   };
 
-  const now = Date.now();
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
@@ -173,25 +171,17 @@ export function DeadlinesPage() {
         title="Deadlines"
         icon={<Calendar size={16} />}
         iconColor="yellow"
-        subtitle={`Dates imposed by law or regulation, like filings, ${isCorporation(society) ? "annual meetings" : "AGMs"}, and renewals. For internal work items, use Tasks; for promises made to funders or partners, use Commitments.`}
+        subtitle={`Dates set by law or regulation: filings, ${isCorporation(society) ? "annual meetings" : "AGMs"} and renewals.`}
+        info={
+          <p>Internal work items belong in Tasks; promises made to funders or partners belong in Commitments.</p>
+        }
         actions={
-          <>
-            <Segmented<"list" | "calendar">
-              value={view}
-              onChange={setView}
-              items={[
-                { id: "list", label: "List" },
-                { id: "calendar", label: "Calendar" },
-              ]}
-            />
-            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
-              <Plus size={12} /> New deadline
-            </button>
-          </>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
+            <Plus size={12} /> New deadline
+          </button>
         }
       />
 
-      {view === "list" && (
         <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "var(--s-2)" }}>
           <Segmented<StatusFilter>
             value={statusFilter}
@@ -204,26 +194,8 @@ export function DeadlinesPage() {
             ]}
           />
         </div>
-      )}
 
-      {view === "calendar" && (
-        <CalendarView
-          items={allRecords}
-          getId={(r) => r._id}
-          getLabel={(r) => r.title}
-          getDate={(r) => r.dueDate}
-          onSelect={openRecord}
-          getTone={(r) => {
-            const s = statusOf(r);
-            if (s === "complete") return "success";
-            if (s === "closed") return "neutral";
-            const overdue = new Date(r.dueDate).getTime() < now;
-            return overdue ? "danger" : "info";
-          }}
-        />
-      )}
-
-      {view === "list" && (
+      {(
         showMetadataWarning ? (
           <RecordTableMetadataEmpty societyId={society?._id} objectLabel="deadline" />
         ) : tableData.objectMetadata ? (
@@ -289,12 +261,12 @@ export function DeadlinesPage() {
                 }
                 if (field.name === "dueDate") {
                   const s = statusOf(record);
-                  const isOverdue = s === "open" && record.dueDate && new Date(record.dueDate).getTime() < Date.now();
+                  const isOverdue = s === "open" && isPastDue(record.dueDate);
                   if (!record.dueDate) return <span className="record-cell__empty">—</span>;
                   return (
-                    <span style={isOverdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
+                    <span style={isOverdue ? { color: "var(--danger)", fontWeight: 600 } : undefined} title={isOverdue ? "Overdue" : undefined}>
                       {(calendarDate(record.dueDate) ?? new Date(record.dueDate)).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
-                      {isOverdue && " · Overdue"}
+                      {isOverdue && <span className="sr-only"> (overdue)</span>}
                     </span>
                   );
                 }
@@ -303,7 +275,7 @@ export function DeadlinesPage() {
                   const isComplete = s === "complete";
                   const isClosed = s === "closed";
                   return (
-                    <div>
+                    <div className="deadline-title-cell">
                       <strong
                         style={{
                           textDecoration: isComplete ? "line-through" : "none",
@@ -313,7 +285,7 @@ export function DeadlinesPage() {
                       >
                         {record.title}
                       </strong>
-                      {record.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{record.description}</div>}
+                      {record.description && <div className="deadline-title-cell__desc">{record.description}</div>}
                     </div>
                   );
                 }

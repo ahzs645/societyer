@@ -31,5 +31,7 @@ export function contentTypeFor(filePath: string) {
   if (ext === ".json") return "application/json";
   if (ext === ".woff") return "font/woff";
   if (ext === ".woff2") return "font/woff2";
+  // AI intake OCR (tesseract.js core, pdf.js image decoders).
+  if (ext === ".wasm") return "application/wasm";
   return "application/octet-stream";
 }

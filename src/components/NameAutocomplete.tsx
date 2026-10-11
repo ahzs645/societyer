@@ -100,6 +100,12 @@ export function NameAutocomplete({
             event.preventDefault();
             setHighlightIndex((index) => Math.max(0, index - 1));
           } else if (event.key === "Escape") {
+            // Escape first dismisses an open suggestion list; it must not also
+            // close the drawer or dialog the field sits in (ui-meetings F4).
+            if (visible) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
             setIsOpen(false);
           } else if (event.key === "Enter") {
             const highlighted = visible ? filtered[highlightIndex] : undefined;

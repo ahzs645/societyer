@@ -1,3 +1,4 @@
+// When this copy was last checked against the legislation (maintainers only; not shown to users).
 export const LEGAL_COPY_REVIEWED = "Reviewed April 2026";
 
 export const PIPA_INTAKE_NOTICE = {
@@ -55,7 +56,8 @@ export const RECORDS_INSPECTION_GUIDANCE = [
 ];
 
 export const DIRECTOR_ATTESTATION_COPY = {
-  subtitle:
+  subtitle: "Each director's yearly confirmation that they still qualify.",
+  info:
     "Annual renewal confirming each director still meets the active qualification rules. Review qualification wording before relying on it for a new jurisdiction or bylaw template.",
   note:
     "By signing, the director confirms each statement is accurate as of today. The society should keep this attestation with its governance records and review the wording when laws or bylaws change.",

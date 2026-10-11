@@ -2,6 +2,7 @@
 // Kept dependency-free so the page, tab views, and drawers can share them
 // without pulling in React state.
 import type { ImageValue } from "../../components/ImageUploadField";
+import { todayDateOnly } from "../../../shared/dateOnly";
 
 export type TabKey = "stock" | "locations" | "lots" | "counts";
 
@@ -48,7 +49,16 @@ export function relativeSince(iso?: string | null) {
 
 export function formatQuantity(value?: number | null, unit?: string | null) {
   if (value == null) return "-";
-  return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(value)} ${unit ?? "each"}`;
+  const label = unit ?? "each";
+  return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(value)} ${Math.abs(value) === 1 ? singularUnit(label) : label}`;
+}
+
+/** "1 flats" reads wrong: units are stored plural, so drop the plural for exactly one. */
+export function singularUnit(unit: string) {
+  if (/ies$/i.test(unit)) return unit.replace(/ies$/i, "y");
+  if (/(x|ch|sh|ss)es$/i.test(unit)) return unit.replace(/es$/i, "");
+  if (/[^s]s$/i.test(unit)) return unit.slice(0, -1);
+  return unit;
 }
 
 export function movementTone(type: string) {
@@ -59,7 +69,7 @@ export function movementTone(type: string) {
 }
 
 export function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 export function dollarsToCents(value: string): number | undefined {

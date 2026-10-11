@@ -12,6 +12,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
+import { todayDateOnly } from "../dateOnly";
 
 export async function listPortable(
   ctx: PortableQueryCtx,
@@ -310,7 +311,7 @@ function appendNote(current: unknown, note: string) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function addDays(date: string, days: number) {

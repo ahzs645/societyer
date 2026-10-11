@@ -454,6 +454,38 @@ export async function updateSettingsPortable(
   });
 }
 
+/** Remove a ballot question while the election is still a draft (G-16). */
+export async function removeQuestionPortable(
+  ctx: PortableMutationCtx,
+  args: { questionId: string; actingUserId?: string },
+) {
+  const question = await requireOwnedRow(ctx, "electionQuestions", args.questionId);
+  const election = await requireOwnedRow(ctx, "elections", String(question.electionId));
+  const societyId = String(election.societyId);
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId,
+    required: "Director",
+  });
+  if (election.status !== "Draft") throw new Error("Ballot questions can only be changed while the election is a draft.");
+  await ctx.db.delete(args.questionId);
+  const remaining = await ctx.db
+    .query("electionQuestions")
+    .withIndex("by_election", (q) => q.eq("electionId", String(question.electionId)))
+    .collect();
+  remaining.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  for (let index = 0; index < remaining.length; index += 1) {
+    if (remaining[index].order !== index) await ctx.db.patch(remaining[index]._id, { order: index });
+  }
+  await logAudit(ctx, {
+    societyId: election.societyId,
+    electionId: String(question.electionId),
+    actorName: user?.displayName ?? "System",
+    action: "question-removed",
+    detail: question.title,
+  });
+}
+
 export async function addQuestionPortable(
   ctx: PortableMutationCtx,
   args: {

@@ -97,7 +97,7 @@ export async function removeSourcePortable(ctx: PortableMutationCtx, { id }: { i
   const docs = await docsByCategory(ctx, String(source.societyId), ITEM_CATEGORY);
 
   await Promise.all([
-    ...docs.filter(isHistoryItem).map((doc) => {
+    ...docs.filter(isHistoryItem).map((doc: any) => {
       const item = hydrateItem(doc);
       const sourceIds = Array.isArray(item.sourceIds)
         ? item.sourceIds.filter((sourceId: string) => sourceId !== id)
@@ -380,7 +380,7 @@ export async function bulkImportPortable(
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   const docs = await docsByCategory(ctx, args.societyId, SOURCE_CATEGORY);
-  const existingSources = docs.filter(isHistorySource).map((doc) => hydrateSource(doc));
+  const existingSources = docs.filter(isHistorySource).map((doc: any) => hydrateSource(doc));
   const sourceIdByExternalId = new Map<string, any>();
   let sourceCount = 0;
 
@@ -391,7 +391,7 @@ export async function bulkImportPortable(
     let sourceId: any = null;
     if (source.externalId) {
       const existing = existingSources.find(
-        (candidate) =>
+        (candidate: any) =>
           candidate.externalId === source.externalId &&
           (candidate.externalSystem ?? "paperless") === (source.externalSystem ?? "paperless"),
       );

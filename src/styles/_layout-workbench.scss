@@ -252,6 +252,11 @@
      * the sidebar from the render tree entirely while the translate still
      * animates smoothly. */
     visibility: hidden;
+    /* Landscape notch / home indicator: keep drawer content inside the
+     * safe area (all zero on devices without insets). */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
 
   .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
@@ -413,14 +418,35 @@
     padding: 8px 10px;
   }
 
-  /* Inspector becomes a full-screen sheet on phones (twenty's drawer pattern). */
+  /* Inspector becomes a page sheet on phones: it rises from the bottom,
+   * leaves a sliver of the page above it (so it reads as dismissable), and
+   * closes by pulling its header down (useSheetDrag in InspectorHost). */
   .app-shell.is-mobile .inspector {
-    top: 0;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
     right: 0;
     bottom: 0;
     width: 100vw;
     border: 0;
-    border-radius: 0;
+    border-top: 1px solid token('border');
+    border-radius: token('r-lg') token('r-lg') 0 0;
+    box-shadow: token('shadow-strong');
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translate3d(0, 100%, 0);
+    transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .app-shell.is-mobile .inspector-host.is-open .inspector {
+    transform: translate3d(0, 0, 0);
+  }
+  .app-shell.is-mobile .inspector::before {
+    content: "";
+    flex: none;
+    align-self: center;
+    width: 36px;
+    height: 5px;
+    margin: 8px 0 2px;
+    border-radius: token('r-pill');
+    background: token('border-strong');
+    opacity: 0.7;
   }
 }
 
@@ -443,6 +469,10 @@
     /* Twenty sizes page titles a bit smaller on phones so the header doesn't
      * dominate the viewport. Still semibold, still -0.03em tracking. */
     font-size: clamp(18px, 4.5vw, 22px);
+    /* A long name wraps beside its icon tile, never leaving the icon alone
+     * on its own row (with or without header actions). */
+    flex-wrap: nowrap;
+    align-items: flex-start;
   }
 
   .page__subtitle {
@@ -460,6 +490,72 @@
 
   .page__header-main {
     flex-basis: 100%;
+  }
+
+  /* Actions on the title's row, right-aligned (PageHeader measures whether
+   * they fit and sets data-actions-fit). */
+  .page__header:is([data-actions-fit="inline"], [data-actions-fit="compact"]) {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+
+    > .page__header-main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    /* A long name wraps beside its icon tile rather than dropping under it. */
+    .page__title {
+      flex-wrap: nowrap;
+    }
+
+    > .page__actions {
+      flex: none;
+      width: auto;
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+  }
+
+  /* "New …" actions are always a bare + on phones, whatever the fit, so the
+   * create button looks the same on every page. */
+  .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child),
+  .page__header .page__actions .btn:has(> .btn__icon:first-child > svg.lucide-plus),
+  .settings-shell__actions :is(.btn, .btn-action):has(> svg.lucide-plus:first-child),
+  .settings-shell__actions .btn:has(> .btn__icon:first-child > svg.lucide-plus) {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    letter-spacing: 0;
+
+    > svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    > .create-menu__caret { display: none; }
+  }
+
+  /* Compact: icon buttons drop their visible text (it stays in the DOM, so
+   * the accessible name is unchanged) and become square icon targets. */
+  .page__header[data-actions-fit="compact"] .page__actions :is(.btn, .btn-action):has(> svg) {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    letter-spacing: 0;
+
+    > svg {
+      width: 16px;
+      height: 16px;
+    }
   }
 }
 
@@ -482,8 +578,12 @@
     z-index: token('z-bottom-nav');
     /* Twenty uses a compact 48px bar (theme spacing[12]); we keep 52px as a
      * balance between their density and the five items Societyer pins. */
-    height: 52px;
-    padding: 0 token('s-2') env(safe-area-inset-bottom, 0);
+    /* The home-indicator inset sits BELOW the 52px bar rather than eating
+     * into it (box-sizing is border-box, so a fixed 52px height + inset
+     * padding squeezed the tab row to ~18px on Face ID iPhones). */
+    height: calc(52px + env(safe-area-inset-bottom, 0px));
+    padding: 0 max(token('s-2'), env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px)
+      max(token('s-2'), env(safe-area-inset-left, 0px));
     background: token('bg-primary');
     border-top: 1px solid token('border-color-light');
     align-items: stretch;
@@ -516,9 +616,45 @@
   .bottom-nav__item.is-active {
     /* Twenty signals active state with a subtle neutral fill + primary text
      * color, not a saturated brand color — keeps the bar from competing with
-     * page content. */
-    background: token('bg-transparent-light');
+     * page content. The fill itself is the shared sliding indicator below. */
     color: token('text-primary');
+  }
+  .bottom-nav__item {
+    position: relative;
+    z-index: 1;
+  }
+  .bottom-nav__item.is-active svg {
+    animation: bottomNavIconPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes bottomNavIconPop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.18) translateY(-1px); }
+    100% { transform: scale(1); }
+  }
+  /* One pill that glides to the active tab (BottomNavIndicator). Sits on
+   * the same 6px inset as the items so it reads as their background. */
+  .bottom-nav__indicator {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    height: 40px;
+    border-radius: token('r-sm');
+    background: token('bg-transparent-light');
+    opacity: 0;
+    pointer-events: none;
+  }
+  .bottom-nav__indicator.is-visible {
+    opacity: 1;
+  }
+  .bottom-nav__indicator.is-animated {
+    transition:
+      transform 0.38s cubic-bezier(0.34, 1.3, 0.64, 1),
+      width 0.38s cubic-bezier(0.34, 1.3, 0.64, 1),
+      opacity 0.2s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bottom-nav__indicator.is-animated { transition: opacity 0.2s ease; }
+    .bottom-nav__item.is-active svg { animation: none; }
   }
   .bottom-nav__item svg {
     /* 16px at stroke-width 2 matches twenty's icon.size.md default. */
@@ -563,7 +699,8 @@
     right: 0;
     z-index: token('z-bottom-nav');
     height: calc(52px + env(safe-area-inset-top, 0));
-    padding: env(safe-area-inset-top, 0) token('s-3') 0;
+    padding: env(safe-area-inset-top, 0px) max(token('s-3'), env(safe-area-inset-right, 0px)) 0
+      max(token('s-3'), env(safe-area-inset-left, 0px));
     background: token('bg-primary');
     border-bottom: 1px solid token('border-color-light');
   }
@@ -588,4 +725,197 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* The sidebar's 22px icon button is far below a thumb-sized target; in
+   * the top bar the bell gets a full 40px hit area (and room for its badge,
+   * which was clipped against the screen edge). */
+  .mobile-topbar .notif-bell {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: token('r-md');
+  }
+  .mobile-topbar .notif-bell svg {
+    width: 18px;
+    height: 18px;
+  }
+  .mobile-topbar .notif-bell__badge {
+    top: 4px;
+    right: 4px;
+  }
+}
+
+/* ----- Phone (<= 560px): sections, not boxes. Page-level cards drop their
+ * side borders, radius and shadow and run to the screen edges, so their
+ * content gets the width the box chrome and double gutters used to take.
+ * Only top-level cards — a card inside a card keeps its box. */
+@media (max-width: 560px) {
+  .app-shell.is-mobile .page {
+    --page-gutter: #{token('s-4')};
+    padding-inline: var(--page-gutter);
+  }
+  .app-shell.is-mobile .page :is(.card, .stat-grid, .onboarding-compact, .record-show__summary):not(.card *):not(.card--boxed) {
+    margin-inline: calc(-1 * var(--page-gutter));
+    border-inline-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* ----- Phones: detail pages' "← All members"-style back link becomes an
+ * arrow button in the title row, left of the page icon, without the label
+ * (it stays the accessible name). Header actions share one 36px height. */
+@media (max-width: 760px) {
+  .app-shell.is-mobile .page:has(> a.row.muted:first-child) {
+    position: relative;
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child {
+    position: absolute;
+    z-index: 1;
+    top: calc(#{token('s-5')} + 2px);
+    left: calc(var(--page-gutter, #{token('s-5')}) - 6px);
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    margin: 0 !important;
+    padding: 0;
+    border-radius: token('r-sm');
+    font-size: 0 !important;
+    color: token('text-secondary');
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child:active {
+    background: token('bg-hover');
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child svg {
+    width: 18px;
+    height: 18px;
+  }
+  .app-shell.is-mobile .page:has(> a.row.muted:first-child) .page__header {
+    padding-left: 30px;
+  }
+  .page__header[data-actions-fit] .page__actions :is(.btn, .btn-action) {
+    min-height: 36px;
+  }
+
+  /* Pages that put "← Section" among their header actions get the same
+   * treatment: a bare arrow left of the page icon, not a text button. */
+  .page__header:has(> .page__actions > a:has(> svg.lucide-arrow-left:first-child)) {
+    position: relative;
+    padding-left: 30px;
+  }
+  .page__header > .page__actions > a:has(> svg.lucide-arrow-left:first-child) {
+    position: absolute;
+    z-index: 1;
+    top: 2px;
+    left: -6px;
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 0 !important;
+    color: token('text-secondary');
+    > svg { width: 18px; height: 18px; }
+  }
+
+  /* "⋯ More" is just "⋯" on phones. */
+  .page__header .page__actions :is(.btn, .btn-action):has(> svg.lucide-ellipsis:first-child) {
+    justify-content: center;
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    > svg { width: 16px; height: 16px; }
+  }
+}
+
+.create-menu__caret {
+  margin-left: -2px;
+  opacity: 0.75;
+}
+
+/* ⓘ background popover (PageHeader `info`, section heads). */
+.info-popover__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: token(text-tertiary);
+  cursor: pointer;
+  vertical-align: middle;
+  &:hover, &[aria-expanded="true"] { color: token(text-primary); background: token(bg-hover); }
+  &:focus-visible { outline: 2px solid token(accent); outline-offset: 1px; }
+}
+.info-popover {
+  z-index: token(z-dropdown);
+  width: min(340px, calc(100vw - 16px));
+  padding: 12px 14px;
+  background: token(bg-panel);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  box-shadow: token(shadow-strong);
+  color: token(text-secondary);
+  font-size: token(fs-sm);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  p { margin: 0; }
+  p + p { margin-top: 8px; }
+}
+
+/* "As of" strip above a dated register (certificates, share register). */
+.register-asof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-2) token(s-4);
+  margin: 0 0 token(s-3);
+  color: token(text-secondary);
+  font-size: token(fs-sm);
+}
+.register-asof__date {
+  display: inline-flex;
+  align-items: center;
+  gap: token(s-2);
+  white-space: nowrap;
+}
+.register-asof__totals { color: token(text-primary); font-variant-numeric: tabular-nums; }
+.page__title-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  > .page__title { min-width: 0; }
+}
+.annual-filings__note { margin: 0 0 token(s-3); font-size: token(fs-sm); }
+
+/* Standalone "Page not found" (unknown address outside the workspace). */
+.not-found-standalone {
+  display: grid;
+  justify-items: center;
+  gap: token(s-3);
+  max-width: 520px;
+  margin: 12vh auto 0;
+  padding: 0 token(s-4);
+  text-align: center;
+}
+.not-found-standalone__title {
+  margin: 0;
+  font-size: token(fs-lg);
+  font-weight: 600;
 }

@@ -508,6 +508,19 @@ function TableButton({
   );
 }
 
+/** Generous: cold dev-server chunk loads on a busy machine can take seconds. */
+const EDITOR_MOUNT_TIMEOUT_MS = 20_000;
+
+/** Per-browser escape hatch (and test hook): `localStorage["societyer:plain-markdown-editor"] = "1"`
+ * always uses the plain Markdown textarea. */
+function plainEditorRequested() {
+  try {
+    return window.localStorage.getItem("societyer:plain-markdown-editor") === "1";
+  } catch {
+    return false;
+  }
+}
+
 const TRACKED_MARK_NAMES = ["strong", "emphasis", "strike_through", "inlineCode", "link"];
 const TRACKED_BLOCK_NAMES = ["bullet_list", "ordered_list", "blockquote", "code_block"];
 
@@ -540,6 +553,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const placeholderRef = useRef(placeholder);
 
     const [active, setActive] = useState<ActiveState>(EMPTY_ACTIVE);
+    const [ready, setReadyState] = useState(false);
+    const [failure, setFailure] = useState<Error | null>(null);
+    // A failed mount is re-thrown here so MarkdownEditor's error boundary
+    // renders the plain-textarea fallback.
+    if (failure) throw failure;
     const prompt = usePrompt();
 
     useEffect(() => {
@@ -607,56 +625,102 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }, []);
 
     useEffect(() => {
-      if (!editorHostRef.current) return;
+      const host = editorHostRef.current;
+      if (!host) return;
       let disposed = false;
-      const crepe = new Crepe({
-        root: editorHostRef.current,
-        defaultValue: initialValueRef.current ?? "",
-        features: {
-          [CrepeFeature.AI]: false,
-          [CrepeFeature.TopBar]: false,
-          [CrepeFeature.Latex]: false,
-          [CrepeFeature.CodeMirror]: false,
-          [CrepeFeature.ImageBlock]: false,
-          // Tables are inserted via the toolbar's grid picker; once present,
-          // Crepe's in-cell handles handle add/remove rows + cols.
-          [CrepeFeature.Table]: true,
-          // The slash (/) menu + block drag-handle. Disabled because the menu
-          // gets clipped by the scrollable editor body when it flips upward,
-          // and the toolbar already exposes the formatting we need here.
-          [CrepeFeature.BlockEdit]: false,
-          // The on-selection floating toolbar. Its only unique action was
-          // links, which the top toolbar's Link button now provides.
-          [CrepeFeature.Toolbar]: false,
-        },
-        featureConfigs: {
-          [CrepeFeature.Placeholder]: {
-            text: placeholderRef.current ?? "",
-            // "doc" shows the placeholder only when the whole document is
-            // empty. "block" paints it on every empty paragraph, so it
-            // reappeared on each new line as the user pressed Enter.
-            mode: "doc",
+      let ready = false;
+      let crepe: Crepe | null = null;
+      // Each Crepe instance renders into its own container so an instance that
+      // is still tearing down can never clear (or share) the live one's DOM.
+      const container = document.createElement("div");
+      container.className = "markdown-editor__instance";
+
+      const fail = (error: unknown) => {
+        if (disposed || ready) return;
+        disposed = true;
+        // Re-thrown during render so MarkdownEditor's error boundary swaps in
+        // the plain-textarea fallback with the current value.
+        setFailure(error instanceof Error ? error : new Error(String(error)));
+      };
+      // Milkdown reports some plugin failures asynchronously, outside the
+      // create() promise. While this instance is starting, treat those as a
+      // failed mount instead of leaving an empty, inert box.
+      const isMilkdownFailure = (reason: unknown) =>
+        reason instanceof Error && (reason.name === "MilkdownError" || /^Context ".+" not found/.test(reason.message));
+      const onWindowError = (event: ErrorEvent) => {
+        if (isMilkdownFailure(event.error)) fail(event.error);
+      };
+      const onRejection = (event: PromiseRejectionEvent) => {
+        if (isMilkdownFailure(event.reason)) fail(event.reason);
+      };
+      let watchdog = 0;
+      const stopWatching = () => {
+        window.removeEventListener("error", onWindowError);
+        window.removeEventListener("unhandledrejection", onRejection);
+        window.clearTimeout(watchdog);
+      };
+
+      const mount = async () => {
+        if (disposed) return;
+        if (plainEditorRequested()) throw new Error("Rich editing is turned off for this browser.");
+        host.appendChild(container);
+        window.addEventListener("error", onWindowError);
+        window.addEventListener("unhandledrejection", onRejection);
+        // A create() that never settles must not leave an inert box forever.
+        watchdog = window.setTimeout(() => fail(new Error("The rich text editor took too long to load.")), EDITOR_MOUNT_TIMEOUT_MS);
+        const instance = new Crepe({
+          root: container,
+          defaultValue: initialValueRef.current ?? "",
+          features: {
+            [CrepeFeature.AI]: false,
+            [CrepeFeature.TopBar]: false,
+            [CrepeFeature.Latex]: false,
+            [CrepeFeature.CodeMirror]: false,
+            [CrepeFeature.ImageBlock]: false,
+            // Tables are inserted via the toolbar's grid picker; once present,
+            // Crepe's in-cell handles handle add/remove rows + cols.
+            [CrepeFeature.Table]: true,
+            // The slash (/) menu + block drag-handle. Disabled because the menu
+            // gets clipped by the scrollable editor body when it flips upward,
+            // and the toolbar already exposes the formatting we need here.
+            [CrepeFeature.BlockEdit]: false,
+            // The on-selection floating toolbar. Its only unique action was
+            // links, which the top toolbar's Link button now provides.
+            [CrepeFeature.Toolbar]: false,
           },
-        },
-      });
-
-      crepe.on((listener) => {
-        listener.markdownUpdated((_ctx, markdown) => {
-          lastEmittedRef.current = markdown;
-          onChangeRef.current(markdown);
+          featureConfigs: {
+            [CrepeFeature.Placeholder]: {
+              text: placeholderRef.current ?? "",
+              // "doc" shows the placeholder only when the whole document is
+              // empty. "block" paints it on every empty paragraph, so it
+              // reappeared on each new line as the user pressed Enter.
+              mode: "doc",
+            },
+          },
         });
-      });
+        crepe = instance;
 
-      crepe.create().then(() => {
-        if (disposed) {
-          crepe.destroy();
-          return;
-        }
-        crepeRef.current = crepe;
-        crepe.setReadonly(readOnlyRef.current);
-        if (pendingMarkdownRef.current !== undefined) {
-          crepe.editor.action(replaceAll(pendingMarkdownRef.current));
-          pendingMarkdownRef.current = undefined;
+        instance.on((listener) => {
+          listener.markdownUpdated((_ctx, markdown) => {
+            if (disposed) return;
+            lastEmittedRef.current = markdown;
+            onChangeRef.current(markdown);
+          });
+        });
+
+        await instance.create();
+        if (disposed) return;
+        if (!container.querySelector(".ProseMirror")) throw new Error("The rich text editor did not render.");
+        ready = true;
+        stopWatching();
+        crepeRef.current = instance;
+        instance.setReadonly(readOnlyRef.current);
+        const pending = pendingMarkdownRef.current;
+        pendingMarkdownRef.current = undefined;
+        // The instance already starts from the initial value; only replay
+        // content that changed while it was loading (avoids a spurious onChange).
+        if (pending !== undefined && pending !== (initialValueRef.current ?? "")) {
+          instance.editor.action(replaceAll(pending));
         }
 
         // Wrap the editor view's dispatch so we recompute toolbar state on
@@ -665,7 +729,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         // exposes `selectionUpdated` and `updated`, but neither fires for a
         // pure storedMarks change, which is what made the Bold button appear
         // stale until the user typed a character.
-        crepe.editor.action((ctx) => {
+        instance.editor.action((ctx) => {
           const view = ctx.get(editorViewCtx);
           if (!view) return;
           const originalDispatch = view.dispatch.bind(view);
@@ -705,16 +769,33 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         });
 
         recomputeActive();
+        setReadyState(true);
         if (pendingFocusRef.current) {
           pendingFocusRef.current = false;
-          editorHostRef.current?.querySelector<HTMLElement>(".ProseMirror")?.focus();
+          container.querySelector<HTMLElement>(".ProseMirror")?.focus();
         }
-      });
+      };
+
+      // React StrictMode mounts, unmounts and remounts effects synchronously.
+      // Starting on the next task means that throwaway first pass never builds
+      // an editor, so two Crepe instances never initialise against one host
+      // (the race behind `MilkdownError: Context "nodes" not found`).
+      const start = window.setTimeout(() => {
+        mount().catch(fail);
+      }, 0);
 
       return () => {
         disposed = true;
+        window.clearTimeout(start);
+        stopWatching();
         crepeRef.current = null;
-        crepe.destroy();
+        const instance = crepe;
+        if (!instance) {
+          container.remove();
+          return;
+        }
+        // Milkdown waits for an in-flight create() before tearing down.
+        instance.destroy().catch(() => undefined).finally(() => container.remove());
       };
       // Editor is created once on mount; updates flow through other effects.
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -856,6 +937,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           ref={editorHostRef}
           className="markdown-editor__body"
           style={{ minHeight: computedMinHeight }}
+          // Until Crepe has mounted, paint the stored Markdown (via CSS) so
+          // the field never looks empty while the editor initialises.
+          aria-busy={ready ? undefined : true}
+          data-loading-preview={ready ? undefined : (value || placeholder || "Loading editor…")}
           onMouseDown={(event) => {
             if (readOnly) return;
             const target = event.target as Element | null;

@@ -12,6 +12,7 @@ import {
   createPortable,
   updateSettingsPortable,
   addQuestionPortable,
+  removeQuestionPortable,
   reviewNominationPortable,
   publishNominationToBallotPortable,
   snapshotEligibleVotersPortable,
@@ -110,6 +111,15 @@ export const addQuestion = authorizedMutation("elections:addQuestion", mutation)
   },
   returns: v.any(),
   handler: async (ctx, args) => addQuestionPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const removeQuestion = authorizedMutation("elections:removeQuestion", mutation)({
+  args: {
+    questionId: v.id("electionQuestions"),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => removeQuestionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const submitNomination = authorizedMutation("elections:submitNomination", mutation)({

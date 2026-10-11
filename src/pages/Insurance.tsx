@@ -8,11 +8,12 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { ArrowLeft, FileSearch, Pencil, Plus, Shield, Trash2 } from "lucide-react";
-import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
+import { centsToDollarInput, daysUntilDate, dollarInputToCents, formatDate, money, todayDateOnly } from "../lib/format";
 import { CitationBadge } from "../components/CitationTooltip";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -26,6 +27,10 @@ import {
 } from "@/platform/record-engine";
 import { policyHistory, policyCostChange, estimatePayrollAssessment, policyCoverageChanges } from "../../shared/insuranceHistory";
 import type { Id } from "../../convex/_generated/dataModel";
+import { useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { hasErrors, validateInsurancePolicyInput, type FieldErrors } from "../../shared/recordValidation";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
@@ -38,6 +43,9 @@ export function InsurancePage() {
   const create = useMutation(api.insurance.create);
   const update = useMutation(api.insurance.update);
   const remove = useMutation(api.insurance.remove);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "edit" | "new">("view");
@@ -57,7 +65,7 @@ export function InsurancePage() {
   const records = useMemo(
     () => rows.map((r) => ({
       ...r,
-      period: `${formatDate(r.startDate)} to ${formatDate(r.endDate)}`,
+      period: `${formatDate(r.startDate)} – ${formatDate(r.endDate)}`,
     })),
     [rows],
   );
@@ -159,12 +167,41 @@ export function InsurancePage() {
 
   const save = async () => {
     const payload = normalizePolicyDraft(form);
-    if (editingId) {
-      await update({ id: editingId as any, patch: payload });
-    } else {
-      await create({ societyId: society._id, ...payload });
+    const validation = validateInsurancePolicyInput(payload);
+    setErrors(validation);
+    if (hasErrors(validation)) {
+      toast.error("Check the highlighted fields", Object.values(validation)[0]);
+      return;
     }
-    setOpen(false);
+    try {
+      if (editingId) {
+        await update({ id: editingId as any, patch: payload });
+        toast.success("Policy updated");
+      } else {
+        await create({ societyId: society._id, ...payload });
+        toast.success("Policy added");
+      }
+      setOpen(false);
+    } catch (error: any) {
+      toast.error("Could not save policy", error?.data?.message ?? error?.message);
+    }
+  };
+
+  const confirmRemove = async (row: any) => {
+    const label = [row.insurer, row.policyNumber].filter(Boolean).join(" · ") || "this policy";
+    const approved = await confirm({
+      title: "Delete insurance policy?",
+      message: `${label} (${kindLabel(row.kind)}, ${formatDate(row.startDate)} to ${formatDate(row.endDate)}) will be permanently removed, including its coverage items, certificates, claims and review history. To keep the history, set the status to Lapsed or Cancelled instead.`,
+      confirmLabel: "Delete policy",
+      tone: "danger",
+    });
+    if (!approved) return;
+    try {
+      await remove({ id: row._id });
+      toast.success("Policy deleted", label);
+    } catch (error: any) {
+      toast.error("Could not delete policy", error?.message);
+    }
   };
 
   return (
@@ -218,10 +255,10 @@ export function InsurancePage() {
             renderCell={({ record, field }) => {
               if (field.name === "kind") return <span className="cell-tag">{kindLabel(record.kind)}</span>;
               if (field.name === "insurer") return <PolicyCell row={record} />;
-              if (field.name === "policyNumber") return <span className="mono">{record.policyNumber}</span>;
-              if (field.name === "coverageCents") return <span className="mono">{money(record.coverageCents)}</span>;
-              if (field.name === "premiumCents") return <span className="mono">{money(record.premiumCents)}</span>;
-              if (field.name === "period") return <span className="mono">{formatDate(record.startDate)} to {formatDate(record.endDate)}</span>;
+              if (field.name === "policyNumber") return <span>{record.policyNumber}</span>;
+              if (field.name === "coverageCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(record.coverageCents)}</span>;
+              if (field.name === "premiumCents") return <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(record.premiumCents)}</span>;
+              if (field.name === "period") return <span style={{ whiteSpace: "nowrap" }} title={`${formatDate(record.startDate)} – ${formatDate(record.endDate)}`}>{formatDate(record.startDate, "MMM d, yyyy")} – {formatDate(record.endDate, "MMM d, yyyy")}</span>;
               if (field.name === "renewalDate") return <RenewalCell date={record.renewalDate} />;
               return undefined;
             }}
@@ -230,7 +267,7 @@ export function InsurancePage() {
                 <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }} disabled={!canWrite}>
                   <Pencil size={12} /> Edit
                 </button>
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); remove({ id: r._id }); }} disabled={!canWrite}>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); void confirmRemove(r); }} disabled={!canWrite}>
                   <Trash2 size={12} />
                 </button>
               </>
@@ -241,7 +278,7 @@ export function InsurancePage() {
 
       <Drawer
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => { setOpen(false); setErrors({}); }}
         title={drawerMode === "new" ? "New policy" : drawerMode === "edit" ? "Edit policy" : policyDrawerTitle(form)}
         size="wide"
         footer={
@@ -268,7 +305,7 @@ export function InsurancePage() {
           ) : (
           <div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Kind" hint="D&O = Directors & Officers liability">
+              <Field label="Kind" hint="D&O = Directors & Officers liability" required error={errors.kind}>
                 <Select value={form.kind} onChange={(value) => setForm({ ...form, kind: value })}
                   options={KINDS.map((k) => ({ value: k, label: kindLabel(k) }))} />
               </Field>
@@ -277,9 +314,9 @@ export function InsurancePage() {
                   options={STATUSES.map((status) => ({ value: status, label: status }))} />
               </Field>
             </div>
-            <Field label="Insurer"><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
+            <Field label="Insurer" required error={errors.insurer}><input className="input" value={form.insurer} onChange={(e) => setForm({ ...form, insurer: e.target.value })} /></Field>
             <Field label="Broker"><input className="input" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} /></Field>
-            <Field label="Policy number"><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
+            <Field label="Policy number" required error={errors.policyNumber}><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Policy series key" hint="An identifier you choose to link this policy to its future renewals, e.g. the insurer's account number"><input className="input" value={form.policySeriesKey ?? ""} onChange={(e) => setForm({ ...form, policySeriesKey: e.target.value })} /></Field>
               <Field label="Policy term"><input className="input" value={form.policyTermLabel ?? ""} onChange={(e) => setForm({ ...form, policyTermLabel: e.target.value })} /></Field>
@@ -287,13 +324,13 @@ export function InsurancePage() {
             </div>
             <Field label="Renewal of policy number"><input className="input" value={form.renewalOfPolicyNumber ?? ""} onChange={(e) => setForm({ ...form, renewalOfPolicyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Coverage" hint="Dollars, only when explicit"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
-              <Field label="Premium" hint="Dollars, only when explicit"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
-              <Field label="Deductible" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
+              <Field label="Coverage" hint="Dollars, only when explicit" error={errors.coverageCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.coverageDollars} onChange={(e) => setForm({ ...form, coverageDollars: e.target.value })} /></Field>
+              <Field label="Premium" hint="Dollars, only when explicit" error={errors.premiumCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
+              <Field label="Deductible" hint="Dollars" error={errors.deductibleCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Policy fee" hint="Dollars, from invoice"><input className="input" type="number" min="0" step="0.01" value={form.policyFeeDollars ?? ""} onChange={(e) => setForm({ ...form, policyFeeDollars: e.target.value })} /></Field>
-              <Field label="Total invoiced cost" hint="Dollars, including documented fees/taxes"><input className="input" type="number" min="0" step="0.01" value={form.totalCostDollars ?? ""} onChange={(e) => setForm({ ...form, totalCostDollars: e.target.value })} /></Field>
+              <Field label="Policy fee" hint="Dollars, from invoice" error={errors.policyFeeCents}><input className="input" type="number" min="0" step="0.01" value={form.policyFeeDollars ?? ""} onChange={(e) => setForm({ ...form, policyFeeDollars: e.target.value })} /></Field>
+              <Field label="Total invoiced cost" hint="Dollars, including documented fees/taxes" error={errors.totalCostCents}><input className="input" type="number" min="0" step="0.01" value={form.totalCostDollars ?? ""} onChange={(e) => setForm({ ...form, totalCostDollars: e.target.value })} /></Field>
             </div>
             <Field label="Coverage summary"><MarkdownEditor rows={4} value={form.coverageSummary ?? ""} onChange={(markdown) => setForm({ ...form, coverageSummary: markdown })} /></Field>
             <Field label="Additional insureds" hint="Comma-separated"><input className="input" value={form.additionalInsuredsInput ?? ""} onChange={(e) => setForm({ ...form, additionalInsuredsInput: e.target.value })} /></Field>
@@ -311,9 +348,9 @@ export function InsurancePage() {
             <EvidenceRowsEditor title="Annual insurance reviews" rows={form.annualReviews ?? parseAnnualReviews(form.annualReviewsInput)} columns={INSURANCE_ROW_COLUMNS.annualReviews} onChange={rows => setForm({ ...form, annualReviews: rows })} />
             <EvidenceRowsEditor title="Compliance checks" rows={form.complianceChecks ?? parseComplianceChecks(form.complianceChecksInput)} columns={INSURANCE_ROW_COLUMNS.complianceChecks} onChange={rows => setForm({ ...form, complianceChecks: rows })} />
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Start"><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
-              <Field label="End"><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
-              <Field label="Renewal"><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
+              <Field label="Start" required error={errors.startDate}><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
+              <Field label="End" error={errors.endDate}><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
+              <Field label="Renewal" required error={errors.renewalDate}><DatePicker value={form.renewalDate} onChange={(value) => setForm({ ...form, renewalDate: value })} /></Field>
             </div>
             <Field label="Source external IDs" hint="Comma-separated Paperless or external IDs"><input className="input" value={form.sourceExternalIdsInput ?? ""} onChange={(e) => setForm({ ...form, sourceExternalIdsInput: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
@@ -361,16 +398,7 @@ export function InsurancePolicyDetailPage() {
   const rows = (items ?? []) as any[];
   const policy = rows.find((row) => String(row._id) === String(id));
   if (!policy) {
-    return (
-      <div className="page">
-        <Link to="/app/insurance" className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-          <ArrowLeft size={12} /> Insurance policies
-        </Link>
-        <div className="card">
-          <div className="card__body">Policy not found.</div>
-        </div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Insurance policy" backTo="/app/insurance" backLabel="Insurance policies" />;
   }
 
   const versions = policyHistory(policy, rows);
@@ -383,15 +411,16 @@ export function InsurancePolicyDetailPage() {
         <ArrowLeft size={12} /> Insurance policies
       </Link>
       <PageHeader
-        title={`${kindLabel(policy.kind)} ${policy.policyNumber}`}
+        title={policy.insurer || `${kindLabel(policy.kind)} ${policy.policyNumber}`}
         icon={<Shield size={16} />}
         iconColor="green"
-        subtitle={[policy.insurer, policy.policyTermLabel, policy.broker].filter(Boolean).join(" · ")}
+        subtitle={[kindLabel(policy.kind), policy.policyNumber ? `Policy ${policy.policyNumber}` : "", policy.policyTermLabel, policy.broker].filter(Boolean).join(" · ")}
         actions={
           <>
             <button className="btn-action" disabled={!canWrite} onClick={() => { setRenewalError(""); setRenewal({ policyNumber: "", startDate: dateInput(policy.endDate || policy.renewalDate), endDate: "", premiumDollars: "", policyFeeDollars: "", totalCostDollars: "" }); }}><Plus size={12} /> Record renewal</button>
             <Badge tone={statusTone(policy.status)}>{policy.status}</Badge>
             {policy.sensitivity === "restricted" && <Badge tone="danger">restricted</Badge>}
+            <SourceProvenanceButton table="insurancePolicies" id={policy._id} />
           </>
         }
       />
@@ -416,12 +445,12 @@ export function InsurancePolicyDetailPage() {
           {renewalError && <p role="alert">{renewalError}</p>}
         </>}
       </Drawer>
-      <InsuranceOperationsCard policy={policy} />
       <InsuranceInsightCards policy={policy} />
 
       <div className="insurance-full-layout">
         <div className="insurance-full-layout__main">
-          <PolicyStructuredDetails row={policy} />
+          <PolicyStructuredDetails row={policy} hideIdentity />
+          <InsuranceOperationsCard policy={policy} />
         </div>
         <aside className="insurance-full-layout__side">
           <div className="card">
@@ -429,28 +458,28 @@ export function InsurancePolicyDetailPage() {
             <div className="card__body col">
               <DetailRow label="Kind">{kindLabel(policy.kind)}</DetailRow>
               <DetailRow label="Policy #">{policy.policyNumber}</DetailRow>
-              <DetailRow label="Series">
-                <span title={policy.policySeriesKey || undefined}>{shortPolicySeries(policy.policySeriesKey)}</span>
-              </DetailRow>
-              <DetailRow label="Term">{policy.policyTermLabel || "Not set"}</DetailRow>
-              <DetailRow label="Period">{formatDate(policy.startDate)} to {formatDate(policy.endDate)}</DetailRow>
+              {policy.policySeriesKey && (
+                <DetailRow label="Series">
+                  <span title={policy.policySeriesKey}>{shortPolicySeries(policy.policySeriesKey)}</span>
+                </DetailRow>
+              )}
+              {policy.policyTermLabel && <DetailRow label="Term">{policy.policyTermLabel}</DetailRow>}
+              <DetailRow label="Period">{formatDate(policy.startDate)} – {formatDate(policy.endDate)}</DetailRow>
               <DetailRow label="Renewal">{formatDate(policy.renewalDate)}</DetailRow>
-              <DetailRow label="Confidence">{policy.confidence || "Unspecified"}</DetailRow>
+              {policy.confidence && <DetailRow label="Confidence">{policy.confidence}</DetailRow>}
             </div>
           </div>
 
           <PolicyHistoryCard versions={versions} />
 
-          <div className="card">
-            <div className="card__head"><h2 className="card__title">Sources</h2></div>
-            <div className="card__body col">
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Source IDs are collapsed in the brief. Hover a source chip to see the preserved IDs.
+          {sourceIds.length > 0 && (
+            <div className="card">
+              <div className="card__head"><h2 className="card__title">Sources</h2></div>
+              <div className="card__body col">
+                <SourceBadges ids={sourceIds} />
               </div>
-              <SourceBadges ids={sourceIds} />
-              {sourceIds.length === 0 && <div className="muted">No source IDs recorded.</div>}
             </div>
-          </div>
+          )}
 
           {noteSummary && (
             <div className="card">
@@ -502,7 +531,7 @@ function InsuranceInsightCards({ policy }: { policy: any }) {
   const evidenceCount = sourceIdsForPolicy(policy).length;
 
   return (
-    <div className="insurance-insights" aria-label="Insurance policy quick answers">
+    <div className="insurance-insights" aria-label="Insurance policy quick answers" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
       <div className="insurance-insight-card">
         <span>What it covers</span>
         <strong>{largestLimit != null ? money(largestLimit) : money(policy.coverageCents)}</strong>
@@ -520,8 +549,8 @@ function InsuranceInsightCards({ policy }: { policy: any }) {
       </div>
       <div className="insurance-insight-card">
         <span>Review state</span>
-        <strong>{openChecks ? `${openChecks} open check${openChecks === 1 ? "" : "s"}` : policy.confidence || "No open checks"}</strong>
-        <small>{evidenceCount ? `${evidenceCount} preserved source${evidenceCount === 1 ? "" : "s"}` : "No source IDs"}</small>
+        <strong>{openChecks ? `${openChecks} open check${openChecks === 1 ? "" : "s"}` : "No open checks"}</strong>
+        {evidenceCount > 0 && <small>{`${evidenceCount} preserved source${evidenceCount === 1 ? "" : "s"}`}</small>}
       </div>
     </div>
   );
@@ -532,7 +561,8 @@ function policyDrawerTitle(form: any) {
   return [kindLabel(form.kind), form.policyNumber].filter(Boolean).join(" · ") || "Insurance policy";
 }
 
-function PolicyStructuredDetails({ row }: { row: any }) {
+/** hideIdentity: the policy page header already shows insurer, policy number and status. */
+function PolicyStructuredDetails({ row, hideIdentity = false }: { row: any; hideIdentity?: boolean }) {
   const parties = row.coveredParties ?? [];
   const items = row.coverageItems ?? [];
   const locations = row.coveredLocations ?? [];
@@ -552,23 +582,25 @@ function PolicyStructuredDetails({ row }: { row: any }) {
     return (
       <div className="insurance-brief">
         <div className="insurance-brief__hero">
-          <PolicyBriefHeader row={row} sourceIds={allSourceIds} />
-          <div className="insurance-empty">No first-class coverage details entered yet.</div>
+          {!hideIdentity && <PolicyBriefHeader row={row} sourceIds={allSourceIds} />}
+          <div className="insurance-empty">No coverage details entered yet.</div>
         </div>
       </div>
     );
   }
   return (
     <div className="insurance-brief">
-      <div className="insurance-brief__hero">
-        <PolicyBriefHeader row={row} sourceIds={allSourceIds} />
-      </div>
+      {!hideIdentity && (
+        <div className="insurance-brief__hero">
+          <PolicyBriefHeader row={row} sourceIds={allSourceIds} />
+        </div>
+      )}
 
       <div className="insurance-brief__grid">
         <BriefMetric label="Policy" value={row.policyNumber || "Not set"} sub={[row.policyTermLabel, row.versionType].filter(Boolean).join(" · ")} />
         <BriefMetric label="Coverage" value={money(row.coverageCents)} sub={row.deductibleCents != null ? `Deductible ${money(row.deductibleCents)}` : ""} />
         <BriefMetric label="Premium" value={money(row.premiumCents)} sub={`Fee ${money(row.policyFeeCents)} · Total invoiced ${money(row.totalCostCents)}`} />
-        <BriefMetric label="Renewal" value={formatDate(row.renewalDate)} sub={`${formatDate(row.startDate)} to ${formatDate(row.endDate)}`} />
+        <BriefMetric label="Renewal" value={formatDate(row.renewalDate)} sub={`${formatDate(row.startDate)} – ${formatDate(row.endDate)}`} />
       </div>
 
       {row.coverageSummary && <div className="insurance-brief__summary">{row.coverageSummary}</div>}
@@ -868,22 +900,15 @@ function PolicyCitation({ id }: { id?: string }) {
 
 function PolicyCell({ row }: { row: any }) {
   const flags = riskFlagsForPolicy(row);
+  const details = [row.broker || "Broker not set", row.policyTermLabel, row.versionType].filter(Boolean).join(" · ");
   return (
-    <div>
-      <strong>{row.insurer}</strong>
-      <div className="row" style={{ gap: 6, marginTop: 2 }}>
-        <Badge tone={statusTone(row.status)}>{row.status}</Badge>
-        {flags.map((flag) => (
-          <Badge key={flag} tone={flag === "restricted" ? "danger" : "warn"}>{flag}</Badge>
-        ))}
-      </div>
-      <div className="muted" style={{ fontSize: 12 }}>
-        {row.broker || "Broker not set"}
-        {row.policyTermLabel ? ` · ${row.policyTermLabel}` : ""}
-        {row.versionType ? ` · ${row.versionType}` : ""}
-        {row.sourceExternalIds?.length ? ` · ${row.sourceExternalIds.length} source${row.sourceExternalIds.length === 1 ? "" : "s"}` : ""}
-      </div>
-    </div>
+    <span title={details} style={{ display: "inline-flex", gap: 6, alignItems: "center", maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden" }}>
+      <strong style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.insurer}</strong>
+      {row.status && row.status !== "Active" && <Badge tone={statusTone(row.status)}>{row.status}</Badge>}
+      {flags.map((flag) => (
+        <Badge key={flag} tone={flag === "restricted" ? "danger" : "warn"}>{flag}</Badge>
+      ))}
+    </span>
   );
 }
 
@@ -900,7 +925,7 @@ function RenewalCell({ date }: { date?: string }) {
 }
 
 function summarizePolicies(rows: any[]) {
-  const current = new Set(currentRenewalPolicies(rows, new Date().toISOString().slice(0,10)).map(row => row._id));
+  const current = new Set(currentRenewalPolicies(rows, todayDateOnly()).map(row => row._id));
   return rows.reduce(
     (summary, row) => {
       const days = daysUntil(row.renewalDate);
@@ -920,9 +945,11 @@ function normalizePolicyDraft(form: any) {
   if (form.confidence === "Review" && !riskFlags.includes("needs review")) riskFlags.push("needs review");
   return {
     kind: form.kind || "Other",
-    insurer: cleanOptional(form.insurer) || "Needs review",
+    // Required fields stay empty when blank so validation can flag them
+    // (they used to be filled with "Needs review", creating blank policies).
+    insurer: cleanOptional(form.insurer) ?? "",
     broker: cleanOptional(form.broker),
-    policyNumber: cleanOptional(form.policyNumber) || "Needs review",
+    policyNumber: cleanOptional(form.policyNumber) ?? "",
     policySeriesKey: cleanOptional(form.policySeriesKey),
     policyTermLabel: cleanOptional(form.policyTermLabel),
     versionType: cleanOptional(form.versionType),
@@ -1308,7 +1335,7 @@ function dateInput(value?: string) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function oneYearFromToday() {
@@ -1316,10 +1343,8 @@ function oneYearFromToday() {
 }
 
 function daysUntil(value?: string) {
-  if (!value) return null;
-  const date = new Date(value).getTime();
-  if (!Number.isFinite(date)) return null;
-  return Math.floor((date - Date.now()) / 86_400_000);
+  // Calendar days in the local calendar; date-only renewals are not shifted by UTC.
+  return daysUntilDate(value);
 }
 
 function kindLabel(kind: string) {
@@ -1366,8 +1391,7 @@ function PolicyHistoryCard({ versions }: { versions: any[] }) {
     <div className="card">
       <div className="card__head"><h2 className="card__title">Cost and coverage history</h2></div>
       <div className="card__body col">
-        <p className="muted" style={{ margin: 0 }}>Compare recorded premiums, limits, and deductibles for this policy series. Premiums are policy costs; payment records belong in Finance.</p>
-        {versions.length < 2 && <p className="muted">Add earlier or renewal records with the same policy series key to compare changes.</p>}
+        {versions.length < 2 && <p className="muted" style={{ margin: 0 }}>Record a renewal to compare premiums, limits and deductibles across terms.</p>}
         {versions.map((version, index) => {
           const previous = versions[index - 1];
           return (

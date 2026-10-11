@@ -14,7 +14,7 @@ export function NumberFieldDisplay({ value, field }: FieldDisplayProps) {
     ? num.toFixed(config.decimals)
     : num.toLocaleString();
   return (
-    <span className="record-cell__number mono">
+    <span className="record-cell__number">
       {config.prefix ?? ""}{formatted}{config.suffix ?? ""}
     </span>
   );

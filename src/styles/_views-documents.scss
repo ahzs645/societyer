@@ -197,6 +197,38 @@
   }
 }
 
+/* Org chart page: canvas beside a 280px detail rail. Below the phone
+ * breakpoint the rail would squeeze the canvas to a sliver, so stack them. */
+.org-chart-layout {
+  display: flex;
+  gap: token('s-4');
+  align-items: stretch;
+}
+.org-chart-layout__canvas {
+  flex: 1;
+  min-width: 0;
+  height: 620px;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  overflow: hidden;
+}
+.org-chart-layout__aside {
+  width: 280px;
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .org-chart-layout {
+    flex-direction: column;
+  }
+  .org-chart-layout__canvas {
+    flex: none;
+    height: min(520px, 62dvh);
+  }
+  .org-chart-layout__aside {
+    width: auto;
+  }
+}
+
 .source-document {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
@@ -507,3 +539,219 @@
 }
 
 /* Bylaw rules */
+
+/* Org chart toolbar: view switch, legend, as-of date. */
+.org-chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2') token('s-4');
+  margin: 0 0 token('s-3');
+}
+.org-chart-toolbar__legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.org-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  &::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--org-tone);
+  }
+}
+.org-legend--director { --org-tone: var(--accent); }
+.org-legend--employee { --org-tone: var(--success); }
+.org-legend--volunteer { --org-tone: var(--warn); }
+.org-chart-toolbar__asof {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  white-space: nowrap;
+}
+.org-chart-note {
+  margin: 0 0 token('s-3');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+
+/* Chart nodes */
+.org-node {
+  position: relative;
+  padding: 8px 12px;
+  border: 1px solid token('border');
+  border-top: 3px solid var(--org-tone);
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  box-shadow: token('shadow-xs');
+  color: token('text-primary');
+  cursor: pointer;
+  &.is-selected { box-shadow: 0 0 0 2px token('accent'); }
+}
+.org-node--root {
+  border-top-width: 1px;
+  background: token('bg-inverse');
+  border-color: token('bg-inverse');
+  cursor: default;
+  .org-node__name { color: token('text-inverse'); text-align: center; }
+}
+.org-node--group {
+  padding: 6px 12px;
+  border-top-width: 1px;
+  border-style: dashed;
+  background: token('bg-subtle');
+  box-shadow: none;
+  cursor: default;
+}
+.org-node__group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  font-weight: 600;
+}
+.org-node__count {
+  color: token('text-tertiary');
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.org-node__name {
+  font-size: token('fs-sm');
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-node__role {
+  margin-top: 2px;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-node .org-node__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: token('border-strong');
+  opacity: 0;
+}
+
+/* Outline (default on phones) */
+.org-outline {
+  flex: 1;
+  min-width: 0;
+  padding: token('s-3');
+}
+.org-outline__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  .org-outline__list {
+    margin-left: 10px;
+    padding-left: 12px;
+    border-left: 1px solid token('border');
+  }
+}
+.org-outline__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: token('r-sm');
+  background: none;
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-sm');
+  text-align: left;
+}
+button.org-outline__row {
+  cursor: pointer;
+  &:hover { background: token('bg-hover'); }
+  &.is-selected { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+}
+.org-outline__row--root .org-outline__name { font-weight: 700; }
+.org-outline__row--group {
+  color: token('text-secondary');
+  font-weight: 600;
+}
+.org-outline__dot {
+  flex: none;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--org-tone);
+}
+.org-outline__row--director { --org-tone: var(--accent); }
+.org-outline__row--employee { --org-tone: var(--success); }
+.org-outline__row--volunteer { --org-tone: var(--warn); }
+.org-outline__name { font-weight: 500; }
+.org-outline__role,
+.org-outline__count {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+@media (max-width: 760px) {
+  .org-chart-toolbar__asof { margin-left: 0; }
+  .org-outline { padding: token('s-2') 0; }
+}
+
+/* Team card: a branch of people without reports, listed in one card. */
+.org-node--team {
+  padding: 0 0 4px;
+  border-top-width: 1px;
+  cursor: default;
+  .org-node__group {
+    padding: 8px 12px 6px;
+    border-bottom: 1px solid token('border');
+  }
+}
+.org-node__members {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+.org-node__member {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px 4px 10px;
+  border: 0;
+  border-left: 3px solid var(--org-tone);
+  border-radius: token('r-sm');
+  background: none;
+  color: token('text-primary');
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  &:hover { background: token('bg-hover'); }
+  &.is-selected { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  & + & { margin-top: 2px; }
+}
+.org-node__member--director { --org-tone: var(--accent); }
+.org-node__member--employee { --org-tone: var(--success); }
+.org-node__member--volunteer { --org-tone: var(--warn); }
+.org-node__members li + li { margin-top: 2px; }
+.org-node__member .org-node__name,
+.org-node__member .org-node__role { display: block; }
+.org-node--root .org-node__name { white-space: normal; }

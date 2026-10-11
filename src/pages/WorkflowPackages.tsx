@@ -6,6 +6,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { OptionSelect } from "../components/OptionSelect";
@@ -29,6 +30,7 @@ export function WorkflowPackagesPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [activeTab, setActiveTab] = useState("packages");
+  const [nameError, setNameError] = useState("");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
 
@@ -57,6 +59,11 @@ export function WorkflowPackagesPage() {
 
   const save = async () => {
     if (!canManage || !draft) return;
+    if (!String(draft.packageName ?? "").trim()) {
+      setNameError("Name the package so it can be tracked.");
+      return;
+    }
+    setNameError("");
     await upsert({
       id: draft._id,
       societyId: society._id,
@@ -65,7 +72,7 @@ export function WorkflowPackagesPage() {
       eventType: draft.eventType || "custom.event",
       effectiveDate: draft.effectiveDate || undefined,
       status: draft.status || "draft",
-      packageName: draft.packageName || "Untitled package",
+      packageName: String(draft.packageName).trim(),
       parts: csv(draft.partsText ?? draft.parts),
       notes: draft.notes || undefined,
       supportingDocumentIds: draft.supportingDocumentId ? [draft.supportingDocumentId] : draft.supportingDocumentIds ?? [],
@@ -112,7 +119,17 @@ export function WorkflowPackagesPage() {
         title="Workflow packages"
         icon={<FileJson size={16} />}
         iconColor="orange"
-        description="Technical setup area. Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment references — typically managed by an administrator, not a page a board member needs to visit."
+        description={
+          <span className="settings-shell__description-row">
+            Legal packages for events, signers and payments.
+            <InfoPopover label="About workflow packages">
+              <p>
+                Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment
+                references — usually managed by an administrator.
+              </p>
+            </InfoPopover>
+          </span>
+        }
         tabs={[
           { id: "packages", label: "Packages", icon: <Workflow size={14} /> },
           { id: "lifecycle", label: "Lifecycle" },
@@ -120,8 +137,8 @@ export function WorkflowPackagesPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         actions={
-          <Button variant="accent" disabled={!canManage} onClick={openNew}>
-            <Plus size={12} /> New package
+          <Button variant="accent" disabled={!canManage} onClick={openNew} aria-label="New package">
+            <Plus size={12} /> <span className="settings-shell__action-label">New package</span>
           </Button>
         }
       >
@@ -132,6 +149,9 @@ export function WorkflowPackagesPage() {
           <h2 className="card__title">Packages</h2>
           <Badge>{packages?.length ?? 0}</Badge>
         </div>
+        {(packages ?? []).length === 0 ? (
+          <div className="card__body muted">No workflow packages yet.</div>
+        ) : (
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -208,12 +228,10 @@ export function WorkflowPackagesPage() {
                   </tr>
                 );
               })}
-              {(packages ?? []).length === 0 && (
-                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No workflow packages yet.</td></tr>
-              )}
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       }
@@ -230,7 +248,7 @@ export function WorkflowPackagesPage() {
       >
         {draft && (
           <>
-            <Field label="Package name"><input className="input" value={draft.packageName ?? ""} onChange={(e) => setDraft({ ...draft, packageName: e.target.value })} /></Field>
+            <Field label="Package name" required error={nameError || undefined}><input className="input" value={draft.packageName ?? ""} onChange={(e) => setDraft({ ...draft, packageName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <OptionSelect label="Event type" setName="eventTypes" value={draft.eventType ?? ""} onChange={(value) => setDraft({ ...draft, eventType: value })} />
               <OptionSelect label="Status" setName="workflowPackageStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />

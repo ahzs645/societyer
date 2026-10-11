@@ -8,6 +8,7 @@ import { Drawer, Field } from "./ui";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { Select } from "./Select";
 import { DatePicker } from "./DatePicker";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const COLLECTION_MODELS = [
   { value: "direct", label: "Direct" },
@@ -45,7 +46,7 @@ const FEE_STATUSES = [
 ];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function nextJanuaryOrSeptemberISO() {

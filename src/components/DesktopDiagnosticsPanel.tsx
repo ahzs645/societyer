@@ -16,6 +16,7 @@ import { createDesktopBackup } from "../lib/desktopBackup";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 import { useToast } from "./Toast";
 import { Badge } from "./ui";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
 const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";
@@ -209,7 +210,7 @@ export function DesktopDiagnosticsPanel() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `societyer-desktop-${new Date().toISOString().slice(0, 10)}.log`;
+    link.download = `societyer-desktop-${todayDateOnly()}.log`;
     link.click();
     URL.revokeObjectURL(url);
   };

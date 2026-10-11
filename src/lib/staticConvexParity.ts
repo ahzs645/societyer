@@ -30,6 +30,8 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "communications:sendMeetingNotice",
   "documentVersions:beginUpload",
   "filingBot:run",
+  // Server-side intake field extraction; the local runtime extracts in a browser worker instead.
+  "intakeActions:extractRun",
   "financialHub:sync",
   "minutes:generateDraft",
   "notifications:sendDigest",

@@ -12,7 +12,7 @@ export function DateFieldDisplay({ value, field }: FieldDisplayProps) {
     if (includeTime) {
       const d = new Date(String(value));
       return (
-        <span className="record-cell__date mono">
+        <span className="record-cell__date">
           {formatDate(d.toISOString().slice(0, 10))}
           <span className="record-cell__date-time">
             {" "}
@@ -21,8 +21,8 @@ export function DateFieldDisplay({ value, field }: FieldDisplayProps) {
         </span>
       );
     }
-    return <span className="record-cell__date mono">{formatDate(String(value))}</span>;
+    return <span className="record-cell__date">{formatDate(String(value))}</span>;
   } catch {
-    return <span className="record-cell__date mono">{String(value)}</span>;
+    return <span className="record-cell__date">{String(value)}</span>;
   }
 }

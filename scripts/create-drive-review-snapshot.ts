@@ -9,7 +9,7 @@ const dir=path.resolve(process.argv[2]??'work/source-audit/staging');
 const target=path.resolve(process.argv[3]??'work/source-audit/offline-review-workspace.json');
 const specialistDirectory=path.resolve(process.argv[4]??path.join(dir,'..'));
 const source=new StaticConvexClient({databaseName:`drive-source-review-${Date.now()}`,seed:{societies:[]}});
-const workspace=await source.mutation('society:createWorkspace',{name:'PGAIR source review',fiscalYearEnd:'12-31',jurisdictionCode:'CA-BC',entityType:'society',actFormedUnder:'bc_societies_act'});
+const workspace=await source.mutation('society:createWorkspace',{name:'PGAIR source review',fiscalYearEnd:'12-31',jurisdictionCode:'CA-BC',entityType:'society',actFormedUnder:'societies_act'});
 const index=JSON.parse(fs.readFileSync(path.join(dir,'index.json'),'utf8'));
 const files=index.bundles.map((x:any)=>path.join(dir,x.file));
 for (const extra of ['financial-review-bundle.json','insurance-review-bundle.json']) {

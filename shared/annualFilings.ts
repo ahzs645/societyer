@@ -103,3 +103,20 @@ export function jurisdictionsTracked(records: FilingRecord[]): string[] {
 /** Annual return/report record kinds from the jurisdiction workspace catalog. */
 export const ANNUAL_FILING_KINDS = ["AnnualReport", "BCSocietyAnnualReport", "BCExtraProvincialAnnualReport", "BCCompanyAnnualReport", "FederalAnnualReturn", "OntarioAnnualReturn"] as const;
 export function annualFilingKind(kind: string) { return (ANNUAL_FILING_KINDS as readonly string[]).includes(kind); }
+
+/**
+ * The filing year a detailed filing's period label names (G-27): "2025" ->
+ * "2025", "2025 AGM" -> "2025", "FY2025-2026" / "2025-26" -> the year the period
+ * ends ("2026"). Returns null when no four-digit year is present.
+ */
+export function annualFilingYear(periodLabel: unknown): string | null {
+  const text = String(periodLabel ?? "").trim();
+  if (/^[1-9]\d{3}$/.test(text)) return text;
+  const range = /([1-9]\d{3})\s*[-/–]\s*(\d{2}|[1-9]\d{3})\b/.exec(text);
+  if (range) {
+    const end = range[2].length === 2 ? `${range[1].slice(0, 2)}${range[2]}` : range[2];
+    return Number(end) > Number(range[1]) ? end : range[1];
+  }
+  const single = text.match(/\b[1-9]\d{3}\b|(?<=FY)[1-9]\d{3}/g);
+  return single?.length === 1 ? single[0] : null;
+}

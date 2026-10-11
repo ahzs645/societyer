@@ -164,7 +164,7 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
         <tr>${labelCell("Total expenses")}${moneyCell(data.expensesCents ?? 0, { width: W })}</tr>
         <tr>${labelCell("Surplus / (Deficit)", { bold: true, rule: "top" })}${moneyCell(data.surplusCents ?? 0, { bold: true, rule: "top", width: W })}</tr>
         ${data.netAssetsCents != null ? `<tr>${labelCell("Net assets")}${moneyCell(data.netAssetsCents, { width: W })}</tr>` : ""}
-        ${data.restrictedFundsCents != null ? `<tr>${labelCell("Restricted funds")}${moneyCell(data.restrictedFundsCents, { width: W })}</tr>` : ""}
+        ${data.restrictedFundsCents != null ? `<tr>${labelCell("Restricted funds (as reported in the year's statements)")}${moneyCell(data.restrictedFundsCents, { width: W })}</tr>` : ""}
       </tbody>
     </table>
     ${categoryTable("Revenue by category", data.incomeByCategory ?? [])}

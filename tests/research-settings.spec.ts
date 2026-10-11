@@ -92,7 +92,8 @@ test("local Owner can edit storage policy while acting Member remains restricted
   await page.getByLabel("Email", { exact: true }).fill("storage-policy-member@example.test");
   // The existing membership form defaults to an Active Member.
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await expect(page.getByText("User added", { exact: true })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "storage-policy-member@example.test" })).toBeVisible();
   await page.goto("/app/settings?tab=runtime", { waitUntil: "domcontentloaded" });
   const picker = page.getByTitle("Switch acting user", { exact: true });
   await expect(picker).toContainText("Owner");
@@ -115,7 +116,7 @@ test("local Owner can edit storage policy while acting Member remains restricted
   await expect(provider).toHaveCount(0);
   await expect(save).toHaveCount(0);
   await picker.click();
-  await page.getByText("Owner", { exact: true }).click();
+  await page.getByRole("listbox", { name: "Acting user", exact: true }).getByRole("option").filter({ hasText: "Owner" }).click();
   await expect(picker).toContainText("Owner");
   await expect(provider).toBeEnabled();
   await page.getByLabel("Custodian / administrator contact", { exact: true }).fill("Owner after reload");

@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useRecordQuery } from "./useRecordQuery";
 import { api } from "@/lib/convexApi";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { useEffect, useState } from "react";
@@ -67,7 +67,10 @@ export function useCurrentUserId(): Id<"users"> | null {
 export function useCurrentUser() {
   const id = useCurrentUserId();
   const usePrincipalUser = getAuthMode() !== "none" && !isLocalDataRuntime();
-  const user = useQuery(api.users.get, !usePrincipalUser && id ? { id } : "skip");
+  // A stored id can name a user that is not in this workspace (the bundled
+  // demo owner in a fresh local workspace, or a removed user): that reads as
+  // "no current user", not as an error (A8).
+  const user = useRecordQuery<Doc<"users">>(api.users.get, !usePrincipalUser && id ? { id } : "skip");
   if (usePrincipalUser) return id ? principalUsers?.get(id) ?? null : null;
   return user ?? null;
 }

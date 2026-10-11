@@ -1,0 +1,843 @@
+{
+  "version": 1,
+  "purpose": "SYNTHETIC golden fixture for scripts/check-intake-eval.ts. Every person, organisation and place is invented. Each document's `content` is rendered to a real DOCX, PDF or text file at test time so the extraction path (tables, page numbers, soft-wrapped PDF lines) is exercised end to end.",
+  "documents": [
+    {
+      "id": "S01",
+      "source": {
+        "fileName": "2025-05-13_Board_Minutes_APPROVED.docx",
+        "format": "docx"
+      },
+      "content": [
+        {
+          "p": "Lakeside Clean Air Society"
+        },
+        {
+          "p": "Board Meeting Minutes"
+        },
+        {
+          "p": "Meeting Date:\tTuesday, May 13, 2025"
+        },
+        {
+          "p": "Meeting Time:\t6:00 PM to 8:00 PM"
+        },
+        {
+          "p": "Location:\tCommittee Room, 3rd floor, 400 Harbour Road"
+        },
+        {
+          "p": "\tNorthport Civic Centre"
+        },
+        {
+          "p": "Members Present:"
+        },
+        {
+          "table": [
+            [
+              "Avery Quill\nJordan Pike\nRobin Vale (Chair)",
+              "Harbour Health Authority\nCity of Northport\nNorthport Chamber of Commerce"
+            ],
+            [
+              "Casey Lark",
+              "Public Member"
+            ],
+            [
+              "Morgan Ashby",
+              "Secretariat Staff"
+            ],
+            [
+              "Taylor Brook (note-taker)\nRegrets\nSam Reed\nLee Okafor",
+              "Secretariat Staff\nNorthport Rail\nRiver Valley College"
+            ]
+          ]
+        },
+        {
+          "p": "Minutes:"
+        },
+        {
+          "table": [
+            [
+              {
+                "text": "Agenda Item",
+                "span": 2
+              },
+              "Discussion Notes",
+              "Action / WHO",
+              "FOR"
+            ],
+            [
+              "1.",
+              "Call to order",
+              "• Meeting is called to order at 6:05 PM (Chaired by Robin Vale)",
+              "",
+              ""
+            ],
+            [
+              "2.",
+              "Quorum",
+              "• Quorum achieved (9 directors present)",
+              "",
+              ""
+            ],
+            [
+              "3.",
+              "Adoption of the Agenda",
+              "• MOTION: To adopt the agenda (Carried)",
+              "",
+              ""
+            ],
+            [
+              "4.",
+              "Adoption of Minutes of March 2025",
+              "• MOTION: To adopt the previous minutes dated 12 March 2025 as amended (Carried)",
+              "",
+              ""
+            ],
+            [
+              "5.",
+              "Receipt of Financial Statements",
+              "• Statements for the year ended December 31, 2024 were presented.\n• Motion to receive the Financial Statements for year end December 31, 2024 made by Avery Quill, seconded by Jordan Pike (Carried)",
+              "• MA – circulate the statements to members\n• TB to post the statements online",
+              "June 1, 2025\nJune 15, 2025"
+            ],
+            [
+              "6.",
+              "Membership Fees",
+              "• Moved that the membership fee be set at $10. Casey Lark, seconded by Avery Quill (Carried)\n• Motions will be made by a show of hands as set out in the bylaws.",
+              "",
+              ""
+            ],
+            [
+              "7.",
+              "Policy Review",
+              "• MOTION to adopt the Delegation of Signing Authority Policy (Carried).\n• The strategic plan review was moved to the next meeting.",
+              "• Board members to review the Terms of Reference before the June meeting",
+              "Ongoing"
+            ],
+            [
+              "8.",
+              "Next Board Meeting",
+              "• Next Board Meeting: Tuesday, June 10th 2025, 6:00 PM (Zoom)",
+              "",
+              ""
+            ],
+            [
+              "9.",
+              "Adjournment",
+              "• Motion to adjourn the meeting by Jordan Pike (Carried)\n• Meeting adjourned at 7:40 PM.",
+              "",
+              ""
+            ]
+          ]
+        }
+      ],
+      "meeting": {
+        "type": "Board",
+        "date": "2025-05-13",
+        "startLocal": "18:00",
+        "endLocal": "20:00",
+        "location": "Committee Room, 3rd floor, 400 Harbour Road, Northport Civic Centre",
+        "electronic": false
+      },
+      "minutes": {
+        "chairName": "Robin Vale",
+        "recorderName": "Taylor Brook",
+        "calledToOrderAt": "18:05",
+        "adjournedAt": "19:40",
+        "quorumStatus": "confirmed",
+        "nextMeeting": {
+          "date": "2025-06-10"
+        }
+      },
+      "attendance": [
+        {
+          "name": "Avery Quill",
+          "status": "present"
+        },
+        {
+          "name": "Jordan Pike",
+          "status": "present"
+        },
+        {
+          "name": "Robin Vale",
+          "status": "present"
+        },
+        {
+          "name": "Casey Lark",
+          "status": "present"
+        },
+        {
+          "name": "Morgan Ashby",
+          "status": "staff"
+        },
+        {
+          "name": "Taylor Brook",
+          "status": "staff"
+        },
+        {
+          "name": "Sam Reed",
+          "status": "regrets"
+        },
+        {
+          "name": "Lee Okafor",
+          "status": "regrets"
+        }
+      ],
+      "motions": [
+        {
+          "text": "To adopt the agenda",
+          "status": "Voted",
+          "outcome": "Carried",
+          "sectionTitle": "Adoption of the Agenda"
+        },
+        {
+          "text": "To adopt the previous minutes dated 12 March 2025 as amended",
+          "status": "Voted",
+          "outcome": "Carried",
+          "sectionTitle": "Adoption of Minutes of March 2025"
+        },
+        {
+          "text": "Receive the Financial Statements for year end December 31, 2024",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Avery Quill",
+          "secondedBy": "Jordan Pike",
+          "sectionTitle": "Receipt of Financial Statements"
+        },
+        {
+          "text": "The membership fee be set at $10",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Casey Lark",
+          "secondedBy": "Avery Quill",
+          "sectionTitle": "Membership Fees"
+        },
+        {
+          "text": "Adopt the Delegation of Signing Authority Policy",
+          "status": "Voted",
+          "outcome": "Carried",
+          "sectionTitle": "Policy Review"
+        },
+        {
+          "text": "Adjourn the meeting",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Jordan Pike",
+          "sectionTitle": "Adjournment"
+        }
+      ],
+      "tasks": [
+        {
+          "text": "Circulate the statements to members",
+          "assignee": "MA",
+          "dueDate": "2025-06-01"
+        },
+        {
+          "text": "Post the statements online",
+          "assignee": "TB",
+          "dueDate": "2025-06-15"
+        },
+        {
+          "text": "Review the Terms of Reference before the June meeting",
+          "assignee": "Board members",
+          "dueDate": null
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "source": {
+        "fileName": "25-10-14 - Minutes - Lakeside.docx",
+        "format": "docx"
+      },
+      "content": [
+        {
+          "p": "LAKESIDE CLEAN AIR SOCIETY"
+        },
+        {
+          "p": "MINUTES OF MEETING"
+        },
+        {
+          "p": "Tuesday, October 14, 2025"
+        },
+        {
+          "p": "5:30 – 8:00pm"
+        },
+        {
+          "p": "Community Hall – Room B"
+        },
+        {
+          "p": "In Attendance:\tPat Delgado, Lee Moreau, Quinn Harlow (proxy for Ari Stone), Dana Whitfield (Monitoring WG Chair), Ellis Novak (Program Coordinator), Fern Castillo (Minute Recorder)"
+        },
+        {
+          "p": "Regrets:\tGray Holm, Ivy Mendez"
+        },
+        {
+          "p": "Guests:\tJules Park (Regional Ministry), Kit Rowan (Valley Times)"
+        },
+        {
+          "p": "1) REVIEW AND ADOPT MINUTES OF LAST MEETING"
+        },
+        {
+          "li": "Minutes approved with changes noted"
+        },
+        {
+          "p": "2) FUNDING"
+        },
+        {
+          "p": "A resolution was motioned by Lee Moreau, seconded by Pat Delgado, and adopted by consensus by all directors present, that the grant agreement with the Regional Ministry be approved and signed by two authorized signatories."
+        },
+        {
+          "p": "3) NEW BUSINESS"
+        },
+        {
+          "p": "a) Motion: Lakeside adopt the transit recommendation of the task force report"
+        },
+        {
+          "li": "The recommendation is ambiguous and requires clarification"
+        },
+        {
+          "li": "Discussion tabled to next meeting"
+        },
+        {
+          "p": "b) Road dust study – the ministry is not the owner of the road; will research ownership maps"
+        },
+        {
+          "p": "\t\t\tAction: Pat, Lee"
+        },
+        {
+          "p": "\t\t\tAction: Ellis to send the council report"
+        },
+        {
+          "p": "Next meeting date and time:  Tuesday, November 18, 2025 – 5:30 PM"
+        },
+        {
+          "p": "Location:  Northport Library, Room 2"
+        }
+      ],
+      "meeting": {
+        "type": "Board",
+        "date": "2025-10-14",
+        "startLocal": "17:30",
+        "endLocal": "20:00",
+        "location": "Community Hall – Room B",
+        "electronic": false
+      },
+      "minutes": {
+        "recorderName": "Fern Castillo",
+        "quorumStatus": "not_recorded",
+        "nextMeeting": {
+          "date": "2025-11-18"
+        }
+      },
+      "attendance": [
+        {
+          "name": "Pat Delgado",
+          "status": "present"
+        },
+        {
+          "name": "Lee Moreau",
+          "status": "present"
+        },
+        {
+          "name": "Quinn Harlow",
+          "status": "proxy",
+          "proxyFor": "Ari Stone"
+        },
+        {
+          "name": "Dana Whitfield",
+          "status": "present"
+        },
+        {
+          "name": "Ellis Novak",
+          "status": "present"
+        },
+        {
+          "name": "Fern Castillo",
+          "status": "present"
+        },
+        {
+          "name": "Gray Holm",
+          "status": "regrets"
+        },
+        {
+          "name": "Ivy Mendez",
+          "status": "regrets"
+        },
+        {
+          "name": "Jules Park",
+          "status": "guest"
+        },
+        {
+          "name": "Kit Rowan",
+          "status": "guest"
+        }
+      ],
+      "motions": [
+        {
+          "text": "That the grant agreement with the Regional Ministry be approved and signed by two authorized signatories",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Lee Moreau",
+          "secondedBy": "Pat Delgado",
+          "sectionTitle": "FUNDING"
+        },
+        {
+          "text": "Lakeside adopt the transit recommendation of the task force report",
+          "status": "Tabled",
+          "outcome": null,
+          "sectionTitle": "NEW BUSINESS"
+        }
+      ],
+      "tasks": [
+        {
+          "text": "Research ownership maps for the road dust study",
+          "assignee": "Pat; Lee",
+          "dueDate": null
+        },
+        {
+          "text": "Send the council report",
+          "assignee": "Ellis",
+          "dueDate": null
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "source": {
+        "fileName": "2025_03_04_Operations_Committee_Minutes.pdf",
+        "format": "pdf"
+      },
+      "content": [
+        "Operations Committee Meeting",
+        "Date: Mar 4th 2025 (12:00 – 1:30 PM)",
+        "Location: Zoom",
+        "",
+        "Present:",
+        "Wren Albright, Harbour Health Authority",
+        "Sky Dorsey, Public Member",
+        "",
+        "Staff:",
+        "Noor Faraday, Secretariat (chair)",
+        "Bea Tanaka, Secretariat (notes)",
+        "",
+        "Regrets:",
+        "Cole Imrie, City of Northport",
+        "",
+        "Agenda Item\tDiscussion",
+        "1. Welcome\tMembers welcomed at 12:04 pm. Quorum not reached.",
+        "2. Workplan\tACTION: Wren to share the monitoring scope and the network review results with the",
+        "\tcommittee before the next meeting.",
+        "\tACTION: Noor/Bea to research coordinator salaries.",
+        "3. Upcoming\tNext Operations Committee Meeting: April 1st, 2025, 12:00 PM",
+        "Meetings\t",
+        "4. Adjournment\tMeeting adjourned at 13:31."
+      ],
+      "meeting": {
+        "type": "Committee",
+        "date": "2025-03-04",
+        "startLocal": "12:00",
+        "endLocal": "13:30",
+        "location": "Zoom",
+        "electronic": true
+      },
+      "minutes": {
+        "chairName": "Noor Faraday",
+        "recorderName": "Bea Tanaka",
+        "calledToOrderAt": "12:04",
+        "adjournedAt": "13:31",
+        "quorumStatus": "not_met",
+        "nextMeeting": {
+          "date": "2025-04-01"
+        }
+      },
+      "attendance": [
+        {
+          "name": "Wren Albright",
+          "status": "present"
+        },
+        {
+          "name": "Sky Dorsey",
+          "status": "present"
+        },
+        {
+          "name": "Noor Faraday",
+          "status": "staff"
+        },
+        {
+          "name": "Bea Tanaka",
+          "status": "staff"
+        },
+        {
+          "name": "Cole Imrie",
+          "status": "regrets"
+        }
+      ],
+      "motions": [],
+      "tasks": [
+        {
+          "text": "Share the monitoring scope and the network review results with the committee before the next meeting",
+          "assignee": "Wren",
+          "dueDate": null
+        },
+        {
+          "text": "Research coordinator salaries",
+          "assignee": "Noor; Bea",
+          "dueDate": null
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "source": {
+        "fileName": "Lakeside_AGM2024Minutes - DRAFT.docx",
+        "format": "docx"
+      },
+      "content": [
+        {
+          "p": "November 2024 – Annual General Meeting Minutes"
+        },
+        {
+          "p": "Date:\tNovember 19, 2024 (6:30PM – 7:30PM)"
+        },
+        {
+          "p": "Location:\tTown Hall Boardroom, 12 Mill Street, Northport"
+        },
+        {
+          "p": "Present:"
+        },
+        {
+          "table": [
+            [
+              "Tara Marsh",
+              "Harbour Health Authority"
+            ],
+            [
+              "Owen Pratt",
+              "City of Northport"
+            ],
+            [
+              "Uma Rios",
+              "Public Member"
+            ],
+            [
+              "Vic Sato",
+              "Northport Chamber of Commerce"
+            ]
+          ]
+        },
+        {
+          "p": "Minutes:"
+        },
+        {
+          "table": [
+            [
+              {
+                "text": "Agenda Item",
+                "span": 2
+              },
+              "Discussion Notes"
+            ],
+            [
+              "1.",
+              "Call meeting to order",
+              "• Meeting is called to order at 6:40pm (chaired by T. Marsh)"
+            ],
+            [
+              "",
+              "Quorum",
+              "• Quorum achieved (4 directors present)"
+            ],
+            [
+              "2.",
+              "Adoption of the Agenda",
+              "• Owen Pratt moves for the agenda to be adopted, Uma Rios seconded (Carried)"
+            ],
+            [
+              "3.",
+              "Adoption of Minutes of 2023",
+              "• Adoption of previous minutes, November 21, 2023, Motion made by Vic Sato, Uma Rios seconded. (Carried)"
+            ],
+            [
+              "4.",
+              "Other Business",
+              "• Chamber moved that the membership fees be made $1, Public Member seconded, carried.\n• Uma Rios made motion to waive the fee, carried.\n• Minutes approved.\n• It was noted that proxy forms need to be returned by December 1."
+            ],
+            [
+              "5.",
+              "Adjournment",
+              "• Moved to adjourn the meeting by Owen Pratt, seconded by Vic Sato (Carried)\n• Meeting adjourned at 7:10pm"
+            ]
+          ]
+        }
+      ],
+      "meeting": {
+        "type": "AGM",
+        "date": "2024-11-19",
+        "startLocal": "18:30",
+        "endLocal": "19:30",
+        "location": "Town Hall Boardroom, 12 Mill Street, Northport",
+        "electronic": false
+      },
+      "minutes": {
+        "chairName": "Tara Marsh",
+        "calledToOrderAt": "18:40",
+        "adjournedAt": "19:10",
+        "quorumStatus": "confirmed"
+      },
+      "attendance": [
+        {
+          "name": "Tara Marsh",
+          "status": "present"
+        },
+        {
+          "name": "Owen Pratt",
+          "status": "present"
+        },
+        {
+          "name": "Uma Rios",
+          "status": "present"
+        },
+        {
+          "name": "Vic Sato",
+          "status": "present"
+        }
+      ],
+      "motions": [
+        {
+          "text": "Adopt the agenda",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Owen Pratt",
+          "secondedBy": "Uma Rios",
+          "sectionTitle": "Adoption of the Agenda"
+        },
+        {
+          "text": "Adopt previous minutes of November 21, 2023",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Vic Sato",
+          "secondedBy": "Uma Rios",
+          "sectionTitle": "Adoption of Minutes of 2023"
+        },
+        {
+          "text": "Membership fees be made $1",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Chamber (Northport Chamber of Commerce)",
+          "secondedBy": "Public Member",
+          "sectionTitle": "Other Business"
+        },
+        {
+          "text": "Waive the fee",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Uma Rios",
+          "sectionTitle": "Other Business"
+        },
+        {
+          "text": "Adjourn the meeting",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Owen Pratt",
+          "secondedBy": "Vic Sato",
+          "sectionTitle": "Adjournment"
+        }
+      ],
+      "tasks": []
+    },
+    {
+      "id": "S05",
+      "source": {
+        "fileName": "Executive Committee Minutes 2025-02-11.txt",
+        "format": "txt"
+      },
+      "content": "Executive Committee Meeting Minutes\nDate: February 11, 2025\nTime: 9:00 AM - 10:15 AM\nLocation: Microsoft Teams\n\nPresent: Rhea Lin, Mo Abara, Ines Varga\nAbsent: Theo Grant\n\n1. Call to order\nThe meeting was called to order at 9:02 AM.\n\n2. Budget\nMoved/Seconded: Rhea Lin/Mo Abara that the 2025 operating budget be approved. Carried.\nMotion to purchase a second monitor was defeated (1 for, 2 against).\n\n3. Next meeting\nNext Executive Committee meeting: March 11, 2025 at 9:00 AM.\nACTION: Ines to circulate the approved budget by February 18.\n\nMeeting adjourned at 10:12 AM.\n",
+      "meeting": {
+        "type": "Board",
+        "date": "2025-02-11",
+        "startLocal": "09:00",
+        "endLocal": "10:15",
+        "location": "Microsoft Teams",
+        "electronic": true
+      },
+      "minutes": {
+        "calledToOrderAt": "09:02",
+        "adjournedAt": "10:12",
+        "quorumStatus": "not_recorded",
+        "nextMeeting": {
+          "date": "2025-03-11"
+        }
+      },
+      "attendance": [
+        {
+          "name": "Rhea Lin",
+          "status": "present"
+        },
+        {
+          "name": "Mo Abara",
+          "status": "present"
+        },
+        {
+          "name": "Ines Varga",
+          "status": "present"
+        },
+        {
+          "name": "Theo Grant",
+          "status": "absent"
+        }
+      ],
+      "motions": [
+        {
+          "text": "That the 2025 operating budget be approved",
+          "status": "Voted",
+          "outcome": "Carried",
+          "movedBy": "Rhea Lin",
+          "secondedBy": "Mo Abara",
+          "sectionTitle": "Budget"
+        },
+        {
+          "text": "Purchase a second monitor",
+          "status": "Voted",
+          "outcome": "Defeated",
+          "sectionTitle": "Budget"
+        }
+      ],
+      "tasks": [
+        {
+          "text": "Circulate the approved budget by February 18",
+          "assignee": "Ines",
+          "dueDate": "2025-02-18"
+        }
+      ]
+    },
+    {
+      "id": "S06",
+      "source": {
+        "fileName": "2025-06-05 Outreach Committee Notes.docx",
+        "format": "docx"
+      },
+      "content": [
+        {
+          "p": "Outreach Committee Meeting"
+        },
+        {
+          "p": "Date: June 5, 2025 (4:00 PM – 5:00 PM)"
+        },
+        {
+          "p": "Location: Northport Library, Room 2"
+        },
+        {
+          "p": "Present:"
+        },
+        {
+          "p": "Hana Ortiz, Public Member"
+        },
+        {
+          "p": "Rui Bastos, Northport Rail"
+        },
+        {
+          "p": "Regrets:"
+        },
+        {
+          "p": "Zed Kimura, River Valley College"
+        },
+        {
+          "p": "Notes:"
+        },
+        {
+          "li": "Meeting called to order at 4:03 PM."
+        },
+        {
+          "li": "The committee reviewed the outreach calendar."
+        },
+        {
+          "p": "Action Items Table"
+        },
+        {
+          "table": [
+            [
+              "Item #",
+              "Description",
+              "Date Added",
+              "Assigned to",
+              "Date Due",
+              "Status"
+            ],
+            [
+              "1",
+              "Book a booth at the summer fair",
+              "May 1, 2025",
+              "HO",
+              "June 20, 2025",
+              "In progress"
+            ],
+            [
+              "2",
+              "Draft the newsletter article on wood smoke",
+              "June 5, 2025",
+              "RB",
+              "July 1, 2025",
+              "Not started"
+            ],
+            [
+              "3",
+              "Collect volunteer availability",
+              "June 5, 2025",
+              "All",
+              "",
+              "Ongoing"
+            ]
+          ]
+        },
+        {
+          "p": "Meeting adjourned at 4:55 PM."
+        }
+      ],
+      "meeting": {
+        "type": "Committee",
+        "date": "2025-06-05",
+        "startLocal": "16:00",
+        "endLocal": "17:00",
+        "location": "Northport Library, Room 2",
+        "electronic": false
+      },
+      "minutes": {
+        "calledToOrderAt": "16:03",
+        "adjournedAt": "16:55",
+        "quorumStatus": "not_recorded"
+      },
+      "attendance": [
+        {
+          "name": "Hana Ortiz",
+          "status": "present"
+        },
+        {
+          "name": "Rui Bastos",
+          "status": "present"
+        },
+        {
+          "name": "Zed Kimura",
+          "status": "regrets"
+        }
+      ],
+      "motions": [],
+      "tasks": [
+        {
+          "text": "Book a booth at the summer fair",
+          "assignee": "HO",
+          "dueDate": "2025-06-20"
+        },
+        {
+          "text": "Draft the newsletter article on wood smoke",
+          "assignee": "RB",
+          "dueDate": "2025-07-01"
+        },
+        {
+          "text": "Collect volunteer availability",
+          "assignee": "All",
+          "dueDate": null
+        }
+      ]
+    }
+  ]
+}

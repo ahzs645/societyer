@@ -56,6 +56,38 @@
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
 }
+/* RollingNumber — odometer digits. The real digit stays in the DOM with a
+ * transparent fill; ::before draws a 0–9 strip and slides it to --digit. */
+.rolling-number {
+  display: inline-flex;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.rolling-number__digit {
+  position: relative;
+  display: inline-block;
+  height: 1.15em;
+  overflow: hidden;
+  -webkit-text-fill-color: transparent;
+}
+.rolling-number__digit::before {
+  content: "0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9";
+  content: "0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9" / "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  white-space: pre;
+  text-align: center;
+  -webkit-text-fill-color: currentColor;
+  transform: translateY(calc(var(--digit) * -1.15em));
+}
+.rolling-number.is-animated .rolling-number__digit::before {
+  transition: transform 0.7s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rolling-number.is-animated .rolling-number__digit::before { transition: none; }
+}
 .stat__sub {
   font-size: token('fs-xs');
   color: token('text-secondary');

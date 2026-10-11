@@ -12,7 +12,7 @@ for (const role of ["Owner", "Admin", "Director", "Member", "Viewer"]) {
     const memberPath = `/app/members/${liveFixture().ids.static_member_mina}`;
     await page.goto(memberPath);
     const tabs = page.locator(".tabs");
-    await tabs.getByRole("button", { name: "Custom fields", exact: true }).click();
+    await tabs.getByRole("button", { name: "Fields", exact: true }).click();
     if (!hasPermission(role, "settings:read")) {
       await expect(page.getByText("Custom fields require additional access.", { exact: true })).toBeVisible();
       await expect(page.locator(".custom-fields-panel")).toHaveCount(0);

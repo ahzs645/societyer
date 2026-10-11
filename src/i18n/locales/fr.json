@@ -11,7 +11,27 @@
     "reload": "Recharger",
     "search": "Rechercher",
     "all": "Tous",
-    "none": "Aucun"
+    "none": "Aucun",
+    "done": "Terminé",
+    "add": "Ajouter",
+    "new": "Nouveau",
+    "open": "Ouvrir",
+    "filter": "Filtrer",
+    "sort": "Trier",
+    "options": "Options",
+    "saveChanges": "Enregistrer les modifications",
+    "discard": "Annuler les modifications",
+    "saveAs": "Enregistrer sous",
+    "saving": "Enregistrement…",
+    "moreActions": "Autres actions",
+    "notifications": "Notifications",
+    "ok": "OK",
+    "yes": "Oui",
+    "no": "Non",
+    "clear": "Effacer",
+    "apply": "Appliquer",
+    "remove": "Retirer",
+    "skipToMain": "Passer au contenu principal"
   },
   "nav": {
     "favorites": "Favoris",
@@ -73,6 +93,7 @@
     "yearEndReports": "Rapports de fin d'exercice",
     "assets": "Actifs",
     "grants": "Subventions",
+    "agreements": "Ententes",
     "reconciliation": "Rapprochement",
     "donationReceipts": "Reçus de don",
     "membership": "Adhésion et facturation",
@@ -86,8 +107,54 @@
     "notifications": "Notifications",
     "users": "Utilisateurs et rôles",
     "importSessions": "Sessions d'importation",
+    "aiIntake": "Intégration assistée par IA",
     "auditLog": "Journal d'audit",
-    "dataExport": "Exportation des données"
+    "dataExport": "Exportation des données",
+    "aiAgents": "Agents IA",
+    "apiKeys": "Clés API",
+    "accounting": "Comptabilité",
+    "annualCycle": "Cycle annuel",
+    "annualFilings": "Déclarations annuelles",
+    "bylawAmendments": "Modifications des règlements",
+    "calendarSync": "Synchronisation du calendrier",
+    "certificateRegister": "Registre des certificats",
+    "complianceSettings": "Paramètres de conformité",
+    "corporateHistory": "Historique de la société",
+    "customFields": "Champs personnalisés",
+    "dividends": "Dividendes",
+    "documentCatalog": "Catalogue de documents",
+    "financeImports": "Importations financières",
+    "formationAnnual": "Constitution et suivi annuel",
+    "governanceRegisters": "Registres de gouvernance",
+    "integrations": "Intégrations",
+    "inventory": "Inventaire",
+    "library": "Bibliothèque",
+    "meetingEvidence": "Preuves de réunion",
+    "membershipClasses": "Catégories de membres",
+    "motionBacklog": "Propositions en attente",
+    "motions": "Propositions",
+    "obligations": "Obligations",
+    "offlinePreparation": "Préparation hors ligne",
+    "outbox": "Boîte d'envoi",
+    "paperlessNgx": "Paperless-ngx",
+    "peopleAndSourceHistory": "Personnes et historique des sources",
+    "peopleDirectory": "Répertoire des personnes",
+    "pointInTimeRegister": "Registre à une date donnée",
+    "portfolio": "Portefeuille",
+    "postIncorporation": "Après la constitution",
+    "recordsArchive": "Archives des dossiers",
+    "researchLibrary": "Bibliothèque de recherche",
+    "rightsLedger": "Registre des droits",
+    "roleHolders": "Titulaires de rôles",
+    "serviceProviders": "Fournisseurs de services",
+    "shareRegister": "Registre des valeurs mobilières",
+    "significantIndividuals": "Particuliers ayant un contrôle important",
+    "sourceModelCoverage": "Couverture du modèle source",
+    "coverageGaps": "Couverture et lacunes",
+    "templateEngine": "Moteur de modèles",
+    "webhooks": "Webhooks",
+    "advanced": "Configuration avancée",
+    "browserConnectors": "Applications de navigateur"
   },
   "sidebar": {
     "openNavigation": "Ouvrir la navigation",
@@ -134,11 +201,160 @@
     "darkThemeHint": "Toujours utiliser le mode sombre.",
     "modulesTitle": "Modules",
     "modulesSubtitle": "Activez seulement les parties réellement utilisées par cette organisation.",
-    "modulesHint": "Désactiver un module masque sa navigation, ses entrées dans la palette de commandes, ses points d'entrée publics et ses routes protégées. Les données existantes restent en place et redeviennent disponibles si vous réactivez le module plus tard."
+    "modulesHint": "Désactiver un module masque sa navigation, ses entrées dans la palette de commandes, ses points d'entrée publics et ses routes protégées. Les données existantes restent en place et redeviennent disponibles si vous réactivez le module plus tard.",
+    "tabWorkspace": "Espace de travail",
+    "tabModules": "Modules",
+    "tabRuntime": "Exécution",
+    "logoTitle": "Logo de l'organisme",
+    "logoSubtitle": "Affiché dans la barre latérale et sur les documents exportés.",
+    "logoDarkToggle": "Personnaliser le logo pour le mode sombre",
+    "letterheadToggle": "Utiliser un en-tête de document personnalisé",
+    "sidebarTitle": "Barre latérale",
+    "aiTitle": "Assistant IA",
+    "aiToggle": "Activer le clavardage IA",
+    "inventoryTitle": "Inventaire",
+    "inventoryPrompt": "Demander la quantité actuelle lors de l'ajout de consommables",
+    "backendTitle": "Connexion au serveur",
+    "notificationsTitle": "Notifications",
+    "demoTitle": "Mode démo",
+    "demoToggle": "Afficher la bannière de démonstration et permettre de créer une société fictive",
+    "dangerTitle": "Zone de danger",
+    "uploadLogo": "Téléverser un logo",
+    "logoFormats": "SVG, PNG ou JPG. 2 Mo maximum.",
+    "logoDarkHint": "Par défaut, le même logo est utilisé dans les deux thèmes.",
+    "letterheadHint": "Image d'en-tête pour les procès-verbaux exportés, les trousses de réunion et la copie publique.",
+    "sidebarSubtitle": "Choisissez les sections affichées dans la barre latérale de votre espace de travail.",
+    "aiSubtitle": "Afficher ou masquer les fonctions de clavardage IA de l'application.",
+    "aiToggleHint": "Lorsque désactivé, le bouton du robot dans la barre latérale et l'assistant IA flottant sont retirés. Les autres aides basées sur l'IA (p. ex. la génération de transcriptions) restent disponibles.",
+    "inventorySubtitle": "Paramètres des flux de travail pour les actifs et les consommables.",
+    "inventoryPromptHint": "Lors de l'ajout de stock à un article consommable, demander d'abord combien il en reste, puis ajouter la nouvelle quantité à ce compte observé.",
+    "notificationsSubtitle": "Paramètres du centre de notifications de l'application.",
+    "keepClearedFor": "Conserver les notifications effacées pendant",
+    "irreversible": "Irréversible",
+    "sharedViews": "Vues partagées de l'espace de travail",
+    "demoData": "Données de démonstration",
+    "modulesAccessNote": "Les modules s'appliquent à tout l'espace de travail. L'accès des utilisateurs suit les rôles de l'espace de travail.",
+    "modulesOwnerOnly": "Seul un propriétaire ou un administrateur peut modifier ces paramètres.",
+    "viewUsersAccess": "Voir les utilisateurs et les accès",
+    "moduleIncludes": "Comprend : {{items}}"
   },
   "locale": {
     "en": "English",
     "fr": "Français",
     "switchTo": "Changer de langue"
+  },
+  "demo": {
+    "label": "Mode démo.",
+    "viewing": "Vous consultez {{name}}, une société de démonstration qui présente l'application.",
+    "reseed": "Réinitialiser",
+    "wipe": "Effacer"
+  },
+  "recordTable": {
+    "allRecords": "Tous les enregistrements",
+    "saveViewTitle": "Enregistrer comme nouvelle vue",
+    "saveViewMessage": "Enregistre les colonnes, filtres et tris actuels dans une vue personnelle.",
+    "viewName": "Nom de la vue",
+    "saveView": "Enregistrer la vue",
+    "tableView": "Vue tableau",
+    "kanbanView": "Vue kanban",
+    "calendarView": "Vue calendrier"
+  },
+  "modules": {
+    "communications": {
+      "label": "Communications",
+      "description": "Campagnes, préférences de consentement des membres et envoi de l'avis d'AGA."
+    },
+    "volunteers": {
+      "label": "Gestion des bénévoles",
+      "description": "Registre des bénévoles, vérifications et inscription publique des bénévoles."
+    },
+    "grants": {
+      "label": "Gestion des subventions",
+      "description": "Suivi des subventions, demandes, rapports et réception publique des demandes de financement."
+    },
+    "voting": {
+      "label": "Votes et résolutions",
+      "description": "Propositions des membres, élections, résolutions écrites, procurations et accès aux scrutins."
+    },
+    "auditors": {
+      "label": "Vérificateurs",
+      "description": "Nominations des vérificateurs et dossiers de surveillance connexes."
+    },
+    "attestations": {
+      "label": "Attestations des administrateurs",
+      "description": "Attestations annuelles des administrateurs et suivi des attestations manquantes."
+    },
+    "courtOrders": {
+      "label": "Ordonnances judiciaires",
+      "description": "Suivi des ordonnances judiciaires pour les organismes qui en ont besoin."
+    },
+    "filingPrefill": {
+      "label": "Préremplissage des dépôts",
+      "description": "Trousses préremplies et outils d'exportation pour les dépôts."
+    },
+    "recordsInspection": {
+      "label": "Demandes de consultation",
+      "description": "Conservation des documents et demandes de consultation des registres."
+    },
+    "pipaTraining": {
+      "label": "Registre de formation PIPA",
+      "description": "Dossiers de formation sur la protection des renseignements personnels et la LCAP."
+    },
+    "insurance": {
+      "label": "Registre des assurances",
+      "description": "Polices d'assurance et suivi des renouvellements."
+    },
+    "agreements": {
+      "label": "Registre des ententes",
+      "description": "Contrats, ententes de financement, baux et protocoles d'entente avec leur durée, renouvellement, livrables, rapports et pouvoirs de signature."
+    },
+    "secrets": {
+      "label": "Garde des accès",
+      "description": "Suivi de la garde des clés de récupération, identifiants du registre, titulaires de comptes et dates de revue."
+    },
+    "transparency": {
+      "label": "Transparence publique",
+      "description": "Centre de transparence publique et documents publiés."
+    },
+    "reconciliation": {
+      "label": "Rapprochement",
+      "description": "Rapprochement entre la banque et le grand livre."
+    },
+    "assets": {
+      "label": "Registre des actifs",
+      "description": "Étiquettes, garde, entretien, assurance, subventions, vérification et aliénation des actifs."
+    },
+    "donationReceipts": {
+      "label": "Reçus de dons",
+      "description": "Émission, annulation et historique des reçus."
+    },
+    "membershipBilling": {
+      "label": "Facturation des adhésions",
+      "description": "Forfaits, abonnements et facturation des adhésions."
+    },
+    "employees": {
+      "label": "Registre des employés",
+      "description": "Dossiers des employés pour les sociétés qui ont une paie ou du personnel."
+    },
+    "paperless": {
+      "label": "Paperless-ngx",
+      "description": "Stockage externe des documents, ROC et synchronisation des étiquettes Paperless pour les fichiers Societyer."
+    },
+    "browserConnectors": {
+      "label": "Applications de navigateur",
+      "description": "Profils d'applications de navigateur autorisés par l'utilisateur pour les importations, téléchargements et outils de site."
+    },
+    "workflows": {
+      "label": "Flux de travail",
+      "description": "Automatisations modèles — préparation de l'AGA, rappels de renouvellement d'assurance, dépôt du rapport annuel."
+    }
+  },
+  "moduleCategories": {
+    "Engagement": "Mobilisation",
+    "Governance": "Gouvernance",
+    "Compliance": "Conformité",
+    "Public": "Public",
+    "Finance": "Finances",
+    "Integrations": "Intégrations"
   }
 }

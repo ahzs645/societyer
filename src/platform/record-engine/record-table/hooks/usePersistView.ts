@@ -3,6 +3,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useRecordTableStoreHandle } from "../state/recordTableStore";
+import { isVirtualColumn } from "../utils/hiddenObjectFields";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -69,9 +70,29 @@ export function usePersistView({
         openRecordIn: state.openRecordIn,
       },
     });
-    // Persist column sizing + visibility.
+    // Persist column sizing + visibility. Columns for fields the view never
+    // had (see withHiddenObjectFields) are only stored once they are shown.
+    const savedColumns = [] as typeof state.columns;
     for (const col of state.columns) {
       requireCurrentAuthority();
+      if (isVirtualColumn(col)) {
+        if (!col.isVisible) {
+          savedColumns.push(col);
+          continue;
+        }
+        const newViewFieldId = await addField({
+          societyId,
+          viewId,
+          fieldMetadataId: col.fieldMetadataId as Id<"fieldMetadata">,
+          isVisible: true,
+          position: col.position,
+          size: col.size,
+          aggregateOperation: col.aggregateOperation ?? undefined,
+          viewFieldGroupId: col.viewFieldGroupId ?? undefined,
+        });
+        savedColumns.push({ ...col, viewFieldId: String(newViewFieldId) });
+        continue;
+      }
       await updateField({
         id: col.viewFieldId as Id<"viewFields">,
         patch: {
@@ -82,20 +103,22 @@ export function usePersistView({
           viewFieldGroupId: col.viewFieldGroupId ?? undefined,
         },
       });
+      savedColumns.push(col);
     }
     // Commit positional order.
     requireCurrentAuthority();
     await reorderFields({
       viewId,
-      orderedIds: state.columns
-        .slice()
+      orderedIds: savedColumns
+        .filter((c) => !isVirtualColumn(c))
         .sort((a, b) => a.position - b.position)
         .map((c) => c.viewFieldId as Id<"viewFields">),
     });
     // Promote live state into `savedView` so isDirty flips back to false.
     requireCurrentAuthority();
-    handle.get().markSaved(state);
-  }, [updateField, updateView, reorderFields, handle, requireCurrentAuthority]);
+    handle.set({ columns: savedColumns });
+    handle.get().markSaved({ ...state, columns: savedColumns });
+  }, [updateField, updateView, addField, reorderFields, societyId, handle, requireCurrentAuthority]);
 
   const saveAsNewView = useCallback(
     async (name: string) => {
@@ -125,6 +148,10 @@ export function usePersistView({
       for (let i = 0; i < state.columns.length; i++) {
         requireCurrentAuthority();
         const col = state.columns[i];
+        if (isVirtualColumn(col) && !col.isVisible) {
+          newColumns.push(col);
+          continue;
+        }
         const newViewFieldId = await addField({
           societyId,
           viewId,

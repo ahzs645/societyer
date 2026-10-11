@@ -17,7 +17,7 @@ const bcWorkspace = await source.mutation("society:createWorkspace", {
   fiscalYearEnd: "03-31",
   jurisdictionCode: "CA-BC",
   entityType: "society",
-  actFormedUnder: "bc_societies_act",
+  actFormedUnder: "societies_act",
 });
 
 const federalWorkspace = await source.mutation("society:createWorkspace", {

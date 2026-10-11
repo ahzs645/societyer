@@ -34,7 +34,8 @@ test("offline membership plans save, reject invalid fees without losing drafts, 
   await createWorkspace(page, `Billing boundary ${testInfo.project.name}`);
   await page.goto("/app/membership");
   await expect(page.getByText("Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "New plan", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Membership plan", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "New plan", exact: true });
   await drawer.getByLabel("Name", { exact: true }).fill("Offline annual membership");
   await drawer.getByLabel("Price (CAD)", { exact: true }).fill("-15");

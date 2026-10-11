@@ -11,12 +11,15 @@ import { useEffect, useState } from "react";
  * visible, the same way Researcher keeps its cell pickers inside the
  * visible viewport on mobile.
  */
-export function useVisualViewportBottomInset(): number {
+export function useVisualViewportBottomInset(enabled = true): number {
   const [inset, setInset] = useState(0);
 
   useEffect(() => {
     const viewport = window.visualViewport;
-    if (!viewport) return;
+    if (!enabled || !viewport) {
+      setInset(0);
+      return;
+    }
     const update = () => {
       const next = window.innerHeight - viewport.height - viewport.offsetTop;
       setInset(Math.max(0, Math.round(next)));
@@ -28,7 +31,7 @@ export function useVisualViewportBottomInset(): number {
       viewport.removeEventListener("resize", update);
       viewport.removeEventListener("scroll", update);
     };
-  }, []);
+  }, [enabled]);
 
   return inset;
 }

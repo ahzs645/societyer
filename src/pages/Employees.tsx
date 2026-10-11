@@ -23,6 +23,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FullTime: "Full-time",
@@ -69,7 +70,7 @@ export function EmployeesPage() {
       firstName: "",
       lastName: "",
       role: "",
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: todayDateOnly(),
       employmentType: "FullTime",
       cppExempt: false,
       eiExempt: false,
@@ -94,7 +95,8 @@ export function EmployeesPage() {
         title="Employees"
         icon={<Users size={16} />}
         iconColor="blue"
-        subtitle="Payroll source of truth for T4/T4A generation, remuneration disclosure (s.36, ≥ $75k) and ESA 4-year record retention."
+        subtitle="Staff records for payroll and remuneration disclosure."
+        info={<p>The payroll source of truth for T4/T4A slips, remuneration disclosure under s.36 of the Societies Act (pay of $75,000 or more), and the Employment Standards Act 4-year record retention.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New employee

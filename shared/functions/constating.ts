@@ -38,8 +38,9 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
     .query("constatingEvents")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  const events = rows.map(toConstatingEvent);
-  return constatingTimeline(events);
+  // Keep each row's id so the page can edit and remove events (G-14).
+  const events = rows.map((row) => ({ ...toConstatingEvent(row), _id: row._id }));
+  return constatingTimeline(events) as Array<ConstatingEvent & { _id: string }>;
 }
 
 /** The governing Act as of a given ISO date (null when none has taken effect). */
@@ -108,6 +109,35 @@ export async function createPortable(
     startISO,
     createdAtISO: nowISO,
   });
+}
+
+/** Correct an existing constating event (same validation as create). */
+export async function updatePortable(
+  ctx: PortableMutationCtx,
+  { id, action, jurisdiction, legislation, regNumber, startISO }: {
+    id: string;
+    action: string;
+    jurisdiction: string;
+    legislation: string;
+    regNumber?: string;
+    startISO: string;
+  },
+) {
+  const candidate = await ctx.db.get(id, "constatingEvents");
+  if (!candidate) throw new Error("constatingEvents not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "constatingEvents", id, String(candidate.societyId));
+  const event: ConstatingEvent = {
+    action: action as ConstatingEvent["action"],
+    jurisdiction: jurisdiction.trim(),
+    legislation: legislation.trim(),
+    regNumber: regNumber?.trim() || undefined,
+    startISO,
+  };
+  const { ok, errors } = validateConstatingEvent(event);
+  if (!ok) throw new Error(errors.join("; "));
+  await ctx.db.patch(id, { ...event });
+  return id;
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
