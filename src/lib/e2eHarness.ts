@@ -14,11 +14,14 @@ type CorporationMvpFixture = {
   ontarioRegistrationId: string;
 };
 
+/** CBCA by default; `"CA-BC"` builds the same fixture as a BC company. */
+type CorporationMvpOptions = { jurisdictionCode?: "CA-FED-CBCA" | "CA-BC" };
+
 declare global {
   interface Window {
     __societyerE2E?: {
       reset(): Promise<void>;
-      setupCorporationMvp(): Promise<CorporationMvpFixture>;
+      setupCorporationMvp(options?: CorporationMvpOptions): Promise<CorporationMvpFixture>;
       setupPathway(): Promise<{ societyId: string; documentId: string; reviewerId: string }>;
       inspectPathway(societyId: string): Promise<any>;
       inspect(): Promise<{
@@ -54,15 +57,16 @@ async function setupPathway() {
 
 async function inspectPathway(societyId: string) { return localDataClient.query("pathways:status", { societyId }); }
 
-async function setupCorporationMvp(): Promise<CorporationMvpFixture> {
+async function setupCorporationMvp(options: CorporationMvpOptions = {}): Promise<CorporationMvpFixture> {
+  const bcCompany = options.jurisdictionCode === "CA-BC";
   const created = await localDataClient.mutation("society:createWorkspace", {
-    name: "Northstar Browser Flow Holdings Inc.",
-    incorporationNumber: "777777-1",
+    name: bcCompany ? "Northstar BC Holdings Ltd." : "Northstar Browser Flow Holdings Inc.",
+    incorporationNumber: bcCompany ? "BC7777777" : "777777-1",
     incorporationDate: "2025-02-10",
     fiscalYearEnd: "12-31",
-    jurisdictionCode: "CA-FED-CBCA",
+    jurisdictionCode: bcCompany ? "CA-BC" : "CA-FED-CBCA",
     entityType: "corporation__business_",
-    actFormedUnder: "canada_business_corporations_act",
+    actFormedUnder: bcCompany ? "business_corporations_act" : "canada_business_corporations_act",
     officialEmail: "records@northstar.example",
   }) as any;
 
@@ -123,7 +127,7 @@ async function setupCorporationMvp(): Promise<CorporationMvpFixture> {
     societyId: created.societyId,
     registrationType: "extra_provincial",
     jurisdiction: "CA-ON-OBCA",
-    homeJurisdiction: "CA-FED-CBCA",
+    homeJurisdiction: bcCompany ? "CA-BC" : "CA-FED-CBCA",
     registrationNumber: "ON-BROWSER-001",
     registrationDate: "2026-01-05",
     activityCommencementDate: "2026-01-05",

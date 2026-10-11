@@ -8,7 +8,7 @@ import { getAuthMode } from "../lib/authMode";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, EmptyState, Field } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -342,7 +342,7 @@ export function MeetingsPage() {
         title="Meetings"
         icon={<Calendar size={16} />}
         iconColor="orange"
-        subtitle={governanceVocabulary(society).isCorporation
+        subtitle={organizationVocabulary(society).isCorporation
           ? "Board meetings, committee meetings, and shareholder meetings (annual and special)."
           : "Board meetings, committee meetings, and general meetings (AGM/SGM)."}
         actions={

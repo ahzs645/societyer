@@ -18,7 +18,7 @@ import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { maintenanceErrorMessage, seedDemoSociety } from "./maintenanceApi";
 import type { ModuleKey } from "./modules";
-import { organizationCopy } from "./organizationCopy";
+import { organizationVocabulary } from "./organizationVocabulary";
 
 export type StaticCommand = {
   id: string;
@@ -35,7 +35,7 @@ export function useStaticCommands(): StaticCommand[] {
   const toast = useToast();
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   // "AGM" is society vocabulary; a corporation holds an annual meeting.
-  const meetingLabel = society ? organizationCopy(society).annualMeeting : "AGM";
+  const meetingLabel = society ? organizationVocabulary(society).annualMeeting : "AGM";
 
   return useMemo<StaticCommand[]>(
     () => [

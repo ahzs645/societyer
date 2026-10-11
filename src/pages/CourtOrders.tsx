@@ -4,6 +4,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -74,6 +75,8 @@ export function CourtOrdersPage() {
 
   const records = (items ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // s.20 is the BC Societies Act records section; other entities get neutral wording.
+  const vocab = organizationVocabulary(society);
 
   return (
     <div className="page">
@@ -81,7 +84,9 @@ export function CourtOrdersPage() {
         title="Court orders"
         icon={<Gavel size={16} />}
         iconColor="red"
-        subtitle="Court orders affecting the society — required to be kept with governance records under s.20."
+        subtitle={vocab.societyLaw
+          ? "Court orders affecting the society — required to be kept with governance records under s.20."
+          : `Court orders affecting the ${vocab.organizationNoun}, kept with its governance records.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Record order

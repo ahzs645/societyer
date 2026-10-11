@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { appliesBcPrivacyRules } from "../../shared/entityRuleScope";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { CreateMenu } from "../components/CreateMenu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -111,8 +112,11 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
     setForm({ ...form, tags: [...form.tags, value] });
   };
 
+  // The seeded setup motions adopt a BC PIPA policy; other jurisdictions draft
+  // their own privacy motions.
+  const bcPrivacy = appliesBcPrivacyRules(society);
   const addPrivacySetupMotions = async () => {
-    if (!canWrite) return;
+    if (!canWrite || !bcPrivacy) return;
     const result = await seedPipaSetup({ societyId: society._id });
     toast.success(
       result.inserted ? `Added ${result.inserted} PIPA setup motions` : "PIPA setup motions already exist",
@@ -156,9 +160,11 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
           actions={(
             <>
               <CreateMenu items={[{ id: "backlog", label: "New backlog motion", onSelect: openComposer, disabled: !canWrite }]} />
-              <button className="btn-action" onClick={addPrivacySetupMotions} disabled={!canWrite}>
-                <Sparkles size={12} /> Add PIPA setup motions
-              </button>
+              {bcPrivacy && (
+                <button className="btn-action" onClick={addPrivacySetupMotions} disabled={!canWrite}>
+                  <Sparkles size={12} /> Add PIPA setup motions
+                </button>
+              )}
               <Link className="btn-action" to="/app/agendas">
                 <CalendarPlus size={12} /> Agendas
               </Link>
@@ -261,9 +267,11 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                 <div className="empty-state empty-state--sm">
                   <BookOpen size={18} />
                   <strong>No backlog motions yet.</strong>
-                  <button className="btn" onClick={addPrivacySetupMotions} disabled={!canWrite}>
-                    <Sparkles size={14} /> Add PIPA setup motions
-                  </button>
+                  {bcPrivacy && (
+                    <button className="btn" onClick={addPrivacySetupMotions} disabled={!canWrite}>
+                      <Sparkles size={14} /> Add PIPA setup motions
+                    </button>
+                  )}
                 </div>
               ) : (
                 (backlog ?? []).map((item: any) => {

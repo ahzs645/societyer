@@ -46,6 +46,8 @@ export const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Records inspections": "nav.recordsInspections",
   "Privacy (PIPA)": "nav.privacy",
   "PIPA training": "nav.pipaTraining",
+  Privacy: "nav.privacyGeneral",
+  "Privacy training": "nav.privacyTraining",
   Insurance: "nav.insurance",
   "Access custody": "nav.accessCustody",
   "Public transparency": "nav.transparency",

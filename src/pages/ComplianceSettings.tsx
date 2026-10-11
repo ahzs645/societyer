@@ -12,7 +12,7 @@ import { formatMonthDay } from "../components/MonthDayPicker";
 import { Link } from "react-router-dom";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
-import { organizationCopy } from "../lib/organizationCopy";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import {
   deriveComplianceDeadlines,
   type ComplianceSettings,
@@ -156,7 +156,7 @@ export function ComplianceSettingsPage() {
   };
 
   const pendingCount = derived.filter((d) => !existingKeys.has(deadlineKey(d))).length;
-  const entity = organizationCopy(society);
+  const entity = organizationVocabulary(society);
   const meetingLabel = entity.annualMeetingTitle;
 
   return (
@@ -236,7 +236,7 @@ export function ComplianceSettingsPage() {
 
           <section className="card settings-section">
             <h2 className="settings-section__title">Contacts &amp; records</h2>
-            <Field label="Short name" hint={`Defined term, e.g. "the ${entity.entityTitle}"`}>
+            <Field label="Short name" hint={`Defined term, e.g. "the ${entity.organizationTitle}"`}>
               <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
             </Field>
             <div className="settings-section__row">

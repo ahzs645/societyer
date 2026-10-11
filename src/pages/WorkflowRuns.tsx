@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { presentRecipe } from "../lib/workflowRecipePresentation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer } from "../components/ui";
@@ -92,7 +93,7 @@ export function WorkflowRunsPage() {
   // rather than in a Convex query — keeps workflow-catalog logic on
   // the client where the labels live.
   const visibleRuns = useMemo(() => {
-    const byKey = new Map<string, any>((catalog ?? []).map((c) => [c.key, c]));
+    const byKey = new Map<string, any>((catalog ?? []).map((c: any) => [c.key, presentRecipe(c, society)]));
     return (runs ?? [])
       .filter((run: any) =>
         (!workflowFilter || run.workflowId === workflowFilter) &&
@@ -104,7 +105,7 @@ export function WorkflowRunsPage() {
         workflowName: workflowsById.get(run.workflowId)?.name ?? "—",
         recipeLabel: byKey.get(run.recipe)?.label ?? run.recipe,
       }));
-  }, [runs, workflowsById, catalog, workflowFilter, providerFilter, triggeredByFilter]);
+  }, [runs, workflowsById, catalog, society, workflowFilter, providerFilter, triggeredByFilter]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;

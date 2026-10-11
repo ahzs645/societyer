@@ -4,6 +4,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useSociety } from "../hooks/useSociety";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { Badge, Field } from "./ui";
 import { useToast } from "./Toast";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -109,6 +111,8 @@ export function SignaturePanel({
   const members = useQuery(api.members.list, can("members:read") ? { societyId } : "skip");
   const directors = useQuery(api.directors.list, can("directors:read") ? { societyId } : "skip");
   const user = useCurrentUser();
+  // A corporation's signers are role holders; the member register is society-only.
+  const corporation = organizationRuleScope(useSociety()).isCorporation;
   const toast = useToast();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [typedName, setTypedName] = useState("");
@@ -530,7 +534,9 @@ export function SignaturePanel({
           <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
             {signerScope === "directors"
               ? <>No directors on file — add one in <Link to="/app/directors">Directors</Link> to enable autocomplete.</>
-              : <>No members or directors on file — add one in <Link to="/app/directors">Directors</Link> or <Link to="/app/members">Members</Link> to enable autocomplete.</>}
+              : corporation
+                ? <>No directors on file — add one in <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link> to enable autocomplete.</>
+                : <>No members or directors on file — add one in <Link to="/app/directors">Directors</Link> or <Link to="/app/members">Members</Link> to enable autocomplete.</>}
           </div>
         )}
       </div>

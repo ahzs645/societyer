@@ -19,7 +19,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
-import { organizationCopy } from "../lib/organizationCopy";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import {
   RecordTable,
   RecordTableScope,
@@ -97,9 +97,9 @@ export function TransparencyPage() {
   const records = (publications ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   // AGM, member and bylaw wording is society vocabulary.
-  const entity = organizationCopy(society);
-  const publicationPresets = PUBLICATION_PRESETS.filter((preset) => !preset.entityKind || preset.entityKind === (entity.society ? "society" : "other"));
-  const governingDocsLabel = entity.society ? "Bylaws" : entity.governingDocumentsTitle;
+  const entity = organizationVocabulary(society);
+  const publicationPresets = PUBLICATION_PRESETS.filter((preset) => !preset.entityKind || preset.entityKind === (entity.isSociety ? "society" : "other"));
+  const governingDocsLabel = entity.isSociety ? "Bylaws" : entity.governingDocumentsTitle;
   const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
   const publicPath = society.publicSlug ? `/public/${society.publicSlug}` : null;
   const copyPublicLink = async () => {
@@ -124,10 +124,10 @@ export function TransparencyPage() {
         title="Public transparency"
         icon={<Globe size={16} />}
         iconColor="blue"
-        subtitle={`What the public can see about your ${entity.entityNoun}.`}
+        subtitle={`What the public can see about your ${entity.organizationNoun}.`}
         info={
           <p>
-            Publish board info, {entity.society ? "bylaws" : entity.governingDocuments}, annual reports, {entity.annualMeeting} materials, and contact details without exposing the
+            Publish board info, {entity.isSociety ? "bylaws" : entity.governingDocuments}, annual reports, {entity.annualMeeting} materials, and contact details without exposing the
             private workspace. Only reviewed records you publish appear on the public page.
           </p>
         }
@@ -432,7 +432,7 @@ export function TransparencyPage() {
             </Field>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicTransparencyEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicTransparencyEnabled: e.target.checked })} /> Enable public page</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBoard} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBoard: e.target.checked })} /> Show board roster</label>
-            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show {entity.society ? "bylaws" : entity.governingDocuments} and governance records</label>
+            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show {entity.isSociety ? "bylaws" : entity.governingDocuments} and governance records</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowFinancials} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowFinancials: e.target.checked })} /> Show financial publications</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicVolunteerIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicVolunteerIntakeEnabled: e.target.checked })} /> Allow public volunteer applications</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicGrantIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicGrantIntakeEnabled: e.target.checked })} /> Allow public grant applications</label>

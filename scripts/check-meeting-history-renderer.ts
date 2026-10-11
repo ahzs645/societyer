@@ -63,4 +63,20 @@ for (const { id: styleId } of MINUTES_EXPORT_STYLES) {
     assert.doesNotMatch(publicHtml, /SOURCE-HISTORY-RETENTION|private-action-evidence|private-quorum-evidence|private-adoption-evidence/);
   }
 }
-console.log("Complete source recreation retains meeting history; both public export flags suppress source and history evidence.");
+// The formal AGM minutes name the meeting by entity and jurisdiction: societies
+// and BC companies hold an "Annual General Meeting" (Societies Act / BC Business
+// Corporations Act term); CBCA and other corporations hold an "Annual Meeting"
+// of shareholders.
+const agmMinutes = { heldAt: "2026-06-10T18:00:00Z", attendees: [], absent: [], quorumMet: true, discussion: "", sections: [], motions: [], decisions: [], actionItems: [] };
+const agmTitle = (society: Record<string, unknown>, type = "AGM") =>
+  renderMinutesHtml({ society: { name: "Fixture", ...society } as any, meeting: { title: "Annual meeting", type, scheduledAt: agmMinutes.heldAt }, minutes: agmMinutes, styleId: "formal-agm", options: { includeGeneratedFooter: false } })
+    .match(/<h1>([^<]+)<\/h1>/)?.[1];
+assert.equal(agmTitle({}), "MINUTES OF THE ANNUAL GENERAL MEETING OF MEMBERS", "legacy society workspaces keep the AGM title");
+assert.equal(agmTitle({ entityType: "society", jurisdictionCode: "CA-BC" }), "MINUTES OF THE ANNUAL GENERAL MEETING OF MEMBERS");
+assert.equal(agmTitle({ entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act" }), "MINUTES OF THE ANNUAL GENERAL MEETING OF SHAREHOLDERS", "BC companies keep Annual General Meeting");
+assert.equal(agmTitle({ entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" }), "MINUTES OF THE ANNUAL MEETING OF SHAREHOLDERS", "CBCA corporations hold an Annual Meeting");
+assert.equal(agmTitle({ entityType: "corporation__business_", jurisdictionCode: "CA-ON-OBCA" }), "MINUTES OF THE ANNUAL MEETING OF SHAREHOLDERS", "OBCA corporations hold an Annual Meeting");
+assert.equal(agmTitle({ entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA" }, "SGM"), "MINUTES OF THE SPECIAL MEETING OF SHAREHOLDERS");
+assert.doesNotMatch(renderMinutesHtml({ society: { name: "Fixture", entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA" } as any, meeting: { title: "Annual meeting", type: "AGM", scheduledAt: agmMinutes.heldAt }, minutes: agmMinutes, styleId: "formal-agm", options: { includeGeneratedFooter: false } }), /Annual General Meeting/);
+
+console.log("Complete source recreation retains meeting history; both public export flags suppress source and history evidence; formal AGM titles follow the entity and jurisdiction.");

@@ -6,6 +6,8 @@ import { hydrateObjectMetadata, hydrateHydratedView } from "../../types";
 import type { HydratedView, ObjectMetadata } from "../../types";
 import { purgeLegacyMetadataCache } from "./legacyMetadataCache";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
+import { useSociety } from "@/hooks/useSociety";
+import { applyEntityObjectLabels, applyEntityViewLabels } from "@/lib/entityRecordLabels";
 
 /**
  * Loads the object metadata + views + active-view columns for a single
@@ -67,13 +69,16 @@ export function useObjectRecordTableData({
 
   const setup: RawSetup | null = (fresh as RawSetup | undefined) ?? null;
 
+  // Stored labels carry the seeded society wording; word them for this
+  // workspace's entity at render time (e.g. "Shareholder proposals").
+  const organization = useSociety();
   const objectMetadata = useMemo<ObjectMetadata | null>(
-    () => (setup?.object ? hydrateObjectMetadata(setup.object) : null),
-    [setup],
+    () => applyEntityObjectLabels(setup?.object ? hydrateObjectMetadata(setup.object) : null, organization),
+    [setup, organization],
   );
   const hydratedView = useMemo<HydratedView | null>(
-    () => (setup?.activeView ? hydrateHydratedView(setup.activeView) : null),
-    [setup],
+    () => applyEntityViewLabels(nameSingular, setup?.activeView ? hydrateHydratedView(setup.activeView) : null, organization),
+    [setup, nameSingular, organization],
   );
   const views = useMemo(() => setup?.views ?? [], [setup]);
 

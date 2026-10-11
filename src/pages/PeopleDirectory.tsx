@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../components/Toast";
 import { useSociety } from "../hooks/useSociety";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Contact, GitMerge, MoreHorizontal, Plus, Undo2, UserPlus } from "lucide-react";
@@ -241,7 +242,11 @@ export function PeopleDirectoryPage() {
           <p className="muted" style={{ margin: 0 }}>Loading…</p>
         ) : people.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            No directory profiles yet. Board and members are in <Link style={{ color: "var(--accent)" }} to="/app/directors">Directors</Link> and <Link style={{ color: "var(--accent)" }} to="/app/members">Members</Link>.
+            {organizationRuleScope(society).isCorporation ? (
+              <>No directory profiles yet. Directors, officers and shareholders are in <Link style={{ color: "var(--accent)" }} to="/app/role-holders">Role holders</Link>.</>
+            ) : (
+              <>No directory profiles yet. Board and members are in <Link style={{ color: "var(--accent)" }} to="/app/directors">Directors</Link> and <Link style={{ color: "var(--accent)" }} to="/app/members">Members</Link>.</>
+            )}
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

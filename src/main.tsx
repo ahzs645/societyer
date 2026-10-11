@@ -9,6 +9,7 @@ import { AuthGate } from "./components/AuthGate";
 const Layout = React.lazy(() => import("./components/Layout").then(m => ({ default: m.Layout })));
 import { WebMcpTools } from "./features/webmcp/WebMcpTools";
 import { ModuleGate } from "./components/ModuleGate";
+import { EntityKindGate } from "./components/EntityKindGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
@@ -172,6 +173,11 @@ captureInstallPrompt();
 
 function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKey"], element: React.ReactNode) {
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
+}
+
+/** Society-only (or corporation-only) pages show a "not used" state by direct URL. */
+function withEntityKind(routeKey: string, element: React.ReactNode) {
+  return <EntityKindGate routeKey={routeKey}>{element}</EntityKindGate>;
 }
 
 function AppWorkspaceLayout() {
@@ -421,8 +427,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="imports" element={<ImportSessionsPage />} />
             <Route path="intake" element={<IntakeRunsPage />} />
             <Route path="intake/:runId/review" element={<IntakeReviewPage />} />
-            <Route path="members" element={<MembersPage />} />
-            <Route path="members/:id" element={<MemberDetailPage />} />
+            <Route path="members" element={withEntityKind("/app/members", <MembersPage />)} />
+            <Route path="members/:id" element={withEntityKind("/app/members", <MemberDetailPage />)} />
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="org-chart" element={<OrgChartPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
@@ -516,7 +522,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             />
             <Route
               path="membership"
-              element={withModule("membershipBilling", <MembershipPage />)}
+              element={withModule("membershipBilling", withEntityKind("/app/membership", <MembershipPage />))}
             />
             <Route
               path="inspections"
@@ -565,11 +571,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             />
             <Route
               path="proposals"
-              element={withModule("voting", <MemberProposalsPage />)}
+              element={withModule("voting", withEntityKind("/app/proposals", <MemberProposalsPage />))}
             />
             <Route
               path="receipts"
-              element={withModule("donationReceipts", <ReceiptsPage />)}
+              element={withModule("donationReceipts", withEntityKind("/app/receipts", <ReceiptsPage />))}
             />
             <Route
               path="employees"

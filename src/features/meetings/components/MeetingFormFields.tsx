@@ -21,7 +21,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
 import { useSociety } from "@/hooks/useSociety";
-import { governanceVocabulary } from "@/lib/governanceVocabulary";
+import { organizationVocabulary } from "@/lib/organizationVocabulary";
 import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow, defaultNewMeetingStart } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -256,7 +256,7 @@ export function MeetingFormFields({
   } = data;
   const availableTemplates = meetingTemplatesForType(meetingTemplates, value.type);
   const overlaps = meetingScheduleConflicts(meetings, value.scheduledAt, editingId);
-  const corporate = governanceVocabulary(useSociety()).isCorporation;
+  const corporate = organizationVocabulary(useSociety()).isCorporation;
 
   return (
     <div className="meeting-form">

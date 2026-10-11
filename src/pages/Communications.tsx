@@ -4,6 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { capitalize, organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -353,6 +354,20 @@ export function CommunicationsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  // Societies keep a member register; for a corporation the member table only
+  // holds contact records (shareholders live in Role holders), so the
+  // preferences and audience labels say "contacts".
+  const vocab = organizationVocabulary(society);
+  const contactTitle = capitalize(vocab.contactNoun);
+  const contactsTitle = capitalize(vocab.contactNounPlural);
+  const audienceLabels = {
+    all_members: `All ${vocab.contactNounPlural}`,
+    voting_members: vocab.isSociety ? "Voting members" : `${contactsTitle} with voting rights`,
+    custom: `Custom ${vocab.contactNoun} subset`,
+    member_class: `${contactTitle} class`,
+    member_status: `${contactTitle} status`,
+  };
+
   const prefByMemberId = new Map(
     (prefs ?? []).map((pref) => [String(pref.memberId), pref]),
   );
@@ -400,8 +415,8 @@ export function CommunicationsPage() {
         title="Communications"
         icon={<Mail size={16} />}
         iconColor="orange"
-        subtitle="Notices, campaigns and member contact preferences."
-        info={<p>Templated notices, campaign history, member contact preferences and proof-of-notice delivery logs.</p>}
+        subtitle={vocab.isSociety ? "Notices, campaigns and member contact preferences." : vocab.isCorporation ? "Notices, campaigns and shareholder and contact preferences." : "Notices, campaigns and contact preferences."}
+        info={<p>Templated notices, campaign history, {vocab.isSociety ? "member contact" : "contact"} preferences and proof-of-notice delivery logs.</p>}
         actions={
           <>
             <MoreActionsMenu
@@ -710,17 +725,19 @@ export function CommunicationsPage() {
       ) : null)}
 
       {section === "preferences" && <DataTable
-        label="Member contact preferences"
+        label={vocab.isSociety ? "Member contact preferences" : "Contact preferences"}
         icon={<Mail size={14} />}
         data={prefRows as any[]}
         rowKey={(row) => String(row.memberId)}
-        searchPlaceholder="Search member or email…"
-        emptyMessage="No active members yet — add a member to manage their contact preferences."
+        searchPlaceholder={`Search ${vocab.contactNoun} or email…`}
+        emptyMessage={vocab.isSociety
+          ? "No active members yet — add a member to manage their contact preferences."
+          : `No active ${vocab.contactNoun} records yet. Contact preferences appear here once contact records are added.`}
         defaultSort={{ columnId: "name", dir: "asc" }}
         columns={[
           {
             id: "name",
-            header: "Member",
+            header: contactTitle,
             sortable: true,
             accessor: (row) => row.name,
             render: (row) => (
@@ -837,8 +854,8 @@ export function CommunicationsPage() {
             <Field label="Audience">
               <Select value={templateDraft.audience} onChange={(value) => setTemplateDraft({ ...templateDraft, audience: value })}
                 options={[
-                  { value: "all_members", label: "All members" },
-                  { value: "voting_members", label: "Voting members" },
+                  { value: "all_members", label: audienceLabels.all_members },
+                  { value: "voting_members", label: audienceLabels.voting_members },
                   { value: "directors", label: "Directors" },
                   { value: "overdue_subscribers", label: "Overdue subscribers" },
                   { value: "volunteers", label: "Volunteers" },
@@ -888,20 +905,20 @@ export function CommunicationsPage() {
             <Field label="Base audience">
               <Select value={segmentDraft.includeAudience} onChange={(value) => setSegmentDraft({ ...segmentDraft, includeAudience: value })}
                 options={[
-                  { value: "all_members", label: "All members" },
-                  { value: "voting_members", label: "Voting members" },
+                  { value: "all_members", label: audienceLabels.all_members },
+                  { value: "voting_members", label: audienceLabels.voting_members },
                   { value: "directors", label: "Directors" },
                   { value: "overdue_subscribers", label: "Overdue subscribers" },
                   { value: "volunteers", label: "Volunteers" },
-                  { value: "custom", label: "Custom member subset" },
+                  { value: "custom", label: audienceLabels.custom },
                 ]} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Member status">
+              <Field label={audienceLabels.member_status}>
                 <Select value={segmentDraft.memberStatus ?? ""} onChange={(value) => setSegmentDraft({ ...segmentDraft, memberStatus: value })}
                   options={[{ value: "", label: "Any" }, ...memberStatusOptions.map((value) => ({ value: value, label: value }))]} />
               </Field>
-              <Field label="Member class">
+              <Field label={audienceLabels.member_class}>
                 <Select value={segmentDraft.membershipClass ?? ""} onChange={(value) => setSegmentDraft({ ...segmentDraft, membershipClass: value })}
                   options={[{ value: "", label: "Any" }, ...memberClassOptions.map((value) => ({ value: value, label: value }))]} />
               </Field>
@@ -1058,15 +1075,15 @@ export function CommunicationsPage() {
                     })
                   }
                   options={[
-                    { value: "all_members", label: "All members" },
-                    { value: "voting_members", label: "Voting members" },
+                    { value: "all_members", label: audienceLabels.all_members },
+                    { value: "voting_members", label: audienceLabels.voting_members },
                     { value: "directors", label: "Directors" },
                     { value: "overdue_subscribers", label: "Overdue subscribers" },
                     { value: "volunteers", label: "Volunteers" },
                     { value: "segment", label: "Saved segment" },
                     { value: "committee", label: "Committee" },
-                    { value: "member_class", label: "Member class" },
-                    { value: "member_status", label: "Member status" },
+                    { value: "member_class", label: audienceLabels.member_class },
+                    { value: "member_status", label: audienceLabels.member_status },
                   ]}
                 />
               </Field>
@@ -1101,7 +1118,7 @@ export function CommunicationsPage() {
               </Field>
             )}
             {sendDraft.audiencePreset === "member_class" && (
-              <Field label="Member class">
+              <Field label={audienceLabels.member_class}>
                 <Select
                   value={sendDraft.audienceTarget}
                   onChange={(value) => setSendDraft({ ...sendDraft, audienceTarget: value })}
@@ -1110,7 +1127,7 @@ export function CommunicationsPage() {
               </Field>
             )}
             {sendDraft.audiencePreset === "member_status" && (
-              <Field label="Member status">
+              <Field label={audienceLabels.member_status}>
                 <Select
                   value={sendDraft.audienceTarget}
                   onChange={(value) => setSendDraft({ ...sendDraft, audienceTarget: value })}

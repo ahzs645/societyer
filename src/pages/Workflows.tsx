@@ -4,6 +4,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { catalogForOrganization, presentRecipe } from "../lib/workflowRecipePresentation";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
@@ -126,7 +128,10 @@ type TriggerKind = "cron" | "manual" | "date_offset";
 export function WorkflowsPage() {
   const society = useSociety();
   const canManage = usePermissions().can("tasks:write");
-  const catalog = useQuery(api.workflows.listCatalog, {});
+  const rawCatalog = useQuery(api.workflows.listCatalog, {});
+  // Recipes worded for this entity; Societies Act-only recipes are not offered
+  // to other workspaces (existing workflows keep their recipe label).
+  const catalog = useMemo(() => catalogForOrganization(rawCatalog as any[] | undefined, society), [rawCatalog, society]);
   const rows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.workflows.create);
   const setupGovernanceN8nRecipes = useMutation(api.workflows.setupGovernanceN8nRecipes);
@@ -163,8 +168,8 @@ export function WorkflowsPage() {
   });
 
   const recipeByKey = useMemo(
-    () => new Map<string, any>((catalog ?? []).map((c: any) => [c.key, c])),
-    [catalog],
+    () => new Map<string, any>(((rawCatalog ?? []) as any[]).map((c: any) => [c.key, presentRecipe(c, society)])),
+    [rawCatalog, society],
   );
 
   const records = useMemo(
@@ -233,6 +238,7 @@ export function WorkflowsPage() {
   };
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const { annualMeeting, annualMeetingTitle } = organizationVocabulary(society);
 
   return (
     <div className="page">
@@ -240,8 +246,8 @@ export function WorkflowsPage() {
         title="Workflows"
         icon={<WorkflowIcon size={16} />}
         iconColor="orange"
-        subtitle="Automations like AGM prep reminders and filing alerts."
-        info={<p>Set up automations — like AGM prep reminders or filing deadline alerts — and control when they run.</p>}
+        subtitle={`Automations like ${annualMeeting} prep reminders and filing alerts.`}
+        info={<p>Set up automations — like {annualMeeting} prep reminders or filing deadline alerts — and control when they run.</p>}
         actions={
           <>
             <MoreActionsMenu
@@ -283,7 +289,7 @@ export function WorkflowsPage() {
                 },
                 {
                   id: "agm-deadlines",
-                  label: "AGM deadlines",
+                  label: `${annualMeetingTitle} deadlines`,
                   icon: <WorkflowIcon size={14} />,
                   disabled: !canManage,
                   onSelect: () => openNew("agm_date_deadlines"),

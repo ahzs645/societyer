@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { InfoPopover } from "../components/InfoPopover";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -73,6 +74,7 @@ export function AuditorsPage() {
 
   const records = (items ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const vocab = organizationVocabulary(society);
 
   return (
     <div className="page">
@@ -80,8 +82,10 @@ export function AuditorsPage() {
         title="Auditor appointments"
         icon={<Calculator size={16} />}
         iconColor="green"
-        subtitle="Who audits or reviews the society's financial statements."
-        info={<p>First auditor appointed by directors; subsequent appointments made by members at the AGM. Only independent CPAs or CPA firms may serve as auditors.</p>}
+        subtitle={`Who audits or reviews the ${vocab.organizationNoun}'s financial statements.`}
+        info={vocab.societyLaw
+          ? <p>First auditor appointed by directors; subsequent appointments made by members at the AGM. Only independent CPAs or CPA firms may serve as auditors.</p>
+          : <p>Record who audits or reviews the financial statements and how they were appointed. Confirm appointment, qualification and any audit exemption under the governing Act and the {vocab.governingDocuments}.</p>}
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New appointment

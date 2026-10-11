@@ -6,7 +6,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { useEligibleVoters } from "../hooks/useEligibleVoters";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { InfoPopover } from "../components/InfoPopover";
@@ -54,6 +55,7 @@ export function ElectionsPage() {
     society ? { societyId: society._id, userId: actingUserId } : "skip",
   );
   const { rules } = useBylawRules();
+  const voters = useEligibleVoters(society);
   const create = useMutation(api.elections.create);
   const snapshotEligibleVoters = useMutation(api.elections.snapshotEligibleVoters);
   const closeElection = useMutation(api.elections.close);
@@ -66,6 +68,8 @@ export function ElectionsPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const vocab = organizationVocabulary(society);
 
   const openCreate = () => {
     const now = new Date();
@@ -153,8 +157,8 @@ export function ElectionsPage() {
         title="Elections"
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle="Member elections with anonymous ballots."
-        info={<p>Verified member eligibility with anonymous ballot storage. Voter identity stays in the eligibility ledger; ballots are stored separately.</p>}
+        subtitle={vocab.isCorporation ? "Shareholder elections with anonymous ballots." : "Member elections with anonymous ballots."}
+        info={<p>Verified {vocab.voterNoun} eligibility with anonymous ballot storage. Voter identity stays in the eligibility ledger; ballots are stored separately.</p>}
         actions={
           canManage ? (
             <button className="btn-action btn-action--primary" onClick={openCreate}>
@@ -168,9 +172,9 @@ export function ElectionsPage() {
         <div className="callout callout--info">
           <Info size={16} />
           <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
-            <span><strong>No-auth mode:</strong> member ballots are turned off.</span>
+            <span><strong>No-auth mode:</strong> {vocab.voterNoun} ballots are turned off.</span>
             <InfoPopover label="About no-auth mode">
-              <p>Real anonymous member voting requires authenticated member accounts. You can still design and administer elections here, but the member ballot flow stays disabled until authentication is enabled.</p>
+              <p>Real anonymous {vocab.voterNoun} voting requires authenticated {vocab.voterNoun} accounts. You can still design and administer elections here, but the {vocab.voterNoun} ballot flow stays disabled until authentication is enabled.</p>
             </InfoPopover>
           </div>
         </div>
@@ -180,9 +184,21 @@ export function ElectionsPage() {
         <div className="callout callout--warn">
           <AlertTriangle size={16} />
           <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
-            <span><strong>Bylaw restriction:</strong> the bylaws don't allow electronic voting.</span>
+            <span><strong>{vocab.isSociety ? "Bylaw restriction:" : "Governing-document restriction:"}</strong> {vocab.isSociety ? "the bylaws don't" : `the ${vocab.governingDocuments} don't`} allow electronic voting.</span>
             <InfoPopover label="About the bylaw restriction">
               <p>The active bylaw rule set currently disallows electronic voting. You can still prepare elections here, but opening them for remote ballots may not match {governingDocumentsPhrase(society)}.</p>
+            </InfoPopover>
+          </div>
+        </div>
+      )}
+
+      {vocab.isCorporation && (
+        <div className="callout callout--info" data-testid="election-voter-source">
+          <Info size={16} />
+          <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
+            <span>{voters.label}.</span>
+            <InfoPopover label="About shareholder voter lists">
+              <p>The eligible-voter snapshot is taken from workspace voter accounts. Confirm it against the share register before opening a shareholder ballot.</p>
             </InfoPopover>
           </div>
         </div>
@@ -192,7 +208,7 @@ export function ElectionsPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">My ballots</h2>
-            <span className="card__subtitle">Verified member view</span>
+            <span className="card__subtitle">Verified {vocab.voterNoun} view</span>
           </div>
           <div className="card__body" style={{ display: "grid", gap: 10 }}>
             {myElections.map((row: any) => (
@@ -473,7 +489,7 @@ export function ElectionsPage() {
 }
 
 function governingDocumentsPhrase(society: any): string {
-  const vocab = governanceVocabulary(society);
+  const vocab = organizationVocabulary(society);
   if (vocab.societyLaw) return "the society's bylaws";
   if (vocab.isCorporation) return "the corporation's articles and by-laws";
   return "the organization's governing documents";

@@ -10,7 +10,7 @@ import { useRecordQuery } from "../hooks/useRecordQuery";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
@@ -112,7 +112,7 @@ export function AgmWorkflowPage() {
   const confirm = useConfirm();
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
-  const vocab = governanceVocabulary(society);
+  const vocab = organizationVocabulary(society);
   const steps = STEP_ORDER.map((step) => stepCopyFor(step, vocab.societyLaw, vocab.voterNounPlural));
 
   const currentIdx = useMemo(() => {

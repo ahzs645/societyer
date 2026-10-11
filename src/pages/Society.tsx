@@ -28,6 +28,7 @@ import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
 import { homeJurisdictionCode, isCorporation, isSociety } from "../../shared/organizationDomain";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -210,6 +211,10 @@ export function SocietyPage() {
   const jurisdictionModule = jurisdictionModuleContract(form);
   const governance = workspaceGovernanceCopy(form);
   const corporate = isCorporation(form);
+  // Wording follows the entity being edited; registered-charity and
+  // member-funded status are society concepts and stay hidden for corporations
+  // (the stored fields are untouched).
+  const vocab = organizationVocabulary(form);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
   const missingGovernanceCount = [
     society.constitutionDocId,
@@ -545,7 +550,9 @@ export function SocietyPage() {
                 </LockedField>
                 <LockedField
                   label="Fiscal year end"
-                  reason="Changing the fiscal year end can require a bylaw amendment and notification to the CRA. Affects every filing deadline downstream."
+                  reason={corporate
+                    ? `Changing the fiscal year end can require a review of the ${vocab.governingDocuments} and the CRA's rules. Affects every filing deadline downstream.`
+                    : "Changing the fiscal year end can require a bylaw amendment and notification to the CRA. Affects every filing deadline downstream."}
                 >
                   {(locked) => (
                     <MonthDayPicker
@@ -560,7 +567,9 @@ export function SocietyPage() {
 
               <LockedField
                 label={governance.purposesLabel}
-                reason="Purposes or articles can require member/shareholder approval and a registry filing to change. Charities may also need CRA review."
+                reason={corporate
+                  ? "Business activities or article restrictions can require shareholder approval and a registry filing to change."
+                  : "Purposes can require member approval and a registry filing to change. Charities may also need CRA review."}
               >
                 {(locked) => (
                   <MarkdownEditor
@@ -581,7 +590,7 @@ export function SocietyPage() {
                   />
                 </Field>
 
-                <LockedField
+                {!corporate && <LockedField
                   label="Status flags"
                   reason="Charity status is controlled by the CRA. Jurisdiction-specific status flags should be reviewed against the governing statute and filed documents."
                 >
@@ -593,7 +602,8 @@ export function SocietyPage() {
                         disabled={locked}
                         label="Registered CRA charity"
                       />
-                      {!corporate && <Toggle
+                      {/* Member-funded is a BC Societies Act subtype. */}
+                      {vocab.societyLaw && <Toggle
                         checked={!!form.isMemberFunded}
                         onChange={(v) => set("isMemberFunded", v)}
                         disabled={locked}
@@ -601,7 +611,7 @@ export function SocietyPage() {
                       />}
                     </div>
                   )}
-                </LockedField>
+                </LockedField>}
               </div>
             </div>
           </div>
@@ -672,7 +682,8 @@ export function SocietyPage() {
                   </thead>
                   <tbody>
                     <DocTableRow label={governance.formationDocumentLabel} present={!!society.constitutionDocId} />
-                    <DocTableRow label="Bylaws" present={!!society.bylawsDocId} />
+                    {/* A BC company's articles take the place of separate by-laws. */}
+                    {!vocab.bcCompany && <DocTableRow label={corporate ? "By-laws" : "Bylaws"} present={!!society.bylawsDocId} />}
                     <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} present={!!society.privacyPolicyDocId} />
                   </tbody>
                 </table>
