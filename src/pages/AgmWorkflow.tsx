@@ -281,6 +281,9 @@ export function AgmWorkflowPage() {
             ].filter(Boolean).join("; ")}
             tone={votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? (deliveredCount >= votingMemberCount ? "success" : "info") : "warn"}
           />
+          {/* The meeting-relative due date is the BC Societies Act annual report
+              rule; other entities file on the registry's own schedule. */}
+          {vocab.societyLaw ? (
           <Item label="Annual report"
             value={
               annualReport?.filed
@@ -295,6 +298,9 @@ export function AgmWorkflowPage() {
             }
             tone={annualReport?.filed ? (annualReport.late ? "warn" : "success") : "warn"}
           />
+          ) : (
+            <Item label="Annual filing" value="Deadline set by the registry; track it in Compliance obligations" tone="info" />
+          )}
           {rulesAtMeeting && !rulesAtMeeting.isFallback && rulesAtMeeting.version != null && (
             <Item label="Bylaw rules applied"
               value={`v${rulesAtMeeting.version} (in force on ${formatDate(meeting.scheduledAt)})`}
