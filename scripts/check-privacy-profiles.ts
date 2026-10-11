@@ -64,7 +64,9 @@ assert.equal(PRIVACY_REFORM_WATCH.currentLaw, "PIPEDA");
 for (const law of Object.values(PRIVACY_LAWS)) {
   for (const rule of law.rules) for (const id of rule.citationIds) assert.ok(PRIVACY_CITATIONS[id]?.url.startsWith("https://"), `${law.id}: missing official citation ${id}`);
 }
-assert.equal(PRIVACY_CITATIONS["AB-PIPA-ACCESS"].sourceCurrentToISO, undefined, "a blocked publisher is not assigned an invented consolidation date");
+assert.equal(PRIVACY_CITATIONS["AB-PIPA-ACCESS"].sourceCurrentToISO, "2025-09-01", "Alberta PIPA records the King's Printer consolidation date actually displayed");
+assert.equal(PRIVACY_CITATIONS["QC-PRIVACY-ACCESS"].sourceCurrentToISO, "2026-08-12", "Québec records the English consolidation date actually displayed");
+assert.equal(PRIVACY_CITATIONS["QC-PRIVACY-INCIDENT-RECORDS"].sourceCurrentToISO, undefined, "a regulation without a displayed consolidation date stays unset");
 
 // Drafts name applicable laws, preserve unknown scope, and separate approval.
 const federalDraft = buildPrivacyPolicyDraft(pipeda, "2026-10-11");

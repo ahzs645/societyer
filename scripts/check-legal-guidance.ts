@@ -166,7 +166,7 @@ assert.equal(citationAppliesToOrganization("OPC-PRIVACY-PLAN-TOOL", bcOperations
 assert.equal(citationAppliesToOrganization("OIPC-PIPA-PRIVATE-ORGS", commercialOntario), false);
 assert.equal(getPrivacyLegalGuideRules({ organization: federal }).length, 0);
 assert.ok(getPrivacyLegalGuideRules({ organization: bcOperations }).every(rule => rule.currentAsOfISO && !rule.effectiveFromISO));
-assert.equal(regulatoryCitations["AB-PIPA-ACCESS"].sourceCurrentToISO, undefined);
+assert.equal(regulatoryCitations["AB-PIPA-ACCESS"].sourceCurrentToISO, "2025-09-01", "Alberta PIPA carries the King's Printer consolidation date actually displayed");
 assert.equal(regulatoryCitations["OIPC-PIPA-PRIVATE-ORGS"].sourceCurrentToISO, undefined);
 assert.notEqual(regulatoryCitations["PIPA-POLICY"].sourceCurrentToISO, regulatoryCitations["PIPA-POLICY"].reviewedOnISO);
 console.log("Legal guidance passed: rendered entity cards, records citations, unsupported-entity review, auditor and conflicts exceptions, member-funded sources, activity-based privacy routing, Ontario source isolation and honest review dates, explicit-unknown and blank-entity scope agreement, and a non-vacuous extraprovincial guard.");

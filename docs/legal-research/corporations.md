@@ -253,6 +253,8 @@ Section 203 does not itself restrict the waiver to private companies, but a publ
 
 An ordinary corporation needs one director. A distributing corporation with outstanding securities held by more than one person needs at least three and at least two who are not officers/employees of it or its affiliates. The current Act retains the **25% resident-Canadian requirement**, with at least one where the board has fewer than four. Regulated sectors can require a majority under s. 105(3.1); s. 105 contains limited sector/holding-company exceptions, not a blanket repeal.
 
+**Currency note:** s. 105(3) is in force in the Justice Laws consolidation current to 2026-09-21. Re-verify it at each consolidation update before relying on the 25% rule. The s. 105(3.1) majority rule for prescribed sectors is a caveat for the entity's facts, not the general default.
+
 Board business also requires the s. 114 resident-Canadian attendance or qualifying absent-director approval conditions. A managing director under s. 115(1) must be a resident Canadian. Residency is a defined legal status, not simply a Canadian postal address.
 
 **Implementation and confidence:** Settled, high-impact correction to the brief. For a generic CBCA board use the ceiling of 25% with the at-least-one rule; require review of distributing/regulated status and any claimed exception. Do not import Ontario's repeal.
