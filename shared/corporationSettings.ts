@@ -74,6 +74,16 @@ export interface ComplianceSettings {
   lastAnnualReturnPeriodEnd?: string;
   annualDeadlineCalendarReviews?: readonly AnnualDeadlineCalendarReview[];
 }
+/** Earlier cycles with no recorded completion or filing evidence. This is an
+ * informational evidence gap, never the open deadline: an unrecorded history
+ * neither proves non-compliance nor completion. */
+export interface HistoryNotVerified {
+  obligation: AnnualDeadlineCalendarReview['obligation'];
+  cycleYears: readonly number[];
+  /** Ontario: the fiscal-calendar taxation-year ends without filing evidence. */
+  periodEnds?: readonly string[];
+  basis: string;
+}
 export interface DeadlineAssessment {
   status: 'upcoming' | 'due' | 'overdue' | 'satisfied' | 'not_applicable' | 'review_required';
   dueDate: string | null;
@@ -93,6 +103,7 @@ export interface DeadlineAssessment {
   basis: string;
   sourceIds: readonly string[];
   issues: readonly string[];
+  historyNotVerified?: HistoryNotVerified;
 }
 export interface DerivedDeadline {
   key: string;
@@ -159,6 +170,36 @@ function nextOccurrence(month: number, day: number, from: string, strictlyAfter 
   const candidate = inYear(p.year, month, day);
   return candidate > from || (!strictlyAfter && candidate === from) ? candidate : p.year < 9999 ? inYear(p.year + 1, month, day) : null;
 }
+/** Holiday and office-closure adjustments move an annual boundary by a few
+ * days at most. Past this margin, an unreviewed calendar cannot make an open
+ * cycle timely, and a cycle this far past is no longer the "current" one. */
+export const CALENDAR_REVIEW_GRACE_DAYS = 7;
+/** Accept a date-only value or an ISO timestamp, using the timestamp's date prefix. */
+export function complianceDateFromISO(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const m = /^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(value);
+  return m && parseComplianceDate(m[1]) ? m[1] : null;
+}
+function daysBetweenDates(start: string, end: string): number {
+  return Math.round((Date.parse(`${end}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 86_400_000);
+}
+function currentCycleFloor(today: string): string { return addComplianceDays(today, -CALENDAR_REVIEW_GRACE_DAYS) ?? today; }
+function yearRanges(years: readonly number[]): string {
+  const sorted = [...new Set(years)].sort((a, b) => a - b), ranges: string[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    ranges.push(i === j ? String(sorted[i]) : `${sorted[i]}–${sorted[j]}`);
+    i = j;
+  }
+  return ranges.join(', ');
+}
+function withHistory(result: DeadlineAssessment, obligation: HistoryNotVerified['obligation'], cycleYears: readonly number[], periodEnds?: readonly string[]): DeadlineAssessment {
+  if (!cycleYears.length) return result;
+  const what = obligation === 'annual_meeting' ? 'annual meeting or written annual business' : 'filing';
+  return { ...result, historyNotVerified: { obligation, cycleYears, ...(periodEnds?.length ? { periodEnds } : {}),
+    basis: `History not verified: no ${what} evidence is recorded for ${periodEnds?.length ? `the periods ending ${periodEnds.join(', ')}` : `cycle${cycleYears.length === 1 ? '' : 's'} ${yearRanges(cycleYears)}`}. These earlier cycles are not assumed complete or missed; record their evidence, or review them separately. The open deadline starts after the latest recorded evidence.` } };
+}
 function plannedInYear(s: ComplianceSettings, year: number): string | undefined {
   if (!validYear(year) || !Number.isInteger(s.agmMonth) || !Number.isInteger(s.agmDay) || s.agmMonth! < 1 || s.agmMonth! > 12 || s.agmDay! < 1 || s.agmDay! > 31) return undefined;
   return inYear(year, s.agmMonth!, s.agmDay!);
@@ -216,17 +257,36 @@ function nominalAnnualMeetingDeadline(s: ComplianceSettings, today: string): Dea
   const years = [...new Set([...(s.heldAgmYears ?? []).filter(y => validYear(y) && y <= Number(today.slice(0, 4))), ...completed.map(completionYear)])].sort((a, b) => a - b);
   const explicitYear = s.annualMeetingAssessmentYear;
   if (explicitYear !== undefined && !validYear(explicitYear)) return review('The annual-meeting assessment year is invalid.', sources, p.id);
+  const todayYear = Number(today.slice(0, 4));
   if (p.annualMeeting.first === 'following_calendar_year') {
     const first = start ? Number(start.slice(0, 4)) + 1 : undefined;
-    const cycleYear = explicitYear ?? (years.length ? years.at(-1)! + 1 : first);
+    const boundary = (year: number) => extensionFor(s, p.id, year, `${year}-12-31`).date ?? `${year}-12-31`;
+    let cycleYear = explicitYear;
+    const history: number[] = [];
+    if (cycleYear === undefined) {
+      // Start after the latest evidenced AGM. Without any, use the current
+      // cycle: the earliest whose deadline has not passed beyond the
+      // calendar-adjustment margin. Earlier unrecorded years are history.
+      if (years.length) cycleYear = years.at(-1)! + 1;
+      else if (first !== undefined) {
+        const floor = currentCycleFloor(today);
+        cycleYear = Math.max(first, todayYear - 1);
+        while (validYear(cycleYear) && boundary(cycleYear) < floor) cycleYear += 1;
+      }
+      if (first && validYear(cycleYear)) for (let year = first; year < cycleYear; year++) if (!years.includes(year)) history.push(year);
+    }
     if (!validYear(cycleYear)) return review('Supply recognition, completed AGM history or an explicit calendar year.', sources, p.id);
     if (first && cycleYear < first) return { status: 'not_applicable', dueDate: null, cycleYear, profileId: p.id, basis: 'No compulsory AGM in the incorporation year; the first required calendar year follows it.', sourceIds: sources, issues: [] };
     const statutory = `${cycleYear}-12-31`, extended = extensionFor(s, p.id, cycleYear, statutory);
     const dueDate = extended.date ?? statutory, issues = extended.issue ? [extended.issue] : [];
-    return { status: years.includes(cycleYear) ? 'satisfied' : issues.length ? 'review_required' : timed(dueDate, today), dueDate, statutoryDueDate: statutory, cycleYear, profileId: p.id, plannedDate: plannedInYear(s, cycleYear), sourceIds: sources, issues, basis: extended.date ? 'Registrar-authorized AGM deadline for this calendar year; retain the authorization and attribution conditions.' : 'AGM required by December 31 of this calendar year after incorporation; the planned meeting is separate.' };
+    return withHistory({ status: years.includes(cycleYear) ? 'satisfied' : issues.length ? 'review_required' : timed(dueDate, today), dueDate, statutoryDueDate: statutory, cycleYear, profileId: p.id, plannedDate: plannedInYear(s, cycleYear), sourceIds: sources, issues, basis: extended.date ? 'Registrar-authorized AGM deadline for this calendar year; retain the authorization and attribution conditions.' : 'AGM required by December 31 of this calendar year after incorporation; the planned meeting is separate.' }, 'annual_meeting', history);
   }
   if (!latest && years.length && !s.annualReferenceDate) return review('A held year without an actual meeting/reference date cannot determine the statutory interval.', sources, p.id);
-  const reference = p.id === 'bc_company' ? s.annualReferenceDate ?? latest?.annualReferenceDate ?? latest?.date : latest?.date;
+  // The most recent of the profile's annual reference date and each completion's
+  // reference or meeting date: a stale profile field never hides a later AGM.
+  const reference = (p.id === 'bc_company'
+    ? [s.annualReferenceDate, ...completed.map(item => item.annualReferenceDate ?? item.date)]
+    : completed.map(item => item.date)).filter((date): date is string => typeof date === 'string' && date.length > 0).sort().at(-1);
   if (reference && (!parseComplianceDate(reference) || reference > today || (start && reference < start))) return review('The annual reference/meeting date requires valid completed-business evidence.', sources, p.id);
   if (latest && latest.kind !== 'held' && p.id === 'bc_company' && !latest.annualReferenceDate && !s.annualReferenceDate) return review('A BC written annual alternative must identify its statutory annual reference date.', sources, p.id);
   const issues: string[] = [];
@@ -234,6 +294,18 @@ function nominalAnnualMeetingDeadline(s: ComplianceSettings, today: string): Dea
   if (!reference) {
     if (!start) return review('Recognition and completed annual-business history are missing.', sources, p.id);
     dueDate = addCalendarMonths(start, p.annualMeeting.firstMonths ?? 18);
+    const firstYear = dueDate ? Number(dueDate.slice(0, 4)) : undefined;
+    if (explicitYear === undefined && firstYear !== undefined && firstYear < todayYear) {
+      // No completion is recorded and the first-meeting deadline belongs to an
+      // earlier year: that history is unverified, not the open deadline.
+      const history = Array.from({ length: todayYear - firstYear }, (_, index) => firstYear + index);
+      const missing = `No annual meeting or written annual business is recorded since recognition on ${start}; the first-meeting deadline (${dueDate}) is in an earlier year. Record the most recent annual meeting or annual reference date to calculate the current statutory deadline.`;
+      if (!p.annualMeeting.eachCalendarYear) return withHistory({ ...review(missing, sources, p.id, ['The preceding annual meeting date is required to calculate the current deadline.']), cycleYear: todayYear }, 'annual_meeting', history);
+      const calendarLimit = `${todayYear}-12-31`;
+      return withHistory({ status: 'review_required', dueDate: calendarLimit, statutoryDueDate: calendarLimit, cycleYear: todayYear, anchorDate: start, plannedDate: plannedInYear(s, todayYear), profileId: p.id, sourceIds: sources,
+        basis: `${missing} An annual meeting is required in each calendar year, so this year's meeting is due by ${calendarLimit} at the latest.`,
+        issues: ['The 15-month interval from the unrecorded preceding meeting or reference date can require an earlier date.'] }, 'annual_meeting', history);
+    }
     basis = `First annual meeting within ${p.annualMeeting.firstMonths ?? 18} calendar months after recognition; no completed annual business is evidenced.`;
     cycleYear = Number(dueDate?.slice(0, 4));
   } else {
@@ -271,7 +343,34 @@ function returnResult(s: ComplianceSettings, today: string, profileId: string, s
   const filed = filedEvidence(s, today).filter(f => options.periodEnd ? f.periodEnd === options.periodEnd : f.cycleYear === cycleYear).filter(f => f.filedAt >= (options.earliestFiling ?? anchorDate)).sort((a, b) => a.filedAt.localeCompare(b.filedAt))[0];
   return { status: filed ? 'satisfied' : options.issues?.length ? 'review_required' : timed(dueDate, today), dueDate, statutoryDueDate: dueDate, cycleYear, anchorDate, profileId, sourceIds, basis, issues: options.issues ?? [], ...(filed ? { filedAt: filed.filedAt, late: filed.filedAt > dueDate } : {}) };
 }
-/** Explicit or earliest open reporting cycle. Only matching filing evidence closes it. */
+/** Year-indexed cycles (anniversary and BC society): start after the latest
+ * evidenced filing, or at the current cycle when none is recorded. Earlier
+ * unevidenced cycles are reported separately as history, not as the deadline. */
+function openYearCycle(today: string, first: number, latestEvidenced: number | undefined, cycle: (year: number) => DeadlineAssessment | null, sources: readonly string[], profileId: string): DeadlineAssessment {
+  const floor = currentCycleFloor(today);
+  let year = latestEvidenced !== undefined ? latestEvidenced + 1 : Math.max(first, Number(today.slice(0, 4)) - 2);
+  if (latestEvidenced === undefined) {
+    // The current cycle is the earliest whose deadline has not passed by more
+    // than the calendar-adjustment margin.
+    while (validYear(year)) {
+      const result = cycle(year);
+      if (!result?.dueDate || result.dueDate >= floor) break;
+      year += 1;
+    }
+  }
+  while (validYear(year)) {
+    const result = cycle(year);
+    if (!result) break;
+    if (result.status !== 'satisfied') {
+      const history: number[] = [];
+      for (let earlier = first; earlier < year; earlier++) if (cycle(earlier)?.status !== 'satisfied') history.push(earlier);
+      return withHistory(result, 'annual_return', history);
+    }
+    year += 1;
+  }
+  return review('The reporting cycle exceeds the supported date range.', sources, profileId);
+}
+/** An explicit cycle, or the open cycle after the latest filing evidence. Only matching filing evidence closes it. */
 function nominalAnnualReturnDeadline(s: ComplianceSettings, today: string): DeadlineAssessment {
   if (!parseComplianceDate(today)) return review('A valid date-only assessment date is required.');
   const p = legalGovernanceProfile(s);
@@ -280,65 +379,90 @@ function nominalAnnualReturnDeadline(s: ComplianceSettings, today: string): Dead
   if (start && (!parseComplianceDate(start) || start > today)) return review('The recognition date must be valid and no later than the assessment date.', sources, p.id);
   const explicit = s.annualReturnCycleYear;
   if (explicit !== undefined && !validYear(explicit)) return review('The annual-return cycle year is invalid.', sources, p.id);
+  const filed = filedEvidence(s, today);
   if (p.annualReturn.anchor === 'anniversary') {
     const raw = s.anniversaryDate ?? s.recognitionDate ?? s.incorporationDate, anniversary = parseComplianceDate(raw);
     if (!raw || !anniversary) return review('A valid recognition/anniversary date is needed; an annual meeting is not the filing anchor.', sources, p.id);
     const firstYear = (start ? Number(start.slice(0, 4)) : anniversary.year) + 1;
-    // A latest receipt proves only its covered cycle, not all preceding years.
-    // Start at recognition and let exact filed evidence close each cycle.
-    let year = explicit ?? firstYear;
-    if (year < firstYear) return { status: 'not_applicable', dueDate: null, cycleYear: year, profileId: p.id, sourceIds: sources, issues: [], basis: 'The first annual filing cycle is the first anniversary after recognition.' };
-    while (validYear(year)) {
+    const cycle = (year: number): DeadlineAssessment | null => {
       const anchor = inYear(year, anniversary.month, anniversary.day);
       const due = p.annualReturn.months ? addCalendarMonths(anchor, p.annualReturn.months) : addComplianceDays(anchor, p.annualReturn.days ?? 0);
-      if (!due) break;
-      const result = returnResult(s, today, p.id, sources, year, anchor, due, `${p.annualReturn.label} for the ${year} anniversary: within ${p.annualReturn.months ? `${p.annualReturn.months} calendar months` : `${p.annualReturn.days} days`} after it. Every cycle requires separate filing evidence.`);
-      if (explicit !== undefined || result.status !== 'satisfied') return result;
-      year += 1;
+      return due ? returnResult(s, today, p.id, sources, year, anchor, due, `${p.annualReturn.label} for the ${year} anniversary: within ${p.annualReturn.months ? `${p.annualReturn.months} calendar months` : `${p.annualReturn.days} days`} after it. Every cycle requires separate filing evidence.`) : null;
+    };
+    if (explicit !== undefined) {
+      if (explicit < firstYear) return { status: 'not_applicable', dueDate: null, cycleYear: explicit, profileId: p.id, sourceIds: sources, issues: [], basis: 'The first annual filing cycle is the first anniversary after recognition.' };
+      return cycle(explicit) ?? review('The reporting cycle exceeds the supported date range.', sources, p.id);
     }
-    return review('The reporting cycle exceeds the supported date range.', sources, p.id);
+    // A receipt proves only its own covered cycle; it is the checkpoint after
+    // which the open cycle starts, and earlier gaps remain unverified history.
+    const latest = [...new Set(filed.map(f => f.cycleYear).filter((y): y is number => validYear(y) && y >= firstYear))]
+      .filter(year => cycle(year)?.status === 'satisfied').sort((a, b) => a - b).at(-1);
+    return openYearCycle(today, firstYear, latest, cycle, sources, p.id);
   }
   if (p.annualReturn.anchor === 'fiscal_year_end') {
     const md = parseMonthDay(s.fiscalYearEnd);
-    let period = s.annualReturnPeriodEnd;
-    const explicitPeriod = period !== undefined;
-    if (period && !parseComplianceDate(period)) return review('The actual reporting taxation-year end is invalid.', sources, p.id);
-    if (!period && explicit !== undefined && md) period = inYear(explicit, md.month, md.day);
-    if (!period && explicit !== undefined) return review('An explicit cycle year needs the actual taxation-year end or a fiscal calendar.', sources, p.id);
-    if (!period && start && md) period = nextOccurrence(md.month, md.day, start) ?? undefined;
-    if (!period) return review('Supply an actual taxation-year end or recognition plus fiscal calendar; a future recurring year-end cannot replace an unfiled completed period.', sources, p.id);
-    while (parseComplianceDate(period)) {
-      if (start && period < start) return { status: 'not_applicable', dueDate: null, profileId: p.id, sourceIds: sources, issues: [], basis: 'The selected reporting period predates recognition.' };
+    const periodCycle = (period: string): DeadlineAssessment | null => {
       const due = addFiscalFilingMonths(period, p.annualReturn.months ?? 6);
-      if (!due) break;
-      const year = Number(period.slice(0, 4));
-      const result = returnResult(s, today, p.id, [...sources, 'CRA-T2-FILING-MONTHS'], year, period, due, 'Ontario annual return for this actual taxation year; the prescribed T2 filing period is normally six months. A month-end taxation year uses the last day of the sixth month. Ontario and CRA submissions are separate.', { periodEnd: period });
-      if (explicitPeriod || explicit !== undefined || result.status !== 'satisfied') return result;
-      period = (md ? nextOccurrence(md.month, md.day, period, true) : addFiscalFilingMonths(period, 12)) ?? '';
+      return due ? returnResult(s, today, p.id, [...sources, 'CRA-T2-FILING-MONTHS'], Number(period.slice(0, 4)), period, due, 'Ontario annual return for this actual taxation year; the prescribed T2 filing period is normally six months. A month-end taxation year uses the last day of the sixth month. Ontario and CRA submissions are separate.', { periodEnd: period }) : null;
+    };
+    const nextPeriod = (period: string) => (md ? nextOccurrence(md.month, md.day, period, true) : addFiscalFilingMonths(period, 12)) ?? '';
+    let period = s.annualReturnPeriodEnd;
+    if (period !== undefined || explicit !== undefined) {
+      if (period && !parseComplianceDate(period)) return review('The actual reporting taxation-year end is invalid.', sources, p.id);
+      if (!period && md) period = inYear(explicit!, md.month, md.day);
+      if (!period) return review('An explicit cycle year needs the actual taxation-year end or a fiscal calendar.', sources, p.id);
+      if (start && period < start) return { status: 'not_applicable', dueDate: null, profileId: p.id, sourceIds: sources, issues: [], basis: 'The selected reporting period predates recognition.' };
+      return periodCycle(period) ?? review('The financial reporting cycle exceeds the supported date range.', sources, p.id);
+    }
+    const filedPeriods = [...new Set(filed.map(f => f.periodEnd).filter((end): end is string => Boolean(parseComplianceDate(end)) && (!start || end! >= start)))]
+      .filter(end => periodCycle(end)?.status === 'satisfied').sort();
+    const latest = filedPeriods.at(-1);
+    const firstPeriod = start && md ? nextOccurrence(md.month, md.day, start) ?? undefined : undefined;
+    if (latest) period = nextPeriod(latest);
+    else if (firstPeriod && md) {
+      // The current period is the earliest whose filing deadline has not
+      // passed by more than the calendar-adjustment margin.
+      const floor = currentCycleFloor(today), recent = inYear(Number(today.slice(0, 4)) - 2, md.month, md.day);
+      period = recent > firstPeriod ? recent : firstPeriod;
+      while (parseComplianceDate(period) && (periodCycle(period)?.dueDate ?? '') < floor) period = nextPeriod(period);
+    } else return review('Supply an actual taxation-year end or recognition plus fiscal calendar; a future recurring year-end cannot replace an unfiled completed period.', sources, p.id);
+    while (parseComplianceDate(period)) {
+      const result = periodCycle(period);
+      if (!result) break;
+      if (result.status !== 'satisfied') {
+        const missing: string[] = [];
+        for (let earlier = firstPeriod ?? filedPeriods[0]; earlier && parseComplianceDate(earlier) && earlier < period; earlier = nextPeriod(earlier)) {
+          if (periodCycle(earlier)?.status !== 'satisfied') missing.push(earlier);
+        }
+        return withHistory(result, 'annual_return', missing.map(end => Number(end.slice(0, 4))), missing);
+      }
+      period = nextPeriod(period);
     }
     return review('The financial reporting cycle exceeds the supported date range.', sources, p.id);
   }
   const completed = completions(s, today).filter(c => c.kind !== 'written_waiver');
   const first = start ? Number(start.slice(0, 4)) + 1 : undefined;
   const knownYears = completed.map(completionYear).filter(validYear);
-  const candidateYears = [...(first ? [first] : []), ...knownYears];
-  let year = explicit ?? (candidateYears.length ? Math.min(...candidateYears) : undefined);
-  if (!validYear(year)) return review('Supply the reporting year, actual AGM date or recognition date. A planned AGM cannot determine the annual-report deadline.', sources, p.id);
-  if (first && year < first && !knownYears.includes(year)) return { status: 'not_applicable', dueDate: null, cycleYear: year, profileId: p.id, sourceIds: sources, issues: [], basis: 'No compulsory no-AGM report is inferred for the incorporation year.' };
-  while (validYear(year)) {
+  const societyCycle = (year: number): DeadlineAssessment | null => {
     const actual = completed.find(c => completionYear(c) === year);
-    if (!actual && s.heldAgmYears?.includes(year)) return review('An AGM is known for this year but its actual date is missing; obtain it before calculating the 30-day deadline.', sources, p.id);
+    if (!actual && s.heldAgmYears?.includes(year)) return { ...review('An AGM is known for this year but its actual date is missing; obtain it before calculating the 30-day deadline.', sources, p.id), cycleYear: year };
     const extended = extensionFor(s, p.id, year, `${year}-12-31`);
     let anchor = actual?.date ?? `${year}-12-31`;
     let due: string | null = actual ? addComplianceDays(actual.date, 30) : `${year + 1}-01-31`;
     let basis = actual ? 'Annual report within 30 days after the actual held or valid deemed AGM for this calendar year.' : anchor > today ? 'If no AGM occurs by the end of this calendar year, the no-AGM report is due January 31 of the following year. An actual held/deemed AGM changes the anchor to 30 days after it.' : 'No AGM evidenced for this calendar year: report that fact by January 31 of the following year. Filing does not cure the missing AGM.';
     if (!actual && extended.date) { anchor = extended.date; due = addComplianceDays(extended.date, 30); basis = 'No AGM evidenced by the registrar-authorized extended deadline: the no-AGM report is due within 30 days after that deadline under s. 73(3).'; }
-    if (!due || !parseComplianceDate(due)) break;
-    const result = returnResult(s, today, p.id, sources, year, anchor, due, basis, { earliestFiling: actual ? actual.date : addComplianceDays(anchor, 1) ?? anchor, issues: extended.issue ? [extended.issue] : [] });
-    if (explicit !== undefined || result.status !== 'satisfied') return result;
-    year += 1;
+    if (!due || !parseComplianceDate(due)) return null;
+    return returnResult(s, today, p.id, sources, year, anchor, due, basis, { earliestFiling: actual ? actual.date : addComplianceDays(anchor, 1) ?? anchor, issues: extended.issue ? [extended.issue] : [] });
+  };
+  if (explicit !== undefined) {
+    if (first && explicit < first && !knownYears.includes(explicit)) return { status: 'not_applicable', dueDate: null, cycleYear: explicit, profileId: p.id, sourceIds: sources, issues: [], basis: 'No compulsory no-AGM report is inferred for the incorporation year.' };
+    return societyCycle(explicit) ?? review('The reporting cycle exceeds the supported date range.', sources, p.id);
   }
-  return review('The reporting cycle exceeds the supported date range.', sources, p.id);
+  const filedYears = [...new Set(filed.map(f => f.cycleYear).filter((y): y is number => validYear(y) && (!first || y >= first || knownYears.includes(y))))];
+  const historyStart = first ?? Math.min(...knownYears, ...filedYears);
+  if (!validYear(historyStart)) return review('Supply the reporting year, actual AGM date or recognition date. A planned AGM cannot determine the annual-report deadline.', sources, p.id);
+  const latest = filedYears.filter(year => societyCycle(year)?.status === 'satisfied').sort((a, b) => a - b).at(-1);
+  return openYearCycle(today, Math.min(historyStart, ...(latest !== undefined ? [latest] : [])), latest, societyCycle, sources, p.id);
 }
 const CALENDAR_SOURCE_IDS: Record<string, string> = {
   bc_society: 'BC-IA-TIME', bc_company: 'BC-IA-TIME',
@@ -361,6 +485,14 @@ function applyAnnualCalendarReview(s: ComplianceSettings, today: string, obligat
       status: ['satisfied', 'review_required'].includes(result.status) ? result.status : timed(calendar.reviewedDueDate, today),
       basis: `${result.basis} Calendar reviewed: ${calendar.calendarBasis} The reviewed deadline is ${calendar.reviewedDueDate}.`,
       ...(result.filedAt ? { late: result.filedAt > calendar.reviewedDueDate } : {}),
+    };
+  }
+  const daysPast = result.status === 'overdue' && !result.filedAt ? daysBetweenDates(nominalDueDate, today) : 0;
+  if (!matching.length && daysPast > CALENDAR_REVIEW_GRACE_DAYS) {
+    // No review is recorded and the open boundary passed long enough ago that
+    // no holiday or office-closure adjustment could still make it timely.
+    return { ...result, nominalDueDate, sourceIds, calendarReviewStatus: 'unreviewed', timingReviewRequired: false, status: 'overdue',
+      basis: `${result.basis} Overdue (calendar not reviewed): the nominal boundary ${nominalDueDate} passed ${daysPast} days ago and no calendar review is recorded. Holiday and office-closure adjustments move an annual boundary by a few days at most, so this cycle is overdue whatever the applicable calendar.`,
     };
   }
   const timingReviewRequired = result.filedAt ? result.filedAt > nominalDueDate : ['due', 'overdue'].includes(result.status);
@@ -406,8 +538,28 @@ export function nextAnnualReportDueDate(s: ComplianceSettings, fromISO: string):
   const result = assessAnnualReturnDeadline(s, fromISO);
   return ['satisfied', 'not_applicable'].includes(result.status) ? null : result.dueDate;
 }
-export function deriveComplianceDeadlines(s: ComplianceSettings, fromISO: string): DerivedDeadline[] {
-  if (!parseComplianceDate(fromISO)) return [];
+export interface ComplianceHistoryNotice {
+  key: 'agm-history' | 'annual-report-history';
+  title: string;
+  cycleYears: readonly number[];
+  periodEnds?: readonly string[];
+  basis: string;
+  sourceIds: readonly string[];
+}
+/** Informational evidence gaps before the open cycles. Never a deadline to add. */
+export function deriveComplianceHistoryNotices(s: ComplianceSettings, fromISO: string): ComplianceHistoryNotice[] {
+  const today = complianceDateFromISO(fromISO);
+  if (!today) return [];
+  const wording = entityMeetingWording(s), profile = legalGovernanceProfile(s), notices: ComplianceHistoryNotice[] = [];
+  const meeting = assessAnnualMeetingDeadline(s, today).historyNotVerified;
+  if (meeting) notices.push({ key: 'agm-history', title: `${wording.annualMeetingTitle} history not verified`, cycleYears: meeting.cycleYears, basis: meeting.basis, sourceIds: profile?.annualMeeting.sourceIds ?? [] });
+  const report = assessAnnualReturnDeadline(s, today).historyNotVerified;
+  if (report) notices.push({ key: 'annual-report-history', title: `${profile?.annualReturn.label ?? 'Annual filing'} history not verified`, cycleYears: report.cycleYears, ...(report.periodEnds ? { periodEnds: report.periodEnds } : {}), basis: report.basis, sourceIds: profile?.annualReturn.sourceIds ?? [] });
+  return notices;
+}
+export function deriveComplianceDeadlines(s: ComplianceSettings, fromISOOrTimestamp: string): DerivedDeadline[] {
+  const fromISO = complianceDateFromISO(fromISOOrTimestamp);
+  if (!fromISO) return [];
   const deadlines: DerivedDeadline[] = [], wording = entityMeetingWording(s), profile = legalGovernanceProfile(s);
   const meeting = assessAnnualMeetingDeadline(s, fromISO);
   if (meeting.dueDate && !['satisfied', 'not_applicable'].includes(meeting.status)) deadlines.push({ key: 'agm', title: wording.annualMeetingTitle, dueDate: meeting.dueDate, category: 'agm', deadlineCategory: 'Governance', basis: meeting.basis + (meeting.issues.length ? ` Review: ${meeting.issues.join(' ')}` : ''), sourceIds: meeting.sourceIds, cycleYear: meeting.cycleYear, status: meeting.status, plannedDate: meeting.plannedDate });
@@ -416,8 +568,59 @@ export function deriveComplianceDeadlines(s: ComplianceSettings, fromISO: string
     if (planned) deadlines.push({ key: 'agm', title: wording.annualMeetingTitle, dueDate: planned, category: 'agm', deadlineCategory: 'Governance', status: 'planned', basis: `Planned ${wording.annualMeeting} date. Statutory deadline remains unverified: ${meeting.basis}` });
   }
   const yearEnd = nextFiscalYearEnd(s, fromISO);
-  if (yearEnd) deadlines.push({ key: 'fiscal-year-end', title: 'Fiscal Year End', dueDate: yearEnd, category: 'financial', deadlineCategory: 'Governance', basis: `Next fiscal-calendar year-end; prepare the statements required for the ${wording.annualMeeting}.` });
+  if (yearEnd) deadlines.push({ key: 'fiscal-year-end', title: 'Fiscal Year End', dueDate: yearEnd, category: 'financial', deadlineCategory: 'Governance', cycleYear: Number(yearEnd.slice(0, 4)), basis: `Next fiscal-calendar year-end; prepare the statements required for the ${wording.annualMeeting}.` });
   const report = assessAnnualReturnDeadline(s, fromISO);
   if (report.dueDate && !['satisfied', 'not_applicable'].includes(report.status)) deadlines.push({ key: 'annual-report', title: profile?.annualReturn.label ?? 'Annual filing', dueDate: report.dueDate, category: 'annual-report', deadlineCategory: 'Governance', basis: report.basis + (report.issues.length ? ` Review: ${report.issues.join(' ')}` : ''), sourceIds: report.sourceIds, cycleYear: report.cycleYear, status: report.status });
   return deadlines;
+}
+
+/** A deadline row already in the register, possibly created before titles and
+ * statutory due dates changed. */
+export interface ExistingDeadlineLike { title?: string; dueDate?: string; category?: string; sourceKey?: string }
+type DerivedObligation = 'agm' | 'annual-report' | 'fiscal-year-end';
+/** Stable identity of a derived deadline: obligation plus covered cycle. */
+export function complianceDeadlineSourceKey(deadline: Pick<DerivedDeadline, 'key' | 'cycleYear' | 'dueDate'>): string {
+  return `compliance:${deadline.key}:${deadline.cycleYear ?? Number(deadline.dueDate.slice(0, 4))}`;
+}
+const normalizeTitle = (title?: string) => String(title ?? '').toLowerCase().replace(/[‐-―-]/g, ' ').replace(/\s+/g, ' ').trim();
+function existingObligation(row: ExistingDeadlineLike, s: ComplianceSettings): { key: DerivedObligation; cycleYear?: number } | undefined {
+  const stored = /^compliance:(agm|annual-report|fiscal-year-end):(\d{1,4})$/.exec(row.sourceKey ?? '');
+  if (stored) return { key: stored[1] as DerivedObligation, cycleYear: Number(stored[2]) };
+  const title = normalizeTitle(row.title), category = normalizeTitle(row.category), profile = legalGovernanceProfile(s);
+  // Current titles, the titles generated before this change ("Annual General
+  // Meeting", "Annual Report", "Fiscal Year End") and their legacy categories.
+  const meetingTitles = new Set(['annual general meeting', 'agm', 'annual meeting', 'annual meeting of shareholders', 'annual general meeting of shareholders', normalizeTitle(entityMeetingWording(s).annualMeetingTitle), normalizeTitle(profile?.annualMeeting.label)]);
+  const reportTitles = new Set(['annual report', 'annual return', 'annual filing', 'bc company annual report', 'federal annual return', 'ontario annual return', normalizeTitle(profile?.annualReturn.label)]);
+  if (meetingTitles.has(title) || (!title && category === 'agm')) return { key: 'agm' };
+  if (reportTitles.has(title) || (!title && category === 'annual report')) return { key: 'annual-report' };
+  if (title === 'fiscal year end') return { key: 'fiscal-year-end' };
+  return undefined;
+}
+/** The cycle a legacy row most plausibly covers, reversing the Act's offset. */
+function inferredCycleYear(key: DerivedObligation, dueDate: string, s: ComplianceSettings): number | undefined {
+  if (!parseComplianceDate(dueDate)) return undefined;
+  const year = Number(dueDate.slice(0, 4));
+  const rule = key === 'annual-report' ? legalGovernanceProfile(s)?.annualReturn : undefined;
+  if (!rule) return year;
+  if (rule.anchor === 'fiscal_year_end') return Number(addCalendarMonths(dueDate, -(rule.months ?? 6))?.slice(0, 4) ?? year);
+  if (rule.anchor === 'anniversary') return Number((rule.months ? addCalendarMonths(dueDate, -rule.months) : addComplianceDays(dueDate, -(rule.days ?? 0)))?.slice(0, 4) ?? year);
+  // BC society: January 31 is the no-AGM report for the preceding year;
+  // otherwise the report follows the AGM by 30 days.
+  return dueDate.endsWith('-01-31') ? year - 1 : Number(addComplianceDays(dueDate, -(rule.days ?? 30))?.slice(0, 4) ?? year);
+}
+/** Whether "Add deadlines" would duplicate a row the register already holds.
+ * Matching uses the obligation and its cycle, not the display title and due
+ * date, so legacy rows and rows with an earlier calculated date still match. */
+export function complianceDeadlineAlreadyTracked(deadline: DerivedDeadline, existing: readonly ExistingDeadlineLike[], s: ComplianceSettings): boolean {
+  if (!['agm', 'annual-report', 'fiscal-year-end'].includes(deadline.key)) return existing.some(row => row.title === deadline.title && row.dueDate === deadline.dueDate);
+  const cycleYear = deadline.cycleYear ?? Number(deadline.dueDate.slice(0, 4));
+  return existing.some(row => {
+    const obligation = existingObligation(row, s);
+    if (!obligation || obligation.key !== deadline.key) return false;
+    if (obligation.cycleYear !== undefined) return obligation.cycleYear === cycleYear;
+    if (!row.dueDate) return false;
+    if (row.dueDate === deadline.dueDate || inferredCycleYear(obligation.key, row.dueDate, s) === cycleYear) return true;
+    // A meeting row may hold the planned date or the statutory deadline.
+    return obligation.key === 'agm' && row.dueDate.slice(0, 4) === deadline.dueDate.slice(0, 4);
+  });
 }

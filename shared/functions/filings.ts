@@ -24,6 +24,11 @@ export function validateFiledFacts(record: Record<string, any>) {
   if (record.reportingPeriodEnd !== undefined && !parseComplianceDate(record.reportingPeriodEnd)) throw new Error("Reporting period end must be a valid date.");
   if (record.reportingYear !== undefined && record.reportingPeriodEnd && record.reportingYear !== Number(record.reportingPeriodEnd.slice(0, 4))) throw new Error("Reporting year and period-end year must agree.");
   if (record.status !== "Filed") return;
+  // An Ontario return reports one actual taxation year; a calendar year alone
+  // cannot identify it when the taxation year does not end on December 31.
+  if (record.kind === "OntarioAnnualReturn" && !record.reportingPeriodEnd) {
+    throw new Error("An Ontario annual return must identify the taxation-year end it reports before it is marked filed.");
+  }
   const date = record.filedAt;
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)
     || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date

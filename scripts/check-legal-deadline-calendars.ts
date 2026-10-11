@@ -58,13 +58,23 @@ assert.equal(assessAnnualReturnDeadline({ ...society, annualDeadlineCalendarRevi
 // completed meeting stays factual while an unreviewed late boundary is flagged.
 for (const [jurisdictionCode, source] of [['CA-BC', 'BC-IA-TIME'], ['CA-FED-CBCA', 'FED-IA-TIME'], ['CA-ON-OBCA', 'ON-LEGISLATION-TIME']] as const) {
   const entity = { entityType: 'corporation__business_', jurisdictionCode, incorporationDate: '2020-01-01' };
-  const meeting = assessAnnualMeetingDeadline(entity, '2022-01-01');
+  // Within the calendar-adjustment margin the unreviewed boundary needs review.
+  const meeting = assessAnnualMeetingDeadline(entity, '2021-07-05');
+  assert.equal(meeting.nominalDueDate, '2021-07-01');
   assert.equal(meeting.status, 'review_required');
   assert.ok(meeting.sourceIds.includes(source));
-  const completed = withAnnualMeetingCompletion(meeting, '2021-08-01');
+  const completed = withAnnualMeetingCompletion(meeting, '2021-07-03');
   assert.equal(completed.status, 'satisfied');
   assert.equal(completed.late, undefined);
   assert.equal(completed.timingReviewRequired, true);
+  // Long past the margin with no review recorded, the open boundary is overdue
+  // and says why; a recorded completion is still attached factually.
+  const missed = assessAnnualMeetingDeadline({ ...entity, annualMeetingAssessmentYear: 2021 }, '2022-01-01');
+  assert.equal(missed.status, 'overdue');
+  assert.equal(missed.calendarReviewStatus, 'unreviewed');
+  assert.ok(missed.basis.includes('calendar not reviewed'));
+  assert.equal(withAnnualMeetingCompletion(missed, '2021-08-01').status, 'satisfied');
+  assert.equal(withAnnualMeetingCompletion(missed, '2021-08-01').timingReviewRequired, true);
 }
 const incompleteFederal = assessAnnualMeetingDeadline({ entityType: 'corporation__business_', jurisdictionCode: 'CA-FED-CBCA', incorporationDate: '2020-01-01', annualMeetingDate: '2025-01-01' }, '2026-10-11');
 assert.equal(withAnnualMeetingCompletion(incompleteFederal, '2026-05-01').status, 'review_required', 'Completion cannot cure an unresolved fiscal-year constraint');

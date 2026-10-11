@@ -23,7 +23,8 @@ const recorded = annualGovernanceSettings(bc, [held, ...unreliable], [], today);
 assert.deepEqual(recorded.annualMeetingCompletions?.map(m => m.date), ['2025-06-01']);
 assert.equal(recorded.annualMeetingDate, undefined, 'the adapter uses one completion channel');
 assert.equal(assessAnnualMeetingDeadline(recorded, today).dueDate, '2026-09-01');
-assert.equal(assessAnnualMeetingDeadline(annualGovernanceSettings(bc, unreliable, [], today), today).dueDate, '2021-09-10', 'past planning does not advance the first annual deadline');
+assert.deepEqual(assessAnnualMeetingDeadline(annualGovernanceSettings(bc, unreliable, [], today), today).historyNotVerified?.cycleYears, [2021, 2022, 2023, 2024, 2025], 'past planning is not completion evidence for any earlier year');
+assert.equal(assessAnnualMeetingDeadline({ ...annualGovernanceSettings(bc, unreliable, [], today), annualMeetingAssessmentYear: 2021 }, today).dueDate, '2021-09-10', 'past planning does not advance the first annual deadline');
 assert.deepEqual(annualGovernanceSettings({ jurisdictionCode: null, entityType: null }, [], [], today).annualMeetingCompletions, []);
 
 // Imported annual-business evidence is a distinct reviewed input. A carried
@@ -73,11 +74,15 @@ for (const extra of [{}, { contextKind: 'home' }, { jurisdictionCode: 'CA-BC' },
 for (const [organization, kind, jurisdictionCode] of [[on, 'OntarioAnnualReturn', 'CA-ON'], [on, 'OntarioAnnualReturn', 'ontario'], [fed, 'FederalAnnualReturn', 'CA-FED'], [fed, 'FederalAnnualReturn', 'federal']] as const) {
   assert.equal(annualReturnEvidence(organization, [{ ...homeReturn, kind, jurisdictionCode }]).length, 1);
 }
-assert.equal(assessAnnualReturnDeadline(bcSettings, today).cycleYear, 2022, 'a later filed cycle leaves the older gap open');
-assert.equal(assessAnnualReturnDeadline(bcSettings, today).dueDate, '2022-05-10');
+assert.equal(assessAnnualReturnDeadline(bcSettings, today).cycleYear, 2024, 'the open cycle follows the latest filed cycle');
+assert.equal(assessAnnualReturnDeadline(bcSettings, today).dueDate, '2024-05-10');
+assert.deepEqual(assessAnnualReturnDeadline(bcSettings, today).historyNotVerified?.cycleYears, [2022], 'a later filed cycle leaves the older gap as unverified history');
 assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2021, today).status, 'satisfied');
-assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2022, today).status, 'review_required', 'an unfiled old cycle remains open while its legal holiday boundary is unreviewed');
-assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2022, today).timingReviewRequired, true);
+assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2022, today).status, 'overdue', 'an unfiled old cycle is overdue once the calendar margin has long passed');
+assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2022, today).calendarReviewStatus, 'unreviewed');
+assert.ok(assessAnnualGovernanceReturnCycle(bcSettings, 2022, today).basis.includes('calendar not reviewed'));
+assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2022, '2022-05-14').status, 'review_required', 'within the margin the boundary still needs calendar review');
+assert.equal(assessAnnualGovernanceReturnCycle(bcSettings, 2022, '2022-05-14').timingReviewRequired, true);
 const bcReturnCalendar = { profileId: 'bc_company', obligation: 'annual_return' as const, cycleYear: 2022, nominalDueDate: '2022-05-10', reviewedDueDate: '2022-05-10', reviewedOn: today, verified: true, evidenceRef: 'fixture-calendar-review', calendarBasis: 'Fixture reviewer confirmed the date, locality and registry filing channel.' };
 assert.equal(assessAnnualGovernanceReturnCycle(annualGovernanceSettings({ ...bc, annualDeadlineCalendarReviews: [bcReturnCalendar] }, [held], bcFilings, today), 2022, today).status, 'overdue', 'a matching evidenced calendar permits a conclusive late-boundary classification');
 assert.equal(assessAnnualGovernanceReturnCycle(annualGovernanceSettings(fed, [held], [], today), 2022, today).dueDate, '2022-05-09', 'CBCA uses 60 days from anniversary, independently of the held meeting');
@@ -89,7 +94,7 @@ const ontarioFilings = [
 const onSettings = annualGovernanceSettings(on, [held], ontarioFilings, today);
 assert.equal(assessAnnualGovernanceReturnCycle(onSettings, 2025, today).dueDate, '2025-10-31', 'actual period overrides the current recurring fiscal preference');
 assert.equal(assessAnnualGovernanceReturnCycle(onSettings, 2025, today).status, 'satisfied');
-assert.equal(assessAnnualGovernanceReturnCycle(onSettings, 2024, today).status, 'review_required', 'the CRA tax filing is not an Ontario registry receipt and the old open boundary requires calendar review');
+assert.equal(assessAnnualGovernanceReturnCycle(onSettings, 2024, today).status, 'overdue', 'the CRA tax filing is not an Ontario registry receipt; the old open boundary is long past the calendar margin');
 assert.equal(assessAnnualGovernanceReturnCycle(onSettings, 2024, today).dueDate, '2025-06-30');
 assert.equal(assessAnnualGovernanceReturnCycle({ ...onSettings, lastAnnualReturnPeriodEnd: '2025-04-30', lastAnnualReturnFiledAt: '2025-10-20' }, 2024, today).dueDate, '2025-06-30', 'a latest-filed checkpoint cannot rewrite an explicitly selected historical year');
 const twoPeriods = annualGovernanceSettings(on, [], [...ontarioFilings, { _id: 'second-period', kind: 'OntarioAnnualReturn', reportingPeriodEnd: '2025-12-31', status: 'Draft' }], today);
@@ -140,16 +145,16 @@ assert.equal(lateBcCycle.meetingAssessment.late, undefined, 'completion is prese
 assert.equal(lateBcCycle.meetingAssessment.timingReviewRequired, true);
 assert.equal(lateBcCycle.reportAssessment.dueDate, '2021-05-10', 'company report is not 30 days from the AGM');
 const plannedBcCycle = await cycle(bc, unreliable.filter(row => row._id !== 'future'), [], 2024);
-assert.equal(plannedBcCycle.meetingAssessment.status, 'review_required');
-assert.equal(plannedBcCycle.meetingAssessment.timingReviewRequired, true);
+assert.equal(plannedBcCycle.meetingAssessment.status, 'overdue', 'a long-passed first-meeting boundary is overdue without calendar review');
+assert.equal(plannedBcCycle.meetingAssessment.timingReviewRequired, false);
 assert.equal(plannedBcCycle.meetingAssessment.dueDate, '2021-09-10');
 const writtenCycle = await cycle({ ...bc, annualMeetingCompletions: [written] }, [], [], 2025);
 assert.equal(writtenCycle.meetingAssessment.status, 'satisfied');
 assert.ok(writtenCycle.meetingAssessment.basis.includes('Reviewed written annual-business completion'));
 assert.equal(writtenCycle.agm, null, 'reviewed written business does not fabricate a meeting row');
 const foreignReturnCycle = await cycle(bc, [], [{ ...homeReturn, _id: 'foreign-context', contextKind: 'extra_provincial' }], 2022);
-assert.equal(foreignReturnCycle.reportAssessment.status, 'review_required');
-assert.equal(foreignReturnCycle.reportAssessment.timingReviewRequired, true);
+assert.equal(foreignReturnCycle.reportAssessment.status, 'overdue', 'a foreign-context filing leaves the home cycle open');
+assert.equal(foreignReturnCycle.reportAssessment.timingReviewRequired, false);
 const onCycle = await cycle(on, [], ontarioFilings, 2025);
 assert.equal(onCycle.reportAssessment.dueDate, '2025-10-31');
 assert.equal(onCycle.annualReport._id, 'on-period');
