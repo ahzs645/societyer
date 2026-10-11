@@ -19,6 +19,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
+import { organizationCopy } from "../lib/organizationCopy";
 import {
   RecordTable,
   RecordTableScope,
@@ -29,13 +30,16 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
-import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
+import { legalCopyForOrganization } from "../lib/legalCopy";
 
-const PUBLICATION_PRESETS = [
+type PublicationPreset = { category: string; title: string; summary: string; entityKind?: "society" | "other" };
+
+const PUBLICATION_PRESETS: PublicationPreset[] = [
   { category: "AnnualReport", title: "Annual report", summary: "Publish the filed annual report package or registry confirmation." },
   { category: "FinancialSummary", title: "Financial summary", summary: "Publish approved financial statements, reviewer notes, or a plain-language annual summary." },
   { category: "Policy", title: "Public policy", summary: "Publish privacy, conflict, records inspection, code of conduct, or grant policies." },
-  { category: "Notice", title: "AGM notice", summary: "Publish an AGM notice, member inspection instructions, or other public notice." },
+  { category: "Notice", title: "AGM notice", summary: "Publish an AGM notice, member inspection instructions, or other public notice.", entityKind: "society" },
+  { category: "Notice", title: "Annual meeting notice", summary: "Publish an annual meeting notice, records inspection instructions, or other public notice.", entityKind: "other" },
   { category: "Grant", title: "Grant disclosure", summary: "Publish grant recipients, funding priorities, eligibility rules, or application instructions." },
 ];
 
@@ -92,6 +96,10 @@ export function TransparencyPage() {
 
   const records = (publications ?? []) as any[];
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // AGM, member and bylaw wording is society vocabulary.
+  const entity = organizationCopy(society);
+  const publicationPresets = PUBLICATION_PRESETS.filter((preset) => !preset.entityKind || preset.entityKind === (entity.society ? "society" : "other"));
+  const governingDocsLabel = entity.society ? "Bylaws" : entity.governingDocumentsTitle;
   const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
   const publicPath = society.publicSlug ? `/public/${society.publicSlug}` : null;
   const copyPublicLink = async () => {
@@ -104,7 +112,7 @@ export function TransparencyPage() {
   };
   const visibility: Array<{ on: boolean; onLabel: string; offLabel: string }> = [
     { on: Boolean(society.publicShowBoard), onLabel: "Board visible", offLabel: "Board hidden" },
-    { on: Boolean(society.publicShowBylaws), onLabel: "Bylaws visible", offLabel: "Bylaws hidden" },
+    { on: Boolean(society.publicShowBylaws), onLabel: `${governingDocsLabel} visible`, offLabel: `${governingDocsLabel} hidden` },
     { on: Boolean(society.publicShowFinancials), onLabel: "Financials visible", offLabel: "Financials hidden" },
     { on: Boolean(society.publicVolunteerIntakeEnabled), onLabel: "Volunteer intake on", offLabel: "Volunteer intake off" },
     { on: Boolean(society.publicGrantIntakeEnabled), onLabel: "Grant intake on", offLabel: "Grant intake off" },
@@ -116,10 +124,10 @@ export function TransparencyPage() {
         title="Public transparency"
         icon={<Globe size={16} />}
         iconColor="blue"
-        subtitle="What the public can see about your society."
+        subtitle={`What the public can see about your ${entity.entityNoun}.`}
         info={
           <p>
-            Publish board info, bylaws, annual reports, AGM materials, and contact details without exposing the
+            Publish board info, {entity.society ? "bylaws" : entity.governingDocuments}, annual reports, {entity.annualMeeting} materials, and contact details without exposing the
             private workspace. Only reviewed records you publish appear on the public page.
           </p>
         }
@@ -249,7 +257,7 @@ export function TransparencyPage() {
           </InfoPopover>
         </div>
         <div className="transparency-builder__presets">
-          {PUBLICATION_PRESETS.map((preset) => (
+          {publicationPresets.map((preset) => (
             <button
               type="button"
               className="transparency-builder__preset"
@@ -420,11 +428,11 @@ export function TransparencyPage() {
             <Field label="Public summary"><MarkdownEditor rows={6} value={settingsDraft.publicSummary ?? ""} onChange={(markdown) => setSettingsDraft({ ...settingsDraft, publicSummary: markdown })} /></Field>
             <Field label="Public contact email"><input className="input" value={settingsDraft.publicContactEmail ?? ""} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicContactEmail: e.target.value })} /></Field>
             <Field label="Privacy notice on public forms" hint="Shown on the volunteer and funding forms. Leave blank to use the default notice.">
-              <textarea className="textarea" rows={4} value={settingsDraft.publicIntakePrivacyNotice ?? ""} placeholder={PIPA_INTAKE_NOTICE.body} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicIntakePrivacyNotice: e.target.value })} />
+              <textarea className="textarea" rows={4} value={settingsDraft.publicIntakePrivacyNotice ?? ""} placeholder={legalCopyForOrganization(society).intakeNotice.body} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicIntakePrivacyNotice: e.target.value })} />
             </Field>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicTransparencyEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicTransparencyEnabled: e.target.checked })} /> Enable public page</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBoard} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBoard: e.target.checked })} /> Show board roster</label>
-            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show bylaws and governance records</label>
+            <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowBylaws} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowBylaws: e.target.checked })} /> Show {entity.society ? "bylaws" : entity.governingDocuments} and governance records</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicShowFinancials} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicShowFinancials: e.target.checked })} /> Show financial publications</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicVolunteerIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicVolunteerIntakeEnabled: e.target.checked })} /> Allow public volunteer applications</label>
             <label className="checkbox"><input type="checkbox" checked={settingsDraft.publicGrantIntakeEnabled} onChange={(e) => setSettingsDraft({ ...settingsDraft, publicGrantIntakeEnabled: e.target.checked })} /> Allow public grant applications</label>

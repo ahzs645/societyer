@@ -38,12 +38,14 @@ import { DatePicker } from "../components/DatePicker";
 import { Toggle } from "../components/Controls";
 import { formatDate } from "../lib/format";
 import {
-  PIPA_POLICY_REQUIREMENTS,
   PIPA_TEMPLATE_RESOURCES,
-  RECORDS_INSPECTION_GUIDANCE,
+  legalCopyForOrganization,
 } from "../lib/legalCopy";
 import { exportWordDocx } from "../lib/docx";
 import { markdownToHtml } from "../lib/markdown";
+import { organizationCopy } from "../lib/organizationCopy";
+import { appliesBcPrivacyRules } from "../../shared/entityRuleScope";
+import { citationIdsForOrganization } from "../lib/regulatoryCitations";
 import { todayDateOnly } from "../../shared/dateOnly";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
@@ -115,6 +117,13 @@ export function PrivacyPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  // Member-data custody, the society member register and the Societies Act
+  // records citation are society concepts; other entities skip them.
+  const entity = organizationCopy(society);
+  const nonSociety = !entity.society;
+  const legal = legalCopyForOrganization(society);
+  const bcPrivacy = appliesBcPrivacyRules(society);
+  const citations = (ids: string[]) => citationIdsForOrganization(ids, society);
   const privacyOpsForm = privacyForm ?? society;
   const setPrivacyField = (key: string, value: any) => {
     if (!canWriteSociety) return;
@@ -154,13 +163,14 @@ export function PrivacyPage() {
       : consentReady && trainingReady
         ? "success"
         : "warn";
-  const completedSetupCount = [
+  const setupChecks = [
     hasOfficer,
     privacyProgramDocumented,
     hasPolicyEvidence,
-    memberDataReady,
+    ...(nonSociety ? [] : [memberDataReady]),
     consentTrainingTone === "success" || consentTrainingTone === "info",
-  ].filter(Boolean).length;
+  ];
+  const completedSetupCount = setupChecks.filter(Boolean).length;
 
   const openPolicyDraft = async () => {
     if (policyDraft) {
@@ -169,7 +179,7 @@ export function PrivacyPage() {
       setDraftViewMode(canWriteDocuments ? "edit" : "preview");
       toast.success(
         prepared !== policyDraft
-          ? "Filled policy draft with society details"
+          ? `Filled policy draft with ${entity.entityNoun} details`
           : "Opened existing policy draft",
         prepared !== policyDraft ? "Review and save the draft to persist these template fields." : undefined,
       );
@@ -185,7 +195,7 @@ export function PrivacyPage() {
       setDraftViewMode(canWriteDocuments ? "edit" : "preview");
       toast.success(
         result.refreshed
-          ? "Filled existing policy draft with society details"
+          ? `Filled existing policy draft with ${entity.entityNoun} details`
           : result.reused
             ? "Opened existing policy draft"
             : "Policy draft created",
@@ -200,10 +210,10 @@ export function PrivacyPage() {
   const rebuildPolicyDraft = async () => {
     if (!canWriteDocuments || !draftEditor || draftEditor.kind !== "policy") return;
     const ok = await confirm({
-      title: "Use current society details?",
+      title: `Use current ${entity.entityNoun} details?`,
       message:
-        `This will replace the draft body with a fresh PIPA starter template filled with ${society.name}'s current Society page details. Any unsaved edits in this editor will be overwritten.`,
-      confirmLabel: "Use society details",
+        `This will replace the draft body with a fresh PIPA starter template filled with ${society.name}'s current ${nonSociety ? "organization profile" : "Society page"} details. Any unsaved edits in this editor will be overwritten.`,
+      confirmLabel: `Use ${entity.entityNoun} details`,
       tone: "warn",
     });
     if (!ok) return;
@@ -216,9 +226,9 @@ export function PrivacyPage() {
         tags: withDraftTags(draftEditor.tags, ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"]),
       });
       setDraftViewMode(canWriteDocuments ? "edit" : "preview");
-      toast.success("Policy draft filled from society details", "Review and save the draft to persist these template fields.");
+      toast.success(`Policy draft filled from ${entity.entityNoun} details`, "Review and save the draft to persist these template fields.");
     } catch (error: any) {
-      toast.error(error?.message ?? "Could not fill the draft from society details");
+      toast.error(error?.message ?? `Could not fill the draft from ${entity.entityNoun} details`);
     } finally {
       setDraftBusy(false);
     }
@@ -349,13 +359,13 @@ export function PrivacyPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Privacy (PIPA)"
+        title={bcPrivacy ? "Privacy (PIPA)" : "Privacy"}
         icon={<Shield size={16} />}
         iconColor="green"
-        subtitle="Set up privacy policies, complaints, member-data access and training."
+        subtitle={nonSociety ? "Set up privacy policies, complaints, consent and training." : "Set up privacy policies, complaints, member-data access and training."}
         info={<>
-          <p>A practical setup checklist for privacy policies, complaint handling, member-data access, consent, and training.</p>
-          <p><strong>Treat this as a setup workflow, not a public-registry filing.</strong> PIPA requires the society to adopt and follow privacy policies, practices, and a complaint process. A missing linked document in Societyer is an evidence gap; it is not normally a requirement to file a public registry privacy policy.</p>
+          <p>A practical setup checklist for privacy policies, complaint handling, {nonSociety ? "" : "member-data access, "}consent, and training.</p>
+          <p><strong>Treat this as a setup workflow, not a public-registry filing.</strong> {bcPrivacy ? "PIPA requires" : "Privacy law generally expects"} the {entity.entityNoun} to adopt and follow privacy policies, practices, and a complaint process. A missing linked document in Societyer is an evidence gap; it is not normally a requirement to file a public registry privacy policy.</p>
         </>}
         actions={
           <>
@@ -401,14 +411,16 @@ export function PrivacyPage() {
                       ? `${adoptedPolicyDocument.title} is the adopted policy.`
                       : policyDraft
                         ? "Tailor the draft, then link it as evidence after approval."
-                        : "Use the header button to start a draft filled in with your society's details."}
+                        : `Use the header button to start a draft filled in with your ${entity.entityNoun}'s details.`}
                   </span>
                 </div>
                 <div className="privacy-document-path__actions">
-                  <button className="btn btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
-                    {memberDataMemoDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
-                    {memberDataMemoDraft ? canWriteDocuments ? "Edit data memo" : "View data memo" : "Create data memo"}
-                  </button>
+                  {!nonSociety && (
+                    <button className="btn btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
+                      {memberDataMemoDraft ? <PenLine size={12} /> : <FilePlus2 size={12} />}
+                      {memberDataMemoDraft ? canWriteDocuments ? "Edit data memo" : "View data memo" : "Create data memo"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -431,7 +443,7 @@ export function PrivacyPage() {
               <div className="privacy-document-path">
                 <div className="privacy-document-path__copy">
                   <strong>{pipaSetupMotionCount ? `${pipaSetupMotionCount} PIPA setup motions in backlog` : "No PIPA setup motions in backlog"}</strong>
-                  <span>Officer, policy, member-data access and training motions.</span>
+                  <span>{nonSociety ? "Officer, policy and training motions." : "Officer, policy, member-data access and training motions."}</span>
                 </div>
                 <div className="privacy-document-path__actions">
                   <button className="btn btn--accent btn--sm" disabled={!canWriteMotions} onClick={addPipaSetupMotions}>
@@ -495,7 +507,7 @@ export function PrivacyPage() {
                     />
                   </Field>
                 </section>
-                <section>
+                {!nonSociety && <section>
                   <span className="society-split__eyebrow">Member data access</span>
                   <div className="society-field-grid">
                     <Field label="Status" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
@@ -529,7 +541,7 @@ export function PrivacyPage() {
                       onChange={(markdown) => setPrivacyField("memberDataAccessNotes", markdown)}
                     />
                   </Field>
-                </section>
+                </section>}
               </div>
             </div>
           </div>
@@ -542,7 +554,7 @@ export function PrivacyPage() {
                   Privacy setup checklist
                 </h2>
                 <p className="card__subtitle">
-                  {completedSetupCount}/5 ready
+                  {completedSetupCount}/{setupChecks.length} ready
                 </p>
               </div>
             </div>
@@ -552,8 +564,8 @@ export function PrivacyPage() {
               title="Designate the privacy officer"
               status={hasOfficer ? "Ready" : "Needed"}
               tone={hasOfficer ? "success" : "warn"}
-              citationIds={["PIPA-OFFICER"]}
-              actions={<Link className="btn btn--sm" to="/app/society"><UserRound size={12} /> Society</Link>}
+              citationIds={citations(["PIPA-OFFICER"])}
+              actions={<Link className="btn btn--sm" to="/app/society"><UserRound size={12} /> {nonSociety ? "Profile" : "Society"}</Link>}
             >
               {hasOfficer ? (
                 <>
@@ -569,7 +581,7 @@ export function PrivacyPage() {
               title="Adopt the policy and complaint process"
               status={privacyProgramDocumented ? "Adopted" : "Draft/adopt"}
               tone={privacyProgramDocumented ? "success" : "warn"}
-              citationIds={["PIPA-POLICY", "OIPC-PIPA-PRIVACY-POLICY-GUIDE"]}
+              citationIds={citations(["PIPA-POLICY", "OIPC-PIPA-PRIVACY-POLICY-GUIDE"])}
               actions={(
                 <>
                   <button className="btn btn--accent btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
@@ -586,7 +598,7 @@ export function PrivacyPage() {
                   {society.privacyProgramReviewedAtISO ? ` and was reviewed ${formatDate(society.privacyProgramReviewedAtISO)}` : ""}.
                 </>
               ) : (
-                "Use the starter template as a draft, tailor it to the society's real systems, then approve the policy, complaint process, access/correction process, safeguards, and retention approach."
+                `Use the starter template as a draft, tailor it to the ${entity.entityNoun}'s real systems, then approve the policy, complaint process, access/correction process, safeguards, and retention approach.`
               )}
             </PrivacyStep>
 
@@ -595,7 +607,7 @@ export function PrivacyPage() {
               title="Link the adopted evidence"
               status={hasPolicyEvidence ? "Linked" : "Evidence gap"}
               tone={hasPolicyEvidence ? "success" : "info"}
-              citationIds={["PIPA-POLICY"]}
+              citationIds={citations(["PIPA-POLICY"])}
               actions={(
                 <>
                   {policyDraft && (
@@ -612,12 +624,12 @@ export function PrivacyPage() {
                 : "Once the policy/process is adopted, link the final version or board approval record here. Keep draft templates separate from adopted evidence."}
             </PrivacyStep>
 
-            <PrivacyStep
+            {!nonSociety && <PrivacyStep
               icon={UsersRound}
               title="Document member-data access"
               status={memberDataReady ? "Recorded" : "Needs memo"}
               tone={memberDataReady ? "success" : "warn"}
-              citationIds={["PIPA-POLICY", "BC-SOC-RECORDS"]}
+              citationIds={citations(["PIPA-POLICY", "BC-SOC-RECORDS"])}
               actions={(
                 <>
                   <button className="btn btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
@@ -629,14 +641,14 @@ export function PrivacyPage() {
               )}
             >
               {memberDataStepText(memberDataAccessStatus, memberDataGapDocumented)}
-            </PrivacyStep>
+            </PrivacyStep>}
 
             <PrivacyStep
               icon={MailCheck}
               title="Track consent and training"
               status={consentTrainingLabel(communicationsEnabled, trainingEnabled, consentReady, trainingReady)}
               tone={consentTrainingTone}
-              citationIds={["PIPA-CONSENT", "CASL-CONSENT"]}
+              citationIds={citations(["PIPA-CONSENT", "CASL-CONSENT"])}
               actions={(
                 <>
                   {communicationsEnabled && (
@@ -649,6 +661,7 @@ export function PrivacyPage() {
               )}
             >
               {consentTrainingText({
+                nonSociety,
                 communicationsEnabled,
                 trainingEnabled,
                 activeMemberCount: activeMembers.length,
@@ -673,7 +686,7 @@ export function PrivacyPage() {
               </h2>
             </div>
             <div className="card__body privacy-resource-list">
-              {PIPA_TEMPLATE_RESOURCES.map((resource) => (
+              {legal.templateResources.map((resource) => (
                 <ResourceRow
                   key={resource.title}
                   resource={resource}
@@ -695,18 +708,19 @@ export function PrivacyPage() {
             </div>
             <div className="card__body">
               <ul className="privacy-bullet-list">
-                {PIPA_POLICY_REQUIREMENTS.map((item) => <li key={item}>{item}</li>)}
+                {legal.policyRequirements.map((item) => <li key={item}>{item}</li>)}
               </ul>
             </div>
           </div>
 
-          <div className="card">
+          {/* Society member/director register inspection rules from the bylaw rule set. */}
+          {legal.recordsInspectionGuidance.length > 0 && <div className="card">
             <div className="card__head">
               <h2 className="card__title">Records inspection rules</h2>
             </div>
             <div className="card__body">
               <ul className="privacy-bullet-list">
-                {RECORDS_INSPECTION_GUIDANCE.map((item) => <li key={item}>{item}</li>)}
+                {legal.recordsInspectionGuidance.map((item) => <li key={item}>{item}</li>)}
                 <li>
                   Members' register is{" "}
                   {rules?.inspectionMemberRegisterByPublic ? <strong>available</strong> : <strong>not</strong>}{" "}
@@ -723,7 +737,7 @@ export function PrivacyPage() {
                 </li>
               </ul>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -745,7 +759,7 @@ export function PrivacyPage() {
               <>
                 <button className="btn" disabled={!canWriteDocuments || draftBusy} onClick={rebuildPolicyDraft}>
                   <RefreshCw size={12} />
-                  Use society details
+                  Use {entity.entityNoun} details
                 </button>
                 <button className="btn" disabled={!canWriteDocuments || draftBusy} onClick={linkDraftAsEvidence}>
                   <FileCheck2 size={12} />
@@ -764,7 +778,7 @@ export function PrivacyPage() {
           <div className="privacy-editor">
             <Banner tone="warn" title={draftEditor.kind === "policy" ? "Draft first, evidence after approval" : "Document the data-access gap"}>
               {draftEditor.kind === "policy"
-                ? "Edit the policy here. Use Link as adopted evidence only after the society has approved the final version."
+                ? `Edit the policy here. Use Link as adopted evidence only after the ${entity.entityNoun} has approved the final version.`
                 : "Record what the society controls, what the university or parent body controls, and the evidence for that conclusion."}
             </Banner>
             <Field label="Document title">
@@ -949,6 +963,16 @@ function buildClientPipaPolicyDraft(society: any) {
   const mailingAddress = valueOrPlaceholder(society.mailingAddress, "mailing address");
   const generalContactEmail = valueOrPlaceholder(society.officialEmail ?? society.publicContactEmail, "general contact email");
   const memberDataStatus = valueOrPlaceholder(society.memberDataAccessStatus, "Society-controlled / Partially available / Institution-held / Not applicable");
+  const entity = organizationCopy(society);
+  const recordsSection = !entity.society
+    ? `## 6. Register Records
+
+Describe who can access the ${entity.entityNoun}'s registers and records that contain personal information, and how that access is limited and logged.`
+    : `## 6. Member Records and Institution-Held Data
+
+Current member-data access status in Societyer: ${memberDataStatus}.
+
+Choose and adapt the correct member-records language before adoption. If a university or parent body holds the member list, describe what the society actually controls and keep a separate member-data access gap memo.`;
 
   return `# ${legalName} Privacy Policy
 
@@ -1001,11 +1025,7 @@ We collect, use, and disclose personal information with consent unless PIPA or a
 
 We do not sell personal information.
 
-## 6. Member Records and Institution-Held Data
-
-Current member-data access status in Societyer: ${memberDataStatus}.
-
-Choose and adapt the correct member-records language before adoption. If a university or parent body holds the member list, describe what the society actually controls and keep a separate member-data access gap memo.
+${recordsSection}
 
 ## 7. Safeguards
 
@@ -1147,6 +1167,7 @@ function consentTrainingLabel(
 }
 
 function consentTrainingText({
+  nonSociety,
   communicationsEnabled,
   trainingEnabled,
   activeMemberCount,
@@ -1154,6 +1175,7 @@ function consentTrainingText({
   missingPrefCoverage,
   caslTrainingCount,
 }: {
+  nonSociety: boolean;
   communicationsEnabled: boolean;
   trainingEnabled: boolean;
   activeMemberCount: number;
@@ -1164,6 +1186,8 @@ function consentTrainingText({
   const parts: string[] = [];
   if (!communicationsEnabled) {
     parts.push("Communication preferences are handled outside this workspace.");
+  } else if (nonSociety) {
+    parts.push("Record communication consent for the people the organization contacts electronically.");
   } else if (missingPrefCoverage) {
     parts.push(`${prefCoverage}/${activeMemberCount} active member communication preference records are on file.`);
   } else {

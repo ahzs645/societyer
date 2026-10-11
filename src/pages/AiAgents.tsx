@@ -525,7 +525,7 @@ export function AiAgentsPage() {
               <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Validate a provider key before choosing a model or saving settings.</span>
             )}
             <div className="settings-pair">
-              <Field label="Temperature" hint="Lower is more consistent; most societies keep the default." className="ai-setup-form__number">
+              <Field label="Temperature" hint="Lower is more consistent; most workspaces keep the default." className="ai-setup-form__number">
                 <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupEditable} />
               </Field>
               <Field label="Max tool steps" hint="Lookups or actions per request before it replies." className="ai-setup-form__number">

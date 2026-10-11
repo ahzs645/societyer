@@ -7,6 +7,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, type ErrorSummaryItem } from "../components/ui";
 import { IntakePrivacyNotice } from "../components/IntakePrivacyNotice";
+import { legalCopyForOrganization } from "../lib/legalCopy";
 import { Select } from "../components/Select";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
 
@@ -133,7 +134,7 @@ export function GrantApplyPage() {
             <BadgeDollarSign size={12} /> Grant application
           </div>
           <h1 className="intake__title">Funding intake for {context.society.name}</h1>
-          <p className="intake__lede">Request funding for a project. Your request goes straight to the society's review queue.</p>
+          <p className="intake__lede">Request funding for a project. Your request goes straight to the {legalCopyForOrganization(context.society).entityNoun}'s review queue.</p>
         </header>
 
         {completed ? (
@@ -212,6 +213,7 @@ export function GrantApplyPage() {
               </fieldset>
               <IntakePrivacyNotice
                 societyName={context.society.name}
+                organization={context.society}
                 customNotice={context.society.privacyNotice}
                 publicSlug={context.society.publicSlug}
                 privacyOfficerName={context.society.privacyOfficerName}

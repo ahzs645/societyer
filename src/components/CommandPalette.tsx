@@ -52,13 +52,13 @@ import {
 } from "lucide-react";
 import { api } from "../lib/convexApi";
 import { useSociety, useSocieties, setStoredSocietyId } from "../hooks/useSociety";
-import { organizationLabel } from "../../shared/organizationDomain";
+import { organizationKind, organizationLabel } from "../../shared/organizationDomain";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useDialogFocus } from "../lib/useDialogFocus";
-import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, type RouteGroup } from "../lib/routeIdentity";
+import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForEntityKind, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 
 type CommandCategory =
@@ -585,8 +585,18 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
       .map((row: any) => commandFromMetadata(row, navigate))
       .filter((item): item is CommandItem => Boolean(item));
     const enabledActions = actions.filter((item) => !item.module || isModuleEnabled(society, item.module));
+    // Match the sidebar: hide routes gated to another entity kind (e.g. the
+    // society member register for a corporation) and use the per-kind label.
+    const entityKind = society ? organizationKind(society as any) : null;
+    const navItems = NAV_ITEMS.flatMap((item) => {
+      const identity = item.to ? ROUTE_IDENTITY[item.to] : undefined;
+      if (!identity) return [item];
+      if (!routeAllowedForEntityKind(identity, entityKind)) return [];
+      const label = routeLabelForEntityKind(identity, entityKind);
+      return [label === item.label ? item : { ...item, label, keywords: [...(item.keywords ?? []), item.label] }];
+    });
     const all = [
-      ...NAV_ITEMS.filter((item) => !item.module || isModuleEnabled(society, item.module)),
+      ...navItems.filter((item) => !item.module || isModuleEnabled(society, item.module)),
       ...enabledActions,
       ...metadataActions,
       ...dynamicActions,

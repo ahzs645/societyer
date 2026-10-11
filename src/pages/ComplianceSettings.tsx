@@ -12,6 +12,7 @@ import { formatMonthDay } from "../components/MonthDayPicker";
 import { Link } from "react-router-dom";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { organizationCopy } from "../lib/organizationCopy";
 import {
   deriveComplianceDeadlines,
   type ComplianceSettings,
@@ -155,6 +156,8 @@ export function ComplianceSettingsPage() {
   };
 
   const pendingCount = derived.filter((d) => !existingKeys.has(deadlineKey(d))).length;
+  const entity = organizationCopy(society);
+  const meetingLabel = entity.annualMeetingTitle;
 
   return (
     <div className="page">
@@ -162,7 +165,7 @@ export function ComplianceSettingsPage() {
         title="Compliance settings"
         icon={<CalendarClock size={16} />}
         iconColor="orange"
-        subtitle="Your AGM date and fiscal year end set the annual deadlines."
+        subtitle={`Your ${entity.annualMeeting} date and fiscal year end set the annual deadlines.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving || !canSaveSettings}>
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
@@ -175,18 +178,18 @@ export function ComplianceSettingsPage() {
           <section className="card settings-section">
             <h2 className="settings-section__title">Annual cycle</h2>
             <div className="settings-section__row settings-section__row--pair">
-              <Field label="AGM month">
+              <Field label={`${meetingLabel} month`}>
                 <Select value={String(agmMonth)} onChange={(value) => setAgmMonth(value === "" ? "" : Number(value))}
                   options={[{ value: "", label: "Not set" }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
               </Field>
-              <Field label="AGM day">
+              <Field label={`${meetingLabel} day`}>
                 <input className="input" type="number" inputMode="numeric" min={1} max={31} value={agmDay}
                   onChange={(e) => setAgmDay(e.target.value === "" ? "" : Number(e.target.value))} />
               </Field>
             </div>
             {lastAgmDay && (agmMonth === "" || agmDay === "") && (
               <p className="settings-section__hint">
-                Last AGM was {formatDate(agmFacts.annualMeetingDate!)}.{" "}
+                Last {entity.annualMeeting} was {formatDate(agmFacts.annualMeetingDate!)}.{" "}
                 <button
                   type="button"
                   className="link-button"
@@ -233,7 +236,7 @@ export function ComplianceSettingsPage() {
 
           <section className="card settings-section">
             <h2 className="settings-section__title">Contacts &amp; records</h2>
-            <Field label="Short name" hint={'Defined term, e.g. "the Society"'}>
+            <Field label="Short name" hint={`Defined term, e.g. "the ${entity.entityTitle}"`}>
               <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
             </Field>
             <div className="settings-section__row">
@@ -295,7 +298,7 @@ export function ComplianceSettingsPage() {
             </button>
           </div>
           {derived.length === 0 ? (
-            <p className="settings-section__hint">Set an AGM date or fiscal year end to see the deadlines they create.</p>
+            <p className="settings-section__hint">Set an {entity.annualMeeting} date or fiscal year end to see the deadlines they create.</p>
           ) : (
             <ul className="settings-deadlines">
               {derived.map((d) => (

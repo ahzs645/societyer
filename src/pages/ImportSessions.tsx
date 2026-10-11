@@ -21,6 +21,7 @@ import { isMemberHistoryDate } from "../../shared/memberHistory";
 import { Select } from "../components/Select";
 import { inspectImportBundle, prepareImportBundle } from "../lib/importBundleIntake";
 import { isActiveImportSession } from "../../shared/importSessionState";
+import { isCorporation } from "../../shared/organizationDomain";
 import { distinguishSessionNames, type SessionLabel } from "../../shared/importSessionLabels";
 import { ImportReviewQueue, DEFAULT_QUEUE_FILTERS, type QueueFilters } from "../features/importReview/ImportReviewQueue";
 import { IMPORT_KIND_LABELS, importKindLabel } from "../features/importReview/importKindLabels";
@@ -460,7 +461,9 @@ export function ImportSessionsPage() {
               items={[
                 { id: "session", label: "New session", icon: <FileJson size={14} />, disabled: !canWrite, onSelect: () => setCreateOpen(true) },
                 { id: "intake", label: "AI intake run", icon: <Sparkles size={14} />, onSelect: () => navigate("/app/intake") },
-                { id: "members-csv", label: "Members CSV", icon: <Upload size={14} />, disabled: !canWrite, onSelect: () => setCsvOpen(true) },
+                // The CSV loads the society member register; corporations record
+                // shareholders as role holders instead.
+                ...(isCorporation(society) ? [] : [{ id: "members-csv", label: "Members CSV", icon: <Upload size={14} />, disabled: !canWrite, onSelect: () => setCsvOpen(true) }]),
               ]}
             />
           </>

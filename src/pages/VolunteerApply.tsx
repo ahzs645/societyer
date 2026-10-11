@@ -7,6 +7,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, type ErrorSummaryItem } from "../components/ui";
 import { IntakePrivacyNotice } from "../components/IntakePrivacyNotice";
+import { legalCopyForOrganization } from "../lib/legalCopy";
 import { ArrowLeft, HandHeart } from "lucide-react";
 
 const FIELD_IDS = {
@@ -120,7 +121,7 @@ export function VolunteerApplyPage() {
             <HandHeart size={12} /> Volunteer application
           </div>
           <h1 className="intake__title">Volunteer with {context.society.name}</h1>
-          <p className="intake__lede">Tell the society where you'd like to help. Someone will follow up by email.</p>
+          <p className="intake__lede">Tell the {legalCopyForOrganization(context.society).entityNoun} where you'd like to help. Someone will follow up by email.</p>
         </header>
 
         {completed ? (
@@ -169,12 +170,13 @@ export function VolunteerApplyPage() {
                     <input className="input" value={form.interests} onChange={(e) => setForm({ ...form, interests: e.target.value })} />
                   </Field>
                 </div>
-                <Field label="Anything else the society should know?">
+                <Field label={`Anything else the ${legalCopyForOrganization(context.society).entityNoun} should know?`}>
                   <textarea className="textarea" rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                 </Field>
               </fieldset>
               <IntakePrivacyNotice
                 societyName={context.society.name}
+                organization={context.society}
                 customNotice={context.society.privacyNotice}
                 publicSlug={context.society.publicSlug}
                 privacyOfficerName={context.society.privacyOfficerName}

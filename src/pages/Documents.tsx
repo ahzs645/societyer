@@ -27,6 +27,7 @@ import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { organizationCopy } from "../lib/organizationCopy";
 import { documentHasFile, openDocumentFile } from "../lib/documentOpen";
 import {
   documentCategoryFacets,
@@ -262,7 +263,10 @@ export function DocumentsPage() {
         iconColor="gray"
         subtitle="Every record and source file the organization keeps."
         info={
-          <p>Constitution, bylaws, minutes, statements, policies and imported sources. Keep records at least 10 years; financial records 7 years (CRA).</p>
+          // The 10-year records default follows the society records rules.
+          !organizationCopy(society).society
+            ? <p>{organizationCopy(society).governingDocumentsTitle}, minutes, statements, policies, imported sources, and other records.</p>
+            : <p>Constitution, bylaws, minutes, statements, policies and imported sources. Keep records at least 10 years; financial records 7 years (CRA).</p>
         }
         actions={
           <>

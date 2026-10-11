@@ -16,6 +16,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Trash2, Calendar, Archive, RotateCcw } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
+import { organizationCopy } from "../lib/organizationCopy";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -170,7 +171,7 @@ export function DeadlinesPage() {
         title="Deadlines"
         icon={<Calendar size={16} />}
         iconColor="yellow"
-        subtitle="Dates set by law or regulation: filings, AGMs and renewals."
+        subtitle={`Dates set by law or regulation: filings, ${organizationCopy(society).society ? "AGMs" : "annual meetings"} and renewals.`}
         info={
           <p>Internal work items belong in Tasks; promises made to funders or partners belong in Commitments.</p>
         }

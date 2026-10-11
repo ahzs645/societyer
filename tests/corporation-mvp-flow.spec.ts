@@ -43,6 +43,23 @@ test("corporation MVP flow renders obligations, share register, registration, an
   expect(setupState.selectedRoleHolderCount, JSON.stringify(setupState)).toBe(4);
   await expect(page.getByRole("button", { name: /Select workspace.*Northstar Browser Flow Holdings Inc\./ })).toBeVisible();
 
+  // A corporation must not see society-only chrome: no Societies Act copy on the
+  // dashboard or in the sidebar, and no society member register in the nav.
+  await navigate("/app");
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await expect(page.getByText("Record directors and shareholders").first()).toBeVisible();
+  for (let i = 0; i < 15; i += 1) {
+    const closedGroup = page.locator('.sidebar__group-toggle[aria-expanded="false"]').first();
+    if (!(await closedGroup.count())) break;
+    await closedGroup.click();
+  }
+  const sidebar = page.locator(".sidebar").first();
+  await expect(sidebar.getByRole("link", { name: "Role holders" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: /^(Members|Member proposals|Donation receipts|Membership & billing)$/ })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: /^Society$/ })).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("Societies Act");
+  await expect(page.locator("body")).not.toContainText("s.40 requires");
+
   await navigate("/app/role-holders");
   await expect(page.getByRole("heading", { name: "Corporation people" })).toBeVisible();
   await expect(page.getByText("Dina Director")).toBeVisible();
