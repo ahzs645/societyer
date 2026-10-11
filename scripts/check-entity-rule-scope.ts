@@ -127,6 +127,7 @@ const test = convexTest(schema, {
   "./dashboard.js": () => import("../convex/dashboard"),
   "./annualCycle.js": () => import("../convex/annualCycle"),
   "./minuteBook.js": () => import("../convex/minuteBook"),
+  "./continuity.js": () => import("../convex/continuity"),
 } as any);
 
 const SOCIETY_ONLY_TEXT = /Societies Act|s\.40|s\.197|member-funded|BC-resident|BC resident|Constitution not uploaded|Bylaws not uploaded|BC defaults|Member list|Member data|constitution/i;
@@ -151,6 +152,7 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
   const cycleItems = Object.values(cycle.phases).flat() as any[];
   const binder = await actor.query(api.minuteBook.overview, { societyId });
   const coreCheck = binder.checks.find((check: any) => check.key === "missing_core_documents");
+  const continuityCitations = ((await actor.query(api.continuity.dashboardChecks, { societyId }) as any).checks as any[]).map((check) => check.citation).filter(Boolean);
 
   if (appliesBcSocietyRules(ENTITIES[key])) {
     for (const ruleId of ["BC-SOC-DIRECTORS-MIN", "BC-SOC-DIRECTORS-BC-RESIDENT", "BC-SOC-DIRECTOR-CONSENT", "BC-SOC-CONSTITUTION-EVIDENCE"]) {
@@ -160,6 +162,7 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
     assert.ok(cycleItems.some((item) => item.id === "member-register"));
     assert.equal(cycleItems.find((item) => item.id === "post-agm-directors").status, "blocked", `${key}: BC society needs a BC-resident director`);
     assert.match(coreCheck.label, /constitution/i);
+    assert.ok(continuityCitations.some((citation: string) => /Societies Act/.test(citation)), `${key}: continuity checks keep Societies Act citations`);
     continue;
   }
 
@@ -169,6 +172,7 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
     assert.ok(!String(id).startsWith("BC-SOC-"), `${key}: Societies Act citation ${id} leaked`);
     assert.ok(citationAppliesToOrganization(id, ENTITIES[key]), `${key}: inapplicable citation ${id}`);
   }
+  for (const citation of continuityCitations) assert.doesNotMatch(citation, /Societies Act/, `${key}: continuity citation ${citation} leaked`);
   if (appliesBcPrivacyRules(ENTITIES[key])) assert.deepEqual(ids, ["PIPA-POLICY-DOCUMENTED", "PIPA-POLICY-EVIDENCE"], `${key}: BC-home entity keeps only BC PIPA checks`);
   else assert.deepEqual(ids, [], `${key}: no automated checks are configured, so none run`);
 

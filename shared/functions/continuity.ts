@@ -45,6 +45,7 @@ import {
   type CadenceRule,
 } from "../continuityRules";
 import { agreementGaps } from "../agreements";
+import { appliesBcSocietyRules } from "../entityRuleScope";
 
 const READ_PERMISSIONS = ["meetings:read", "minutes:read", "motions:read", "committees:read", "filings:read", "financials:read", "directors:read", "documents:read", "agreements:read"] as const;
 
@@ -313,7 +314,8 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       title: "Director consent on file",
       text: !active.length ? "No active directors in the register." : missing.length ? `${missing.length} of ${active.length} active director(s) have no consent evidence.` : `All ${active.length} active directors have consent evidence.`,
       to: "/app/directors",
-      citation: "Societies Act, SBC 2015, c. 18, s. 42(4)",
+      // Societies Act citation only for a BC society; corporations get the check without it.
+      citation: appliesBcSocietyRules(snapshot.society) ? "Societies Act, SBC 2015, c. 18, s. 42(4)" : undefined,
     });
   }
   if ((await readAccess(ctx, societyId)).has("agreements:read")) {
