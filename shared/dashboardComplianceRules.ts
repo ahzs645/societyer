@@ -621,7 +621,12 @@ function extendedDashboardRules(organization?: LegalEntityLike | null): Dashboar
     out.push(make(`LEGAL-${profile.id}-GOVERNING-DOCUMENTS`, 'Governing-document evidence', profile.records[0]?.sourceIds ?? [], audience, ctx => !ctx.society?.bylawsDocId && !ctx.society?.constitutionDocId ? { level: 'warn', text: `Link the current ${profile.id === 'bc_company' ? 'articles and notice of articles' : 'articles and by-laws'} and review the entity-specific minute-book checklist.` } : null, '/app/minute-book'));
   }
   const privacy = resolvePrivacyProfile(organization);
-  out.push(make('PRIVACY-APPLICABILITY', 'Assess privacy applicability', [], 'general', () => privacy.status !== 'assessed' && privacy.status !== 'no-general-law-identified' ? { level: 'warn', text: 'Assess privacy law using operating locations and activities. Incorporation jurisdiction alone does not establish which privacy duties apply.' } : null, '/app/privacy'));
+  // A BC-home workspace has BC PIPA presumed (privacy.md); the warning asks it
+  // to confirm the displacing facts rather than implying no law is identified.
+  const privacyApplicabilityText = privacy.presumedLawIds.includes('bc_pipa')
+    ? 'BC PIPA is presumed to apply to this BC organization. Confirm the facts that could displace it (federal work, undertaking or business; health or public-sector records; operations outside BC) to finalize the privacy assessment.'
+    : 'Assess privacy law using operating locations and activities. Incorporation jurisdiction alone does not establish which privacy duties apply.';
+  out.push(make('PRIVACY-APPLICABILITY', 'Assess privacy applicability', [], 'general', () => privacy.status !== 'assessed' && privacy.status !== 'no-general-law-identified' ? { level: 'warn', text: privacyApplicabilityText } : null, '/app/privacy'));
   for (const lawId of privacy.applicableLawIds) {
     const law = PRIVACY_LAWS[lawId];
     const audience: RuleAudience = `privacy:${lawId}`;
