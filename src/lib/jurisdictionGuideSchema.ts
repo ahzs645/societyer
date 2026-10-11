@@ -95,15 +95,27 @@ export const jurisdictionGuideRuleSchema = z
       .strict(),
     validity: z
       .object({
+        /** Verified commencement of this rule. */
         effectiveFrom: dateSchema.optional(),
         effectiveTo: dateSchema.nullable().optional(),
-        /** Review of current wording; never represents legal commencement. */
+        /** Review of current wording; review metadata only, never legal commencement. */
         currentAsOf: dateSchema.optional(),
+        /** Earliest date the governing Act or Part could apply, for a rule whose
+         * own commencement is not verified. It is a floor, not a commencement. */
+        notBefore: dateSchema.optional(),
       })
       .strict()
       .refine(
-        (validity) => Boolean(validity.effectiveFrom) !== Boolean(validity.currentAsOf),
-        "Provide a verified effectiveFrom or a currentAsOf review date, never substitute one for the other",
+        (validity) => Boolean(validity.effectiveFrom || validity.currentAsOf),
+        "Provide a verified effectiveFrom, a currentAsOf review date, or both",
+      )
+      .refine(
+        (validity) => !validity.notBefore || (!validity.effectiveFrom && Boolean(validity.currentAsOf)),
+        "notBefore is only a floor for an unverified current rule; a verified effectiveFrom replaces it",
+      )
+      .refine(
+        (validity) => !validity.effectiveFrom || !validity.currentAsOf || validity.currentAsOf >= validity.effectiveFrom,
+        "A currentAsOf review cannot precede the verified commencement",
       )
       .refine(
         (validity) => !validity.effectiveTo || Boolean(validity.effectiveFrom && Date.parse(validity.effectiveTo) > Date.parse(validity.effectiveFrom)),

@@ -174,6 +174,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -196,7 +197,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1991-12-31 restored from the previously verified guide (R.S.O. 1990 revision proclaimed in force 1991-12-31; the earlier guide's 1990-12-31 was corrected). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "The first annual shareholder meeting must be called within 18 months of incorporation and subsequently within 15 months of the last annual meeting. A qualifying written annual-business route may replace the meeting.",
@@ -222,6 +223,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -244,7 +246,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1991-12-31 restored from the previously verified guide (R.S.O. 1990 revision proclaimed in force 1991-12-31; the earlier guide's 1990-12-31 was corrected). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Maintain articles/bylaws/amendments, known unanimous shareholder agreements, shareholder proceedings, director and securities registers, Ontario land-ownership records, applicable ISC register, accounting and board/committee proceedings. Records may use any form with safeguards and accurate intelligible reproduction. Accounting records have a six-year minimum subject to tax requirements.",
@@ -270,6 +272,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -292,7 +295,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1991-12-31 restored from the previously verified guide (R.S.O. 1990 revision proclaimed in force 1991-12-31; the earlier guide's 1990-12-31 was corrected). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Subject to the bylaws, shareholder quorum is holders of a majority of shares entitled to vote, present personally or by proxy. Board quorum is governed by s. 126 and the articles/bylaws.",
@@ -318,6 +321,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -340,7 +344,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1991-12-31 restored from the previously verified guide (R.S.O. 1990 revision proclaimed in force 1991-12-31; the earlier guide's 1990-12-31 was corrected). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Ordinary meeting resolutions use a majority and special meeting resolutions at least two-thirds of votes cast. Written special resolutions require all entitled shareholders; board/committee written resolutions require all entitled directors. Non-offering corporations may pass an ordinary written resolution by holders of a majority of entitled voting shares.",
@@ -367,6 +371,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -389,7 +394,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1991-12-31 restored from the previously verified guide (R.S.O. 1990 revision proclaimed in force 1991-12-31; the earlier guide's 1990-12-31 was corrected). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Ontario corporations file the prescribed initial and annual returns and generally notify changes in filed information within 15 days. Extraprovincial corporations normally file their initial return within 60 days of starting to carry on business in Ontario.",
@@ -415,6 +420,7 @@
         "conditions": []
       },
       "validity": {
+        "notBefore": "1991-12-31",
         "currentAsOf": "2026-06-02"
       },
       "authority": {
@@ -433,7 +439,7 @@
         "verifiedAt": "2026-06-02",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1991-12-31 is the earliest date the governing Act could apply (an Ontario Business Registry profile report is registry output, not a provision with its own commencement); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Ontario profile reports expose registry identity and status fields that can be archived as source evidence for the organization profile.",
@@ -476,6 +482,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -484,7 +491,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1991-12-31 is the earliest date the governing Act could apply (the R.S.O. 1990 revision, including c. B.16 and c. C.39, was proclaimed in force 1991-12-31); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Give shareholder-meeting notice at least ten and not more than 50 days before a non-offering corporation’s meeting; an offering corporation requires at least 21 and not more than 50 days. Lawful notice waivers and special-business/electronic-meeting particulars are separate.",
@@ -526,6 +533,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -534,7 +542,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1991-12-31 is the earliest date the governing Act could apply (the R.S.O. 1990 revision, including c. B.16 and c. C.39, was proclaimed in force 1991-12-31); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Directors inspect the broader statutory books. Shareholders/creditors and authorized representatives have access to the specified shareholder-level records, with public-offering and copy/list provisions governed separately.",
@@ -576,6 +584,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2023-01-01",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -584,7 +593,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2023-01-01 is the earliest date the governing provisions could apply (the OBCA ISC register provisions commenced 2023-01-01); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "An in-scope corporation maintains an ISC register with identity, tax residence, control dates/description and diligence steps, reviews it each financial year and enters changes within 15 days after awareness. Prescribed enforcement bodies can request information. Personal information is disposed of in the year after six years from cessation unless longer legal retention applies.",
@@ -626,6 +635,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -634,7 +644,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1991-12-31 is the earliest date the governing Act could apply (the R.S.O. 1990 revision, including c. B.16 and c. C.39, was proclaimed in force 1991-12-31); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Maintain the Ontario ownership-interest register identifying each property, acquisition/disposal dates and supporting deeds/transfers or similar records with prescribed property particulars.",
@@ -676,6 +686,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2021-10-19",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -684,7 +695,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2021-10-19 is the earliest date the governing regulation could apply (research records O. Reg. 400/21 from 2021-10-19, replacing revoked R.R.O. 1990, Reg. 182); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "An OBCA corporation files its annual return within the prescribed corporate-income-tax return period, normally six months after its taxation year-end. Other corporate classes have specified rules/exemptions. Ontario filing is separate from the CRA tax return.",
@@ -727,6 +738,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1991-12-31",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -735,7 +747,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1991-12-31 is the earliest date the governing Act could apply (the R.S.O. 1990 revision, including c. B.16 and c. C.39, was proclaimed in force 1991-12-31); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Subject to articles/bylaws/unanimous shareholder agreement, directors make/amend/repeal bylaws effective immediately, then submit them to the next shareholder meeting for confirmation/amendment/rejection. Failure to submit or rejection terminates their effect.",

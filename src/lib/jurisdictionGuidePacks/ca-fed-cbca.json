@@ -193,6 +193,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -215,7 +216,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1975-12-15 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "A corporation sends an annual return in the period fixed by the Director. Statutory default can lead to notice-based dissolution; the Act requires notice and an opportunity to cure.",
@@ -241,6 +242,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -263,7 +265,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1975-12-15 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Maintain articles/bylaws/amendments and unanimous shareholder agreements, shareholder proceedings, statutory director notices, securities register, accounting records and board/committee proceedings. Electronic records must be intelligibly reproducible and protected. Accounting records are retained six years after the financial year to which they relate.",
@@ -289,6 +291,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -311,7 +314,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1975-12-15 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Unless bylaws provide otherwise, shareholder quorum consists of holders of a majority of shares entitled to vote, present personally or by proxy. Subject to articles/bylaws, board quorum is a majority of the prescribed board number/minimum, with resident-Canadian participation requirements.",
@@ -337,6 +340,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -359,7 +363,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 1975-12-15 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "An ordinary meeting resolution uses a majority of votes cast; a special meeting resolution normally needs at least two-thirds. Written shareholder resolutions require all shareholders entitled to vote on that resolution. Written board/committee resolutions require every director entitled to vote.",
@@ -402,6 +406,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -410,7 +415,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "The first annual meeting is due within 18 months after existence begins. Subsequent meetings must be within 15 months of the preceding meeting and six months of the preceding financial year-end. A valid unanimous written resolution disposing of all required annual business can replace the meeting.",
@@ -452,6 +457,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -459,7 +465,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "An annual return is due within 60 days after the anniversary of incorporation, amalgamation or continuance, beginning the following year. It cannot be filed before the anniversary. Inactive corporations still file; federal tax returns are separate.",
@@ -500,6 +506,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -508,7 +515,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Shareholder-meeting notice follows the prescribed range. A non-distributing corporation’s articles or bylaws may specify a shorter minimum. Individual waivers and required special-business/electronic-meeting content are separate rules.",
@@ -550,6 +557,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -558,7 +566,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "The prescribed shareholder-meeting notice interval is at least 21 days and at most 60 days before the meeting, subject to the Act’s specific private-company provision and lawful waivers.",
@@ -599,6 +607,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2019-06-13",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -607,7 +616,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2019-06-13 is the earliest date the governing provisions could apply (the CBCA ISC register provisions commenced 2019-06-13); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "In-scope corporations keep an ISC register, identify controllers through voting/value, direct/indirect and joint-control tests, review it at least once each financial year and record new information within 15 days after awareness. It includes identity, citizenship, tax residence, control and diligence information.",
@@ -649,6 +658,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2024-01-22",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -657,7 +667,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2024-01-22 is the earliest date the governing provisions could apply (research records the federal ISC filing regime from 2024-01-22); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "ISC information must be sent annually, after specified organizational events and within 15 days of recording changes. The Director makes prescribed selected particulars public; access to the full register is a separate enforcement regime.",
@@ -699,6 +709,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2024-01-22",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -706,7 +717,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2024-01-22 is the earliest date the governing provisions could apply (research records the federal ISC filing regime from 2024-01-22); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "The registry’s filing service implements the January 22, 2024 filing regime: at incorporation, within 30 days of amalgamation/continuance, with the annual return, and within 15 days after a change is entered. An exempt corporation supplies the applicable exclusion confirmation.",
@@ -748,6 +759,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -756,7 +768,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Shareholders, creditors and specified representatives can inspect the shareholder-level records free of charge; directors inspect the broader board/accounting records. Distributing corporations have additional public access. Statutory shareholder-list requests involve an affidavit, permitted purposes, a reasonable fee and the ten-day delivery rule.",
@@ -799,6 +811,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -807,7 +820,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Subject to articles/bylaws/unanimous shareholder agreement, directors can make, amend or repeal bylaws effective immediately and submit them to the next shareholder meeting for ordinary confirmation, amendment or rejection. Failure to submit or shareholder rejection ends their effect.",
@@ -849,6 +862,7 @@
         ]
       },
       "validity": {
+        "notBefore": "1975-12-15",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -857,7 +871,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 1975-12-15 is the earliest date the governing Act could apply (Canada Business Corporations Act came into force 1975-12-15); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Fundamental articles amendments normally require a special resolution, any separate class/series approval and filing of articles of amendment; they take effect under the resulting certificate.",

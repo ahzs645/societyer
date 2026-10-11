@@ -50,10 +50,16 @@ export type LegalGuideRule = {
   sectionLabel: string;
   citationLabel: string;
   topics: LegalGuideTopic[];
-  /** Present only when this rule wording's commencement has been verified. */
+  /** Present only when this rule's commencement has been verified. */
   effectiveFromISO?: string;
-  /** Current wording reviewed on this date; does not establish historical validity. */
+  /** Current wording reviewed on this date. Review metadata only: it never
+   * limits the dates a rule applies to and does not establish commencement. */
   currentAsOfISO?: string;
+  /** Earliest date the governing Act or Part could apply to a rule whose own
+   * commencement is not verified. A floor, not a commencement. */
+  notBeforeISO?: string;
+  /** Date-specific warning set by getLegalGuideRules for the requested date. */
+  dateCaveatText?: string;
   reviewedAtISO?: string;
   /** Exclusive end timestamp. Omit for current rules. */
   effectiveToISO?: string;
@@ -145,7 +151,27 @@ export function getLegalGuideRules({
     .filter((rule) =>
       topicSet ? rule.topics.some((topic) => topicSet.has(topic)) : true,
     )
+    .map((rule) => withDateCaveat(rule, dateTime))
     .sort(compareGuideRules);
+}
+
+export const UNVERIFIED_COMMENCEMENT_CAVEAT =
+  "Commencement not verified — confirm the rule applied on this date.";
+
+/** Earlier dates keep their guidance. A rule without a verified commencement
+ * says so; a verified rule shown in its current wording points to the
+ * point-in-time text, because later amendments may differ from that date. */
+function withDateCaveat(rule: LegalGuideRule, dateTime: number): LegalGuideRule {
+  const reviewed = timestamp(rule.currentAsOfISO);
+  if (reviewed === null || dateTime >= reviewed) return rule;
+  const dateCaveatText = rule.effectiveFromISO
+    ? `Current wording reviewed ${shortISODate(rule.currentAsOfISO!)}; check the point-in-time text for amendments after this date.`
+    : UNVERIFIED_COMMENCEMENT_CAVEAT;
+  return {
+    ...rule,
+    dateCaveatText,
+    caveatText: rule.caveatText ? `${dateCaveatText} ${rule.caveatText}` : dateCaveatText,
+  };
 }
 
 export function getPrimaryLegalGuide(args: {
@@ -157,17 +183,24 @@ export function getPrimaryLegalGuide(args: {
 }
 
 export function formatGuideDateRange(rule: LegalGuideRule) {
-  if (!rule.effectiveFromISO) return rule.currentAsOfISO
-    ? `current wording reviewed ${shortISODate(rule.currentAsOfISO)}; commencement not established by this guide`
-    : "effective period not established";
+  if (!rule.effectiveFromISO) {
+    if (!rule.currentAsOfISO) return "effective period not established";
+    const floor = rule.notBeforeISO ? `; governing law from ${shortISODate(rule.notBeforeISO)}` : "";
+    return `current wording reviewed ${shortISODate(rule.currentAsOfISO)}; commencement not verified${floor}`;
+  }
   const from = shortISODate(rule.effectiveFromISO);
   if (!rule.effectiveToISO) return `effective from ${from}`;
   return `${from} to before ${shortISODate(rule.effectiveToISO)}`;
 }
 
+/** The first date a rule can be shown: its verified commencement, otherwise
+ * the governing-law floor. The currentAsOf review date is never a start date. */
+export function guideRuleStartISO(rule: Pick<LegalGuideRule, "effectiveFromISO" | "notBeforeISO">) {
+  return rule.effectiveFromISO ?? rule.notBeforeISO;
+}
+
 function isEffective(rule: LegalGuideRule, dateTime: number) {
-  // A current-source review cannot prove what the statute said at an earlier meeting.
-  const from = timestamp(rule.effectiveFromISO ?? rule.currentAsOfISO) ?? Number.NEGATIVE_INFINITY;
+  const from = timestamp(guideRuleStartISO(rule)) ?? Number.NEGATIVE_INFINITY;
   const to = timestamp(rule.effectiveToISO) ?? Number.POSITIVE_INFINITY;
   return dateTime >= from && dateTime < to;
 }
@@ -268,6 +301,7 @@ function adaptGuidePack(pack: JurisdictionGuidePackV2): JurisdictionGuidePack {
         effectiveFromISO: rule.validity.effectiveFrom,
         effectiveToISO: rule.validity.effectiveTo ?? undefined,
         currentAsOfISO: rule.validity.currentAsOf,
+        notBeforeISO: rule.validity.notBefore,
         reviewedAtISO: primary?.reviewedOn ?? rule.provenance.verifiedAt,
         sourceUrl: primary?.url ?? section.url,
         pointInTimeUrl: section.pointInTimeUrl ?? source?.pointInTimeUrl,

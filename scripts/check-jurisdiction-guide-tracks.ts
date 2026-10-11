@@ -60,13 +60,17 @@ assert.equal(resolveJurisdictionCode({ jurisdictionCode: "CA-FED-CBCA" }), "CA-F
 assert.ok(JURISDICTION_OPTIONS.some((option) => option.value === "CA-FED-CBCA"));
 assert.ok(JURISDICTION_OPTIONS.some((option) => option.value === "CA-ON-OBCA"));
 
-// A current consolidation cannot prove historical wording or commencement.
+// A current-wording review is metadata, not a start date: earlier meetings keep
+// guidance, and an unverified commencement is disclosed instead of hidden.
 for (const code of ["CA-BC-BCA", "CA-FED-CBCA", "CA-ON-OBCA"]) {
   const current = getLegalGuideRules({ jurisdictionCode: code, dateISO: "2026-10-11", topics: ["records"] });
   assert.ok(current.length > 0);
-  assert.ok(current.every((rule) => !rule.effectiveFromISO && !!rule.currentAsOfISO));
-  assert.deepEqual(getLegalGuideRules({ jurisdictionCode: code, dateISO: "2000-01-01", topics: ["records"] }), [], `${code}: no false historical application of modern transparency/ISC rules`);
-  assert.match(formatGuideDateRange(current[0]), /reviewed.*commencement not established/);
+  assert.ok(current.every((rule) => !!rule.currentAsOfISO && !rule.dateCaveatText), `${code}: review dates are kept and need no caveat on the review date`);
+  const unverified = current.find((rule) => !rule.effectiveFromISO);
+  assert.ok(unverified, `${code}: expected an unverified current rule`);
+  assert.match(formatGuideDateRange(unverified), /reviewed.*commencement not verified/);
+  const historical = getLegalGuideRules({ jurisdictionCode: code, dateISO: "2000-01-01", topics: ["records"] });
+  assert.ok(historical.every((rule) => !/transparency|isc/.test(rule.id)), `${code}: no false historical application of modern transparency/ISC rules`);
 }
 const federalRecords = getLegalGuideRules({ jurisdictionCode: "CA-FED-CBCA", dateISO: "2026-10-11", topics: ["records"] });
 assert.ok(federalRecords.some((rule) => rule.sourceCurrentToISO === "2026-09-21" && rule.currentAsOfISO === "2026-10-11"), "source currency and review dates remain separate");

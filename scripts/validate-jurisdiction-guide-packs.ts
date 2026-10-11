@@ -52,7 +52,11 @@ for (const pack of packs) {
       const source = legalSourceById.get(sourceId);
       assert.ok(source, `${rule.ruleId}: unknown shared legal source ${sourceId}`);
       assert.notEqual(source.status, "proposed", `${rule.ruleId}: proposals cannot supply operative guide rules`);
-      assert.ok(rule.validity.currentAsOf, `${rule.ruleId}: current registry sources must not fabricate historical commencement`);
+      assert.ok(rule.validity.currentAsOf, `${rule.ruleId}: current registry sources record the review of their current wording`);
+      assert.ok(
+        rule.validity.effectiveFrom || rule.validity.notBefore,
+        `${rule.ruleId}: current rules need a verified commencement or a governing-Act floor so earlier meetings keep their guidance`,
+      );
     }
   }
 }
@@ -63,8 +67,15 @@ const referencedSources = new Set(packs.flatMap((pack) => pack.rules.flatMap((ru
 for (const sourceId of ["CBCA-RESOLUTIONS", "OBCA-RESOLUTIONS", "BC-BCA-RESOLUTIONS", "BC-SOC-MEETING-NOTICE"]) {
   assert.ok(referencedSources.has(sourceId), `Missing expected shared source ${sourceId}`);
 }
-const invalidBothDates = structuredClone(packs[0]);
-invalidBothDates.rules[0].validity = { effectiveFrom: "2026-10-11", currentAsOf: "2026-10-11" };
-assert.equal(jurisdictionGuidePackSchema.safeParse(invalidBothDates).success, false, "a review date is not a second commencement date");
+const withValidity = (validity: Record<string, string>) => {
+  const pack = structuredClone(packs[0]);
+  pack.rules[0].validity = validity;
+  return jurisdictionGuidePackSchema.safeParse(pack).success;
+};
+assert.equal(withValidity({ effectiveFrom: "2016-11-28", currentAsOf: "2026-10-11" }), true, "a review date is metadata beside a verified commencement");
+assert.equal(withValidity({ effectiveFrom: "2026-10-11", currentAsOf: "2016-11-28" }), false, "a review cannot precede commencement");
+assert.equal(withValidity({ effectiveFrom: "2016-11-28", notBefore: "2016-11-28", currentAsOf: "2026-10-11" }), false, "a floor never accompanies a verified commencement");
+assert.equal(withValidity({ notBefore: "2016-11-28" }), false, "a floor needs a current-wording review");
+assert.equal(withValidity({}), false, "a rule needs a commencement or review date");
 
 console.log(`Validated ${packs.length} jurisdiction guide pack${packs.length === 1 ? "" : "s"}.`);

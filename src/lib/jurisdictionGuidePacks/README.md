@@ -55,7 +55,7 @@ Each rule needs:
 - `ruleType`
 - `topics`
 - `applicability`
-- Either a verified `validity.effectiveFrom`, or `validity.currentAsOf` for a review of current wording; never use a consolidation date as an effective date
+- `validity.effectiveFrom` when the rule's commencement is verified; `validity.currentAsOf` records the review of the current wording and is metadata only. A current rule whose commencement is not verified uses `validity.notBefore` instead: the earliest date its governing Act or Part could apply. Never use a consolidation or review date as an effective date
 - `authority.sourceId`
 - `authority.sections`
 - `provenance.verifiedAt`
@@ -64,7 +64,9 @@ Each rule needs:
 - `content.tooltip`
 - `content.displayCitation`
 
-Use `validity.effectiveTo` for historical rules. It is exclusive and must be after a verified `effectiveFrom`. A `currentAsOf` snapshot is not shown for a meeting earlier than that review date: the current wording does not prove the historical rule.
+Use `validity.effectiveTo` for historical rules. It is exclusive and must be after a verified `effectiveFrom`. Link a historical version to its successor with `supersededBy`/`supersedes`; the predecessor's `effectiveTo` must equal the successor's `effectiveFrom`, so there is no gap or overlap.
+
+The review date never hides a rule. A meeting before the `currentAsOf` date still receives the rule from its `effectiveFrom` (or `notBefore`) onward, with a date caveat: an unverified commencement shows "Commencement not verified — confirm the rule applied on this date", and a verified rule points to the point-in-time text for later amendments. Use a later `notBefore` for a regime the research records as recently commenced, so it is not shown before it began. `scripts/check-guide-rule-continuity.ts` sweeps every date from each Act's commencement to today.
 
 Use `authority.registrySourceIds` for current rules already researched in `shared/legalSources.ts`. The adapter resolves their summaries, caveats, citations, actual consolidation dates and review dates from that registry, so amendments do not require parallel copy edits. Proposed sources are rejected. The JSON content remains a readable snapshot, and its citation records are preserved for export.
 

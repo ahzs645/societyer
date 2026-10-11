@@ -185,6 +185,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -207,7 +208,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2004-03-29 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "A BC company files its annual report within two calendar months after each recognition anniversary, reporting information current at that anniversary. Missing reports do not automatically move the deadline to next year. Two consecutive years of default can trigger the registrar’s notice-based dissolution process.",
@@ -233,6 +234,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -255,7 +257,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2004-03-29 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Keep the statutory corporate records, including governing articles and predecessors, incorporation agreement, certificates and orders, director and securities records, shareholder and board proceedings, received consents/resignations/dissents, disclosures, financial statements and auditor representations, and conditional subtype reports. Deposit required records promptly.",
@@ -281,6 +283,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -303,7 +306,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2004-03-29 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "The first AGM is due within 18 months of recognition. Thereafter an AGM is required in every calendar year and no later than 15 months after the preceding annual reference date. All AGM voting shareholders may use the statutory unanimous defer, annual-business consent or waiver routes with the applicable annual reference date.",
@@ -329,6 +332,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -351,7 +355,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2004-03-29 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "An ordinary meeting resolution uses a simple majority of votes cast. An ordinary written resolution is circulated to every eligible holder and needs the special majority of all entitled votes, normally at least two-thirds. A special written resolution requires all eligible general-voting shareholders. Board written resolutions default to all directors entitled to vote.",
@@ -377,6 +381,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -399,7 +404,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2004-03-29 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Unless the articles provide otherwise, shareholder quorum is two entitled shareholders present personally or by proxy; where fewer entitled holders exist, all suffice. Board quorum must be resolved from the operative articles and any authorized directors’ determination.",
@@ -425,6 +430,7 @@
         "conditions": []
       },
       "validity": {
+        "notBefore": "2020-10-01",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -447,7 +453,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2020-10-01 is the earliest date the governing Part could apply (Part 2.1 transparency-register provisions commenced 2020-10-01); guidance for earlier review dates carries a commencement caveat. The earlier guide's 2004-03-29 date was the Act's commencement, not this Part's."
       },
       "content": {
         "summary": "An in-scope private company maintains a transparency register identifying significant individuals and prescribed identity, residence, citizenship, tax-residence and control particulars. Review in the two months after each incorporation anniversary, update within 30 days of awareness and notify individuals within ten days of entering that they became or ceased to be significant.",
@@ -490,6 +496,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -498,7 +505,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2004-03-29 is the earliest date the governing Act could apply (Business Corporations Act, SBC 2002, c. 57 came into force 2004-03-29); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Send shareholder-meeting notice to those entitled, directors and the auditor within the prescribed minimum and no more than two calendar months before the meeting. Notice waivers/reductions and electronic-meeting instructions have specific rules.",
@@ -540,6 +547,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -548,7 +556,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2004-03-29 is the earliest date the governing Act could apply (Business Corporations Act, SBC 2002, c. 57 came into force 2004-03-29); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "The default minimum shareholder-meeting notice is 21 days. A non-public company may specify a period of at least ten days in its articles. A public company requires at least 21 days, or the longer period its articles specify.",
@@ -589,6 +597,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -597,7 +606,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2004-03-29 is the earliest date the governing Act could apply (Business Corporations Act, SBC 2002, c. 57 came into force 2004-03-29); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Current directors have broad inspection rights. Shareholders generally inspect shareholder-level records free; board minutes and accounting/confidential layers are not a blanket shareholder entitlement. Public companies and specified subtypes have wider public access. Copies, permitted fees and archived-record production follow separate rules.",
@@ -639,6 +648,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2020-10-01",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -647,7 +657,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2020-10-01 is the earliest date the governing Part could apply (Part 2.1 transparency-register provisions commenced 2020-10-01); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Only directors and authorized inspecting officials receive statutory transparency-register access. Dispose of former-individual personal information in the year after the sixth anniversary of the cessation entry. Corporate and individual offence maxima can reach $100,000 and $50,000 respectively.",
@@ -689,6 +699,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2026-01-12",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -697,7 +708,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2026-01-12 is the earliest date the governing regulation text could apply (research records the current exclusion list as amended 2026-01-12 (BC Reg 3/2026); an older list applied before then); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Prescribed exclusions include qualifying wholly owned subsidiaries of public issuers, certain insurance/trust and government entities, specified schools, wholly Indigenous-nation-owned companies and wholly professional-LLP-owned companies. The Regulation also defines indirect and joint control.",
@@ -739,6 +750,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -747,7 +759,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2004-03-29 is the earliest date the governing Act could apply (Business Corporations Act, SBC 2002, c. 57 came into force 2004-03-29); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Maintain the central securities register with issued and transferred shares, holders and addresses, classes/series, numbers and transaction dates/particulars. Replicate branch-register particulars promptly. The central register must remain available for statutory inspection in BC.",
@@ -790,6 +802,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2004-03-29",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -798,7 +811,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2004-03-29 is the earliest date the governing Act could apply (Business Corporations Act, SBC 2002, c. 57 came into force 2004-03-29); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Articles/notice alterations follow the Act’s specified resolution, then the articles’ applicable resolution, then the special-resolution default. A notice-of-articles or special-rights alteration requires the prescribed filing and takes effect at the applicable registry time. Other article changes generally take effect when the alteration resolution is deposited at the records office.",

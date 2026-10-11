@@ -272,6 +272,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -292,7 +293,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "BC bylaws are the local rule source for meeting procedures, including any quorum greater than the statutory default.",
@@ -318,6 +319,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -340,7 +342,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Constitution and bylaw alterations generally require a special resolution and take effect on filing the alteration application.",
@@ -366,6 +368,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -388,7 +391,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Hold an AGM each calendar year after the incorporation year. A unanimous written resolution addressing all required annual business can be a deemed AGM.",
@@ -441,7 +444,10 @@
         "caveat": "The app points to the correct historical source track but does not yet encode every notice-delivery variant.",
         "displayCitation": "BC Societies Act ss.77-78 PIT"
       },
-      "priority": 20
+      "priority": 20,
+      "supersededBy": [
+        "ca-bc-societies-act-general-notice-current"
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-general-notice-current",
@@ -459,6 +465,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2023-05-04",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -481,7 +488,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2023-05-04 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Send written general-meeting notice to every member 14–60 days before the meeting; bylaws can specify a minimum of at least seven days.",
@@ -489,7 +496,10 @@
         "caveat": "The current s. 77(2) alternative requires more than 100 members, enabling bylaws, email to all recorded email addresses and the prescribed publication or website posting. Required notice content and electronic instructions are in s. 78.",
         "displayCitation": "Societies Act, SBC 2015, c. 18, ss. 77–78"
       },
-      "priority": 20
+      "priority": 20,
+      "supersedes": [
+        "ca-bc-societies-act-general-notice-2016"
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-member-proposals",
@@ -507,6 +517,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -527,7 +538,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Member proposal thresholds are based on voting members, with bylaws able to lower the percentage where allowed.",
@@ -553,6 +564,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -573,7 +585,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Voting members can requisition a general meeting using the Act's threshold unless bylaws provide a lower percentage.",
@@ -599,6 +611,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -621,7 +634,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "General-meeting quorum is three voting members, or a greater bylaw quorum. If fewer voting members exist, all of them form quorum.",
@@ -674,7 +687,10 @@
         "caveat": "Bylaws may have restricted or shaped electronic participation.",
         "displayCitation": "BC Societies Act s.83 PIT"
       },
-      "priority": 31
+      "priority": 31,
+      "supersededBy": [
+        "ca-bc-societies-act-electronic-participation-current"
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-electronic-participation-current",
@@ -692,6 +708,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2021-05-20",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -712,7 +729,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2021-05-20 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Unless bylaws say otherwise, eligible participants may attend by telephone or other communications medium when participation requirements are met.",
@@ -720,7 +737,10 @@
         "caveat": "Fully electronic meetings carry separate facilitation and notice-instruction requirements.",
         "displayCitation": "BC Societies Act s.83"
       },
-      "priority": 31
+      "priority": 31,
+      "supersedes": [
+        "ca-bc-societies-act-electronic-participation-2016"
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-voting-rights",
@@ -738,6 +758,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -758,7 +779,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Voting rights and one-vote rules start in the Act, with class and good-standing limits controlled by bylaws where allowed.",
@@ -811,7 +832,10 @@
         "caveat": "Proxy authority is bylaw-dependent.",
         "displayCitation": "BC Societies Act s.85 PIT"
       },
-      "priority": 32
+      "priority": 32,
+      "supersededBy": [
+        "ca-bc-societies-act-proxies-current"
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-proxies-current",
@@ -829,6 +853,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2021-10-28",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -849,7 +874,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2021-10-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Proxy voting is not available unless the society's bylaws permit it.",
@@ -857,7 +882,10 @@
         "caveat": "A valid proxy appointment still has to meet Act and bylaw requirements.",
         "displayCitation": "BC Societies Act s.85"
       },
-      "priority": 32
+      "priority": 32,
+      "supersedes": [
+        "ca-bc-societies-act-proxies-2016"
+      ]
     },
     {
       "ruleId": "ca-bc-societies-act-special-resolution",
@@ -875,6 +903,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -897,7 +926,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "An ordinary written resolution must be sent to every voting member and receive consent from at least two-thirds of voting members. A written special resolution requires all voting members.",
@@ -923,6 +952,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -945,7 +975,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "Keep formation and registry records, orders, registers, consents, disclosures, minutes, resolutions, financial statements and accounting records. Access depends on the record and requester.",
@@ -971,6 +1001,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -993,7 +1024,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "The model general-meeting quorum is the greater of three voting members and ten percent; model directors’ quorum is a majority.",
@@ -1019,6 +1050,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-04-14"
       },
       "authority": {
@@ -1038,7 +1070,7 @@
         "verifiedAt": "2026-04-14",
         "verificationMethod": "manual_review",
         "confidence": "medium",
-        "changeNote": "Inherited guide wording; date records its last review, not statutory commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "The BC Model Bylaws do not permit proxy voting.",
@@ -1064,6 +1096,7 @@
         "conditions": []
       },
       "validity": {
+        "effectiveFrom": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "authority": {
@@ -1086,7 +1119,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement 2016-11-28 restored from the previously verified guide (verified commencement). currentAsOf records only the review of the current wording; amendments after commencement must be checked against the point-in-time text for older meetings."
       },
       "content": {
         "summary": "The model general-meeting quorum is the greater of three voting members and ten percent; model directors’ quorum is a majority.",
@@ -1129,6 +1162,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -1137,7 +1171,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2016-11-28 is the earliest date the governing Act could apply (Societies Act, SBC 2015, c. 18 came into force 2016-11-28); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "File within 30 days of the held or deemed AGM. If none was held when required, report that fact by January 31 of the next year.",
@@ -1179,6 +1213,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -1187,7 +1222,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2016-11-28 is the earliest date the governing Act could apply (Societies Act, SBC 2015, c. 18 came into force 2016-11-28); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Member inspection under the Act is free. Public access requires bylaw permission and excludes the member register; copies have separate rights and fees.",
@@ -1229,6 +1264,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -1237,7 +1273,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2016-11-28 is the earliest date the governing Act could apply (Societies Act, SBC 2015, c. 18 came into force 2016-11-28); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Records may cease to be required only after ten years from creation or last alteration and only when no longer relevant.",
@@ -1279,6 +1315,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -1287,7 +1324,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2016-11-28 is the earliest date the governing Act could apply (Societies Act, SBC 2015, c. 18 came into force 2016-11-28); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Send a directors’ written resolution to every director. All consent unless the bylaws validly permit a lesser number or another method.",
@@ -1329,6 +1366,7 @@
         ]
       },
       "validity": {
+        "notBefore": "2016-11-28",
         "currentAsOf": "2026-10-11"
       },
       "provenance": {
@@ -1337,7 +1375,7 @@
         "verifiedAt": "2026-10-11",
         "verificationMethod": "official_source_review",
         "confidence": "high",
-        "changeNote": "Current rule and source metadata reuse the shared legal registry. Review and consolidation dates do not establish commencement."
+        "changeNote": "Commencement of this wording is not verified. notBefore 2016-11-28 is the earliest date the governing Act could apply (Societies Act, SBC 2015, c. 18 came into force 2016-11-28); guidance for earlier review dates carries a commencement caveat."
       },
       "content": {
         "summary": "Present the financial statements and any auditor’s report at each AGM. The statement period must end no more than six months before the meeting.",

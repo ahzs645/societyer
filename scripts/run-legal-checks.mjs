@@ -23,6 +23,7 @@ const scripts = [
   'check-dashboard-resource-authority.ts', 'check-meeting-package-projection.ts',
   'check-authorization-policy.ts', 'check-generated-document-access.ts',
   'check-filing-preparation-integration.ts', 'check-filing-ledger-handoffs.ts',
+  'check-guide-rule-continuity.ts',
 ];
 const results = [];
 for (const script of scripts) {
