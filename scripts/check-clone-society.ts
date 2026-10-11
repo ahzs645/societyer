@@ -12,7 +12,14 @@ import { StaticConvexClient } from "../src/lib/staticConvex";
 
 const SRC = "soc-src";
 const seed = {
-  societies: [{ _id: SRC, name: "Source Inc.", entityType: "corporation__business_", actFormedUnder: "business_corporations_act" }],
+  societies: [{
+    _id: SRC, name: "Source Inc.", entityType: "corporation__business_", actFormedUnder: "business_corporations_act",
+    // The source entity's own annual-business evidence must not travel with a clone.
+    annualDeadlineCalendarReviews: [{ category: "annual-report", cycleYear: 2025 }],
+    annualMeetingCompletions: [{ cycleYear: 2025, writtenResolutionId: "wr-src" }],
+    annualMeetingFinancialYearEnd: "2025-12-31",
+    annualReturnPeriodEnd: "2025-12-31",
+  }],
   roleHolders: [{ _id: "rh-1", societyId: SRC, roleType: "director", fullName: "Alice Stone", status: "current" }],
   rightsClasses: [{ _id: "rc-1", societyId: SRC, className: "Class A", classType: "share", status: "active" }],
   rightsHoldings: [
@@ -46,6 +53,12 @@ const tables = (client as unknown as { exportLocalWorkspaceSnapshot(): { tables:
   .exportLocalWorkspaceSnapshot().tables;
 const inNew = (table: string) => (tables[table] ?? []).filter((r) => r.societyId === newId);
 const inSrc = (table: string) => (tables[table] ?? []).filter((r) => r.societyId === SRC);
+
+// --- the clone is a distinct legal entity: no inherited annual evidence -------
+const clonedSociety = (tables.societies ?? []).find((r) => r._id === newId);
+for (const field of ["annualDeadlineCalendarReviews", "annualMeetingCompletions", "annualMeetingFinancialYearEnd", "annualReturnPeriodEnd", "incorporationNumber"]) {
+  assert.equal(clonedSociety?.[field], undefined, `${field} is not copied into the clone`);
+}
 
 // --- the previously-dropped tables are now present in the clone --------------
 for (const table of ["rightsHoldings", "rightsholdingTransfers", "dividends", "assets", "assetEvents", "significantIndividualSteps"]) {

@@ -26,6 +26,7 @@ const scripts = [
   'check-filing-preparation-integration.ts', 'check-filing-ledger-handoffs.ts',
   'check-guide-rule-continuity.ts',
   'check-annual-deadline-review-fixes.ts',
+  'check-deadline-source-key.ts', 'check-clone-society.ts',
 ];
 const results = [];
 for (const script of scripts) {

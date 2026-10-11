@@ -17,6 +17,7 @@ import {
   assessAnnualMeetingDeadline,
   assessAnnualReturnDeadline,
   complianceDeadlineAlreadyTracked,
+  complianceDeadlineSourceKey,
   deriveComplianceDeadlines,
   deriveComplianceHistoryNotices,
   type ComplianceSettings,
@@ -166,7 +167,7 @@ export function ComplianceSettingsPage() {
       let added = 0;
       for (const d of generatable) {
         if (alreadyTracked(d)) continue;
-        await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.deadlineCategory, description: d.basis });
+        await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.deadlineCategory, description: d.basis, sourceKey: complianceDeadlineSourceKey(d) });
         added += 1;
       }
       toast.success("Deadlines generated", `${added} new dates added.`);

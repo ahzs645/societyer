@@ -322,6 +322,12 @@ export async function cloneSocietyPortable(
     ...(sourceFields as any),
     name,
     incorporationNumber: undefined, // a clone is a distinct legal entity
+    // Annual-business evidence belongs to the source entity (and its written
+    // resolutions); a clone records its own.
+    annualDeadlineCalendarReviews: undefined,
+    annualMeetingCompletions: undefined,
+    annualMeetingFinancialYearEnd: undefined,
+    annualReturnPeriodEnd: undefined,
     updatedAt: Date.now(),
   });
 

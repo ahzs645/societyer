@@ -158,11 +158,17 @@ export async function createPortable(
     recurrence?: string;
     recurrenceEndDate?: string;
     linkedFilingId?: string;
+    /** Stable identity of a derived compliance deadline (`compliance:<obligation>:<cycle>`). */
+    sourceKey?: string;
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   if (args.linkedFilingId) {
     await getOwned(ctx, "filings", args.linkedFilingId, args.societyId);
+  }
+  // Agreement obligations set their own keys through the agreements register.
+  if (args.sourceKey !== undefined && !/^compliance:(agm|annual-report|fiscal-year-end):\d{4}$/.test(args.sourceKey)) {
+    throw new Error("Unsupported deadline source key.");
   }
   const { status, ...rest } = args;
   const initial = status ?? "open";

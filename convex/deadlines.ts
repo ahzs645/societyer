@@ -35,6 +35,7 @@ export const create = authorizedMutation("deadlines:create", mutation)({
     recurrence: v.optional(v.string()),
     recurrenceEndDate: v.optional(v.string()),
     linkedFilingId: v.optional(v.id("filings")),
+    sourceKey: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
