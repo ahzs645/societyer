@@ -454,7 +454,7 @@ function AnnualDeadlineEvidence({ societyId, society, settings, today, canWrite,
       ) : !writtenDraft ? (
         <button type="button" className="btn btn--sm" disabled={!canWrite || eligibleResolutions.length === 0}
           onClick={() => setWrittenDraft({ writtenResolutionId: eligibleResolutions[0]?._id ?? "", kind: "written_annual_business", completedOn: String(eligibleResolutions[0]?.completedAtISO ?? "").slice(0, 10), annualReferenceDate: "", financialYearEnd: "", annualBusinessEvidence: "", annualBusinessReviewed: false })}>
-          {eligibleResolutions.length ? "Record written annual business" : "No carried member or shareholder resolution"}
+          {eligibleResolutions.length ? "Record written annual business" : `No carried ${entity.isCorporation ? "shareholder" : entity.isSociety ? "member" : "member or shareholder"} resolution`}
         </button>
       ) : (
         <div>

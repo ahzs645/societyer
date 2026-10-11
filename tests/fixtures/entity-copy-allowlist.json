@@ -5,7 +5,11 @@
       "pattern": "pipa",
       "route": "/app/privacy",
       "channel": "main",
-      "workspaces": ["cbca-corp", "obca-corp", "custom"],
+      "workspaces": [
+        "cbca-corp",
+        "obca-corp",
+        "custom"
+      ],
       "snippet": "^(BC|Alberta) PIPA Conditional$",
       "reason": "Fresh workspaces have no recorded privacy activity assessment. These closed conditional-law summaries appear only within the Privacy-law scope region, alongside explicit applicability and operating-location review text. The browser test asserts that context and that no law is labelled assessed as applicable. Incorporation does not select a privacy law."
     },
@@ -13,7 +17,10 @@
       "pattern": "constitution",
       "route": "/app/court-orders",
       "channel": "main",
-      "workspaces": ["cbca-corp", "obca-corp"],
+      "workspaces": [
+        "cbca-corp",
+        "obca-corp"
+      ],
       "snippet": "Six years is not a blanket destruction period for constitutional records, minutes or registers\\.|constitutional records do not expire after six years\\.",
       "reason": "Reviewed CBCA s.20 and OBCA ss.140,145 records guidance distinguishes continuing articles/minutes/register obligations from accounting retention. Constitutional records describes a corporation's constating records; it does not import a society constitution requirement."
     },
@@ -157,6 +164,15 @@
       "workspaces": [
         "obca-corp"
       ]
+    },
+    {
+      "pattern": "agm",
+      "route": "/app/compliance-settings",
+      "workspaces": [
+        "bc-corp"
+      ],
+      "snippet": "AGM voting shareholders can defer",
+      "reason": "BC company profile wording: the BC Business Corporations Act s. 182(2) uses 'annual general meeting' and lets the shareholders entitled to vote at the AGM unanimously defer, dispose of annual business or waive it."
     }
   ],
   "knownLeaks": []
