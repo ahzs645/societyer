@@ -139,6 +139,29 @@ These runs used Chromium from `SOCIETYER_CHROMIUM_PATH`, on a heavily loaded 4-c
 
 The CI results for these jobs appear on the PR checks once the revision is pushed. This document does not claim a CI pass for them.
 
+## Review fixes: combined verification
+
+An independent review of `aa79237` reproduced the CI-covered results but found defects the existing checks did not exercise: deadlines walking back to the incorporation year, guide rules disappearing for past dates, directors' written resolutions ignoring role-holder directors, a UTC-date rule that blocked evening circulations in BC, unbounded record dates, a stale BC company reference date, evidence fields with no writer, and a director-contact leak through AGM notice reads. A legal spot-check of 21 answers against the official consolidations found the core law correct. The fixes, the regression checks added for each, and the documentation changes are described in the [research index](README.md#review-fixes) and the extension guide.
+
+All gates below were run locally on the combined fix branch (on top of `aa79237`), in one sequence, on the same commit:
+
+| Gate | Result |
+| --- | --- |
+| `npm run test:legal` | 44/44 scripts passed (adds guide-rule continuity, annual-deadline review fixes, written-resolution routes, meeting-notice authority, deadline source keys and clone isolation) |
+| `npm run test:stage2-enforced` | 21/21 suites with enforcement on |
+| `npm run test:stage2-tenancy` | 3,732 blocked attempts; 0 leaked reads; 0 leaked writes; 0 new leaks |
+| `npm run test:static-parity` | 350 frontend writes; 332 handled; 18 intentional offline no-ops; 0 pending |
+| `npm run test:portable-manifest` / `test:portable-conformance-matrix` | passed; MemoryDb and LocalStoreDb agree across the portable surface |
+| `check-platform-polish`, `check-entity-rule-scope`, `check-seeded-record-views`, `check-deadline-source-key` | passed |
+| `npm run build` | Convex TypeScript, project TypeScript and Vite passed |
+| Strict entity sweep (`ENTITY_SWEEP_STRICT=1`) | 22/22; five workspaces; 0 page errors; 0 unallowlisted leaks; empty baseline |
+| `playwright.corporation.config.ts` | 4/4 |
+| Interface suites (dashboard, tasks, governance, records, calendar views, shared) on desktop and phone | 64/64 |
+| Guided setup (four viewports) | 16/16 |
+| Meetings editing | 3/3 |
+
+The new `legal-governance-browser` CI job runs the strict sweep, the corporation configuration and the records and tasks interface suites; its first CI result is reported on the pull request, not claimed here.
+
 ## Reproduction and practical limits
 
 Use Node 24 and the repository lockfile:
