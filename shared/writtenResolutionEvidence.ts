@@ -2,6 +2,20 @@
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, organizationTimeZone, type LegalEntityLike } from "./organizationDomain";
 import { legalProfileRegistry } from "./legalGovernanceProfiles";
 
+/**
+ * Singular or plural label for a written-resolution count: "1 person",
+ * "2 people", "1 share", "3 votes". An unknown unit counts consents.
+ */
+export function resolutionCountUnitLabel(count: number | null | undefined, unit?: string | null): string {
+  const one = count === 1;
+  switch (unit) {
+    case "people": return one ? "person" : "people";
+    case "shares": return one ? "share" : "shares";
+    case "votes": return one ? "vote" : "votes";
+    default: return one ? "consent" : "consents";
+  }
+}
+
 /** New circulation records must be entered within this period after circulation. */
 export const CIRCULATION_RECORDING_WINDOW_HOURS = 72;
 
