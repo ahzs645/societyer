@@ -3,6 +3,25 @@ import { canonicalizeJurisdictionCode } from './organizationDomain';
 import { dateOnly, deriveAgmFacts, statedReportingYear, type AgmMeetingLike } from './agmEvidence';
 import { assessAnnualReturnDeadline, parseComplianceDate, type AnnualMeetingCompletion, type AnnualReturnFilingEvidence, type ComplianceSettings, type DeadlineAssessment } from './corporationSettings';
 
+/** An Ontario return recorded with only its reporting year: the recurring
+ * fiscal calendar identifies the period only when exactly one taxation year
+ * ends in that calendar year, after recognition and no later than the filing.
+ * Otherwise the year stays ambiguous and does not close a period. */
+export function fiscalCalendarPeriodEnd(organization: (GovernanceOrganization & Record<string, any>) | null | undefined, year: number | undefined, filedAt?: string): string {
+  const m = /^(\d{2})-(\d{2})$/.exec(String(organization?.fiscalYearEnd ?? ''));
+  if (!m || year === undefined || !Number.isInteger(year) || year < 1 || year > 9999) return '';
+  const month = Number(m[1]), day = Number(m[2]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day > lastDay && !(month === 2 && day === 29)) return '';
+  const candidate = `${String(year).padStart(4, '0')}-${m[1]}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+  if (!parseComplianceDate(candidate)) return '';
+  const start = dateOnly(organization?.recognitionDate ?? organization?.incorporationDate);
+  if (start && candidate < start) return '';
+  if (filedAt && parseComplianceDate(filedAt) && candidate > filedAt) return '';
+  return candidate;
+}
+
 /** Only an explicit reporting year/period closes a filing cycle. Dates alone are ambiguous. */
 export function annualReturnEvidence(organization: GovernanceOrganization | null | undefined, filings: readonly Record<string, any>[]): AnnualReturnFilingEvidence[] {
   const profile = legalGovernanceProfile(organization);
@@ -23,7 +42,8 @@ export function annualReturnEvidence(organization: GovernanceOrganization | null
     })?.id === profile.id;
   }).map(row => {
     const dates = String(row.periodLabel ?? '').match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [];
-    const periodEnd = dateOnly(row.reportingPeriodEnd) || (dates.length === 1 ? dateOnly(dates[0]) : '');
+    const periodEnd = dateOnly(row.reportingPeriodEnd) || (dates.length === 1 ? dateOnly(dates[0]) : '') ||
+      (profile.id === 'ontario_obca' && !dates.length ? fiscalCalendarPeriodEnd(organization, statedReportingYear(row), dateOnly(row.filedAt)) : '');
     const periodYear = periodEnd ? Number(periodEnd.slice(0, 4)) : undefined;
     const cycleYear = profile.id === 'ontario_obca' && periodYear !== undefined ? periodYear : statedReportingYear(row) ?? periodYear;
     return { cycleYear, ...(periodEnd ? { periodEnd } : {}), filedAt: dateOnly(row.filedAt), status: row.status, evidenceRef: row._id == null ? undefined : String(row._id) };

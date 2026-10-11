@@ -75,7 +75,9 @@ assert.deepEqual(commitmentProblems({ title: "T", confidence: 0.8, noticeLeadDay
 
 // --- Next annual report follows the next AGM -----------------------------------
 const derived = deriveComplianceDeadlines({ agmMonth: 6, agmDay: 19, jurisdictionCode: "CA-BC", entityType: "society", annualMeetingDate: "2025-06-19", heldAgmYears: [2025] }, "2026-10-06");
-assert.equal(derived.find((d) => d.key === "annual-report")?.dueDate, "2027-01-30", "30 days after the Dec 31, 2026 AGM deadline, not the past Jul 19, 2025");
+// Without filing evidence the open report is the current (2026) cycle: no AGM
+// is recorded for 2026 yet, so the s. 73(2) no-AGM date is January 31, 2027.
+assert.equal(derived.find((d) => d.key === "annual-report")?.dueDate, "2027-01-31", "the current cycle's no-AGM date, not the past Jul 19, 2025");
 
 // --- Runtime: handlers enforce the rules and cascades ---------------------------
 const societyId = "soc_governance_forms";

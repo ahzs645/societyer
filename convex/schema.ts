@@ -30,7 +30,7 @@ import { treasuryTables } from "./tables/treasury";
 import { workflowTables } from "./tables/workflows";
 import { subscriptionTables } from "./tables/subscriptions";
 import { meetingTables } from "./tables/meetings";
-import { complianceTables } from "./tables/compliance";
+import { annualDeadlineEvidenceValidators, complianceTables } from "./tables/compliance";
 import { policyTables } from "./tables/policies";
 import { storageTables } from "./tables/storage";
 import { pathwayTables } from "./tables/pathways";
@@ -150,6 +150,9 @@ export default defineSchema({
     agmMonth: v.optional(v.number()),
     agmDay: v.optional(v.number()),
     waivePrepFinancials: v.optional(v.boolean()),
+    // Reviewed annual-deadline evidence read by shared/annualGovernanceEvidence.ts.
+    // Written through corporationSettings:* mutations; optional and additive.
+    ...annualDeadlineEvidenceValidators,
     // Current short/defined-term name ("the Company"). Effective-dated history
     // lives in societyNameHistory; this is the current convenience value.
     shortName: v.optional(v.string()),

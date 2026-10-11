@@ -5131,6 +5131,60 @@
     ]
   },
   {
+    "key": "convex:corporationSettings:recordAnnualDeadlineCalendarReview",
+    "surface": "convex",
+    "name": "corporationSettings:recordAnnualDeadlineCalendarReview",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporationSettings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:corporationSettings:recordWrittenAnnualBusinessCompletion",
+    "surface": "convex",
+    "name": "corporationSettings:recordWrittenAnnualBusinessCompletion",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporationSettings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "writtenResolutionId",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:corporationSettings:updateAnnualEvidenceSettings",
+    "surface": "convex",
+    "name": "corporationSettings:updateAnnualEvidenceSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporationSettings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:courtOrders:create",
     "surface": "convex",
     "name": "courtOrders:create",
@@ -26461,6 +26515,60 @@
     "surface": "portable",
     "name": "corporationSettings:complianceDeadlines",
     "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporationSettings:recordAnnualDeadlineCalendarReview",
+    "surface": "portable",
+    "name": "corporationSettings:recordAnnualDeadlineCalendarReview",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporationSettings:recordWrittenAnnualBusinessCompletion",
+    "surface": "portable",
+    "name": "corporationSettings:recordWrittenAnnualBusinessCompletion",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "writtenResolutionId",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporationSettings:updateAnnualEvidenceSettings",
+    "surface": "portable",
+    "name": "corporationSettings:updateAnnualEvidenceSettings",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": [

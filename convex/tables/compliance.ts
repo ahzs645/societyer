@@ -1,6 +1,46 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
+/**
+ * Optional societies-row fields holding reviewed annual-deadline evidence
+ * (shared/corporationSettings.ts, shared/annualGovernanceEvidence.ts). Each
+ * calendar review is scoped to one profile, obligation, cycle and nominal
+ * boundary; each completion is an actual held meeting or a reviewed written
+ * annual-business instrument with its evidence.
+ */
+export const annualDeadlineEvidenceValidators = {
+  annualDeadlineCalendarReviews: v.optional(v.array(v.object({
+    profileId: v.string(),
+    obligation: v.union(v.literal("annual_meeting"), v.literal("annual_return")),
+    cycleYear: v.number(),
+    nominalDueDate: v.string(),
+    reviewedDueDate: v.string(),
+    reviewedOn: v.string(),
+    verified: v.boolean(),
+    evidenceRef: v.string(),
+    calendarBasis: v.string(),
+    channel: v.optional(v.string()),
+    recordedAtISO: v.optional(v.string()),
+    recordedByUserId: v.optional(v.string()),
+  }))),
+  annualMeetingCompletions: v.optional(v.array(v.object({
+    date: v.string(),
+    kind: v.union(v.literal("held"), v.literal("written_annual_business"), v.literal("written_waiver")),
+    cycleYear: v.optional(v.number()),
+    annualReferenceDate: v.optional(v.string()),
+    verified: v.optional(v.boolean()),
+    evidenceRef: v.optional(v.string()),
+    writtenResolutionId: v.optional(v.id("writtenResolutions")),
+    financialYearEnd: v.optional(v.string()),
+    recordedAtISO: v.optional(v.string()),
+    recordedByUserId: v.optional(v.string()),
+  }))),
+  /** CBCA: the actual financial year-end the next annual meeting must deal with. */
+  annualMeetingFinancialYearEnd: v.optional(v.string()),
+  /** Ontario: the actual taxation-year end selected for the annual-return assessment. */
+  annualReturnPeriodEnd: v.optional(v.string()),
+};
+
 export const complianceTables = {
   deadlines: defineTable({
     societyId: v.id("societies"),

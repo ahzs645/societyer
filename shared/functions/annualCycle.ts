@@ -328,7 +328,8 @@ export async function summaryPortable(
           ? `Notice is recorded for the ${am}. ${NOTICE_CALENDAR_REVIEW_CAVEAT}`
           : `Nominal notice window: ${noticeWindowOpen} to ${noticeWindowClose}. ${NOTICE_CALENDAR_REVIEW_CAVEAT}`
         : `Schedule the ${am} before sending notice.`,
-      status: !selectedAgm ? "blocked" : "attention",
+      // Recorded notice completes the step; the calendar caveat stays in the detail.
+      status: !selectedAgm ? "blocked" : noticeSent ? "complete" : "attention",
       evidence: ["Notice delivery log", "Agenda", "Motions and special resolutions", "Electronic participation instructions"],
       dueDate: noticeWindowClose,
       to: selectedAgm ? `/meetings/${selectedAgm._id}/agm` : "/meetings",

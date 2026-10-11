@@ -517,6 +517,10 @@ export function FilingsPage() {
                   toast.error("Add filed date, method, and at least one evidence item before marking filed");
                   return;
                 }
+                if (completeDraft.kind === "OntarioAnnualReturn" && !completeDraft.reportingPeriodEnd) {
+                  toast.error("Add the taxation year end this Ontario annual return reports");
+                  return;
+                }
                 const feeCents = dollarInputToCents(completeDraft.feePaidDollars);
                 if (feeCents != null && (!Number.isFinite(feeCents) || feeCents < 0)) {
                   toast.error("The fee paid cannot be negative");
@@ -576,7 +580,7 @@ export function FilingsPage() {
             </div>
             {['AnnualReport', 'BCSocietyAnnualReport', 'BCCompanyAnnualReport', 'FederalAnnualReturn', 'OntarioAnnualReturn'].includes(completeDraft.kind) && <>
               <Field label="Reporting year" hint="Identify the covered cycle from the filing evidence. An unknown period remains unverified in annual-cycle checks."><input className="input" type="number" min={1} max={9999} value={completeDraft.reportingYear ?? ''} onChange={(e) => setCompleteDraft({ ...completeDraft, reportingYear: e.target.value ? Number(e.target.value) : undefined })} /></Field>
-              {completeDraft.kind === 'OntarioAnnualReturn' && <Field label="Taxation year end"><DatePicker value={completeDraft.reportingPeriodEnd ?? ''} onChange={(value) => setCompleteDraft({ ...completeDraft, reportingPeriodEnd: value || undefined })} /></Field>}
+              {completeDraft.kind === 'OntarioAnnualReturn' && <Field label="Taxation year end (required)" hint="Exact period end covered by the return. A reporting year alone cannot identify the taxation year."><DatePicker value={completeDraft.reportingPeriodEnd ?? ''} onChange={(value) => setCompleteDraft({ ...completeDraft, reportingPeriodEnd: value || undefined })} /></Field>}
             </>}
             <Field label="Filed date"><DatePicker value={completeDraft.filedAt} onChange={(value) => setCompleteDraft({ ...completeDraft, filedAt: value })} /></Field>
             <Field label="Submission method">
