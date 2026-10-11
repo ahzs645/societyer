@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
@@ -121,7 +122,7 @@ export function VolunteersPage() {
         icon={<HandHeart size={16} />}
         iconColor="pink"
         subtitle="Intake, assignments and screening checks."
-        info={<p>Public and member intake, volunteer assignments, BC Criminal Record Review Program screening records, and annual readiness tracking.</p>}
+        info={<p>Public and {organizationVocabulary(society).isSociety ? "member" : "internal"} intake, volunteer assignments, BC Criminal Record Review Program screening records, and annual readiness tracking.</p>}
         actions={
           <CreateMenu
             disabled={!canWrite}

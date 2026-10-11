@@ -6,6 +6,7 @@ import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { InfoPopover } from "../components/InfoPopover";
 import { Field, Badge } from "../components/ui";
@@ -60,6 +61,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function BylawDiffPage() {
   const society = useSociety();
+  // Societies amend bylaws; a BC company alters its articles; other corporations amend by-laws.
+  const docs = organizationVocabulary(society);
+  const amendmentsTitle = docs.bylawsNoun === "articles" ? "Articles alterations" : `${docs.bylawsTitle.replace(/s$/, "")} amendments`;
   const permissions = usePermissions();
   const canWrite = permissions.loaded && permissions.can("documents:write");
   const toast = useToast();
@@ -202,11 +206,11 @@ export function BylawDiffPage() {
       })
       .join("");
     const bodyHtml = `
-      <h1>Bylaw amendments${title ? ` — ${escapeHtml(title)}` : ""}</h1>
+      <h1>${amendmentsTitle}${title ? ` — ${escapeHtml(title)}` : ""}</h1>
       <p class="meta">Generated ${escapeHtml(new Date().toLocaleString())}</p>
       ${sectionsHtml || "<p>No section-level changes.</p>"}
     `;
-    void exportWordDocx({ filename: `bylaw-amendments${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: "Bylaw amendments", bodyHtml });
+    void exportWordDocx({ filename: `bylaw-amendments${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: amendmentsTitle, bodyHtml });
   };
 
   const generalMeetings = (meetings ?? []).filter((m: any) => m.type === "AGM" || m.type === "SGM" || m.type === "General" || /general meeting/i.test(String(m.title ?? "")));
@@ -226,10 +230,10 @@ export function BylawDiffPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Bylaw amendments"
+        title={amendmentsTitle}
         icon={<GitCompare size={16} />}
         iconColor="purple"
-        subtitle="Draft, consult, pass and file bylaw amendments."
+        subtitle={`Draft, consult, pass and file ${docs.bylawsNoun === "articles" ? "alterations to the articles" : `${docs.bylawAmendmentNoun}s`}.`}
         info={<p>Each draft keeps a full history of edits and lifecycle events.</p>}
         actions={
           <>
@@ -247,7 +251,7 @@ export function BylawDiffPage() {
                 className="btn-action btn-action--primary"
                 onClick={saveAsNewDraft}
                 disabled={!canWrite || !title.trim() || (!oldText && !newText)}
-                title={!title.trim() ? "Add a title first" : !oldText && !newText ? "Paste the current or proposed bylaw text first" : undefined}
+                title={!title.trim() ? "Add a title first" : !oldText && !newText ? `Paste the current or proposed ${docs.bylawsNoun} text first` : undefined}
               >
                 <Save size={12} /> Save as draft
               </button>
@@ -354,15 +358,15 @@ export function BylawDiffPage() {
                       onClick={async () => {
                         if (!canWrite) return;
                         const ok = await confirm({
-                          title: "Mark bylaw amendment as filed?",
-                          message: "Confirm the special resolution, final bylaw text, and registry filing evidence are captured in filings or documents before marking this amendment filed.",
+                          title: `Mark ${docs.bylawAmendmentNoun} as filed?`,
+                          message: `Confirm the special resolution, final ${docs.bylawsNoun} text, and registry filing evidence are captured in filings or documents before marking this amendment filed.`,
                           confirmLabel: "Mark filed",
                           tone: "warn",
                         });
                         if (!ok) return;
                         try {
                           await markFiled({ id: selected._id });
-                          toast.success("Marked as filed", "Record a new bylaw rule version effective on the filing date (Bylaw rules) if the amendment changes meeting rules.");
+                          toast.success("Marked as filed", "Record a new rule version effective on the filing date (rules page) if the amendment changes meeting rules.");
                         } catch (error) {
                           toast.error("Could not mark filed", error instanceof Error ? error.message : String(error));
                         }
@@ -400,7 +404,7 @@ export function BylawDiffPage() {
                         const reason = await prompt({
                           title: "Supersede amendment",
                           message: "Mark this amendment as superseded by a newer version.",
-                          placeholder: "e.g. Replaced by the 2026 revised bylaws",
+                          placeholder: `e.g. Replaced by the 2026 revised ${docs.bylawsNoun}`,
                           confirmLabel: "Supersede",
                         });
                         if (reason === null) return;
@@ -460,17 +464,17 @@ export function BylawDiffPage() {
           )}
 
           <div className="two-col bylaw-diff__editors">
-            <Field label="Current bylaws">
+            <Field label={`Current ${docs.bylawsNoun}`}>
               <textarea
                 className="textarea textarea--mono"
                 style={{ minHeight: 240 }}
                 value={oldText}
                 disabled={!canWrite || (selected != null && !isDraft)}
                 onChange={(e) => { setOldText(e.target.value); setDirty(true); }}
-                placeholder="Paste the current bylaws section here…"
+                placeholder={`Paste the current ${docs.bylawsNoun} section here…`}
               />
             </Field>
-            <Field label="Proposed bylaws">
+            <Field label={`Proposed ${docs.bylawsNoun}`}>
               <textarea
                 className="textarea textarea--mono"
                 style={{ minHeight: 240 }}

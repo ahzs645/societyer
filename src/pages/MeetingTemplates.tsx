@@ -90,7 +90,7 @@ const AGENDA_ITEM_LIBRARY: AgendaLibraryEntry[] = [
   {
     id: "territory-acknowledgement-bc",
     label: "Territory acknowledgement",
-    summary: "BC-specific acknowledgement, editable for the society.",
+    summary: "BC-specific acknowledgement, editable for your organization.",
     items: [
       {
         ...EMPTY_ITEM,
@@ -144,7 +144,7 @@ const AGENDA_ITEM_LIBRARY: AgendaLibraryEntry[] = [
   {
     id: "open-discussion",
     label: "Open discussion",
-    summary: "Discussion space for members in attendance.",
+    summary: "Discussion space for those in attendance.",
     items: [
       {
         ...EMPTY_ITEM,

@@ -90,7 +90,8 @@ export function BylawsHistoryPage() {
   const canScanPaperless = loaded && can("documents:write") && can("settings:write");
   // The BC Registry bylaws connector reads BC society bylaw filings (Societies
   // Online). Other entity types do not file bylaws there.
-  const registryBylawsApply = organizationVocabulary(society).societyLaw;
+  const docs = organizationVocabulary(society);
+  const registryBylawsApply = docs.societyLaw;
   const canStageRegistry = loaded && can("settings:manage") && registryBylawsApply;
   const toast = useToast();
   const amendments = useQuery(
@@ -133,7 +134,7 @@ export function BylawsHistoryPage() {
   const exportCurrent = () => {
     if (!current) return;
     const bodyHtml = `
-      <h1>${escapeHtml(society.name)} — Bylaws (current)</h1>
+      <h1>${escapeHtml(society.name)} — ${docs.bylawsTitle} (current)</h1>
       <p class="meta">Effective ${escapeHtml(formatDate(current.filedAtISO))} · Last amended ${escapeHtml(formatDateTime(current.filedAtISO))}</p>
       ${registryBylawsApply ? `<p class="meta">Filed via Societies Online.</p>` : ""}
       <pre style="font-family: inherit; white-space: pre-wrap; font-size: 11pt; line-height: 1.5;">${escapeHtml(current.proposedText)}</pre>
@@ -144,7 +145,7 @@ export function BylawsHistoryPage() {
     `;
     void exportWordDocx({
       filename: "bylaws-current.docx",
-      title: `${society.name} — Bylaws`,
+      title: `${society.name} — ${docs.bylawsTitle}`,
       bodyHtml,
     });
   };
@@ -166,11 +167,11 @@ export function BylawsHistoryPage() {
       if (!result?.sessionId) throw new Error("No offline handler returned a review session.");
       setLastBotSessionId(result.sessionId);
       toast.success(
-        "Paperless bylaws review staged",
+        `Paperless ${docs.bylawsNoun} review staged`,
         `${result.bylawAmendments ?? 0} candidate version(s), ${result.visionQueue ?? 0} needing page review`,
       );
     } catch (error: any) {
-      toast.error("Could not scan Paperless bylaws", serverActionErrorMessage("Scanning Paperless", error, "Check the Paperless connection and try again."));
+      toast.error(`Could not scan Paperless ${docs.bylawsNoun}`, serverActionErrorMessage("Scanning Paperless", error, "Check the Paperless connection and try again."));
     } finally {
       setPaperlessBusy(false);
     }
@@ -219,7 +220,7 @@ export function BylawsHistoryPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Bylaws history"
+        title={`${docs.bylawsTitle} history`}
         icon={<BookOpen size={16} />}
         iconColor="purple"
         subtitle="Every filed amendment, with the diff at each step."
@@ -234,7 +235,7 @@ export function BylawsHistoryPage() {
             <MoreActionsMenu
               label={isPhone ? "" : "More"}
               items={[
-                ...(current ? [{ id: "export", label: "Export current bylaws", icon: <FileDown size={12} />, onSelect: exportCurrent }] : []),
+                ...(current ? [{ id: "export", label: `Export current ${docs.bylawsNoun}`, icon: <FileDown size={12} />, onSelect: exportCurrent }] : []),
                 ...(canScanPaperless || canStageRegistry
                   ? [{
                       id: "import",
@@ -256,11 +257,11 @@ export function BylawsHistoryPage() {
         onChange={setView}
         items={[
           { id: "timeline", label: "Timeline" },
-          { id: "current", label: "Current bylaws" },
+          { id: "current", label: `Current ${docs.bylawsNoun}` },
         ]}
       />
 
-      <ImportCandidatesNotice noun="bylaw amendment" targets={["bylawAmendments"]} kinds={["bylawAmendment", "bylawRuleSet"]} documentCategory="Bylaws" emptyRegister={filed.length === 0} />
+      <ImportCandidatesNotice noun={docs.bylawAmendmentNoun} targets={["bylawAmendments"]} kinds={["bylawAmendment", "bylawRuleSet"]} documentCategory="Bylaws" emptyRegister={filed.length === 0} />
       <div className="stat-grid">
         <Stat label="Filed amendments" value={String(filed.length)} />
         <Stat label="In flight" value={String(inFlight.length)} sub="Drafts + active consultations" />
@@ -282,7 +283,7 @@ export function BylawsHistoryPage() {
         <div className="card__head">
           <h2 className="card__title"><Bot size={14} /> Import bylaw versions</h2>
           <InfoPopover label="About importing bylaw versions">
-            <p>{registryBylawsApply ? "Stage BC Registry and Paperless sources" : "Stage Paperless sources"} as markdown bylaw versions, then approve them in Import Sessions before they update this timeline.</p>
+            <p>{registryBylawsApply ? "Stage BC Registry and Paperless sources" : "Stage Paperless sources"} as markdown {docs.bylawsNoun} versions, then approve them in Import Sessions before they update this timeline.</p>
             <p>Digital OCR is normalized into Markdown automatically. Scan-only PDFs are queued for page-by-page vision transcription and should stay pending until a reviewer confirms the text.</p>
           </InfoPopover>
           <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
@@ -334,7 +335,7 @@ export function BylawsHistoryPage() {
       {view === "current" && (
         <div className="card">
           <div className="card__head">
-            <h2 className="card__title">Current bylaws</h2>
+            <h2 className="card__title">Current {docs.bylawsNoun}</h2>
             <span className="card__subtitle">
               {current
                 ? `Effective ${formatDate(current.filedAtISO)} — last amendment: ${current.title}`

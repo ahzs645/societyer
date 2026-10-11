@@ -4,6 +4,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/ui";
 import { Select } from "../components/Select";
@@ -96,7 +97,9 @@ export function EmployeesPage() {
         icon={<Users size={16} />}
         iconColor="blue"
         subtitle="Staff records for payroll and remuneration disclosure."
-        info={<p>The payroll source of truth for T4/T4A slips, remuneration disclosure under s.36 of the Societies Act (pay of $75,000 or more), and the Employment Standards Act 4-year record retention.</p>}
+        info={organizationVocabulary(society).societyLaw
+          ? <p>The payroll source of truth for T4/T4A slips, remuneration disclosure under s.36 of the Societies Act (pay of $75,000 or more), and the Employment Standards Act 4-year record retention.</p>
+          : <p>The payroll source of truth for T4/T4A slips and employment-standards record retention.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New employee

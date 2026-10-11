@@ -30,6 +30,7 @@ import {
   useRecordTableState,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { useEligibleVoters } from "../hooks/useEligibleVoters";
 
 /**
  * Distinguishes "genuinely zero records" from "filters/search narrowed a
@@ -65,6 +66,7 @@ function CommunicationsEmptyState({
 type AudiencePreset =
   | "all_members"
   | "voting_members"
+  | "voting_shareholders"
   | "directors"
   | "overdue_subscribers"
   | "volunteers"
@@ -82,6 +84,7 @@ function parseAudienceValue(audience: string): { preset: AudiencePreset; target:
     [
       "all_members",
       "voting_members",
+      "voting_shareholders",
       "directors",
       "overdue_subscribers",
       "volunteers",
@@ -211,6 +214,7 @@ function estimateAudience(args: {
 
 export function CommunicationsPage() {
   const society = useSociety();
+  const eligibleVoters = useEligibleVoters(society);
   const { can } = usePermissions();
   const canWrite = can("communications:write");
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -337,6 +341,8 @@ export function CommunicationsPage() {
   const audiencePreview = useMemo(() => {
     if (!sendDraft) return null;
     const audience = buildAudienceValue(sendDraft);
+    // Resolved on the server from the share register; the count is the same source.
+    if (audience === "voting_shareholders") return eligibleVoters.count ?? 0;
     return estimateAudience({
       audience,
       members: members ?? [],
@@ -349,7 +355,7 @@ export function CommunicationsPage() {
           ? [{ _id: sendDraft.audienceTarget, members: committeeDetail.members ?? [] }]
           : [],
     });
-  }, [sendDraft, members, directors, subscriptions, volunteers, segments, committeeDetail]);
+  }, [sendDraft, members, directors, subscriptions, volunteers, segments, committeeDetail, eligibleVoters.count]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -856,6 +862,7 @@ export function CommunicationsPage() {
                 options={[
                   { value: "all_members", label: audienceLabels.all_members },
                   { value: "voting_members", label: audienceLabels.voting_members },
+                  ...(vocab.isCorporation ? [{ value: "voting_shareholders", label: "Voting shareholders (share register)" }] : []),
                   { value: "directors", label: "Directors" },
                   { value: "overdue_subscribers", label: "Overdue subscribers" },
                   { value: "volunteers", label: "Volunteers" },
@@ -1077,6 +1084,7 @@ export function CommunicationsPage() {
                   options={[
                     { value: "all_members", label: audienceLabels.all_members },
                     { value: "voting_members", label: audienceLabels.voting_members },
+                  ...(vocab.isCorporation ? [{ value: "voting_shareholders", label: "Voting shareholders (share register)" }] : []),
                     { value: "directors", label: "Directors" },
                     { value: "overdue_subscribers", label: "Overdue subscribers" },
                     { value: "volunteers", label: "Volunteers" },

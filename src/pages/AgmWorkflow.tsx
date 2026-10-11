@@ -86,6 +86,11 @@ export function AgmWorkflowPage() {
   const minutes = useQuery(api.minutes.getByMeeting, meetingId ? { meetingId } : "skip");
   const run = useQuery(api.agm.runForMeeting, meetingId ? { meetingId } : "skip");
   const deliveries = useQuery(api.agm.noticeDeliveries, meetingId ? { meetingId } : "skip");
+  // Who is entitled to notice: voting members for a society, voting
+  // shareholders (share register, then shareholder role holders) for a corporation.
+  const coverage = useQuery(api.agm.noticeCoverage, meetingId ? { meetingId } : "skip") as
+    | { value: string; detail: string; tone: "success" | "info" | "warn" }
+    | undefined;
   const allElections = useQuery(api.elections.list, society ? { societyId: society._id } : "skip");
   const meetingElections = useMemo(
     () => (allElections ?? []).filter((e: any) => String(e.meetingId) === String(id)),
@@ -248,7 +253,7 @@ export function AgmWorkflowPage() {
         <ArrowLeft size={12} /> Back to meeting
       </Link>
       <PageHeader
-        title={`AGM workflow · ${meeting.title}`}
+        title={`${vocab.annualMeetingTitle} workflow · ${meeting.title}`}
         icon={<ClipboardCheck size={16} />}
         iconColor="orange"
         subtitle={`${formatMeetingDate(meeting)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
@@ -272,14 +277,14 @@ export function AgmWorkflowPage() {
             tone={noticeWithinWindow ? "success" : "warn"}
           />
           <Item label="Notice coverage"
-            value={votingMemberCount
+            value={coverage?.value ?? (votingMemberCount
               ? `${noticeCoverage} notified · ${votingMemberCount} voting member${votingMemberCount === 1 ? "" : "s"}`
-              : "No voting member register"}
-            detail={[
+              : vocab.isCorporation ? "Checking voting shareholders…" : "No voting member register")}
+            detail={coverage?.detail ?? [
               `${deliveredCount} delivery record${deliveredCount === 1 ? "" : "s"} logged`,
               recordedRecipientCount ? `the workflow records ${recordedRecipientCount} recipient${recordedRecipientCount === 1 ? "" : "s"}` : "",
             ].filter(Boolean).join("; ")}
-            tone={votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? (deliveredCount >= votingMemberCount ? "success" : "info") : "warn"}
+            tone={coverage?.tone ?? (votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? (deliveredCount >= votingMemberCount ? "success" : "info") : "warn")}
           />
           {/* The meeting-relative due date is the BC Societies Act annual report
               rule; other entities file on the registry's own schedule. */}

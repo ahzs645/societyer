@@ -434,7 +434,7 @@ export function PrivacyPage() {
                   Setup motions backlog
                   <InfoPopover label="About setup motions">
                     <p>Keep draft motions separate until you are ready to place them on a future agenda and seed them into minutes.</p>
-                    <p>Seed motions for designating the privacy officer, adopting the policy and complaint process, documenting member-data access, and setting the training review cycle.</p>
+                    <p>Seed motions for designating the privacy officer, adopting the policy and complaint process, {entity.isSociety ? "documenting member-data access, " : ""}and setting the training review cycle.</p>
                   </InfoPopover>
                 </h2>
               </div>
@@ -479,7 +479,7 @@ export function PrivacyPage() {
                   <Shield size={14} />
                   Privacy operations record
                   <InfoPopover label="About the privacy operations record">
-                    <p>Internal PIPA setup state, including member-data custody notes.</p>
+                    <p>{entity.bcHome ? "Internal PIPA setup state" : "Internal privacy setup state"}{entity.isSociety ? ", including member-data custody notes" : ""}.</p>
                   </InfoPopover>
                 </h2>
               </div>

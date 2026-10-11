@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import { GitBranch } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { formatDate, formatDateTime, isPastDue, money } from "../lib/format";
@@ -185,7 +186,9 @@ export function TimelinePage() {
         icon={<GitBranch size={16} />}
         iconColor="purple"
         subtitle="Past and upcoming events in date order."
-        info={<p>Meetings, filings, deadlines, elections, bylaw milestones, commitments, member-fee changes and funding events on one spine.</p>}
+        info={organizationVocabulary(society).isSociety
+          ? <p>Meetings, filings, deadlines, elections, bylaw milestones, commitments, member-fee changes and funding events on one spine.</p>
+          : <p>Meetings, filings, deadlines, elections, governing-document milestones, commitments and funding events on one spine.</p>}
       />
 
       <div className="card">

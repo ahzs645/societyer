@@ -1164,7 +1164,7 @@ export function Layout() {
                     {!counts ? (
                       <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>
                     ) : counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
-                      <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end (Society profile) and record held AGMs to compute statutory deadlines.">
+                      <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end on the organization profile and record held annual meetings to compute statutory deadlines.">
                         <Pill size="sm" tone="warn">Set up</Pill>
                       </span>
                     ) : (

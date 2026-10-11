@@ -4,6 +4,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
 import { Select } from "../components/Select";
@@ -103,7 +104,7 @@ export function ProxiesPage() {
         subtitle={rules?.allowProxyVoting ? "Proxy appointments for general meetings." : "Proxy voting is off under the active rules."}
         info={
           <p>
-            Active rules: proxies {rules?.allowProxyVoting ? "allowed" : "not allowed"}, up to {rules?.proxyLimitPerGrantorPerMeeting ?? 1} holder(s) per member per meeting.
+            Active rules: proxies {rules?.allowProxyVoting ? "allowed" : "not allowed"}, up to {rules?.proxyLimitPerGrantorPerMeeting ?? 1} holder(s) per {organizationVocabulary(society).voterNoun} per meeting.
           </p>
         }
         actions={

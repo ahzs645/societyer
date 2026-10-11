@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../../shared/minutesQuorum";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState, RecordChip } from "../components/ui";
 import { formatDate } from "../lib/format";
@@ -85,7 +86,9 @@ export function MinutesPage() {
         icon={<FileText size={16} />}
         iconColor="turquoise"
         subtitle="All meeting minutes on file."
-        info={<p>Minutes of general meetings (AGM/SGM) are accessible to members.</p>}
+        info={organizationVocabulary(society).isCorporation
+          ? <p>Shareholders can inspect the minutes of shareholder meetings; confirm the rules in the governing Act.</p>
+          : <p>Minutes of general meetings (AGM/SGM) are accessible to members.</p>}
       />
 
       {showMetadataWarning ? (

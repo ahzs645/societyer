@@ -127,7 +127,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
   {
     key: "pipaTraining",
-    label: "PIPA training log",
+    label: "Privacy training log",
     category: "Compliance",
     description: "Training records for privacy and CASL refresh workflows.",
     includes: ["PIPA training", "Privacy training status"],

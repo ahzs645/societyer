@@ -115,7 +115,11 @@ assert.ok(visibleTemplates("bcSociety").every((id) => id.startsWith("SOC-")) && 
 assert.ok(visibleTemplates("bcCompany").every((id) => id.startsWith("BCC-")) && visibleTemplates("bcCompany").length === 10);
 assert.ok(visibleTemplates("federalCbca").every((id) => id.startsWith("FED-")) && visibleTemplates("federalCbca").length === 10);
 assert.deepEqual(visibleTemplates("ontarioObca"), visibleTemplates("federalCbca"));
-assert.equal(visibleTemplates("albertaSociety").length, templates.length, "no matching research area: show every record, labelled");
+// No research area of its own: only platform research by default (another
+// entity's templates would read as guidance for this one); "All entity types"
+// still lists every record, labelled.
+assert.equal(visibleTemplates("albertaSociety").length, 0, "no matching research area: no other entity's templates by default");
+assert.equal(researchAreasForOrganization(null), null, "while loading, nothing is filtered");
 assert.equal(researchAreaApplies("storage", ["bc_company"]), true, "platform research applies everywhere");
 assert.equal(templates.length, 28, "templates are filtered, never deleted");
 

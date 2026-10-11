@@ -161,7 +161,7 @@ export function CustomFieldsPage() {
             Extra fields for {organizationVocabulary(society).isCorporation ? "contacts" : "members"}, directors, volunteers and staff.
             <InfoPopover label="About custom fields">
               <p>
-                Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear
+                Add extra fields to any person category ({organizationVocabulary(society).isCorporation ? "contacts" : "members"}, directors, volunteers, employees). Saved values appear
                 on each person's detail and can be pulled into PDF mapping.
               </p>
             </InfoPopover>

@@ -157,7 +157,13 @@
     "templateEngine": "Moteur de modèles",
     "webhooks": "Webhooks",
     "advanced": "Configuration avancée",
-    "browserConnectors": "Applications de navigateur"
+    "browserConnectors": "Applications de navigateur",
+    "corporateBylawRules": "Règles des règlements administratifs",
+    "governanceRules": "Règles de gouvernance",
+    "corporateBylawAmendments": "Modifications des règlements administratifs",
+    "articlesAlterations": "Modifications des statuts",
+    "corporateBylawsHistory": "Historique des règlements administratifs",
+    "articlesHistory": "Historique des statuts"
   },
   "sidebar": {
     "openNavigation": "Ouvrir la navigation",
@@ -300,7 +306,7 @@
       "description": "Conservation des documents et demandes de consultation des registres."
     },
     "pipaTraining": {
-      "label": "Registre de formation PIPA",
+      "label": "Registre de formation sur la vie privée",
       "description": "Dossiers de formation sur la protection des renseignements personnels et la LCAP."
     },
     "insurance": {

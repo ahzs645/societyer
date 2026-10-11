@@ -241,6 +241,7 @@ type NavItem = {
   label: string;
   labelByEntityKind?: Partial<Record<"society" | "corporation", string>>;
   labelOutsideBc?: string;
+  labelForBcCompany?: string;
   icon: LucideIcon;
   color: IconTone;
   end?: boolean;
@@ -273,6 +274,7 @@ function navItem(to: string, end?: boolean): NavItem {
     label: id.label,
     ...(id.labelByEntityKind ? { labelByEntityKind: id.labelByEntityKind } : {}),
     ...(id.labelOutsideBc ? { labelOutsideBc: id.labelOutsideBc } : {}),
+    ...(id.labelForBcCompany ? { labelForBcCompany: id.labelForBcCompany } : {}),
     icon: id.icon,
     color: id.color,
     ...(end ? { end } : {}),

@@ -157,7 +157,13 @@
     "templateEngine": "Template engine",
     "webhooks": "Webhooks",
     "advanced": "Advanced setup",
-    "browserConnectors": "Browser apps"
+    "browserConnectors": "Browser apps",
+    "corporateBylawRules": "By-law rules",
+    "governanceRules": "Governance rules",
+    "corporateBylawAmendments": "By-law amendments",
+    "articlesAlterations": "Articles alterations",
+    "corporateBylawsHistory": "By-laws history",
+    "articlesHistory": "Articles history"
   },
   "sidebar": {
     "openNavigation": "Open navigation",
@@ -300,7 +306,7 @@
       "description": "Records retention and inspection request workflows."
     },
     "pipaTraining": {
-      "label": "PIPA training log",
+      "label": "Privacy training log",
       "description": "Training records for privacy and CASL refresh workflows."
     },
     "insurance": {

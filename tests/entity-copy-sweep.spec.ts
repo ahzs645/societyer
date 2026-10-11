@@ -133,7 +133,11 @@ const PATTERNS: Pattern[] = [
   // "members" as voters/owners; board/committee/team membership is fine.
   { key: "members", regex: /(?<!\b(?:board|committee|team|staff|family|council|panel|crew|commission)\s)\bmembers?\b/gi, unless: /\b(?:board|committee|team|staff) members?\b/i },
   { key: "agm", regex: /\bAGMs?\b|annual general meeting/gi },
-  { key: "bylaws", regex: /\bby-?laws?\b/gi, unless: /articles/i },
+  // A BC company has articles only, so any by-law wording is a leak there.
+  // Federal, Ontario and other corporations do have by-laws (hyphenated, the
+  // statutory spelling); only the society spelling "bylaws" is flagged.
+  { key: "bylaws", regex: /\bby-?laws?\b/gi, unless: /articles/i, applies: (workspace) => workspace.bc },
+  { key: "bylaws", regex: /\bbylaws?\b/gi, unless: /articles/i, applies: (workspace) => !workspace.bc },
   { key: "constitution", regex: /\bconstitution(?:s|al)?\b/gi },
   { key: "pipa", regex: /\bPIPA\b/g, applies: (workspace) => !workspace.bc },
   { key: "charity-toggle", regex: /charit(?:y|ies|able)/gi, toggleOnly: true, applies: (workspace) => !workspace.society },

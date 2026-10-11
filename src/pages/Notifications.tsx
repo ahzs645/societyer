@@ -68,7 +68,7 @@ export function NotificationsPage() {
           <>
             <button
               className="btn-action"
-              title="Send a digest email to members who have opted in to notification emails."
+              title="Send a digest email to workspace users who have opted in to notification emails."
               disabled={busy || !digestAvailable}
               onClick={async () => {
                 if (!digestAvailable) return;

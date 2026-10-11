@@ -115,7 +115,7 @@ export const MODULE_ACCESS_DEFINITIONS: readonly ModuleAccessDefinition[] = [
   core("workspace", "Workspace profile", "Workspace", {
     view: ["society:read"], write: ["society:write", "society:update"],
   }, [ACTION_POLICY_NOTE]),
-  core("people", "Members, directors & committees", "Governance", {
+  core("people", "People, directors & committees", "Governance", {
     view: ["members:read", "directors:read", "committees:read"],
     write: ["members:write", "directors:write", "committees:write"],
   }, [ACTION_POLICY_NOTE]),

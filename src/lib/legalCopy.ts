@@ -62,7 +62,7 @@ export const RECORDS_INSPECTION_GUIDANCE = [
 export const DIRECTOR_ATTESTATION_COPY = {
   subtitle: "Each director's yearly confirmation that they still qualify.",
   info:
-    "Annual renewal confirming each director still meets the active qualification rules. Review qualification wording before relying on it for a new jurisdiction or bylaw template.",
+    "Annual renewal confirming each director still meets the active qualification rules. Review qualification wording before relying on it for a new jurisdiction or governing-document template.",
   note:
     "By signing, the director confirms each statement is accurate as of today. The society should keep this attestation with its governance records and review the wording when laws or bylaws change.",
   statements: {
@@ -93,6 +93,14 @@ export type OrganizationLegalCopy = {
  * instead so society wording, Societies Act guidance and BC-only resources do
  * not leak. Empty arrays mean "hide the section", not "nothing is required".
  */
+/** Outside BC the federal tool is a primary resource, not a supplement to BC PIPA. */
+function outsideBcResourceBody(body: string) {
+  return body.replace(
+    "Useful for drafting ideas, but supplemental because it is PIPEDA-oriented rather than BC PIPA-specific.",
+    "Built for PIPEDA, the federal private-sector privacy law; confirm which privacy law applies where you operate.",
+  );
+}
+
 export function legalCopyForOrganization(organization: LegalEntityLike | null | undefined): OrganizationLegalCopy {
   const scope = organizationRuleScope(organization);
   const entityNoun = scope.isCorporation ? "corporation" : scope.isSociety ? "society" : "organization";
@@ -113,7 +121,7 @@ export function legalCopyForOrganization(organization: LegalEntityLike | null | 
     ),
     templateResources: PIPA_TEMPLATE_RESOURCES
       .filter((resource) => citationIdsForOrganization(resource.citationIds, organization).length > 0)
-      .map((resource) => ({ ...resource, body: noun(resource.body) })),
+      .map((resource) => ({ ...resource, body: noun(scope.isBcHome ? resource.body : outsideBcResourceBody(resource.body)) })),
     recordsInspectionGuidance: scope.isBcSociety ? RECORDS_INSPECTION_GUIDANCE : [],
     directorAttestation: {
       ...DIRECTOR_ATTESTATION_COPY,

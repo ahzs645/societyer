@@ -24,8 +24,9 @@ function isEntityArea(area: string): area is EntityResearchArea {
 
 /**
  * The entity-specific research areas that apply to this workspace, or `null`
- * when the workspace is not loaded or its entity/jurisdiction has no research
- * area (then every record is shown).
+ * while the workspace is loading (then every record is shown). An entity or
+ * jurisdiction with no research area of its own gets `[]`: only platform
+ * research by default, with "All entity types" one switch away.
  */
 export function researchAreasForOrganization(organization?: LegalEntityLike | null): EntityResearchArea[] | null {
   if (!organization) return null;
@@ -33,7 +34,7 @@ export function researchAreasForOrganization(organization?: LegalEntityLike | nu
   if (scope.isBcSociety) return ["bc_society"];
   if (scope.isCorporation && scope.jurisdictionCode === "CA-BC") return ["bc_company"];
   if (scope.isCorporation && (scope.jurisdictionCode === "CA-FED-CBCA" || scope.jurisdictionCode.startsWith("CA-ON"))) return ["federal_ontario"];
-  return null;
+  return [];
 }
 
 /** Who the record is for: an entity audience, or `null` for platform research that applies everywhere. */

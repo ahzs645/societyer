@@ -64,6 +64,11 @@ export type OrganizationVocabulary = {
   governingDocumentsTitle: string;
   /** Privacy page and nav label: names PIPA only where BC PIPA applies. */
   privacyLabel: string;
+  /** The rules document: "bylaws" (society), "articles" (BC company), "by-laws" (other corporations). */
+  bylawsNoun: string;
+  bylawsTitle: string;
+  /** "bylaw amendment", "by-law amendment" or "alteration to the articles". */
+  bylawAmendmentNoun: string;
 };
 
 export function organizationVocabulary(organization?: LegalEntityLike | null): OrganizationVocabulary {
@@ -93,6 +98,9 @@ export function organizationVocabulary(organization?: LegalEntityLike | null): O
       annualMeetingFormal: "Annual General Meeting",
       governingDocuments: "constitution and bylaws",
       governingDocumentsTitle: "Constitution and bylaws",
+      bylawsNoun: "bylaws",
+      bylawsTitle: "Bylaws",
+      bylawAmendmentNoun: "bylaw amendment",
     };
   }
   if (scope.isCorporation) {
@@ -109,6 +117,9 @@ export function organizationVocabulary(organization?: LegalEntityLike | null): O
       annualMeetingFormal: bcCompany ? "Annual General Meeting" : "Annual Meeting",
       governingDocuments: bcCompany ? "articles" : "articles and by-laws",
       governingDocumentsTitle: bcCompany ? "Articles" : "Articles and by-laws",
+      bylawsNoun: bcCompany ? "articles" : "by-laws",
+      bylawsTitle: bcCompany ? "Articles" : "By-laws",
+      bylawAmendmentNoun: bcCompany ? "alteration to the articles" : "by-law amendment",
     };
   }
   return {
@@ -124,6 +135,9 @@ export function organizationVocabulary(organization?: LegalEntityLike | null): O
     annualMeetingFormal: "Annual Meeting",
     governingDocuments: "governing documents",
     governingDocumentsTitle: "Governing documents",
+    bylawsNoun: "governing documents",
+    bylawsTitle: "Governing documents",
+    bylawAmendmentNoun: "governing-document amendment",
   };
 }
 

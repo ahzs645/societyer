@@ -70,7 +70,7 @@ test("governance and people pages show no Societies Act copy for a CBCA corporat
   await expect(page.getByText("shareholder meetings (annual and special)", { exact: false })).toBeVisible();
   expect(await pageText(page)).not.toMatch(SOCIETY_ONLY);
 
-  await visit(`/app/meetings/${agmId}/agm`, /AGM workflow/);
+  await visit(`/app/meetings/${agmId}/agm`, /Annual meeting workflow/);
   await expect(page.getByText("Record annual registry filing")).toBeVisible();
   const agmText = await pageText(page);
   expect(agmText).not.toMatch(SOCIETY_ONLY);
@@ -84,8 +84,8 @@ test("governance and people pages show no Societies Act copy for a CBCA corporat
     ["/app/directors", "Directors"],
     ["/app/inspections", "Records inspections"],
     ["/app/written-resolutions", "Written resolutions"],
-    ["/app/bylaws-history", "Bylaws history"],
-    ["/app/bylaw-rules", "Bylaw rules"],
+    ["/app/bylaws-history", "By-laws history"],
+    ["/app/bylaw-rules", "By-law rules"],
     ["/app/conflicts", "Conflicts of interest"],
     ["/app/auditors", "Auditor appointments"],
   ] as const) {

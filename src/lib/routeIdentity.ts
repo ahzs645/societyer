@@ -179,6 +179,8 @@ export type RouteIdentity = {
    * `routeLabelForOrganization`.
    */
   labelOutsideBc?: string;
+  /** Label for a BC company, whose articles replace by-laws (BC Business Corporations Act). */
+  labelForBcCompany?: string;
   /** Optional module gate; page is hidden when the module is disabled. */
   module?: ModuleKey;
   /**
@@ -225,11 +227,13 @@ export function routeLabelForEntityKind(
  * workspace loads, the default label is shown.
  */
 export function routeLabelForOrganization(
-  identity: Pick<RouteIdentity, "label" | "labelByEntityKind" | "labelOutsideBc">,
+  identity: Pick<RouteIdentity, "label" | "labelByEntityKind" | "labelOutsideBc" | "labelForBcCompany">,
   organization: LegalEntityLike | null | undefined,
 ): string {
   if (!organization) return identity.label;
-  if (identity.labelOutsideBc && !organizationRuleScope(organization).isBcHome) return identity.labelOutsideBc;
+  const scope = organizationRuleScope(organization);
+  if (identity.labelOutsideBc && !scope.isBcHome) return identity.labelOutsideBc;
+  if (identity.labelForBcCompany && scope.isCorporation && scope.isBcHome) return identity.labelForBcCompany;
   return routeLabelForEntityKind(identity, organizationKind(organization));
 }
 
@@ -313,9 +317,9 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/annual-filings": { icon: CalendarCheck, group: "records", label: "Annual filings" },
   "/app/certificate-register": { icon: ScrollText, group: "records", label: "Certificate register", entityKinds: ["corporation"] },
   "/app/minute-book": { icon: BookOpen, group: "records", label: "Minute book" },
-  "/app/bylaw-rules": { icon: BookMarked, group: "records", label: "Bylaw rules" },
-  "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw amendments" },
-  "/app/bylaws-history": { icon: Scroll, group: "records", label: "Bylaws history" },
+  "/app/bylaw-rules": { icon: BookMarked, group: "records", label: "Bylaw rules", labelByEntityKind: { corporation: "By-law rules" }, labelForBcCompany: "Governance rules" },
+  "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw amendments", labelByEntityKind: { corporation: "By-law amendments" }, labelForBcCompany: "Articles alterations" },
+  "/app/bylaws-history": { icon: Scroll, group: "records", label: "Bylaws history", labelByEntityKind: { corporation: "By-laws history" }, labelForBcCompany: "Articles history" },
 
   // ---- Compliance ----
   "/app/filings": { icon: FileCheck, group: "compliance", label: "Filings" },

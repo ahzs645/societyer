@@ -40,11 +40,16 @@ for (const [key, value] of enKeys) {
 // Every sidebar/palette route label resolves to a catalogue key.
 const mapped = new Map(Object.entries(NAV_ITEM_LABEL_KEYS));
 const labels = new Set<string>();
-for (const identity of Object.values(ROUTE_IDENTITY) as Array<{ label: string; labelByEntityKind?: Record<string, string>; labelOutsideBc?: string }>) {
+for (const identity of Object.values(ROUTE_IDENTITY) as Array<{ label: string; labelByEntityKind?: Record<string, string>; labelOutsideBc?: string; labelForBcCompany?: string }>) {
   labels.add(identity.label);
   for (const label of Object.values(identity.labelByEntityKind ?? {})) labels.add(label);
   if (identity.labelOutsideBc) labels.add(identity.labelOutsideBc);
+  if (identity.labelForBcCompany) labels.add(identity.labelForBcCompany);
 }
+// A BC company's articles replace by-laws; federal and Ontario corporations have by-laws.
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/bylaws-history"], { entityType: "society", jurisdictionCode: "CA-BC" }), "Bylaws history");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/bylaws-history"], { entityType: "corporation__business_", jurisdictionCode: "CA-BC" }), "Articles history");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/bylaws-history"], { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA" }), "By-laws history");
 // Nav labels that name BC law (PIPA) switch to a neutral label outside BC.
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "society", jurisdictionCode: "CA-BC" }), "Privacy (PIPA)");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act" }), "Privacy (PIPA)");

@@ -1,4 +1,5 @@
 import { DecisionAssessmentCard } from "../components/DecisionAssessmentCard";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { isCorporation } from "../../shared/organizationDomain";
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
@@ -55,6 +56,7 @@ export function BylawRulesPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+  const docs = organizationVocabulary(society);
   if (!form) return <PageLoading />;
 
   const corporate = isCorporation(society);
@@ -214,7 +216,7 @@ export function BylawRulesPage() {
   return (
     <div className="page bylaw-rules">
       <PageHeader
-        title="Bylaw rules"
+        title={docs.isSociety ? "Bylaw rules" : docs.bcCompany ? "Governance rules" : `${docs.bylawsTitle.replace(/s$/, "")} rules`}
         icon={<Scale size={16} />}
         iconColor="purple"
         subtitle="Rules derived from the operative bylaws or articles."
@@ -266,7 +268,7 @@ export function BylawRulesPage() {
         <div className="bylaw-rules__notice" role="status">
           <Info size={14} aria-hidden="true" />
           <div>
-            {rules?.baselineLabel ?? "Statutory draft baseline"}. This does not record adoption of model bylaws. {rules?.quorumRequiresLegalRegister ? "Corporate quorum requires the legal shareholder and issued voting share registers; attendee headcount cannot establish it." : "Review the filed bylaws and legal member electorate."}
+            {rules?.baselineLabel ?? "Statutory draft baseline"}. This does not record adoption of {docs.isSociety ? "model bylaws" : "a model governing document"}. {rules?.quorumRequiresLegalRegister ? "Corporate quorum requires the legal shareholder and issued voting share registers; attendee headcount cannot establish it." : `Review the filed ${docs.bylawsNoun} and the legal ${docs.voterNoun} electorate.`}
           </div>
         </div>
       )}
@@ -450,7 +452,7 @@ export function BylawRulesPage() {
             </div>
             <div className="card__body bylaw-rules__body col" style={{ gap: 12 }}>
               <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
-                Bylaws often set a different quorum for board meetings (for example a majority of directors) than for general meetings. A committee's own terms of reference, set on the committee page, take precedence over the committee default here.
+                {docs.bylawsTitle} often set a different quorum for board meetings (for example a majority of directors) than for general meetings. A committee's own terms of reference, set on the committee page, take precedence over the committee default here.
               </p>
               {(["board", "committee"] as const).map((body) => {
                 const draft = bodyDraftFor(form.bodyQuorumRules, body);

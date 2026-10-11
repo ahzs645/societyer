@@ -3,6 +3,16 @@
 Audit date: 2026-10-11, at `claude/admiring-brown-utjnwt` 9b095a7. Produced by the automated sweep in
 `tests/entity-copy-sweep.spec.ts` (config `playwright.entity-sweep.config.ts`, run with `npm run test:entity-sweep`).
 
+## Status
+
+**Resolved.** After the fixes on `claude/admiring-brown-utjnwt`, a strict run (`ENTITY_SWEEP_STRICT=1`)
+finds no leaks for the BC company, CBCA, OBCA or custom (Quebec) workspace on any of the 108 routes. The
+BC society control still shows its Societies Act content. The `knownLeaks` baseline in
+`tests/fixtures/entity-copy-allowlist.json` is now empty, so `npm run test:entity-sweep` fails on any new
+society-only copy in a non-society workspace. Justified matches stay in `allow`, each with a reason.
+
+The findings below are the original audit, kept as a record of what was fixed and where.
+
 ## What was swept
 
 Five workspaces were built through the real guided setup (`/setup` → "Start a new organization" → the Act
