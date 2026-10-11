@@ -14,10 +14,16 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import {
+  assessAnnualMeetingDeadline,
+  assessAnnualReturnDeadline,
+  complianceDeadlineAlreadyTracked,
   deriveComplianceDeadlines,
+  deriveComplianceHistoryNotices,
   type ComplianceSettings,
+  type DeadlineAssessment,
   type DerivedDeadline,
 } from "../../shared/corporationSettings";
+import { DatePicker } from "../components/DatePicker";
 import { deriveAgmFacts } from "../../shared/agmEvidence";
 import { formatDate } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
@@ -51,7 +57,7 @@ export function ComplianceSettingsPage() {
   const existing = useQuery(
     api.deadlines.list,
     society ? { societyId: society._id } : "skip",
-  ) as Array<{ title?: string; dueDate?: string }> | undefined;
+  ) as Array<{ title?: string; dueDate?: string; category?: string; sourceKey?: string }> | undefined;
   const meetings = useQuery(
     api.meetings.list,
     society ? { societyId: society._id } : "skip",
@@ -119,6 +125,10 @@ export function ComplianceSettingsPage() {
       ? { ...deadline, status: "review_required", basis: `${deadline.basis} Filing evidence is not available in this view; completion and overdue status require someone with filing access to review the register.` }
       : deadline);
   const generatable = derived.filter(deadline => deadline.status !== "review_required");
+  // Earlier cycles without evidence: informational, never an open deadline.
+  const historyNotices = canReadFilings && filings !== undefined
+    ? deriveComplianceHistoryNotices(settings, today)
+    : deriveComplianceHistoryNotices(settings, today).filter((notice) => notice.key !== "annual-report-history");
 
   const onSave = async () => {
     if (!canSaveSettings || saving) return;
@@ -145,15 +155,17 @@ export function ComplianceSettingsPage() {
     finally { setSaving(false); }
   };
 
-  const deadlineKey = (d: { title?: string; dueDate?: string }) => `${d.title}::${d.dueDate}`;
-  const existingKeys = new Set((existing ?? []).map(deadlineKey));
+  // De-duplicate on the obligation and its cycle, not on title and due date:
+  // titles and calculated dates change, and legacy rows ("Annual General
+  // Meeting", "Annual Report") must still count as already tracked.
+  const alreadyTracked = (d: DerivedDeadline) => complianceDeadlineAlreadyTracked(d, existing ?? [], settings);
   const generate = async () => {
     if (!canGenerate || generating) return;
     setGenerating(true);
     try {
       let added = 0;
       for (const d of generatable) {
-        if (existingKeys.has(deadlineKey(d))) continue;
+        if (alreadyTracked(d)) continue;
         await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.deadlineCategory, description: d.basis });
         added += 1;
       }
@@ -162,7 +174,7 @@ export function ComplianceSettingsPage() {
     finally { setGenerating(false); }
   };
 
-  const pendingCount = generatable.filter((d) => !existingKeys.has(deadlineKey(d))).length;
+  const pendingCount = generatable.filter((d) => !alreadyTracked(d)).length;
   const entity = organizationVocabulary(society);
   const meetingLabel = entity.annualMeetingTitle;
 
@@ -221,6 +233,16 @@ export function ComplianceSettingsPage() {
               hint="Requires a separate review of the Act, eligibility and unanimous annual consent. This setting alone completes no annual business."
             />}
           </section>
+
+          <AnnualDeadlineEvidence
+            societyId={society._id}
+            society={society}
+            settings={settings}
+            today={today}
+            canWrite={canSaveSettings}
+            canReadResolutions={permissions.loaded && permissions.can("motions:read")}
+            filingsAvailable={canReadFilings && filings !== undefined}
+          />
 
           <section className="card settings-section">
             <h2 className="settings-section__title">Documents</h2>
@@ -315,7 +337,7 @@ export function ComplianceSettingsPage() {
                     {d.title}
                     {d.status === "overdue" && <span className="settings-deadlines__added"> · overdue cycle</span>}
                     {d.status === "review_required" && <span className="settings-deadlines__added"> · evidence review needed</span>}
-                    {existingKeys.has(deadlineKey(d)) && <span className="settings-deadlines__added"> · added</span>}
+                    {alreadyTracked(d) && <span className="settings-deadlines__added"> · added</span>}
                   </span>
                   {d.basis ? <span className="settings-deadlines__basis">{d.basis}</span> : null}
                   {d.sourceIds?.map((id) => <CitationBadge key={id} citationId={id} />)}
@@ -323,8 +345,198 @@ export function ComplianceSettingsPage() {
               ))}
             </ul>
           )}
+          {historyNotices.length > 0 && <ul className="settings-deadlines" aria-label="Earlier cycles without evidence">
+            {historyNotices.map((notice) => <li key={notice.key} className="settings-deadlines__item">
+              <span className="settings-deadlines__date">Information</span><span className="settings-deadlines__title">{notice.title}</span>
+              <span className="settings-deadlines__basis">{notice.basis}</span>{notice.sourceIds.map((id) => <CitationBadge key={id} citationId={id} />)}
+            </li>)}
+          </ul>}
         </aside>
       </div>
     </div>
+  );
+}
+
+type Obligation = "annual_meeting" | "annual_return";
+type CalendarDraft = { obligation: Obligation; cycleYear: number; nominalDueDate: string; reviewedDueDate: string; calendarBasis: string; evidenceRef: string; channel: string };
+type WrittenDraft = { writtenResolutionId: string; kind: "written_annual_business" | "written_waiver"; completedOn: string; annualReferenceDate: string; financialYearEnd: string; annualBusinessEvidence: string; annualBusinessReviewed: boolean };
+
+/**
+ * Reviewed annual-deadline evidence: a holiday/office calendar review for one
+ * calculated boundary, a written resolution that disposed of the annual
+ * meeting's business, and the actual periods the Act-specific deadlines need.
+ * Each entry is recorded by an authorized user with an activity-log entry.
+ */
+function AnnualDeadlineEvidence({ societyId, society, settings, today, canWrite, canReadResolutions, filingsAvailable }: {
+  societyId: any;
+  society: Record<string, any>;
+  settings: ComplianceSettings;
+  today: string;
+  canWrite: boolean;
+  canReadResolutions: boolean;
+  filingsAvailable: boolean;
+}) {
+  const toast = useToast();
+  const recordCalendar = useMutation(api.corporationSettings.recordAnnualDeadlineCalendarReview);
+  const recordWritten = useMutation(api.corporationSettings.recordWrittenAnnualBusinessCompletion);
+  const resolutions = useQuery(api.writtenResolutions.list, canReadResolutions ? { societyId } : "skip") as
+    Array<{ _id: string; title: string; status: string; body?: string; completedAtISO?: string }> | undefined;
+  const profile = legalGovernanceProfile(society);
+  const entity = organizationVocabulary(society);
+  const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(null);
+  const [writtenDraft, setWrittenDraft] = useState<WrittenDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!profile) return null;
+
+  const boundaries: Array<{ obligation: Obligation; label: string; assessment: DeadlineAssessment }> = [
+    { obligation: "annual_meeting" as const, label: entity.annualMeetingTitle, assessment: assessAnnualMeetingDeadline(settings, today) },
+    ...(filingsAvailable ? [{ obligation: "annual_return" as const, label: profile.annualReturn.label, assessment: assessAnnualReturnDeadline(settings, today) }] : []),
+  ].filter(({ assessment }) => assessment.dueDate && assessment.cycleYear && assessment.calendarReviewStatus === "unreviewed" && assessment.status !== "satisfied" && assessment.status !== "not_applicable");
+  const eligibleResolutions = (resolutions ?? []).filter((row) => row.status === "Carried" && row.body !== "directors" && row.completedAtISO);
+  const recordedCompletions = (Array.isArray(society.annualMeetingCompletions) ? society.annualMeetingCompletions : []) as Array<{ date: string; kind: string; writtenResolutionId?: string }>;
+  const recordedReviews = (Array.isArray(society.annualDeadlineCalendarReviews) ? society.annualDeadlineCalendarReviews : []) as Array<{ obligation: string; cycleYear: number; nominalDueDate: string; reviewedDueDate: string }>;
+  const run = async (label: string, action: () => Promise<unknown>, done: () => void) => {
+    if (!canWrite || busy) return;
+    setBusy(true);
+    try { await action(); toast.success(label); done(); }
+    catch (error) { toast.error(`Could not save: ${label.toLowerCase()}`, error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <section className="card settings-section">
+      <h2 className="settings-section__title">Annual deadline evidence</h2>
+      <p className="settings-section__hint">
+        A calendar review applies to one calculated boundary. Holiday and office-closure adjustments move an annual boundary by a few days at most; a boundary more than 7 days past without a review is reported as overdue.
+      </p>
+      {boundaries.map(({ obligation, label, assessment }) => (
+        <div key={obligation} className="settings-section__fact">
+          <span className="settings-section__fact-label">{label} {assessment.cycleYear}</span>
+          <span>Nominal {formatDate(assessment.nominalDueDate ?? assessment.dueDate!)} · calendar not reviewed</span>
+          <button type="button" className="link-button settings-section__fact-link" disabled={!canWrite}
+            onClick={() => setCalendarDraft({ obligation, cycleYear: assessment.cycleYear!, nominalDueDate: assessment.nominalDueDate ?? assessment.dueDate!, reviewedDueDate: assessment.nominalDueDate ?? assessment.dueDate!, calendarBasis: "", evidenceRef: "", channel: "" })}>
+            Record calendar review
+          </button>
+        </div>
+      ))}
+      {calendarDraft && (
+        <div>
+          <Field label="Reviewed deadline" hint={`Nominal boundary ${formatDate(calendarDraft.nominalDueDate)}. The reviewed date cannot be earlier.`}>
+            <DatePicker value={calendarDraft.reviewedDueDate} onChange={(value) => setCalendarDraft({ ...calendarDraft, reviewedDueDate: value })} />
+          </Field>
+          <Field label="Calendar basis" hint="Interpretation statute, holiday calendar, locality and filing office reviewed.">
+            <input className="input" value={calendarDraft.calendarBasis} onChange={(e) => setCalendarDraft({ ...calendarDraft, calendarBasis: e.target.value })} />
+          </Field>
+          <div className="settings-section__row">
+            <Field label="Evidence reference"><input className="input" value={calendarDraft.evidenceRef} onChange={(e) => setCalendarDraft({ ...calendarDraft, evidenceRef: e.target.value })} /></Field>
+            <Field label="Filing office or channel"><input className="input" value={calendarDraft.channel} onChange={(e) => setCalendarDraft({ ...calendarDraft, channel: e.target.value })} /></Field>
+          </div>
+          <div className="settings-section__row settings-section__row--action">
+            <button type="button" className="btn" onClick={() => setCalendarDraft(null)}>Cancel</button>
+            <button type="button" className="btn btn--accent" disabled={!canWrite || busy}
+              onClick={() => run("Calendar review recorded", () => recordCalendar({ societyId, obligation: calendarDraft.obligation, cycleYear: calendarDraft.cycleYear, nominalDueDate: calendarDraft.nominalDueDate, reviewedDueDate: calendarDraft.reviewedDueDate, calendarBasis: calendarDraft.calendarBasis, evidenceRef: calendarDraft.evidenceRef, channel: calendarDraft.channel || undefined }), () => setCalendarDraft(null))}>
+              Save review
+            </button>
+          </div>
+        </div>
+      )}
+      {recordedReviews.length > 0 && (
+        <p className="settings-section__hint">
+          Reviewed boundaries: {recordedReviews.map((item) => `${item.cycleYear} ${item.obligation === "annual_meeting" ? entity.annualMeeting : "annual return"} ${item.nominalDueDate} → ${item.reviewedDueDate}`).join("; ")}.
+        </p>
+      )}
+
+      <h3 className="settings-section__title">Annual business completed in writing</h3>
+      <p className="settings-section__hint">{profile.annualMeeting.writtenAlternative} Link the carried resolution; a reviewer confirms it disposed of all required annual business.</p>
+      {!canReadResolutions ? (
+        <p className="settings-section__hint">Written resolutions are not available with your permissions.</p>
+      ) : !writtenDraft ? (
+        <button type="button" className="btn btn--sm" disabled={!canWrite || eligibleResolutions.length === 0}
+          onClick={() => setWrittenDraft({ writtenResolutionId: eligibleResolutions[0]?._id ?? "", kind: "written_annual_business", completedOn: String(eligibleResolutions[0]?.completedAtISO ?? "").slice(0, 10), annualReferenceDate: "", financialYearEnd: "", annualBusinessEvidence: "", annualBusinessReviewed: false })}>
+          {eligibleResolutions.length ? "Record written annual business" : "No carried member or shareholder resolution"}
+        </button>
+      ) : (
+        <div>
+          <Field label="Written resolution">
+            <Select value={writtenDraft.writtenResolutionId}
+              onChange={(value) => setWrittenDraft({ ...writtenDraft, writtenResolutionId: value, completedOn: String(eligibleResolutions.find((row) => row._id === value)?.completedAtISO ?? "").slice(0, 10) })}
+              options={eligibleResolutions.map((row) => ({ value: row._id, label: `${row.title} (${String(row.completedAtISO).slice(0, 10)})` }))} />
+          </Field>
+          {profile.id === "bc_company" && (
+            <Field label="Kind">
+              <Select value={writtenDraft.kind} onChange={(value) => setWrittenDraft({ ...writtenDraft, kind: value as WrittenDraft["kind"] })}
+                options={[{ value: "written_annual_business", label: "Consent to all annual business" }, { value: "written_waiver", label: "Unanimous waiver of the meeting" }]} />
+            </Field>
+          )}
+          <div className="settings-section__row settings-section__row--pair">
+            <Field label="Effective date"><DatePicker value={writtenDraft.completedOn} onChange={(value) => setWrittenDraft({ ...writtenDraft, completedOn: value })} /></Field>
+            {profile.id === "bc_company" ? (
+              <Field label="Annual reference date (required)"><DatePicker value={writtenDraft.annualReferenceDate} onChange={(value) => setWrittenDraft({ ...writtenDraft, annualReferenceDate: value })} /></Field>
+            ) : profile.annualMeeting.afterFiscalYearEndMonths ? (
+              <Field label="Financial year-end dealt with"><DatePicker value={writtenDraft.financialYearEnd} onChange={(value) => setWrittenDraft({ ...writtenDraft, financialYearEnd: value })} /></Field>
+            ) : null}
+          </div>
+          <Field label="Annual business evidence" hint="How the resolution dealt with financial statements, director elections, auditor matters and any required written statements.">
+            <input className="input" value={writtenDraft.annualBusinessEvidence} onChange={(e) => setWrittenDraft({ ...writtenDraft, annualBusinessEvidence: e.target.value })} />
+          </Field>
+          <Checkbox checked={writtenDraft.annualBusinessReviewed} onChange={(checked) => setWrittenDraft({ ...writtenDraft, annualBusinessReviewed: checked })}
+            label="I reviewed that this resolution disposed of all required annual business under the governing Act" />
+          <div className="settings-section__row settings-section__row--action">
+            <button type="button" className="btn" onClick={() => setWrittenDraft(null)}>Cancel</button>
+            <button type="button" className="btn btn--accent" disabled={!canWrite || busy || !writtenDraft.writtenResolutionId}
+              onClick={() => run("Annual business completion recorded", () => recordWritten({ societyId, writtenResolutionId: writtenDraft.writtenResolutionId as any, kind: writtenDraft.kind, completedOn: writtenDraft.completedOn, annualReferenceDate: writtenDraft.annualReferenceDate || undefined, financialYearEnd: writtenDraft.financialYearEnd || undefined, annualBusinessEvidence: writtenDraft.annualBusinessEvidence, annualBusinessReviewed: writtenDraft.annualBusinessReviewed }), () => setWrittenDraft(null))}>
+              Save completion
+            </button>
+          </div>
+        </div>
+      )}
+      {recordedCompletions.some((item) => item.kind !== "held") && <p className="settings-section__hint">
+        Recorded written completions: {recordedCompletions.filter((item) => item.kind !== "held").map((item) => formatDate(item.date)).join(", ")}.</p>}
+
+      <AnnualPeriods society={society} canWrite={canWrite} />
+    </section>
+  );
+}
+
+/** Actual periods for the CBCA six-month meeting limit and the Ontario return. */
+function AnnualPeriods({ society, canWrite }: { society: Record<string, any>; canWrite: boolean }) {
+  const toast = useToast();
+  const updatePeriods = useMutation(api.corporationSettings.updateAnnualEvidenceSettings);
+  const profile = legalGovernanceProfile(society);
+  const [periods, setPeriods] = useState({ annualMeetingFinancialYearEnd: society.annualMeetingFinancialYearEnd ?? "", annualReturnPeriodEnd: society.annualReturnPeriodEnd ?? "" });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setPeriods({ annualMeetingFinancialYearEnd: society.annualMeetingFinancialYearEnd ?? "", annualReturnPeriodEnd: society.annualReturnPeriodEnd ?? "" });
+  }, [society._id, society.annualMeetingFinancialYearEnd, society.annualReturnPeriodEnd]);
+  const meetingPeriod = Boolean(profile?.annualMeeting.afterFiscalYearEndMonths), returnPeriod = profile?.annualReturn.anchor === "fiscal_year_end";
+  if (!meetingPeriod && !returnPeriod) return null;
+  const save = async () => {
+    if (!canWrite || busy) return;
+    setBusy(true);
+    try {
+      await updatePeriods({ societyId: society._id,
+        ...(meetingPeriod ? { annualMeetingFinancialYearEnd: periods.annualMeetingFinancialYearEnd || null } : {}),
+        ...(returnPeriod ? { annualReturnPeriodEnd: periods.annualReturnPeriodEnd || null } : {}) });
+      toast.success("Annual periods saved");
+    } catch (error) { toast.error("Could not save annual periods", error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <>
+      <h3 className="settings-section__title">Actual periods</h3>
+      <div className="settings-section__row settings-section__row--pair">
+        {meetingPeriod && (
+          <Field label="Financial year-end for the next annual meeting" hint="The actual period the next meeting must deal with, when the fiscal calendar changed.">
+            <DatePicker value={periods.annualMeetingFinancialYearEnd} onChange={(value) => setPeriods({ ...periods, annualMeetingFinancialYearEnd: value })} />
+          </Field>
+        )}
+        {returnPeriod && (
+          <Field label="Taxation-year end to assess" hint="Pins the annual-return assessment to this actual period. Clear it to follow the fiscal calendar.">
+            <DatePicker value={periods.annualReturnPeriodEnd} onChange={(value) => setPeriods({ ...periods, annualReturnPeriodEnd: value })} />
+          </Field>
+        )}
+      </div>
+      <button type="button" className="btn btn--sm" disabled={!canWrite || busy} onClick={save}>Save periods</button>
+    </>
   );
 }

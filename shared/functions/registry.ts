@@ -369,6 +369,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // corporationSettings
   definePortableQuery({ name: "corporationSettings:complianceDeadlines", handler: corporationSettingsFns.complianceDeadlinesPortable }),
+  definePortableMutation({ name: "corporationSettings:recordAnnualDeadlineCalendarReview", handler: corporationSettingsFns.recordAnnualDeadlineCalendarReviewPortable }),
+  definePortableMutation({ name: "corporationSettings:recordWrittenAnnualBusinessCompletion", handler: corporationSettingsFns.recordWrittenAnnualBusinessCompletionPortable }),
+  definePortableMutation({ name: "corporationSettings:updateAnnualEvidenceSettings", handler: corporationSettingsFns.updateAnnualEvidenceSettingsPortable }),
 
   // postIncorporation
   definePortableQuery({ name: "pathways:status", handler: pathwayFns.statusPortable }),
