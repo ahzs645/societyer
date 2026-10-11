@@ -85,11 +85,12 @@ export const updateSettings = authorizedMutation("elections:updateSettings", mut
   args: {
     electionId: v.id("elections"),
     corporateReview: v.optional(corporateElectionReviewValidator),
-    nominationsOpenAtISO: v.optional(v.string()),
-    nominationsCloseAtISO: v.optional(v.string()),
+    // null clears the stored value; an omitted field is left unchanged.
+    nominationsOpenAtISO: v.optional(v.union(v.string(), v.null())),
+    nominationsCloseAtISO: v.optional(v.union(v.string(), v.null())),
     scrutineerUserIds: v.optional(v.array(v.id("users"))),
-    resultsSummary: v.optional(v.string()),
-    evidenceDocumentId: v.optional(v.id("documents")),
+    resultsSummary: v.optional(v.union(v.string(), v.null())),
+    evidenceDocumentId: v.optional(v.union(v.id("documents"), v.null())),
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),

@@ -11,7 +11,7 @@ import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requir
 import { getActiveBylawRuleSet } from "./bylawRules";
 import { normalizeElectionWindow, validateElectionQuestion, type ElectionQuestionInput } from "../electionValidation";
 import { organizationRuleScope } from "../entityRuleScope";
-import { corporateElectionPreview, validateCorporateElectionReview, type CorporateElectionReview } from "./electionElectorate";
+import { corporateElectionPreview, electionRecordDateReference, validateCorporateElectionReview, type CorporateElectionReview } from "./electionElectorate";
 
 function accountMayVote(row: Record<string, any>, actor: Record<string, any> | null) {
   if (!actor) return false;
@@ -100,7 +100,7 @@ export async function getPortable(
   const society = await ctx.db.get(societyId, "societies");
   const isCorporation = organizationRuleScope(society).isCorporation;
   const corporatePreview = isCorporation && canSeeSensitive && election.status === "Draft"
-    ? await corporateElectionPreview(ctx, societyId, election.corporateReview) : null;
+    ? await corporateElectionPreview(ctx, societyId, election.corporateReview, await electionRecordDateReference(ctx, societyId, election)) : null;
   const visibleElection = !canSeeSensitive && election.corporateReview
     ? { ...election, corporateReview: { recordDateISO: election.corporateReview.recordDateISO, votingMethod: election.corporateReview.votingMethod } }
     : election;
@@ -409,7 +409,8 @@ export async function createPortable(
   if (args.corporateReview) {
     const society = await ctx.db.get(args.societyId, "societies");
     if (!organizationRuleScope(society).isCorporation) throw new Error("A share-weighted review only applies to a share-capital corporation.");
-    await validateCorporateElectionReview(ctx, args.societyId, args.corporateReview);
+    await validateCorporateElectionReview(ctx, args.societyId, args.corporateReview,
+      await electionRecordDateReference(ctx, args.societyId, { meetingId: args.meetingId, opensAtISO: votingWindow.start }));
   }
   const id = await ctx.db.insert("elections", {
     societyId: args.societyId,
@@ -446,11 +447,12 @@ export async function updateSettingsPortable(
   args: {
     electionId: string;
     corporateReview?: CorporateElectionReview;
-    nominationsOpenAtISO?: string;
-    nominationsCloseAtISO?: string;
+    /** `null` clears a stored value; omitted leaves it unchanged. */
+    nominationsOpenAtISO?: string | null;
+    nominationsCloseAtISO?: string | null;
     scrutineerUserIds?: string[];
-    resultsSummary?: string;
-    evidenceDocumentId?: string;
+    resultsSummary?: string | null;
+    evidenceDocumentId?: string | null;
     actingUserId?: string;
   },
 ) {
@@ -461,10 +463,15 @@ export async function updateSettingsPortable(
     societyId,
     required: "Director",
   });
+  const patch: Record<string, any> = { updatedAtISO: new Date().toISOString() };
   if (args.nominationsOpenAtISO || args.nominationsCloseAtISO) {
-    const window = normalizeElectionWindow(args.nominationsOpenAtISO ?? election.createdAtISO, args.nominationsCloseAtISO ?? election.closesAtISO, "Nominations");
-    args.nominationsOpenAtISO = window.start;
-    args.nominationsCloseAtISO = window.end;
+    const window = normalizeElectionWindow(args.nominationsOpenAtISO || election.createdAtISO, args.nominationsCloseAtISO || election.closesAtISO, "Nominations");
+    patch.nominationsOpenAtISO = window.start;
+    patch.nominationsCloseAtISO = window.end;
+  } else if (args.nominationsOpenAtISO === null || args.nominationsCloseAtISO === null) {
+    // Clearing either date clears the nomination window; voting dates then apply.
+    patch.nominationsOpenAtISO = undefined;
+    patch.nominationsCloseAtISO = undefined;
   }
   await Promise.all([
     ...(args.scrutineerUserIds ?? []).map((userId) =>
@@ -477,13 +484,19 @@ export async function updateSettingsPortable(
     const society = await ctx.db.get(societyId, "societies");
     if (!organizationRuleScope(society).isCorporation) throw new Error("A share-weighted review only applies to a share-capital corporation.");
     if (election.status !== "Draft") throw new Error("The electorate review is frozen after voting opens.");
-    await validateCorporateElectionReview(ctx, societyId, args.corporateReview);
+    await validateCorporateElectionReview(ctx, societyId, args.corporateReview, await electionRecordDateReference(ctx, societyId, election));
   }
-  const patch: Record<string, any> = { updatedAtISO: new Date().toISOString() };
-  for (const field of ["nominationsOpenAtISO", "nominationsCloseAtISO", "scrutineerUserIds", "resultsSummary", "evidenceDocumentId", "corporateReview"] as const) {
-    if (args[field] !== undefined) patch[field] = args[field];
+  if (args.scrutineerUserIds !== undefined) patch.scrutineerUserIds = args.scrutineerUserIds;
+  for (const field of ["resultsSummary", "evidenceDocumentId"] as const) {
+    // An empty value or null clears the field, as the settings form did before.
+    if (args[field] === null || args[field] === "") patch[field] = undefined;
+    else if (args[field] !== undefined) patch[field] = args[field];
   }
-  if (args.corporateReview) patch.eligibilityCutoffISO = args.corporateReview.recordDateISO;
+  // The electorate review is replaced only when one is supplied; it is never cleared here.
+  if (args.corporateReview) {
+    patch.corporateReview = args.corporateReview;
+    patch.eligibilityCutoffISO = args.corporateReview.recordDateISO;
+  }
   await ctx.db.patch(args.electionId, patch);
   await logAudit(ctx, {
     societyId: election.societyId,
@@ -669,8 +682,9 @@ export async function snapshotEligibleVotersPortable(
   if (corporation) {
     const review = election.corporateReview as CorporateElectionReview | undefined;
     if (!review) throw new Error("Review the record date, share rights and authorized shareholder accounts before opening this election.");
-    await validateCorporateElectionReview(ctx, societyId, review);
-    const electorate = await corporateElectionPreview(ctx, societyId, review);
+    const reference = await electionRecordDateReference(ctx, societyId, election);
+    await validateCorporateElectionReview(ctx, societyId, review, reference);
+    const electorate = await corporateElectionPreview(ctx, societyId, review, reference);
     if (!electorate.complete) throw new Error(electorate.issues.join(" "));
     for (const holder of electorate.votingHolders) {
       const assignment = review.representatives.find((row) => row.roleHolderId === holder.roleHolderId);
@@ -679,7 +693,8 @@ export async function snapshotEligibleVotersPortable(
         voterKind: "shareholder", holderKey: holder.holderKey, roleHolderId: holder.roleHolderId,
         userId: assignment.userId, email: holder.email, fullName: holder.fullName,
         voteWeight: holder.totalVotes, classVotes: holder.classVotes,
-        eligibilityReason: `Reviewed share register at the end of ${review.recordDateISO}; ${holder.totalVotes} votes before any cumulative multiplier`,
+        // A record date of today freezes the live register now, not at the end of the day.
+        eligibilityReason: `${electorate.registerBasis === "live_at_snapshot" ? `Live share register at snapshot time on ${review.recordDateISO}` : `Share register reconstructed to the end of ${review.recordDateISO}`}; ${holder.totalVotes} votes before any cumulative multiplier`,
       });
     }
   } else {
