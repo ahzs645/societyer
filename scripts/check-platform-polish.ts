@@ -191,11 +191,22 @@ assert.equal(openableExternalUrl(" https://paperless.example.org/documents/12/ "
     "BEGIN:VEVENT", "SUMMARY:Holiday", "DTSTART;VALUE=DATE:20261111", "DTEND;VALUE=DATE:20261112", "END:VEVENT",
     "BEGIN:VEVENT", "SUMMARY:Floating", "DTSTART:20261114T183000", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
   const [board, committee, holiday, floating] = parseIcs(ics, { displayTimeZone: "America/Vancouver" });
-  assert.deepEqual([board.start, board.end, board.startTimeZone, board.allDay], ["2026-11-12T18:00", "2026-11-12T19:30", "America/Vancouver", false], "a UTC time is shown in the viewer's zone, on its local day");
+  // Expected wall times come from the runtime's own zone rules: Vancouver's
+  // offset for late 2026 differs between time zone database releases (BC's
+  // move to permanent daylight time), and the check is about the conversion.
+  const vancouverWallTime = (iso: string) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Vancouver", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  };
+  const boardStart = vancouverWallTime("2026-11-13T02:00:00Z"), boardEnd = vancouverWallTime("2026-11-13T03:30:00Z");
+  assert.equal(boardStart.slice(0, 10), "2026-11-12", "the evening UTC time falls on the previous local day in Vancouver");
+  assert.deepEqual([board.start, board.end, board.startTimeZone, board.allDay], [boardStart, boardEnd, "America/Vancouver", false], "a UTC time is shown in the viewer's zone, on its local day");
   assert.deepEqual([committee.start, committee.startTimeZone], ["2026-11-12T09:00", "America/Toronto"]);
   assert.deepEqual([holiday.start, holiday.allDay], ["2026-11-11", true]);
   assert.equal(floating.start, "2026-11-14T18:30");
-  assert.equal(formatIcsWhen(board.start, board.startTimeZone, "America/Vancouver"), "2026-11-12 18:00");
+  assert.equal(formatIcsWhen(board.start, board.startTimeZone, "America/Vancouver"), boardStart.replace("T", " "));
   assert.equal(formatIcsWhen(committee.start, committee.startTimeZone, "America/Vancouver"), "2026-11-12 09:00 (America/Toronto)");
   assert.equal(formatIcsWhen(holiday.start), "2026-11-11");
   assert.match(readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8"), /formatIcsWhen\(e\.start/, "the parsed-events table formats the time");
