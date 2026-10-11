@@ -79,25 +79,25 @@ export const PATHWAY_REGISTRY: readonly PathwayDefinition[] = createPathwayRegis
   incorporationPathway({
     key: "bc_society", title: "BC society incorporation", availability: "preparation",
     eligibility: { jurisdictions: ["CA-BC"], entityTypes: ["society", "society__bc_"], acts: ["societies_act"], subtypes: ["ordinary_society", "member_funded_society"] },
-    setup: { label: "BC society (nonprofit)", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act", hint: "British Columbia Societies Act; member governance." },
+    setup: { label: "BC society (nonprofit)", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act", hint: "Nonprofit run by members who elect the board; filed with BC Registries." },
     message: "BC society preparation: confirm ordinary or member-funded classification, constitution, bylaws, eligible directors and official incorporation evidence. Charity registration is separate.",
   }),
   incorporationPathway({
     key: "bc_company", title: "BC ordinary private company incorporation", availability: "preparation",
     eligibility: { jurisdictions: ["CA-BC"], entityTypes: ["corporation__business_"], acts: ["business_corporations_act__british_columbia_", "business_corporations_act"], subtypes: ["ordinary_private_company"] },
-    setup: { label: "BC business corporation (provincial)", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", hint: "British Columbia Business Corporations Act; shareholder governance." },
+    setup: { label: "BC business corporation (provincial)", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", hint: "Owned by shareholders who elect the directors; filed with BC Registries." },
     message: "BC ordinary private company preparation. Confirm the articles, incorporation agreement and director eligibility; specialist company subtypes require review.",
   }),
   incorporationPathway({
     key: "federal_cbca", title: "Federal CBCA business incorporation", availability: "preparation",
     eligibility: { jurisdictions: ["CA-FED-CBCA"], entityTypes: ["corporation__business_"], acts: ["canada_business_corporations_act"], subtypes: ["federal_private_corporation"] },
-    setup: { label: "Federal business corporation (CBCA)", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act", hint: "Corporations Canada; provincial registration may also be needed where you operate." },
+    setup: { label: "Federal business corporation (CBCA)", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act", hint: "Filed with Corporations Canada; each province you operate in may also require registration." },
     message: "Federal CBCA business corporation preparation. Registry acceptance, execution and CRA accounts require their own evidence.",
   }),
   incorporationPathway({
     key: "ontario_obca", title: "Ontario OBCA business incorporation", availability: "review_required",
     eligibility: { jurisdictions: ["CA-ON-OBCA"], entityTypes: ["corporation__business_"], acts: ["business_corporations_act__ontario_"], subtypes: [] },
-    setup: { label: "Ontario business corporation (OBCA)", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_", hint: "Existing Ontario guide track; incorporation preparation requires review." },
+    setup: { label: "Ontario business corporation (OBCA)", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_", hint: "Filed with the Ontario Business Registry; preparation guidance is still under review." },
     message: "Ontario preparation remains under review. Confirm the Ontario rules and document forms before using a packet.",
   }),
 ]);

@@ -498,7 +498,8 @@ export function MenuRow({
         {icon && <span className="menu__item-icon">{icon}</span>}
         <span className="menu__item-label">
           {label}
-          {hint && <span className="menu__item-hint"> · {hint}</span>}
+          {/* The separator stays in the accessible name; described menus hide it visually and stack the hint. */}
+          {hint && <span className="menu__item-hint"><span className="menu__item-hint-sep"> · </span>{hint}</span>}
         </span>
       </span>
       {right && <span className="menu__item-right">{right}</span>}

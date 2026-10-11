@@ -160,10 +160,12 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
               </div>
               {/* The Act question depends on the answer above, so it appears once one is chosen. */}
               {stage && <Field label={stage === "existing" ? "Act the organization was formed under" : "Act you plan to incorporate under"}>
-                <Select value={pathwayKey} onChange={choosePathway} options={[...PATHWAY_REGISTRY.map((pathway) => ({ value: pathway.key, label: `${pathway.setup.label} — ${optionLabel("actsFormedUnder", pathway.setup.actFormedUnder)}`, hint: pathway.setup.hint })), ...(stage === "existing" ? [{ value: "custom_existing", label: "Another existing organization — enter legal details", hint: "Reviewed incorporation guidance may be unavailable." }] : [])]} />
+                <Select value={pathwayKey} onChange={choosePathway} options={pathwayOptions(stage)} />
               </Field>}
               {pathwayKey === "custom_existing" && <div className="society-field-grid"><Field label="Legal jurisdiction"><Select value={form.jurisdictionCode} onChange={(value) => set("jurisdictionCode", value)} options={optionChoices("entityJurisdictions")} /></Field><Field label="Entity type"><Select value={form.entityType} onChange={(value) => set("entityType", value)} options={optionChoices("entityTypes")} /></Field><Field label="Act formed under"><Select value={form.actFormedUnder} onChange={(value) => set("actFormedUnder", value)} options={optionChoices("actsFormedUnder")} /></Field></div>}
-              {pathwayKey && <div className="notice notice--info">{route.message}</div>}
+              {pathwayKey && <div className="notice notice--info">{stage === "existing" && pathwayKey !== "custom_existing"
+                ? "After setup, the checklist asks for the certificate of incorporation, governing documents and filing history so the records can be verified."
+                : route.message}</div>}
               {canRestore && <button type="button" className="society-create__link" onClick={() => setRestoring(true)}>Have a Societyer backup? Restore it instead</button>}
             </>}
 
@@ -193,6 +195,20 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
       )}
     </main>
   </div></div>;
+}
+
+/** The entity is the label; the Act and what it means sit underneath as the hint. */
+function pathwayOptions(stage: "preparing" | "existing") {
+  return [
+    ...PATHWAY_REGISTRY.map((pathway) => ({
+      value: pathway.key,
+      label: pathway.setup.label,
+      hint: `${optionLabel("actsFormedUnder", pathway.setup.actFormedUnder)}. ${pathway.setup.hint}`,
+    })),
+    ...(stage === "existing"
+      ? [{ value: "custom_existing", label: "Another organization or Act", hint: "Enter the jurisdiction, entity type and Act yourself. Reviewed guidance may not be available." }]
+      : []),
+  ];
 }
 
 type GovernanceAnswers = { governanceStructure: string; classDetails: string; governanceDocuments: string; peopleReadiness: string; operatingRegions: string };

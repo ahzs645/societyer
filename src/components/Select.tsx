@@ -94,10 +94,14 @@ export function Select<T extends string>({
   const [isPhone, setIsPhone] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
-  // Phones use a bottom sheet for long or searchable option lists; a short
-  // list (Yes / No, a few statuses) stays an anchored popover.
+  // Sentence-length hints read as descriptions: stack them under the label
+  // and keep the menu to the trigger's width instead of one very long line.
+  const described = useMemo(() => options.some((o) => (o.hint?.length ?? 0) > 28), [options]);
+  // Phones use a bottom sheet for long, searchable or described option lists;
+  // a short list (Yes / No, a few statuses) stays an anchored popover.
   const isBottomSheet = isPhone && (
-    Boolean(searchable ?? options.some((o) => o.color))
+    described
+    || Boolean(searchable ?? options.some((o) => o.color))
     || options.length + (clearable ? 1 : 0) > SHEET_MIN_ITEMS
   );
   // Keeps the bottom sheet above the on-screen keyboard: iOS overlays the
@@ -367,7 +371,7 @@ export function Select<T extends string>({
                 ref={menuRef}
                 data-floating-layer=""
                 id={`${controlId}-menu`}
-                className={`menu${isBottomSheet ? " menu--sheet" : ""}`}
+                className={`menu${isBottomSheet ? " menu--sheet" : ""}${described ? " menu--described" : ""}`}
                 role="listbox"
                 tabIndex={-1}
                 onKeyDown={onMenuKey}
@@ -385,6 +389,7 @@ export function Select<T extends string>({
                           top: pos.top,
                           left: pos.left,
                           minWidth: Math.max(menuMinWidth ?? 0, pos.width),
+                          ...(described ? { width: Math.max(menuMinWidth ?? 0, pos.width, 280) } : null),
                         }
                 }
               >

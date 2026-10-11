@@ -120,6 +120,8 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   /* dvh, not vh — anchored menus must fit the VISIBLE viewport on mobile
    * (vh includes the browser chrome, letting the menu extend under it). */
   max-height: min(70dvh, 420px);
+  /* Never wider than the viewport; long labels ellipsize instead. */
+  max-width: calc(100vw - 16px);
   @include flex-column;
   overflow: hidden auto;
   animation: menuIn 0.08s ease-out;
@@ -228,6 +230,31 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   white-space: nowrap;
 }
 .menu__item-hint { color: token('text-tertiary'); }
+/* Options with sentence-length hints: label on the first line, the hint
+ * wrapped underneath in smaller type, so the menu matches the field width. */
+.menu--described .menu__item { align-items: flex-start; padding-block: 8px; }
+.menu--described .menu__item-main { align-items: flex-start; }
+.menu--described .menu__item-label {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: token('text-primary');
+}
+.menu--described .menu__item-hint {
+  font-size: token('fs-sm');
+  line-height: 1.4;
+}
+.menu--described .menu__item-hint-sep {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.menu--described .menu__item-right { padding-top: 3px; }
 .menu__item-right {
   @include inline-flex-center;
   gap: 6px;
