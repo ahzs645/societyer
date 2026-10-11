@@ -28,7 +28,7 @@ export function DecisionAssessmentCard({ organization }: { organization: any }) 
   // Only societies and business corporations have reviewed decision rules. A
   // custom entity (co-operative, partnership, ...) must not be evaluated as a
   // business corporation, so the card is hidden for it.
-  const society = vocab.kind === "society" || vocab.societyLaw;
+  const society = vocab.isSociety;
   const supportedEntity = society || vocab.isCorporation;
   const [body, setBody] = useState<LegalDecisionInput["body"]>(society ? "members" : "shareholders");
   const [mode, setMode] = useState<LegalDecisionInput["mode"]>("meeting");

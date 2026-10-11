@@ -5,12 +5,12 @@ import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
 import { ShieldCheck, PenLine } from "lucide-react";
 import { formatDate, initials } from "../lib/format";
-import { DIRECTOR_ATTESTATION_COPY } from "../lib/legalCopy";
+import { legalCopyForOrganization } from "../lib/legalCopy";
+import { citationIdForOrganization } from "../lib/regulatoryCitations";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import {
@@ -116,6 +116,7 @@ export function AttestationsPage() {
   if (society === null) return <SeedPrompt />;
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const DIRECTOR_ATTESTATION_COPY = legalCopyForOrganization(society).directorAttestation;
 
   return (
     <div className="page">
@@ -129,9 +130,8 @@ export function AttestationsPage() {
 
       {missing && missing.length > 0 && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
-          {/* The qualification citation is BC Societies Act s.44(2); other
-              entity types have no reviewed citation, so none is shown. */}
-          <Flag level="warn" citationId={governanceVocabulary(society).societyLaw ? "BC-SOC-DIRECTOR-QUALIFICATIONS" : undefined}>
+          {/* BC Societies Act s.44(2); suppressed for entities it does not govern. */}
+          <Flag level="warn" citationId={citationIdForOrganization("BC-SOC-DIRECTOR-QUALIFICATIONS", society)}>
             {missing.length} director{missing.length === 1 ? "" : "s"} have not yet attested for {year}.
           </Flag>
         </div>

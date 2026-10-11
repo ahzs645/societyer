@@ -7,7 +7,6 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
