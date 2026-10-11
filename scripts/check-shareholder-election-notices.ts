@@ -3,7 +3,7 @@ import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 import { api } from "../convex/_generated/api";
 import { betterAuthIssuer } from "../convex/lib/authIdentity";
-import { buildShareholderElectorate } from "../shared/shareholderElectorate";
+import { buildShareholderElectorate, recordDateLimitFor, recordDateWindow } from "../shared/shareholderElectorate";
 import { allMemberNoticeRecipients, votingShareholderNoticeAudience, meetingNoticeCoverage } from "../shared/meetingNoticeAudience";
 import { earliestPermittedNoticeDate } from "../shared/legalMeetingNotice";
 import { noticeWindowSatisfied } from "../src/features/meetings/lib/noticeWindow";
@@ -24,6 +24,24 @@ assert.equal(coverage.deliveredCount, 1); assert.equal(coverage.noticeCoverage, 
 assert.equal(earliestPermittedNoticeDate("2026-08-31", 62, 2), "2026-06-30");
 assert.equal(noticeWindowSatisfied("2026-06-30", "2026-08-31", 21, 62, { noticeUsesCalendarMonthsMaximum: true }), true);
 assert.equal(noticeWindowSatisfied("2026-06-29", "2026-08-31", 21, 62, { noticeUsesCalendarMonthsMaximum: true }), false);
+// OBCA s. 95(2): a record date fixed by the directors is 30 to 60 days before the meeting
+// (meetings-records.md#mtg-5). The s. 95(3) statutory default is exempt from the minimum.
+const ontario = { entityType: "corporation__business_", jurisdictionCode: "CA-ON-OBCA", actFormedUnder: "business_corporations_act__ontario_" };
+const obcaMeeting = recordDateLimitFor(ontario, "meeting");
+assert.equal(obcaMeeting.minAgeDays, 30); assert.equal(obcaMeeting.maxAgeDays, 60); assert.equal(obcaMeeting.basis, "statutory");
+assert.equal(recordDateWindow("2026-10-21", "2026-11-20", obcaMeeting, "meeting").issue, undefined, "exactly 30 days before is permitted");
+assert.equal(recordDateWindow("2026-09-21", "2026-11-20", obcaMeeting, "meeting").issue, undefined, "exactly 60 days before is permitted");
+assert.match(recordDateWindow("2026-10-22", "2026-11-20", obcaMeeting, "meeting").issue ?? "", /at least 30 days before the meeting on 2026-11-20 \(s\. 95\(2\)\); 2026-10-22 is later than 2026-10-21/);
+assert.match(recordDateWindow("2026-10-22", "2026-11-20", obcaMeeting, "meeting", "fixed").issue ?? "", /at least 30 days/);
+const obcaDefault = recordDateWindow("2026-11-05", "2026-11-20", obcaMeeting, "meeting", "statutory_default");
+assert.equal(obcaDefault.issue, undefined, "the statutory default record date is not subject to the fixed-date minimum");
+assert.match(obcaDefault.reviewNote ?? "", /day before notice was given/);
+assert.match(recordDateWindow("2026-09-20", "2026-11-20", obcaMeeting, "meeting", "statutory_default").issue ?? "", /more than 60 days/, "the maximum still applies to a default record date");
+// No minimum where the research states none: CBCA, BC companies and OBCA written resolutions.
+assert.equal(recordDateLimitFor(federal, "meeting").minAgeDays, undefined);
+assert.equal(recordDateLimitFor(bc, "meeting").minAgeDays, undefined);
+assert.equal(recordDateLimitFor(ontario, "writtenResolution").minAgeDays, undefined);
+assert.equal(recordDateWindow("2026-11-20", "2026-11-20", recordDateLimitFor(federal, "meeting"), "meeting").issue, undefined);
 for (const entity of [{ entityType: "corporation__not_for_profit_", actFormedUnder: "canada_not_for_profit_corporations_act" }, { entityType: "corporation__not_for_profit_", actFormedUnder: "not_for_profit_corporations_act__ontario_" }, { entityType: "cooperative", actFormedUnder: "cooperative_association_act" }]) assert.equal(organizationRuleScope(entity).isCorporation, false, "Member-based bodies must not enter share voting");
 
 const test = convexTest(schema, { "./_generated/api.js": () => import("../convex/_generated/api.js"), "./_generated/server.js": () => import("../convex/_generated/server.js"), "./elections.js": () => import("../convex/elections") } as any);

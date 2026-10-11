@@ -1,5 +1,5 @@
 import type { PortableQueryCtx } from "../portable/ctx";
-import { buildShareholderElectorate, recordDateLimitFor, recordDateWindow, validElectorateDate, type RecordDatePurpose } from "../shareholderElectorate";
+import { buildShareholderElectorate, recordDateLimitFor, recordDateWindow, validElectorateDate, type RecordDatePurpose, type RecordDateSource } from "../shareholderElectorate";
 import { materializeRightsHoldings } from "../equityLedger";
 import { meetingCalendarDate } from "../meetingDates";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
@@ -7,6 +7,8 @@ import { getOwned } from "./access";
 
 export type CorporateElectionReview = {
   recordDateISO: string;
+  /** Omitted means fixed by the directors, so any statutory minimum interval applies. */
+  recordDateSource?: RecordDateSource;
   recordDateBasis: string;
   rightsBasis: string;
   ledgerBasis: string;
@@ -71,7 +73,7 @@ export async function corporateElectionPreview(ctx: PortableQueryCtx, societyId:
   if (!validDate) issues.push("Record an actual calendar record date (YYYY-MM-DD).");
   if (recordDateISO > today) issues.push("The record date has not occurred yet; take the snapshot after that date.");
   if (validDate && reference) {
-    const window = recordDateWindow(recordDateISO, reference.referenceDateISO, recordDateLimitFor(organization, reference.purpose), reference.eventLabel);
+    const window = recordDateWindow(recordDateISO, reference.referenceDateISO, recordDateLimitFor(organization, reference.purpose), reference.eventLabel, review?.recordDateSource);
     if (window.issue) issues.push(window.issue);
     if (window.reviewNote) reviewNotes.push(window.reviewNote);
   }
@@ -96,9 +98,10 @@ export async function validateCorporateElectionReview(ctx: PortableQueryCtx, soc
     if (!value || value.trim().length < 12) throw new Error(`Record the reviewed ${label}, including the supporting resolution or document reference.`);
   }
   if (!validElectorateDate(review.recordDateISO) || !/^\d{4}-\d{2}-\d{2}$/.test(review.recordDateISO)) throw new Error("Enter a valid calendar record date.");
+  if (review.recordDateSource !== undefined && review.recordDateSource !== "fixed" && review.recordDateSource !== "statutory_default") throw new Error("Record whether the directors fixed the record date or the statutory default applies.");
   if (reference) {
     const organization = await ctx.db.get(societyId, "societies");
-    const window = recordDateWindow(review.recordDateISO, reference.referenceDateISO, recordDateLimitFor(organization, reference.purpose), reference.eventLabel);
+    const window = recordDateWindow(review.recordDateISO, reference.referenceDateISO, recordDateLimitFor(organization, reference.purpose), reference.eventLabel, review.recordDateSource);
     if (window.issue) throw new Error(window.issue);
   }
   if (!Array.isArray(review.representatives)) throw new Error("Assign an authorized account to each shareholder.");
