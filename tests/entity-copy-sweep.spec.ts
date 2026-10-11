@@ -286,21 +286,32 @@ async function expandSidebar(page: Page) {
   }
 }
 
-async function assertUnassessedPrivacyScope(page: Page, workspace: Workspace) {
+async function assertPrivacyScope(page: Page, workspace: Workspace) {
   // Fresh guided-setup fixtures deliberately contain no privacy activity facts.
-  // Possible laws belong inside the scope assessment, never in operative nav
-  // or policy claims based solely on incorporation.
   const assessment = page.getByRole("region", { name: "Privacy-law scope", exact: true });
   await expect(assessment).toBeVisible();
   await expect(assessment).toContainText("Record where personal information is handled and which activities it supports.");
   await expect(assessment).toContainText("Multiple laws can apply to different records or transactions.");
-  await expect(assessment).toContainText("applicability needs assessment");
   await expect(assessment).toContainText("Record the provinces or territories where personal information is handled.");
-  await expect(assessment.locator("summary").filter({ hasText: /^(?:BC|Alberta) PIPA Conditional$/ })).toHaveCount(2);
-  await expect(assessment.locator("details[open]")).toHaveCount(0);
   await expect(assessment).not.toContainText("Assessed as applicable");
-  await expect(page.locator(".sidebar")).not.toContainText(/\bPIPA\b/);
-  await expect(page.locator("#main-content h1")).toHaveText("Privacy — applicability needs assessment");
+  if (workspace.bc) {
+    // BC PIPA s. 3(1) applies to every organization (including not-for-profits)
+    // unless federal law governs, so a BC-home workspace presumes it and labels
+    // the presumption for confirmation. No other provincial law is listed.
+    await expect(assessment.locator("summary").filter({ hasText: /^BC PIPA Presumed: confirm facts$/ })).toHaveCount(1);
+    await expect(assessment.locator("summary").filter({ hasText: /^(?:Alberta PIPA|Québec private-sector privacy law) / })).toHaveCount(0);
+    await expect(assessment).toContainText("federal work, undertaking or business");
+    await expect(page.locator(".sidebar").getByRole("link", { name: "Privacy (PIPA)", exact: true })).toBeVisible();
+    await expect(page.locator("#main-content h1")).toHaveText("Privacy (BC PIPA — presumed: confirm facts)");
+  } else {
+    // Possible laws belong inside the scope assessment, never in operative nav
+    // or policy claims based solely on incorporation.
+    await expect(assessment).toContainText("applicability needs assessment");
+    await expect(assessment.locator("summary").filter({ hasText: /^(?:BC|Alberta) PIPA Conditional$/ })).toHaveCount(2);
+    await expect(assessment.locator("details[open]")).toHaveCount(0);
+    await expect(page.locator(".sidebar")).not.toContainText(/\bPIPA\b/);
+    await expect(page.locator("#main-content h1")).toHaveText("Privacy — applicability needs assessment");
+  }
   if (!workspace.society) {
     await expect(page.locator("#main-content")).not.toContainText("Members may inspect the member register");
     await expect(page.locator("#main-content")).not.toContainText("Members may inspect the director register");
@@ -452,7 +463,7 @@ test.describe("entity copy sweep", () => {
           await workspaceButton(page, workspace).waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
           await settle(page);
           if (route === "/app/privacy") {
-            await assertUnassessedPrivacyScope(page, workspace);
+            await assertPrivacyScope(page, workspace);
             if (workspace.key === "cbca-corp") await page.screenshot({ path: path.join(OUT_DIR, "cbca-corp-privacy.png") });
           }
           const text = await collect(page);

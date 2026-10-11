@@ -15,13 +15,47 @@ const bc = within("CA-BC", { name: "Example BC Company", jurisdictionCode: "CA-B
 const pipeda = within("CA-ON", { name: "Example Ontario Company", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_", privacyCommercialActivity: "yes" });
 const quebec = within("CA-QC", { name: "Example Québec Enterprise", privacyQuebecEnterprise: "yes" });
 
-// Form of incorporation and a province/address alone never resolve privacy law.
-for (const org of [undefined, null, {}, { jurisdictionCode: "CA-BC", name: "Legacy Society" }, { jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" }, { jurisdictionCode: "CA-ON-OBCA" }]) {
+// Outside BC, form of incorporation and a province/address never resolve privacy law.
+for (const org of [undefined, null, { jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" }, { jurisdictionCode: "CA-ON-OBCA" }, { jurisdictionCode: "alberta", entityType: "society", actFormedUnder: "societies_act__alberta_" }]) {
   const result = resolvePrivacyProfile(org);
   assert.equal(result.status, "unassessed");
   assert.deepEqual(result.applicableLawIds, []);
+  assert.deepEqual(result.presumedLawIds, []);
   assert.ok(result.possibleLawIds.length > 0);
 }
+// BC PIPA s. 1 includes a not-for-profit in "organization" and s. 3(1) applies the
+// Act to every organization, subject to the federal Act. A BC-home workspace
+// without recorded facts is therefore presumed covered, labelled for confirmation.
+const bcSociety = { name: "Riverside Community Society", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act" };
+const bcCompanyNoFacts = { name: "Example BC Company", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_" };
+for (const org of [bcSociety, bcCompanyNoFacts, { jurisdictionCode: "CA-BC", name: "Legacy Society" }, { jurisdictionCode: "british_columbia", entityType: "cooperative" }]) {
+  const result = resolvePrivacyProfile(org);
+  assert.equal(result.status, "presumed", JSON.stringify(org));
+  assert.deepEqual(result.applicableLawIds, ["bc_pipa"]);
+  assert.deepEqual(result.presumedLawIds, ["bc_pipa"]);
+  assert.equal(result.assessments.find((item) => item.lawId === "bc_pipa")?.basis, "presumed");
+  assert.match(result.assessments.find((item) => item.lawId === "bc_pipa")!.reason, /^Presumed: confirm facts\./);
+  assert.match(result.label, /BC PIPA — presumed: confirm facts/);
+  assert.ok(hasApplicablePrivacyLaw(org, "bc_pipa"));
+  assert.deepEqual(privacyCitationIdsFor(org, "access"), ["PIPA-ACCESS"]);
+  assert.ok(result.possibleLawIds.includes("pipeda"), "federal-work and cross-border facts stay open");
+  assert.ok(!result.possibleLawIds.includes("ab_pipa") && !result.possibleLawIds.includes("qc_private"), "a BC presumption does not list other provinces");
+  assert.ok(result.unresolvedFacts.some((text) => /federal work/.test(text)));
+}
+assert.ok(PRIVACY_CITATIONS["PIPA-SCOPE"].quote.includes("not-for-profit"));
+// Recorded facts displace the presumption.
+assert.deepEqual(resolvePrivacyProfile({ ...bcSociety, privacyFederalWork: "yes" }).applicableLawIds, [], "a recorded federal work displaces BC PIPA (PIPEDA remains conditional on sector facts)");
+assert.deepEqual(resolvePrivacyProfile({ ...bcSociety, privacyFederalWork: "yes", privacySectorSpecific: "none" }).applicableLawIds, ["pipeda"], "a recorded federal work selects PIPEDA instead of BC PIPA");
+assert.equal(hasApplicablePrivacyLaw({ ...bcCompanyNoFacts, privacyFederalWork: "yes" }, "bc_pipa"), false);
+assert.deepEqual(resolvePrivacyProfile({ ...bcSociety, privacyOperatingJurisdictions: ["CA-AB"] }).presumedLawIds, [], "recorded operations outside BC displace the presumption");
+assert.ok(!resolvePrivacyProfile({ ...bcSociety, privacyOperatingJurisdictions: ["CA-AB"] }).applicableLawIds.includes("bc_pipa"));
+assert.deepEqual(resolvePrivacyProfile({ ...bcSociety, privacySectorSpecific: "health" }).applicableLawIds, [], "a recorded health/public-sector regime needs its own assessment");
+const partiallyRecorded = resolvePrivacyProfile({ ...bcSociety, privacyOperatingJurisdictions: ["CA-BC"] });
+assert.deepEqual([partiallyRecorded.status, partiallyRecorded.presumedLawIds], ["conditional", ["bc_pipa"]], "BC operations with open federal-work facts remain presumed");
+const recordedBc = resolvePrivacyProfile({ ...bcSociety, ...within("CA-BC") });
+assert.deepEqual([recordedBc.status, recordedBc.presumedLawIds, recordedBc.label], ["assessed", [], "Privacy (BC PIPA)"], "recorded facts replace the presumption");
+// Outside BC, recorded BC operations alone stay conditional until federal-work status is known.
+assert.deepEqual(resolvePrivacyProfile({ jurisdictionCode: "CA-FED-CBCA", privacyOperatingJurisdictions: ["CA-BC"] }).applicableLawIds, []);
 assert.deepEqual(resolvePrivacyProfile(bc).applicableLawIds, ["bc_pipa"]);
 assert.equal(resolvePrivacyProfile(bc).status, "assessed");
 assert.ok(hasApplicablePrivacyLaw(bc, "bc_pipa"));
@@ -74,15 +108,21 @@ assert.match(federalDraft, /### PIPEDA/);
 assert.doesNotMatch(federalDraft, /### BC PIPA|contact the Office of the Information and Privacy Commissioner for British Columbia/);
 assert.match(federalDraft, /shareholder and securities records/);
 assert.doesNotMatch(federalDraft, /The organization maintains its own member register/);
-const unknownDraft = buildPrivacyPolicyDraft({ name: "Unassessed entity", jurisdictionCode: "CA-BC" }, "2026-10-11");
+const unknownDraft = buildPrivacyPolicyDraft({ name: "Unassessed entity", jurisdictionCode: "CA-ON-OBCA" }, "2026-10-11");
 assert.match(unknownDraft, /Unresolved scope questions/);
 assert.doesNotMatch(unknownDraft, /### BC PIPA|### PIPEDA/);
+const presumedDraft = buildPrivacyPolicyDraft({ name: "Unassessed BC entity", jurisdictionCode: "CA-BC" }, "2026-10-11");
+assert.match(presumedDraft, /### BC PIPA/, "a BC-home draft starts from the presumed BC PIPA requirements");
+assert.match(presumedDraft, /Unresolved scope questions/, "and still lists the facts to confirm");
+assert.doesNotMatch(presumedDraft, /### PIPEDA/);
 assert.match(buildPrivacyPolicyDraft(quebec), /### Québec private-sector privacy law/);
 assert.match(privacyRecordTemplate("incidentRegister", pipeda).content, /Date the organization determined/);
 assert.match(privacyRecordTemplate("incidentRegister", quebec).content, /five years after awareness/);
 assert.match(privacyRecordTemplate("accessLog", within("CA-AB", { privacyAlbertaNonprofitClass: "other" })).content, /45 calendar days/);
 assert.match(privacyRecordTemplate("privacyAssessment", quebec).content, /## Decision/);
-assert.doesNotMatch(pipaSetupMotionsFor({ name: "Unknown BC", jurisdictionCode: "CA-BC" }).map((motion) => motion.motionText).join(" "), /PIPA privacy policy/);
+assert.ok(pipaSetupMotionsFor({ name: "Unknown BC", jurisdictionCode: "CA-BC" }).some((motion) => motion.motionText.includes("PIPA privacy policy")), "BC PIPA setup is offered under the BC-home presumption");
+assert.doesNotMatch(pipaSetupMotionsFor({ name: "Federal work BC", jurisdictionCode: "CA-BC", privacyFederalWork: "yes" } as any).map((motion) => motion.motionText).join(" "), /PIPA privacy policy/);
+assert.doesNotMatch(pipaSetupMotionsFor({ name: "Unknown Ontario", jurisdictionCode: "CA-ON-OBCA" }).map((motion) => motion.motionText).join(" "), /PIPA privacy policy/);
 assert.ok(pipaSetupMotionsFor(bc).some((motion) => motion.motionText.includes("PIPA privacy policy")));
 
 // Exercise the real schema, authenticated mutation, saved facts and template path.
@@ -124,4 +164,4 @@ assert.match(task!.title, /privacy remediation/);
 assert.doesNotMatch(`${task!.title} ${task!.description}`, /PIPA|member-data/);
 assert.equal((await actor.mutation(api.dashboardRemediation.createPrivacyReviewTask, reviewInput)).taskId, reviewTask.taskId, "the corrected privacy task remains idempotent");
 await assert.rejects(() => test.mutation(api.documents.createPipaPolicyDraft, { societyId }), /[Aa]uthentication|[Ss]ign in|[Aa]ccess|[Mm]embership|[Pp]ermission/);
-console.log("Privacy profiles passed: activity-based scope, nonprofit exceptions, overlapping laws, uncertainty, deadlines, retention, proposed-law exclusion, persisted assessment, shared drafts, edit preservation, idempotence and authorization.");
+console.log("Privacy profiles passed: BC-home presumption and federal-work override, activity-based scope, nonprofit exceptions, overlapping laws, uncertainty, deadlines, retention, proposed-law exclusion, persisted assessment, shared drafts, edit preservation, idempotence and authorization.");

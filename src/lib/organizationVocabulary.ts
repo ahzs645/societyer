@@ -20,7 +20,7 @@
  * `organizationVocabulary` from here.
  */
 import { organizationRuleScope } from "../../shared/entityRuleScope";
-import { resolvePrivacyProfile } from "../../shared/privacyRuleProfiles";
+import { PRIVACY_LAWS, resolvePrivacyProfile, type PrivacyLawId } from "../../shared/privacyRuleProfiles";
 import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import type { LegalEntityLike, OrganizationKind } from "../../shared/organizationDomain";
 
@@ -73,6 +73,14 @@ export type OrganizationVocabulary = {
   bylawAmendmentNoun: string;
 };
 
+/** Nav/page label: "Privacy (PIPA)" when BC PIPA alone applies (including the
+ * BC-home presumption), the applicable laws when several apply, else neutral. */
+function privacyNavLabel(lawIds: readonly PrivacyLawId[]): string {
+  if (!lawIds.length) return "Privacy";
+  if (lawIds.length === 1 && lawIds[0] === "bc_pipa") return "Privacy (PIPA)";
+  return `Privacy (${lawIds.map((id) => PRIVACY_LAWS[id].label).join(" + ")})`;
+}
+
 export function organizationVocabulary(organization?: LegalEntityLike | null): OrganizationVocabulary {
   const scope = organizationRuleScope(organization);
   const bcCompany = legalGovernanceProfile(organization)?.id === "bc_company";
@@ -85,7 +93,7 @@ export function organizationVocabulary(organization?: LegalEntityLike | null): O
     societyLaw: scope.isBcSociety,
     bcHome: scope.isBcHome,
     bcCompany,
-    privacyLabel: privacy.applicableLawIds.length ? privacy.label : "Privacy",
+    privacyLabel: privacyNavLabel(privacy.applicableLawIds),
   };
   if (scope.isSociety) {
     return {

@@ -42,7 +42,12 @@ for (const field of ["directors", "bcResidents", "overdueFilings", "openDeadline
 assert.ok(!JSON.stringify(member).includes("Restricted"), "Composite cannot bypass forbidden resource endpoints");
 assert.ok(!member.complianceFlags.some((flag: any) => flag.ruleId.startsWith("BC-SOC-DIRECTOR") || flag.ruleId === "DASHBOARD-COMPLIANCE-OK"), "Unreadable board must not create false failure or overall-compliance claims");
 assert.ok(member.complianceFlags.some((flag: any) => flag.ruleId === "PRIVACY-APPLICABILITY"), "Authorized society/document checks request privacy facts before choosing a law");
-assert.ok(!member.complianceFlags.some((flag: any) => flag.ruleId.startsWith("PIPA-")), "Incorporation alone cannot establish PIPA applicability");
+// BC PIPA is presumed for this BC society until facts are recorded, so its
+// document-backed PIPA checks run alongside the request to confirm the facts.
+assert.ok(member.complianceFlags.some((flag: any) => flag.ruleId.startsWith("PIPA-")), "BC-home workspace keeps presumed BC PIPA checks");
+await test.run(async ctx => ctx.db.patch(fixture.societyId, { privacyFederalWork: "yes" }));
+const federalWorkMember = await actors.Member.query(api.dashboard.summary, { societyId: fixture.societyId });
+assert.ok(!federalWorkMember.complianceFlags.some((flag: any) => flag.ruleId.startsWith("PIPA-")), "A recorded federal work displaces the BC PIPA presumption");
 await test.run(async ctx => ctx.db.patch(fixture.societyId, { privacyOperatingJurisdictions: ["CA-BC"], privacyFederalWork: "no", privacySectorSpecific: "none" }));
 const assessedMember = await actors.Member.query(api.dashboard.summary, { societyId: fixture.societyId });
 assert.ok(assessedMember.complianceFlags.some((flag: any) => flag.ruleId === "PIPA-POLICY-DOCUMENTED"), "Assessed BC privacy/document checks remain available to an authorized member");

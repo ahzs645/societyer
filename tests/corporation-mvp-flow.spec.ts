@@ -107,7 +107,9 @@ test("corporation MVP flow renders obligations, share register, registration, an
   await navigate("/app/template-engine");
   await expect(page.getByRole("heading", { name: "Template Engine" })).toBeVisible();
   await expect(page.getByText("Share issuance packet", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Annual resolutions and return packet", { exact: true }).first()).toBeVisible();
+  // Annual packets are Act-specific preparation drafts, not executed resolutions.
+  await expect(page.getByText("Annual business and return preparation", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Annual resolutions and return packet", { exact: true })).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });
