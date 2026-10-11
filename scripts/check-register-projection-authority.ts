@@ -79,7 +79,9 @@ await test.run(async ctx => {
   assert.equal((await ctx.db.get(fixture.budgets[0] as any))?.status, "NeedsReview");
 });
 for (const role of ["Owner", "Admin"]) {
-  await actors[role].mutation(api.evidenceRegisters.promoteBoardRoleToDirector, { assignmentId: fixture.assignment });
+  // Promotion is one-way: Owner promotes; Admin clears the permission gate and reaches the duplicate guard.
+  if (role === "Owner") await actors[role].mutation(api.evidenceRegisters.promoteBoardRoleToDirector, { assignmentId: fixture.assignment });
+  else await assert.rejects(() => actors[role].mutation(api.evidenceRegisters.promoteBoardRoleToDirector, { assignmentId: fixture.assignment }), /already promoted to the director register/);
   await actors[role].mutation(api.evidenceRegisters.updateReview, { table: "budgetSnapshots", id: fixture.budgets[0], status: "Verified" });
   await actors[role].mutation(api.evidenceRegisters.finishFinancePaperlessReview, { societyId: fixture.societyId });
 }

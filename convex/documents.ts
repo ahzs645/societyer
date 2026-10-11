@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
   listPortable,
+  listSummariesPortable,
   getPortable,
   getManyPortable,
   createPortable,
@@ -21,12 +22,29 @@ import {
   archivePortable,
   removePortable,
 } from "../shared/functions/documents";
+import {
+  browsePortable,
+  versionsForPortable,
+  evidenceForPortable,
+  categoryCountsPortable,
+  markDuplicatePortable,
+  clearDuplicatePortable,
+  setVersionInfoPortable,
+  mergeDuplicatesPortable,
+} from "../shared/functions/documentCatalog";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("documents:list", query)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
+});
+
+/** `list` without each document's heavy `content` — for tables and pickers. */
+export const listSummaries = authorizedQuery("documents:listSummaries", query)({
+  args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, args) => listSummariesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = authorizedQuery("documents:get", query)({
@@ -209,4 +227,59 @@ export const remove = authorizedMutation("documents:remove", mutation)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
+});
+
+/* ---------------- document catalog: browse, duplicates, versions ---------------- */
+
+export const browse = authorizedQuery("documents:browse", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => browsePortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const versionsFor = authorizedQuery("documents:versionsFor", query)({
+  args: { id: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => versionsForPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const categoryCounts = authorizedQuery("documents:categoryCounts", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => categoryCountsPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const evidenceFor = authorizedQuery("documents:evidenceFor", query)({
+  args: { id: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => evidenceForPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const markDuplicate = authorizedMutation("documents:markDuplicate", mutation)({
+  args: { id: v.id("documents"), duplicateOfDocumentId: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => markDuplicatePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const clearDuplicate = authorizedMutation("documents:clearDuplicate", mutation)({
+  args: { id: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => clearDuplicatePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const setVersionInfo = authorizedMutation("documents:setVersionInfo", mutation)({
+  args: {
+    id: v.id("documents"),
+    versionGroupKey: v.optional(v.union(v.string(), v.null())),
+    supersedesDocumentId: v.optional(v.union(v.id("documents"), v.null())),
+    sourceVersionStatus: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => setVersionInfoPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const mergeDuplicates = authorizedMutation("documents:mergeDuplicates", mutation)({
+  args: { keepId: v.id("documents"), duplicateIds: v.array(v.id("documents")) },
+  returns: v.any(),
+  handler: async (ctx, args) => mergeDuplicatesPortable(await toPortableMutationCtx(ctx), args),
 });

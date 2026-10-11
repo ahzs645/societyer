@@ -1,3 +1,5 @@
+import { formatDate } from "../lib/format";
+import { useConfirm } from "../components/Modal";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -7,6 +9,7 @@ import { useSociety } from "../hooks/useSociety";
 import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { InfoPopover } from "../components/InfoPopover";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -56,6 +59,7 @@ export function ElectionsPage() {
   const closeElection = useMutation(api.elections.close);
   const tallyElection = useMutation(api.elections.tallyElection);
   const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ElectionCreateForm | null>(null);
   const [saving, setSaving] = useState(false);
@@ -149,7 +153,8 @@ export function ElectionsPage() {
         title="Elections"
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle="Verified member eligibility with anonymous ballot storage. Voter identity stays in the eligibility ledger; ballots are stored separately."
+        subtitle="Member elections with anonymous ballots."
+        info={<p>Verified member eligibility with anonymous ballot storage. Voter identity stays in the eligibility ledger; ballots are stored separately.</p>}
         actions={
           canManage ? (
             <button className="btn-action btn-action--primary" onClick={openCreate}>
@@ -162,10 +167,11 @@ export function ElectionsPage() {
       {!isAuthenticatedAuthMode() && (
         <div className="callout callout--info">
           <Info size={16} />
-          <div>
-            <strong>No-auth mode:</strong> Real anonymous member voting requires authenticated member accounts.
-            You can still design and administer elections here, but the member
-            ballot flow stays disabled until authentication is enabled.
+          <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
+            <span><strong>No-auth mode:</strong> member ballots are turned off.</span>
+            <InfoPopover label="About no-auth mode">
+              <p>Real anonymous member voting requires authenticated member accounts. You can still design and administer elections here, but the member ballot flow stays disabled until authentication is enabled.</p>
+            </InfoPopover>
           </div>
         </div>
       )}
@@ -173,10 +179,11 @@ export function ElectionsPage() {
       {rules && !rules.allowElectronicVoting && (
         <div className="callout callout--warn">
           <AlertTriangle size={16} />
-          <div>
-            <strong>Bylaw restriction:</strong> The active bylaw rule set currently disallows electronic voting. You can
-            still prepare elections here, but opening them for remote ballots may not
-            match {governingDocumentsPhrase(society)}.
+          <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
+            <span><strong>Bylaw restriction:</strong> the bylaws don't allow electronic voting.</span>
+            <InfoPopover label="About the bylaw restriction">
+              <p>The active bylaw rule set currently disallows electronic voting. You can still prepare elections here, but opening them for remote ballots may not match {governingDocumentsPhrase(society)}.</p>
+            </InfoPopover>
           </div>
         </div>
       )}
@@ -202,8 +209,8 @@ export function ElectionsPage() {
                   </Badge>
                 </div>
                 <div className="muted" style={{ fontSize: 13 }}>
-                  Opens {new Date(row.election.opensAtISO).toLocaleDateString()} · closes{" "}
-                  {new Date(row.election.closesAtISO).toLocaleDateString()}
+                  Opens {formatDate(row.election.opensAtISO)} · closes{" "}
+                  {formatDate(row.election.closesAtISO)}
                 </div>
               </Link>
             ))}
@@ -217,7 +224,7 @@ export function ElectionsPage() {
           <span className="card__subtitle">{elections?.length ?? 0} total</span>
         </div>
         <div style={{ overflowX: "auto" }}>
-        <table className="table">
+        <table className="table elections-table" style={{ width: "100%" }}>
           <thead>
             <tr>
               <th>Election</th>
@@ -251,11 +258,11 @@ export function ElectionsPage() {
                     {election.status}
                   </Badge>
                 </td>
-                <td className="mono">
-                  {new Date(election.opensAtISO).toLocaleDateString()}
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {formatDate(election.opensAtISO)}
                 </td>
-                <td className="mono">
-                  {new Date(election.closesAtISO).toLocaleDateString()}
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {formatDate(election.closesAtISO)}
                 </td>
                 <td>
                   <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
@@ -283,6 +290,14 @@ export function ElectionsPage() {
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
+                              const early = Date.parse(election.closesAtISO) > Date.now();
+                              const ok = await confirm({
+                                title: `Close voting on "${election.title}"?`,
+                                message: `${early ? `Voting is scheduled to stay open until ${formatDate(election.closesAtISO)}. ` : ""}Closing stops all further ballots and cannot be reopened.`,
+                                confirmLabel: early ? "Close early" : "Close voting",
+                                tone: early ? "danger" : "warn",
+                              });
+                              if (!ok) return;
                               await closeElection({
                                 electionId: election._id,
                               });
@@ -296,6 +311,13 @@ export function ElectionsPage() {
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
+                              const ok = await confirm({
+                                title: `Publish results for "${election.title}"?`,
+                                message: "The ballots will be tallied and the results recorded as final. Open the election to review the ballot count first.",
+                                confirmLabel: "Publish results",
+                                tone: "warn",
+                              });
+                              if (!ok) return;
                               await tallyElection({
                                 electionId: election._id,
                               });

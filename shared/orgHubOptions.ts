@@ -168,6 +168,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "managing_director",
     "other",
     "president",
+    "privacy_officer",
     "secretary",
     "secretary_treasurer",
     "treasurer",
@@ -307,6 +308,38 @@ export function isAllowedOption(setName: OptionSetName, value: unknown) {
   const text = cleanText(value);
   if (!text) return false;
   return SOURCE_OPTION_VALUES[setName].includes(text);
+}
+
+/** Map a legacy or imported label ("Vice President", "Treasurer") to its option
+ *  code ("vice_president", "treasurer"). Codes pass through unchanged; values
+ *  with no matching code are returned trimmed so validation can still reject
+ *  them. Fixtures and imports historically stored labels (G-10). */
+export function normalizeOptionValue(setName: OptionSetName, value: unknown): string | undefined {
+  const text = cleanText(value);
+  if (!text) return undefined;
+  const codes = SOURCE_OPTION_VALUES[setName];
+  if (codes.includes(text)) return text;
+  const slug = text.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (codes.includes(slug)) return slug;
+  const lower = codes.find((code) => code.toLowerCase() === text.toLowerCase());
+  return lower ?? text;
+}
+
+const OFFICER_TITLE_LABELS: Record<string, string> = {
+  chair_person: "Chairperson",
+  secretary_treasurer: "Secretary-Treasurer",
+  vice_chair: "Vice-Chair",
+  vice_president: "Vice-President",
+  other: "Officer",
+};
+
+/** Human label for an officer title code (or a legacy label), for documents. */
+export function officerTitleLabel(value: unknown): string {
+  const code = normalizeOptionValue("officerTitles", value);
+  if (!code) return "Officer";
+  if (OFFICER_TITLE_LABELS[code]) return OFFICER_TITLE_LABELS[code];
+  if (!SOURCE_OPTION_VALUES.officerTitles.includes(code)) return code;
+  return code.replace(/_+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function assertAllowedOption(setName: OptionSetName, value: unknown, label: string, optional = true) {

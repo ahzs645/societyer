@@ -3,7 +3,14 @@ import { assertScannerFallback, denyBrowserCamera } from "./helpers/cameraFallba
 
 // The fake device supplies video hardware; no fake-UI or grantPermissions bypass is used.
 // Full Chromium supports media permissions; its headless-shell build does not.
-test.use({ channel: "chromium", launchOptions: { args: ["--use-fake-device-for-media-stream"] }, permissions: [] });
+// `launchOptions` here replaces the config-level object, so carry the
+// configured browser path (SOCIETYER_CHROMIUM_PATH) over explicitly.
+const executablePath = process.env.SOCIETYER_CHROMIUM_PATH;
+test.use({
+  channel: "chromium",
+  launchOptions: { ...(executablePath ? { executablePath } : {}), args: ["--use-fake-device-for-media-stream"] },
+  permissions: [],
+});
 test.beforeEach(async ({ page, baseURL }) => denyBrowserCamera(page, baseURL!));
 
 test("camera denial still lets an asset tag resolve through the existing register", async ({ page }) => {
@@ -11,7 +18,7 @@ test("camera denial still lets an asset tag resolve through the existing registe
   await page.getByRole("button", { name: "Scan", exact: true }).click();
   await assertScannerFallback(page, "AST-0001", "Scan an asset");
   await expect(page).toHaveURL(/\/assets\/static_asset_projector$/);
-  await expect(page.getByRole("heading", { name: "AST-0001", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Epson community projector", exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 

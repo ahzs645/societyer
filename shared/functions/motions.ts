@@ -18,6 +18,7 @@ import {
   classifyProceduralMotion,
 } from "../proceduralMotions";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { assertMotionVotes, touchesMotionVoteFields } from "../motionValidation";
 
 async function validateMotionForeignKeys(
   ctx: PortableMutationCtx,
@@ -37,10 +38,22 @@ async function validateMotionForeignKeys(
     ["motionTemplateId", "motionTemplates"],
     ["sourceMotionEvidenceId", "motionEvidence"],
     ["sourceMinutesId", "minutes"],
+    ["movedByPersonId", "peopleDirectory"],
+    ["secondedByPersonId", "peopleDirectory"],
+    ["dissentDocumentId", "documents"],
   ] as const;
   for (const [field, table] of foreignKeys) {
     const value = input[field];
     if (typeof value === "string") await getOwned(ctx, table, value, societyId);
+  }
+  for (const field of ["abstainedBy", "opposedBy"] as const) {
+    const rows = input[field];
+    if (rows === undefined) continue;
+    if (!Array.isArray(rows)) throw new Error(`${field} must be a list of people.`);
+    for (const row of rows as any[]) {
+      if (!String(row?.name ?? "").trim()) throw new Error(`${field}: every entry needs a name.`);
+      if (typeof row?.personId === "string") await getOwned(ctx, "peopleDirectory", row.personId, societyId);
+    }
   }
   if (Array.isArray(input.sourceDocumentIds)) {
     for (const documentId of input.sourceDocumentIds) {
@@ -155,6 +168,7 @@ export async function createPortable(ctx: PortableMutationCtx, args: Record<stri
   const societyId = typeof args.societyId === "string" ? args.societyId : "";
   await requireSocietyMembership(ctx, societyId);
   await validateMotionForeignKeys(ctx, args, societyId);
+  assertMotionVotes(args);
   return insertMotion(ctx, args);
 }
 
@@ -165,6 +179,7 @@ export async function updatePortable(
   const authorizedRow = await requireOwnedRow(ctx, "motions", motionId);
   const societyId = String(authorizedRow.societyId);
   await validateMotionForeignKeys(ctx, patch, societyId);
+  if (touchesMotionVoteFields(patch)) assertMotionVotes({ ...authorizedRow, ...patch } as Record<string, any>);
   return patchMotion(ctx, motionId, patch);
 }
 
@@ -185,6 +200,7 @@ export async function setStatusPortable(
   const row = await requireOwnedRow(ctx, "motions", motionId);
   const societyId = String(row.societyId);
   if (meetingId) await getOwned(ctx, "meetings", meetingId, societyId);
+  assertMotionVotes({ ...row, status, outcome: status === "Voted" ? outcome : undefined });
   const now = new Date().toISOString();
   const entry = stripUndefined({
     at: now,
@@ -237,7 +253,8 @@ export async function recordVotePortable(
     abstentions?: number;
   },
 ) {
-  await requireOwnedRow(ctx, "motions", motionId);
+  const row = await requireOwnedRow(ctx, "motions", motionId);
+  assertMotionVotes({ ...row, votesFor, votesAgainst, abstentions });
   return patchMotion(ctx, motionId, { votesFor, votesAgainst, abstentions });
 }
 

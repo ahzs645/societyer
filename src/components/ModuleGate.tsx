@@ -52,7 +52,7 @@ export function ModuleGate({
             Existing records are preserved. Re-enable the module in Settings to access them again.
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <Link to="/app/settings" className="btn btn--accent">
+            <Link to="/app/settings?tab=modules" className="btn btn--accent">
               Open settings
             </Link>
             <Link to="/app" className="btn">

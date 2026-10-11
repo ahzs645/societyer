@@ -11,10 +11,21 @@ import { parseMeetingTemplateImport, type ImportedMeetingTemplate } from "../lib
 
 export function MeetingTemplateImportButton({ societyId, existingNames }: { societyId: Id<"societies">; existingNames: string[] }) {
   const { can } = usePermissions();
+  const [open, setOpen] = useState(false);
+  if (!can("meetings:write")) return null;
+  return <>
+    <button className="btn-action" onClick={() => setOpen(true)}><Upload size={12} /> Import template</button>
+    <MeetingTemplateImportDialog societyId={societyId} existingNames={existingNames} open={open} onClose={() => setOpen(false)} />
+  </>;
+}
+
+/** The import modal on its own, for pages that open it from a "+ New" menu. */
+export function MeetingTemplateImportDialog({ societyId, existingNames, open, onClose }: { societyId: Id<"societies">; existingNames: string[]; open: boolean; onClose: () => void }) {
+  const { can } = usePermissions();
   const canWrite = can("meetings:write");
   const create = usePermissionedMutation(api.meetingTemplates.create, canWrite);
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const setOpen = (next: boolean) => { if (!next) onClose(); };
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -37,7 +48,6 @@ export function MeetingTemplateImportButton({ societyId, existingNames }: { soci
   };
   if (!canWrite) return null;
   return <>
-    <button className="btn-action" onClick={() => { setError(""); setOpen(true); }}><Upload size={12} /> Import template</button>
     <Modal open={open && canWrite} title="Import meeting template" onClose={() => { if (!saving) setOpen(false); }} footer={<>
       <button className="btn-action" disabled={saving} onClick={() => setOpen(false)}>Cancel</button>
       <button className="btn-action btn-action--primary" disabled={!template || !!duplicate || saving} onClick={() => { void save(); }}>{saving ? "Importing..." : "Import template"}</button>

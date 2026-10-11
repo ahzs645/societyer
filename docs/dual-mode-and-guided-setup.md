@@ -12,7 +12,7 @@ Online connection failures return the user to local setup. Local startup does no
 
 ## Guided web and local setup
 
-The setup flow asks whether the user has used Societyer before and offers local backup recovery. JSON backup validation precedes destructive confirmation and bounds input size, table/row counts, IDs and attachment references. JSON restores records and references; physical documents require their separate file/native archive backup. Hosted upload/tenant migration remains a separate operation with its own identity and authorization requirements.
+The setup flow offers local backup recovery from its first step (or directly via `?restore=1`). JSON backup validation precedes destructive confirmation and bounds input size, table/row counts, IDs and attachment references. JSON restores records and references; physical documents require their separate file/native archive backup. Hosted upload/tenant migration remains a separate operation with its own identity and authorization requirements.
 
 Users explicitly choose an existing organization or preparation for incorporation, and select the actual/planned Act from the shared pathway registry. The wizard gathers the legal/proposed name, dates and fiscal year end, registered/mailing address, contact and privacy details, membership/share-class planning, document readiness, people readiness and operating regions.
 

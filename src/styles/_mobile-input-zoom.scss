@@ -14,7 +14,16 @@
   .text-input--sm,
   .text-input input,
   .text-area textarea,
-  .kbar__input {
+  .kbar__input,
+  .input--compact,
+  .textarea--mono,
+  .milkdown .ProseMirror {
     font-size: 16px;
+  }
+  /* Compact inline controls (tag adders) set a 24-28px height inline; give
+   * the 16px text room to breathe on phones. */
+  .input--compact {
+    height: auto !important;
+    min-height: 32px;
   }
 }

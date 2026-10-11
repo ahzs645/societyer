@@ -1,5 +1,5 @@
 import { Field } from "./ui";
-import { OptionSetName, optionChoices } from "../lib/orgHubOptions";
+import { OptionSetName, normalizeOptionChoice, optionChoices } from "../lib/orgHubOptions";
 import { Select } from "./Select";
 
 type OptionSelectProps = {
@@ -11,11 +11,12 @@ type OptionSelectProps = {
 };
 
 export function OptionSelect({ label, setName, value, onChange, emptyLabel }: OptionSelectProps) {
-  const options = optionChoices(setName, value ? [value] : []);
+  const normalized = value ? normalizeOptionChoice(setName, value) : "";
+  const options = optionChoices(setName, normalized ? [normalized] : []);
   return (
     <Field label={label}>
       <Select
-        value={value ?? ""}
+        value={normalized}
         onChange={(next) => onChange(next || undefined)}
         options={options}
         placeholder={emptyLabel ?? "Select…"}
@@ -33,10 +34,13 @@ type OptionMultiSelectProps = {
   values?: string[];
   onChange: (values: string[]) => void;
   rows?: number;
+  /** Option values to hide unless already selected (e.g. internal codes that
+   *  duplicate a human option, such as "CA-BC" beside "British Columbia"). */
+  hideValues?: string[];
 };
 
-export function OptionMultiSelect({ label, setName, values = [], onChange, rows = 5 }: OptionMultiSelectProps) {
-  const options = optionChoices(setName, values);
+export function OptionMultiSelect({ label, setName, values = [], onChange, rows = 5, hideValues = [] }: OptionMultiSelectProps) {
+  const options = optionChoices(setName, values).filter((option) => !hideValues.includes(option.value) || values.includes(option.value));
   return (
     <Field label={label}>
       <select

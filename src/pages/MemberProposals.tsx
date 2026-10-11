@@ -22,6 +22,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function MemberProposalsPage() {
   const society = useSociety();
@@ -57,7 +58,7 @@ export function MemberProposalsPage() {
       title: "",
       text: "",
       submittedByName: "",
-      submittedAtISO: new Date().toISOString().slice(0, 10),
+      submittedAtISO: todayDateOnly(),
       signatureCount: 1,
       thresholdPercent: rules?.memberProposalThresholdPct ?? 5,
       eligibleVotersAtSubmission: eligibleVoters,
@@ -76,9 +77,18 @@ export function MemberProposalsPage() {
         title={vocab.isCorporation ? "Shareholder proposals" : "Member proposals"}
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={vocab.isCorporation
-          ? `Proposals for the annual shareholder meeting. The active rule set uses a ${rules?.memberProposalThresholdPct ?? 5}% threshold with a floor of ${rules?.memberProposalMinSignatures ?? 1} signature(s) and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before notice; confirm proposal rights under the governing Act and the articles or by-laws.`
-          : `Proposals from members — active rule set requires at least ${rules?.memberProposalThresholdPct ?? 5}% of voting members, subject to a floor of ${rules?.memberProposalMinSignatures ?? 1}, and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before AGM notice. Current voting members: ${eligibleVoters}.`}
+        subtitle={vocab.isCorporation ? "Proposals for the annual shareholder meeting." : `Proposals from members. ${eligibleVoters} voting members today.`}
+        info={vocab.isCorporation ? (
+          <p>
+            The active rule set uses a {rules?.memberProposalThresholdPct ?? 5}% threshold with a floor of {rules?.memberProposalMinSignatures ?? 1} signature(s) and
+            receipt at least {rules?.memberProposalLeadDays ?? 7} days before notice. Confirm shareholder proposal rights under the governing Act and the articles or by-laws.
+          </p>
+        ) : (
+          <p>
+            Under the active rules a proposal needs at least {rules?.memberProposalThresholdPct ?? 5}% of voting members (and no fewer than{" "}
+            {rules?.memberProposalMinSignatures ?? 1}), received at least {rules?.memberProposalLeadDays ?? 7} days before the AGM notice goes out.
+          </p>
+        )}
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New proposal

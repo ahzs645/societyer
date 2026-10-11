@@ -111,11 +111,12 @@ export function OperatingSubscriptionsCard({
   );
 }
 
-export function Stat({ label, value, tone }: { label: string; value: string; tone?: "ok" | "danger" }) {
+export function Stat({ label, value, tone, sub }: { label: string; value: string; tone?: "ok" | "danger"; sub?: string }) {
   return (
     <div className="stat">
       <div className="stat__label">{label}</div>
       <div className="stat__value" style={{ color: tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
+      {sub && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }

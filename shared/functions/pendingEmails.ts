@@ -7,6 +7,7 @@
  * oracle. markSent/cancel are pure status patches (no network/scheduler).
  */
 
+import { assertValid, validateOutboxEmailInput } from "../recordValidation";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
@@ -60,6 +61,7 @@ export async function createPortable(
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  assertValid(validateOutboxEmailInput({ ...args, status: args.status ?? "ready" }));
   if (args.workflowId) await getOwned(ctx, "workflows", args.workflowId, args.societyId);
   if (args.workflowRunId) {
     await getOwned(ctx, "workflowRuns", args.workflowRunId, args.societyId);
@@ -124,6 +126,9 @@ export async function updatePortable(
   for (const attachment of patch.attachments ?? []) {
     await getOwned(ctx, "documents", attachment.documentId, String(existing.societyId));
   }
+  if (existing.status !== "sent" && existing.status !== "cancelled") {
+    assertValid(validateOutboxEmailInput({ ...existing, ...patch }));
+  }
   await ctx.db.patch(id, patch);
 }
 
@@ -144,6 +149,8 @@ export async function markSentPortable(
   if (actingUserId && actingUserId !== sentByUserId) {
     throw new Error("Authenticated actor does not match the current principal.");
   }
+  // Only a complete email can be recorded as sent.
+  assertValid(validateOutboxEmailInput({ ...existing, status: "ready" }), "Complete the email before marking it sent");
   await ctx.db.patch(id, {
     status: "sent",
     sentAtISO: new Date().toISOString(),

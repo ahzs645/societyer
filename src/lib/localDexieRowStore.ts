@@ -1,9 +1,11 @@
-import Dexie, { type Table } from "dexie";
+import type { LocalDexieDatabase } from "./localDexieDatabase";
 import { stripImportedAuthBindings } from "../../shared/workspaceIdentity";
 import { quarantineImportedPathways } from "../../shared/pathways/imports";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
-import { createEntityIdFactory } from "../../shared/portable/ids";
+import { createEntityIdFactory, preservedSystemFields } from "../../shared/portable/ids";
+import { HEAVY_FIELD_POLICY, splitHeavyFields } from "../../shared/portable/heavyFields";
+import { DEFERRED_HYDRATION_TABLES } from "../../shared/portable/localRowStore";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -16,6 +18,29 @@ export type LocalRecordEnvelope = {
   updatedAtISO?: string;
   deletedAtISO?: string;
   value: any;
+  /**
+   * Top-level fields of `value` stored in the `recordFields` object store instead
+   * (lazy heavy fields, see shared/portable/heavyFields.ts). Absent = none.
+   */
+  external?: string[];
+  /** Row revision, renewed on every write (projection memos). Absent = the data epoch. */
+  rev?: string;
+};
+
+/** A persisted `collectProjected` result for one row at one revision. */
+export type LocalProjectionEnvelope = {
+  key: string;
+  table: string;
+  rev: string;
+  value: unknown;
+};
+
+/** Side record holding a row's externalized heavy field values. */
+export type LocalRecordFieldsEnvelope = {
+  key: string;
+  table: string;
+  id: string;
+  fields: Record<string, unknown>;
 };
 
 export type LocalChangeEnvelope = {
@@ -66,54 +91,105 @@ export type LocalWorkspaceBinaryFile = { key: string; sha256: string; blob?: Blo
 
 const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
 
+/**
+ * Physical storage layout, independent of the row schema version above.
+ *   1 — every row stored whole in `records`; meetings/minutes mirrored into the
+ *       legacy v1 object stores.
+ *   2 — heavy fields split into `recordFields` so boot reads only light rows;
+ *       legacy mirrors no longer written (still read once to upgrade v1 data).
+ */
+// 3: intake extracts and extraction records joined the lazy heavy fields (the same idempotent move).
+const CURRENT_LOCAL_STORAGE_LAYOUT = 3;
+const LAYOUT_MIGRATION_CHUNK = 100;
+/** At or above this many rows, persisted projection memos are read by key range. */
+const PROJECTION_RANGE_READ_MIN = 256;
+
 // Keep a useful diagnostic window without treating the journal as durable history.
 const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
 const LOCAL_CHANGE_JOURNAL_PRUNE_SLACK = 100;
 
-export class LocalDexieDatabase extends Dexie {
-  meta!: Table<any, string>;
-  records!: Table<LocalRecordEnvelope, string>;
-  changes!: Table<LocalChangeEnvelope, number>;
-  attachments!: Table<any, string>;
-  meetings!: Table<any, string>;
-  minutes!: Table<any, string>;
-  files!: Table<LocalWorkspaceBinaryFile, string>;
+/** One table of the in-memory cache: rows by id, plus derived views built on demand. */
+type TableState = {
+  rows: Map<string, any>;
+  /** Insertion-ordered array view, rebuilt after a write. */
+  array: any[] | null;
+  /** Equality indexes: field → value → rows. Dropped after a write. */
+  indexes: Map<string, Map<unknown, any[]>>;
+};
 
-  constructor(databaseName: string) {
-    super(databaseName);
-    this.version(1).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-    });
-    this.version(2).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-      records: "&key, table, id, societyId",
-    });
-    this.version(3).stores({
-      meta: "&key",
-      records: "&key, table, id, societyId, updatedAtISO, deletedAtISO",
-      changes: "++seq, table, id, societyId, op, createdAtISO",
-      attachments: "&key, societyId, documentId, versionId, sha256",
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-    });
-    this.version(4).stores({ files: "&key, sha256" });
-  }
-}
+type PreparedOp =
+  | { kind: "delete"; table: string; id: string; key: string }
+  | {
+      kind: "upsert";
+      table: string;
+      id: string;
+      key: string;
+      light: any;
+      heavy: Record<string, unknown> | null;
+      /** Previously external fields the (light) legacy row did not mention: kept as they are. */
+      carried: string[];
+      external: string[];
+      rev: string;
+    };
 
+type UndoEntry = {
+  table: string;
+  id: string;
+  row: any;
+  external: readonly string[] | undefined;
+  pending: Record<string, unknown> | undefined;
+};
+
+/**
+ * Browser-local row store: an in-memory cache of every table over IndexedDB
+ * (Dexie). WP-K scale notes:
+ *   - rows live in per-table Maps with an id → table map, so lookups are O(1)
+ *     and a write no longer copies the whole table array;
+ *   - equality indexes (societyId, meetingId, …) are built lazily per field;
+ *   - heavy fields (HEAVY_FIELD_POLICY) are kept in `recordFields`, out of both
+ *     the cache and the `records` store that boot reads, and are loaded only for
+ *     rows a query returns (`loadExternalFields`);
+ *   - change notifications carry the set of tables that changed, so the query
+ *     cache re-runs only queries that read them.
+ */
 export class LocalDexieRowStore implements LocalRowStore {
   private db: LocalDexieDatabase | null = null;
-  private cache: LocalSeed;
+  private tables = new Map<string, TableState>();
+  private idTables = new Map<string, string>();
+  /** recordKey → externalized field names. */
+  private external = new Map<string, readonly string[]>();
+  /** recordKey → revision of rows written since the data epoch began. */
+  private revisions = new Map<string, string>();
+  /**
+   * Revision shared by every row not rewritten since the vault's data was
+   * (re)loaded wholesale. Persisted in meta and renewed by restore/reseed, so
+   * projection memos computed before a restore can never match restored rows.
+   */
+  private dataEpoch = newRevisionToken();
+  private revisionCounter = 0;
+  /** Unique per store instance, so revisions written in different sessions never collide. */
+  private readonly sessionToken = newRevisionToken();
+  /** Namespace for persisted projection memos (a build id); undefined = memory only. */
+  private projectionNamespace: string | undefined;
+  private projectionWrites = new Set<Promise<void>>();
+  /** Heavy values written but not yet durable (read before IndexedDB). */
+  private pendingHeavy = new Map<string, Record<string, unknown>>();
+  /** Heavy values when there is no IndexedDB (memory-only session never splits). */
   private seed: LocalSeed;
   private attachmentsCache: LocalAttachmentEnvelope[] = [];
   private filesCache: LocalWorkspaceBinaryFile[] = [];
   private changesCache: LocalChangeEnvelope[] = [];
   private workspaceMeta: LocalWorkspaceMeta;
-  private listeners = new Set<() => void>();
+  private listeners = new Set<(changed?: ReadonlySet<string>) => void>();
   private transactionDepth = 0;
-  private pendingNotify = false;
+  /** undefined = nothing pending; null = everything changed. */
+  private pendingChanged: Set<string> | null | undefined = undefined;
   private atomicBatchOps: RowStoreOp[] | null = null;
+  private atomicUndo: Map<string, UndoEntry> | null = null;
+  /** Ops issued through the legacy row API, whose rows may omit external fields. */
+  private legacyOps = new WeakSet<RowStoreOp>();
+  /** Mints `entityId` for rows the legacy row API writes without one (portable inserts mint their own). */
+  private readonly legacyEntityIds = createEntityIdFactory();
   private hydrated: Promise<void> = Promise.resolve();
   /**
    * Writes that landed while the first read of IndexedDB was still in flight.
@@ -123,10 +199,20 @@ export class LocalDexieRowStore implements LocalRowStore {
    * creates a workspace seconds after boot. They are replayed on top instead.
    */
   private preHydrationOps: RowStoreOp[] | null = null;
+  /** Resolves to the opened vault (null when IndexedDB is unavailable or failed). */
+  private dbReady: Promise<LocalDexieDatabase | null> | null = null;
+  /** Whether rows are persisted (heavy fields are split out only then). */
+  private persistent = false;
+  /**
+   * Deferred tables (DEFERRED_HYDRATION_TABLES) whose stored rows have not been read yet: table → the load
+   * in flight (null = not started). Boot skips them; the first read (or write) of one loads it.
+   */
+  private deferred = new Map<string, Promise<void> | null>();
 
-  constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string }) {
+  constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string; projectionNamespace?: string }) {
+    this.projectionNamespace = options?.projectionNamespace;
     this.seed = cloneLocalSeed(seed);
-    this.cache = cloneLocalSeed(seed);
+    this.loadTables(cloneLocalSeed(seed));
     this.workspaceMeta = {
       id: options?.databaseName ?? "societyer-local-workspace",
       name: "Societyer Local Workspace",
@@ -137,11 +223,19 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
-    this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
+    this.persistent = true;
     this.preHydrationOps = [];
-    this.hydrated = this.hydrate(seed).catch((error) => {
+    // Dexie loads with the vault (SU-11): writes issued before it arrives await `database()`.
+    const opening = import("./localDexieDatabase").then(({ LocalDexieDatabase }) => {
+      this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
+      return this.db;
+    });
+    this.dbReady = opening.catch(() => null);
+    this.hydrated = opening.then(() => this.hydrate(seed)).catch((error) => {
       this.db?.close();
       this.db = null;
+      this.persistent = false;
+      this.dbReady = Promise.resolve(null);
       console.warn(
         `[${options?.logLabel ?? "societyer-local"}] Dexie hydrate failed; using in-memory data for this session. Changes will not persist.`,
         error,
@@ -159,15 +253,125 @@ export class LocalDexieRowStore implements LocalRowStore {
     return this.hydrated;
   }
 
-  onUpdate(listener: () => void) {
+  /** `changed` lists the tables a write touched; undefined means "anything may have changed". */
+  onUpdate(listener: (changed?: ReadonlySet<string>) => void) {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   }
 
+  /* ------------------------------ cache access ----------------------------- */
+
+  private tableState(table: string, create: true): TableState;
+  private tableState(table: string, create?: false): TableState | undefined;
+  private tableState(table: string, create = false) {
+    let state = this.tables.get(table);
+    if (!state && create) {
+      state = { rows: new Map(), array: null, indexes: new Map() };
+      this.tables.set(table, state);
+    }
+    return state;
+  }
+
+  private setCachedRow(table: string, row: any) {
+    const state = this.tableState(table, true);
+    state.rows.set(row._id, row);
+    state.array = null;
+    if (state.indexes.size) state.indexes.clear();
+    this.idTables.set(row._id, table);
+  }
+
+  private deleteCachedRow(table: string, id: string) {
+    const state = this.tableState(table);
+    if (!state?.rows.delete(id)) return;
+    state.array = null;
+    if (state.indexes.size) state.indexes.clear();
+    if (this.idTables.get(id) === table) this.idTables.delete(id);
+  }
+
+  private loadTables(seed: LocalSeed) {
+    this.tables = new Map();
+    this.idTables = new Map();
+    for (const [table, rows] of Object.entries(seed)) {
+      const state = this.tableState(table, true);
+      for (const row of rows) {
+        if (!row?._id) continue;
+        state.rows.set(row._id, row);
+        this.idTables.set(row._id, table);
+      }
+    }
+  }
+
+  private loadTableMaps(tableMaps: Map<string, Map<string, any>>) {
+    this.tables = new Map();
+    this.idTables = new Map();
+    for (const [table, rows] of tableMaps) {
+      this.tables.set(table, { rows, array: null, indexes: new Map() });
+      for (const id of rows.keys()) this.idTables.set(id, table);
+    }
+  }
+
+  isDeferred(table: string) {
+    return this.deferred.has(table);
+  }
+
+  hasDeferredTables() {
+    return this.deferred.size > 0;
+  }
+
+  /** Reads deferred tables' stored rows into the cache (all of them when `tables` is omitted). */
+  async ensureTables(tables?: readonly string[]) {
+    if (!this.deferred.size) return;
+    const names = (tables ?? [...this.deferred.keys()]).filter((table) => this.deferred.has(table));
+    await Promise.all(names.map((table) => {
+      let loading = this.deferred.get(table);
+      if (!loading) {
+        loading = this.loadDeferredTable(table);
+        this.deferred.set(table, loading);
+      }
+      return loading;
+    }));
+  }
+
+  private async loadDeferredTable(table: string) {
+    const db = await this.database();
+    const started = now();
+    let count = 0;
+    if (db) {
+      // Record keys are "<table>:<id>": one key range, read with a single getAll.
+      const records = await db.records.where(":id").between(`${table}:`, `${table}:\uffff`, true, true).toArray();
+      // A table with nothing stored stays absent, exactly as boot would have left it.
+      const state = records.length ? this.tableState(table, true) : this.tableState(table);
+      for (const record of records) {
+        if (!record?.value?._id) continue;
+        const id = record.value._id;
+        // A row written in this session (it has a session revision) is newer than the stored one.
+        if (this.revisions.has(record.key) && this.revisions.get(record.key) !== record.rev) continue;
+        if (record.deletedAtISO) {
+          this.deleteCachedRow(table, id);
+          continue;
+        }
+        state!.rows.set(id, record.value);
+        this.idTables.set(id, table);
+        if (record.external?.length && !this.external.has(record.key)) this.external.set(record.key, record.external);
+        if (record.rev && !this.revisions.has(record.key)) this.revisions.set(record.key, record.rev);
+        count++;
+      }
+      if (state) {
+        state.array = null;
+        state.indexes.clear();
+      }
+    }
+    this.deferred.delete(table);
+    recordDeferredTiming(table, now() - started, count);
+  }
+
   rows(table: string) {
-    return this.cache[table] ?? [];
+    const state = this.tableState(table);
+    if (!state) return [];
+    state.array ??= [...state.rows.values()];
+    return state.array;
   }
 
   listRows(table: string, args?: LocalArgs) {
@@ -175,16 +379,125 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   getRow(table: string, id: string | undefined) {
-    return byLocalId(this.rows(table), id);
+    if (!id) return undefined;
+    return this.tableState(table)?.rows.get(id);
   }
+
+  tableOf(id: string) {
+    return this.idTables.get(id);
+  }
+
+  /**
+   * Compound equality index over primitive field values, built on first use
+   * and dropped when the table changes. Non-primitive values fall back to a scan.
+   */
+  rowsWhere(table: string, fields: readonly string[], values: readonly unknown[]) {
+    if (!values.every(isIndexableValue)) return undefined;
+    const state = this.tableState(table);
+    if (!state) return [];
+    const indexName = fields.join("\u0000");
+    let index = state.indexes.get(indexName);
+    if (!index) {
+      index = new Map();
+      for (const row of state.rows.values()) {
+        const key = indexKey(fields.map((field) => row[field]));
+        if (key === undefined) continue;
+        const bucket = index.get(key);
+        if (bucket) bucket.push(row);
+        else index.set(key, [row]);
+      }
+      state.indexes.set(indexName, index);
+    }
+    return index.get(indexKey(values)) ?? [];
+  }
+
+  /** Opaque row version for projection memos (LocalRowStore contract). */
+  rowRevision(table: string, id: string) {
+    const key = localRecordKey(table, id);
+    if (!this.tableState(table)?.rows.has(id)) return undefined;
+    return this.revisions.get(key) ?? `e:${this.dataEpoch}`;
+  }
+
+  private nextRevision() {
+    return `${this.sessionToken}.${(++this.revisionCounter).toString(36)}`;
+  }
+
+  async loadProjections(key: string, table: string, ids: string[]) {
+    const out = new Map<string, { rev: string; value: unknown }>();
+    if (!this.db || !this.projectionNamespace || !ids.length) return out;
+    try {
+      if (ids.length >= PROJECTION_RANGE_READ_MIN) {
+        // A list's memos (documents: ~11k rows) are read with one key-range
+        // getAll instead of one IndexedDB get per row, which dominated a cold
+        // visit to Documents (SU-12).
+        const prefix = projectionKey(key, table, "");
+        const wanted = new Set(ids);
+        const rows = await this.db.projections.where("key").startsWith(prefix).toArray();
+        for (const row of rows) {
+          const id = row.key.slice(prefix.length);
+          if (wanted.has(id)) out.set(id, { rev: row.rev, value: row.value });
+        }
+        return out;
+      }
+      const rows = await this.db.projections.bulkGet(ids.map((id) => projectionKey(key, table, id)));
+      rows.forEach((row, index) => {
+        if (row) out.set(ids[index], { rev: row.rev, value: row.value });
+      });
+    } catch {
+      // A memo is only an optimisation; recompute on any storage problem.
+    }
+    return out;
+  }
+
+  saveProjections(key: string, table: string, entries: Array<{ id: string; rev: string; value: unknown }>) {
+    if (!this.db || !this.projectionNamespace || !entries.length) return;
+    const rows = entries.map((entry) => ({ key: projectionKey(key, table, entry.id), table, rev: entry.rev, value: entry.value }));
+    const write = this.db.projections.bulkPut(rows).then(() => undefined, () => undefined);
+    this.projectionWrites.add(write);
+    void write.finally(() => this.projectionWrites.delete(write));
+  }
+
+  /** Resolves once every projection memo handed to `saveProjections` is durable. */
+  async flushProjections() {
+    while (this.projectionWrites.size) await Promise.all([...this.projectionWrites]);
+  }
+
+  externalFields(table: string, id: string) {
+    return this.external.get(localRecordKey(table, id));
+  }
+
+  /** Externalized fields of these rows (LocalRowStore contract); values are fresh copies. */
+  async loadExternalFields(table: string, ids: string[]) {
+    const out = new Map<string, Record<string, unknown>>();
+    const keys = ids.map((id) => localRecordKey(table, id));
+    const stored = this.db ? await this.db.recordFields.bulkGet(keys) : [];
+    keys.forEach((key, index) => {
+      const fields = this.external.get(key);
+      if (!fields?.length) return;
+      // IndexedDB hands back fresh copies; values still in flight are shared, so copy them.
+      const pending = this.pendingHeavy.get(key);
+      const merged = { ...(stored[index]?.fields ?? {}), ...(pending ? cloneLocalRow(pending) : {}) };
+      const value: Record<string, unknown> = {};
+      for (const field of fields) if (field in merged) value[field] = merged[field];
+      out.set(ids[index], value);
+    });
+    return out;
+  }
+
+  /* --------------------------------- writes -------------------------------- */
 
   upsertRow(table: string, row: any) {
     if (!row?._id) return null;
-    this.cache[table] = upsertLocalRow(this.rows(table), row);
-    this.preHydrationOps?.push({ kind: "upsert", table, row: cloneLocalRow(row) });
-    if (this.atomicBatchOps) this.atomicBatchOps.push({ kind: "upsert", table, row: cloneLocalRow(row) });
-    else this.persistRow(table, row, "upsert");
-    this.scheduleNotify();
+    // Legacy writes build rows by hand: keep the stored row's durable identity and creation time, and
+    // give a new row an entityId, as a portable insert would (a later restore would otherwise mint one).
+    if (!(typeof row.entityId === "string" && row.entityId) || row._creationTime === undefined) {
+      row = { ...row, ...preservedSystemFields(this.getRow(table, row._id), row) };
+      if (!(typeof row.entityId === "string" && row.entityId)) row.entityId = this.legacyEntityIds.mint(table);
+      if (row._creationTime === undefined) row._creationTime = Date.now();
+    }
+    const op: RowStoreOp = { kind: "upsert", table, row };
+    this.legacyOps.add(op);
+    this.applyLegacyOp(op);
     return row;
   }
 
@@ -200,24 +513,41 @@ export class LocalDexieRowStore implements LocalRowStore {
   removeRow(table: string, id: string | undefined) {
     if (!id) return null;
     const previous = this.getRow(table, id);
-    this.cache[table] = this.rows(table).filter((row) => row._id !== id);
-    this.preHydrationOps?.push({ kind: "delete", table, id });
-    if (this.atomicBatchOps) {
-      this.atomicBatchOps.push({ kind: "delete", table, id });
-      this.scheduleNotify();
-      return previous;
-    }
-    const deletedAtISO = new Date().toISOString();
-    void this.db?.records.put(localDeletedRecord(table, {
-      _id: id,
-      societyId: previous?.societyId,
-      ...(previous ?? {}),
-      deletedAtISO,
-    }));
-    if (table === "meetings" || table === "minutes") void this.db?.[table].delete(id);
-    void this.appendChange(table, { _id: id, societyId: previous?.societyId }, "delete");
-    this.scheduleNotify();
+    this.applyLegacyOp({ kind: "delete", table, id });
     return previous;
+  }
+
+  /** Legacy row API: apply to the cache now, persist in the background. */
+  private applyLegacyOp(op: RowStoreOp) {
+    if (this.atomicBatchOps) {
+      // Inside transactionAsync: buffer; the batch commits (or rolls back) as one.
+      this.recordUndo(op.table, op.kind === "delete" ? op.id : op.row._id);
+      const prepared = this.prepareOps([op]);
+      this.applyPrepared(prepared);
+      this.atomicBatchOps.push(op);
+      this.scheduleNotify([op.table]);
+      return;
+    }
+    void this.commitBatch([op]).catch((error) => {
+      console.warn("[societyer-local] background write failed", error);
+    });
+  }
+
+  private recordUndo(table: string, id: string) {
+    const key = localRecordKey(table, id);
+    if (!this.atomicUndo || this.atomicUndo.has(key)) return;
+    this.atomicUndo.set(key, { table, id, row: this.getRow(table, id), external: this.external.get(key), pending: this.pendingHeavy.get(key) });
+  }
+
+  private restoreUndo(undo: Map<string, UndoEntry>) {
+    for (const [key, entry] of undo) {
+      if (entry.row) this.setCachedRow(entry.table, entry.row);
+      else this.deleteCachedRow(entry.table, entry.id);
+      if (entry.external) this.external.set(key, entry.external);
+      else this.external.delete(key);
+      if (entry.pending) this.pendingHeavy.set(key, entry.pending);
+      else this.pendingHeavy.delete(key);
+    }
   }
 
   transaction<T>(mutate: () => T): T {
@@ -226,111 +556,245 @@ export class LocalDexieRowStore implements LocalRowStore {
       return mutate();
     } finally {
       this.transactionDepth -= 1;
-      if (this.transactionDepth === 0 && this.pendingNotify) this.notify();
+      if (this.transactionDepth === 0 && this.pendingChanged !== undefined) this.notify();
     }
   }
 
   async transactionAsync<T>(mutate: () => T | Promise<T>): Promise<T> {
     if (this.atomicBatchOps) return await mutate();
 
-    const cacheBackup = cloneLocalSeed(this.cache);
     this.atomicBatchOps = [];
+    this.atomicUndo = new Map();
     this.transactionDepth += 1;
     try {
       const result = await mutate();
       const ops = this.atomicBatchOps;
+      const undo = this.atomicUndo;
       this.atomicBatchOps = null;
-      this.cache = cacheBackup;
+      this.atomicUndo = null;
+      this.restoreUndo(undo);
       await this.commitBatch(ops);
       return result;
     } catch (error) {
+      if (this.atomicUndo) this.restoreUndo(this.atomicUndo);
       this.atomicBatchOps = null;
-      this.cache = cacheBackup;
+      this.atomicUndo = null;
       throw error;
     } finally {
       this.transactionDepth -= 1;
-      if (this.transactionDepth === 0 && this.pendingNotify) this.notify();
+      if (this.transactionDepth === 0 && this.pendingChanged !== undefined) this.notify();
     }
   }
 
-  /** Table names currently held in the cache (LocalRowStore contract). */
+  /** Table names held in the cache or deferred (LocalRowStore contract). */
   tableNames(): string[] {
-    return Object.keys(this.cache);
+    return this.deferred.size ? [...new Set([...this.tables.keys(), ...this.deferred.keys()])] : [...this.tables.keys()];
+  }
+
+  private get splitsHeavyFields() {
+    return this.persistent;
+  }
+
+  /** The vault once it is open; null when this session is memory-only. */
+  private async database(): Promise<LocalDexieDatabase | null> {
+    if (this.db) return this.db;
+    if (!this.dbReady) return null;
+    return (await this.dbReady) ?? null;
+  }
+
+  private prepareOps(ops: RowStoreOp[]): PreparedOp[] {
+    return ops.map((op) => {
+      if (op.kind === "delete") return { kind: "delete", table: op.table, id: op.id, key: localRecordKey(op.table, op.id) };
+      const key = localRecordKey(op.table, op.row._id);
+      const { light, heavy } = this.splitsHeavyFields ? splitHeavyFields(op.table, op.row) : { light: op.row, heavy: null };
+      const carried = this.legacyOps.has(op)
+        ? (this.external.get(key) ?? []).filter((field) => !Object.prototype.hasOwnProperty.call(op.row, field))
+        : [];
+      return {
+        kind: "upsert",
+        table: op.table,
+        id: op.row._id,
+        key,
+        light,
+        heavy,
+        carried,
+        external: [...carried, ...Object.keys(heavy ?? {})],
+        rev: this.nextRevision(),
+      };
+    });
+  }
+
+  private applyPrepared(prepared: PreparedOp[]) {
+    for (const op of prepared) {
+      if (op.kind === "delete") {
+        this.deleteCachedRow(op.table, op.id);
+        this.revisions.delete(op.key);
+        this.external.delete(op.key);
+        this.pendingHeavy.delete(op.key);
+        continue;
+      }
+      this.setCachedRow(op.table, op.light);
+      this.revisions.set(op.key, op.rev);
+      if (op.external.length) this.external.set(op.key, op.external);
+      else this.external.delete(op.key);
+      if (op.heavy) this.pendingHeavy.set(op.key, op.heavy);
+      else this.pendingHeavy.delete(op.key);
+    }
   }
 
   /**
    * Apply a batch of writes ATOMICALLY (LocalRowStore contract, used by the
-   * portable mutation adapter). Unlike the legacy per-row `upsertRow`/`removeRow`
-   * path — which fires un-awaited `void db.records.put(...)` with no isolation —
-   * this persists every op in a single Dexie `rw` transaction and rolls the
-   * in-memory cache back if the persist fails, so a multi-table mutation never
-   * commits partially. This is the fix for the non-atomic-write correctness bug.
+   * portable mutation adapter). Every op is persisted in a single Dexie `rw`
+   * transaction and the in-memory cache rolls back if the persist fails, so a
+   * multi-table mutation never commits partially.
    */
   async commitBatch(ops: RowStoreOp[]): Promise<void> {
     if (!ops.length) return;
+    if (this.deferred.size && ops.some((op) => this.deferred.has(op.table))) await this.ensureTables(ops.map((op) => op.table));
 
-    const touched = new Set(ops.map((op) => op.table));
-    const cacheBackup: LocalSeed = {};
-    for (const table of touched) cacheBackup[table] = this.rows(table).map(cloneLocalRow);
+    const undo = new Map<string, UndoEntry>();
+    for (const op of ops) {
+      const id = op.kind === "delete" ? op.id : op.row._id;
+      const key = localRecordKey(op.table, id);
+      if (!undo.has(key)) undo.set(key, { table: op.table, id, row: this.getRow(op.table, id), external: this.external.get(key), pending: this.pendingHeavy.get(key) });
+    }
+    const prepared = this.prepareOps(ops);
 
     // Apply to the in-memory cache up front (reads see the new state immediately).
-    for (const op of ops) {
-      if (op.kind === "delete") this.cache[op.table] = this.rows(op.table).filter((row) => row._id !== op.id);
-      else this.cache[op.table] = upsertLocalRow(this.rows(op.table), op.row);
-    }
-    if (this.preHydrationOps) this.preHydrationOps.push(...ops.map((op) => (op.kind === "delete" ? op : { ...op, row: cloneLocalRow(op.row) })));
+    this.applyPrepared(prepared);
+    if (this.preHydrationOps) this.preHydrationOps.push(...ops);
 
     const changes: LocalChangeEnvelope[] = [];
     const now = new Date().toISOString();
-    for (const op of ops) {
-      const id = op.kind === "delete" ? op.id : op.row._id;
-      const societyId = op.kind === "delete" ? cacheBackup[op.table]?.find((r) => r._id === id)?.societyId : op.row.societyId;
+    for (const op of prepared) {
+      const societyId = op.kind === "delete" ? undo.get(op.key)?.row?.societyId : op.light.societyId;
       changes.push({
         table: op.table,
-        id,
+        id: op.id,
         societyId,
         op: op.kind === "delete" ? "delete" : "upsert",
         createdAtISO: now,
-        mutationId: `${op.table}:${id}:${Date.now()}`,
+        mutationId: `${op.table}:${op.id}:${Date.now()}`,
       });
     }
 
     // Persistence policy: broken at startup => memory-only session; broken mid-session => fail the mutation.
-    if (this.db) {
+    const db = this.db ?? await this.database();
+    if (db) {
       try {
-        await this.db.open();
-        await this.db.transaction("rw", [this.db.records, this.db.changes, this.db.meetings, this.db.minutes], async () => {
-          for (const op of ops) {
+        await db.open();
+        await db.transaction("rw", [db.records, db.recordFields, db.changes], async () => {
+          for (const op of prepared) {
             if (op.kind === "delete") {
-              const previous = cacheBackup[op.table]?.find((r) => r._id === op.id);
-              await this.db!.records.put(localDeletedRecord(op.table, { _id: op.id, societyId: previous?.societyId, ...(previous ?? {}) }));
-              if (op.table === "meetings" || op.table === "minutes") await this.db![op.table].delete(op.id);
+              const previous = undo.get(op.key)?.row;
+              await db.records.put(localDeletedRecord(op.table, { _id: op.id, societyId: previous?.societyId, ...(previous ?? {}) }));
+              await db.recordFields.delete(op.key);
+              continue;
+            }
+            await db.records.put({ ...localRecord(op.table, op.light, false, op.external), rev: op.rev });
+            if (op.carried.length) {
+              const existing = await db.recordFields.get(op.key);
+              const fields: Record<string, unknown> = {};
+              for (const field of op.carried) if (existing && field in existing.fields) fields[field] = existing.fields[field];
+              Object.assign(fields, op.heavy ?? {});
+              if (Object.keys(fields).length) await db.recordFields.put({ key: op.key, table: op.table, id: op.id, fields });
+              else await db.recordFields.delete(op.key);
+            } else if (op.heavy) {
+              await db.recordFields.put({ key: op.key, table: op.table, id: op.id, fields: op.heavy });
             } else {
-              await this.db!.records.put(localRecord(op.table, op.row));
-              if (op.table === "meetings" || op.table === "minutes") await this.db![op.table].put(cloneLocalRow(op.row));
+              await db.recordFields.delete(op.key);
             }
           }
-          await this.db!.changes.bulkAdd(changes);
+          await db.changes.bulkAdd(changes);
           await this.prunePersistedChangesIfNeeded();
         });
       } catch (error) {
         // Roll the cache back to its pre-batch state so memory matches storage.
-        for (const table of touched) this.cache[table] = cacheBackup[table];
+        this.restoreUndo(undo);
         throw error;
       }
+      for (const op of prepared) if (op.kind === "upsert" && op.heavy && this.pendingHeavy.get(op.key) === op.heavy) this.pendingHeavy.delete(op.key);
     }
 
     this.changesCache.push(...changes);
     this.pruneChangesCacheIfNeeded();
-    this.scheduleNotify();
+    this.scheduleNotify(prepared.map((op) => op.table));
   }
 
-  exportSnapshot() {
+  /**
+   * Full snapshot including every heavy field (backups, in-place migrations).
+   * Rows are fresh top-level objects, so callers may edit them freely.
+   */
+  async exportSnapshot(): Promise<LocalWorkspaceSnapshot> {
+    await this.whenHydrated();
+    await this.ensureTables();
+    await this.flushProjections();
+    const tables: LocalSeed = {};
+    for (const table of this.tables.keys()) {
+      const rows = this.rows(table);
+      const heavyIds = rows.filter((row) => this.external.has(localRecordKey(table, row._id))).map((row) => row._id);
+      const heavy = heavyIds.length ? await this.loadExternalFields(table, heavyIds) : new Map<string, Record<string, unknown>>();
+      tables[table] = rows.map((row) => ({ ...row, ...(heavy.get(row._id) ?? {}) }));
+    }
     return {
       kind: "societyer.localWorkspaceSnapshot" as const,
       exportedAtISO: new Date().toISOString(),
       workspace: { ...this.workspaceMeta, updatedAtISO: new Date().toISOString() },
-      tables: cloneLocalSeed(this.cache),
+      tables,
+      attachments: cloneLocalRows(this.attachmentsCache),
+      changes: cloneLocalRows(this.changesCache),
+    };
+  }
+
+  /**
+   * The snapshot as a stream for backups: the snapshot fields without `tables`, and per table an iterator of
+   * row batches whose lazy fields are loaded one batch at a time (the whole workspace is never one object).
+   * Each batch's rows are fresh objects. Rows written while the export runs may or may not be included.
+   */
+  async exportSnapshotSource(batchSize = 500): Promise<{ meta: Omit<LocalWorkspaceSnapshot, "tables">; tables: Array<{ name: string; rows: () => AsyncIterable<any[]> }> }> {
+    await this.whenHydrated();
+    await this.ensureTables();
+    await this.flushProjections();
+    const meta = {
+      kind: "societyer.localWorkspaceSnapshot" as const,
+      exportedAtISO: new Date().toISOString(),
+      workspace: { ...this.workspaceMeta, updatedAtISO: new Date().toISOString() },
+      attachments: cloneLocalRows(this.attachmentsCache),
+      changes: cloneLocalRows(this.changesCache),
+    };
+    const tables = [...this.tables.keys()].map((table) => ({
+      name: table,
+      rows: () => this.exportTableBatches(table, batchSize),
+    }));
+    return { meta, tables };
+  }
+
+  private async *exportTableBatches(table: string, batchSize: number): AsyncIterable<any[]> {
+    const rows = [...this.rows(table)];
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batch = rows.slice(start, start + batchSize);
+      const heavyIds = batch.filter((row) => this.external.has(localRecordKey(table, row._id))).map((row) => row._id);
+      const heavy = heavyIds.length ? await this.loadExternalFields(table, heavyIds) : new Map<string, Record<string, unknown>>();
+      yield batch.map((row) => ({ ...row, ...(heavy.get(row._id) ?? {}) }));
+    }
+  }
+
+  /**
+   * Synchronous snapshot for runtimes whose rows are all in memory (Node
+   * scripts, a session without IndexedDB). Throws when heavy fields are lazy:
+   * a backup must never silently omit them — use `exportSnapshot()`.
+   */
+  exportSnapshotSync(): LocalWorkspaceSnapshot {
+    if (this.external.size || this.deferred.size) {
+      throw new Error("Some fields of this workspace are stored outside memory; export it with exportSnapshot().");
+    }
+    const tables: LocalSeed = {};
+    for (const table of this.tables.keys()) tables[table] = this.rows(table).map((row) => ({ ...row }));
+    return {
+      kind: "societyer.localWorkspaceSnapshot" as const,
+      exportedAtISO: new Date().toISOString(),
+      workspace: { ...this.workspaceMeta, updatedAtISO: new Date().toISOString() },
+      tables,
       attachments: cloneLocalRows(this.attachmentsCache),
       changes: cloneLocalRows(this.changesCache),
     };
@@ -346,8 +810,19 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   exportAttachmentReferences() { return cloneLocalRows(this.attachmentsCache); }
+  /** Saves file bytes in this device's workspace (content-addressed) plus optional
+   * lookup references ("version:<id>", "document:<id>"); backups export them. */
+  async saveFile(blob: Blob, sha256: string, references: string[] = []) {
+    await this.whenHydrated();
+    if (!/^[a-f0-9]{64}$/.test(sha256)) throw new Error("Invalid file checksum.");
+    const rows: LocalWorkspaceBinaryFile[] = [{ key: `sha256:${sha256}`, sha256, blob }, ...references.map((key) => ({ key, sha256 }))];
+    for (const row of rows) this.filesCache = [...this.filesCache.filter((file) => file.key !== row.key), row];
+    if (this.db) await this.db.files.bulkPut(rows);
+  }
+
 
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }, files: LocalWorkspaceBinaryFile[] = [], preserveFiles = false) {
+    await this.database();
     const importedTables = quarantineImportedPathways(stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables)));
     const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
     if (files.some(file => !file.key || !/^[a-f0-9]{64}$/.test(file.sha256) || (file.blob !== undefined && !(file.blob instanceof Blob)))) throw new Error("Invalid restored file data.");
@@ -360,8 +835,8 @@ export class LocalDexieRowStore implements LocalRowStore {
     // success. Validate first so invalid backups never wait for or write storage.
     await this.whenHydrated();
     const normalizedMeta = normalizeWorkspaceMeta(snapshot?.workspace, this.workspaceMeta);
-    // Validation already owns a deep copy. Migration and IndexedDB's structured
-    // writes need no additional JSON copies of large embedded source images.
+    // Validation never mutates the input, and migration builds new top-level
+    // rows, so no extra JSON copy of large embedded content is needed.
     const importedCache = migrateLocalWorkspaceSnapshotTables(importedTables, false);
     const importedMeta: LocalWorkspaceMeta = {
       ...normalizedMeta,
@@ -374,43 +849,53 @@ export class LocalDexieRowStore implements LocalRowStore {
     });
     let committedImportChange = importChange;
 
+    const split = this.db ? splitSeed(importedCache) : { light: importedCache, records: [], fields: [], external: new Map<string, string[]>() };
+    const nextEpoch = newRevisionToken();
     if (this.db) {
-      await this.db.open();
-      const records = localRecordsForSeed(importedCache, false);
-      await this.db.transaction(
+      const db = this.db;
+      await db.open();
+      await db.transaction(
         "rw",
-        [this.db.meta, this.db.records, this.db.changes, this.db.attachments, this.db.meetings, this.db.minutes, this.db.files],
+        [db.meta, db.records, db.recordFields, db.projections, db.changes, db.attachments, db.meetings, db.minutes, db.files],
         async () => {
-          await this.db!.meta.clear();
-          await this.db!.records.clear();
-          await this.db!.changes.clear();
-          await this.db!.attachments.clear();
-          await this.db!.meetings.clear();
-          await this.db!.minutes.clear();
-          if (!preserveFiles) await this.db!.files.clear();
+          await db.meta.clear();
+          await db.records.clear();
+          await db.recordFields.clear();
+          await db.projections.clear();
+          await db.changes.clear();
+          await db.attachments.clear();
+          await db.meetings.clear();
+          await db.minutes.clear();
+          if (!preserveFiles) await db.files.clear();
 
-          if (records.length) await this.db!.records.bulkPut(records);
-          if (importedAttachments.length) await this.db!.attachments.bulkPut(cloneLocalRows(importedAttachments));
-          if (files.length) await this.db!.files.bulkPut(files);
-          if (history.length) await this.db!.changes.bulkAdd(history);
-          if (importedCache.meetings?.length) await this.db!.meetings.bulkPut(importedCache.meetings);
-          if (importedCache.minutes?.length) await this.db!.minutes.bulkPut(importedCache.minutes);
-          await this.db!.meta.bulkPut([
+          if (split.records.length) await db.records.bulkPut(split.records);
+          if (split.fields.length) await db.recordFields.bulkPut(split.fields);
+          if (importedAttachments.length) await db.attachments.bulkPut(cloneLocalRows(importedAttachments));
+          if (files.length) await db.files.bulkPut(files);
+          if (history.length) await db.changes.bulkAdd(history);
+          await db.meta.bulkPut([
             { key: "schemaVersion", value: importedMeta.schemaVersion },
             { key: "workspace", value: importedMeta },
+            { key: "storageLayout", value: CURRENT_LOCAL_STORAGE_LAYOUT },
+            { key: "dataEpoch", value: nextEpoch },
           ]);
-          const seq = await this.db!.changes.add(importChange);
+          const seq = await db.changes.add(importChange);
           committedImportChange = { ...importChange, seq };
         },
       );
     }
 
-    this.cache = importedCache;
+    this.loadTables(split.light);
+    this.deferred = new Map();
+    this.external = new Map(split.external);
+    this.revisions = new Map();
+    this.dataEpoch = nextEpoch;
+    this.pendingHeavy = new Map();
     this.attachmentsCache = importedAttachments;
     if (!preserveFiles) this.filesCache = files;
     this.changesCache = [...history, committedImportChange];
     this.workspaceMeta = importedMeta;
-    this.notify();
+    this.notify(null);
   }
 
   upsertAttachment(attachment: Omit<LocalAttachmentEnvelope, "key" | "createdAtISO" | "updatedAtISO"> & { key?: string; createdAtISO?: string; updatedAtISO?: string }) {
@@ -421,8 +906,10 @@ export class LocalDexieRowStore implements LocalRowStore {
       createdAtISO: attachment.createdAtISO ?? now,
       updatedAtISO: now,
     };
-    this.attachmentsCache = upsertLocalRow(this.attachmentsCache, { ...row, _id: row.key }).map(({ _id, ...rest }: any) => rest);
-    void this.db?.attachments.put(cloneLocalRow(row));
+    const index = this.attachmentsCache.findIndex((candidate) => candidate.key === row.key);
+    this.attachmentsCache = index === -1 ? [...this.attachmentsCache, row] : this.attachmentsCache.map((candidate, i) => (i === index ? row : candidate));
+    const stored = cloneLocalRow(row);
+    void (this.db ? Promise.resolve(this.db) : this.database()).then((db) => db?.attachments.put(stored));
     void this.appendChange("__attachments", { _id: row.key, societyId: row.societyId }, "upsert", {
       reason: "attachment-upsert",
     });
@@ -435,15 +922,23 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   async reseed() {
-    this.cache = cloneLocalSeed(this.seed);
+    await this.database();
+    this.loadTables(cloneLocalSeed(this.seed));
+    this.deferred = new Map();
+    this.external = new Map();
+    this.pendingHeavy = new Map();
+    this.revisions = new Map();
+    this.dataEpoch = newRevisionToken();
     if (!this.db) {
-      this.notify();
+      this.notify(null);
       return;
     }
     await this.db.open();
     await Promise.all([
       this.db.meta.clear(),
       this.db.records.clear(),
+      this.db.recordFields.clear(),
+      this.db.projections.clear(),
       this.db.changes.clear(),
       this.db.attachments.clear(),
       this.db.meetings.clear(),
@@ -452,17 +947,21 @@ export class LocalDexieRowStore implements LocalRowStore {
     ]);
     this.filesCache = [];
     await this.writeSeed(this.seed);
-    this.notify();
+    this.notify(null);
   }
+
+  /* --------------------------------- startup ------------------------------- */
 
   private async hydrate(seed: LocalSeed) {
     if (!this.db) return;
+    const db = this.db;
+    const started = now();
 
-    await this.db.open();
-    if ((await this.db.records.count()) === 0) {
+    await db.open();
+    if ((await db.records.count()) === 0) {
       const [legacyMeetings, legacyMinutes] = await Promise.all([
-        this.db.meetings.toArray(),
-        this.db.minutes.toArray(),
+        db.meetings.toArray(),
+        db.minutes.toArray(),
       ]);
       await this.writeSeed({
         ...seed,
@@ -470,111 +969,199 @@ export class LocalDexieRowStore implements LocalRowStore {
         minutes: legacyMinutes.length ? legacyMinutes : seed.minutes,
       });
     } else {
+      await this.migrateStorageLayout();
       await this.putMissingSeedRows(seed);
     }
 
     // Bound journals created before the cap was introduced before hydrating them.
-    await this.db.transaction("rw", this.db.changes, async () => {
+    await db.transaction("rw", db.changes, async () => {
       await this.prunePersistedChangesIfNeeded();
     });
 
-    const [localRecords, attachments, changes, workspaceMeta] = await Promise.all([
-      this.db.records.toArray(),
-      this.db.attachments.toArray(),
-      this.db.changes.toArray(),
-      this.db.meta.get("workspace"),
+    const readStarted = now();
+    // Boot reads LIGHT rows only: heavy fields stay in `recordFields`. Deferred tables (AI intake staging,
+    // field provenance) are read on first use, unless a schema migration needs every row now.
+    const workspaceMeta = await db.meta.get("workspace");
+    const needsMigration = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta).schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION;
+    const deferTables = needsMigration ? [] : DEFERRED_HYDRATION_TABLES.filter((table) => !this.seed[table]?.length);
+    const [localRecords, attachments, changes] = await Promise.all([
+      deferTables.length ? readRecordsExcept(db, deferTables) : db.records.toArray(),
+      db.attachments.toArray(),
+      db.changes.toArray(),
     ]);
-    const next = cloneLocalSeed(seed);
+    // One pass, straight into per-table maps: seed rows first (in seed order;
+    // `this.seed` is a private copy and cached rows are never mutated), then each
+    // persisted record overrides in place or is appended in key order.
+    const tableMaps = new Map<string, Map<string, any>>();
+    for (const [table, rows] of Object.entries(this.seed)) {
+      const rowsById = new Map<string, any>();
+      for (const row of rows) if (row?._id) rowsById.set(row._id, row);
+      tableMaps.set(table, rowsById);
+    }
+    const external = new Map<string, readonly string[]>();
+    const revisions = new Map<string, string>();
     for (const record of localRecords) {
       if (!record?.table || !record?.value?._id) continue;
+      const id = record.value._id;
+      let rowsById = tableMaps.get(record.table);
       if (record.deletedAtISO) {
-        next[record.table] = (next[record.table] ?? []).filter((row) => row._id !== record.value._id);
+        rowsById?.delete(id);
         continue;
       }
-      next[record.table] = upsertLocalRow(next[record.table] ?? [], record.value);
+      if (!rowsById) tableMaps.set(record.table, (rowsById = new Map()));
+      rowsById.set(id, record.value);
+      if (record.external?.length) external.set(record.key, record.external);
+      if (record.rev) revisions.set(record.key, record.rev);
     }
 
     const persistedWorkspaceMeta = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta);
-    let hydratedCache = next;
+    let hydratedCache: LocalSeed | null = null;
     let hydratedWorkspaceMeta = persistedWorkspaceMeta;
     if (persistedWorkspaceMeta.schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION) {
-      hydratedCache = migrateLocalWorkspaceSnapshotTables(next);
+      const merged: LocalSeed = {};
+      for (const [table, rowsById] of tableMaps) merged[table] = [...rowsById.values()];
+      hydratedCache = migrateLocalWorkspaceSnapshotTables(merged);
       hydratedWorkspaceMeta = {
         ...persistedWorkspaceMeta,
         schemaVersion: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION,
         updatedAtISO: new Date().toISOString(),
       };
-      const migratedRecords = localRecordsForSeed(hydratedCache);
-      await this.db.transaction("rw", [this.db.meta, this.db.records, this.db.meetings, this.db.minutes], async () => {
-        if (migratedRecords.length) await this.db!.records.bulkPut(migratedRecords);
-        await this.db!.meetings.clear();
-        await this.db!.minutes.clear();
-        if (hydratedCache.meetings?.length) await this.db!.meetings.bulkPut(cloneLocalRows(hydratedCache.meetings));
-        if (hydratedCache.minutes?.length) await this.db!.minutes.bulkPut(cloneLocalRows(hydratedCache.minutes));
-        await this.db!.meta.bulkPut([
+      const migratedRecords = Object.entries(hydratedCache).flatMap(([table, rows]) =>
+        rows.filter((row) => row?._id).map((row) => localRecord(table, row, false, external.get(localRecordKey(table, row._id)) as string[] | undefined)),
+      );
+      await db.transaction("rw", [db.meta, db.records], async () => {
+        if (migratedRecords.length) await db.records.bulkPut(migratedRecords);
+        await db.meta.bulkPut([
           { key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION },
           { key: "workspace", value: hydratedWorkspaceMeta },
         ]);
       });
     }
 
+    if (hydratedCache) this.loadTables(hydratedCache);
+    else this.loadTableMaps(tableMaps);
+    this.external = external;
+    this.revisions = revisions;
+    this.deferred = new Map(deferTables.map((table) => [table, null]));
+    this.dataEpoch = await this.persistedDataEpoch();
     // Replay anything written while this read was in flight, so a mutation
     // issued during startup survives hydration.
-    for (const op of this.preHydrationOps ?? []) {
-      if (op.kind === "delete") {
-        hydratedCache[op.table] = (hydratedCache[op.table] ?? []).filter((row) => row._id !== op.id);
-      } else {
-        hydratedCache[op.table] = upsertLocalRow(hydratedCache[op.table] ?? [], op.row);
+    const replay = this.preHydrationOps ?? [];
+    this.preHydrationOps = null;
+    if (replay.length) this.applyPrepared(this.prepareOps(replay));
+
+    this.attachmentsCache = cloneLocalRows(attachments);
+    this.changesCache = changes;
+    this.workspaceMeta = hydratedWorkspaceMeta;
+    recordBootTiming({ totalMs: now() - started, readMs: now() - readStarted, records: localRecords.length });
+    this.notify(null);
+  }
+
+  /**
+   * The vault's data epoch (see `dataEpoch`), created on first use. Projection
+   * memos from another build are dropped here, since their logic may differ.
+   */
+  private async persistedDataEpoch() {
+    const db = this.db!;
+    const [epoch, namespace] = await Promise.all([db.meta.get("dataEpoch"), db.meta.get("projectionNamespace")]);
+    const value = typeof epoch?.value === "string" && epoch.value ? epoch.value : newRevisionToken();
+    const writes: Array<{ key: string; value: unknown }> = [];
+    if (value !== epoch?.value) writes.push({ key: "dataEpoch", value });
+    if (this.projectionNamespace && namespace?.value !== this.projectionNamespace) {
+      await db.projections.clear();
+      writes.push({ key: "projectionNamespace", value: this.projectionNamespace });
+    }
+    if (writes.length) await db.meta.bulkPut(writes);
+    return value;
+  }
+
+  /**
+   * Layout 1 → 2 (→ 3): move heavy field values out of `records` into `recordFields`,
+   * a bounded chunk at a time (never the whole table in memory), and stop
+   * mirroring rows into the legacy v1 meetings/minutes stores. Idempotent, so an
+   * interrupted upgrade simply resumes on the next start.
+   */
+  private async migrateStorageLayout() {
+    const db = this.db!;
+    const layout = Number((await db.meta.get("storageLayout"))?.value ?? 1);
+    if (layout >= CURRENT_LOCAL_STORAGE_LAYOUT) return;
+    // Layout 2 vaults already moved the tables layout 2 knew about; only newer heavy tables need a pass.
+    const LAYOUT_2_TABLES = new Set(["documents", "minutes", "transcripts"]);
+    for (const table of Object.keys(HEAVY_FIELD_POLICY).filter((name) => layout < 2 || !LAYOUT_2_TABLES.has(name))) {
+      const keys = await db.records.where("table").equals(table).primaryKeys();
+      for (let start = 0; start < keys.length; start += LAYOUT_MIGRATION_CHUNK) {
+        const chunk = keys.slice(start, start + LAYOUT_MIGRATION_CHUNK);
+        await db.transaction("rw", [db.records, db.recordFields], async () => {
+          const envelopes = await db.records.bulkGet(chunk);
+          const records: LocalRecordEnvelope[] = [];
+          const fields: LocalRecordFieldsEnvelope[] = [];
+          const existingFields = await db.recordFields.bulkGet(chunk as string[]);
+          for (const [position, envelope] of envelopes.entries()) {
+            if (!envelope?.value?._id || envelope.deletedAtISO) continue;
+            const { light, heavy } = splitHeavyFields(table, envelope.value);
+            if (!heavy) continue;
+            const external = [...new Set([...(envelope.external ?? []), ...Object.keys(heavy)])];
+            records.push({ ...envelope, value: light, external });
+            fields.push({ key: envelope.key, table, id: envelope.id, fields: { ...(existingFields[position]?.fields ?? {}), ...heavy } });
+          }
+          if (records.length) await db.records.bulkPut(records);
+          if (fields.length) await db.recordFields.bulkPut(fields);
+        });
       }
     }
-    this.preHydrationOps = null;
-
-    this.cache = hydratedCache;
-    this.attachmentsCache = cloneLocalRows(attachments);
-    this.changesCache = cloneLocalRows(changes);
-    this.workspaceMeta = hydratedWorkspaceMeta;
-    this.notify();
+    await db.transaction("rw", [db.meta, db.meetings, db.minutes], async () => {
+      // `records` is authoritative once it has rows; the v1 mirrors are only
+      // read to upgrade a database whose `records` store is still empty.
+      await db.meetings.clear();
+      await db.minutes.clear();
+      await db.meta.put({ key: "storageLayout", value: CURRENT_LOCAL_STORAGE_LAYOUT });
+    });
   }
 
   private async writeSeed(seed: LocalSeed) {
     if (!this.db) return;
-    const records = localRecordsForSeed(seed);
-    if (records.length) await this.db.records.bulkPut(records);
-    await Promise.all([
-      this.db.meta.put({ key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION }),
-      this.db.meta.put({ key: "workspace", value: this.workspaceMeta }),
-      seed.meetings?.length ? this.db.meetings.bulkPut(cloneLocalRows(seed.meetings)) : Promise.resolve(),
-      seed.minutes?.length ? this.db.minutes.bulkPut(cloneLocalRows(seed.minutes)) : Promise.resolve(),
-    ]);
+    const db = this.db;
+    const split = splitSeed(seed);
+    await db.transaction("rw", [db.meta, db.records, db.recordFields], async () => {
+      if (split.records.length) await db.records.bulkPut(split.records);
+      if (split.fields.length) await db.recordFields.bulkPut(split.fields);
+      await db.meta.bulkPut([
+        { key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION },
+        { key: "workspace", value: this.workspaceMeta },
+        { key: "storageLayout", value: CURRENT_LOCAL_STORAGE_LAYOUT },
+        { key: "dataEpoch", value: this.dataEpoch },
+      ]);
+    });
   }
 
   private async putMissingSeedRows(seed: LocalSeed) {
     if (!this.db) return;
-    const missing: LocalRecordEnvelope[] = [];
+    const candidates: Array<{ table: string; row: any }> = [];
     for (const [table, rows] of Object.entries(seed)) {
-      for (const row of rows) {
-        if (!row?._id) continue;
-        if (!(await this.db.records.get(localRecordKey(table, row._id)))) missing.push(localRecord(table, row));
-      }
+      for (const row of rows) if (row?._id) candidates.push({ table, row });
     }
-    if (missing.length) await this.db.records.bulkPut(missing);
-  }
-
-  private persistRow(table: string, row: any, op: LocalChangeEnvelope["op"]) {
-    void this.db?.records.put(localRecord(table, row));
-    if (table === "meetings" || table === "minutes") void this.db?.[table].put(cloneLocalRow(row));
-    void this.appendChange(table, row, op);
+    if (!candidates.length) return;
+    const existing = await this.db.records.bulkGet(candidates.map(({ table, row }) => localRecordKey(table, row._id)));
+    const missing: LocalSeed = {};
+    candidates.forEach(({ table, row }, index) => {
+      if (!existing[index]) (missing[table] ??= []).push(row);
+    });
+    const split = splitSeed(missing);
+    if (split.records.length) await this.db.records.bulkPut(split.records);
+    if (split.fields.length) await this.db.recordFields.bulkPut(split.fields);
   }
 
   private appendChange(table: string, row: any, op: LocalChangeEnvelope["op"], metadata?: Pick<LocalChangeEnvelope, "mutationId" | "reason" | "snapshot">) {
     const change = createLocalChange(table, row, op, metadata);
     this.changesCache.push(change);
     this.pruneChangesCacheIfNeeded();
-    if (!this.db) return undefined;
-    return this.db.transaction("rw", this.db.changes, async () => {
-      change.seq = await this.db!.changes.add(change);
+    const persist = (db: LocalDexieDatabase) => db.transaction("rw", db.changes, async () => {
+      change.seq = await db.changes.add(change);
       await this.prunePersistedChangesIfNeeded();
     });
+    if (this.db) return persist(this.db);
+    if (!this.dbReady) return undefined;
+    return this.database().then((db) => (db ? persist(db) : undefined));
   }
 
   private pruneChangesCacheIfNeeded() {
@@ -593,24 +1180,125 @@ export class LocalDexieRowStore implements LocalRowStore {
     await this.db.changes.bulkDelete(oldestKeys);
   }
 
-  private notify() {
-    this.pendingNotify = false;
+  /* ------------------------------ notification ----------------------------- */
+
+  private notify(changed?: Set<string> | null) {
+    const pending = this.pendingChanged;
+    this.pendingChanged = undefined;
+    let tables: Set<string> | null;
+    if (changed === null || pending === null) tables = null;
+    else {
+      tables = new Set(pending ?? []);
+      for (const table of changed ?? []) tables.add(table);
+      if (changed === undefined && pending === undefined) tables = null;
+    }
     for (const listener of this.listeners) {
       try {
-        listener();
+        listener(tables ?? undefined);
       } catch (error) {
         console.error("[societyer-local] local row store listener failed", error);
       }
     }
   }
 
-  private scheduleNotify() {
+  private scheduleNotify(tables: Iterable<string>) {
     if (this.transactionDepth > 0) {
-      this.pendingNotify = true;
+      if (this.pendingChanged !== null) {
+        this.pendingChanged ??= new Set();
+        for (const table of tables) this.pendingChanged.add(table);
+      }
       return;
     }
-    this.notify();
+    this.notify(new Set(tables));
   }
+}
+
+function newRevisionToken() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function projectionKey(key: string, table: string, id: string) {
+  return `${key}|${table}:${id}`;
+}
+
+function now() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+/**
+ * Boot diagnostics for the perf scripts (scripts/perf/): how long the vault
+ * took to read and how many light records it held. Read via
+ * `globalThis.__SOCIETYER_LOCAL_BOOT__`; nothing else depends on it.
+ */
+function recordBootTiming(timing: { totalMs: number; readMs: number; records: number }) {
+  (globalThis as { __SOCIETYER_LOCAL_BOOT__?: unknown }).__SOCIETYER_LOCAL_BOOT__ = {
+    totalMs: Math.round(timing.totalMs),
+    readMs: Math.round(timing.readMs),
+    records: timing.records,
+  };
+}
+
+/**
+ * Every record except those of `tables`, as key ranges between the tables' key prefixes ("<table>:<id>"),
+ * each read with one getAll. (An index `noneOf` walks a cursor record by record, several times slower.)
+ */
+async function readRecordsExcept(db: LocalDexieDatabase, tables: readonly string[]): Promise<LocalRecordEnvelope[]> {
+  const prefixes = [...tables].map((table) => `${table}:`).sort();
+  const reads: Array<Promise<LocalRecordEnvelope[]>> = [];
+  let lower: string | null = null;
+  for (const prefix of prefixes) {
+    reads.push(lower === null ? db.records.where(":id").below(prefix).toArray() : db.records.where(":id").between(lower, prefix, false, false).toArray());
+    lower = `${prefix}\uffff`;
+  }
+  reads.push(lower === null ? db.records.toArray() : db.records.where(":id").above(lower).toArray());
+  return (await Promise.all(reads)).flat();
+}
+
+/** Opt-in diagnostics: deferred tables loaded on first use (table → { ms, rows }). */
+function recordDeferredTiming(table: string, ms: number, rows: number) {
+  const target = globalThis as { __SOCIETYER_LOCAL_DEFERRED__?: Record<string, { ms: number; rows: number }> };
+  (target.__SOCIETYER_LOCAL_DEFERRED__ ??= {})[table] = { ms: Math.round(ms), rows };
+}
+
+function isIndexableValue(value: unknown) {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+/** Index key for a tuple of primitive values; undefined when a value is not indexable. */
+function indexKey(values: readonly unknown[]): unknown {
+  if (values.length === 1) return isIndexableValue(values[0]) ? values[0] : undefined;
+  let key = "";
+  for (const value of values) {
+    if (!isIndexableValue(value)) return undefined;
+    key += `${typeof value}:${String(value).length}:${String(value)}|`;
+  }
+  return key;
+}
+
+/** Split seed/snapshot tables into light records, side records and the external map. */
+function splitSeed(seed: LocalSeed) {
+  const light: LocalSeed = {};
+  const records: LocalRecordEnvelope[] = [];
+  const fields: LocalRecordFieldsEnvelope[] = [];
+  const external = new Map<string, string[]>();
+  for (const [table, rows] of Object.entries(seed)) {
+    if (!Array.isArray(rows)) continue;
+    const out: any[] = [];
+    for (const row of rows) {
+      if (!row?._id) continue;
+      const split = splitHeavyFields(table, row);
+      out.push(split.light);
+      const key = localRecordKey(table, row._id);
+      const externalFields = split.heavy ? Object.keys(split.heavy) : undefined;
+      records.push(localRecord(table, split.light, false, externalFields));
+      if (split.heavy) {
+        fields.push({ key, table, id: row._id, fields: split.heavy });
+        external.set(key, externalFields!);
+      }
+    }
+    light[table] = out;
+  }
+  return { light, records, fields, external };
 }
 
 export function scopedLocalRows(rows: any[], args: LocalArgs) {
@@ -647,10 +1335,16 @@ export function cloneLocalSeed(seed: LocalSeed): LocalSeed {
   );
 }
 
+/**
+ * Structural validation only. The input is never mutated downstream
+ * (sanitizers and migration build new top-level rows), so it is not copied:
+ * a deep JSON copy of a 200 MB backup doubled the peak memory of a restore.
+ */
 function validateSnapshotTables(value: unknown): LocalSeed {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Local workspace snapshot is missing tables.");
   }
+  const tables: LocalSeed = {};
   for (const [table, rows] of Object.entries(value)) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table) || ["constructor", "prototype", "__proto__"].includes(table)) {
       throw new Error("Local workspace snapshot contains an invalid table name.");
@@ -665,8 +1359,9 @@ function validateSnapshotTables(value: unknown): LocalSeed {
       }
       ids.add(row._id);
     }
+    tables[table] = rows;
   }
-  return cloneLocalSeed(value as LocalSeed);
+  return tables;
 }
 
 function validateSnapshotAttachments(value: unknown): LocalAttachmentEnvelope[] {
@@ -688,12 +1383,6 @@ function validateSnapshotAttachments(value: unknown): LocalAttachmentEnvelope[] 
     keys.add(attachment.key);
   }
   return cloneLocalRows(value as LocalAttachmentEnvelope[]);
-}
-
-function localRecordsForSeed(seed: LocalSeed, copy = true): LocalRecordEnvelope[] {
-  return Object.entries(seed).flatMap(([table, rows]) =>
-    Array.isArray(rows) ? rows.filter((row) => row?._id).map((row) => localRecord(table, row, copy)) : [],
-  );
 }
 
 function createLocalChange(
@@ -806,7 +1495,7 @@ export function localRecordKey(table: string, id: string) {
   return `${table}:${id}`;
 }
 
-export function localRecord(table: string, row: any, copy = true): LocalRecordEnvelope {
+export function localRecord(table: string, row: any, copy = true, external?: readonly string[]): LocalRecordEnvelope {
   return {
     key: localRecordKey(table, row._id),
     table,
@@ -815,6 +1504,7 @@ export function localRecord(table: string, row: any, copy = true): LocalRecordEn
     updatedAtISO: row.updatedAtISO,
     deletedAtISO: row.deletedAtISO,
     value: copy ? cloneLocalRow(row) : row,
+    ...(external?.length ? { external: [...external] } : {}),
   };
 }
 
@@ -837,7 +1527,7 @@ function normalizeWorkspaceMeta(value: Partial<LocalWorkspaceMeta> | undefined, 
 export function localDeletedRecord(table: string, row: any): LocalRecordEnvelope {
   const deletedAtISO = row.deletedAtISO ?? new Date().toISOString();
   return {
-    ...localRecord(table, { ...row, deletedAtISO }),
+    ...localRecord(table, { ...row, deletedAtISO }, false),
     deletedAtISO,
   };
 }

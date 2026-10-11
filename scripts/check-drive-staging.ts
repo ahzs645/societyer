@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { recordsFromBundle } from '../shared/functions/importSessionHelpers/importSessionRecordKinds';
 import { inspectImportBundle } from '../src/lib/importBundleIntake';
 import { sourceMeetingDateEvidence } from '../shared/driveStaging';
@@ -11,12 +12,16 @@ assert.equal(sourceMeetingDateEvidence('Annual General Meeting\nFinancial statem
 assert.equal(sourceMeetingDateEvidence('Board minutes\nJanuary 16, 2024','Board minutes January16 2023.docx').date,undefined);
 assert.equal(sourceMeetingDateEvidence('Board minutes\nJanuary 16, 2024','2023_01_16 Board minutes.docx').date,undefined);
 assert.equal(sourceMeetingDateEvidence('Board minutes\nDate not recorded','2021 Board minutes.docx').date,undefined);
+fs.mkdirSync(path.resolve('work'),{recursive:true});
 const root=fs.mkdtempSync(path.resolve('work/drive-staging-check-'));
 try {
   const corpus=path.join(root,'corpus'),output=path.join(root,'staging');fs.mkdirSync(corpus);
   const textPath=path.join(corpus,'source.txt');
-  fs.writeFileSync(textPath,'Prince George Air Improvement Roundtable\nBoard Meeting Minutes\nNovember 19, 2019\nPresent: Alice Example, Bob Example\nQuorum not reached\nMeeting adjourned at 6:00 p.m.\n');
-  const source=(id:string,status='extracted')=>({id,name:status==='extracted'?'Board Meeting Minutes November 19 2019.docx':'Board Meeting Minutes December 2019.pdf',path:`Lexar/Board/${id}`,folder:false,metadataStub:false,url:`https://drive.google.com/file/d/${id}/view`,textStatus:status,downloadStatus:status==='extracted'?'downloaded':'failed',sha256:status==='extracted'?'same-actual-file-digest':undefined,textPath:status==='extracted'?textPath:undefined,error:status==='extracted'?undefined:'HTTP 503: remote connection failure'});
+  // Byte-identical copies share a real SHA-256; placeholder or empty digests are never grouped (ID-03).
+  const sourceText='Riverbend Clean Air Roundtable\nBoard Meeting Minutes\nNovember 19, 2019\nPresent: Alice Example, Bob Example\nQuorum not reached\nMeeting adjourned at 6:00 p.m.\n';
+  fs.writeFileSync(textPath,sourceText);
+  const sourceDigest=createHash('sha256').update(sourceText).digest('hex');
+  const source=(id:string,status='extracted')=>({id,name:status==='extracted'?'Board Meeting Minutes November 19 2019.docx':'Board Meeting Minutes December 2019.pdf',path:`Lexar/Board/${id}`,folder:false,metadataStub:false,url:`https://drive.google.com/file/d/${id}/view`,textStatus:status,downloadStatus:status==='extracted'?'downloaded':'failed',sha256:status==='extracted'?sourceDigest:undefined,textPath:status==='extracted'?textPath:undefined,error:status==='extracted'?undefined:'HTTP 503: remote connection failure'});
   const items=[source('source-a'),source('source-copy'),source('source-unread','failed')];
   fs.writeFileSync(path.join(corpus,'manifest.json'),JSON.stringify({rootId:'fixture',finished:true,items,folders:[]}));
   fs.writeFileSync(path.join(corpus,'extraction.json'),JSON.stringify({finished:true,items}));
@@ -34,7 +39,7 @@ try {
   assert.ok(minutes.every((x:any)=>x.sourceExternalIds.length===2));
   for (const bundle of bundles) {
     assert.equal(bundle.metadata.createdFrom,'Google Drive');
-    const preview=inspectImportBundle(bundle,{_id:'fixture',name:'PRINCE GEORGE AIR IMPROVEMENT ROUNDTABLE SOCIETY'});
+    const preview=inspectImportBundle(bundle,{_id:'fixture',name:'RIVERBEND CLEAN AIR ROUNDTABLE SOCIETY'});
     assert.equal(preview.needsReview,true,'Mentioned organization remains a suggestion requiring destination review');
     assert.ok(recordsFromBundle(bundle).every((record:any)=>!record.status || record.status==='Pending'));
     assert.equal(bundle.transactionCandidates,undefined);assert.equal(bundle.members,undefined);

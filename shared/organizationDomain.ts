@@ -121,6 +121,28 @@ export function isOntarioObca(organization?: LegalEntityLike | null): boolean {
   );
 }
 
+/** Province/territory → the IANA zone of its seat of government (used when a source states only a local time). */
+const PROVINCE_TIME_ZONES: Record<string, string> = {
+  BC: "America/Vancouver", AB: "America/Edmonton", SK: "America/Regina", MB: "America/Winnipeg",
+  ON: "America/Toronto", QC: "America/Toronto", NB: "America/Moncton", NS: "America/Halifax",
+  PE: "America/Halifax", NL: "America/St_Johns", YT: "America/Whitehorse", NT: "America/Edmonton", NU: "America/Iqaluit",
+};
+const PROVINCE_ALIASES: Record<string, string> = { british_columbia: "BC", bc: "BC", ontario: "ON", on: "ON", alberta: "AB", quebec: "QC" };
+
+/**
+ * The organization's local time zone: an explicit `timeZone` on the record when
+ * one is set, else the zone of its home province (America/Vancouver for a BC
+ * society). Undefined for federal or unknown jurisdictions, so callers keep
+ * times as text rather than guess an instant.
+ */
+export function organizationTimeZone(organization?: (LegalEntityLike & { timeZone?: string | null }) | null): string | undefined {
+  const explicit = cleanText(organization?.timeZone);
+  if (explicit) return explicit;
+  const code = homeJurisdictionCode(organization);
+  const province = /^CA-([A-Z]{2})(?:-|$)/.exec(code)?.[1] ?? PROVINCE_ALIASES[code.toLowerCase()];
+  return province ? PROVINCE_TIME_ZONES[province] : undefined;
+}
+
 export function isBcSociety(organization?: LegalEntityLike | null): boolean {
   const jurisdiction = homeJurisdictionCode(organization);
   const act = cleanText(organization?.actFormedUnder).toLowerCase();

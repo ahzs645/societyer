@@ -108,18 +108,18 @@ test.describe("Meeting agenda minutes workflow", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await page.goto("/demo/app/meetings/static_meeting_board_q2", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Agenda & minutes" }).click();
+    await page.getByRole("tab", { name: "Agenda & minutes" }).click();
     // Wait for demo data to hydrate from IndexedDB before editing — starting
     // the edit against a not-yet-loaded agenda record makes the save create a
     // duplicate agenda instead of updating the fixture one.
-    await expect(page.getByRole("button", { name: "Privacy program review" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Privacy program review", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Edit agenda", exact: true }).click();
     await page.getByRole("button", { name: "Add item" }).click();
     await page.locator(".meeting-minutes-agenda-editor input.input").last().fill("Volunteer program update");
     await page.getByRole("button", { name: "Save agenda", exact: true }).click();
 
     await expect(page.getByText("Agenda saved")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Volunteer program update" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Volunteer program update", exact: true })).toBeVisible();
     await expect(page.locator("#meeting-minutes-section-3")).toContainText("Volunteer program update");
 
     // Give IndexedDB persistence a beat before the HARD navigation below —
@@ -129,7 +129,8 @@ test.describe("Meeting agenda minutes workflow", () => {
     // NOT networkidle: demo mode keeps a background request retry loop alive
     // that can make networkidle hang until the test times out.
     await page.goto("/demo/app/agendas", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Q2 board meeting agenda.*Apr 23, 2026.*Draft/ }).click();
+    // The demo's upcoming board meeting is dated relative to today (A3).
+    await page.getByRole("button", { name: /Quarterly board meeting agenda.*Draft/ }).click();
     // Load once and POLL the same expansion: the builder first seeds its
     // editable rows from the pre-hydration fixture cache, then re-seeds when
     // the IndexedDB-hydrated query result arrives. Reloading between reads

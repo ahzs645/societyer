@@ -265,7 +265,8 @@ export const runAgentLive = authorizedAction("aiChatActions:runAgentLive", actio
   },
 });
 
-async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: any, requestedModelId?: string) {
+/** Provider resolution shared by chat and intake extraction (settings, secret vault, then environment). */
+export async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: any, requestedModelId?: string) {
   const settings = await ctx.runQuery((api as any).aiSettings.getEffective, {
     societyId,
     actingUserId,

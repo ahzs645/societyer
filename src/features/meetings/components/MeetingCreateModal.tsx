@@ -6,8 +6,8 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
-import { noticeDaysUntil, isGeneralMeeting, meetingScheduleConflicts } from "../lib/noticeWindow";
-import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
+import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, statusForNewMeeting } from "../lib/noticeWindow";
+import { normalizedMeetingTitle, suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 import {
   MeetingFormFields,
   blankMeetingDraft,
@@ -65,7 +65,7 @@ function MeetingCreateModalForm({
 
   const save = async () => {
     if (!open || !canCreate) return;
-    const title = normalizedMeetingTitle(form.title);
+    const title = normalizedMeetingTitle(form.title) || suggestedMeetingTitle(form, data.committees);
     if (!title) {
       toast.error("Enter a meeting title.");
       return;
@@ -78,25 +78,25 @@ function MeetingCreateModalForm({
       toast.error("Review and acknowledge the schedule conflict before continuing.");
       return;
     }
-    if (isGeneralMeeting(form.type)) {
-      const days = noticeDaysUntil(form.scheduledAt, data.effectiveRules);
-      if (days == null || days < data.effectiveNoticeMinDays) {
-        toast.error(`General meetings need at least ${data.effectiveNoticeMinDays} days of notice.`);
-        return;
-      }
+    const noticeProblem = isGeneralMeeting(form.type) ? newGeneralMeetingNoticeProblem(form.scheduledAt, data.effectiveNoticeMinDays, data.effectiveRules) : null;
+    if (noticeProblem) {
+      toast.error(noticeProblem);
+      return;
     }
+    const past = isPastMeeting(form.scheduledAt);
     setSaving(true);
     try {
       const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
       const meetingId = await create({
         societyId,
         ...payload,
+        status: statusForNewMeeting(form.scheduledAt, payload.status),
         title,
         committeeId: (committeeId || undefined) as Id<"committees"> | undefined,
         meetingTemplateId: form.meetingTemplateId || undefined,
         quorumRequired: numberOrUndefined(form.quorumRequired),
       });
-      toast.success("Meeting scheduled", title);
+      toast.success(past ? "Held meeting recorded" : "Meeting scheduled", title);
       onClose();
       if (meetingId) {
         onCreated?.(meetingId as Id<"meetings">);
@@ -109,11 +109,12 @@ function MeetingCreateModalForm({
     }
   };
 
+  const createLabels = meetingCreateLabels(form?.scheduledAt ?? "");
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Schedule meeting"
+      title={createLabels.title}
       size="lg"
       resizeKey="meeting-create"
       footer={
@@ -122,7 +123,7 @@ function MeetingCreateModalForm({
             Cancel
           </button>
           <button className="btn btn--accent" type="button" onClick={save} disabled={!canCreate || saving || hasUnacknowledgedConflict}>
-            {saving ? "Scheduling…" : "Schedule"}
+            {saving ? createLabels.busy : createLabels.action}
           </button>
         </>
       }

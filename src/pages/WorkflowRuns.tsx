@@ -117,7 +117,7 @@ export function WorkflowRunsPage() {
         title="Workflow runs"
         icon={<History size={16} />}
         iconColor="gray"
-        subtitle="A history of every time your automations have run. Click a row to see the details."
+        subtitle="Every time your automations have run."
       />
 
       {showMetadataWarning ? (
@@ -146,7 +146,7 @@ export function WorkflowRunsPage() {
               <div className="record-table__empty">
                 <div className="record-table__empty-title">No runs yet</div>
                 <div className="record-table__empty-desc">
-                  Trigger a workflow from the Workflows page.
+                  Run a workflow from the <Link to="/app/workflows">Workflows page</Link>.
                 </div>
               </div>
             }

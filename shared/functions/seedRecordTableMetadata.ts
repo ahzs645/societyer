@@ -227,14 +227,14 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
           .withIndex("by_view", (q) => q.eq("viewId", existingExtraView._id))
           .collect();
         const seededColumnFieldIds = columns
-          .map((column) => resolveFieldId(column.fieldName))
-          .filter((fieldId): fieldId is string => !!fieldId);
+          .map((column: any) => resolveFieldId(column.fieldName))
+          .filter((fieldId: string | undefined): fieldId is string => !!fieldId);
         const existingColumnFieldIds = new Set(
           existingColumns.map((column) => String(column.fieldMetadataId)),
         );
         const hasSeededColumnSet =
           existingColumns.length === seededColumnFieldIds.length &&
-          seededColumnFieldIds.every((fieldId) => existingColumnFieldIds.has(fieldId));
+          seededColumnFieldIds.every((fieldId: string) => existingColumnFieldIds.has(fieldId));
         // Extra views predate the visibility marker. That missing marker,
         // together with the seed's exact column set and lack of a creator,
         // distinguishes old seeded extras from user-created same-name views.

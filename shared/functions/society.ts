@@ -90,7 +90,8 @@ export function newSocietyOwnerFields(
     return {
       societyId: input.societyId,
       email: input.placeholderEmail,
-      displayName: input.placeholderDisplayName,
+      // Setup sends "" when no privacy-officer name was entered.
+      displayName: input.placeholderDisplayName.trim() || "Owner",
       role: "Owner",
       status: "Active",
       createdAtISO: input.createdAtISO,

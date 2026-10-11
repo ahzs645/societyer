@@ -29,6 +29,8 @@ export type TagColor =
   | "gray"
   | "pink"
   | "violet"
+  | "orange"
+  | "yellow"
   | "transparent";
 
 const KNOWN_COLORS: readonly TagColor[] = [
@@ -41,6 +43,8 @@ const KNOWN_COLORS: readonly TagColor[] = [
   "gray",
   "pink",
   "violet",
+  "orange",
+  "yellow",
   "transparent",
 ] as const;
 

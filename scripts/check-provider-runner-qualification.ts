@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
 import { WebSocketServer } from "ws";
 import { BlitzBrowserBackend } from "../services/connector-runner/src/blitzBrowserBackend";
+import { writeTrackedReport } from "./lib/writeTrackedReport.mjs";
 
 let mode = "ok", probes = 0;
 const server = createServer();
@@ -61,8 +61,7 @@ try {
   assert.equal(failedLogin.status, 500);
   const failureBody = await failedLogin.text(); assert.ok(!failureBody.includes(privateSecret)); assert.ok(!failureBody.includes(cdp));
   const afterFailure = await fetch(`${base}/sessions`, { headers: { ...auth, "x-connector-tenant-key": tenant } }); assert.deepEqual((await afterFailure.json()).sessions, []); pass("real runner CDP login failure creates no active session and hides provider URL/credentials");
-  await mkdir("artifacts/offline", { recursive: true });
-  await writeFile("artifacts/offline/provider-runner-qualification.json", JSON.stringify({ sourceBaseline: "66b8dcd", executedAt: new Date().toISOString(), fixtureOnly: true, actualRunnerHttp: true, realBrowserProviderContacted: false, cases, count: cases.length, remaining: ["Configured BlitzBrowser runtime and authenticated external provider session qualification", "No physical browser/login or external account operation was exercised"] }, null, 2) + "\n");
+  writeTrackedReport("artifacts/offline/provider-runner-qualification.json", JSON.stringify({ sourceBaseline: "66b8dcd", executedAt: new Date().toISOString(), fixtureOnly: true, actualRunnerHttp: true, realBrowserProviderContacted: false, cases, count: cases.length, remaining: ["Configured BlitzBrowser runtime and authenticated external provider session qualification", "No physical browser/login or external account operation was exercised"] }, null, 2) + "\n");
   console.log(`Runner provider qualification: ${cases.length}/${cases.length} local protocol groups passed.`);
 } finally {
   runner.kill("SIGTERM");

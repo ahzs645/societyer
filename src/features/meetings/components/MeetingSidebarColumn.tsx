@@ -11,7 +11,7 @@ import {
   MINUTES_EXPORT_STYLES,
   type MinutesExportStyleId,
 } from "../lib/minutesExportStyles";
-import { formatDate, formatDateTime } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import { resolveJurisdictionCode } from "../../../lib/jurisdictionGuideTracks";
 import { governanceVocabulary } from "../../../lib/governanceVocabulary";
 import {
@@ -25,6 +25,7 @@ import {
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
 import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
+import { meetingDatePrecision } from "../../../../shared/meetingDates";
 import { SourceOriginalDownload } from "./SourceOriginalDownload";
 
 export function MeetingSidebarColumn({
@@ -165,12 +166,16 @@ export function MeetingSidebarColumn({
           <div className="card">
             <div className="card__head"><h2 className="card__title">Meeting details</h2></div>
             <div className="card__body col">
-              <Detail label="Type"><Badge tone={meeting.type === "AGM" ? "accent" : "info"}>{meeting.type}</Badge></Detail>
-              <Detail label={minutes?.sourceMeetingRecord?.header?.dateText ? "Source date" : "Scheduled"}>{minutes?.sourceMeetingRecord ? (minutes.sourceMeetingRecord.header?.dateText || formatDate(meeting.scheduledAt)) : formatDateTime(meeting.scheduledAt)}</Detail>
-              {minutes?.sourceMeetingRecord?.header?.timeText && <Detail label="Source time">{minutes.sourceMeetingRecord.header.timeText}</Detail>}
-              <Detail label="Location">
-                <span className="meeting-detail-location-value">{minutes?.sourceMeetingRecord?.header?.locationText || meeting.location || "—"}</span>
-              </Detail>
+              {/* Body, date and location are in the page subtitle; this card holds the rest. */}
+              {meetingDatePrecision(meeting) === "date" && <Detail label="Time">Not recorded (date only)</Detail>}
+              {meeting.timeZone && <Detail label="Time zone">{meeting.timeZone}</Detail>}
+              {minutes?.sourceMeetingRecord?.header && (minutes.sourceMeetingRecord.header.dateText || minutes.sourceMeetingRecord.header.locationText) && (
+                <Detail label="As written in source">
+                  <span className="muted meeting-detail-source-header">
+                    {[minutes.sourceMeetingRecord.header.dateText, minutes.sourceMeetingRecord.header.locationText].filter(Boolean).join(" · ")}
+                  </span>
+                </Detail>
+              )}
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ? formatDate(meeting.noticeSentAt) : "—"}</Detail>
               <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>
@@ -188,7 +193,6 @@ export function MeetingSidebarColumn({
                 <h2 className="card__title">
                   {exportControlsReadOnly ? "Export readiness" : "Minutes export"}
                 </h2>
-                <span className="card__subtitle">{selectedMinutesExportStyle.source}</span>
               </div>
               <div className="card__body col" style={{ gap: 12 }}>
                 {minutes && !minutes.approvedAt && <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{minutes.sourceMeetingRecord || minutes.sourceTransposition ? "Source record · approval not recorded" : "Draft minutes · approval not recorded"}</span>}
@@ -288,19 +292,43 @@ export function MeetingSidebarColumn({
                     </div>
                   </>
                 )}
-                {showExportGaps && (
-                  <div className="minutes-export-gaps">
-                    {minutesExportGaps.map((gap) => (
-                      <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
-                        <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <strong>{gap.label}</strong>
-                          <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
-                        </div>
-                        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
+                {showExportGaps && (() => {
+                  // Lead with what's missing; the full checklist is one tap away.
+                  const ready = minutesExportGaps.filter((gap) => gap.status === "available").length;
+                  const open = minutesExportGaps.filter((gap) => gap.status !== "available");
+                  return (
+                    <div className="minutes-export-summary">
+                      <div className="minutes-export-summary__head">
+                        <strong>{ready} of {minutesExportGaps.length} ready</strong>
+                        <div className="minutes-export-summary__bar" aria-hidden="true"><span style={{ width: `${minutesExportGaps.length ? (ready / minutesExportGaps.length) * 100 : 0}%` }} /></div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {open.length > 0 && (
+                        <ul className="minutes-export-summary__open">
+                          {open.map((gap) => (
+                            <li key={`${gap.status}-${gap.label}`}>
+                              <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                              <span>{gap.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <details className="minutes-export-summary__all">
+                        <summary>Show all checks</summary>
+                        <div className="minutes-export-gaps">
+                          {minutesExportGaps.map((gap) => (
+                            <div key={`${gap.status}-${gap.label}`} className="minutes-export-gap">
+                              <div className="row" style={{ gap: 6, justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <strong>{gap.label}</strong>
+                                <Badge tone={gapStatusTone(gap.status)}>{gapStatusLabel(gap.status)}</Badge>
+                              </div>
+                              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{gap.detail}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

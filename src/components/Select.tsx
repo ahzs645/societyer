@@ -4,6 +4,7 @@ import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
 import { getDialogFocusables } from "../lib/useDialogFocus";
 import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
 
@@ -90,13 +91,24 @@ export function Select<T extends string>({
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [isBottomSheet, setIsBottomSheet] = useState(
+  const [isPhone, setIsPhone] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
+  );
+  // Sentence-length hints read as descriptions: stack them under the label
+  // and keep the menu to the trigger's width instead of one very long line.
+  const described = useMemo(() => options.some((o) => (o.hint?.length ?? 0) > 28), [options]);
+  // Phones use a bottom sheet for long, searchable or described option lists;
+  // a short list (Yes / No, a few statuses) stays an anchored popover.
+  const isBottomSheet = isPhone && (
+    described
+    || Boolean(searchable ?? options.some((o) => o.color))
+    || options.length + (clearable ? 1 : 0) > SHEET_MIN_ITEMS
   );
   // Keeps the bottom sheet above the on-screen keyboard: iOS overlays the
   // keyboard on the layout viewport, so a `bottom: 0` sheet disappears
   // behind it the moment the search input is focused.
-  const keyboardInset = useVisualViewportBottomInset();
+  const keyboardInset = useVisualViewportBottomInset(open && isBottomSheet);
+  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
   const wasOpenRef = useRef(defaultOpen);
@@ -128,7 +140,7 @@ export function Select<T extends string>({
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
-    const update = () => setIsBottomSheet(media.matches);
+    const update = () => setIsPhone(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -357,8 +369,9 @@ export function Select<T extends string>({
               )}
               <div
                 ref={menuRef}
+                data-floating-layer=""
                 id={`${controlId}-menu`}
-                className={`menu${isBottomSheet ? " menu--sheet" : ""}`}
+                className={`menu${isBottomSheet ? " menu--sheet" : ""}${described ? " menu--described" : ""}`}
                 role="listbox"
                 tabIndex={-1}
                 onKeyDown={onMenuKey}
@@ -376,9 +389,11 @@ export function Select<T extends string>({
                           top: pos.top,
                           left: pos.left,
                           minWidth: Math.max(menuMinWidth ?? 0, pos.width),
+                          ...(described ? { width: Math.max(menuMinWidth ?? 0, pos.width, 280) } : null),
                         }
                 }
               >
+                {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
                 {renderedSearchable && (
                   <div className="menu__search">
                     <Search size={12} />

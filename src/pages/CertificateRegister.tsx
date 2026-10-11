@@ -1,3 +1,6 @@
+import { useConfirm } from "../components/Modal";
+import { calendarDateKey } from "../lib/calendarDates";
+import { isCorporation } from "../../shared/organizationDomain";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -8,6 +11,7 @@ import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { ScrollText, Plus, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type Certificate = {
   _id?: string;
@@ -31,7 +35,7 @@ export function CertificateRegisterPage() {
   const society = useSociety();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
-  const [asOf, setAsOf] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState<string>(() => todayDateOnly());
   const register = useQuery(
     api.shareCertificates.register,
     society ? { societyId: society._id, asOf } : "skip",
@@ -49,6 +53,7 @@ export function CertificateRegisterPage() {
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -62,7 +67,7 @@ export function CertificateRegisterPage() {
       holderName: "",
       shareClass: "",
       shares: "",
-      issuedOn: new Date().toISOString().slice(0, 10),
+      issuedOn: todayDateOnly(),
       replacesCertificateNumber: "",
     });
     setOpen(true);
@@ -70,6 +75,20 @@ export function CertificateRegisterPage() {
 
   const save = async () => {
     if (saving || !canEdit) return;
+    // Friendly, field-level checks before the server's validator (G-29 showed
+    // the raw "Invalid certificate: certificateNumber is required; ...").
+    const shares = Number(form.shares);
+    const problems = [
+      !String(form.certificateNumber ?? "").trim() ? "a certificate number" : "",
+      !String(form.holderName ?? "").trim() ? "the holder's name" : "",
+      !String(form.shareClass ?? "").trim() ? "the share class" : "",
+      !form.issuedOn ? "the issue date" : "",
+      !(Number.isInteger(shares) && shares > 0) ? "a whole, positive number of shares" : "",
+    ].filter(Boolean);
+    if (problems.length) {
+      toast.error("Could not record certificate", `Enter ${problems.join(", ")}.`);
+      return;
+    }
     setSaving(true);
     try {
     await create({
@@ -95,7 +114,7 @@ export function CertificateRegisterPage() {
     if (!id || !canEdit) return;
     await update({
       id,
-      patch: { cancelledOn: new Date().toISOString().slice(0, 10) },
+      patch: { cancelledOn: todayDateOnly() },
     });
   };
 
@@ -111,38 +130,46 @@ export function CertificateRegisterPage() {
         title="Certificate register"
         icon={<ScrollText size={16} />}
         iconColor="purple"
-        subtitle="Register of physical share certificates — holder, class, shares and issue date — with outstanding shares by class as of a chosen date."
+        subtitle="Physical share certificates issued, with outstanding shares by class on any date."
+        info={
+          <p>
+            Each certificate records its holder, class, shares and issue date. Cancel a certificate when it's returned;
+            a replacement records the number it supersedes.
+            {!isCorporation(society) && ` Optional for ${society.name}: a society has members, not shareholders.`}
+          </p>
+        }
         actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
-              <DatePicker
-                value={asOf}
-                onChange={(value) => setAsOf(value)}
-              />
-            </label>
-            <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
-              <Plus size={12} /> Issue certificate
-            </button>
-          </div>
+          <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
+            <Plus size={12} /> Issue certificate
+          </button>
         }
       />
 
-      {Object.keys(outstanding).length > 0 && (
-        <p style={{ color: "var(--text-secondary)" }}>
-          Outstanding by class:{" "}
-          {Object.entries(outstanding)
-            .map(([cls, shares]) => `${cls} ${shares.toLocaleString()}`)
-            .join(" · ")}
-        </p>
+      {list !== undefined && list.length > 0 && (
+        <div className="register-asof">
+          <label className="register-asof__date">
+            <span>Outstanding as of</span>
+            <DatePicker value={asOf} onChange={(value) => setAsOf(value)} />
+          </label>
+          <span className="register-asof__totals">
+            {Object.keys(outstanding).length > 0
+              ? Object.entries(outstanding)
+                  .map(([cls, shares]) => `${cls} ${shares.toLocaleString()}`)
+                  .join(" · ")
+              : "No shares outstanding on this date"}
+          </span>
+        </div>
       )}
 
       <div className="card">
         {list === undefined ? (
           <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
         ) : list.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>No certificates issued yet.</p>
+          <p style={{ color: "var(--text-tertiary)", margin: 0 }}>
+            No certificates issued yet.
+          </p>
         ) : (
+          <div className="table-scroll" role="region" aria-label="Share certificates" tabIndex={0}>
           <table className="table">
             <thead>
               <tr>
@@ -179,7 +206,16 @@ export function CertificateRegisterPage() {
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete certificate ${c.certificateNumber}`}
                         disabled={!canEdit}
-                        onClick={() => remove({ id: c._id }).catch((error: any) => toast.error("Could not delete certificate", error?.message ?? String(error)))}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Delete certificate ${c.certificateNumber}?`,
+                            message: `The register entry for ${c.holderName} (${c.shares.toLocaleString()} ${c.shareClass}) will be removed and outstanding share totals recalculated. To record a returned certificate, use Cancel instead.`,
+                            confirmLabel: "Delete certificate",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          remove({ id: c._id }).catch((error: any) => toast.error("Could not delete certificate", error?.message ?? String(error)));
+                        }}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -189,6 +225,7 @@ export function CertificateRegisterPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

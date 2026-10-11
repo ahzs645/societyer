@@ -9,6 +9,7 @@ import { Badge } from "./ui";
 import { ExternalLink, RefreshCw, UploadCloud } from "lucide-react";
 import { useState } from "react";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import { openableExternalUrl } from "../lib/externalUrl";
 
 export function PaperlessDocumentAction({
   documentId,
@@ -50,12 +51,14 @@ export function PaperlessDocumentAction({
     }
   };
 
+  const paperlessUrl = openableExternalUrl(sync?.paperlessDocumentUrl);
+
   return (
     <>
-      {sync?.paperlessDocumentUrl && (
+      {paperlessUrl && (
         <a
           className="btn btn--ghost btn--sm"
-          href={sync.paperlessDocumentUrl}
+          href={paperlessUrl}
           target="_blank"
           rel="noreferrer"
           title="Open in Paperless-ngx"
@@ -63,10 +66,10 @@ export function PaperlessDocumentAction({
           <ExternalLink size={12} /> Paperless
         </a>
       )}
-      {sync && !sync.paperlessDocumentUrl && (
+      {sync && !paperlessUrl && (
         <span title={sync.lastError ?? `Paperless status: ${sync.status}`}>
           <Badge tone={sync.status === "failed" ? "danger" : "info"}>
-            {sync.status}
+            {sync.status ? sync.status.charAt(0).toUpperCase() + sync.status.slice(1) : sync.status}
           </Badge>
         </span>
       )}

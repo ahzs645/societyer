@@ -25,6 +25,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function ReceiptsPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -61,7 +62,7 @@ export function ReceiptsPage() {
       donorAddress: "",
       amountDollars: "",
       eligibleAmountDollars: "",
-      receivedOnISO: new Date().toISOString().slice(0, 10),
+      receivedOnISO: todayDateOnly(),
       location: society.registeredOfficeAddress ?? "Vancouver, BC",
       isNonCash: false,
     });

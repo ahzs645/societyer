@@ -291,3 +291,12 @@
 .spinner--md { width: 16px; height: 16px; border-width: 2px; }
 .spinner--lg { width: 24px; height: 24px; border-width: 3px; }
 .spinner--accent { color: token('accent'); }
+
+/* Month + day without a year (fiscal year end). */
+.month-day-picker {
+  display: flex;
+  gap: 8px;
+  max-width: 260px;
+  > .month-day-picker__month { flex: 1.4 1 0; min-width: 0; }
+  > .month-day-picker__day { flex: 1 1 0; min-width: 0; }
+}

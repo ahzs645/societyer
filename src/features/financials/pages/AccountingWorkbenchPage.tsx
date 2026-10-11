@@ -3,7 +3,9 @@ import { AccountingStatementsCard } from "../components/AccountingStatementsCard
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { CreateMenu } from "../../../components/CreateMenu";
+import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Download, FileSpreadsheet, GitCompareArrows, Landmark, Lock, PlusCircle, Scale, Split, Unlock } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -15,10 +17,18 @@ import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { formatDate, money } from "../../../lib/format";
+import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
+import {
+  hasErrors,
+  validateCounterpartyInput,
+  validateFiscalPeriodInput,
+  type FieldErrors,
+} from "../../../../shared/recordValidation";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
-type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | null;
+type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | "backfill" | null;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayDateOnly();
 const currentYear = () => new Date().getFullYear().toString();
 
 function centsFromInput(value: string) {
@@ -127,7 +137,13 @@ export function AccountingWorkbenchPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
-  const [drawer, setDrawer] = useState<DrawerKind>(null);
+  const navigate = useNavigate();
+  const [drawer, setDrawerState] = useState<DrawerKind>(null);
+  const [formErrors, setFormErrors] = useState<FieldErrors>({});
+  const setDrawer = (next: DrawerKind) => {
+    setFormErrors({});
+    setDrawerState(next);
+  };
   const [busy, setBusy] = useState(false);
   const [periodForm, setPeriodForm] = useState({
     fiscalYear: currentYear(),
@@ -186,7 +202,6 @@ export function AccountingWorkbenchPage() {
   const postAllocation = useMutation(api.accounting.postTransactionCandidateAllocation);
   const createRecon = useMutation(api.accounting.createReconciliationRun);
   const setReconStatus = useMutation(api.accounting.setReconciliationRunStatus);
-  const backfillTransactions = useMutation(api.accounting.backfillFinancialTransactionsToJournal);
   const upsertCounterparty = useMutation(api.accounting.upsertCounterparty);
   const upsertFundRestriction = useMutation(api.accounting.upsertFundRestriction);
   const chartCsv = useQuery(api.accounting.exportCsv, society && canExport ? { societyId: society._id, kind: "chart_of_accounts" } : "skip");
@@ -215,11 +230,15 @@ export function AccountingWorkbenchPage() {
     }
   };
 
-  const savePeriod = () =>
-    run(async () => {
-      await upsertPeriod({ societyId: society._id, ...periodForm, status: "open" });
+  const savePeriod = () => {
+    const errors = validateFiscalPeriodInput(periodForm, periods ?? []);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    return run(async () => {
+      await upsertPeriod({ societyId: society._id, ...periodForm, fiscalYear: periodForm.fiscalYear.trim(), periodLabel: periodForm.periodLabel.trim(), status: "open" });
       setDrawer(null);
     }, "Fiscal period created");
+  };
 
   const saveOpening = () =>
     run(async () => {
@@ -285,8 +304,16 @@ export function AccountingWorkbenchPage() {
       setDrawer(null);
     }, "Candidate posted to journal");
 
-  const saveReconciliation = () =>
-    run(async () => {
+  const saveReconciliation = () => {
+    const errors: FieldErrors = {};
+    if (!reconciliationForm.financialAccountId) errors.financialAccountId = "Choose the bank or cash account to reconcile.";
+    if (!reconciliationForm.statementDate) errors.statementDate = "Enter the statement date.";
+    if (reconciliationForm.statementBalance.trim() === "" || !Number.isFinite(Number(reconciliationForm.statementBalance))) {
+      errors.statementBalance = "Enter the closing balance shown on the statement.";
+    }
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    return run(async () => {
       const result = await createRecon({
         societyId: society._id,
         financialAccountId: reconciliationForm.financialAccountId as any,
@@ -299,13 +326,13 @@ export function AccountingWorkbenchPage() {
       setDrawer(null);
       toast.info(`Book balance ${money(result.bookBalanceCents)} · difference ${money(result.differenceCents)}`);
     }, "Reconciliation run created");
+  };
 
-  const saveCounterparty = () =>
-    run(async () => {
-      if (!counterpartyForm.name.trim()) {
-        toast.warn("Counterparty name is required");
-        return;
-      }
+  const saveCounterparty = () => {
+    const errors = validateCounterpartyInput(counterpartyForm);
+    setFormErrors(errors);
+    if (hasErrors(errors)) return;
+    return run(async () => {
       await upsertCounterparty({
         societyId: society._id,
         name: counterpartyForm.name.trim(),
@@ -316,6 +343,7 @@ export function AccountingWorkbenchPage() {
       setCounterpartyForm({ name: "", kind: "vendor", email: "", taxIdentifier: "" });
       setDrawer(null);
     }, "Counterparty saved");
+  };
 
   const saveFundRestriction = () =>
     run(async () => {
@@ -367,45 +395,49 @@ export function AccountingWorkbenchPage() {
         title="Accounting"
         icon={<Landmark size={16} />}
         iconColor="green"
-        subtitle="Internal ledger setup, journal posting, candidate allocation, reconciliation, and audit exports."
-        actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>}
+        subtitle="Ledger setup, journal posting, reconciliation and audit exports."
+        info={
+          <>
+            <p>
+              <Link to="/app/reconciliation">Bank reconciliation</Link> matches imported bank lines to records, while
+              ledger reconciliation here checks the journal against a statement balance.
+            </p>
+            <p>
+              Use <strong>Post bank transactions to journal</strong> (under More) to post synced or manual bank
+              transactions into the journal so both agree.
+            </p>
+          </>
+        }
+        actions={
+          <>
+            <Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>
+            <MoreActionsMenu
+              items={[
+                {
+                  id: "seed-chart",
+                  label: "Set up standard chart of accounts",
+                  icon: <Landmark size={14} />,
+                  disabled: !canWrite || busy,
+                  onSelect: () => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded"),
+                },
+                { id: "period", label: "Add fiscal period", icon: <PlusCircle size={14} />, disabled: !canWrite, onSelect: () => setDrawer("period") },
+                { id: "opening", label: "Opening balances", icon: <FileSpreadsheet size={14} />, disabled: !canWrite, onSelect: () => setDrawer("opening") },
+                { id: "backfill", label: "Post bank transactions to journal", icon: <FileSpreadsheet size={14} />, disabled: !canWrite || busy, onSelect: () => setDrawer("backfill") },
+                { id: "bank-reconciliation", label: "Bank reconciliation", icon: <GitCompareArrows size={14} />, onSelect: () => navigate("/app/reconciliation") },
+              ]}
+            />
+            <CreateMenu
+              disabled={!canWrite}
+              minWidth={220}
+              items={[
+                { id: "journal", label: "Journal entry", icon: <GitCompareArrows size={14} />, onSelect: () => setDrawer("journal") },
+                { id: "candidate", label: "Allocate imported transaction", icon: <Split size={14} />, onSelect: () => setDrawer("candidate") },
+                { id: "reconciliation", label: "Ledger reconciliation", icon: <Scale size={14} />, onSelect: () => setDrawer("reconciliation") },
+              ]}
+            />
+          </>
+        }
       />
-
-      <FinancialVersionCard societyId={society._id} />
-      <AccountingStatementsCard societyId={society._id} />
-
-      <div className="accounting-action-panel">
-        <div className="accounting-action-panel__heading">
-          <strong>Accounting tools</strong>
-          <span>Set up, post, and reconcile the ledger.</span>
-        </div>
-        <div className="accounting-action-bar" role="group" aria-label="Accounting tools">
-          <button className="btn-action btn-action--primary" disabled={!canWrite || (busy)} onClick={() => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded")}>
-            <Landmark size={12} /> Seed chart
-          </button>
-          <button className="btn-action" onClick={() => setDrawer("period")} disabled={!canWrite}><PlusCircle size={12} /> Fiscal period</button>
-          <button className="btn-action" onClick={() => setDrawer("opening")} disabled={!canWrite}><FileSpreadsheet size={12} /> Opening balances</button>
-          <button className="btn-action" onClick={() => setDrawer("journal")} disabled={!canWrite}><GitCompareArrows size={12} /> Journal entry</button>
-          <button className="btn-action" onClick={() => setDrawer("candidate")} disabled={!canWrite}><Split size={12} /> Post candidate</button>
-          <button className="btn-action" onClick={() => setDrawer("reconciliation")} disabled={!canWrite}><Scale size={12} /> Reconcile</button>
-          <button className="btn-action" disabled={!canWrite || (busy)} onClick={() => run(async () => {
-            const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear() });
-            toast.success(`Backfilled ${result.posted} transaction${result.posted === 1 ? "" : "s"}`);
-          })}>
-            <FileSpreadsheet size={12} /> Backfill imports
-          </button>
-          <Link className="btn-action" to="/app/reconciliation"><GitCompareArrows size={12} /> Bank reconciliation</Link>
-        </div>
-      </div>
-
-      <details className="accounting-reconciliation-note">
-        <summary>How reconciliation works</summary>
-        <div className="muted">
-          <Link to="/app/reconciliation">Bank reconciliation</Link> matches imported bank lines to records, while ledger
-          reconciliation here checks the journal against a statement balance. Use <strong>Backfill imports</strong> to post
-          synced/manual bank transactions into the journal so both agree.
-        </div>
-      </details>
 
       <div className="stat-grid">
         <div className="stat"><div className="stat__label">Chart accounts</div><div className="stat__value">{accounts?.length ?? 0}</div></div>
@@ -413,6 +445,11 @@ export function AccountingWorkbenchPage() {
         <div className="stat"><div className="stat__label">Debit total</div><div className="stat__value">{money(totalDebit)}</div></div>
         <div className="stat"><div className="stat__label">Credit total</div><div className="stat__value">{money(totalCredit)}</div></div>
       </div>
+
+      {/* Reports follow the tools and totals: the posting actions used to sit
+          below a full balance sheet, income statement and budget form. */}
+      <AccountingStatementsCard societyId={society._id} />
+      <FinancialVersionCard societyId={society._id} />
 
       <div className="accounting-grid">
         <section className="card">
@@ -492,7 +529,11 @@ export function AccountingWorkbenchPage() {
             <details className="accounting-entry" key={entry._id}>
               <summary>
                 <span><strong>{formatDate(entry.date)}</strong> {entry.memo}</span>
-                <Badge tone={entry.status === "posted" ? "success" : "warn"}>{entry.status}</Badge>
+                <span className="row" style={{ gap: 4 }}>
+                  {(entry.reviewFlags ?? []).includes("before_opening_balance") && <Badge tone="warn">Before opening balances</Badge>}
+                  {(entry.reviewFlags ?? []).includes("unmapped_suspense") && <Badge tone="warn">Suspense</Badge>}
+                  <Badge tone={entry.status === "posted" ? "success" : "warn"}>{entry.status}</Badge>
+                </span>
               </summary>
               <ResponsiveTable>
                 <thead><tr><th>Account</th><th>Side</th><th>Description</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
@@ -518,7 +559,10 @@ export function AccountingWorkbenchPage() {
 
       {(restrictedBalances ?? []).length > 0 && (
         <section className="card">
-          <div className="card__head"><h2 className="card__title">Restricted funds</h2></div>
+          <div className="card__head">
+            <h2 className="card__title">Restricted funds</h2>
+            <span className="card__subtitle">Posted journal lines tagged to each fund restriction. This can differ from the restricted bank balance on Financials when restricted money is not held in its own account.</span>
+          </div>
           <div className="accounting-list">
             {(restrictedBalances ?? []).map((row: any) => (
               <div className="accounting-row" key={row._id}>
@@ -574,19 +618,19 @@ export function AccountingWorkbenchPage() {
 
       <Drawer open={drawer === "counterparty"} onClose={() => setDrawer(null)} title="Add counterparty" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveCounterparty}>Save</button></>}>
         <div className="col">
-          <Field label="Name"><input className="input" value={counterpartyForm.name} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, name: e.target.value })} /></Field>
+          <Field label="Name" required error={formErrors.name}><input className="input" value={counterpartyForm.name} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, name: e.target.value })} /></Field>
           <Field label="Kind"><Select value={counterpartyForm.kind} onChange={(value) => setCounterpartyForm({ ...counterpartyForm, kind: value })} options={[{ value: "vendor", label: "Vendor" }, { value: "customer", label: "Customer" }, { value: "other", label: "Other" }]} /></Field>
-          <Field label="Email"><input className="input" value={counterpartyForm.email} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, email: e.target.value })} /></Field>
+          <Field label="Email" error={formErrors.email}><input className="input" type="email" value={counterpartyForm.email} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, email: e.target.value })} /></Field>
           <Field label="Tax identifier"><input className="input" value={counterpartyForm.taxIdentifier} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, taxIdentifier: e.target.value })} /></Field>
         </div>
       </Drawer>
 
       <Drawer open={drawer === "period"} onClose={() => setDrawer(null)} title="Create fiscal period" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={savePeriod}>Create</button></>}>
         <FormGrid>
-          <Field label="Fiscal year"><input className="input" value={periodForm.fiscalYear} onChange={(e) => setPeriodForm({ ...periodForm, fiscalYear: e.target.value })} /></Field>
-          <Field label="Period label"><input className="input" value={periodForm.periodLabel} onChange={(e) => setPeriodForm({ ...periodForm, periodLabel: e.target.value })} /></Field>
-          <Field label="Start date"><DatePicker value={periodForm.startDate} onChange={(value) => setPeriodForm({ ...periodForm, startDate: value })} /></Field>
-          <Field label="End date"><DatePicker value={periodForm.endDate} onChange={(value) => setPeriodForm({ ...periodForm, endDate: value })} /></Field>
+          <Field label="Fiscal year" required error={formErrors.fiscalYear}><input className="input" value={periodForm.fiscalYear} onChange={(e) => setPeriodForm({ ...periodForm, fiscalYear: e.target.value })} /></Field>
+          <Field label="Period label" required error={formErrors.periodLabel}><input className="input" value={periodForm.periodLabel} onChange={(e) => setPeriodForm({ ...periodForm, periodLabel: e.target.value })} /></Field>
+          <Field label="Start date" required error={formErrors.startDate}><DatePicker value={periodForm.startDate} onChange={(value) => setPeriodForm({ ...periodForm, startDate: value })} /></Field>
+          <Field label="End date" required error={formErrors.endDate}><DatePicker value={periodForm.endDate} onChange={(value) => setPeriodForm({ ...periodForm, endDate: value })} /></Field>
         </FormGrid>
       </Drawer>
 
@@ -631,11 +675,20 @@ export function AccountingWorkbenchPage() {
         </div>
       </Drawer>
 
+      <BackfillReviewDrawer
+        open={drawer === "backfill"}
+        onClose={() => setDrawer(null)}
+        societyId={society._id}
+        accounts={accounts ?? []}
+        fiscalYear={currentYear()}
+        canWrite={canWrite}
+      />
+
       <Drawer open={drawer === "reconciliation"} onClose={() => setDrawer(null)} title="Create reconciliation run" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveReconciliation}>Create</button></>}>
         <div className="col">
-          <Field label="Financial account"><AccountSelect accounts={cashAccounts} value={reconciliationForm.financialAccountId} onChange={(financialAccountId) => setReconciliationForm({ ...reconciliationForm, financialAccountId })} /></Field>
-          <Field label="Statement date"><DatePicker value={reconciliationForm.statementDate} onChange={(value) => setReconciliationForm({ ...reconciliationForm, statementDate: value })} /></Field>
-          <Field label="Statement balance"><input className="input" type="number" value={reconciliationForm.statementBalance} onChange={(e) => setReconciliationForm({ ...reconciliationForm, statementBalance: e.target.value })} /></Field>
+          <Field label="Financial account" required error={formErrors.financialAccountId}><AccountSelect accounts={cashAccounts} value={reconciliationForm.financialAccountId} onChange={(financialAccountId) => setReconciliationForm({ ...reconciliationForm, financialAccountId })} /></Field>
+          <Field label="Statement date" required error={formErrors.statementDate}><DatePicker value={reconciliationForm.statementDate} onChange={(value) => setReconciliationForm({ ...reconciliationForm, statementDate: value })} /></Field>
+          <Field label="Statement balance" required error={formErrors.statementBalance}><input className="input" type="number" value={reconciliationForm.statementBalance} onChange={(e) => setReconciliationForm({ ...reconciliationForm, statementBalance: e.target.value })} /></Field>
         </div>
       </Drawer>
     </div>

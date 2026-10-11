@@ -38,6 +38,7 @@ import {
   FileCheck,
   FileCog,
   FileJson,
+  Sparkles,
   FileText,
   FolderOpen,
   Gavel,
@@ -66,6 +67,7 @@ import {
   Webhook,
   Receipt,
   Scale,
+  ScanSearch,
   Scroll,
   Settings,
   Shield,
@@ -85,6 +87,7 @@ import {
   Construction,
   FolderKanban,
   ListChecks,
+  FileSignature,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ModuleKey } from "./modules";
@@ -224,6 +227,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/role-holders": { icon: UsersRound, group: "people", label: "Role holders" },
   "/app/point-in-time-register": { icon: History, group: "people", label: "Point-in-time register" },
   "/app/source-model-coverage": {icon:FileText,group:"compliance",label:"Source model coverage"},
+  "/app/coverage": { icon: ScanSearch, group: "compliance", label: "Coverage & gaps" },
   "/app/people-history": {icon:Contact,group:"people",label:"People and source history"},
   "/app/people-directory": { icon: Contact, group: "people", label: "People directory" },
   "/app/committees": { icon: Network, group: "people", label: "Committees" },
@@ -313,6 +317,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },
   "/app/inventory": { icon: Package, group: "finance", label: "Inventory", module: "assets" },
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },
+  "/app/agreements": { icon: FileSignature, group: "finance", label: "Agreements", module: "agreements" },
   "/app/reconciliation": { icon: Scale, group: "finance", label: "Reconciliation", module: "reconciliation" },
   "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts" },
   "/app/membership": { icon: CreditCard, group: "finance", label: "Membership & billing", module: "membershipBilling" },
@@ -320,7 +325,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // ---- Workflows (kept visible to everyone — plain-language automation a treasurer can use) ----
   "/app/workflows": { icon: Workflow, group: "workflows", label: "Workflows", module: "workflows" },
   "/app/workflow-runs": { icon: History, group: "workflows", label: "Workflow runs", module: "workflows" },
-  "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync" },
+  "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync", module: "workflows" },
 
   // ---- Advanced setup (technical/admin-only — raw integration & automation internals) ----
   "/app/integrations": { icon: Plug, group: "advanced", label: "Integrations", module: "workflows", permission: "settings:manage" },
@@ -335,6 +340,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/users": { icon: UserCog, group: "administration", label: "Users & access" },
   "/app/custom-fields": { icon: Sliders, group: "administration", label: "Custom fields" },
   "/app/imports": { icon: FileJson, group: "administration", label: "Import sessions" },
+  "/app/intake": { icon: Sparkles, group: "administration", label: "AI intake" },
   "/app/settings": { icon: Settings, group: "administration", label: "Settings" },
   "/app/settings/api-keys": { icon: KeyRound, group: "administration", label: "API keys" },
   "/app/webhooks": { icon: Webhook, group: "administration", label: "Webhooks" },

@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { agendaItemExtensionFields, motionExtensionFields } from "../validators/meetingModel";
 
 /**
  * Board-meeting-workflow + records/evidence tables, extracted from
@@ -35,6 +36,7 @@ export const meetingWorkflowTables = {
     motionText: v.optional(v.string()),
     outcome: v.optional(v.string()), // Pending | Carried | Defeated | Tabled | Deferred (see src/lib/motionGovernance)
     resolutionId: v.optional(v.id("writtenResolutions")),
+    ...agendaItemExtensionFields,
     createdAtISO: v.string(),
   })
     .index("by_agenda", ["agendaId"])
@@ -77,6 +79,9 @@ export const meetingWorkflowTables = {
     secondedBy: v.optional(v.string()),
     secondedByMemberId: v.optional(v.id("members")),
     secondedByDirectorId: v.optional(v.id("directors")),
+    // A1/A11/C1/C13/G-04 extensions (people links, named abstainers/dissenters,
+    // dissent report, source locator, raw outcome wording, override note).
+    ...motionExtensionFields,
 
     // Classification → references bylawRuleSet.resolutionTypes by id; label is a
     // denormalized snapshot so a superseded rule set doesn't orphan old motions.

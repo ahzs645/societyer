@@ -6,13 +6,13 @@ test("research reference preserves form classification and unresolved questions"
   await page.goto("/demo/app/research-library", { waitUntil: "networkidle" });
   await expect(page.getByRole("heading", { name: "Research library", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Ordinary society constitution", exact: true })).toBeVisible();
-  await expect(page.getByText("28 of 28 records", { exact: true })).toBeVisible();
+  await expect(page.getByText("28 records", { exact: true })).toBeVisible();
   await page.getByRole("searchbox").fill("WORK01SOC");
   await expect(page.getByText(/records$/).filter({ hasText: /of 28 records/ })).toBeVisible();
   await page.getByRole("searchbox").clear();
   await page.getByRole("button", { name: "Collection", exact: true }).click();
   await page.getByRole("option", { name: "Questions to confirm" }).click();
-  await expect(page.getByText("42 of 42 records", { exact: true })).toBeVisible();
+  await expect(page.getByText("42 records", { exact: true })).toBeVisible();
   await expect(page.getByText("Authorized registry filer / portal reviewer", { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });

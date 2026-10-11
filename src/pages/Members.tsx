@@ -1,4 +1,5 @@
 import { MembershipEvidenceCard } from "../components/MembershipEvidenceCard";
+import { MembersRepresentativesCard } from "../components/MembersRepresentativesCard";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -8,14 +9,16 @@ import { useSociety } from "../hooks/useSociety";
 import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Drawer, Field, InspectorNote } from "../components/ui";
+import { memberProblems } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Users, Trash2, Pencil, GitMerge, Download } from "lucide-react";
+import { Plus, Users, Trash2, Pencil, GitMerge, Download, Building2, ScrollText } from "lucide-react";
+import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 import { useRegisterCommand } from "../lib/commands";
 import { rowsToCsv } from "../lib/csv";
@@ -35,6 +38,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function MembersPage() {
   const society = useSociety();
@@ -56,6 +60,8 @@ export function MembersPage() {
   const [mergeRows, setMergeRows] = useState<any[] | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [orgMemberRequest, setOrgMemberRequest] = useState(0);
+  const [ruleRequest, setRuleRequest] = useState(0);
   const mergeMembers = useMutation(api.members.merge);
 
   const tableData = useObjectRecordTableData({
@@ -83,7 +89,7 @@ export function MembersPage() {
       id: r._id,
       patch: {
         status: "Inactive",
-        leftAt: new Date().toISOString().slice(0, 10),
+        leftAt: todayDateOnly(),
         votingRights: false,
         notes: [r.notes, `Archived: ${reason}`].filter(Boolean).join("\n\n"),
       },
@@ -116,7 +122,7 @@ export function MembersPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `members-${todayDateOnly()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -140,21 +146,30 @@ export function MembersPage() {
       firstName: "", lastName: "", email: "",
       aliases: [],
       membershipClass: "Regular", status: "Active", votingRights: true,
-      joinedAt: new Date().toISOString().slice(0, 10),
+      joinedAt: todayDateOnly(),
     });
     setDrawerOpen(true);
   };
 
+  const selectedProblems = selected ? memberProblems(selected) : [];
   const save = async () => {
     if (!selected || !canManage) return;
-    if (selected._id) {
-      const { _id, _creationTime, societyId, ...patch } = selected;
-      patch.aliases = cleanAliases(patch.aliases);
-      await update({ id: _id, patch });
-    } else {
-      await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
+    if (selectedProblems.length) {
+      toast.error("Member not saved", selectedProblems[0]);
+      return;
     }
-    setDrawerOpen(false);
+    try {
+      if (selected._id) {
+        const { _id, _creationTime, societyId, ...patch } = selected;
+        patch.aliases = cleanAliases(patch.aliases);
+        await update({ id: _id, patch });
+      } else {
+        await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
+      }
+      setDrawerOpen(false);
+    } catch (error) {
+      toast.error("Member not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const records = (members ?? []) as any[];
@@ -173,6 +188,8 @@ export function MembersPage() {
             <MoreActionsMenu
               items={[
                 { id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: exportMembersCsv },
+                { id: "org-member", label: "Add organization member", icon: <Building2 size={14} />, disabled: !canManage, onSelect: () => setOrgMemberRequest((n) => n + 1) },
+                { id: "rule", label: "New membership rule version", icon: <ScrollText size={14} />, disabled: !canManage, onSelect: () => setRuleRequest((n) => n + 1) },
               ]}
             />
             <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
@@ -182,7 +199,8 @@ export function MembersPage() {
         }
       />
 
-      <MembershipEvidenceCard societyId={society._id} />
+      <MembersRepresentativesCard societyId={society._id} createRequest={orgMemberRequest} />
+      <MembershipEvidenceCard societyId={society._id} createRequest={ruleRequest} />
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="member" />
       ) : tableData.objectMetadata ? (
@@ -219,8 +237,10 @@ export function MembersPage() {
           <RecordTable
             renderCell={({ field, record }) => field.name === "firstName" ? (
               <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setDrawerOpen(true); }}>
-                {record.firstName || "Open member"}
+                {record.firstName || record.lastName || "Unnamed member"}
               </button>
+            ) : field.name === "joinedAt" || field.name === "leftAt" ? (
+              <span>{record[field.name] ? formatDate(record[field.name]) : ""}</span>
             ) : undefined}
             selectable={canManage}
             loading={metadataLoading || members === undefined}
@@ -321,12 +341,15 @@ export function MembersPage() {
               </Link>
             )}
             <button className="btn" onClick={() => setDrawerOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
           </>
         }
       >
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {selectedProblems.length > 0 && (
+              <InspectorNote tone="danger" title="Required before saving">{selectedProblems.join(" ")}</InspectorNote>
+            )}
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>

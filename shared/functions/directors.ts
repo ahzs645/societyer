@@ -9,6 +9,8 @@ import {exactDay,requireEvidence} from "../evidenceReview";
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { assertValid, directorProblems } from "../registerValidation";
+import { todayDateOnly } from "../dateOnly";
 
 export interface DirectorCreateArgs {
   societyId: string;
@@ -54,7 +56,8 @@ export async function directorsList(ctx: PortableQueryCtx, { societyId }: { soci
 export async function directorCreate(ctx: PortableMutationCtx, args: DirectorCreateArgs): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
-  return ctx.db.insert("directors", args);
+  assertValid(directorProblems(args), "Director");
+  return ctx.db.insert("directors", { ...args, firstName: args.firstName.trim(), lastName: args.lastName.trim(), email: args.email?.trim() || undefined });
 }
 
 export async function directorUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: DirectorPatch }): Promise<void> {
@@ -62,11 +65,12 @@ export async function directorUpdate(ctx: PortableMutationCtx, { id, patch }: { 
   const societyId = String(authorizedRow.societyId);
   if (patch.memberId){const member=await getOwned(ctx,"members",patch.memberId,societyId);if(authorizedRow.directoryPersonId&&member.directoryPersonId&&authorizedRow.directoryPersonId!==member.directoryPersonId)throw new Error("The selected member has a different confirmed person identity.");}
   const {positionChangeEvidence,...values}=patch;
+  assertValid(directorProblems({ ...authorizedRow, ...values }), "Director");
   if(patch.position!==undefined&&patch.position!==authorizedRow.position){
     if(!positionChangeEvidence||!exactDay(positionChangeEvidence.effectiveDate))throw new Error("Record the effective day and source evidence for a position change.");
     requireEvidence(positionChangeEvidence);
     if(positionChangeEvidence.reviewStatus!=="verified")throw new Error("Review position-change evidence before changing the current register.");
-    if(positionChangeEvidence.effectiveDate>new Date().toISOString().slice(0,10))throw new Error("Record a future appointment in history; the current register changes when it takes effect.");
+    if(positionChangeEvidence.effectiveDate>todayDateOnly())throw new Error("Record a future appointment in history; the current register changes when it takes effect.");
     const linkedMember=authorizedRow.memberId?await getOwned(ctx,"members",authorizedRow.memberId,societyId):null;
     const personId=authorizedRow.directoryPersonId??linkedMember?.directoryPersonId??await createContact(ctx,{societyId,fullName:`${authorizedRow.firstName} ${authorizedRow.lastName}`.trim(),sourceKey:`director:${id}`});
     const source={sourceUrl:positionChangeEvidence.sourceUrl,sourceReference:positionChangeEvidence.sourceReference,reviewStatus:'verified'};

@@ -11,9 +11,10 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
+import { todayDateOnly } from "../dateOnly";
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function previousDateISO(dateISO: string) {

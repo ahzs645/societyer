@@ -63,6 +63,7 @@ export async function upsertPublicationPortable(
     societyId: args.societyId,
     required: "Director",
   });
+  if (!String(args.title ?? "").trim()) throw new Error("A publication needs a title.");
   if (args.id) await getOwned(ctx, "publications", args.id, args.societyId);
   if (args.documentId) {
     await getOwned(ctx, "documents", args.documentId, args.societyId);

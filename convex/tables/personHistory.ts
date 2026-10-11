@@ -21,4 +21,14 @@ export const personHistoryTables={
   sourceUrl:v.string(),sourceReference:v.string(),sourceExternalId:v.optional(v.string()),
   reviewHistory:v.optional(v.array(v.any())),createdAtISO:v.string(),createdByUserId:v.string(),
  }).index('by_society',['societyId']).index('by_person',['societyId','personId']).index('by_key',['societyId','eventKey']),
+ // P7: one row per merged directory profile. `moves` lists every reference that
+ // was repointed (table, id, field/path) so the merge can be undone exactly.
+ personMerges:defineTable({
+  societyId:v.id('societies'),survivorId:v.id('peopleDirectory'),mergedId:v.id('peopleDirectory'),
+  survivorName:v.string(),mergedName:v.string(),rationale:v.string(),
+  survivorBefore:v.any(),mergedBefore:v.any(),moves:v.array(v.any()),
+  status:v.string(), // applied | undone
+  createdAtISO:v.string(),createdByUserId:v.string(),
+  undoneAtISO:v.optional(v.string()),undoneByUserId:v.optional(v.string()),undoNotes:v.optional(v.string()),
+ }).index('by_society',['societyId']).index('by_survivor',['societyId','survivorId']).index('by_merged',['societyId','mergedId']),
 };

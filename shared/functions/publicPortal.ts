@@ -56,6 +56,8 @@ export async function volunteerIntakeContextPortable(ctx: PortableQueryCtx, { sl
       name: society.name,
       publicSlug: society.publicSlug,
       publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail,
+      privacyNotice: society.publicIntakePrivacyNotice ?? null,
+      privacyOfficerName: society.privacyOfficerName ?? null,
     },
     committees: committees.map((committee: Record<string, any>) => ({
       _id: committee._id,
@@ -93,6 +95,8 @@ export async function grantIntakeContextPortable(ctx: PortableQueryCtx, { slug }
       name: society.name,
       publicSlug: society.publicSlug,
       publicContactEmail: society.publicContactEmail ?? society.privacyOfficerEmail,
+      privacyNotice: society.publicIntakePrivacyNotice ?? null,
+      privacyOfficerName: society.privacyOfficerName ?? null,
     },
     grants: openGrants
       .map((grant: Record<string, any>) => ({

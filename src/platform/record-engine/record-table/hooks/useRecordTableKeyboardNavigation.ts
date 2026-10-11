@@ -11,6 +11,11 @@ function isTypingTarget(target: EventTarget | null) {
   return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
+function isControlTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.closest('button, a[href], summary, [role="button"], [role="menuitem"], [role="option"], [role="checkbox"], [role="tab"]') !== null;
+}
+
 export function useRecordTableKeyboardNavigation({
   enabled,
   selectable,
@@ -38,7 +43,13 @@ export function useRecordTableKeyboardNavigation({
         if (!wasEditing) handle.get().setFocusedCell(null);
         return;
       }
+      // Modifier shortcuts belong to the app or browser (Ctrl/Cmd+K opens the
+      // command palette — it must not also act as "k" = row up and pull focus
+      // into the grid). Ctrl/Cmd+Enter is the only modified table shortcut.
+      if (event.altKey || ((event.metaKey || event.ctrlKey) && event.key !== "Enter")) return;
       if (isTypingTarget(event.target)) return;
+      // Toolbar, bulk-bar and in-cell buttons/links keep their native keys.
+      if (isControlTarget(event.target)) return;
       if (filteredRecords.length === 0 || visibleColumns.length === 0) return;
 
       const state = handle.get();

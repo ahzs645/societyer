@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { randomUUID, createHmac } from "node:crypto";
-import { writeFile, mkdir } from "node:fs/promises";
 import { makeFunctionReference } from "convex/server";
 import { createFixture } from "../experiments/offline-convex/fixture";
 import { sendEmail } from "../convex/providers/email";
@@ -11,6 +10,7 @@ import { testPaperlessConnection, downloadPaperlessDocument, listPaperlessDocume
 import { recordConnectionTestPortable } from "../shared/functions/paperless";
 import { toPortableMutationCtx } from "../convex/lib/portable";
 import { waveHealthCheck } from "../convex/providers/waveData";
+import { writeTrackedReport } from "./lib/writeTrackedReport.mjs";
 
 // Real adapter HTTP against loopback protocol fixtures, never provider accounts.
 const envNames = ["PAPERLESS_NGX_URL", "PAPERLESS_SOCIETY_ID", "SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON", "PAPERLESS_NGX_TOKEN", "RESEND_API_KEY", "RESEND_FROM_EMAIL", "RESEND_FROM", "RESEND_API_BASE_URL", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "TWILIO_MESSAGING_SERVICE_SID", "TWILIO_MESSAGES_API_BASE_URL", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "WAVE_ACCESS_TOKEN", "WAVE_BUSINESS_ID", "WAVE_GRAPHQL_ENDPOINT", "SOCIETYER_OUTBOUND_ALLOW_LOCAL_DEVELOPMENT", "NODE_ENV", "RUSTFS_ENDPOINT", "RUSTFS_ACCESS_KEY", "RUSTFS_SECRET_KEY", "RUSTFS_BUCKET"];
@@ -308,8 +308,7 @@ try {
   assert.equal((await fixture.native.fetch("/stripe/webhook", { method: "POST", body: signedBody, headers: { "stripe-signature": signature(signedBody) } })).status, 200);
   assert.equal((await fixture.native.run(ctx => ctx.db.query("integrationSyncStates").collect())).length, receiptCount);
   pass("actual Convex HTTP Stripe route rejects unsigned/malformed events, verifies signed bytes and preserves idempotency on delivery retry");
-  await mkdir("artifacts/offline", { recursive: true });
-  await writeFile("artifacts/offline/provider-gap-qualification.json", JSON.stringify({ sourceBaseline: "66b8dcd", executedAt: new Date().toISOString(), fixtureOnly: true, externalProviderAccountsContacted: false, cases, count: cases.length, remaining: ["Real provider credentials and external delivery/payment/OCR qualification", "Live Stripe cancellation is performed in Stripe; verified webhook updates Societyer", "Google/Microsoft calendar import/feed exist; OAuth write-back is not implemented"] }, null, 2) + "\n");
+  writeTrackedReport("artifacts/offline/provider-gap-qualification.json", JSON.stringify({ sourceBaseline: "66b8dcd", executedAt: new Date().toISOString(), fixtureOnly: true, externalProviderAccountsContacted: false, cases, count: cases.length, remaining: ["Real provider credentials and external delivery/payment/OCR qualification", "Live Stripe cancellation is performed in Stripe; verified webhook updates Societyer", "Google/Microsoft calendar import/feed exist; OAuth write-back is not implemented"] }, null, 2) + "\n");
   console.log(`Provider gap qualification: ${cases.length}/${cases.length} fixture groups passed; no external accounts contacted.`);
 } finally {
   globalThis.fetch = originalFetch;

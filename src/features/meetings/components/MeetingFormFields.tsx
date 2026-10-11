@@ -4,6 +4,8 @@
  * reused by the page Drawer and the global "Create meeting" popup
  * (MeetingCreateModal).
  */
+import { MEETING_STATUS_OPTIONS } from "../../../../shared/meetingStatus";
+import { bodyPatchForValue, bodyValueForMeeting, meetingBodyOptions } from "../../../../shared/meetingBodyPicker";
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -20,9 +22,11 @@ import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
 import { useSociety } from "@/hooks/useSociety";
 import { governanceVocabulary } from "@/lib/governanceVocabulary";
-import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow, defaultNewMeetingStart } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { formatMeetingDate } from "../../../../shared/meetingDates";
+import { suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 
 export type MeetingDraft = {
   type: string;
@@ -37,6 +41,8 @@ export type MeetingDraft = {
   committeeId: string;
   conflictAcknowledged: boolean;
   notes?: string;
+  /** B8: a special meeting of the board or a committee. */
+  special?: boolean;
 };
 
 type BylawRules = ReturnType<typeof useBylawRules>["rules"];
@@ -174,8 +180,7 @@ export function makeMeetingDraft(
   const type = overrides.type ?? "Board";
   const template = meetingTemplatesForType(data.meetingTemplates, type).find((row) => row.isDefault) ??
     meetingTemplatesForType(data.meetingTemplates, type)[0];
-  const scheduled = new Date();
-  scheduled.setDate(scheduled.getDate() + data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
+  const scheduled = defaultNewMeetingStart(data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
   return blankMeetingDraft({
     type,
     scheduledAt: toDateTimeLocalValue(scheduled),
@@ -200,6 +205,7 @@ export function meetingToDraft(meeting: Doc<"meetings">): MeetingDraft {
     committeeId: meeting.committeeId ? String(meeting.committeeId) : "",
     conflictAcknowledged: false,
     notes: meeting.notes ?? "",
+    special: !!(meeting as any).special,
   };
 }
 
@@ -254,6 +260,11 @@ export function MeetingFormFields({
 
   return (
     <div className="meeting-form">
+      {!editingId && (daysUntil(value.scheduledAt) ?? 0) < 0 && (
+        <div className="flag" role="status" style={{ marginBottom: 12 }}>
+          <div>This date is before today, so the meeting is recorded as already held (no notice check). Add its minutes and attendance after saving.</div>
+        </div>
+      )}
       {isGeneralMeeting(value.type) &&
       (daysUntil(value.scheduledAt) ?? 0) >= 0 &&
       !meetsNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules) ? (
@@ -297,28 +308,34 @@ export function MeetingFormFields({
           )}
         </div>
       )}
-      <Field label="Title" required>
+      <Field label="Title" hint={editingId ? undefined : "Leave blank to use the suggested title."}>
         <input
           className="input"
-          required
           value={value.title}
+          placeholder={editingId ? undefined : suggestedMeetingTitle(value, committees) || undefined}
           onChange={(e) => onChange({ title: e.target.value })}
         />
       </Field>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Type">
+        <Field label="Body" hint="Board, a special meeting, AGM/SGM, or a committee.">
           <Select
-            value={value.type}
+            value={bodyValueForMeeting({ type: value.type, committeeId: value.committeeId || null, special: value.special })}
+            searchable
+            aria-label="Meeting body"
             onChange={(v) => {
-              const templates = meetingTemplatesForType(meetingTemplates, v);
+              const body = bodyPatchForValue(v);
+              const templates = meetingTemplatesForType(meetingTemplates, body.type);
               const template = templates.find((row) => row.isDefault) ?? templates[0];
               onChange({
-                type: v,
-                committeeId: v === "Committee" ? value.committeeId : "",
+                type: body.type,
+                committeeId: body.committeeId ?? "",
+                special: body.special,
                 meetingTemplateId: editingId ? value.meetingTemplateId : template ? String(template._id) : "",
               });
             }}
-            options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: meetingTypeLabel(t, corporate) }))}
+            options={meetingBodyOptions((committees ?? []).map((committee) => ({ _id: String(committee._id), name: committee.name, status: (committee as any).status })))
+              .filter((option) => option.value !== "external")
+              .map((option) => ({ value: option.value, label: meetingTypeLabel(option.value, option.label, corporate), hint: meetingBodyGroup(option.group, corporate) }))}
           />
         </Field>
         <Field label="Scheduled">
@@ -328,27 +345,12 @@ export function MeetingFormFields({
           />
         </Field>
       </div>
-      {value.type === "Committee" && (
-        <Field label="Committee" required>
-          <Select
-            value={value.committeeId}
-            onChange={(committeeId) => onChange({ committeeId })}
-            options={[
-              { value: "", label: "Select committee" },
-              ...(committees ?? []).map((committee) => ({
-                value: String(committee._id),
-                label: committee.name,
-              })),
-            ]}
-          />
-        </Field>
-      )}
       {editingId && (
         <Field label="Status">
           <Select
             value={value.status}
             onChange={(v) => onChange({ status: v })}
-            options={["Scheduled", "Held", "Cancelled"].map((s) => ({ value: s, label: s }))}
+            options={MEETING_STATUS_OPTIONS}
           />
         </Field>
       )}
@@ -420,7 +422,7 @@ export function MeetingFormFields({
             <ul style={{ margin: "4px 0 0 20px" }}>
               {overlaps.map((m) => (
                 <li key={m._id} className="muted">
-                  {m.title} — {formatDateTime(m.scheduledAt)}
+                  {m.title} — {formatMeetingDate(m)}
                 </li>
               ))}
             </ul>
@@ -437,10 +439,14 @@ export function MeetingFormFields({
   );
 }
 
-/** Stored meeting types stay AGM/SGM; corporations see shareholder-meeting labels. */
-function meetingTypeLabel(type: string, corporate: boolean): string {
-  if (!corporate) return type;
-  if (type === "AGM") return "Annual shareholder meeting (AGM)";
-  if (type === "SGM") return "Special shareholder meeting (SGM)";
-  return type;
+/** Stored bodies stay agm/sgm; corporations see shareholder-meeting labels. */
+function meetingTypeLabel(value: string, label: string, corporate: boolean): string {
+  if (!corporate) return label;
+  if (value === "agm") return "Annual shareholder meeting (AGM)";
+  if (value === "sgm") return "Special shareholder meeting (SGM)";
+  return label;
+}
+
+function meetingBodyGroup(group: string, corporate: boolean): string {
+  return corporate && group === "Members" ? "Shareholders" : group;
 }

@@ -67,7 +67,7 @@ export function evaluateLegalDecision(input: LegalDecisionInput): LegalDecisionR
   const valid = [input.votesFor, input.votesAgainst, count].every(n => typeof n === "number" && Number.isSafeInteger(n) && n >= 0);
   if (!valid || !count || input.votesFor + input.votesAgainst > count) warnings.push("Supply consistent nonnegative integer vote totals and the required electorate denominator.");
   // Cross multiplication avoids floating point two-thirds boundary drift.
-  const unsafe = !Number.isSafeInteger(input.votesFor * divisor) || !Number.isSafeInteger((count ?? 0) * numerator);
+  const unsafe = valid && !!count && (!Number.isSafeInteger(input.votesFor * divisor) || !Number.isSafeInteger(count * numerator));
   if (unsafe) warnings.push("Vote totals exceed the supported exact-integer range.");
   const carries = warnings.length ? null : strict ? input.votesFor * divisor > count! * numerator : input.votesFor * divisor >= count! * numerator;
   return { carries, denominator, denominatorCount: count, thresholdNumerator: numerator, thresholdDenominator: divisor, strict, citation, classification: warnings.length ? "review_required" : "statutory_baseline", warnings };

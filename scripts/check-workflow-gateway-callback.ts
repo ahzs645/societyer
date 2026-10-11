@@ -1,7 +1,7 @@
 /** Mounted HTTP route + actual native Convex handlers; only transport/JWT issuance are fixture adapters. */
 import assert from 'node:assert/strict';
 import express from 'express';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ConvexHttpClient } from 'convex/browser';
@@ -11,6 +11,7 @@ import schema from '../convex/schema';
 import { betterAuthIssuer } from '../convex/lib/authIdentity';
 
 const cwd = process.cwd();
+await mkdir(path.join(cwd, 'tmp'), { recursive: true });
 const privateRoot = await mkdtemp(path.join(cwd, 'tmp/workflow-gateway-'));
 const callbackSecret = randomUUID(); const serviceSecret = randomUUID(); const issuedToken = randomUUID();
 const envValues = { AUTH_MODE: 'better-auth', AUTH_DB_PATH: path.join(privateRoot, 'auth.sqlite'), SOCIETYER_WORKFLOW_CALLBACK_SECRET: callbackSecret, SOCIETYER_API_PLATFORM_TOKEN: serviceSecret };

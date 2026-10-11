@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { InfoPopover } from "./InfoPopover";
 import { ShieldCheck } from "lucide-react";
 import { Badge } from "./ui";
 import { Select } from "./Select";
@@ -32,47 +33,47 @@ export function WorkspaceAccessViewer({
 
   return (
     <section className="card" aria-labelledby="workspace-access-title" style={{ marginTop: 16 }}>
-      <div className="card__head" style={{ flexWrap: "wrap", gap: 12 }}>
-        <h2 id="workspace-access-title" className="card__title">
-          <ShieldCheck size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+      <div className="card__head" style={{ flexWrap: "wrap", gap: 8 }}>
+        <h2 id="workspace-access-title" className="card__title" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <ShieldCheck size={14} aria-hidden="true" />
           Module access
         </h2>
+        <InfoPopover label="About module access">
+          <p>
+            What each role's permissions allow, module by module. Record sharing, workflow state and other server checks can
+            narrow this further; specialized operations note any extra authority they need.
+          </p>
+          <p>
+            "Some actions" means the role allows part of a module; "—" means no role permission covers it. Turning a
+            module off hides it for the whole workspace but doesn't change role permissions. Change a user's policy by changing
+            their role; per-user overrides aren't available.
+          </p>
+        </InfoPopover>
         <Select
           aria-label="User to inspect"
           value={user._id}
           onChange={onSelectUser}
           searchable
+          size="sm"
           options={users.map((entry) => ({ value: entry._id, label: entry.displayName, hint: entry.email }))}
-          style={{ marginLeft: "auto", minWidth: 200 }}
+          style={{ marginLeft: "auto", width: 220, maxWidth: "100%" }}
         />
       </div>
-      <div className="card__body col" style={{ gap: 12 }}>
-        <div className="row" style={{ flexWrap: "wrap", gap: 8 }} aria-live="polite">
-          <strong>{user.displayName}</strong>
-          <span className="muted">{user.email}</span>
-          <Badge tone={user.role === "Owner" || user.role === "Admin" ? "success" : "info"}>{user.role}</Badge>
-          <Badge tone={inactive ? "warn" : "success"}>{user.status ?? "Active"}</Badge>
-        </div>
-        {inactive && (
-          <p style={{ margin: 0, color: "var(--warning)" }}>
-            This workspace membership is {user.status?.toLowerCase()}. The table describes the assigned role; it does not grant or activate access.
-          </p>
+      <div className="card__body row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }} aria-live="polite">
+        <Badge tone={user.role === "Owner" || user.role === "Admin" ? "success" : "info"}>{user.role}</Badge>
+        {inactive ? (
+          <span style={{ color: "var(--warning)", fontSize: "var(--fs-sm)" }}>
+            {user.status}: the table shows the assigned role but grants no access.
+          </span>
+        ) : (
+          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{user.email}</span>
         )}
-        <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: 0 }}>
-          This table summarizes the role permissions enforced by the shared action policy.
-          Record sharing, workflow state, linked records, and other server checks can also affect access. Specialized operations can require additional authority; review their notes below.
-        </p>
-        <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: 0 }}>
-          “Some actions” means the role allows part of a module. “Not defined” means there is no corresponding role permission.
-          Turning off a module hides its features for the entire workspace; it does not revoke role permissions.
-          To change this user's policy, update their role in the Users table. Individual module overrides are not available.
-        </p>
-        <Link to="/app/settings?tab=modules" className="btn btn--ghost btn--sm" style={{ alignSelf: "flex-start" }}>
-          Manage workspace modules
+        <Link to="/app/settings?tab=modules" style={{ marginLeft: "auto", fontSize: "var(--fs-sm)" }}>
+          Manage modules
         </Link>
       </div>
       <div style={{ overflowX: "auto" }}>
-        <table className="table" aria-label={`Role policy for ${user.displayName}`}>
+        <table className="table access-policy-table" aria-label={`Role policy for ${user.displayName}`}>
           <thead>
             <tr>
               <th scope="col">Module / area</th>
@@ -83,7 +84,7 @@ export function WorkspaceAccessViewer({
           <tbody>
             {rows.map((row) => (
               <tr key={row.key}>
-                <th scope="row" style={{ minWidth: 250, fontWeight: "normal" }}>
+                <th scope="row" style={{ minWidth: 200, fontWeight: "normal", textAlign: "left" }}>
                   <strong>{row.label}</strong>
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>{row.category}</div>
                   {row.notes.length > 0 && (
@@ -104,7 +105,9 @@ export function WorkspaceAccessViewer({
                     <td key={action}>
                       {coverage === "full" ? <Badge tone="success">Allowed</Badge>
                         : coverage === "partial" ? <Badge tone="warn">Some actions</Badge>
-                        : <span className="muted">{coverage === "unmapped" ? "Not defined" : "Not granted"}</span>}
+                        : coverage === "unmapped"
+                          ? <span className="muted" title="No role permission covers this action">—</span>
+                          : <span className="muted">Not granted</span>}
                     </td>
                   );
                 })}

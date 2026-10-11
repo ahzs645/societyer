@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -12,10 +13,15 @@ import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
-import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Menu } from "../components/Menu";
+import { InfoPopover } from "../components/InfoPopover";
+import { Tabs } from "../components/primitives";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
+import { hasErrors, validateBudgetLineInput, type FieldErrors } from "../../shared/recordValidation";
 import {
   WaveHealthPanel,
   redactWaveHealthResult,
@@ -109,10 +115,12 @@ export function FinancialsPage() {
   const [linkItemId, setLinkItemId] = useState("");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [waveHealthBusy, setWaveHealthBusy] = useState(false);
   const [waveHealth, setWaveHealth] = useState<any>(null);
-  const [budgetForm, setBudgetForm] = useState<{ category: string; planned: string } | null>(null);
+  const [budgetForm, setBudgetForm] = useState<{ id?: string; category: string; planned: string } | null>(null);
+  const [budgetErrors, setBudgetErrors] = useState<FieldErrors>({});
   const [subscriptionForm, setSubscriptionForm] = useState<any>(null);
   const [waveMode, setWaveMode] = useState<"resources" | "structures">("resources");
   const [waveResourceType, setWaveResourceType] = useState("account");
@@ -344,11 +352,27 @@ export function FinancialsPage() {
         title="Financials"
         icon={<PiggyBank size={16} />}
         iconColor="green"
-        subtitle="Connected bank balances, budget vs actuals, restricted funds, and the AGM financial statements. Disclose remuneration ≥ $75k (s.36)."
+        subtitle="Bank balances, budgets, restricted funds and year-end statements."
+        info={
+          <>
+            <p>
+              Ledger figures come from the posted accounting ledger (accrual basis) and are the authoritative total once
+              transactions are reconciled. The <Link to="/app/treasurer">Treasurer</Link> dashboard shows the
+              bank-transaction view, which can be provisional before reconciliation.
+            </p>
+            <p>
+              Year-over-year figures come from each year's recorded financial statements, so they may differ from the
+              ledger if a statement predates recent postings.
+            </p>
+            <p>Societies must disclose remuneration of $75,000 or more in the AGM financial statements (s.36).</p>
+          </>
+        }
         actions={
           activeConnection ? (
             <>
-              <Badge tone="success">Connected · {activeConnection.provider}</Badge>
+              <span title={`Connected to ${providerLabel(activeConnection.provider)}`}>
+                <Badge tone="success">{providerLabel(activeConnection.provider)}</Badge>
+              </span>
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
@@ -410,22 +434,20 @@ export function FinancialsPage() {
           )
         }
       />
+      <ImportCandidatesNotice noun="financial statement" targets={["financials", "financialStatements", "financialStatementImports"]} kinds={["financialStatement", "financialStatementImport", "budgetSnapshot", "treasurerReport"]} documentCategory="FinancialStatement" emptyRegister={!(items ?? []).length} also={{ to: "/app/finance-imports", label: "Imported statements and budget snapshots awaiting verification are in Finance imports" }} />
 
-      <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-        {[
-          { id: "overview", label: "Overview" },
-          { id: "transactions", label: "Transactions" },
-          { id: "wave", label: "Wave data" },
-          { id: "subscriptions", label: "Subscriptions" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            className={`btn-action${tab === t.id ? " btn-action--primary" : ""}`}
-            onClick={() => setTab(t.id as typeof tab)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="financials-tabs">
+        <Tabs<typeof tab>
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Financials sections"
+          items={[
+            { id: "overview", label: "Overview" },
+            { id: "transactions", label: "Transactions" },
+            { id: "wave", label: "Wave data" },
+            { id: "subscriptions", label: "Subscriptions" },
+          ]}
+        />
       </div>
 
       {tab === "transactions" && (accounts ?? []).length > 0 && (
@@ -467,35 +489,34 @@ export function FinancialsPage() {
 
       {tab === "wave" && waveHealth && <WaveHealthPanel result={waveHealth} />}
 
-      {tab === "overview" && (trialBalance ?? []).length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
+      {tab === "overview" && ((trialBalance ?? []).length > 0 || (activeConnection && hub)) && (
+        <div className="card financials-summary-card" style={{ marginBottom: 16 }}>
           <div className="card__head">
-            <h2 className="card__title">Internal ledger summary</h2>
-            <span className="card__subtitle">Posted journal lines take priority for board and auditor reporting.</span>
+            <h2 className="card__title">{(trialBalance ?? []).length > 0 ? "Internal ledger summary" : "Bank summary"}</h2>
+            {activeConnection?.lastSyncAtISO && (
+              <span className="card__subtitle">Last synced {formatDateTime(activeConnection.lastSyncAtISO)}</span>
+            )}
           </div>
-          <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
-            <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
-            <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
-            <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
-            <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+          <div className="stat-grid financials-summary-card__stats">
+            {(trialBalance ?? []).length > 0 && (
+              <>
+                <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
+                <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
+                <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
+                {/* Ledger assets only earn a tile when they differ from the bank balance beside them. */}
+                {!(activeConnection && hub && hub.totalBalance === ledgerAssetCents) && (
+                  <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+                )}
+              </>
+            )}
+            {activeConnection && hub && (
+              <>
+                <Stat label="Bank balance" value={money(hub.totalBalance)} />
+                <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
+                <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} />
+              </>
+            )}
           </div>
-          <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: "0 16px 16px" }}>
-            Based on the posted accounting ledger (accrual basis) — this is the authoritative total once
-            transactions are reconciled. Compare with the bank-transaction view on{" "}
-            <Link to="/app/treasurer">Treasurer</Link>, which can be provisional before reconciliation.
-          </p>
-        </div>
-      )}
-
-      {tab === "overview" && activeConnection && hub && (
-        <div className="stat-grid" style={{ marginBottom: 16 }}>
-          <Stat label="Total bank balance" value={money(hub.totalBalance)} />
-          <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
-          <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} />
-          <Stat
-            label="Last sync"
-            value={activeConnection.lastSyncAtISO ? formatDateTime(activeConnection.lastSyncAtISO) : "—"}
-          />
         </div>
       )}
 
@@ -557,7 +578,12 @@ export function FinancialsPage() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Restricted funds</h2>
-            <span className="card__subtitle">Earmarked for specific purposes — track separately (CPA guidance).</span>
+            <InfoPopover label="About restricted funds">
+              <p>
+                Bank accounts flagged as restricted. The fund-by-fund ledger balance is under{" "}
+                <Link to="/app/financials/accounting">Accounting</Link>; the audited figure is in the year's statements.
+              </p>
+            </InfoPopover>
           </div>
           <table className="table">
             <thead>
@@ -584,7 +610,7 @@ export function FinancialsPage() {
             <div style={{ marginLeft: "auto" }}>
               <button
                 className="btn-action"
-                onClick={() => setBudgetForm({ category: "", planned: "" })} disabled={!canWrite}
+                onClick={() => { setBudgetErrors({}); setBudgetForm({ category: "", planned: "" }); }} disabled={!canWrite}
               >
                 <PlusCircle size={12} /> Add budget line
               </button>
@@ -614,14 +640,55 @@ export function FinancialsPage() {
                     >
                       {money(variance)}
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        aria-label={`Delete budget ${b.name}`}
-                        onClick={() => removeBudget({ id: b._id })} disabled={!canWrite}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <Menu
+                        align="right"
+                        trigger={
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--sm btn--icon"
+                            aria-label={`Actions for budget ${b.category}`}
+                            title="More actions"
+                            disabled={!canWrite}
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                        }
+                        sections={[
+                          {
+                            id: "budget-actions",
+                            items: [
+                              {
+                                id: "edit",
+                                label: "Edit planned amount",
+                                icon: <Pencil size={14} />,
+                                onSelect: () => { setBudgetErrors({}); setBudgetForm({ id: b._id, category: b.category, planned: String((b.plannedCents ?? 0) / 100) }); },
+                              },
+                              {
+                                id: "delete",
+                                label: "Delete budget line",
+                                icon: <Trash2 size={14} />,
+                                destructive: true,
+                                onSelect: async () => {
+                                  const approved = await confirm({
+                                    title: "Delete budget line?",
+                                    message: `The FY ${fiscalYear} "${b.category}" budget of ${money(b.plannedCents)} will be removed. Actual transactions are not affected.`,
+                                    confirmLabel: "Delete budget line",
+                                    tone: "danger",
+                                  });
+                                  if (!approved) return;
+                                  try {
+                                    await removeBudget({ id: b._id });
+                                    toast.success("Budget line deleted", b.category);
+                                  } catch (error: any) {
+                                    toast.error("Could not delete budget line", error?.message);
+                                  }
+                                },
+                              },
+                            ],
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
@@ -638,18 +705,21 @@ export function FinancialsPage() {
 
           {budgetForm && (
             <div className="card__body" style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-              <Field label="Category">
+              <Field label="Category" required error={budgetErrors.category}>
                 <input
                   className="input"
                   value={budgetForm.category}
+                  disabled={Boolean(budgetForm.id)}
                   onChange={(e) => setBudgetForm({ ...budgetForm, category: e.target.value })}
                   placeholder="e.g. Program supplies"
                 />
               </Field>
-              <Field label="Planned (CAD)">
+              <Field label="Planned (CAD)" required error={budgetErrors.plannedCents}>
                 <input
                   className="input"
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={budgetForm.planned}
                   onChange={(e) => setBudgetForm({ ...budgetForm, planned: e.target.value })}
                   placeholder="12000"
@@ -658,15 +728,18 @@ export function FinancialsPage() {
               <button
                 className="btn btn--accent"
                 onClick={async () => {
-                  if (!budgetForm.category || !budgetForm.planned) return;
-                  await upsertBudget({
-                    societyId: society._id,
-                    fiscalYear,
-                    category: budgetForm.category,
-                    plannedCents: Math.round(Number(budgetForm.planned) * 100),
-                  });
-                  setBudgetForm(null);
-                  toast.success("Budget saved");
+                  const plannedCents = budgetForm.planned.trim() === "" ? Number.NaN : Math.round(Number(budgetForm.planned) * 100);
+                  const payload = { fiscalYear, category: budgetForm.category.trim(), plannedCents };
+                  const errors = validateBudgetLineInput(payload, hub?.budgetRows ?? [], budgetForm.id);
+                  setBudgetErrors(errors);
+                  if (hasErrors(errors)) return;
+                  try {
+                    await upsertBudget({ id: budgetForm.id as any, societyId: society._id, ...payload });
+                    setBudgetForm(null);
+                    toast.success(budgetForm.id ? "Budget updated" : "Budget saved");
+                  } catch (error: any) {
+                    toast.error("Could not save budget line", error?.data?.message ?? error?.message);
+                  }
                 }}
               >
                 Save
@@ -780,25 +853,6 @@ export function FinancialsPage() {
             <Link to="/app/org-history?section=budgets">Review in history →</Link>
           </Flag>
         </div>
-      )}
-
-      {tab === "overview" && latest && (
-        <>
-          <div className="stat-grid">
-            <Stat label={`FY ${latest.fiscalYear} revenue`} value={money(latest.revenueCents)} />
-            <Stat label="Expenses" value={money(latest.expensesCents)} />
-            <Stat
-              label="Net surplus / (deficit)"
-              value={money(latest.revenueCents - latest.expensesCents)}
-              tone={latest.revenueCents - latest.expensesCents >= 0 ? "ok" : "danger"}
-            />
-            <Stat label="Net assets" value={money(latest.netAssetsCents)} />
-          </div>
-          <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
-            From the recorded year-end financial statement for FY {latest.fiscalYear} — may differ from the
-            "Internal ledger summary" above if the statement predates recent postings.
-          </p>
-        </>
       )}
 
       {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}
@@ -1105,4 +1159,11 @@ function BankCsvImportCard({
       </div>
     </div>
   );
+}
+
+function providerLabel(provider: string | undefined) {
+  const value = String(provider ?? "").trim();
+  if (!value) return "Connected";
+  if (value.toLowerCase() === "quickbooks") return "QuickBooks";
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { FIELD_TYPES, type ViewFilterOperator } from "../../types";
 import { Select } from "@/components/Select";
+import { isOutsidePointerEvent } from "@/lib/floatingLayer";
 
 const DEFAULT_OPERATORS: Record<string, ViewFilterOperator[]> = {
   [FIELD_TYPES.TEXT]: ["contains", "eq", "neq", "startsWith", "endsWith", "isEmpty", "isNotEmpty"],
@@ -69,9 +70,9 @@ export function RecordTableFilterPopover({
     if (!open) return;
 
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (popoverRef.current?.contains(target)) return;
+      // The field/operator Selects portal their menus to <body>; picking an
+      // option there is not an outside click.
+      if (!isOutsidePointerEvent(event, popoverRef)) return;
       onClose();
     };
 
@@ -83,6 +84,13 @@ export function RecordTableFilterPopover({
   const selectedColumn = columns.find((c) => c.fieldMetadataId === fieldId);
   const availableOps =
     (selectedColumn && DEFAULT_OPERATORS[selectedColumn.field.fieldType]) ?? ["contains"];
+
+  // Fields with a fixed set of choices (selects, and relations a page has
+  // given names to) pick a value from a list instead of typing a raw value.
+  const configOptions = (selectedColumn?.field.config as { options?: { value: string; label: string }[] } | undefined)?.options;
+  const valueOptions = Array.isArray(configOptions)
+    ? configOptions.map((option) => ({ value: String(option.value), label: String(option.label ?? option.value) }))
+    : [];
 
   const add = () => {
     if (!selectedColumn) return;
@@ -190,7 +198,17 @@ export function RecordTableFilterPopover({
           options={availableOps.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
           disabled={!selectedColumn}
         />
-        {!VALUELESS.includes(operator) && (
+        {!VALUELESS.includes(operator) && valueOptions.length > 0 ? (
+          <Select
+            size="sm"
+            value={value}
+            onChange={(v) => setValue(v)}
+            placeholder="Choose…"
+            searchable={valueOptions.length > 8}
+            aria-label="Filter value"
+            options={valueOptions}
+          />
+        ) : !VALUELESS.includes(operator) && (
           <input
             type={
               selectedColumn?.field.fieldType === FIELD_TYPES.DATE

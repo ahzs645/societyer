@@ -12,6 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { annualFilingYear } from "../annualFilings";
 import { getOwned, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import {
@@ -41,7 +42,7 @@ async function resolvedRows(ctx: PortableQueryCtx, societyId: string) {
     if (!row.sourceFilingId) return row;
     const source = await ctx.db.get(String(row.sourceFilingId), "filings");
     const valid = source?.societyId === societyId && annualFilingKind(String(source.kind))
-      && source.jurisdictionCode === row.jurisdiction && source.periodLabel === row.year;
+      && source.jurisdictionCode === row.jurisdiction && annualFilingYear(source.periodLabel) === row.year;
     return { ...row, filed: Boolean(valid && source.status === "Filed"),
       filedOn: valid && source.status === "Filed" ? source.filedAt : undefined,
       sourceMissing: !valid };
@@ -96,8 +97,8 @@ export async function upsertPortable(
   if (sourceFilingId) {
     await requirePermissionPortable(ctx, societyId, "filings:read");
     const source = await getOwned(ctx, "filings", sourceFilingId, societyId);
-    if (!annualFilingKind(String(source.kind)) || source.jurisdictionCode !== jurisdiction || source.periodLabel !== year) {
-      throw new Error("Link an annual filing with the same jurisdiction and four-digit period year.");
+    if (!annualFilingKind(String(source.kind)) || source.jurisdictionCode !== jurisdiction || annualFilingYear(source.periodLabel) !== year) {
+      throw new Error("Link an annual filing with the same jurisdiction whose period names the same year.");
     }
     filed = source.status === "Filed";
     filedOn = filed && typeof source.filedAt === "string" ? source.filedAt : undefined;

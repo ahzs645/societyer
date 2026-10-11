@@ -1,12 +1,19 @@
+import { serverActionErrorMessage, serverActionsUnavailable, serverConnectionMessage } from "../lib/serverConnection";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Banner, Field } from "../components/ui";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
+import { Badge, Field } from "../components/ui";
+import { Tabs } from "../components/primitives";
+import { CreateMenu } from "../components/CreateMenu";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { InfoPopover } from "../components/InfoPopover";
+import { useIsMobile } from "../lib/useIsMobile";
 import { useToast } from "../components/Toast";
 import {
   BookOpen,
@@ -23,7 +30,7 @@ import {
   Bot,
   Database,
   FileSearch,
-  ScanText,
+  X,
 } from "lucide-react";
 import { formatDateTime, formatDate, relative } from "../lib/format";
 import { exportWordDocx } from "../lib/docx";
@@ -95,6 +102,10 @@ export function BylawsHistoryPage() {
   const [paperlessBusy, setPaperlessBusy] = useState(false);
   const [registryBusy, setRegistryBusy] = useState(false);
   const [lastBotSessionId, setLastBotSessionId] = useState<string | null>(null);
+  // The import tools stay out of the way until asked for from the ⋯ menu.
+  const [importOpen, setImportOpen] = useState(false);
+  const navigate = useNavigate();
+  const isPhone = useIsMobile();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -134,8 +145,13 @@ export function BylawsHistoryPage() {
     });
   };
 
+  const needsServer = serverActionsUnavailable();
   const runPaperlessBot = async () => {
     if (!canScanPaperless || paperlessBusy) return;
+    if (needsServer) {
+      toast.info("Paperless scan unavailable here", serverConnectionMessage("Scanning Paperless"));
+      return;
+    }
     setPaperlessBusy(true);
     try {
       const result = await scanPaperlessBylaws({
@@ -143,13 +159,14 @@ export function BylawsHistoryPage() {
         query: paperlessQuery.trim() || undefined,
         maxDocuments: paperlessLimit,
       });
+      if (!result?.sessionId) throw new Error("No offline handler returned a review session.");
       setLastBotSessionId(result.sessionId);
       toast.success(
         "Paperless bylaws review staged",
         `${result.bylawAmendments ?? 0} candidate version(s), ${result.visionQueue ?? 0} needing page review`,
       );
     } catch (error: any) {
-      toast.error("Could not scan Paperless bylaws", error?.message ?? "Check the Paperless connection and try again.");
+      toast.error("Could not scan Paperless bylaws", serverActionErrorMessage("Scanning Paperless", error, "Check the Paperless connection and try again."));
     } finally {
       setPaperlessBusy(false);
     }
@@ -157,6 +174,10 @@ export function BylawsHistoryPage() {
 
   const runRegistryBot = async () => {
     if (!canStageRegistry || registryBusy) return;
+    if (needsServer) {
+      toast.info("BC Registry staging unavailable here", serverConnectionMessage("Staging BC Registry bylaws"));
+      return;
+    }
     setRegistryBusy(true);
     try {
       const response = await authenticatedFetch("/api/v1/browser-connectors/bylaws-history/import", {
@@ -185,7 +206,7 @@ export function BylawsHistoryPage() {
         );
       }
     } catch (error: any) {
-      toast.error("Could not stage BC Registry bylaws", error?.message ?? "Open a BC Registry browser session and try again.");
+      toast.error("Could not stage BC Registry bylaws", serverActionErrorMessage("Staging BC Registry bylaws", error, "Open a BC Registry browser session and try again."));
     } finally {
       setRegistryBusy(false);
     }
@@ -197,27 +218,54 @@ export function BylawsHistoryPage() {
         title="Bylaws history"
         icon={<BookOpen size={16} />}
         iconColor="purple"
-        subtitle="Every filed amendment from incorporation to today — with the diff at each step and the assembled current text."
+        subtitle="Every filed amendment, with the diff at each step."
+        info={<p>Every filed amendment from incorporation to today — with the diff at each step and the assembled current text.</p>}
         actions={
           <>
-            <div className="segmented">
-              <button className={`segmented__btn${view === "timeline" ? " is-active" : ""}`} onClick={() => setView("timeline")}>Timeline</button>
-              <button className={`segmented__btn${view === "current" ? " is-active" : ""}`} onClick={() => setView("current")}>Current bylaws</button>
-            </div>
-            <Link to="/app/bylaw-diff" className="btn-action"><GitCompare size={12} /> {canScanPaperless ? "New amendment" : "Review amendments"}</Link>
-            {current && <button className="btn-action" onClick={exportCurrent}><FileDown size={12} /> Export current</button>}
+            {canScanPaperless ? (
+              <CreateMenu items={[{ id: "amendment", label: "New amendment", onSelect: () => navigate("/app/bylaw-diff") }]} />
+            ) : (
+              <Link to="/app/bylaw-diff" className="btn-action"><GitCompare size={12} /> Review amendments</Link>
+            )}
+            <MoreActionsMenu
+              label={isPhone ? "" : "More"}
+              items={[
+                ...(current ? [{ id: "export", label: "Export current bylaws", icon: <FileDown size={12} />, onSelect: exportCurrent }] : []),
+                ...(canScanPaperless || canStageRegistry
+                  ? [{
+                      id: "import",
+                      label: "Import from Paperless or BC Registry…",
+                      icon: <Bot size={12} />,
+                      hint: needsServer ? "Needs a server connection" : undefined,
+                      disabled: needsServer,
+                      onSelect: () => setImportOpen(true),
+                    }]
+                  : []),
+              ]}
+            />
           </>
         }
       />
 
+      <Tabs<View>
+        value={view}
+        onChange={setView}
+        items={[
+          { id: "timeline", label: "Timeline" },
+          { id: "current", label: "Current bylaws" },
+        ]}
+      />
+
+      <ImportCandidatesNotice noun="bylaw amendment" targets={["bylawAmendments"]} kinds={["bylawAmendment", "bylawRuleSet"]} documentCategory="Bylaws" emptyRegister={filed.length === 0} />
       <div className="stat-grid">
         <Stat label="Filed amendments" value={String(filed.length)} />
         <Stat label="In flight" value={String(inFlight.length)} sub="Drafts + active consultations" />
-        <Stat
+        {/* With one filing the first and latest dates are the same; show it once. */}
+        {!(firstFiledAt && current && formatDate(firstFiledAt) === formatDate(current.filedAtISO)) && <Stat
           label="First filing"
           value={firstFiledAt ? formatDate(firstFiledAt) : "—"}
           sub={firstFiledAt ? relative(firstFiledAt) : undefined}
-        />
+        />}
         <Stat
           label="Last amended"
           value={current ? formatDate(current.filedAtISO) : "—"}
@@ -225,24 +273,27 @@ export function BylawsHistoryPage() {
         />
       </div>
 
+      {(importOpen || lastBotSessionId) && (
       <div className="card">
         <div className="card__head">
-          <div>
-            <h2 className="card__title"><Bot size={14} /> Bylaws history bot</h2>
-            <p className="card__subtitle">
-              Stage BC Registry and Paperless sources as markdown bylaw versions, then approve them in Import Sessions before they update this timeline.
-            </p>
+          <h2 className="card__title"><Bot size={14} /> Import bylaw versions</h2>
+          <InfoPopover label="About importing bylaw versions">
+            <p>Stage BC Registry and Paperless sources as markdown bylaw versions, then approve them in Import Sessions before they update this timeline.</p>
+            <p>Digital OCR is normalized into Markdown automatically. Scan-only PDFs are queued for page-by-page vision transcription and should stay pending until a reviewer confirms the text.</p>
+          </InfoPopover>
+          <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
+            {lastBotSessionId && (
+              <Link to="/app/imports" className="btn-action">
+                <FileSearch size={12} /> Review staged records
+              </Link>
+            )}
+            <button className="btn-action btn-action--icon" type="button" aria-label="Close import tools" onClick={() => { setImportOpen(false); setLastBotSessionId(null); }}>
+              <X size={12} />
+            </button>
           </div>
-          {lastBotSessionId && (
-            <Link to="/app/imports" className="btn-action">
-              <FileSearch size={12} /> Review staged records
-            </Link>
-          )}
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
-          <Banner tone="warn" icon={<ScanText size={14} />} title="Scans need review">
-            Digital OCR is normalized into Markdown automatically. Scan-only PDFs are queued for page-by-page vision transcription and should stay pending until a reviewer confirms the text.
-          </Banner>
+          <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>Staged versions wait for review in Import Sessions.</p>
           <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
             <Field label="Paperless search">
               <input
@@ -263,15 +314,16 @@ export function BylawsHistoryPage() {
                 onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)}
               />
             </Field>
-            <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy} onClick={runPaperlessBot}>
+            <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy || needsServer} title={needsServer ? serverConnectionMessage("Scanning Paperless") : undefined} onClick={runPaperlessBot}>
               <Database size={12} /> {paperlessBusy ? "Scanning..." : "Scan Paperless"}
             </button>
-            <button className="btn-action" disabled={!canStageRegistry || registryBusy} onClick={runRegistryBot}>
+            <button className="btn-action" disabled={!canStageRegistry || registryBusy || needsServer} title={needsServer ? serverConnectionMessage("Staging BC Registry bylaws") : undefined} onClick={runRegistryBot}>
               <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
             </button>
           </div>
         </div>
       </div>
+      )}
 
       {view === "current" && (
         <div className="card">
@@ -349,7 +401,7 @@ export function BylawsHistoryPage() {
                     <div className="timeline-vertical__item" key={a._id}>
                       <span className="timeline-vertical__dot" style={{ borderColor: "var(--success)", background: "var(--success)" }} />
                       <div className="row" style={{ gap: 8 }}>
-                        <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>
+                        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                           {formatDate(a.filedAtISO)}
                         </span>
                         <Badge tone="success">v{i + 1} · Filed</Badge>
@@ -404,7 +456,7 @@ export function BylawsHistoryPage() {
                                     <div className="timeline-vertical__item" key={j}>
                                       <span className="timeline-vertical__dot" style={{ borderColor: eventColor(ev.action) }} />
                                       <div className="row">
-                                        <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(ev.atISO)}</span>
+                                        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(ev.atISO)}</span>
                                         <Badge tone={eventTone(ev.action)}>
                                           {eventIcon(ev.action)} {eventLabel(ev.action)}
                                         </Badge>
@@ -433,7 +485,7 @@ export function BylawsHistoryPage() {
                 <div className="card__body col" style={{ gap: 6 }}>
                   {withdrawn.map((a: any) => (
                     <div key={a._id} className="row" style={{ padding: 8, border: "1px solid var(--border)", borderRadius: 6 }}>
-                      <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
+                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                         {formatDate(a.updatedAtISO)}
                       </span>
                       <strong style={{ flex: 1 }}>{a.title}</strong>

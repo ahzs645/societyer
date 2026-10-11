@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { columnWidthStyle } from "../utils/columnWidth";
 import {
   ArrowDown,
   ArrowLeft,
@@ -12,6 +13,7 @@ import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../ty
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useIsMobile } from "../../../../lib/useIsMobile";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 
 /**
  * One header cell. Click = cycle sort (asc → desc → off). Drag the right
@@ -57,9 +59,7 @@ export function RecordTableHeaderCell({
     if (!menuOpen) return;
 
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (menuRef.current?.contains(target)) return;
+      if (!isOutsidePointerEvent(event, menuRef)) return;
       setMenuOpen(false);
     };
 
@@ -199,7 +199,7 @@ export function RecordTableHeaderCell({
         "record-table__header-cell" +
         (isLabelIdentifier ? " record-table__header-cell--identifier" : "")
       }
-      style={{ width: recordField.size, minWidth: recordField.size }}
+      style={columnWidthStyle(recordField.size)}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
     >
       <button

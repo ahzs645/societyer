@@ -27,12 +27,15 @@ export function MeetingProxiesCard({
   members,
   presentCount,
   quorumRequired,
+  notYetHeld = false,
 }: {
   societyId: Id<"societies">;
   meetingId: Id<"meetings">;
   members: any[];
   presentCount: number;
   quorumRequired?: number;
+  /** Before the meeting the count is who is expected; quorum is not determined yet. */
+  notYetHeld?: boolean;
 }) {
   const { can } = usePermissions();
   const canRead = can("proxies:read");
@@ -116,7 +119,7 @@ export function MeetingProxiesCard({
       <div className="card__body">
         <div className="meeting-proxy-quorum">
           <span>
-            {societyLaw ? "Members counted" : "Attendees counted"} <strong>{presentCount}</strong>
+            {notYetHeld ? (societyLaw ? "Members expected" : "Attendees expected") : (societyLaw ? "Members counted" : "Attendees counted")} <strong>{presentCount}</strong>
           </span>
           <span>
             Active proxies <strong>{activeProxies.length}</strong>
@@ -125,9 +128,9 @@ export function MeetingProxiesCard({
             Effective total <strong>{effective}</strong>
             {quorumRequired != null ? <span className="muted"> / {quorumRequired} required</span> : null}
           </span>
-          {quorumMet != null && (
-            <Badge tone={quorumMet ? "success" : "danger"}>{quorumMet ? "Quorum met" : "Below quorum"}</Badge>
-          )}
+          {quorumMet != null && (notYetHeld
+            ? <Badge tone="neutral">Quorum determined at the meeting</Badge>
+            : <Badge tone={quorumMet ? "success" : "danger"}>{quorumMet ? "Quorum met" : "Below quorum"}</Badge>)}
         </div>
         <p className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 0 }}>
           Proxies count toward quorum only where the bylaws permit; confirm against the active rule set.

@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { MenuRow, MenuSectionLabel } from "./ui";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
 
 export type MenuItem = {
   id: string;
@@ -45,9 +46,15 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; triggerWidth: number } | null>(null);
   const [posClamped, setPosClamped] = useState(false);
-  const [isBottomSheet, setIsBottomSheet] = useState(
+  const [isPhone, setIsPhone] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
+  // Short action menus stay anchored popovers on phones too; only long ones
+  // become a bottom sheet.
+  const itemCount = sections.reduce((n, s) => n + s.items.length, 0);
+  const isBottomSheet = isPhone && itemCount > SHEET_MIN_ITEMS;
+
+  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
 
   const flat = useMemo(() => sections.flatMap((s) => s.items.filter((i) => !i.disabled)), [sections]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -88,7 +95,7 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
-    const update = () => setIsBottomSheet(media.matches);
+    const update = () => setIsPhone(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -241,6 +248,7 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
                       }
                 }
               >
+                {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
                 {renderSections()}
               </div>
             </>,

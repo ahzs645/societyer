@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { CreateMenu } from "../components/CreateMenu";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
@@ -7,11 +8,14 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { Tabs } from "../components/primitives";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -92,6 +96,11 @@ function newSourceForm() {
   };
 }
 
+/** The current section's record type first, so "+ Add" reads as the obvious next step. */
+function orderCreateItems<T extends { id: string }>(section: string, items: T[]): T[] {
+  return [...items.filter((item) => item.id === section), ...items.filter((item) => item.id !== section)];
+}
+
 function newFactForm() {
   return {
     label: "",
@@ -170,9 +179,11 @@ export function OrganizationHistoryPage() {
   const society = useSociety();
   const data = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const saveSourceRecord = usePermissionedMutation(api.organizationHistory.saveSource, canWrite);
-  const removeSource = usePermissionedMutation(api.organizationHistory.removeSource, canWrite);
+  const removeSourceRaw = usePermissionedMutation(api.organizationHistory.removeSource, canWrite);
   const saveItem = usePermissionedMutation(api.organizationHistory.saveItem, canWrite);
-  const removeItem = usePermissionedMutation(api.organizationHistory.removeItem, canWrite);
+  const removeItemRaw = usePermissionedMutation(api.organizationHistory.removeItem, canWrite);
+  const toast = useToast();
+  const confirm = useConfirm();
   const bulkImport = usePermissionedMutation(api.organizationHistory.bulkImport, canWrite);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -269,10 +280,52 @@ export function OrganizationHistoryPage() {
   if (society === null) return <SeedPrompt />;
   if (data === undefined) return <PageLoading />;
 
+  // Every history delete names what is lost and asks first (G-23).
+  const KIND_LABELS: Record<string, string> = { fact: "fact", event: "event", boardTerm: "board term", motion: "motion", budget: "budget snapshot" };
+  const removeItem = async (args: { id: any; kind: string }) => {
+    const collections: Record<string, any[]> = { fact: facts, event: events, boardTerm: boardTerms, motion: motions, budget: budgets };
+    const row = (collections[args.kind] ?? []).find((item: any) => item._id === args.id);
+    const name = row?.label ?? row?.title ?? row?.personName ?? (row?.motionText ? String(row.motionText).slice(0, 60) : "this record");
+    const ok = await confirm({
+      title: `Delete this ${KIND_LABELS[args.kind] ?? "record"}?`,
+      message: `"${name || "Untitled"}" will be removed from the organization history. Its source documents are not deleted.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await removeItemRaw(args);
+      toast.success("Deleted");
+    } catch (error) {
+      toast.error("Could not delete", error instanceof Error ? error.message : String(error));
+    }
+  };
+  const removeSource = async (args: { id: any }) => {
+    const row = sources.find((item: any) => item._id === args.id);
+    const ok = await confirm({
+      title: "Delete this source?",
+      message: `"${row?.title ?? "Untitled source"}" will be removed. Facts, events and motions that cite it lose that citation.`,
+      confirmLabel: "Delete source",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await removeSourceRaw(args);
+      toast.success("Source deleted");
+    } catch (error) {
+      toast.error("Could not delete the source", error instanceof Error ? error.message : String(error));
+    }
+  };
+  const requireFields = (what: string, fields: Array<[string, unknown]>) => {
+    const missing = fields.filter(([, value]) => value === undefined || value === null || String(value).trim() === "").map(([label]) => label);
+    if (missing.length) toast.error(`${what} not saved`, `Enter ${missing.join(", ")}.`);
+    return missing.length === 0;
+  };
+
   const saveSource = async () => {
     if (!canWrite) return;
     const payload = normalizeSource(sourceForm);
-    if (!payload.title) return;
+    if (!requireFields("Source", [["a title", payload.title]])) return;
     await saveSourceRecord({ societyId: society._id, id: sourceForm._id, payload });
     setSourceForm(null);
   };
@@ -280,7 +333,7 @@ export function OrganizationHistoryPage() {
   const saveFact = async () => {
     if (!canWrite) return;
     const payload = normalizeFact(factForm);
-    if (!payload.label || !payload.value) return;
+    if (!requireFields("Fact", [["a label", payload.label], ["a value", payload.value]])) return;
     await saveItem({ societyId: society._id, id: factForm._id, kind: "fact", payload });
     setFactForm(null);
   };
@@ -288,7 +341,7 @@ export function OrganizationHistoryPage() {
   const saveEvent = async () => {
     if (!canWrite) return;
     const payload = normalizeEvent(eventForm);
-    if (!payload.eventDate || !payload.title || !payload.summary) return;
+    if (!requireFields("Event", [["a date", payload.eventDate], ["a title", payload.title], ["a summary", payload.summary]])) return;
     await saveItem({ societyId: society._id, id: eventForm._id, kind: "event", payload });
     setEventForm(null);
   };
@@ -296,7 +349,7 @@ export function OrganizationHistoryPage() {
   const saveBoardTerm = async () => {
     if (!canWrite) return;
     const payload = normalizeBoardTerm(boardTermForm);
-    if (!payload.personName || !payload.position) return;
+    if (!requireFields("Board term", [["the person's name", payload.personName], ["a position", payload.position]])) return;
     await saveItem({ societyId: society._id, id: boardTermForm._id, kind: "boardTerm", payload });
     setBoardTermForm(null);
   };
@@ -304,7 +357,7 @@ export function OrganizationHistoryPage() {
   const saveMotion = async () => {
     if (!canWrite) return;
     const payload = normalizeMotion(motionForm);
-    if (!payload.meetingDate || !payload.motionText || !payload.outcome) return;
+    if (!requireFields("Motion", [["the meeting date", payload.meetingDate], ["the motion text", payload.motionText], ["an outcome", payload.outcome]])) return;
     await saveItem({ societyId: society._id, id: motionForm._id, kind: "motion", payload });
     setMotionForm(null);
   };
@@ -312,7 +365,7 @@ export function OrganizationHistoryPage() {
   const saveBudget = async () => {
     if (!canWrite) return;
     const payload = normalizeBudget(budgetForm);
-    if (!payload.fiscalYear || !payload.title) return;
+    if (!requireFields("Budget", [["the fiscal year", payload.fiscalYear], ["a title", payload.title]])) return;
     await saveItem({ societyId: society._id, id: budgetForm._id, kind: "budget", payload });
     setBudgetForm(null);
   };
@@ -321,15 +374,31 @@ export function OrganizationHistoryPage() {
     if (!canWrite) return;
     try {
       const parsed = JSON.parse(importText);
-      await bulkImport({
-        societyId: society._id,
+      const payload = {
         sources: normalizeImportSources(parsed.sources),
         facts: normalizeImportFacts(parsed.facts),
         events: normalizeImportEvents(parsed.events),
         boardTerms: normalizeImportBoardTerms(parsed.boardTerms),
         motions: normalizeImportMotions(parsed.motions),
         budgets: normalizeImportBudgets(parsed.budgets),
-      });
+      };
+      const counts = Object.entries(payload).map(([key, rows]) => [key, (rows ?? []).length] as const);
+      const total = counts.reduce((sum, [, count]) => sum + count, 0);
+      const supplied = ["sources", "facts", "events", "boardTerms", "motions", "budgets"]
+        .reduce((sum, key) => sum + (Array.isArray(parsed?.[key]) ? parsed[key].length : 0), 0);
+      if (total === 0) {
+        // G-25: a wrongly shaped file used to close silently with nothing imported.
+        setImportError(supplied
+          ? `None of the ${supplied} row(s) could be imported. Facts need a text "label" and "value"; events need "eventDate", "title" and "summary"; see the field names in the example.`
+          : "Nothing to import. The JSON needs at least one of: sources, facts, events, boardTerms, motions, budgets (each an array).");
+        return;
+      }
+      await bulkImport({ societyId: society._id, ...payload });
+      const skipped = supplied - total;
+      toast.success(
+        `Imported ${total} record${total === 1 ? "" : "s"}`,
+        [counts.filter(([, count]) => count > 0).map(([key, count]) => `${count} ${key}`).join(", "), skipped > 0 ? `${skipped} row(s) skipped as incomplete` : ""].filter(Boolean).join(" · "),
+      );
       setImportText("");
       setImportError("");
       setImportOpen(false);
@@ -354,15 +423,28 @@ export function OrganizationHistoryPage() {
         title="Org history"
         icon={<Newspaper size={16} />}
         iconColor="purple"
-        subtitle="Build an editable, source-backed organization profile from Paperless, archive, registry, and meeting records."
+        subtitle="A source-backed profile of the organization's history."
+        info={<p>Build an editable organization profile from Paperless, archive, registry and meeting records. Each fact, board term, motion and budget links back to its sources.</p>}
         actions={
           <>
-            <button className="btn-action" onClick={() => setImportOpen(true)} disabled={!canWrite}>
-              <Upload size={12} /> Import JSON
-            </button>
-            <button className="btn-action btn-action--primary" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add source
-            </button>
+            <MoreActionsMenu
+              items={[
+                { id: "import", label: "Import JSON", icon: <Upload size={14} />, disabled: !canWrite, onSelect: () => setImportOpen(true) },
+                { id: "workflow", label: "How it works", icon: <BookOpen size={14} />, onSelect: () => setWorkflowOpen(true) },
+              ]}
+            />
+            <CreateMenu
+              label="Add"
+              disabled={!canWrite}
+              items={orderCreateItems(section, [
+                { id: "sources", label: "Source", onSelect: () => setSourceForm(newSourceForm()) },
+                { id: "facts", label: "Fact", onSelect: () => setFactForm(newFactForm()) },
+                { id: "people", label: "Board term", onSelect: () => setBoardTermForm(newBoardTermForm()) },
+                { id: "motions", label: "Motion", onSelect: () => setMotionForm(newMotionForm()) },
+                { id: "budgets", label: "Budget snapshot", onSelect: () => setBudgetForm(newBudgetForm()) },
+                { id: "timeline", label: "Timeline event", onSelect: () => setEventForm(newEventForm()) },
+              ])}
+            />
           </>
         }
       />
@@ -389,20 +471,6 @@ export function OrganizationHistoryPage() {
 
       {section === "facts" && (
         <div className="card">
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">Profile facts</h2>
-              <span className="card__subtitle">Paged, searchable claims with source-document links</span>
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn-action" onClick={() => setWorkflowOpen(true)} disabled={!canWrite}>
-                <BookOpen size={12} /> Workflow
-              </button>
-              <button className="btn-action" onClick={() => setFactForm(newFactForm())} disabled={!canWrite}>
-                <Plus size={12} /> Add fact
-              </button>
-            </div>
-          </div>
           {!factsTableData.loading && !factsTableData.objectMetadata ? (
             <RecordTableMetadataEmpty societyId={society?._id} objectLabel="profile-fact" />
           ) : factsTableData.objectMetadata ? (
@@ -490,11 +558,6 @@ export function OrganizationHistoryPage() {
                     : "Editable service terms with linked source documents"}
                 </span>
               </div>
-              {peopleSection === "terms" && (
-                <button className="btn-action" onClick={() => setBoardTermForm(newBoardTermForm())} disabled={!canWrite}>
-                  <Plus size={12} /> Add term
-                </button>
-              )}
             </div>
 
             <div className="org-history__inline-tabs" role="tablist" aria-label="People history views">
@@ -598,9 +661,6 @@ export function OrganizationHistoryPage() {
               <h2 className="card__title">Converted motions</h2>
               <span className="card__subtitle">Paperless minute motions merged with editable org-history records</span>
             </div>
-            <button className="btn-action" onClick={() => setMotionForm(newMotionForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add motion
-            </button>
           </div>
           <DataTable<any>
             label="Converted motions"
@@ -680,9 +740,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Budget snapshots</h2>
-            <button className="btn-action" onClick={() => setBudgetForm(newBudgetForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add budget
-            </button>
           </div>
           <TableScroll>
             <table className="table">
@@ -751,9 +808,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">History timeline</h2>
-            <button className="btn-action" onClick={() => setEventForm(newEventForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add event
-            </button>
           </div>
           <div className="card__body">
             {events.length > 0 ? (
@@ -797,9 +851,6 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Source records</h2>
-            <button className="btn-action" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
-              <Plus size={12} /> Add source
-            </button>
           </div>
           {sources.length > 0 ? (
             <TableScroll>
@@ -1144,7 +1195,24 @@ export function OrganizationHistoryBudgetPage() {
   }, [sources]);
   const budget = budgets.find((item: any) => item._id === budgetId);
   const budgetLines = Array.isArray(budget?.lines) ? budget.lines : [];
+  const budgetReconciliation = (() => {
+    const out: string[] = [];
+    const sumFor = (pattern: RegExp) => budgetLines
+      .filter((line: any) => pattern.test(String(line.section ?? "")) && typeof line.amountCents === "number")
+      .reduce((sum: number, line: any) => sum + line.amountCents, 0);
+    const pairs: Array<[string, number | undefined, number, boolean]> = [
+      ["Income", budget?.totalIncomeCents, sumFor(/income|revenue/i), budgetLines.some((line: any) => /income|revenue/i.test(String(line.section ?? "")))],
+      ["Expenses", budget?.totalExpenseCents, sumFor(/expense|cost/i), budgetLines.some((line: any) => /expense|cost/i.test(String(line.section ?? "")))],
+    ];
+    for (const [label, header, lines, hasLines] of pairs) {
+      if (typeof header === "number" && hasLines && header !== lines) {
+        out.push(`${label}: header ${formatCents(header, budget?.currency)} vs lines ${formatCents(lines, budget?.currency)} (difference ${formatCents(header - lines, budget?.currency)}).`);
+      }
+    }
+    return out;
+  })();
   const budgetLineGroups = useMemo(() => groupBudgetLines(budgetLines), [budgetLines]);
+  const budgetTotalMismatches = useMemo(() => budgetHeaderMismatches(budget, budgetLineGroups), [budget, budgetLineGroups]);
   const registerTransactions = Array.isArray(budget?.registerTransactions) ? budget.registerTransactions : [];
   const sourceObservations = Array.isArray(budget?.sourceObservations) ? budget.sourceObservations : [];
   const sourceSummary = budget?.sourceSummary;
@@ -1179,26 +1247,7 @@ export function OrganizationHistoryBudgetPage() {
   if (data === undefined) return <PageLoading />;
 
   if (!budget) {
-    return (
-      <div className="page">
-        <PageHeader
-          title="Budget snapshot"
-          icon={<Archive size={16} />}
-          iconColor="purple"
-          subtitle="The requested budget snapshot could not be found."
-          actions={<Link className="btn-action" to="/app/org-history?section=budgets"><ArrowLeft size={12} /> Org history</Link>}
-        />
-        <div className="card">
-          <div className="card__body">
-            <EmptyCallout
-              title="Budget not found"
-              body="Return to Org history and open a current budget snapshot."
-              action={<Link className="btn-action" to="/app/org-history?section=budgets"><ArrowLeft size={12} /> Back to Org history</Link>}
-            />
-          </div>
-        </div>
-      </div>
-    );
+    return <RecordNotFound recordLabel="Budget snapshot" backTo="/app/org-history?section=budgets" backLabel="Org history" icon={<Archive size={16} />} description="It may have been deleted." />;
   }
 
   return (
@@ -1210,7 +1259,13 @@ export function OrganizationHistoryBudgetPage() {
         subtitle={`Budget snapshot · ${fiscalYearLabel}${budget.sourceDate ? ` · source date ${budget.sourceDate}` : ""}`}
         actions={(
           <>
-            <button className="btn-action" type="button" disabled={!canWrite || (extracting || !budget.sourceIds?.length)} onClick={runSourceExtraction}>
+            <button
+              className="btn-action"
+              type="button"
+              disabled={!canWrite || (extracting || !budget.sourceIds?.length)}
+              title={!budget.sourceIds?.length ? "Link a source document to this budget snapshot to extract its detail." : !canWrite ? "You need write access to extract source detail." : undefined}
+              onClick={runSourceExtraction}
+            >
               {extracting ? <RefreshCw size={12} /> : <FileText size={12} />}
               {extracting ? "Extracting" : "Extract source detail"}
             </button>
@@ -1219,12 +1274,34 @@ export function OrganizationHistoryBudgetPage() {
         )}
       />
 
+      {budgetReconciliation.length > 0 && (
+        <div className="bylaw-rules__notice" role="status" style={{ marginBottom: 12 }}>
+          <span>
+            <strong>Totals do not match the line items.</strong>{" "}
+            {budgetReconciliation.join(" ")} The header totals come from the source summary; the line items may be incomplete. Review the source before relying on either.
+          </span>
+        </div>
+      )}
       <div className="stat-grid org-history__budget-stats">
         <Stat label="Fiscal year" value={fiscalYearLabel} icon={<BookOpen size={14} />} sub={budget.sourceDate || "No source date"} />
         <Stat label="Income" value={formatCents(budget.totalIncomeCents, budget.currency)} icon={<FileText size={14} />} />
         <Stat label="Expenses" value={formatCents(budget.totalExpenseCents, budget.currency)} icon={<FileText size={14} />} />
         <Stat label="Register rows" value={String(registerTransactions.length)} icon={<Archive size={14} />} sub={sourceSummary?.pageCount ? `${sourceSummary.pageCount} source pages` : undefined} />
       </div>
+
+      {budgetTotalMismatches.length > 0 && (
+        <div className="callout callout--warn" role="note" style={{ marginBottom: 16 }}>
+          <div className="callout__body">
+            <strong className="callout__title">Totals do not match the line items</strong>
+            {budgetTotalMismatches.map((row) => (
+              <div key={row.label} className="callout__note">
+                {row.label}: snapshot total {formatCents(row.headerCents, budget.currency)}, line items add up to {formatCents(row.linesCents, budget.currency)} (difference {formatCents(row.headerCents - row.linesCents, budget.currency)}).
+              </div>
+            ))}
+            <div className="callout__note muted">Some lines may be missing from the extraction, or the source total may include items that are not itemized. Check the source document before relying on these figures.</div>
+          </div>
+        </div>
+      )}
 
       <div className="two-col org-history__budget-detail-grid">
         <div className="card">
@@ -1763,6 +1840,25 @@ function groupBudgetLines(lines: any[]): BudgetLineGroup[] {
       hasExplicitTotal: Boolean(explicitTotalLine),
     };
   });
+}
+
+/** Header income/expense totals that disagree with the sum of their line groups (L14). */
+function budgetHeaderMismatches(budget: any, groups: BudgetLineGroup[]) {
+  const rows: Array<{ label: string; headerCents: number; linesCents: number }> = [];
+  if (!budget) return rows;
+  const sum = (pattern: RegExp) => {
+    const matching = groups.filter((group) => pattern.test(group.section) && typeof group.totalCents === "number");
+    return matching.length ? matching.reduce((total, group) => total + Number(group.totalCents), 0) : undefined;
+  };
+  const income = sum(/income|revenue/i);
+  const expense = sum(/expense|expenditure|cost/i);
+  if (typeof budget.totalIncomeCents === "number" && typeof income === "number" && Math.abs(budget.totalIncomeCents - income) >= 100) {
+    rows.push({ label: "Income", headerCents: budget.totalIncomeCents, linesCents: income });
+  }
+  if (typeof budget.totalExpenseCents === "number" && typeof expense === "number" && Math.abs(budget.totalExpenseCents - expense) >= 100) {
+    rows.push({ label: "Expenses", headerCents: budget.totalExpenseCents, linesCents: expense });
+  }
+  return rows;
 }
 
 function isBudgetTotalLine(line: any) {

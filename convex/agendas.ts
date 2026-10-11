@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { agendaItemExtensionFields } from "./validators/meetingModel";
 import {
   listForMeetingPortable,
   getForMeetingPortable,
@@ -82,6 +83,7 @@ export const addItem = authorizedMutation("agendas:addItem", mutation)({
     motionTemplateId: v.optional(v.id("motionTemplates")),
     motionId: v.optional(v.id("motions")),
     motionText: v.optional(v.string()),
+    ...agendaItemExtensionFields,
   },
   returns: v.any(),
   handler: async (ctx, args) => addItemPortable(await toPortableMutationCtx(ctx), args),
@@ -97,6 +99,7 @@ export const updateItem = authorizedMutation("agendas:updateItem", mutation)({
     timeAllottedMinutes: v.optional(v.number()),
     motionText: v.optional(v.string()),
     outcome: v.optional(v.string()),
+    ...agendaItemExtensionFields,
   },
   returns: v.any(),
   handler: async (ctx, args) => updateItemPortable(await toPortableMutationCtx(ctx), args),
@@ -118,6 +121,7 @@ export const syncForMeeting = authorizedMutation("agendas:syncForMeeting", mutat
       motionTemplateId: v.optional(v.id("motionTemplates")),
       motionId: v.optional(v.id("motions")),
       motionText: v.optional(v.string()),
+      ...agendaItemExtensionFields,
     })),
   },
   returns: v.any(),
