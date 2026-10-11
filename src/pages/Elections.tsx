@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { InfoPopover } from "../components/InfoPopover";
@@ -181,7 +182,7 @@ export function ElectionsPage() {
           <div className="row" style={{ gap: 6, flexWrap: "nowrap", alignItems: "center" }}>
             <span><strong>Bylaw restriction:</strong> the bylaws don't allow electronic voting.</span>
             <InfoPopover label="About the bylaw restriction">
-              <p>The active bylaw rule set currently disallows electronic voting. You can still prepare elections here, but opening them for remote ballots may not match the society's bylaws.</p>
+              <p>The active bylaw rule set currently disallows electronic voting. You can still prepare elections here, but opening them for remote ballots may not match {governingDocumentsPhrase(society)}.</p>
             </InfoPopover>
           </div>
         </div>
@@ -469,4 +470,11 @@ export function ElectionsPage() {
       </Drawer>
     </div>
   );
+}
+
+function governingDocumentsPhrase(society: any): string {
+  const vocab = governanceVocabulary(society);
+  if (vocab.societyLaw) return "the society's bylaws";
+  if (vocab.isCorporation) return "the corporation's articles and by-laws";
+  return "the organization's governing documents";
 }

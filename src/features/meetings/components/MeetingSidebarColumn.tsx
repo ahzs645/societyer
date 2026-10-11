@@ -13,6 +13,7 @@ import {
 } from "../lib/minutesExportStyles";
 import { formatDate } from "../../../lib/format";
 import { resolveJurisdictionCode } from "../../../lib/jurisdictionGuideTracks";
+import { governanceVocabulary } from "../../../lib/governanceVocabulary";
 import {
   Check,
   Detail,
@@ -150,6 +151,9 @@ export function MeetingSidebarColumn({
   const { can } = usePermissions();
   const canDownload = can("exports:download");
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
+  // The 14–60 day notice and 30-day annual report windows are BC Societies Act
+  // defaults; other entities follow their Act, articles/by-laws and registry.
+  const societyLaw = governanceVocabulary(society).societyLaw;
   const minutesExportBlocked = formalExportBlockers.length > 0;
   const sourceDocumentsAccessible = can("documents:read") && (minutes?.sourceDocumentIds ?? []).every((id: string) => (sourceDocuments ?? []).some((document: any) => document._id === id));
   const agmRun = useQuery(
@@ -427,11 +431,11 @@ export function MeetingSidebarColumn({
                   is the authoritative source; always defer to it over this card
                   when the two disagree.
                 */}
-                <Check ok={!!meeting.noticeSentAt}>Notice sent 14–60 days in advance</Check>
+                <Check ok={!!meeting.noticeSentAt}>{societyLaw ? "Notice sent 14–60 days in advance" : "Notice sent within the required notice window"}</Check>
                 <Check ok={meeting.status === "Held"}>Meeting held</Check>
                 <Check ok={minutesRecorded}>Minutes recorded</Check>
                 <Check ok={!!minutes?.approvedAt}>Minutes approved at next meeting</Check>
-                <Check ok={isAgmStepDone(agmRun, "annualReportFiled")}>Annual report filed within 30 days</Check>
+                <Check ok={isAgmStepDone(agmRun, "annualReportFiled")}>{societyLaw ? "Annual report filed within 30 days" : "Annual registry filing recorded"}</Check>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
                   See the <Link to={`/app/meetings/${meeting._id}/agm`}>AGM workflow</Link> for the authoritative,
                   step-by-step status of this meeting.

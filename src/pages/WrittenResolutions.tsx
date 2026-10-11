@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -62,6 +63,7 @@ export function WrittenResolutionsPage() {
   if (society === null) return <SeedPrompt />;
 
   const eligibleVoters = (members ?? []).filter((m: any) => m.status === "Active" && m.votingRights).length;
+  const vocab = governanceVocabulary(society);
 
   const openNew = () => {
     if (!canWrite) return;
@@ -85,10 +87,14 @@ export function WrittenResolutionsPage() {
         title="Written resolutions"
         icon={<PenLine size={16} />}
         iconColor="purple"
-        subtitle="Members' resolutions passed in writing instead of at a meeting."
-        info={
-          <p>Ordinary resolutions need majority written consent; special resolutions need unanimous written consent from all voting members.</p>
-        }
+        subtitle={vocab.isCorporation
+          ? "Directors' and shareholders' resolutions passed in writing instead of at a meeting."
+          : vocab.societyLaw
+            ? "Members' resolutions passed in writing instead of at a meeting."
+            : "Resolutions passed in writing instead of at a meeting."}
+        info={vocab.societyLaw
+          ? <p>Ordinary resolutions need majority written consent; special resolutions need unanimous written consent from all voting members.</p>
+          : <p>Confirm who must sign under the governing Act and the {vocab.isCorporation ? "articles or by-laws" : "governing documents"}, and record the required signatures for each resolution.</p>}
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New resolution
@@ -192,14 +198,22 @@ export function WrittenResolutionsPage() {
               <Field label="Kind">
                 <Select value={form.kind} onChange={(value) => {
                   const k = value;
-                  setForm({ ...form, kind: k, requiredCount: k === "Special" ? eligibleVoters : Math.ceil(eligibleVoters / 2) });
+                  // Only the society baseline has a reviewed majority rule for
+                  // ordinary written resolutions; elsewhere default to all
+                  // eligible signers and let the user lower it.
+                  setForm({ ...form, kind: k, requiredCount: k === "Special" || !vocab.societyLaw ? eligibleVoters : Math.ceil(eligibleVoters / 2) });
                 }}
-                  options={[
+                  options={vocab.societyLaw ? [
                     { value: "Ordinary", label: "Ordinary (majority)" },
                     { value: "Special", label: "Special (unanimous, in lieu of meeting)" },
+                  ] : [
+                    { value: "Ordinary", label: "Ordinary" },
+                    { value: "Special", label: "Special" },
                   ]} />
               </Field>
-              <Field label="Required signatures" hint={`Eligible voting members: ${eligibleVoters}`}>
+              <Field label="Required signatures" hint={vocab.isCorporation
+                ? `Voting members on the member register: ${eligibleVoters}. Confirm the count against the shareholder and director registers.`
+                : `Eligible voting members: ${eligibleVoters}`}>
                 <input className="input" type="number" value={form.requiredCount} onChange={(e) => setForm({ ...form, requiredCount: Number(e.target.value) })} />
               </Field>
             </div>

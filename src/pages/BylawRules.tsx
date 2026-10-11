@@ -495,7 +495,7 @@ export function BylawRulesPage() {
                   onChange={(value) =>
                     setForm({ ...form, proxyHolderMustBeMember: value })
                   }
-                  label="Require proxy holder to be a member"
+                  label={corporate ? "Require proxy holder to be a shareholder" : "Require proxy holder to be a member"}
                 />
                 <Toggle
                   disabled={!canWrite}
@@ -519,7 +519,7 @@ export function BylawRulesPage() {
                   onChange={(value) =>
                     setForm({ ...form, voterMustBeMemberAtRecordDate: value })
                   }
-                  label="Voter must be a member at the record date"
+                  label={corporate ? "Voter must be a shareholder at the record date" : "Voter must be a member at the record date"}
                 />
               </div>
               <div className="bylaw-rules__field-grid bylaw-rules__field-grid--single">
@@ -545,11 +545,11 @@ export function BylawRulesPage() {
         <div className="bylaw-rules__column">
           <div className="card bylaw-rules__card">
             <div className="card__head">
-              <h2 className="card__title">AGM and proposals</h2>
+              <h2 className="card__title">{corporate ? "Annual meeting and proposals" : "AGM and proposals"}</h2>
             </div>
             <div className="card__body bylaw-rules__body">
               <div className="bylaw-rules__field-grid">
-                <Field label="Annual report due after AGM (days)">
+                <Field label={corporate ? "Annual filing due after annual meeting (days)" : "Annual report due after AGM (days)"}>
                   <input
                     disabled={!canWrite}
                     className="input"
@@ -629,7 +629,7 @@ export function BylawRulesPage() {
                   onChange={(value) =>
                     setForm({ ...form, requireAgmFinancialStatements: value })
                   }
-                  label="Require financial statements to be presented at the AGM"
+                  label={corporate ? "Require financial statements to be presented at the annual meeting" : "Require financial statements to be presented at the AGM"}
                 />
                 <Toggle
                   disabled={!canWrite}
@@ -637,7 +637,7 @@ export function BylawRulesPage() {
                   onChange={(value) =>
                     setForm({ ...form, requireAgmElections: value })
                   }
-                  label="Require elections at the AGM"
+                  label={corporate ? "Require director elections at the annual meeting" : "Require elections at the AGM"}
                 />
               </div>
             </div>
@@ -699,7 +699,7 @@ export function BylawRulesPage() {
                       inspectionMemberRegisterByMembers: value,
                     })
                   }
-                  label="Members may inspect the member register"
+                  label={corporate ? "Shareholders may inspect the share register" : "Members may inspect the member register"}
                 />
                 <Toggle
                   disabled={!canWrite}
@@ -710,7 +710,7 @@ export function BylawRulesPage() {
                       inspectionMemberRegisterByPublic: value,
                     })
                   }
-                  label="Public may inspect the member register"
+                  label={corporate ? "Public may inspect the share register" : "Public may inspect the member register"}
                 />
                 <Toggle
                   disabled={!canWrite}
@@ -721,7 +721,7 @@ export function BylawRulesPage() {
                       inspectionDirectorRegisterByMembers: value,
                     })
                   }
-                  label="Members may inspect the director register"
+                  label={corporate ? "Shareholders may inspect the director register" : "Members may inspect the director register"}
                 />
                 <Toggle
                   disabled={!canWrite}

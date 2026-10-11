@@ -20,6 +20,8 @@ import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
+import { useSociety } from "@/hooks/useSociety";
+import { governanceVocabulary } from "@/lib/governanceVocabulary";
 import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow, defaultNewMeetingStart } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -254,6 +256,7 @@ export function MeetingFormFields({
   } = data;
   const availableTemplates = meetingTemplatesForType(meetingTemplates, value.type);
   const overlaps = meetingScheduleConflicts(meetings, value.scheduledAt, editingId);
+  const corporate = governanceVocabulary(useSociety()).isCorporation;
 
   return (
     <div className="meeting-form">
@@ -332,7 +335,7 @@ export function MeetingFormFields({
             }}
             options={meetingBodyOptions((committees ?? []).map((committee) => ({ _id: String(committee._id), name: committee.name, status: (committee as any).status })))
               .filter((option) => option.value !== "external")
-              .map((option) => ({ value: option.value, label: option.label, hint: option.group }))}
+              .map((option) => ({ value: option.value, label: meetingTypeLabel(option.value, option.label, corporate), hint: meetingBodyGroup(option.group, corporate) }))}
           />
         </Field>
         <Field label="Scheduled">
@@ -434,4 +437,16 @@ export function MeetingFormFields({
       )}
     </div>
   );
+}
+
+/** Stored bodies stay agm/sgm; corporations see shareholder-meeting labels. */
+function meetingTypeLabel(value: string, label: string, corporate: boolean): string {
+  if (!corporate) return label;
+  if (value === "agm") return "Annual shareholder meeting (AGM)";
+  if (value === "sgm") return "Special shareholder meeting (SGM)";
+  return label;
+}
+
+function meetingBodyGroup(group: string, corporate: boolean): string {
+  return corporate && group === "Members" ? "Shareholders" : group;
 }

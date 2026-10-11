@@ -1154,6 +1154,9 @@ export function MeetingDetailPage() {
       society: {
         name: society.name,
         incorporationNumber: society.incorporationNumber ?? null,
+        entityType: (society as any).entityType ?? null,
+        actFormedUnder: (society as any).actFormedUnder ?? null,
+        jurisdictionCode: (society as any).jurisdictionCode ?? null,
         logoUrl: (society as any).logoUrl ?? null,
         letterheadUrl: (society as any).letterheadUrl ?? null,
       },

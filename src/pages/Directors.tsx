@@ -31,6 +31,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
 
@@ -109,6 +110,14 @@ export function DirectorsPage() {
   // compliance flags would flash red for a frame before real data arrives.
   // Skip the warning UI until we know the actual numbers.
   const directorsLoaded = directors !== undefined;
+  // The BC-resident column is the Societies Act s.40 residency check; hide it
+  // where the director rules do not track residency (e.g. corporations).
+  const showBcResidentField = directorProfile.showBcResidentField;
+  const directorsView = useMemo(() => {
+    const view = tableData.hydratedView;
+    if (!view || showBcResidentField) return view;
+    return { ...view, columns: view.columns.map((column) => column.field?.name === "isBCResident" ? { ...column, isVisible: false } : column) };
+  }, [tableData.hydratedView, showBcResidentField]);
   const roleTerms = useMemo(() => {
     return (orgHistory?.boardTerms ?? [])
       .slice()
@@ -235,7 +244,7 @@ export function DirectorsPage() {
           <RecordTableScope
             tableId="directors"
             objectMetadata={tableData.objectMetadata}
-            hydratedView={tableData.hydratedView}
+            hydratedView={directorsView}
             records={records}
             onRecordClick={(_, record) => {
               setSelected(record);
@@ -343,8 +352,9 @@ export function DirectorsPage() {
             )}
             {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
             <InspectorNote tone="warn" title="Director register">
-              Keep this register current. Changes to directors normally need to be reflected in your
-              filing workflow within 30 days.
+              {governanceVocabulary(society).societyLaw
+                ? "Keep this register current. Changes to directors normally need to be reflected in your filing workflow within 30 days."
+                : "Keep this register current. Changes to directors usually need a registry notice; check the deadline under the governing Act."}
             </InspectorNote>
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>

@@ -8,6 +8,7 @@ export default defineConfig({
   // backend (or the Vite dev server's /src modules) and run under their own configs.
   testIgnore: [
     "corporation-mvp-flow.spec.ts",
+    "corporation-governance-copy.spec.ts",
     "pathway-pipeline.spec.ts",
     "interface-*.spec.ts",
     "live-interface-*.spec.ts",

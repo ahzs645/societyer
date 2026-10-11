@@ -5,6 +5,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { capitalize, governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -49,11 +50,13 @@ export function InspectionsPage() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const vocab = governanceVocabulary(society);
+  const insiderLabel = capitalize(vocab.voterNoun);
   const records = useMemo(() => (items ?? []).map((r: any) => ({
     ...r,
-    inspectorType: r.isMember ? "Member" : "Public",
+    inspectorType: r.isMember ? insiderLabel : "Public",
     copies: r.copyPages ? `${r.copyPages} pg · ${money(r.copyFeeCents)}` : "—",
-  })), [items]);
+  })), [items, insiderLabel]);
 
   const openNew = useCallback(() => {
     if (!canWrite) return;
@@ -102,7 +105,9 @@ export function InspectionsPage() {
         icon={<Eye size={16} />}
         iconColor="gray"
         subtitle="Who inspected official records and what fees were charged."
-        info={<p>Societies Act s.24: the public may be charged up to $10 per day for inspection, plus $0.50 per page for copies ($0.10 per page electronic).</p>}
+        info={vocab.societyLaw
+          ? <p>Societies Act s.24: the public may be charged up to $10 per day for inspection, plus $0.50 per page for copies ($0.10 per page electronic).</p>
+          : <p>Confirm inspection rights and any fee limits under the governing Act and the {vocab.isCorporation ? "articles or by-laws" : "governing documents"}.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log inspection
@@ -135,7 +140,7 @@ export function InspectionsPage() {
             loading={tableData.loading || items === undefined}
             renderCell={({ record, field }) => {
               if (field.name === "inspectedAtISO") return <span className="mono">{formatDate(record.inspectedAtISO)}</span>;
-              if (field.name === "inspectorType") return record.isMember ? <Badge tone="info">Member</Badge> : <Badge>Public</Badge>;
+              if (field.name === "inspectorType") return record.isMember ? <Badge tone="info">{insiderLabel}</Badge> : <Badge>Public</Badge>;
               if (field.name === "feeCents") return <span className="mono">{money(record.feeCents)}</span>;
               return undefined;
             }}
@@ -165,9 +170,13 @@ export function InspectionsPage() {
               <input className="input" value={form.inspectorName} onChange={(e) => setForm({ ...form, inspectorName: e.target.value })} />
             </Field>
             <label className="checkbox">
-              <input type="checkbox" checked={form.isMember} onChange={(e) => setForm({ ...form, isMember: e.target.checked })} /> Member of the society (no fee)
+              <input type="checkbox" checked={form.isMember} onChange={(e) => setForm({ ...form, isMember: e.target.checked })} /> {vocab.societyLaw ? "Member of the society (no fee)" : `${insiderLabel} of the ${vocab.organizationNoun}`}
             </label>
-            <Field label="Records requested" hint="e.g. members register (excluded from public), bylaws, 2025 AGM minutes">
+            <Field label="Records requested" hint={vocab.societyLaw
+              ? "e.g. members register (excluded from public), bylaws, 2025 AGM minutes"
+              : vocab.isCorporation
+                ? "e.g. share register, articles and by-laws, 2025 shareholder meeting minutes"
+                : "e.g. member register, governing documents, 2025 meeting minutes"}>
               <MarkdownEditor rows={4} value={form.recordsRequested} onChange={(markdown) => setForm({ ...form, recordsRequested: markdown })} />
             </Field>
             <Field label="Related document (optional)">

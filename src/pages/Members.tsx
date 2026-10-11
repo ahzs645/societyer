@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
@@ -181,7 +182,7 @@ export function MembersPage() {
         title="Members"
         icon={<Users size={16} />}
         iconColor="blue"
-        subtitle="Register of members as required under s.20 of the Societies Act."
+        subtitle={membersSubtitle(society)}
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
@@ -408,4 +409,13 @@ export function MembersPage() {
 function cleanAliases(value: unknown) {
   const items = Array.isArray(value) ? value : String(value ?? "").split(",");
   return Array.from(new Set(items.map((item) => String(item).trim()).filter(Boolean)));
+}
+
+function membersSubtitle(society: any): string {
+  const vocab = governanceVocabulary(society);
+  if (vocab.societyLaw) return "Register of members as required under s.20 of the Societies Act.";
+  if (vocab.isCorporation) {
+    return "Member and contact records for this corporation. Shareholders, directors and officers are recorded in Role holders and the share register.";
+  }
+  return "Register of members for this organization. Confirm membership requirements against its governing documents.";
 }
