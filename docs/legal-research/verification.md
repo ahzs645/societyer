@@ -2,6 +2,8 @@
 
 **Verified 11 October 2026.** The final production build, all **38 legal/evidence regression scripts**, the **21-suite run with access enforcement enabled**, and the strict **22-test browser sweep** passed. The browser visited **540 routes** across five independently created workspace types, with no uncaught page errors or unallowlisted entity-copy leaks.
 
+**Correction (same day).** That verification ran the browser sweep locally only. It did not run the corporation browser suite (`playwright.corporation.config.ts`), the legal record-form and task interface specs, or `scripts/check-platform-polish.ts`, and CI ran none of them. On the published revision (`aa79237`) all three failed: the corporation suite passed 0 of 4 tests, the record-form spec failed at every width, and the polish check failed. Most failures were tests that still expected copy the PR had intentionally changed. One was a real defect: the sidebar built its navigation items without the privacy label mode, so it showed the neutral "Privacy" label for every workspace. The [follow-up corrections](#follow-up-browser-coverage-in-ci-and-the-bc-privacy-default) fix these, restore the BC privacy default, and add a browser job to CI.
+
 The [machine-readable results](verification-results.json) retain the individual gate names and durations, browser route inventory, environment, source-coverage count and runtime-parity results. The [coverage manifest](coverage.json) independently maps all 102 brief questions to their answers, official authorities, available runtime source IDs and implementation boundaries.
 
 ## Executed checks
@@ -17,7 +19,7 @@ The [machine-readable results](verification-results.json) retain the individual 
 | Voting-power and static corporation people-register checks | Passed | The downstream domain checks skipped by the initial failed CI run also pass; the equity-ledger check passes inside the enforced runner |
 | Portable conformance matrix in GitHub Actions | 987 registered functions; 0 divergent results | 441 exercised query/mutation cases and 546 consistent rejection cases agree across the compared runtimes |
 | `npm run build` | Passed | Convex TypeScript, project TypeScript and Vite production build; Vite completed in 39.85 seconds |
-| `npm run test:entity-sweep` with the available Chromium executable | 22/22 tests passed | Guided setup, complete route inventory, entity-copy assertions, privacy conditional-state assertions and uncaught-error checks |
+| `npm run test:entity-sweep` with the available Chromium executable | 22/22 tests passed (local run only; not run in CI at the time) | Guided setup, complete route inventory, entity-copy assertions, privacy conditional-state assertions and uncaught-error checks |
 | `git diff --check` | Passed | No patch whitespace errors |
 
 The production build emitted Vite's warning about chunks larger than 1000 kB after minification. This was a warning, not a failed build; this change does not establish a performance budget or redesign the application's large editor/dependency bundles.
@@ -54,9 +56,9 @@ The regression retains historical unexecuted text and adds a review projection/a
 
 ### Privacy and source-guided screens
 
-Privacy tests exercise authenticated schema persistence, activity-based multi-law assessment, missing/contradictory facts, nonprofit exceptions, source selection, access-day bases, incident-record periods, exclusion of proposed laws, shared policy output, preservation of authored drafts and idempotent draft/task creation.
+Privacy tests exercise authenticated schema persistence, the BC-home presumption of BC PIPA and its displacement by recorded federal-work or non-BC facts, activity-based multi-law assessment, missing/contradictory facts, nonprofit exceptions, source selection, access-day bases, incident-record periods, exclusion of proposed laws, shared policy output, preservation of authored drafts and idempotent draft/task creation.
 
-Rendered guidance tests cover the four reviewed governance profiles and unsupported nonprofit/cooperative entities. They check entity-specific sources, optional society audit, distinct director/senior-manager conflict rules, Ontario's repealed auditor exemption, member-funded director requirements and the separation of privacy applicability from incorporation. Explicit unknown jurisdictions and Acts cannot clear the review guard through stored bylaw rules or lower-priority legacy identity fields.
+Rendered guidance tests cover the four reviewed governance profiles and unsupported nonprofit/cooperative entities. They check entity-specific sources, optional society audit, distinct director/senior-manager conflict rules, Ontario's repealed auditor exemption, member-funded director requirements and the separation of privacy applicability from incorporation outside BC. Explicit unknown jurisdictions and Acts cannot clear the review guard through stored bylaw rules or lower-priority legacy identity fields.
 
 ## Strict browser sweep
 
@@ -73,11 +75,69 @@ The final run completed in approximately **2.2 minutes**: five guided workspace 
 
 The known-leak baseline is empty. There were no new or stale baseline entries. Narrow allowances cover reviewed contextual wording, such as closed conditional privacy-law summaries and external catalogue/tag identifiers; the tests assert the surrounding privacy applicability explanation and absence of an “assessed as applicable” claim. They do not globally suppress PIPA or society wording.
 
-The representative Privacy screenshot was visually inspected. The full applicability questions wrap and remain readable, the workspace has no inferred operating province, and possible laws remain visibly conditional. The final evidence timestamp is **2026-10-11T19:47:59.595Z**.
+The representative Privacy screenshot (the CBCA workspace) was visually inspected. The full applicability questions wrap and remain readable, the workspace has no inferred operating province, and possible laws remain visibly conditional. After the follow-up, the two BC workspaces show BC PIPA as "Presumed: confirm facts" instead; see below. The final evidence timestamp is **2026-10-11T19:47:59.595Z**.
 
 The normal Playwright browser download failed in this environment. The successful run used Chromium **147.0.7727.0** from an isolated `@sparticuz/chromium` installation and the repository's existing configurable executable path. No browser dependency was added to the application. The final build and legal checks include the two subsequent TypeScript-only narrowing/array annotations; those did not change browser behaviour.
 
 Earlier discovery runs found an inspection-copy leak, a sidebar readiness race in the test, unreadable form labels and concurrent-edit React errors. The implementation/test corrections were made before the final strict run. Those discovery failures are not counted as successful verification.
+
+## Follow-up: browser coverage in CI and the BC privacy default
+
+### What CI runs
+
+The `Legal governance and evidence` workflow (`.github/workflows/legal-governance.yml`) runs on every pull request and every push to `main`. It has two jobs.
+
+| Job | Steps |
+| --- | --- |
+| `legal-governance` | `npm run test:legal` (38 scripts), `npx tsx scripts/check-platform-polish.ts`, `npm run test:portable-manifest`, `npm run build` |
+| `legal-governance-browser` | Installs Playwright Chromium (`npx playwright install --with-deps chromium`), then runs: the strict entity sweep (`ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep`, 20-minute step limit); the corporation browser suite (`playwright.corporation.config.ts`); and `tests/interface-records.spec.ts` with `tests/interface-tasks.spec.ts` on the desktop project of `playwright.interface.config.ts`. Each later suite still runs if an earlier one fails. Failure artifacts are uploaded. The job limit is 50 minutes. |
+
+The portable conformance workflow is unchanged. CI still does not run the other interface projects (narrow phone, phone, tablet), the other Playwright configs, or the enforced Stage 2 runner (`scripts/check-stage2-enforced.ts`). The enforced runner result above is a local result.
+
+### Test expectations updated to the PR's intended copy
+
+Each change below was checked against the PR diff. Each test now asserts the new behaviour.
+
+- **Director attestations** (`src/pages/Attestations.tsx`). Corporate statutes impose no annual director attestation, so the statutory warning ("have not yet attested") became an informational note: "have no optional annual attestation recorded for {year}". The test asserts the new note and that the old wording is gone.
+- **Written resolutions** (`src/pages/WrittenResolutions.tsx`). The free-typed signature count, with its "Shareholders holding voting shares on the share register: 1" hint, was replaced by a server-computed electorate preview. The count is still shown, so this is not a regression. For the CBCA fixture the drawer shows "1 eligible people · 1 people. Required: 1 people." (CBCA s. 142 needs every voting shareholder) and the decision body "Shareholders". The test asserts both. The elections page still shows the share-register voter source.
+- **Elections subtitle**: now "Shareholder elections with verified representation and share-weighted ballots."
+- **Conflicts subtitle**: now the entity-neutral "Directors’ disclosed interests and the recorded handling of each matter." The test still asserts that "(s.56)" never appears.
+- **Annual packet**: "Annual resolutions and return packet" became the preparation-only "Annual business and return preparation". The test asserts the new name and that the old one is gone.
+- **Auditors dialog**: the field "Firm name" became "Auditor or firm name", because an auditor can be an individual. The other 27 dialog fields in `interface-records.spec.ts` were checked against the current labels and pass at all four widths. That test's time limit rose from 120 to 300 seconds: it opens 28 dialogs per width, and on a loaded runner the full sequence can take longer than two minutes.
+- **Loading label**: while a workspace loads, the privacy navigation label is the neutral "Privacy". The PR made this change on purpose; the polish check now expects it.
+
+### BC privacy default
+
+The PR derived privacy labels and checks only from recorded privacy facts. Every existing BC society and BC company without those facts therefore lost the "Privacy (PIPA)" label and its PIPA dashboard checks. That outcome was legally too narrow. BC PIPA s. 1 defines "organization" to include "a not for profit organization". Section 3(1) applies the Act to every organization, except where the federal Act (PIPEDA) applies to a federal work, undertaking or business, or to interprovincial or international commercial transfers (s. 3(2)).
+
+`shared/privacyRuleProfiles.ts` now presumes BC PIPA for a BC-home workspace (the same BC-home test the rest of the app uses) unless recorded facts displace it:
+
+- federal-work status is recorded as "yes";
+- a health or public-sector regime is recorded; or
+- the recorded operating locations exclude BC.
+
+A presumed law is applicable for labels and checks, carries `basis: "presumed"`, and appears in the assessment UI as "Presumed: confirm facts". The page title reads "Privacy (BC PIPA — presumed: confirm facts)". The open facts stay listed, and the dashboard still asks for the assessment. The navigation shows "Privacy (PIPA)" and "PIPA training" again, and the BC PIPA dashboard checks, guides and setup motions are restored.
+
+Outside BC, nothing is presumed: those workspaces still use the activity-based assessment. A complete BC assessment ("BC operations, not a federal work, general private-sector records") replaces the presumption with a recorded result. `check-privacy-profiles.ts`, `check-entity-rule-scope.ts`, `check-organization-vocabulary.ts`, `check-dashboard-resource-authority.ts`, `check-jurisdiction-guide-tracks.ts` and `check-platform-polish.ts` each assert the BC default and an explicit federal-work override. The entity sweep asserts the presumed state for the two BC workspaces and the conditional state for the other three. The corporation suite asserts the sidebar labels and the presumption badge for a BC company.
+
+### Defect found by the new coverage
+
+`src/components/Layout.internal.tsx` built sidebar items without the route's `privacyMode`. As a result, the sidebar never resolved privacy labels, even for a workspace with recorded BC facts. The item now carries `privacyMode`, and `check-platform-polish.ts` guards against regression.
+
+### Local results for the follow-up
+
+These runs used Chromium from `SOCIETYER_CHROMIUM_PATH`, on a heavily loaded 4-core machine:
+
+| Check | Result |
+| --- | --- |
+| `npx playwright test -c playwright.corporation.config.ts` | 4/4 passed |
+| Interface records and tasks, desktop project | 9/9 passed |
+| `ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep` | 22/22 passed in about 5 minutes; 540 routes, 0 page errors, 0 leaks, empty baseline |
+| `npm run test:legal` | 38/38 passed |
+| `check-platform-polish.ts`, `check-privacy-profiles.ts`, `check-entity-rule-scope.ts` | Passed |
+| `npx tsc -b` | Passed |
+
+The CI results for these jobs appear on the PR checks once the revision is pushed. This document does not claim a CI pass for them.
 
 ## Reproduction and practical limits
 
@@ -97,6 +157,15 @@ npm run build
 npm run test:entity-sweep
 ```
 
-If Chromium is installed outside Playwright's default location, set `SOCIETYER_CHROMIUM_PATH` to the executable. A custom font installation can require `FONTCONFIG_PATH`. The legal runner uses `node --import tsx`, avoiding the separate `tsx` CLI's IPC requirement. The dedicated PR workflow runs the legal gates, manifest drift check and production build.
+Browser suites (also run in CI; see below):
+
+```sh
+ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep
+npx playwright test -c playwright.corporation.config.ts
+npx playwright test -c playwright.interface.config.ts tests/interface-records.spec.ts tests/interface-tasks.spec.ts --project=desktop
+npx tsx scripts/check-platform-polish.ts
+```
+
+If Chromium is installed outside Playwright's default location, set `SOCIETYER_CHROMIUM_PATH` to the executable. The configs use it only when set. A custom font installation can require `FONTCONFIG_PATH`. To run several checkouts on one machine, set `ENTITY_SWEEP_PORT`, `CORPORATION_FLOW_PORT` or `INTERFACE_AUDIT_PORT` to free ports. The legal runner uses `node --import tsx`, avoiding the separate `tsx` CLI's IPC requirement.
 
 These are synthetic evidence/authorization fixtures and browser workflows, not a production registry acceptance test or a legal opinion on an organization's facts. Articles, bylaws, unanimous shareholder agreements, actual execution, historical law, office calendars and special subtypes remain factual review inputs. The reviewed-calendar contract has no broad capture UI in this change, and annual preparation packets require a separately reviewed execution instrument. Ontario and Alberta source-retrieval limits are stated in the detailed research. A passing suite verifies the encoded behaviour and provenance; it cannot establish future legislative currency.

@@ -22,7 +22,50 @@ jobs:
       - run: npm ci
       - name: Source coverage, profiles, evidence and authorization
         run: npm run test:legal
+      - name: Navigation labels, translations and privacy labels
+        run: npx tsx scripts/check-platform-polish.ts
       - name: Portable manifest drift
         run: npm run test:portable-manifest
       - name: Convex, TypeScript and production build
         run: npm run build
+
+  # Browser suites that exercise the entity-specific copy end to end. Each suite
+  # starts its own Vite server; SOCIETYER_CHROMIUM_PATH is not set here, so the
+  # configs use the Chromium that Playwright installs below.
+  legal-governance-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Strict entity copy sweep (five guided workspaces, every route)
+        run: npm run test:entity-sweep
+        timeout-minutes: 20
+        env:
+          ENTITY_SWEEP_STRICT: "1"
+      - name: Corporation flow and governance copy
+        if: ${{ !cancelled() }}
+        run: npx playwright test -c playwright.corporation.config.ts
+        timeout-minutes: 15
+      - name: Legal record forms and tasks (desktop)
+        if: ${{ !cancelled() }}
+        run: npx playwright test -c playwright.interface.config.ts tests/interface-records.spec.ts tests/interface-tasks.spec.ts --project=desktop
+        timeout-minutes: 15
+      - name: Upload browser results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: legal-governance-browser-results
+          path: |
+            tmp/entity-sweep
+            tmp/entity-sweep-results
+            tmp/interface-suite-results
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
