@@ -16,7 +16,9 @@ assertImportBundlePreflight({ metadata: { createdFrom: "Google Drive" }, sources
 assertImportBundlePreflight({ representatives: [{ fullName: "Example Person" }] });
 assertImportBundlePreflight({ meetingMinutes: [{ actionItems: [" Follow up "] }] });
 assertImportBundlePreflight({ organizationIdentifiers: [{ number: "123" }], taxRegistrations: [{ number: "456" }] });
-assert.throws(() => assertImportBundlePreflight({ sources: [], members: [{ firstName: "Example" }] }), /members: unsupported/);
+assert.throws(() => assertImportBundlePreflight({ sources: [], contracts: [{ title: "Example" }] }), /contracts: unsupported/);
+// Agreements register (A5): the agreements key is supported and lossless.
+assert.equal(importBundlePreflightIssues({ agreements: [{ title: "Example lease", kind: "lease", parties: [{ name: "Example Landlord", role: "counterparty" }], effectiveDate: "2024-01-01", endDate: "2025-12-31", valueCents: 120000, reportingObligations: [{ text: "Annual report", dueDate: "2025-06-30" }], sourceExternalIds: ["gdrive:lease"] }] }).length, 0);
 assert.throws(() => assertImportBundlePreflight({ sources: {} }), /expected an array/);
 assert.throws(() => assertImportBundlePreflight({ sources: [null] }), /expected a record object/);
 assert.throws(() => assertImportBundlePreflight({ sources: [] }), /no supported records/);
@@ -37,4 +39,15 @@ assertImportBundlePreflight({meetingMinutes:[{
 }]});
 assert.throws(()=>assertImportBundlePreflight({meetingMinutes:[{attendanceEvents:[{id:'a',personName:'Missing event kind',boundary:'Opening',...citation}]}]}),/could not normalize/);
 assert.throws(()=>assertImportBundlePreflight({meetingMinutes:[{unknownEvidence:[{id:'unsupported'}]}]}),/unknownEvidence: normalization would discard/);
+// C11 keys and the richer minutes contract are accepted without losses.
+for (const key of ["committees", "committeeMembers", "members", "directors", "tasks", "goals", "commitments", "fundingSources", "grantReports", "meetingMaterials", "organizationSeats", "conflicts", "proxies", "bylawRuleSets", "operatingBudgets"]) {
+  assert.equal(importBundlePreflightIssues({ [key]: [{ name: "Example", title: "Example" }] }).length, 0, key);
+}
+assertImportBundlePreflight({ meetingMinutes: [{ meetingDate: "2021-05-18", meetingTitle: "Board", body: "Executive Committee", meetingStatus: "Held", localStartText: "6:00 PM", timeZone: "America/Vancouver",
+  agendaItems: ["Call to order", { title: "Approve minutes", number: "4", requestedAction: "approve", consent: false }],
+  sections: [{ title: "Minutes", depth: 1, publicVisible: true, motionIndex: 0, actionItems: [{ text: "Send", status: "ongoing", assignee: "Alex Example" }] }],
+  detailedAttendance: [{ name: "Alex Example", status: "present", representedOrganization: "Example Org" }],
+  nextMeetings: [{ at: "2021-06-15", body: "board" }],
+  motions: [{ motionText: "Adopt minutes", outcome: "Passed", decidedBy: "consent", sectionIndex: 0, sectionTitle: "Minutes", adoptsMinutes: { meetingDate: "2021-04-20" }, abstainedBy: ["Blair Sample"], opposedBy: [{ name: "Casey Rep" }] }],
+}] });
 console.log("Import bundle preflight checks passed.");

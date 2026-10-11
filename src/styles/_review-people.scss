@@ -1,0 +1,40 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+/* Interface review — "people" area (people, registers, members, work,
+ * assets, insurance, agreements, imports, intake). Wire into index.scss. */
+
+/* Insurance detail: the operations log is a real collapsible card. */
+.insurance-operations > summary {
+  list-style: none;
+  gap: token('s-2');
+
+  &::-webkit-details-marker { display: none; }
+}
+.insurance-operations__chevron {
+  flex: none;
+  color: token('text-tertiary');
+  transition: transform token('anim-normal') token('anim-ease');
+}
+.insurance-operations[open] .insurance-operations__chevron {
+  transform: rotate(90deg);
+}
+
+@media (max-width: 760px) {
+  /* AI intake: option groups sit flat on the card on phones instead of a
+   * bordered box inside the card. */
+  .intake-page .intake-llm {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .intake-page .intake-llm legend {
+    padding: 0;
+  }
+
+  /* Review queue: the search shares the row with the Filters toggle. */
+  .import-queue__filters .import-queue__search {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+}

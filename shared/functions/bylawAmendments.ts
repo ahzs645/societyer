@@ -13,6 +13,8 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { evaluateSpecialResolution, SPECIAL_RESOLUTION_CITATION, voteCountProblems } from "../bylawGovernance";
+import { getActiveBylawRuleSet } from "./bylawRules";
 
 const nowEvent = (actor: string, action: string, note?: string) => ({
   atISO: new Date().toISOString(),
@@ -48,9 +50,11 @@ export async function createDraftPortable(
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  if (!String(args.title ?? "").trim()) throw new Error("Add a title for this amendment first.");
   const now = new Date().toISOString();
   return ctx.db.insert("bylawAmendments", {
     ...args,
+    title: args.title.trim(),
     status: "Draft",
     createdAtISO: now,
     updatedAtISO: now,
@@ -134,38 +138,70 @@ export async function startConsultationPortable(
   });
 }
 
+/**
+ * Record the special-resolution vote on a bylaw amendment (G-05).
+ *
+ * A bylaw alteration needs a special resolution (BC Societies Act s.17(1)): at
+ * least two-thirds of the votes cast, or the higher majority in the society's
+ * bylaw rules (s.1(1)). Counts must be whole and non-negative. A vote below the
+ * threshold is recorded as a failed resolution (history event, status stays in
+ * consultation) and never marks the amendment "ResolutionPassed".
+ */
 export async function markResolutionPassedPortable(
   ctx: PortableMutationCtx,
-  { id, meetingId, votesFor, votesAgainst, abstentions, actor }: {
+  { id, meetingId, votesFor, votesAgainst, abstentions, actor, resolutionDateISO }: {
     id: string;
     meetingId?: string;
     votesFor?: number;
     votesAgainst?: number;
     abstentions?: number;
     actor?: string;
+    resolutionDateISO?: string;
   },
 ) {
   const candidate = await ctx.db.get(id, "bylawAmendments");
   if (!candidate) return;
   await requireSocietyMembership(ctx, String(candidate.societyId));
   const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
-  if (meetingId) await getOwned(ctx, "meetings", meetingId, String(row.societyId));
   if (!row) return;
+  if (row.status !== "Consultation" && row.status !== "Draft") {
+    throw new Error(`A resolution can only be recorded for an amendment in consultation (this one is ${row.status}).`);
+  }
+  let meeting: any = null;
+  if (meetingId) meeting = await getOwned(ctx, "meetings", meetingId, String(row.societyId));
+  const problems = voteCountProblems({ votesFor, votesAgainst, abstentions }, { requireVotesFor: true });
+  if (problems.length) throw new Error(`Resolution vote not recorded: ${problems.join(" ")}`);
   const now = new Date().toISOString();
-  const note = votesFor != null
-    ? `For ${votesFor} · Against ${votesAgainst ?? 0} · Abstain ${abstentions ?? 0}`
-    : undefined;
+  const resolutionDate = String(resolutionDateISO ?? meeting?.scheduledAt ?? "").slice(0, 10);
+  // Allow one day of clock skew: a user ahead of UTC may legitimately be on
+  // "tomorrow" relative to the server's UTC date.
+  const latestAllowed = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  if (resolutionDate && (!/^\d{4}-\d{2}-\d{2}$/.test(resolutionDate) || resolutionDate > latestAllowed)) {
+    throw new Error("The resolution date must be a valid date that is not in the future.");
+  }
+  const rules = await getActiveBylawRuleSet(ctx, String(row.societyId));
+  const result = evaluateSpecialResolution({ votesFor, votesAgainst }, rules?.specialResolutionThresholdPct);
+  const note = `For ${votesFor} · Against ${votesAgainst ?? 0} · Abstain ${abstentions ?? 0}. ${result.summary}`;
+  if (!result.passed) {
+    await ctx.db.patch(id, {
+      updatedAtISO: now,
+      history: [...row.history, nowEvent(actor ?? "You", "resolution_failed", `${note} Not passed as a special resolution (${SPECIAL_RESOLUTION_CITATION}).`)],
+    });
+    return { ...result, passed: false };
+  }
+  const passedAtISO = resolutionDate ? `${resolutionDate}T00:00:00.000Z` : now;
   await ctx.db.patch(id, {
     status: "ResolutionPassed",
     resolutionMeetingId: meetingId,
-    resolutionPassedAtISO: now,
-    consultationEndedAtISO: row.consultationEndedAtISO ?? now,
+    resolutionPassedAtISO: passedAtISO,
+    consultationEndedAtISO: row.consultationEndedAtISO ?? passedAtISO,
     votesFor,
     votesAgainst,
     abstentions,
     updatedAtISO: now,
     history: [...row.history, nowEvent(actor ?? "You", "resolution_passed", note)],
   });
+  return { ...result, passed: true };
 }
 
 export async function markFiledPortable(

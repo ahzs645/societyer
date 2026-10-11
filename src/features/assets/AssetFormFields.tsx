@@ -135,7 +135,7 @@ export type AssetFormData = {
 export function useAssetFormData(societyId: Id<"societies"> | null | undefined): AssetFormData {
   const { can } = usePermissions();
   const args = (permission: string) => societyId && can(permission) ? { societyId } : "skip";
-  const documents = useQuery(api.documents.list, args("documents:read"));
+  const documents = useQuery(api.documents.listSummaries, args("documents:read"));
   const transactions = useQuery(
     api.financialHub.transactions,
     societyId && can("financials:read") ? { societyId, limit: 200 } : "skip",

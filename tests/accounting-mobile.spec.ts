@@ -3,56 +3,37 @@ import { expect, test } from "@playwright/test";
 const PHONE = { width: 390, height: 844 };
 
 test.describe("accounting responsive layout", () => {
-  test("uses a compact, touch-friendly command grid on mobile", async ({ page }) => {
+  test("keeps the ledger tools in the header's New and More menus on mobile", async ({ page }) => {
     await page.setViewportSize(PHONE);
     await page.goto("/demo/app/financials/accounting", { waitUntil: "networkidle" });
 
-    const tools = page.getByRole("group", { name: "Accounting tools" });
-    await expect(tools).toBeVisible();
-    await expect(page.getByText("Set up, post, and reconcile the ledger.")).toBeVisible();
-    await expect(page.getByText("How reconciliation works")).toBeVisible();
-    await expect(page.locator(".accounting-reconciliation-note")).not.toHaveAttribute("open", "");
+    // Entries live in one "+ New" menu; setup tools sit behind "⋯ More".
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    for (const name of ["Journal entry", "Allocate imported transaction", "Ledger reconciliation"]) {
+      await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
+    }
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    for (const name of ["Set up standard chart of accounts", "Add fiscal period", "Opening balances", "Post bank transactions to journal", "Bank reconciliation"]) {
+      await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
+    }
+    await page.keyboard.press("Escape");
 
-    const layout = await tools.evaluate((element) => {
-      const actions = Array.from(element.querySelectorAll<HTMLElement>(".btn-action"));
-      const firstRowTop = actions[0]?.getBoundingClientRect().top;
-      return {
-        columns: getComputedStyle(element).gridTemplateColumns.split(" ").length,
-        actionCount: actions.length,
-        firstRowCount: actions.filter((action) => action.getBoundingClientRect().top === firstRowTop).length,
-        minActionHeight: Math.min(...actions.map((action) => action.getBoundingClientRect().height)),
-        pageOverflows: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-      };
-    });
+    // The reconciliation background moved behind the header's ⓘ.
+    await page.getByRole("button", { name: "About Accounting", exact: true }).click();
+    await expect(page.getByText("ledger reconciliation here checks the journal against a statement balance", { exact: false })).toBeVisible();
 
-    expect(layout).toMatchObject({
-      columns: 2,
-      actionCount: 8,
-      firstRowCount: 2,
-      pageOverflows: false,
-    });
-    expect(layout.minActionHeight).toBeGreaterThanOrEqual(42);
+    const overflows = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(overflows).toBe(false);
   });
 
-  test("keeps the compact desktop toolbar", async ({ page }) => {
+  test("keeps a compact desktop header with no row of tool buttons", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/demo/app/financials/accounting", { waitUntil: "networkidle" });
 
-    const tools = page.getByRole("group", { name: "Accounting tools" });
-    const layout = await tools.evaluate((element) => {
-      const actions = Array.from(element.querySelectorAll<HTMLElement>(".btn-action"));
-      return {
-        display: getComputedStyle(element).display,
-        // Buttons keep their intrinsic width here rather than being stretched
-        // into equal grid cells, which is what distinguishes the desktop bar
-        // from the phone command grid.
-        equalWidths: new Set(actions.map((action) => Math.round(action.getBoundingClientRect().width))).size === 1,
-        fullWidth: actions.every((action) => Math.round(action.getBoundingClientRect().width) >= 300),
-      };
-    });
-    await expect(page.getByText("Set up, post, and reconcile the ledger.")).toBeHidden();
-    // The desktop bar is a flex row that may wrap — eight labelled tools do not
-    // fit one 1440px line — but it must never become the mobile two-up grid.
-    expect(layout).toEqual({ display: "flex", equalWidths: false, fullWidth: false });
+    await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "More actions", exact: true })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Accounting tools" })).toHaveCount(0);
+    await expect(page.getByText("Balance sheet as at", { exact: false }).first()).not.toContainText(/\d{4}-\d{2}-\d{2}/);
   });
 });

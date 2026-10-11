@@ -98,6 +98,7 @@ export function staticAgendaItemType(title: string) {
   if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
   if (lower.includes("report") || lower.includes("financial")) return "report";
   if (lower.includes("break")) return "break";
-  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
+  // "Executive Director update" or "Executive Committee report" is not an in-camera session.
+  if (/\bin[ -]?camera|executive session|closed session\b/.test(lower)) return "executive_session";
   return "discussion";
 }

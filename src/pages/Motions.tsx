@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { BookOpen, CalendarPlus, Gavel, Layers, Pencil, Plus, Tag as TagIcon, X } from "lucide-react";
+import { BookOpen, CalendarPlus, Gavel, Layers, Pencil, Tag as TagIcon, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
@@ -12,8 +12,9 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
-import { isRoutineMotion } from "../lib/motionGovernance";
-import { ROUTINE_MOTION_TAGS } from "../../shared/proceduralMotions";
+import { isRoutineMotion, motionTagLabel } from "../lib/motionGovernance";
+import { DECIDED_BY_LABELS, DECIDED_BY_VALUES, ROUTINE_MOTION_TAGS } from "../../shared/proceduralMotions";
+import { OUTCOME_OVERRIDE_DECIDED_BY, motionOutcomeConsistencyIssues, motionVoteIssues } from "../../shared/motionValidation";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -24,8 +25,10 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import { Tabs } from "../components/primitives";
+import { CreateMenu } from "../components/CreateMenu";
 import { MotionBacklogPage } from "./MotionBacklog";
 import { MotionLibraryPage } from "./MotionLibrary";
+import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 
 const MOTION_STATUSES = ["Backlog", "Draft", "Agenda", "Moved", "Tabled", "Deferred", "Withdrawn", "Voted", "Archived"];
 const MOTION_OUTCOMES = [
@@ -44,7 +47,23 @@ type MotionForm = {
   votesFor: string;
   votesAgainst: string;
   abstentions: string;
+  decidedBy: string;
+  outcomeOverrideNote: string;
 };
+
+/** G-04: the same vote/outcome rules the server enforces. */
+function motionFormIssues(form: MotionForm, resolutionTypeLabel?: string): string[] {
+  const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+  return motionVoteIssues({
+    outcome: form.outcome || undefined,
+    votesFor: num(form.votesFor),
+    votesAgainst: num(form.votesAgainst),
+    abstentions: num(form.abstentions),
+    decidedBy: form.decidedBy || undefined,
+    outcomeOverrideNote: form.outcomeOverrideNote || undefined,
+    resolutionTypeLabel,
+  });
+}
 
 // A motion is safely editable from this master page only if it's a genuine
 // first-class row that doesn't mirror a meeting's minutes: motions with
@@ -60,6 +79,8 @@ type MotionsTab = (typeof MOTIONS_TABS)[number];
 // The Motions area consolidates the master motions table, the Tabled/backlog
 // workflow, and the template library into one tabbed page (driven by ?tab=).
 export function MotionsPage() {
+  const { can } = usePermissions();
+  const canWrite = can("motions:write");
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab") as MotionsTab | null;
   const tab: MotionsTab = tabFromUrl && MOTIONS_TABS.includes(tabFromUrl) ? tabFromUrl : "motions";
@@ -73,6 +94,16 @@ export function MotionsPage() {
       },
       { replace: true },
     );
+  // The Backlog and Templates tabs open their composer from the header "+".
+  const openComposer = () =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("intent", "add");
+        return params;
+      },
+      { replace: true },
+    );
 
   return (
     <div className="page motions">
@@ -80,14 +111,24 @@ export function MotionsPage() {
         title="Motions"
         icon={<Gavel size={16} />}
         iconColor="orange"
-        subtitle="Every decision your society has moved — a referenceable record across all meetings."
+        subtitle="Motions with their meetings and outcomes."
+        info={
+          <p>Motions that exist only inside minutes text appear here once they are extracted or reviewed.</p>
+        }
+        actions={
+          tab === "tabled" ? (
+            <CreateMenu items={[{ id: "backlog", label: "New backlog motion", onSelect: openComposer, disabled: !canWrite }]} />
+          ) : tab === "templates" ? (
+            <CreateMenu items={[{ id: "template", label: "New template", onSelect: openComposer, disabled: !canWrite }]} />
+          ) : undefined
+        }
       />
       <Tabs<MotionsTab>
         value={tab}
         onChange={setTab}
         items={[
           { id: "motions", label: "Motions", icon: <Gavel size={13} /> },
-          { id: "tabled", label: "Tabled", icon: <Layers size={13} /> },
+          { id: "tabled", label: "Backlog", icon: <Layers size={13} /> },
           { id: "templates", label: "Templates", icon: <BookOpen size={13} /> },
         ]}
       />
@@ -124,6 +165,23 @@ function MotionsTableTab() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // The stored label options use slugs ("previous-minutes"); show their names in
+  // filter chips and pickers, and give "Outcome" room for its header.
+  const hydratedView = useMemo(() => tableData.hydratedView ? {
+    ...tableData.hydratedView,
+    columns: tableData.hydratedView.columns.map((column) => {
+      if (column.field.name === "outcome") return { ...column, size: Math.max(column.size, 130) };
+      if (column.field.name !== "tags") return column;
+      const options = (column.field.config as any)?.options;
+      return Array.isArray(options) ? {
+        ...column,
+        field: {
+          ...column.field,
+          config: { ...column.field.config, options: options.map((option: any) => ({ ...option, label: motionTagLabel(String(option.value)) })) },
+        },
+      } : column;
+    }),
+  } : null, [tableData.hydratedView]);
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -163,6 +221,11 @@ function MotionsTableTab() {
     setTagDraft({ ...tagDraft, [String(row._id)]: "" });
     try {
       await setTags({ motionId: row._id, tags: next });
+      // The default view hides routine motions; say so instead of letting
+      // the row silently disappear (G-28).
+      if (ROUTINE_MOTION_TAGS.includes(value)) {
+        toast.info("Labelled as routine", "Routine motions are hidden in the default Motions view. Switch to the All motions view to see it.");
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Could not update labels");
     }
@@ -190,6 +253,8 @@ function MotionsTableTab() {
       votesFor: row.votesFor != null ? String(row.votesFor) : "",
       votesAgainst: row.votesAgainst != null ? String(row.votesAgainst) : "",
       abstentions: row.abstentions != null ? String(row.abstentions) : "",
+      decidedBy: row.decidedBy ?? "",
+      outcomeOverrideNote: row.outcomeOverrideNote ?? "",
     });
   };
   const closeEdit = () => {
@@ -200,6 +265,11 @@ function MotionsTableTab() {
     if (!canWrite) return;
     if (!editing || !form) return;
     const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+    const issues = motionFormIssues(form, editing.resolutionTypeLabel);
+    if (issues.length) {
+      toast.error(issues[0]);
+      return;
+    }
     try {
       await update({
         motionId: editing._id as Id<"motions">,
@@ -213,6 +283,8 @@ function MotionsTableTab() {
           votesFor: num(form.votesFor),
           votesAgainst: num(form.votesAgainst),
           abstentions: num(form.abstentions),
+          decidedBy: form.decidedBy || undefined,
+          outcomeOverrideNote: form.outcomeOverrideNote.trim() || undefined,
         },
       });
       toast.success("Motion updated");
@@ -222,6 +294,15 @@ function MotionsTableTab() {
     }
   };
 
+  const formIssues = form ? motionFormIssues(form, editing?.resolutionTypeLabel) : [];
+  const overrideAvailable = form ? (OUTCOME_OVERRIDE_DECIDED_BY as readonly string[]).includes(form.decidedBy) : false;
+  const tallyConflict = form ? motionOutcomeConsistencyIssues({
+    outcome: form.outcome || undefined,
+    votesFor: form.votesFor.trim() === "" ? undefined : Number(form.votesFor),
+    votesAgainst: form.votesAgainst.trim() === "" ? undefined : Number(form.votesAgainst),
+    resolutionTypeLabel: editing?.resolutionTypeLabel,
+  }).length > 0 : false;
+
   return (
     <>
       {showMetadataWarning ? (
@@ -230,7 +311,7 @@ function MotionsTableTab() {
         <RecordTableScope
           tableId="motions"
           objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
+          hydratedView={hydratedView}
           records={records}
         >
           <RecordTableViewToolbar
@@ -274,11 +355,11 @@ function MotionsTableTab() {
                     {(row.tags ?? []).map((tag: string) => (
                       <Badge key={tag} tone="neutral">
                         <span className="row" style={{ gap: 2, alignItems: "center" }}>
-                          <TagIcon size={10} /> {tag}
+                          <TagIcon size={10} /> {motionTagLabel(tag)}
                           <button
                             className="btn btn--ghost btn--icon"
                             style={{ padding: 0, height: 14 }}
-                            aria-label={`Remove label ${tag}`}
+                            aria-label={`Remove label ${motionTagLabel(tag)}`}
                             onClick={() => removeTag(row, tag)}
                           disabled={!canWrite}
                          >
@@ -288,18 +369,17 @@ function MotionsTableTab() {
                       </Badge>
                     ))}
                     <input
-                      className="input"
-                      style={{ width: 90, height: 24, fontSize: 12 }}
+                      className="input input--compact"
+                      style={{ width: 90, height: 24 }}
                       value={tagDraft[String(row._id)] ?? ""}
                       onChange={(e) => setTagDraft({ ...tagDraft, [String(row._id)]: e.target.value })}
                       onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
                       placeholder="+ label"
                       aria-label="Add label"
+                      enterKeyHint="done"
+                      title="Type a label and press Enter"
                       disabled={!canWrite}
                     />
-                    <button className="btn btn--ghost btn--icon" aria-label="Add label" onClick={() => addTag(row)} disabled={!canWrite}>
-                      <Plus size={12} />
-                    </button>
                   </div>
                 );
               }
@@ -337,7 +417,7 @@ function MotionsTableTab() {
         footer={
           <>
             <button className="btn" onClick={closeEdit}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveEdit} disabled={!canWrite || (!form?.text.trim())}>
+            <button className="btn btn--accent" onClick={saveEdit} disabled={!canWrite || (!form?.text.trim()) || formIssues.length > 0}>
               Save
             </button>
           </>
@@ -345,6 +425,11 @@ function MotionsTableTab() {
       >
         {form && (
           <div>
+            {editing?._id && (
+              <div style={{ marginBottom: 8 }}>
+                <UnsupportedDetailsBadge table="motions" id={String(editing._id)} />
+              </div>
+            )}
             <Field label="Title (optional)">
               <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </Field>
@@ -360,14 +445,15 @@ function MotionsTableTab() {
               <Field label="Status">
                 <Select
                   value={form.status}
-                  onChange={(value) => setForm({ ...form, status: value })}
+                  // An outcome only exists for a voted motion.
+                  onChange={(value) => setForm({ ...form, status: value, outcome: value === "Voted" ? form.outcome : "" })}
                   options={MOTION_STATUSES.map((s) => ({ value: s, label: s }))}
                 />
               </Field>
               <Field label="Outcome">
                 <Select
                   value={form.outcome}
-                  onChange={(value) => setForm({ ...form, outcome: value })}
+                  onChange={(value) => setForm({ ...form, outcome: value, status: value ? "Voted" : form.status })}
                   options={MOTION_OUTCOMES}
                 />
               </Field>
@@ -391,6 +477,29 @@ function MotionsTableTab() {
                 <input className="input" type="number" min={0} value={form.abstentions} onChange={(e) => setForm({ ...form, abstentions: e.target.value })} />
               </Field>
             </div>
+            <Field label="Decided by" hint="Consensus, unanimous consent or a chair's ruling can stand against a recorded tally, with a note.">
+              <Select
+                value={form.decidedBy}
+                onChange={(value) => setForm({ ...form, decidedBy: value })}
+                options={[{ value: "", label: "—" }, ...DECIDED_BY_VALUES.map((value) => ({ value, label: DECIDED_BY_LABELS[value] }))]}
+              />
+            </Field>
+            {(overrideAvailable && tallyConflict) || form.outcomeOverrideNote ? (
+              <Field label="Override note" required={overrideAvailable && tallyConflict}>
+                <textarea
+                  className="input"
+                  rows={2}
+                  value={form.outcomeOverrideNote}
+                  placeholder="Why the recorded outcome stands despite the vote count"
+                  onChange={(e) => setForm({ ...form, outcomeOverrideNote: e.target.value })}
+                />
+              </Field>
+            ) : null}
+            {formIssues.length > 0 && (
+              <div role="alert" data-testid="motion-vote-issues" style={{ marginTop: 8 }}>
+                {formIssues.map((issue) => <p key={issue} className="field__error" style={{ margin: "4px 0" }}>{issue}</p>)}
+              </div>
+            )}
           </div>
         )}
       </Drawer>

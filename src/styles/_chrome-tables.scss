@@ -267,6 +267,37 @@
     overscroll-behavior-x: contain;
     max-width: 100%;
   }
+  /* That block scroll box would otherwise squeeze its (anonymous) inner table
+   * to the phone width, and `overflow-wrap: anywhere` cells then wrap one
+   * character per line ("mina / @riv / ersi…", "approv / al"). Keep words
+   * whole and give text cells a readable minimum; the table scrolls sideways
+   * instead of collapsing. Record tables manage their own layout. */
+  :is(.page, .card, .drawer__body, .modal__body) table:not(.record-table) {
+    > thead > tr > th {
+      white-space: nowrap;
+    }
+    > tbody > tr > td,
+    > tbody > tr > td *,
+    > thead > tr > th {
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+    > tbody > tr > td {
+      min-width: 6.5rem;
+    }
+    > tbody > tr > td:empty,
+    > tbody > tr > td:has(> :is(input, button, svg, .checkbox):only-child) {
+      min-width: 0;
+    }
+  }
+  /* A table-wrap that is the card's own edge-to-edge scroller must not bleed
+   * past the card (it was pulled 16px beyond it, clipping the last column). */
+  .card > .table-wrap {
+    margin-inline: 0;
+  }
+  .card__body > .table-wrap {
+    margin-inline: calc(token('s-3') * -1);
+  }
   /* Keep the count inline (right-aligned) next to the "Sorted by" pill so the
    * toolbar is one compact row instead of stacking search / sort / count into
    * three separate rows above the table. */

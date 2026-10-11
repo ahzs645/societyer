@@ -9,6 +9,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import {
@@ -178,7 +179,17 @@ export function IntegrationMarketplacePage() {
       <SettingsShell
         routeKey="/app/integrations"
         title="Integration marketplace"
-        description="Technical setup area. Install and configure third-party connectors — board packs, calendar sync, office documents, CRM bridges, and automation actions. This is a one-time setup step typically done by an administrator, not something a board member needs to visit."
+        description={
+          <span className="settings-shell__description-row">
+            Install and configure third-party connectors.
+            <InfoPopover label="About the integration marketplace">
+              <p>
+                Board packs, calendar sync, office documents, CRM bridges, and automation actions. This is a one-time
+                setup step usually done by an administrator.
+              </p>
+            </InfoPopover>
+          </span>
+        }
         tabs={[
           { id: "catalog", label: "Catalog", icon: <Plug size={14} /> },
           { id: "setup", label: "Setup" },
@@ -197,9 +208,8 @@ export function IntegrationMarketplacePage() {
             <button
               key={item.slug}
               type="button"
-              className="card"
+              className="card integration-card"
               style={{
-                minHeight: 190,
                 textAlign: "left",
                 cursor: "pointer",
                 display: "flex",
@@ -209,21 +219,23 @@ export function IntegrationMarketplacePage() {
               onClick={() => openItem(item)}
             >
               <div className="card__body col" style={{ gap: 10 }}>
-                <div className="row" style={{ justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                  <span className="row" style={{ gap: 8, minWidth: 0 }}>
-                    {CATEGORY_ICONS[item.category] ?? <Plug size={14} />}
-                    <strong style={{ fontSize: "var(--fs-md)" }}>{item.name}</strong>
+                <div className="integration-card__head">
+                  <span className="integration-card__icon" aria-hidden="true">{CATEGORY_ICONS[item.category] ?? <Plug size={14} />}</span>
+                  <strong className="integration-card__title">{item.name}</strong>
+                  <span className="integration-card__status">
+                    <Badge tone={item.installed ? "success" : item.status === "planned" ? "warn" : "info"}>
+                      {item.installed ? "Installed" : statusLabel(item.status)}
+                    </Badge>
                   </span>
-                  <Badge tone={item.installed ? "success" : item.status === "planned" ? "warn" : "info"}>
-                    {item.installed ? "Installed" : statusLabel(item.status)}
-                  </Badge>
                 </div>
                 <div className="muted">{item.summary}</div>
               </div>
               <div className="card__body" style={{ paddingTop: 0 }}>
                 <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                   <Badge>{item.category}</Badge>
-                  <Badge tone={healthTone(item.health.status)}>{healthLabel(item.health.status)}</Badge>
+                  {/* "Not installed" / "Coming soon" repeat the status badge; only
+                    * an installed integration has a setup state worth showing. */}
+                  {item.installed && <Badge tone={healthTone(item.health.status)}>{healthLabel(item.health.status)}</Badge>}
                   <Badge>{item.capabilities.length} feature{item.capabilities.length === 1 ? "" : "s"}</Badge>
                 </div>
               </div>
@@ -277,7 +289,7 @@ export function IntegrationMarketplacePage() {
                 >
                   <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
                     <strong>Board-pack quick start</strong>
-                    <Badge tone="success">uses existing workflow packages</Badge>
+                    <Badge tone="success">Uses existing workflow packages</Badge>
                   </div>
                   <Field label="Meeting">
                     <Select
@@ -438,6 +450,8 @@ function healthTone(status: string) {
 const STATUS_LABELS: Record<string, string> = {
   planned: "Coming soon",
   available: "Available",
+  ready: "Available",
+  browser_backed: "Browser-based",
 };
 
 function statusLabel(status: string) {

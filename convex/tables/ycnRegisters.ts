@@ -37,6 +37,12 @@ export const sharedRegisterTables = {
     gender: v.optional(v.string()), // M | F | X
     pronouns: v.optional(v.string()), // stated pronouns; override gender for NLG
     corpSign: v.optional(v.string()), // signature-block "By:" prefix for orgs
+    // P7: a merged duplicate stays as a tombstone pointing at the survivor so
+    // old links resolve and the merge can be undone (see personMerges).
+    mergedIntoId: v.optional(v.id("peopleDirectory")),
+    mergedAtISO: v.optional(v.string()),
+    // Profiles a reviewer confirmed are different people (hides the suggestion).
+    distinctFromIds: v.optional(v.array(v.string())),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

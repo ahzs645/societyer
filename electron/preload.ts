@@ -63,6 +63,9 @@ const bridge: SocietyerDesktopBridgeWithSnapshot = {
   getSecret: (key) => ipcRenderer.invoke(IpcChannels.GET_SECRET_CHANNEL, key),
   setSecret: (key, value) => ipcRenderer.invoke(IpcChannels.SET_SECRET_CHANNEL, { key, value }),
   removeSecret: (key) => ipcRenderer.invoke(IpcChannels.REMOVE_SECRET_CHANNEL, key),
+  pickIntakeFolder: () => ipcRenderer.invoke(IpcChannels.PICK_INTAKE_FOLDER_CHANNEL),
+  readIntakeFile: (input) => ipcRenderer.invoke(IpcChannels.READ_INTAKE_FILE_CHANNEL, input),
+  convertLegacyDocument: (input) => ipcRenderer.invoke(IpcChannels.CONVERT_LEGACY_DOCUMENT_CHANNEL, input),
   onNativeThemeChanged: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (!state || typeof state !== "object") return;

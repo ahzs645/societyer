@@ -1,20 +1,23 @@
-import {SourceRoleObservations} from "../components/SourceRoleObservations";
+import { calendarDateKey } from "../lib/calendarDates";
+import { BoardRosterCard } from "../features/people/BoardRosterCard";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
+import { directorProblems, directorTermLapsed } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Archive, ListChecks, Plus, Trash2, UserCog } from "lucide-react";
+import { Archive, ChevronRight, Plus, Trash2, UserCog } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -29,6 +32,9 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { todayDateOnly } from "../../shared/dateOnly";
+
+const CURRENT_DIRECTORS_VIEW = "Current directors";
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -47,13 +53,53 @@ export function DirectorsPage() {
   const [open, setOpen] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [directorMode, setDirectorMode] = useState<"register" | "archived">("register");
+  // ?intent=consent (dashboard "Update consent") opens the first active
+  // director without consent on file instead of the generic list (G-24).
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("intent") !== "consent" || directors === undefined) return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    const missing = (directors ?? []).filter((director: any) => director.status === "Active" && !director.consentOnFile);
+    if (!missing.length) {
+      toast.info("Every active director has consent on file");
+      return;
+    }
+    setSelected(missing[0]);
+    setOpen(true);
+    toast.info(
+      `${missing.length} active director${missing.length === 1 ? "" : "s"} without consent on file`,
+      missing.map((director: any) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()).join(", "),
+    );
+  }, [directors, params, setParams, toast]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
     nameSingular: "director",
     viewId: currentViewId,
   });
+  // The register opens on "Current directors" (former directors filtered
+  // out); choosing another view — or clearing the filter — sticks.
+  const defaultViewApplied = useRef(false);
+  const currentDirectorsView = tableData.views.find((view) => view.name === CURRENT_DIRECTORS_VIEW);
+  useEffect(() => {
+    if (defaultViewApplied.current || currentViewId || !currentDirectorsView) return;
+    defaultViewApplied.current = true;
+    setCurrentViewId(currentDirectorsView._id as Id<"views">);
+  }, [currentDirectorsView, currentViewId]);
+  // Workspaces seeded before the view existed get it once; the seed mutation
+  // is idempotent and adds missing views by name.
+  const ensureMetadata = useMutation(api.seedRecordTableMetadata.ensureForSociety);
+  const metadataHealRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!society?._id || !tableData.objectMetadata || !loaded || !can("settings:write")) return;
+    if (currentDirectorsView || metadataHealRef.current === String(society._id)) return;
+    metadataHealRef.current = String(society._id);
+    void ensureMetadata({ societyId: society._id }).catch(() => undefined);
+  }, [society?._id, tableData.objectMetadata, currentDirectorsView, loaded, can, ensureMetadata]);
 
   const active = (directors ?? []).filter((d: any) => d.status === "Active");
   const bcResidents = active.filter((d: any) => d.isBCResident).length;
@@ -82,14 +128,36 @@ export function DirectorsPage() {
     setSelected({
       firstName: "", lastName: "", email: "",
       position: "Director", isBCResident: directorProfile.showBcResidentField,
-      termStart: new Date().toISOString().slice(0, 10),
+      termStart: todayDateOnly(),
       consentOnFile: false, status: "Active", aliases: [],
     });
     setOpen(true);
   };
 
+  const selectedProblems = selected ? directorProblems(selected) : [];
+  const deleteSelected = async () => {
+    if (!selected?._id || !canManage) return;
+    const name = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() || "this unnamed director";
+    const ok = await confirm({
+      title: `Delete ${name}?`,
+      message: `${name} will be removed from the director register and from active-director and BC-residency counts. To record that a real director left office, use Resign instead so the term history is kept.`,
+      confirmLabel: "Delete director",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove({ id: selected._id });
+      setOpen(false);
+      toast.success("Director deleted");
+    } catch (error: any) { toast.error(error.message); }
+  };
+
   const save = async () => {
     if (!selected || !canManage) return;
+    if (selectedProblems.length) {
+      toast.error("Director not saved", selectedProblems[0]);
+      return;
+    }
     try {
     if (selected._id) {
       const { _id, _creationTime, societyId, directoryPersonId, entityId, ...patch } = selected;
@@ -111,42 +179,23 @@ export function DirectorsPage() {
         title="Directors"
         icon={<UserCog size={16} />}
         iconColor="blue"
-        subtitle={directorProfile.subtitle}
+        subtitle="The legal director register."
+        info={
+          <>
+            <p>{directorProfile.subtitle}</p>
+            <p>
+              Officers and past terms live in <Link to="/app/role-holders">Role holders</Link>.
+            </p>
+          </>
+        }
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <div className="segmented" role="tablist" aria-label="Director screen view">
-              <button
-                type="button"
-                className={`segmented__btn${directorMode === "register" ? " is-active" : ""}`}
-                aria-pressed={directorMode === "register"}
-                onClick={() => setDirectorMode("register")}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-              >
-                <ListChecks size={12} /> Register
-              </button>
-              <button
-                type="button"
-                className={`segmented__btn${directorMode === "archived" ? " is-active" : ""}`}
-                aria-pressed={directorMode === "archived"}
-                onClick={() => setDirectorMode("archived")}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-              >
-                <Archive size={12} /> Archived
-              </button>
-            </div>
-            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
-              <Plus size={12} /> New director
-            </button>
-          </div>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
+            <Plus size={12} /> New director
+          </button>
         }
       />
 
-      <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        This is your BC director filing register. For a complete history of every governance role (officers, controllers, past terms), see{" "}
-        <Link to="/app/role-holders">Role holders</Link>.
-      </p>
-
-      <SourceRoleObservations societyId={society._id}/>
+      <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
@@ -172,16 +221,15 @@ export function DirectorsPage() {
         </div>
       </div>
 
-      {directorsLoaded && directorMode === "register" && ((isBcSocietyWorkspace && !society.isMemberFunded && ((directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors) || (directorProfile.requiresBcResidentDirector && bcResidents < 1))) || missingConsent.length > 0) && (
+      {directorsLoaded && ((isBcSocietyWorkspace && !society.isMemberFunded && ((directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors) || (directorProfile.requiresBcResidentDirector && bcResidents < 1))) || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
           {directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors && !society.isMemberFunded && <Flag level="err">Fewer than {directorProfile.minimumActiveDirectors} active directors — regular societies must have at least {directorProfile.minimumActiveDirectors}.</Flag>}
           {directorProfile.requiresBcResidentDirector && bcResidents < 1 && !society.isMemberFunded && <Flag level="err">No BC-resident director. At least one is required for non-member-funded societies.</Flag>}
-          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) without consent evidence on file.</Flag>}
+          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length === 1 ? "1 director has" : `${missingConsent.length} directors have`} no consent evidence on file.</Flag>}
         </div>
       )}
 
-      {directorMode === "register" ? (
-        showMetadataWarning ? (
+      {showMetadataWarning ? (
           <RecordTableMetadataEmpty societyId={society?._id} objectLabel="director" />
         ) : tableData.objectMetadata ? (
           <RecordTableScope
@@ -206,7 +254,7 @@ export function DirectorsPage() {
               icon={<UserCog size={14} />}
               label="Current legal director register"
               views={tableData.views}
-              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+              currentViewId={currentViewId ?? currentDirectorsView?._id ?? tableData.views[0]?._id ?? null}
               onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
               onOpenFilter={() => setFilterOpen((x) => !x)}
             />
@@ -217,7 +265,10 @@ export function DirectorsPage() {
               loading={tableData.loading || directors === undefined}
               renderCell={({ field, record }) => field.name === "firstName" ? (
                 <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setOpen(true); }}>
-                  {record.firstName || "Open director"}
+                  {record.firstName || record.lastName || "Unnamed director"}
+                  {directorTermLapsed(record, calendarDateKey(new Date())) ? (
+                    <span className="badge badge--warn" style={{ marginLeft: 6 }} title={`Term ended ${record.termEnd}; record a re-election or resignation.`}>Term ended</span>
+                  ) : null}
                 </button>
               ) : undefined}
             />
@@ -249,8 +300,9 @@ export function DirectorsPage() {
               <div key={i} className="record-table__loading-row" />
             ))}
           </div>
-        )
-      ) : (
+      )}
+
+      {roleTerms.length > 0 && (
         <ArchivedRoleEvidenceView
           roleTerms={roleTerms}
           legalDirectorTerms={legalDirectorTerms}
@@ -266,13 +318,29 @@ export function DirectorsPage() {
         title={selected?._id ? (canManage ? "Edit director" : "View director") : "Add director"}
         footer={
           <>
+            {selected?._id && canManage ? (
+              <button className="btn btn--danger" style={{ marginRight: "auto" }} onClick={deleteSelected}>
+                <Trash2 size={12} /> Delete
+              </button>
+            ) : null}
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
           </>
         }
       >
+        {selected?._id && <div style={{ marginBottom: 8 }}><SourceProvenanceButton table="directors" id={selected._id} /></div>}
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {selectedProblems.length > 0 && (
+              <InspectorNote tone="danger" title="Required before saving">
+                {selectedProblems.join(" ")}
+              </InspectorNote>
+            )}
+            {directorTermLapsed(selected, calendarDateKey(new Date())) && (
+              <InspectorNote tone="warn" title="Term has ended">
+                This director's term ended {selected.termEnd} but the record is still Active. Record the re-election (new term end) or the date they left office.
+              </InspectorNote>
+            )}
             {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
             <InspectorNote tone="warn" title="Director register">
               Keep this register current. Changes to directors normally need to be reflected in your
@@ -328,7 +396,7 @@ export function DirectorsPage() {
                 <Select
                   value={selected.status}
                   onChange={(v) => setSelected({ ...selected, status: v })}
-                  options={["Active", "Resigned", "Removed"].map((s) => ({ value: s, label: s }))}
+                  options={["Active", "NeedsReview", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review (from a source roster)" : s }))}
                 />
               </Field>
             </div>
@@ -382,53 +450,26 @@ function ArchivedRoleEvidenceView({
   const legalEvidencePeople = new Set(legalDirectorTerms.map((term: any) => personNameKey(term.personName)).filter(Boolean)).size;
 
   return (
-    <div className="col" style={{ gap: 16 }}>
-      <div className="card">
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">Archived role evidence</h2>
-            <p className="card__subtitle">
-              Historical board, director, masthead, and editorial observations. Use this for comparison; the Register view remains the current legal director register.
-            </p>
-          </div>
-          <Link className="btn-action" to="/app/org-history">
-            Open history
-          </Link>
+    <details className="card directors-history">
+      <summary className="card__head directors-history__summary">
+        <ChevronRight size={14} className="directors-history__chevron" aria-hidden="true" />
+        <Archive size={14} aria-hidden="true" />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h2 className="card__title">Role history evidence</h2>
+          <p className="card__subtitle">
+            {roleTerms.length} historical role{roleTerms.length === 1 ? "" : "s"} · {archivedRoleTerms.length} archived · {unresolvedRoleTerms.length} unresolved
+          </p>
         </div>
-        <div className="card__body">
-          <div className="stat-grid">
-            <div className="stat">
-              <div className="stat__label">Historical roles</div>
-              <div className="stat__value">{roleTerms.length}</div>
-              <div className="stat__sub">board, director, masthead, staff</div>
-            </div>
-            <div className="stat">
-              <div className="stat__label">Director/officer evidence</div>
-              <div className="stat__value">{legalDirectorTerms.length}</div>
-              <div className="stat__sub">{currentOverlap} current · {Math.max(legalEvidencePeople - currentOverlap, 0)} historical-only</div>
-            </div>
-            <div className="stat">
-              <div className="stat__label">Archived</div>
-              <div className="stat__value">{archivedRoleTerms.length}</div>
-              <div className="stat__sub">kept for audit trail</div>
-            </div>
-            <div className="stat">
-              <div className="stat__label">Unresolved</div>
-              <div className="stat__value">{unresolvedRoleTerms.length}</div>
-              <div className="stat__sub">source needs cleanup</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">Archived people and roles</h2>
-            <p className="card__subtitle">Compared against active directors by normalized name.</p>
-          </div>
-        </div>
-        <div className="card__body">
+        <Link className="btn-action" to="/app/org-history" onClick={(event) => event.stopPropagation()}>
+          Open history
+        </Link>
+      </summary>
+      <div className="card__body">
+        <p className="muted" style={{ margin: "0 0 12px", fontSize: "var(--fs-sm)" }}>
+          Board, masthead and editorial observations for comparison only.{" "}
+          {currentOverlap} match a current director; {Math.max(legalEvidencePeople - currentOverlap, 0)} appear only historically.
+        </p>
+        <div className="table-wrap">
           {roleTerms.length > 0 ? (
             <table className="table">
               <thead>
@@ -454,12 +495,10 @@ function ArchivedRoleEvidenceView({
                 })}
               </tbody>
             </table>
-          ) : (
-            <div className="muted">No archived role evidence has been imported yet.</div>
-          )}
+          ) : null}
         </div>
       </div>
-    </div>
+    </details>
   );
 }
 

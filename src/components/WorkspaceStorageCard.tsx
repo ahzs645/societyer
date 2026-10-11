@@ -1,3 +1,4 @@
+import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, HardDrive, Server, Upload } from "lucide-react";
@@ -12,7 +13,9 @@ import {
   downloadLocalWorkspaceZip,
   localWorkspaceBackupSupported,
   localWorkspaceRestoreSupported,
+  readWorkspaceBackupFile,
   restoreLocalWorkspaceBackup,
+  summarizeWorkspaceBackup,
 } from "../lib/localWorkspaceExport";
 import { isStandalonePwa } from "../lib/pwa";
 
@@ -36,7 +39,7 @@ export function WorkspaceStorageCard() {
     setBusy("export");
     setProgress("Preparing backup…");
     try {
-      if (format === "json") toast.success("Records downloaded", downloadLocalWorkspaceSnapshot());
+      if (format === "json") toast.success("Records downloaded", await downloadLocalWorkspaceSnapshot());
       else {
         const { filename, manifest } = await downloadLocalWorkspaceZip(setProgress);
         if (manifest.completeStoredFiles) toast.success("ZIP backup downloaded", `${manifest.rowCount} records and ${manifest.includedFiles} saved files. ${filename}`);
@@ -52,9 +55,34 @@ export function WorkspaceStorageCard() {
 
   const importBackup = async (file: File | null | undefined, input: HTMLInputElement) => {
     if (!file) return;
+    try {
+      await preflightWorkspaceBackupFile(file);
+    } catch (error: any) {
+      input.value = "";
+      toast.error("This file can't be restored", error?.message ?? "Choose a Societyer ZIP or JSON backup.");
+      return;
+    }
+    // Read and validate the whole backup (records, ZIP checksums) before
+    // asking to replace anything, so a broken file is refused up front and the
+    // confirmation can say exactly what will be restored.
+    let preview: ReturnType<typeof summarizeWorkspaceBackup>;
+    setBusy("import");
+    setProgress(`Checking "${file.name}"…`);
+    try {
+      preview = summarizeWorkspaceBackup(await readWorkspaceBackupFile(file));
+    } catch (error: any) {
+      input.value = "";
+      toast.error("This file can't be restored", error?.message ?? "Choose a Societyer ZIP or JSON backup.");
+      return;
+    } finally {
+      setBusy(null);
+      setProgress("");
+    }
+    const organizations = preview.societies.slice(0, 5).map((society) => society.name).join(", ")
+      + (preview.societies.length > 5 ? ` and ${preview.societies.length - 5} more` : "");
     const ok = await confirm({
       title: "Restore this backup?",
-      message: `Everything currently in this workspace is replaced by the contents of "${file.name}". This cannot be undone — export a backup first if you need one.`,
+      message: `Everything currently in this workspace is replaced by "${file.name}": ${preview.rowCount.toLocaleString()} records for ${organizations}, with ${preview.includedFiles} saved files${preview.unavailableFiles ? ` (${preview.unavailableFiles} files unavailable)` : ""}. This cannot be undone — export a backup first if you need one.`,
       confirmLabel: "Restore",
       tone: "danger",
     });
@@ -63,7 +91,7 @@ export function WorkspaceStorageCard() {
     setBusy("import");
     try {
       const summary = await restoreLocalWorkspaceBackup(file);
-      const restoredSocietyId = summary.societies[0]?._id;
+      const restoredSocietyId = summary.preferredSocietyId;
       if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       toast.success(
         "Backup restored",

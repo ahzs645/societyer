@@ -10,8 +10,22 @@ import { setStoredUserId } from "./useCurrentUser";
 import { useLocalWorkspaceReady } from "./useLocalWorkspaceReady";
 
 const KEY = "societyer.currentSocietyId";
+// The demo runtime keeps its own selection so a workspace created in the demo
+// stays selected across a reload (G-22) without touching the real key.
+const DEMO_KEY = "societyer.demo.currentSocietyId";
+
+function readDemoSelection(): Id<"societies"> | null {
+  try { return (localStorage.getItem(DEMO_KEY) as Id<"societies"> | null) ?? null; } catch { return null; }
+}
+
+function writeDemoSelection(id: Id<"societies"> | null) {
+  try {
+    if (id) localStorage.setItem(DEMO_KEY, id);
+    else localStorage.removeItem(DEMO_KEY);
+  } catch { /* Storage can be unavailable (private mode); the in-memory value still applies. */ }
+}
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";
-let staticSocietyId = STATIC_DEMO_SOCIETY_ID as Id<"societies"> | null;
+let staticSocietyId = (readDemoSelection() ?? STATIC_DEMO_SOCIETY_ID) as Id<"societies"> | null;
 let membershipUserIds: Map<Id<"societies">, Id<"users">> | null = null;
 
 type SocietyView = Doc<"societies"> & {
@@ -56,6 +70,7 @@ export function setStoredSocietyId(id: Id<"societies"> | null) {
 
   if (isStaticDemoRuntime()) {
     staticSocietyId = id;
+    writeDemoSelection(id);
   } else if (id) {
     localStorage.setItem(KEY, id);
   } else {

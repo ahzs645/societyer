@@ -129,7 +129,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "votingRights", label: "Voting rights", fieldType: FIELD_TYPES.BOOLEAN, icon: "Vote" },
+      { name: "votingRights", label: "Voting", fieldType: FIELD_TYPES.BOOLEAN, icon: "Vote" },
       { name: "joinedAt", label: "Joined", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "leftAt", label: "Left", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "notes", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
@@ -146,7 +146,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "email", size: 240 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -203,6 +217,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         config: {
           options: [
             { value: "Active", label: "Active", color: "green" },
+            { value: "NeedsReview", label: "Needs review", color: "amber" },
             { value: "Resigned", label: "Resigned", color: "amber" },
             { value: "Inactive", label: "Inactive", color: "gray" },
           ],
@@ -224,6 +239,14 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "consentOnFile", size: 120 },
       ],
     },
+    // Opened by default: the current register, with former directors one
+    // filter (or the "All directors" view) away.
+    extraViews: [
+      {
+        name: "Current directors",
+        filters: [{ fieldName: "status", operator: "in", value: ["Active", "NeedsReview"] }],
+      },
+    ],
   },
   {
     nameSingular: "roleHolder",
@@ -378,6 +401,28 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         config: {
           options: [
             { value: "RegistryRecord", label: "Registry record", color: "gray" },
+            // Stored filing kind codes (shared/jurisdictionWorkspace.ts), so
+            // the table shows labels instead of raw enums (G-17).
+            { value: "AnnualReport", label: "Annual report", color: "blue" },
+            { value: "BCSocietyAnnualReport", label: "BC society annual report", color: "blue" },
+            { value: "BCCompanyAnnualReport", label: "BC company annual report", color: "blue" },
+            { value: "BCExtraProvincialAnnualReport", label: "BC extra-provincial annual report", color: "blue" },
+            { value: "ChangeOfDirectors", label: "Change of directors", color: "purple" },
+            { value: "ChangeOfAddress", label: "Change of address", color: "teal" },
+            { value: "BylawAmendment", label: "Bylaw amendment", color: "purple" },
+            { value: "ConstitutionAlteration", label: "Constitution alteration", color: "purple" },
+            { value: "FederalAnnualReturn", label: "Federal annual return", color: "blue" },
+            { value: "FederalIscUpdate", label: "Federal ISC update", color: "amber" },
+            { value: "FederalDirectorChange", label: "Federal director change", color: "purple" },
+            { value: "FederalRegisteredOfficeChange", label: "Federal registered office change", color: "teal" },
+            { value: "OntarioInitialReturn", label: "Ontario initial return", color: "blue" },
+            { value: "OntarioAnnualReturn", label: "Ontario annual return", color: "blue" },
+            { value: "OntarioNoticeOfChange", label: "Ontario notice of change", color: "teal" },
+            { value: "T2", label: "CRA T2", color: "green" },
+            { value: "T1044", label: "CRA T1044 (NPO)", color: "green" },
+            { value: "T3010", label: "CRA T3010 (charity)", color: "green" },
+            { value: "T4", label: "T4 / T4A", color: "green" },
+            { value: "GSTHST", label: "GST/HST return", color: "green" },
             { value: "Annual Report", label: "Annual Report", color: "blue" },
             { value: "Statement of Directors", label: "Statement of Directors", color: "purple" },
             { value: "Charity Return", label: "Charity Return", color: "green" },
@@ -461,7 +506,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "confirmationNumber", size: 160 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -667,8 +726,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       name: "All pending emails",
       columns: [
         { fieldName: "subject", size: 280 },
+        { fieldName: "to", size: 240 },
         { fieldName: "fromEmail", size: 190 },
-        { fieldName: "to", size: 220 },
         { fieldName: "status", size: 110 },
         { fieldName: "createdAtISO", size: 180 },
         { fieldName: "sentAtISO", size: 180 },
@@ -1106,8 +1165,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     defaultView: {
       name: "All workflows",
       columns: [
-        { fieldName: "name", size: 220 },
-        { fieldName: "recipeLabel", size: 200 },
+        { fieldName: "name", size: 240 },
         { fieldName: "triggerLabel", size: 180 },
         { fieldName: "provider", size: 120 },
         { fieldName: "status", size: 110 },
@@ -1690,7 +1748,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "feeCents", label: "Inspection fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
+      { name: "feeCents", label: "Fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
       { name: "copies", label: "Copies", fieldType: FIELD_TYPES.TEXT, icon: "Copy", isReadOnly: true },
     ],
     defaultView: {
@@ -1890,24 +1948,78 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           options: [
             { value: "Scheduled", label: "Scheduled", color: "blue" },
             { value: "Held", label: "Held", color: "green" },
+            { value: "HeldMinutesMissing", label: "Held — minutes missing", color: "amber" },
             { value: "Cancelled", label: "Cancelled", color: "gray" },
+            { value: "Draft", label: "Draft (source)", color: "purple" },
           ],
         },
       },
       { name: "minutes", label: "Minutes", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true },
+      // Review-at-scale columns (ui-meetings F24). Derived on the page from the
+      // meeting row and the light minutes summaries; read-only in the table.
+      { name: "body", label: "Body", fieldType: FIELD_TYPES.TEXT, icon: "Users", isReadOnly: true },
+      {
+        name: "sourceReviewStatus",
+        label: "Source review",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "ClipboardCheck",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "imported_needs_review", label: "Needs review", color: "amber" },
+            { value: "source_reviewed", label: "Reviewed", color: "green" },
+            { value: "rejected", label: "Rejected", color: "red" },
+            { value: "not_applicable", label: "Not imported", color: "gray" },
+          ],
+        },
+      },
+      { name: "motionCount", label: "Motions", fieldType: FIELD_TYPES.NUMBER, icon: "Gavel", isReadOnly: true },
+      { name: "presentCount", label: "Present", fieldType: FIELD_TYPES.NUMBER, icon: "Users", isReadOnly: true },
+      {
+        name: "datePrecision",
+        label: "Date precision",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "CalendarClock",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "date", label: "Date only", color: "gray" },
+            { value: "datetime", label: "Date and time", color: "blue" },
+          ],
+        },
+      },
+      { name: "duplicateCount", label: "Same-day duplicates", fieldType: FIELD_TYPES.NUMBER, icon: "Copy", isReadOnly: true },
+      // Derived on the page: held, but no minutes started.
+      { name: "minutesMissing", label: "Minutes missing", fieldType: FIELD_TYPES.BOOLEAN, icon: "FileText", isReadOnly: true },
     ],
     defaultView: {
       name: "All meetings",
       columns: [
         { fieldName: "title", size: 240 },
         { fieldName: "type", size: 120 },
-        { fieldName: "scheduledAt", size: 180 },
+        { fieldName: "scheduledAt", size: 210 },
         { fieldName: "location", size: 180 },
         { fieldName: "status", size: 120 },
         { fieldName: "minutes", size: 110 },
+        { fieldName: "sourceReviewStatus", size: 130 },
+        { fieldName: "motionCount", size: 90 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -1991,6 +2103,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
             { value: "Monthly", label: "Monthly", color: "purple" },
             { value: "Quarterly", label: "Quarterly", color: "amber" },
             { value: "Ad-hoc", label: "Ad-hoc", color: "gray" },
+            { value: "Unknown", label: "Not set", color: "gray" },
           ],
         },
       },
@@ -2007,6 +2120,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           options: [
             { value: "Active", label: "Active", color: "green" },
             { value: "Inactive", label: "Inactive", color: "gray" },
+            { value: "NeedsReview", label: "Needs review", color: "amber" },
           ],
         },
       },
@@ -2026,7 +2140,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "openTaskCount", size: 110 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -2085,6 +2213,72 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "renewalDate", size: 150 },
       ],
     },
+  },
+  {
+    nameSingular: "serviceProvider",
+    namePlural: "serviceProviders",
+    labelSingular: "Service provider",
+    labelPlural: "Service providers",
+    icon: "Briefcase",
+    iconColor: "purple",
+    routePath: "/app/service-providers",
+    labelIdentifierFieldName: "firmName",
+    fields: [
+      { name: "firmName", label: "Firm", fieldType: FIELD_TYPES.TEXT, icon: "Building", isSystem: true },
+      {
+        name: "function",
+        label: "Role",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Briefcase",
+        config: {
+          options: [
+            { value: "lawyer", label: "Lawyer", color: "purple" },
+            { value: "accountant", label: "Accountant", color: "green" },
+            { value: "banker", label: "Banker", color: "blue" },
+            { value: "transfer_agent", label: "Transfer agent", color: "teal" },
+            { value: "auditor", label: "Auditor", color: "amber" },
+            { value: "registered_agent", label: "Registered agent", color: "pink" },
+            { value: "other", label: "Other", color: "gray" },
+          ],
+        },
+      },
+      { name: "contactName", label: "Contact", fieldType: FIELD_TYPES.TEXT, icon: "User" },
+      { name: "firmLocation", label: "Location", fieldType: FIELD_TYPES.TEXT, icon: "MapPin" },
+      { name: "appointedOn", label: "Appointed", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "removedOn", label: "Removed", fieldType: FIELD_TYPES.DATE, icon: "LogOut" },
+      {
+        // Derived on the page from removedOn and today's date.
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "active", label: "Active", color: "green" },
+            { value: "former", label: "Former", color: "gray" },
+          ],
+        },
+      },
+    ],
+    defaultView: {
+      name: "All providers",
+      columns: [
+        { fieldName: "firmName", size: 240 },
+        { fieldName: "function", size: 150 },
+        { fieldName: "contactName", size: 200 },
+        { fieldName: "status", size: 110 },
+        { fieldName: "appointedOn", size: 140 },
+        { fieldName: "removedOn", size: 140 },
+        { fieldName: "firmLocation", size: 180 },
+      ],
+    },
+    extraViews: [
+      {
+        name: "Active providers",
+        filters: [{ fieldName: "status", operator: "in", value: ["active"] }],
+      },
+    ],
   },
   {
     nameSingular: "volunteerApplication",
@@ -2345,6 +2539,102 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     },
   },
   {
+    nameSingular: "agreement",
+    namePlural: "agreements",
+    labelSingular: "Agreement",
+    labelPlural: "Agreements",
+    icon: "FileText",
+    iconColor: "teal",
+    routePath: "/app/agreements",
+    labelIdentifierFieldName: "title",
+    fields: [
+      { name: "title", label: "Agreement", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isSystem: true },
+      { name: "counterparty", label: "Counterparty", fieldType: FIELD_TYPES.TEXT, icon: "Users", isReadOnly: true },
+      {
+        name: "kind",
+        label: "Kind",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Tag",
+        config: {
+          options: [
+            { value: "service", label: "Service", color: "blue" },
+            { value: "funding", label: "Funding", color: "green" },
+            { value: "lease", label: "Lease", color: "teal" },
+            { value: "consulting", label: "Consulting", color: "purple" },
+            { value: "MOU", label: "MOU", color: "amber" },
+            { value: "partnership", label: "Partnership", color: "pink" },
+            { value: "employment", label: "Employment", color: "blue" },
+            { value: "licence", label: "Licence", color: "purple" },
+            { value: "data_sharing", label: "Data sharing", color: "amber" },
+            { value: "other", label: "Other", color: "gray" },
+          ],
+        },
+      },
+      {
+        name: "effectiveStatus",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "CheckCircle2",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "draft", label: "Draft", color: "gray" },
+            { value: "negotiating", label: "Negotiating", color: "blue" },
+            { value: "active", label: "Active", color: "green" },
+            { value: "expired", label: "Expired", color: "amber" },
+            { value: "terminated", label: "Terminated", color: "red" },
+            { value: "superseded", label: "Superseded", color: "purple" },
+            { value: "unknown", label: "Unknown", color: "gray" },
+          ],
+        },
+      },
+      { name: "term", label: "Term", fieldType: FIELD_TYPES.TEXT, icon: "CalendarClock", isReadOnly: true },
+      { name: "valueCents", label: "Value", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true },
+      { name: "renewalDue", label: "Renewal due", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock", isReadOnly: true },
+      { name: "signing", label: "Signing authority", fieldType: FIELD_TYPES.TEXT, icon: "ShieldAlert", isReadOnly: true },
+      {
+        name: "reviewStatus",
+        label: "Review",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "AlertTriangle",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "NeedsReview", label: "Needs review", color: "amber" },
+            { value: "Verified", label: "Verified", color: "green" },
+            { value: "Rejected", label: "Rejected", color: "red" },
+          ],
+        },
+      },
+      { name: "effectiveDate", label: "Effective", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock", isReadOnly: true },
+      { name: "endDate", label: "Ends", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All agreements",
+      columns: [
+        { fieldName: "title", size: 300 },
+        { fieldName: "effectiveStatus", size: 120 },
+        { fieldName: "counterparty", size: 200 },
+        { fieldName: "kind", size: 120 },
+        { fieldName: "term", size: 200 },
+        { fieldName: "valueCents", size: 120 },
+        { fieldName: "renewalDue", size: 140 },
+        { fieldName: "signing", size: 180 },
+        { fieldName: "reviewStatus", size: 130 },
+      ],
+    },
+    extraViews: [
+      {
+        name: "Active agreements",
+        filters: [{ fieldName: "effectiveStatus", operator: "in", value: ["active", "negotiating"] }],
+      },
+      {
+        name: "Needs review",
+        filters: [{ fieldName: "reviewStatus", operator: "eq", value: "NeedsReview" }],
+      },
+    ],
+  },
+  {
     nameSingular: "asset",
     namePlural: "assets",
     labelSingular: "Asset",
@@ -2393,7 +2683,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "purchaseEvidence", size: 170 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -2439,22 +2743,81 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "createdAtISO", label: "Created", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "createdAtISO", label: "Added", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "retentionYears", label: "Retention", fieldType: FIELD_TYPES.NUMBER, icon: "Clock" },
       { name: "tags", label: "Tags", fieldType: FIELD_TYPES.ARRAY, icon: "Tag", isReadOnly: true },
       { name: "flagged", label: "Flags", fieldType: FIELD_TYPES.TEXT, icon: "Flag", isReadOnly: true },
+      // Derived by documents:browse (findings D-12, D-14, D-15).
+      {
+        name: "reviewStatus",
+        label: "Review status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "CheckCircle2",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "none", label: "Not reviewed", color: "gray" },
+            { value: "needs_review", label: "Needs review", color: "amber" },
+            { value: "in_review", label: "In review", color: "blue" },
+            { value: "needs_signature", label: "Needs signature", color: "amber" },
+            { value: "approved", label: "Approved", color: "green" },
+            { value: "blocked", label: "Blocked", color: "red" },
+          ],
+        },
+      },
+      { name: "sourceDate", label: "Source date", fieldType: FIELD_TYPES.TEXT, icon: "CalendarClock", isReadOnly: true },
+      { name: "sourceSystemLabel", label: "Source", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
+      {
+        name: "sourceVersionStatus",
+        label: "Version",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "History",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "draft", label: "Draft", color: "gray" },
+            { value: "revised", label: "Revised", color: "amber" },
+            { value: "final", label: "Final", color: "blue" },
+            { value: "approved", label: "Approved", color: "green" },
+            { value: "signed", label: "Signed", color: "purple" },
+          ],
+        },
+      },
+      { name: "linkedRecordCount", label: "Linked records", fieldType: FIELD_TYPES.NUMBER, icon: "Link", isReadOnly: true },
     ],
     defaultView: {
       name: "All documents",
       columns: [
-        { fieldName: "title", size: 280 },
+        { fieldName: "title", size: 300 },
         { fieldName: "category", size: 160 },
-        { fieldName: "createdAtISO", size: 140 },
-        { fieldName: "retentionYears", size: 120 },
+        { fieldName: "reviewStatus", size: 140 },
+        { fieldName: "sourceDate", size: 120 },
+        { fieldName: "sourceSystemLabel", size: 130 },
+        { fieldName: "sourceVersionStatus", size: 110 },
+        { fieldName: "linkedRecordCount", size: 120 },
+        { fieldName: "createdAtISO", size: 120 },
+        { fieldName: "retentionYears", size: 110 },
         { fieldName: "tags", size: 220 },
-        { fieldName: "flagged", size: 120 },
+        { fieldName: "flagged", size: 100 },
       ],
     },
+    // Triage columns first (finding D-15). Existing workspaces keep their
+    // "All documents" column order; this view gives them the review layout.
+    extraViews: [
+      {
+        name: "Review and provenance",
+        columns: [
+          { fieldName: "title", size: 320 },
+          { fieldName: "reviewStatus", size: 140 },
+          { fieldName: "category", size: 170 },
+          { fieldName: "sourceDate", size: 120 },
+          { fieldName: "sourceSystemLabel", size: 130 },
+          { fieldName: "sourceVersionStatus", size: 110 },
+          { fieldName: "linkedRecordCount", size: 120 },
+          { fieldName: "tags", size: 200 },
+        ],
+      },
+    ],
   },
   {
     nameSingular: "financialTransaction",
@@ -2909,18 +3272,18 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           "Free-form labels. Adjournment and 'accept previous minutes' are auto-applied and hidden by the default view.",
         config: {
           options: [
-            { value: "governance", label: "governance", color: "purple" },
-            { value: "finance", label: "finance", color: "green" },
-            { value: "membership", label: "membership", color: "blue" },
-            { value: "operations", label: "operations", color: "teal" },
-            { value: "bylaws", label: "bylaws", color: "amber" },
-            { value: "privacy", label: "privacy", color: "pink" },
-            { value: "adjournment", label: "adjournment", color: "gray" },
-            { value: "previous-minutes", label: "previous-minutes", color: "gray" },
-            { value: "approve-agenda", label: "approve-agenda", color: "gray" },
-            { value: "receive-reports", label: "receive-reports", color: "gray" },
-            { value: "recess", label: "recess", color: "gray" },
-            { value: "routine", label: "routine", color: "gray" },
+            { value: "governance", label: "Governance", color: "purple" },
+            { value: "finance", label: "Finance", color: "green" },
+            { value: "membership", label: "Membership", color: "blue" },
+            { value: "operations", label: "Operations", color: "teal" },
+            { value: "bylaws", label: "Bylaws", color: "amber" },
+            { value: "privacy", label: "Privacy", color: "pink" },
+            { value: "adjournment", label: "Adjournment", color: "gray" },
+            { value: "previous-minutes", label: "Previous minutes", color: "gray" },
+            { value: "approve-agenda", label: "Approve agenda", color: "gray" },
+            { value: "receive-reports", label: "Receive reports", color: "gray" },
+            { value: "recess", label: "Recess", color: "gray" },
+            { value: "routine", label: "Routine", color: "gray" },
           ],
         },
       },
@@ -2978,7 +3341,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "createdAtISO", size: 140 },
       ],
     },
+    // Review queues are ordinary filtered views, so they can be tweaked,
+    // cleared or saved like any other table filter.
     extraViews: [
+      {
+        name: "Needs source review",
+        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+      },
+      {
+        name: "Held, no minutes",
+        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
+      },
+      {
+        name: "Same-day duplicates",
+        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+      },
       {
         name: "Board",
         type: "kanban",
@@ -3025,6 +3402,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
             { value: "InProgress", label: "In progress", color: "blue" },
             { value: "Blocked", label: "Blocked", color: "red" },
             { value: "Done", label: "Done", color: "green" },
+            { value: "Unknown", label: "Unknown (from source)", color: "amber" },
+            { value: "Cancelled", label: "Cancelled", color: "gray" },
           ],
         },
       },
@@ -3066,6 +3445,24 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           targetObjectNamePlural: "committees",
           targetLabelFieldName: "name",
           kind: "many-to-one",
+        },
+      },
+      {
+        name: "linkedTo",
+        label: "Linked to",
+        fieldType: FIELD_TYPES.MULTI_SELECT,
+        icon: "Link",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "meeting", label: "Meeting", color: "blue" },
+            { value: "goal", label: "Goal", color: "green" },
+            { value: "filing", label: "Filing", color: "orange" },
+            { value: "workflow", label: "Workflow", color: "purple" },
+            { value: "document", label: "Document", color: "gray" },
+            { value: "commitment", label: "Commitment", color: "yellow" },
+            { value: "event", label: "Event", color: "red" },
+          ],
         },
       },
       {
@@ -3175,6 +3572,14 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
     extraViews: [
+      {
+        name: "Open work",
+        filters: [{ fieldName: "status", operator: "in", value: ["Todo", "InProgress", "Blocked"] }],
+      },
+      {
+        name: "Blocked",
+        filters: [{ fieldName: "status", operator: "in", value: ["Blocked"] }],
+      },
       {
         name: "Board",
         type: "kanban",

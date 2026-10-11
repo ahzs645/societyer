@@ -18,6 +18,14 @@ import {
   requireSocietyMembership,
 } from "./access";
 import { authorizeApplicationIntake } from "./publicIntake";
+import { findOwnedRow } from "./recordLookup";
+import {
+  assertValid,
+  validateGrantInput,
+  validateGrantReportInput,
+  validateGrantTransactionInput,
+} from "../recordValidation";
+import { daysUntilDate, isPastDue } from "../dateOnly";
 
 function isoNow() {
   return new Date().toISOString();
@@ -33,7 +41,8 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return requireOwnedRow(ctx, "grants", id);
+  // Detail pages render a not-found state for null; see recordLookup.ts.
+  return findOwnedRow(ctx, "grants", id);
 }
 
 export async function publicOpeningsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -89,7 +98,7 @@ export async function employeeLinksPortable(
 
 export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const [grants, reports, accounts, applications, ledger] = await Promise.all([
+  const [allGrants, reports, accounts, applications, ledger] = await Promise.all([
     ctx.db
       .query("grants")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -113,6 +122,8 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
   ]);
 
   const now = Date.now();
+  // Archived grants stay in the ledger totals but leave the pipeline counts.
+  const grants = allGrants.filter((grant) => !grant.archivedAtISO);
   const active = grants.filter((grant) => ["Awarded", "Active"].includes(grant.status));
   const linkedRestrictedBalance = active.reduce((sum, grant) => {
     if (!grant.linkedFinancialAccountId) return sum;
@@ -125,6 +136,7 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
 
   return {
     total: grants.length,
+    archived: allGrants.length - grants.length,
     pipeline: grants.filter((grant) =>
       ["Prospecting", "Drafting", "Submitted"].includes(grant.status),
     ).length,
@@ -140,12 +152,12 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
     ledgerSpendCents: spentCents,
     overdueReports: reports.filter((report) => {
       if (report.status === "Submitted") return false;
-      return new Date(report.dueAtISO).getTime() < now;
+      return isPastDue(report.dueAtISO, now);
     }).length,
     dueSoonReports: reports.filter((report) => {
       if (report.status === "Submitted") return false;
-      const due = new Date(report.dueAtISO).getTime();
-      return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
+      const days = daysUntilDate(report.dueAtISO, now);
+      return days != null && days >= 0 && days <= 30 && !isPastDue(report.dueAtISO, now);
     }).length,
   };
 }
@@ -257,9 +269,13 @@ export async function reviewApplicationPortable(
     societyId,
     required: "Director",
   });
+  if (application.status === "Converted" && status !== "Converted") {
+    throw new Error("This application was already converted into a grant. Archive the grant instead of declining the application.");
+  }
   await ctx.db.patch(id, {
     status,
-    notes,
+    // Leave existing reviewer notes alone when this transition adds none.
+    ...(notes !== undefined ? { notes } : {}),
     reviewedAtISO: isoNow(),
     reviewedByUserId: await principalUserId(ctx, societyId),
   });
@@ -310,6 +326,9 @@ export async function upsertGrantPortable(ctx: PortableMutationCtx, args: Record
   });
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
+  assertValid(validateGrantInput(rest, { partial: Boolean(id) }));
+  if (typeof rest.title === "string") rest.title = rest.title.trim();
+  if (typeof rest.funder === "string") rest.funder = rest.funder.trim();
   await Promise.all([
     id ? getOwned(ctx, "grants", id, args.societyId) : Promise.resolve(),
     args.committeeId ? getOwned(ctx, "committees", args.committeeId, args.societyId) : Promise.resolve(),
@@ -407,6 +426,80 @@ export async function importGcosProjectSnapshotPortable(
   return { grantId, created: true, sourceExternalIds };
 }
 
+/**
+ * Everything that references one grant. Ledger links (grant transactions,
+ * posted journal lines, restricted funds) are financial history: they block a
+ * hard delete, and the grant should be archived instead. Reports, employee
+ * links and application back-links are workflow data owned by the grant.
+ */
+async function collectGrantLinks(ctx: PortableQueryCtx, grantId: string, societyId: string) {
+  const [reports, ledger, journalLines, fundRestrictions, applications, employeeLinks] = await Promise.all([
+    ctx.db.query("grantReports").withIndex("by_grant", (q) => q.eq("grantId", grantId)).collect(),
+    ctx.db.query("grantTransactions").withIndex("by_grant", (q) => q.eq("grantId", grantId)).collect(),
+    ctx.db.query("journalLines").withIndex("by_grant", (q) => q.eq("grantId", grantId)).collect(),
+    ctx.db.query("fundRestrictions").withIndex("by_grant", (q) => q.eq("linkedGrantId", grantId)).collect(),
+    ctx.db.query("grantApplications").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("grantEmployeeLinks").withIndex("by_grant", (q) => q.eq("grantId", grantId)).collect(),
+  ]);
+  return {
+    reports: reports.filter((row: any) => String(row.societyId ?? societyId) === societyId),
+    ledger: ledger.filter((row: any) => String(row.societyId ?? societyId) === societyId),
+    journalLines: journalLines.filter((row: any) => String(row.societyId ?? societyId) === societyId),
+    fundRestrictions: fundRestrictions.filter((row: any) => String(row.societyId ?? societyId) === societyId),
+    applications: applications.filter((row: any) => String(row.linkedGrantId ?? "") === grantId || String(row.grantId ?? "") === grantId),
+    employeeLinks: employeeLinks.filter((row: any) => String(row.societyId ?? societyId) === societyId),
+  };
+}
+
+function ledgerBlockers(links: Awaited<ReturnType<typeof collectGrantLinks>>): string[] {
+  const parts: string[] = [];
+  const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  if (links.ledger.length) parts.push(plural(links.ledger.length, "restricted-fund ledger entry", "restricted-fund ledger entries"));
+  if (links.journalLines.length) parts.push(plural(links.journalLines.length, "journal line"));
+  if (links.fundRestrictions.length) {
+    parts.push(`restricted fund ${links.fundRestrictions.map((row: any) => `"${row.name}"`).join(", ")}`);
+  }
+  return parts;
+}
+
+/** What deleting a grant would touch, for the confirmation dialog. */
+export async function deletionImpactPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
+  const grant = await findOwnedRow(ctx, "grants", id);
+  if (!grant) return null;
+  const societyId = String(grant.societyId);
+  const links = await collectGrantLinks(ctx, id, societyId);
+  const blockers = ledgerBlockers(links);
+  return {
+    grantId: id,
+    title: grant.title,
+    archived: Boolean(grant.archivedAtISO),
+    reports: links.reports.map((row: any) => ({ _id: row._id, title: row.title, status: row.status })),
+    ledgerTransactionCount: links.ledger.length,
+    ledgerAmountCents: links.ledger.reduce((sum: number, row: any) => sum + (Number(row.amountCents) || 0), 0),
+    journalLineCount: links.journalLines.length,
+    fundRestrictions: links.fundRestrictions.map((row: any) => ({ _id: row._id, name: row.name, status: row.status })),
+    applicationCount: links.applications.length,
+    employeeLinkCount: links.employeeLinks.length,
+    canHardDelete: blockers.length === 0,
+    blockers,
+  };
+}
+
+/** Archive (or restore) a grant: hidden from the pipeline, history kept. */
+export async function setArchivedPortable(
+  ctx: PortableMutationCtx,
+  { id, archived, reason, actingUserId }: { id: string; archived: boolean; reason?: string; actingUserId?: string },
+) {
+  const grant = await requireOwnedRow(ctx, "grants", id);
+  const societyId = String(grant.societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  const now = isoNow();
+  await ctx.db.patch(id, archived
+    ? { archivedAtISO: now, archivedReason: reason?.trim() || undefined, updatedAtISO: now }
+    : { archivedAtISO: undefined, archivedReason: undefined, updatedAtISO: now });
+  return id;
+}
+
 export async function removeGrantPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
@@ -418,19 +511,21 @@ export async function removeGrantPortable(
     societyId,
     required: "Director",
   });
-  const [reports, ledger] = await Promise.all([
-    ctx.db
-      .query("grantReports")
-      .withIndex("by_grant", (q) => q.eq("grantId", id))
-      .collect(),
-    ctx.db
-      .query("grantTransactions")
-      .withIndex("by_grant", (q) => q.eq("grantId", id))
-      .collect(),
-  ]);
-  for (const report of reports) await ctx.db.delete(report._id);
-  for (const row of ledger) await ctx.db.delete(row._id);
+  const links = await collectGrantLinks(ctx, id, societyId);
+  const blockers = ledgerBlockers(links);
+  if (blockers.length) {
+    throw new Error(
+      `"${grant.title}" cannot be deleted while ${blockers.join(", ")} reference it. Archive the grant instead to keep the financial history.`,
+    );
+  }
+  for (const report of links.reports) await ctx.db.delete(report._id);
+  for (const link of links.employeeLinks) await ctx.db.delete(link._id);
+  for (const application of links.applications) {
+    if (String(application.linkedGrantId ?? "") === id) await ctx.db.patch(application._id, { linkedGrantId: undefined });
+    if (String(application.grantId ?? "") === id) await ctx.db.patch(application._id, { grantId: undefined });
+  }
   await ctx.db.delete(id);
+  return { deletedReports: links.reports.length, deletedEmployeeLinks: links.employeeLinks.length, unlinkedApplications: links.applications.length };
 }
 
 export async function upsertReportPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
@@ -442,6 +537,7 @@ export async function upsertReportPortable(ctx: PortableMutationCtx, args: Recor
   });
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
+  assertValid(validateGrantReportInput(rest));
   await Promise.all([
     getOwned(ctx, "grants", args.grantId, args.societyId),
     id ? getOwned(ctx, "grantReports", id, args.societyId) : Promise.resolve(),
@@ -483,6 +579,7 @@ export async function upsertTransactionPortable(ctx: PortableMutationCtx, args: 
   });
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
+  assertValid(validateGrantTransactionInput(rest));
   await Promise.all([
     getOwned(ctx, "grants", args.grantId, args.societyId),
     id ? getOwned(ctx, "grantTransactions", id, args.societyId) : Promise.resolve(),

@@ -1,6 +1,7 @@
-import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../../shared/onboarding";
-import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
-import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
+import { assertValid, validateAccessCustodyInput } from "../../shared/recordValidation";
+import { todayDateOnly } from "../../shared/dateOnly";
+import { validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
+import { validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
 // portable migration backlog is complete.
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
@@ -35,19 +36,11 @@ import {
   YCN_NOT_HANDLED,
 } from "./staticConvexYcn";
 import {
-  staticSeedCorporationDocumentPackets,
-  staticSeedSocietyDocumentPackets,
   staticCreatePacketRunArtifacts,
   staticStageCorporationDocumentPacket,
   staticGenerateDocumentFromCatalog,
 } from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
-import {
-  DEFAULT_HOME_JURISDICTION_CODE,
-  workspaceOnboardingWorkflowConfig,
-  buildWorkspaceOnboardingNodes,
-  buildWorkspaceOnboardingTasks,
-} from "../../shared/jurisdictionWorkspace";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
 import {
@@ -204,7 +197,7 @@ const STATIC_PERMISSIONS = [
   "proxies:read", "proxies:write", "conflicts:read", "conflicts:write", "attestations:read",
   "attestations:write", "auditors:read", "auditors:write", "courtOrders:read", "courtOrders:write",
   "filings:read", "filings:write", "filings:submit", "deadlines:read", "deadlines:write",
-  "commitments:read", "commitments:write", "financials:read", "financials:write", "elections:read",
+  "commitments:read", "commitments:write", "agreements:read", "agreements:write", "financials:read", "financials:write", "elections:read",
   "elections:write", "elections:tally", "grants:read", "grants:write", "documents:read",
   "documents:write", "users:read", "users:write", "tasks:read", "tasks:write", "exports:read",
   "exports:download", "settings:read", "settings:write", "settings:manage", "audit:read",
@@ -365,6 +358,7 @@ const STATIC_EXPORT_TABLES = [
   "deadlines",
   "commitments",
   "commitmentEvents",
+  "agreements",
   "documents",
   "publications",
   "policies",
@@ -611,7 +605,7 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
   if (moduleName === "firm" && exportName === "overview") {
-    const today = (args?.todayISO ?? new Date().toISOString()).slice(0, 10);
+    const today = args?.todayISO ? String(args.todayISO).slice(0, 10) : todayDateOnly();
     const societies = store?.listRows("societies", {}) ?? [];
     const entities = societies.map((society: any) => {
       const deadlines = store?.listRows("deadlines", { societyId: society._id }) ?? [];
@@ -844,139 +838,7 @@ export function portableSyncStub(name: string, args: StaticArgs, store?: StaticD
 const MUT_NOT_HANDLED = Symbol("staticConvex.mutationNotHandled");
 
 function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
-  if (name === "society:createWorkspace") {
-    const createWorkspace = () => {
-      readOnboardingAnswersJson(args?.onboardingAnswersJson, args);
-      if (args?.onboardingAnswersJson) validateInitialOrganizationProfile(args);
-      validateEntitySetup(args ?? {});
-      validateFormationEvidence(args ?? {});
-      validateWorkspaceLegalIdentity({ ...args, jurisdictionCode: args?.jurisdictionCode ?? args?.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE });
-      const now = new Date().toISOString();
-      const societyId = staticLocalId("society", "workspace");
-      const workflowId = staticLocalId("workflow", "onboarding");
-      const jurisdictionCode = args?.jurisdictionCode ?? args?.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
-      const homeJurisdictionCode = args?.homeJurisdictionCode ?? jurisdictionCode;
-      const anniversaryDate = args?.anniversaryDate ?? args?.incorporationDate;
-      const homeRegistrationId = staticLocalId("organizationRegistration", "home");
-      const taskSeeds = buildWorkspaceOnboardingTasks(args ?? {});
-      const taskIds = taskSeeds.map((_, index) => staticLocalId("task", `onboarding_${index}`));
-      store?.upsertRow("societies", {
-        _id: societyId,
-        _creationTime: Date.now(),
-        name: args?.name,
-        onboardingAnswersJson: args?.onboardingAnswersJson,
-        numbered: args?.numbered === true,
-        incorporationNumber: args?.incorporationNumber,
-        incorporationDate: args?.incorporationDate,
-        fiscalYearEnd: args?.fiscalYearEnd,
-        jurisdictionCode,
-        homeJurisdictionCode,
-        primaryRegistrationId: homeRegistrationId,
-        anniversaryDate,
-        corporationKeyVaultItemId: args?.corporationKeyVaultItemId,
-        continuanceDate: args?.continuanceDate,
-        amalgamationDate: args?.amalgamationDate,
-        ...entitySetupFields(args ?? {}),
-        formationStatus: args?.formationStatus || "preparing",
-        entityType: args?.entityType,
-        actFormedUnder: args?.actFormedUnder,
-        officialEmail: args?.officialEmail,
-        organizationStatus: args?.organizationStatus ?? "active",
-        registeredOfficeAddress: args?.registeredOfficeAddress,
-        mailingAddress: args?.mailingAddress,
-        purposes: args?.purposes,
-        privacyOfficerName: args?.privacyOfficerName,
-        privacyOfficerEmail: args?.privacyOfficerEmail,
-        isCharity: args?.isCharity === true,
-        isMemberFunded: args?.isMemberFunded === true,
-        distributing: args?.distributing === true,
-        disabledModules: [],
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-      // Auto-seed the entity's document packet catalog by kind (mirrors
-      // convex/society.createWorkspace), unless the caller opts out.
-      if (args?.seedDocumentPackets !== false) {
-        const isCorp = String(args?.entityType ?? "").includes("corporation") || String(args?.actFormedUnder ?? "").includes("corporations_act");
-        if (isCorp) staticSeedCorporationDocumentPackets(store, { societyId });
-        else staticSeedSocietyDocumentPackets(store, { societyId });
-      }
-      store?.upsertRow("organizationRegistrations", {
-        _id: homeRegistrationId,
-        _creationTime: Date.now(),
-        societyId,
-        registrationType: "home",
-        jurisdiction: homeJurisdictionCode,
-        homeJurisdiction: homeJurisdictionCode,
-        registrationNumber: args?.incorporationNumber,
-        registrationDate: args?.incorporationDate,
-        officialEmail: args?.officialEmail,
-        representativeIds: [],
-        status: args?.organizationStatus === "pre_incorporation" ? "pending" : "active",
-        notes: args?.organizationStatus === "pre_incorporation" ? "Planned home jurisdiction; incorporation has not been confirmed." : "Created automatically from the workspace home jurisdiction.",
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-      staticSeedNewSocietyOwner(store, {
-        societyId,
-        placeholderEmail:
-          args?.officialEmail ??
-          args?.privacyOfficerEmail ??
-          `owner@${String(args?.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
-        placeholderDisplayName: args?.privacyOfficerName ?? "Owner",
-        createdAtISO: now,
-      });
-      // Mirror convex/society.createWorkspace exactly. The UI reads `name`,
-      // `recipe`, and `nodePreview`; writing a `title`/`kind` shape instead left
-      // the onboarding workflow rendering as an unnamed, empty canvas.
-      store?.upsertRow("workflows", {
-        _id: workflowId,
-        _creationTime: Date.now(),
-        societyId,
-        recipe: "workspace_onboarding",
-        name: "Workspace onboarding",
-        status: "active",
-        provider: "internal",
-        nodePreview: buildWorkspaceOnboardingNodes(args ?? {}),
-        trigger: { kind: "manual" },
-        config: workspaceOnboardingWorkflowConfig(args ?? {}),
-        createdByUserId: args?.actingUserId,
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-      taskSeeds.forEach(({ title, description, priority, tags }, index) => {
-        store?.upsertRow("tasks", {
-          _id: taskIds[index],
-          _creationTime: Date.now() + index,
-          societyId,
-          title,
-          description,
-          status: "Todo",
-          priority,
-          tags: ["workspace-onboarding", ...tags],
-          workflowId,
-          createdByUserId: args?.actingUserId,
-          createdAtISO: now,
-          updatedAtISO: now,
-        });
-      });
-      store?.upsertRow("activity", {
-        _id: staticLocalId("activity", "workspace"),
-        _creationTime: Date.now(),
-        societyId,
-        actor: "Desktop user",
-        entityType: "society",
-        subjectId: societyId,
-        // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
-        entityId: societyId,
-        action: "workspace-created",
-        summary: `Created ${args?.name ?? "workspace"}`,
-        createdAtISO: now,
-      });
-      return { societyId, workflowId, taskIds };
-    };
-    return store ? store.transactionAsync(createWorkspace) : createWorkspace();
-  }
+  // society:createWorkspace is a portable handler (shared/functions/societyCreate.ts).
 
   {
     const ycn = ycnMutationResult(name, args, store as any, staticLocalId, society);
@@ -1061,7 +923,10 @@ function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticD
       ok: Boolean(args?.apiKey),
       provider,
       baseUrl: args?.baseUrl ?? (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1"),
-      message: args?.apiKey ? "Static provider key validated." : "API key is required.",
+      // Nothing is contacted in the local/demo runtime: say so instead of
+      // claiming the key was validated.
+      simulated: true,
+      message: args?.apiKey ? "Simulated validation: the key was not checked with the provider in this local workspace." : "API key is required.",
       modelIds: modelCatalog.models.map((model: any) => model.id),
       modelCatalog,
     };
@@ -1069,8 +934,32 @@ function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticD
   if (name === "aiSettingsActions:listProviderModels") {
     return staticModelCatalog(args?.provider ?? "openai");
   }
-  if (name === "secrets:create") {
-    return `static_secret_${Date.now()}`;
+  if (name === "secrets:create" || name === "secrets:update") {
+    // Access-custody records persist locally so a save is visible after it
+    // succeeds. Secret values need server-side encryption, so the local
+    // runtime refuses them instead of storing plaintext or dropping them.
+    const fields = name === "secrets:update" ? { ...(args?.patch ?? {}) } : { ...(args ?? {}) };
+    if (fields.secretValue) {
+      throw new Error("Stored secret values need the hosted server's encryption. Record where the credential is kept (external reference) instead.");
+    }
+    delete fields.secretValue;
+    delete fields.actingUserId;
+    const existing = name === "secrets:update" ? store?.getRow("secretVaultItems", args?.id) : null;
+    if (name === "secrets:update" && !existing) throw new Error("Record not found.");
+    assertValid(validateAccessCustodyInput(name === "secrets:update" ? { ...existing, ...fields } : fields));
+    const now = new Date().toISOString();
+    const id = existing?._id ?? `static_secret_${Date.now()}`;
+    store?.upsertRow("secretVaultItems", {
+      ...(existing ?? {}),
+      ...fields,
+      _id: id,
+      societyId: existing?.societyId ?? args?.societyId ?? SOCIETY_ID,
+      storageMode: fields.storageMode ?? existing?.storageMode ?? "external_reference",
+      status: fields.status ?? existing?.status ?? "NeedsReview",
+      createdAtISO: existing?.createdAtISO ?? now,
+      updatedAtISO: now,
+    });
+    return id;
   }
   return MUT_NOT_HANDLED;
 }
@@ -1332,7 +1221,7 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
         isCurrent: true,
       };
       store.upsertRow("documentVersions", versionRow);
-      if (versionRow.storageProvider === "local-filesystem" && versionRow.storageKey) {
+      if ((versionRow.storageProvider === "local-filesystem" || versionRow.storageProvider === "local-indexeddb") && versionRow.storageKey) {
         store.upsertAttachment({
           societyId: versionRow.societyId,
           documentId: versionRow.documentId,
@@ -1497,9 +1386,9 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
       staticSeedNewSocietyOwner(store, {
         societyId: String(id),
         placeholderEmail:
-          row.officialEmail ??
+          staticFilled(row.officialEmail) ??
           `owner@${String(row.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
-        placeholderDisplayName: row.privacyOfficerName ?? "Owner",
+        placeholderDisplayName: staticFilled(row.privacyOfficerName) ?? "Owner",
         createdAtISO: row.createdAtISO,
       });
     }
@@ -1605,6 +1494,11 @@ function staticStoredRoleHolderRevisions(store: StaticDemoDexieStore | null | un
 
 function staticLocalId(moduleName: string, exportName = "row") {
   return `static_${moduleName}_${exportName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** A trimmed non-empty string, else undefined (mirrors convex/society blankToUndefined). */
+export function staticFilled(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function staticSeedNewSocietyOwner(

@@ -19,8 +19,8 @@ export function CurrencyFieldDisplay({ value, field }: FieldDisplayProps) {
       minimumFractionDigits: config.decimals ?? 2,
       maximumFractionDigits: config.decimals ?? 2,
     }).format(num);
-    return <span className="record-cell__number mono">{formatted}</span>;
+    return <span className="record-cell__number">{formatted}</span>;
   } catch {
-    return <span className="record-cell__number mono">{num.toFixed(2)}</span>;
+    return <span className="record-cell__number">{num.toFixed(2)}</span>;
   }
 }

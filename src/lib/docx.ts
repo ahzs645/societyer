@@ -705,7 +705,9 @@ function docxParagraphFromRuns(
 function cssWidthToTcW(width: string | undefined): string {
   if (width) {
     const pct = /^([\d.]+)%$/.exec(width.trim());
-    if (pct) return `<w:tcW w:w="${Math.round(parseFloat(pct[1]) * 50)}" w:type="pct"/>`;
+    // OOXML pct is fiftieths of a percent; a width over 100% is not a real
+    // column width (F20) — let the table grid decide instead.
+    if (pct) return parseFloat(pct[1]) > 100 ? '<w:tcW w:w="0" w:type="auto"/>' : `<w:tcW w:w="${Math.round(parseFloat(pct[1]) * 50)}" w:type="pct"/>`;
     const pt = parsePoints(width);
     if (pt) return `<w:tcW w:w="${Math.round(pt * 20)}" w:type="dxa"/>`;
   }
@@ -766,6 +768,7 @@ function docxTable(table: HTMLElement, rels: DocxRels) {
   let tblWidth = '<w:tblW w:w="0" w:type="auto"/>';
   let layout = "";
   let grid = "";
+  let gridWidths: number[] | undefined;
   if (statement) {
     const cells = Array.from(rows[0].cells);
     const widths = cells.map((cell) => cssWidthToDxa(cellWidthValue(cell)));
@@ -793,7 +796,8 @@ function docxTable(table: HTMLElement, rels: DocxRels) {
       }
     }
     const total = weights.reduce((sum, value) => sum + value, 0);
-    grid = `<w:tblGrid>${weights.map(weight => `<w:gridCol w:w="${Math.round(weight / total * STATEMENT_CONTENT_WIDTH_DXA)}"/>`).join("")}</w:tblGrid>`;
+    gridWidths = weights.map(weight => Math.round(weight / total * STATEMENT_CONTENT_WIDTH_DXA));
+    grid = `<w:tblGrid>${gridWidths.map(width => `<w:gridCol w:w="${width}"/>`).join("")}</w:tblGrid>`;
     tblWidth = `<w:tblW w:w="${STATEMENT_CONTENT_WIDTH_DXA}" w:type="dxa"/>`;
     layout = '<w:tblLayout w:type="fixed"/>';
   }
@@ -814,17 +818,54 @@ function docxTable(table: HTMLElement, rels: DocxRels) {
       ${cellMargins}
     </w:tblPr>
     ${grid}
-    ${rows.map((row) => docxTableRow(row, rels, statement)).join("")}
+    ${docxTableRows(rows, rels, statement, gridWidths)}
   </w:tbl>`;
 }
 
-function docxTableRow(row: HTMLTableRowElement, rels: DocxRels, statement: boolean) {
-  return `<w:tr>${Array.from(row.cells).map((cell) => docxTableCell(cell, rels, statement)).join("")}</w:tr>`;
+/**
+ * Rows under an HTML rowspan get an empty placeholder cell in the spanned
+ * column(s). Without it, a row under a rowspan shifted its cells into the first
+ * (narrowest) column — a one-character-wide column on continuation pages (F20).
+ * Placeholders are plain cells rather than OOXML vertical merges: the paginated
+ * preview/PDF renderer drops vMerge continuation cells when a table breaks
+ * across pages, which reintroduces the shift.
+ * Fixed-grid (source) tables size every cell from the grid columns it spans.
+ */
+function docxTableRows(rows: HTMLTableRowElement[], rels: DocxRels, statement: boolean, gridWidths?: number[]) {
+  const merges = new Map<number, { remaining: number; span: number }>();
+  const widthFor = (column: number, span: number) => gridWidths ? gridWidths.slice(column, column + span).reduce((sum, value) => sum + value, 0) : undefined;
+  const continueCell = (column: number, span: number) => {
+    const width = widthFor(column, span);
+    return `<w:tc><w:tcPr>${width ? `<w:tcW w:w="${width}" w:type="dxa"/>` : '<w:tcW w:w="0" w:type="auto"/>'}${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ""}</w:tcPr>${docxParagraphFromRuns("")}</w:tc>`;
+  };
+  const totalColumns = gridWidths?.length ?? Math.max(0, ...rows.map((row) => Array.from(row.cells).reduce((sum, cell) => sum + Math.max(1, cell.colSpan), 0)));
+  return rows.map((row) => {
+    let column = 0;
+    const out: string[] = [];
+    const flushMerges = () => {
+      for (let merge = merges.get(column); merge && merge.remaining > 0; merge = merges.get(column)) {
+        out.push(continueCell(column, merge.span));
+        merge.remaining -= 1;
+        if (merge.remaining <= 0) merges.delete(column);
+        column += merge.span;
+      }
+    };
+    for (const cell of Array.from(row.cells)) {
+      flushMerges();
+      const span = Math.max(1, cell.colSpan);
+      const rowSpan = Math.max(1, cell.rowSpan || 1);
+      out.push(docxTableCell(cell, rels, statement, widthFor(column, span)));
+      if (rowSpan > 1) merges.set(column, { remaining: rowSpan - 1, span });
+      column += span;
+    }
+    while (column < totalColumns && merges.has(column)) flushMerges();
+    return `<w:tr>${out.join("")}</w:tr>`;
+  }).join("");
 }
 
 const CELL_BLOCK_TAGS = new Set(["p", "ul", "ol", "blockquote", "table", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "div"]);
 
-function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels, statement = false) {
+function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels, statement = false, gridWidthDxa?: number) {
   const isHeader = cell.tagName.toLowerCase() === "th";
   const styles = parseInlineStyle(cell.getAttribute("style") ?? "");
   const alignValue = styles["text-align"] || cell.getAttribute("align") || "";
@@ -846,8 +887,8 @@ function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels, statement = f
     : docxParagraphFromRuns(docxInlineRuns(cell, rels, isHeader ? "<w:b/>" : ""), undefined, undefined, jc);
   return `<w:tc>
     <w:tcPr>
+      ${gridWidthDxa ? `<w:tcW w:w="${gridWidthDxa}" w:type="dxa"/>` : cssWidthToTcW(cellWidthValue(cell))}
       ${cell.colSpan > 1 ? `<w:gridSpan w:val="${cell.colSpan}"/>` : ""}
-      ${cssWidthToTcW(cellWidthValue(cell))}
       ${tcBorders}
       ${isHeader && !statement ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F1F1"/>' : ""}
     </w:tcPr>

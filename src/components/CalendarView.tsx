@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { ToneVariant } from "./ui";
 import { calendarDate, calendarDateKey, calendarWeekDays } from "../lib/calendarDates";
 
 export type CalendarLayout = "month" | "week" | "list";
+/** "Agenda", not "List": pages put a List/Calendar view toggle next to this
+ * group, and two same-named "List" buttons are ambiguous for screen readers. */
+const CALENDAR_LAYOUT_LABELS: Record<CalendarLayout, string> = { month: "Month", week: "Week", list: "Agenda" };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -19,6 +22,23 @@ function monthDays(anchor: Date): Date[] {
 
 export type CalendarEvent = { id: string; label: string; tone?: ToneVariant; date: string };
 
+/**
+ * Where the calendar opens (A6). Today's month when it has records (or there
+ * are none at all); otherwise the month of the most recent record on or before
+ * today, or of the first upcoming one. A historic workspace (minutes from
+ * 2008–2019) used to open on an empty month with no way to find its records.
+ */
+export function calendarOpeningDate(datedKeys: readonly string[], today: Date = new Date()): Date | null {
+  if (!datedKeys.length) return null;
+  const sorted = [...datedKeys].sort();
+  const todayKey = calendarDateKey(today);
+  const monthPrefix = todayKey.slice(0, 7);
+  if (sorted.some((key) => key.startsWith(monthPrefix))) return null;
+  const past = sorted.filter((key) => key <= todayKey);
+  const target = past.length ? past[past.length - 1] : sorted[0];
+  return calendarDate(target);
+}
+
 /** Shared month/week/agenda presentation. Callers retain data, authorization and selection. */
 export function CalendarView<T>({
   items, getDate, getLabel, getTone, getId, onSelect, initialMonth, layout, onLayoutChange,
@@ -33,7 +53,13 @@ export function CalendarView<T>({
   layout?: CalendarLayout;
   onLayoutChange?: (layout: CalendarLayout) => void;
 }) {
-  const [anchor, setAnchor] = useState(() => initialMonth ?? new Date());
+  const [anchor, setAnchorState] = useState(() => initialMonth ?? new Date());
+  // Once the person navigates, the opening-month logic stays out of the way.
+  const navigated = useRef(Boolean(initialMonth));
+  const setAnchor = (next: Date) => {
+    navigated.current = true;
+    setAnchorState(next);
+  };
   const [localLayout, setLocalLayout] = useState<CalendarLayout>("month");
   const mode = layout ?? localLayout;
   const changeLayout = (next: CalendarLayout) => onLayoutChange ? onLayoutChange(next) : setLocalLayout(next);
@@ -51,6 +77,21 @@ export function CalendarView<T>({
     }
     return { byDay: map, undated: missing };
   }, [items, getDate, getLabel, getTone, getId]);
+  const datedKeys = useMemo(() => [...byDay.keys()].sort(), [byDay]);
+  const earliestKey = datedKeys[0];
+  const latestKey = datedKeys[datedKeys.length - 1];
+  // Records usually arrive after the first render; pick the opening month once
+  // they do, unless the person has already moved the calendar.
+  useEffect(() => {
+    if (navigated.current || !datedKeys.length) return;
+    navigated.current = true;
+    const opening = calendarOpeningDate(datedKeys);
+    if (opening) setAnchorState(opening);
+  }, [datedKeys]);
+  const jumpTo = (key: string | undefined) => {
+    const date = key ? calendarDate(key) : null;
+    if (date) setAnchor(date);
+  };
   const days = mode === "week" ? calendarWeekDays(anchor) : monthDays(anchor);
   const listDays = days.filter((day) => day.getMonth() === anchor.getMonth() && (byDay.get(calendarDateKey(day))?.length ?? 0) > 0);
   const monthLabel = anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
@@ -85,9 +126,17 @@ export function CalendarView<T>({
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => setAnchor(new Date())}>Today</button>
         <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Next ${period}`} onClick={() => move(1)}><ChevronRight size={14} /></button>
       </div>
+      {earliestKey && latestKey && <div className="calendar-view__jump" role="group" aria-label="Jump to records">
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => jumpTo(earliestKey)} title={`Earliest record: ${earliestKey}`} aria-label={`Jump to earliest record (${earliestKey})`}>
+          <ChevronsLeft size={14} aria-hidden="true" /> Earliest
+        </button>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => jumpTo(latestKey)} title={`Latest record: ${latestKey}`} aria-label={`Jump to latest record (${latestKey})`}>
+          Latest <ChevronsRight size={14} aria-hidden="true" />
+        </button>
+      </div>}
       <div className="record-table__segmented" role="group" aria-label="Calendar layout">
         {(["month", "week", "list"] as const).map((value) => <button key={value} type="button" aria-pressed={mode === value}
-          className={mode === value ? "is-active" : ""} onClick={() => changeLayout(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}
+          className={mode === value ? "is-active" : ""} onClick={() => changeLayout(value)}>{CALENDAR_LAYOUT_LABELS[value]}</button>)}
       </div>
     </div>
     {mode === "list" ? <div className="calendar-view__agenda" role="region" aria-label={`${monthLabel} events`}>

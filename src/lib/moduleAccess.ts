@@ -52,6 +52,10 @@ const OPTIONAL_POLICY: Record<ModuleKey, Pick<ModuleAccessDefinition, "permissio
     permissions: { view: ["grants:read"], write: ["grants:write"] },
     notes: ["Grant changes require the grants:write permission, granted to Admin and Owner."],
   },
+  agreements: {
+    permissions: { view: ["agreements:read"], write: ["agreements:write"] },
+    notes: ["Agreement changes require the agreements:write permission, granted to Admin and Owner. Converting system gaps also needs documents:write."],
+  },
   voting: {
     permissions: {
       view: ["elections:read", "motions:read", "proxies:read"],

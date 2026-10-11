@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../../../components/ui";
-import { money } from "../../../lib/format";
+import { formatDate, money } from "../../../lib/format";
 
 export type WaveAccountView = "working" | "transaction" | "category" | "ledger" | "all";
 
@@ -48,9 +48,7 @@ export function waveResourceColumns() {
           <Badge>{waveResourceBadgeLabel(row)}</Badge>
           {(row.typeValue || row.subtypeValue) && (
             <div className="muted" style={{ fontSize: 12 }}>
-              {row.resourceType === "account"
-                ? ["Wave account", row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")
-                : [row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")}
+              {[humanizeWaveEnum(row.typeValue), humanizeWaveEnum(row.subtypeValue)].filter(Boolean).join(" · ")}
             </div>
           )}
         </>
@@ -61,7 +59,7 @@ export function waveResourceColumns() {
       header: "Status",
       sortable: true,
       accessor: (row: any) => row.status ?? "",
-      render: (row: any) => row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—",
+      render: (row: any) => row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{humanizeWaveEnum(row.status)}</Badge> : "—",
     },
     {
       id: "value",
@@ -78,7 +76,7 @@ export function waveResourceColumns() {
       header: "Date",
       sortable: true,
       accessor: (row: any) => row.dateValue ?? "",
-      render: (row: any) => <span className="table__cell--mono">{row.dateValue ?? "—"}</span>,
+      render: (row: any) => <span className="table__cell--mono">{row.dateValue ? formatDate(row.dateValue) : "—"}</span>,
     },
   ];
 }
@@ -399,7 +397,7 @@ export function waveResourceBadgeLabel(resource: any) {
   if (resource?.resourceType === "account") {
     const role = waveAccountRole(resource);
     if (role === "transaction") return "Money account";
-    if (role === "ledger") return "Ledger/system";
+    if (role === "ledger") return "Internal row";
     return "Category account";
   }
   return waveTypeLabel(resource?.resourceType);
@@ -439,13 +437,14 @@ export function waveResourceDetailFields(resource: any, raw: any) {
   const balance = raw?.balance ?? resource.amountValue;
   const businessBalance = raw?.balanceInBusinessCurrency;
   const displayId = raw?.displayId ?? raw?.invoiceNumber ?? raw?.estimateNumber;
+  const balanceText = balance == null ? undefined : formatWaveValue(String(balance), currencyCode);
+  const businessBalanceText = businessBalance == null ? undefined : formatWaveValue(String(businessBalance), currencyCode);
   const fields = [
-    { label: "Resource", value: waveResourceBadgeLabel(resource) },
-    { label: "Type", value: detailPair(raw?.type?.name, raw?.type?.value ?? resource.typeValue) },
-    { label: "Subtype", value: detailPair(raw?.subtype?.name, raw?.subtype?.value ?? resource.subtypeValue) },
-    { label: "Status", value: detailValue(resource.status) },
+    { label: "Type", value: detailValue(raw?.type?.name) ?? humanizeWaveEnum(raw?.type?.value ?? resource.typeValue) },
+    { label: "Subtype", value: detailValue(raw?.subtype?.name) ?? humanizeWaveEnum(raw?.subtype?.value ?? resource.subtypeValue) },
+    { label: "Status", value: humanizeWaveEnum(resource.status) },
     { label: "Currency", value: detailPair(raw?.currency?.name, currencyCode) },
-    { label: "Balance", value: balance == null ? undefined : formatWaveValue(String(balance), currencyCode) },
+    { label: "Balance", value: balanceText },
     isWaveCounterpartyResource(resource) && Number(resource.linkedTransactionCount ?? 0) > 0
       ? { label: "Linked activity", value: `${money(Number(resource.linkedTransactionTotalCents ?? 0))} · ${resource.linkedTransactionCount} txn${resource.linkedTransactionCount === 1 ? "" : "s"}` }
       : undefined,
@@ -455,11 +454,9 @@ export function waveResourceDetailFields(resource: any, raw: any) {
     isWaveLedgerArtifactAccount(resource) && Number(resource.linkedCategoryTransactionCount ?? 0) > 0
       ? { label: "Ledger activity", value: `${money(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
       : undefined,
-    {
-      label: "Business balance",
-      value: businessBalance == null ? undefined : formatWaveValue(String(businessBalance), currencyCode),
-    },
-    { label: "Normal balance", value: detailValue(raw?.normalBalanceType) },
+    // Only worth a row when it differs (a foreign-currency account).
+    { label: "Business balance", value: businessBalanceText === balanceText ? undefined : businessBalanceText },
+    { label: "Normal balance", value: humanizeWaveEnum(raw?.normalBalanceType) },
     { label: "Display ID", value: detailValue(displayId), mono: true },
     { label: "Archived", value: typeof raw?.isArchived === "boolean" ? detailValue(raw.isArchived) : undefined },
   ];
@@ -468,6 +465,14 @@ export function waveResourceDetailFields(resource: any, raw: any) {
 
 function detailPair(label: unknown, value: unknown) {
   return [detailValue(label), detailValue(value)].filter(Boolean).join(" · ") || undefined;
+}
+
+/** Wave enums ("CASH_AND_BANK", "active") as plain words ("Cash and bank", "Active"). */
+export function humanizeWaveEnum(value: unknown) {
+  const text = detailValue(value);
+  if (!text) return undefined;
+  const words = text.replace(/[_-]+/g, " ").trim().toLowerCase();
+  return words ? `${words[0].toUpperCase()}${words.slice(1)}` : undefined;
 }
 
 function detailValue(value: unknown) {

@@ -18,7 +18,8 @@ import { Link } from "react-router-dom";
 import { useSociety } from "../../../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { Badge, Field } from "../../../components/ui";
-import { centsToDollarInput, dollarInputToCents, money } from "../../../lib/format";
+import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../../../lib/format";
+import { Tabs } from "../../../components/primitives";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { exportWordDocx } from "../../../lib/docx";
 import {
@@ -273,7 +274,10 @@ export function YearEndReportsPage() {
         title="Year-end reports"
         icon={<PiggyBank size={16} />}
         iconColor="green"
-        subtitle="Assemble and export the society's year-end financial reports — annual statement, restricted funds, the BC Community Gaming Grants program actuals & budget, and a readiness checklist."
+        subtitle="Assemble and export the year-end financial reports."
+        info={
+          <p>Covers the annual statement, restricted funds, BC Community Gaming Grants actuals and budget, and a readiness checklist.</p>
+        }
         actions={
           <Link className="btn-action" to="/app/financials">
             <ArrowLeft size={12} /> Financials
@@ -283,7 +287,7 @@ export function YearEndReportsPage() {
 
       <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 12 }}>
         <Field label="Fiscal year">
-          <select className="input" value={fiscalYear ?? ""} onChange={(e) => setSelectedYear(e.target.value)}>
+          <select className="input year-end-fy-select" value={fiscalYear ?? ""} onChange={(e) => setSelectedYear(e.target.value)}>
             {fiscalYears.map((y) => (
               <option key={y} value={y}>
                 {y}
@@ -293,16 +297,8 @@ export function YearEndReportsPage() {
         </Field>
       </div>
 
-      <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`btn-action${tab === t.id ? " btn-action--primary" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="financials-tabs">
+        <Tabs<TabId> value={tab} onChange={setTab} items={TABS} ariaLabel="Year-end reports" />
       </div>
 
       {tab === "readiness" && (
@@ -327,26 +323,29 @@ export function YearEndReportsPage() {
               </div>
               <div className="col" style={{ gap: 8 }}>
                 {readiness.items.map((item: any) => (
-                  <div key={item.key} className="card" style={{ padding: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <span style={{ marginTop: 2 }}>
+                  <div key={item.key} className="card year-end-check">
+                    <span className="year-end-check__icon">
                       {item.ok ? (
-                        <CheckCircle2 size={16} color="#0a8f4e" />
+                        <CheckCircle2 size={16} color="#0a8f4e" role="img" aria-label="Complete" />
                       ) : item.status === "upcoming" ? (
-                        <Circle size={16} color="#888" />
+                        <Circle size={16} color="#888" role="img" aria-label="Upcoming" />
                       ) : (
-                        <AlertTriangle size={16} color="#c9264a" />
+                        <AlertTriangle size={16} color="#c9264a" role="img" aria-label="Needs attention" />
                       )}
                     </span>
-                    <div className="col" style={{ gap: 2, flex: 1 }}>
-                      <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
-                        <strong>{item.label}</strong>
-                        <ToneBadge tone={item.status} />
-                      </div>
-                      <span className="muted">{item.detail}</span>
+                    <div className="col year-end-check__body">
+                      <strong>{item.label}</strong>
+                      <span className="muted">{readableDetail(item.detail)}</span>
                       <Link to={item.href} className="meta">
                         Open →
                       </Link>
                     </div>
+                    {/* The check icon already says "complete"; only open items carry a status chip. */}
+                    {!item.ok && (
+                      <span className="year-end-check__status">
+                        <ToneBadge tone={item.status} />
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -700,4 +699,12 @@ function ProgramStatementEditor({
       <PreviewBox bodyHtml={bodyHtml} />
     </div>
   );
+}
+
+/** Readiness details arrive as plain sentences; show ISO dates as human dates
+ * and resolve "1 grant report(s)" style plurals. */
+function readableDetail(detail: unknown) {
+  return String(detail ?? "")
+    .replace(/\b(\d{4}-\d{2}-\d{2})(?:T[\d:.]+Z?)?\b/g, (_match, date: string) => formatDate(date))
+    .replace(/\b(\d+) ([A-Za-z][\w -]*?)\(s\)/g, (_match, count: string, noun: string) => `${count} ${noun}${Number(count) === 1 ? "" : "s"}`);
 }

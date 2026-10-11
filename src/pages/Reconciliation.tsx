@@ -12,7 +12,7 @@ import { DatePicker } from "../components/DatePicker";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { Boxes, Scale, Link2, Undo2, Plus } from "lucide-react";
+import { Boxes, GitCompareArrows, Scale, Link2, Undo2, Plus, Wand2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -24,6 +24,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Bank reconciliation page. The record table on the left is purely
@@ -56,10 +57,18 @@ export function ReconciliationPage() {
   const navigate = useNavigate();
 
   const [selected, setSelected] = useState<string | null>(null);
+  const selectForMatching = (id: string) => {
+    setSelected(id);
+    // On narrow screens the match panel stacks below the table; bring it into view.
+    window.requestAnimationFrame(() => {
+      const panel = document.getElementById("reconciliation-match-panel");
+      if (panel && panel.getBoundingClientRect().top > window.innerHeight) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   const [linkItemId, setLinkItemId] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [txnForm, setTxnForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: todayDateOnly(),
     description: "",
     amountDollars: "",
     direction: "out" as "in" | "out",
@@ -74,6 +83,36 @@ export function ReconciliationPage() {
     nameSingular: "reconciliationTransaction",
     viewId: currentViewId,
   });
+
+  // Amount and match status are what a reconciler scans for, so they sit
+  // right after the description/date (and stay visible) instead of off to
+  // the right past a wide counterparty column.
+  const reconciliationView = useMemo(() => {
+    const view = tableData.hydratedView;
+    if (!view) return view;
+    const order = ["description", "date", "amountCents", "status", "counterparty"];
+    const sizes: Record<string, number> = { description: 210, date: 130, amountCents: 145, status: 140, counterparty: 160 };
+    const rank = (name: string) => {
+      const index = order.indexOf(name);
+      return index < 0 ? order.length : index;
+    };
+    return {
+      ...view,
+      view: { ...view.view, openRecordIn: "page" as const },
+      columns: view.columns
+        .map((column) => {
+          const name = column.field.name;
+          if (!order.includes(name)) return column;
+          return {
+            ...column,
+            isVisible: name === "amountCents" || name === "status" ? true : column.isVisible,
+            size: sizes[name] ?? column.size,
+          };
+        })
+        .sort((a, b) => rank(a.field.name) - rank(b.field.name))
+        .map((column, position) => ({ ...column, position })),
+    };
+  }, [tableData.hydratedView]);
 
   const rows = overview?.rows ?? [];
   const summary = overview?.summary ?? { total: 0, reconciled: 0, withSuggestions: 0, unmatched: 0 };
@@ -174,7 +213,7 @@ export function ReconciliationPage() {
     });
     toast.success("Transaction added");
     setAddOpen(false);
-    setTxnForm({ date: new Date().toISOString().slice(0, 10), description: "", amountDollars: "", direction: "out", counterparty: "", category: "" });
+    setTxnForm({ date: todayDateOnly(), description: "", amountDollars: "", direction: "out", counterparty: "", category: "" });
   };
 
   return (
@@ -183,7 +222,13 @@ export function ReconciliationPage() {
         title="Bank reconciliation"
         icon={<Scale size={16} />}
         iconColor="green"
-        subtitle="Match imported bank transactions to internal records (filings, donation receipts, payroll). Anything unreconciled at year-end is a red flag for the auditor."
+        subtitle="Match imported bank transactions to internal records."
+        info={
+          <p>
+            Match imported bank transactions to internal records such as filings, donation receipts and payroll.
+            Anything unreconciled at year-end is a red flag for the auditor.
+          </p>
+        }
         actions={
           <>
             <MoreActionsMenu
@@ -193,7 +238,7 @@ export function ReconciliationPage() {
               ]}
             />
             <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence} disabled={!canWrite}>
-              <Link2 size={12} /> Auto-match high confidence
+              <Wand2 size={12} /> Auto-match high confidence
             </button>
           </>
         }
@@ -259,9 +304,11 @@ export function ReconciliationPage() {
             <RecordTableScope
               tableId="reconciliation"
               objectMetadata={tableData.objectMetadata}
-              hydratedView={tableData.hydratedView}
+              // Row clicks select the transaction for matching (the panel on the
+              // right) instead of opening the generic record side panel.
+              hydratedView={reconciliationView}
               records={records}
-              onRecordClick={(_, record) => setSelected(record._id)}
+              onRecordClick={(_, record) => selectForMatching(record._id)}
             >
               <RecordTableViewToolbar
                 societyId={society._id}
@@ -275,7 +322,22 @@ export function ReconciliationPage() {
               />
               <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
               <RecordTableFilterChips />
-              <RecordTable loading={tableData.loading || overview === undefined} />
+              <RecordTable
+                loading={tableData.loading || overview === undefined}
+                renderRowActions={(row: any) => (
+                  <button
+                    className={`btn btn--sm ${selected === row._id ? "btn--accent" : "btn--ghost"}`}
+                    aria-pressed={selected === row._id}
+                    aria-label={`Match ${row.description ?? "transaction"}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      selectForMatching(row._id);
+                    }}
+                  >
+                    <GitCompareArrows size={12} /> Match
+                  </button>
+                )}
+              />
             </RecordTableScope>
           ) : (
             <div className="record-table__loading">
@@ -286,11 +348,11 @@ export function ReconciliationPage() {
           )}
         </div>
 
-        <div className="col" style={{ gap: 16 }}>
+        <div className="col" style={{ gap: 16 }} id="reconciliation-match-panel">
           {!selectedRow && (
             <div className="card">
               <div className="card__body muted" style={{ textAlign: "center", padding: 32 }}>
-                Select a transaction to see match suggestions.
+                Click a transaction (or its Match button) to see match suggestions.
               </div>
             </div>
           )}

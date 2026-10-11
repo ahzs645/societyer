@@ -3,6 +3,8 @@ import { StaticConvexClient } from "../src/lib/staticConvex";
 import { normalizeMeetingQuorum, minutesQuorumLabel } from "../shared/minutesQuorum";
 import { normalizeMeetingMinutesPayload } from "../shared/functions/importSessionHelpers/importSessionNormalize";
 import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
+import { quorumStatementFromText } from "../shared/quorumStatement";
+import { resolveMeetingQuorumRule } from "../shared/bodyQuorum";
 
 assert.deepEqual(normalizeMeetingQuorum({}), { quorumMet: false, quorumStatus: "not_recorded" });
 assert.deepEqual(normalizeMeetingQuorum({ quorumMet: "false" }), { quorumMet: false, quorumStatus: "not_met" });
@@ -48,4 +50,11 @@ await restored.mutation("minutes:update", { id: row._id, patch: { quorumMet: fal
 assert.equal(restored.exportLocalWorkspaceSnapshot().tables.minutes[0].quorumStatus, "not_met", "explicit manual false makes a known negative observation");
 await restored.mutation("minutes:update", { id: row._id, patch: { quorumStatus: "not_recorded" } });
 assert.equal(restored.exportLocalWorkspaceSnapshot().tables.minutes[0].quorumStatus, "not_recorded");
-console.log("Meeting quorum fidelity: normalization, staging, native promotion, restore, all export styles and explicit edits passed.");
+// Stated quorum is promoted as stated (not forced to not_recorded), and per-body rules resolve.
+const stated = await restored.mutation("importSessions:createFromBundle", { societyId, bundle: { meetingMinutes: [{ meetingDate: "2020-02-02", meetingTitle: "Stated quorum board", meetingType: "Board", quorumStatus: "confirmed", discussion: "Quorum achieved." }] } });
+await restored.mutation("importSessions:bulkSetStatus", { sessionId: stated, status: "Approved" });
+await restored.mutation("importSessions:applyApprovedMeetings", { sessionId: stated });
+assert.equal(restored.exportLocalWorkspaceSnapshot().tables.minutes.find(row => row.heldAt.startsWith("2020-02-02"))!.quorumStatus, "confirmed", "a stated quorum survives promotion");
+assert.equal(quorumStatementFromText("Secretary reported that quorum of members (12) was present.").presentCount, 12);
+assert.equal(resolveMeetingQuorumRule({ quorumType: "fixed", quorumValue: 3, bodyQuorumRules: [{ body: "general", quorumType: "percentage", quorumValue: 10 }] }, { type: "AGM" })?.rule.quorumType, "percentage");
+console.log("Meeting quorum fidelity: normalization, staging, native promotion, restore, all export styles, explicit edits, stated quorum and per-body rules passed.");

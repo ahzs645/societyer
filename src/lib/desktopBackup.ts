@@ -6,7 +6,7 @@ export async function createDesktopBackup(): Promise<DesktopBackupResult> {
   if (!bridge) throw new Error("Electron desktop bridge is not available.");
 
   const { getLocalWorkspaceSnapshot } = await import("./localWorkspaceExport");
-  const snapshot = getLocalWorkspaceSnapshot();
+  const snapshot = await getLocalWorkspaceSnapshot();
   if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
 
   await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));

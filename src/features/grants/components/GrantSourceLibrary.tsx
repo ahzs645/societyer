@@ -1,9 +1,10 @@
 import { usePermissions } from "@/hooks/usePermissions";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Menu } from "../../../components/Menu";
 import { useMutation } from "convex/react";
-import { ExternalLink, FileText, Globe2, LayoutGrid, Plus, Table2 } from "lucide-react";
+import { ExternalLink, FileText, Globe2, LayoutGrid, MoreHorizontal, Plus, Table2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { DataTable } from "../../../components/DataTable";
 import type { Column } from "../../../components/DataTable";
@@ -260,9 +261,8 @@ function GrantSourceCard({ row, actions }: { row: any; actions: ReactNode }) {
     <article className="card grant-source-card">
       <div className="grant-source-card__head">
         <div className="grant-source-card__main">
-          <div className="grant-source-card__eyebrow">
-            {row.rowKind === "library" ? "Societyer library" : "Workspace source"}
-          </div>
+          {/* Library sources are the norm; only a workspace's own source is labelled. */}
+          {row.rowKind !== "library" && <div className="grant-source-card__eyebrow">Workspace source</div>}
           <h3 className="grant-source-card__title">{row.name}</h3>
         </div>
         <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
@@ -298,30 +298,46 @@ function SourceActions({
   onAdded: (name: string) => void;
 }) {
   const { loaded, can } = usePermissions();
+  const navigate = useNavigate();
   const canWrite = loaded && can("grants:write");
+  const canAdd = row.rowKind === "library" && !row.installed;
+  const addSource = async () => {
+    await addGrantSourceFromLibrary({
+      societyId,
+      libraryKey: row.libraryKey,
+    });
+    onAdded(row.name);
+  };
+  // One primary action per source; the rest sit in a "⋯" menu.
+  const moreItems = [
+    ...(canAdd && row.libraryKey ? [{ id: "details", label: "Details", icon: <FileText size={14} />, onSelect: () => navigate(`/app/grants/sources/${row.libraryKey}`) }] : []),
+    ...(row.url && (canAdd || row.libraryKey) ? [{ id: "open", label: "Open website", icon: <ExternalLink size={14} />, onSelect: () => window.open(row.url, "_blank", "noopener,noreferrer") }] : []),
+  ];
   return (
     <div className="grant-source-actions">
-      <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noreferrer">
-        <ExternalLink size={12} /> Open
-      </a>
-      {row.libraryKey && (
+      {canAdd ? (
+        <button className="btn btn--ghost btn--sm" onClick={() => void addSource()} disabled={!canWrite}>
+          <Plus size={12} /> Add source
+        </button>
+      ) : row.libraryKey ? (
         <Link className="btn btn--ghost btn--sm" to={`/app/grants/sources/${row.libraryKey}`}>
           <FileText size={12} /> Details
         </Link>
-      )}
-      {row.rowKind === "library" && !row.installed && (
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={async () => {
-            await addGrantSourceFromLibrary({
-              societyId,
-              libraryKey: row.libraryKey,
-            });
-            onAdded(row.name);
-          }} disabled={!canWrite}
-        >
-          <Plus size={12} /> Add source
-        </button>
+      ) : row.url ? (
+        <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noreferrer">
+          <ExternalLink size={12} /> Open
+        </a>
+      ) : null}
+      {moreItems.length > 0 && (
+        <Menu
+          align="right"
+          trigger={
+            <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${row.name}`} title="More actions">
+              <MoreHorizontal size={14} />
+            </button>
+          }
+          sections={[{ id: "source-actions", items: moreItems }]}
+        />
       )}
     </div>
   );

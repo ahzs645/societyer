@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 import {
   createIdleUpdateState,
@@ -68,6 +70,8 @@ assert.equal(contentTypeFor("/dist/assets/app.mjs"), "text/javascript");
 assert.equal(contentTypeFor("/dist/assets/app.css"), "text/css");
 assert.equal(contentTypeFor("/dist/assets/icon.webp"), "image/webp");
 assert.equal(contentTypeFor("/dist/assets/data.json"), "application/json");
+assert.equal(contentTypeFor("/dist/assets/intake-ocr/pdfjs/jbig2.wasm"), "application/wasm");
+assert.doesNotMatch(DESKTOP_CSP_HEADER, /'unsafe-eval'/, "only WebAssembly compilation is allowed, never eval");
 
 assert.match(DESKTOP_CSP_HEADER, /default-src 'self'/);
 assert.match(DESKTOP_CSP_HEADER, /object-src 'none'/);
@@ -82,5 +86,18 @@ assert.equal(
   ),
   true,
 );
+
+// The desktop main-process build (desktop:build:main) runs tsc with
+// tsconfig.electron.json, which is stricter than the renderer config
+// (noImplicitAny) and must resolve the renderer's "@/" alias. A type error there
+// stops desktop:build, desktop:smoke and desktop:package, so keep it at zero.
+const electronTsconfig = JSON.parse(readFileSync("tsconfig.electron.json", "utf8"));
+assert.deepEqual(electronTsconfig.compilerOptions.paths?.["@/*"], ["./src/*"], "tsconfig.electron.json must map the @/ alias");
+if (process.env.SOCIETYER_SKIP_DESKTOP_TYPECHECK !== "1") {
+  const typecheck = spawnSync(process.execPath, ["node_modules/typescript/bin/tsc", "-p", "tsconfig.electron.json", "--noEmit"], {
+    encoding: "utf8",
+  });
+  assert.equal(typecheck.status, 0, `desktop:typecheck failed:\n${typecheck.stdout}${typecheck.stderr}`);
+}
 
 console.log("Electron architecture checks passed.");

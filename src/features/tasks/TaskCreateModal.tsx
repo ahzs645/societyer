@@ -87,6 +87,8 @@ function TaskCreateModalForm({
         status: form.status,
         priority: form.priority,
         assignee: form.assignee || undefined,
+        assigneePersonId: (form.assigneePersonId || undefined) as Id<"peopleDirectory"> | undefined,
+        agendaItemId: (form.meetingId && form.agendaItemId ? form.agendaItemId : undefined) as Id<"agendaItems"> | undefined,
         responsibleUserIds: form.responsibleUserId
           ? [form.responsibleUserId as Id<"users">]
           : undefined,

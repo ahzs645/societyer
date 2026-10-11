@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react";
+import { InfoPopover } from "./InfoPopover";
 import {
   incorporationPreparationForOrganization,
 } from "../../shared/incorporationPreparation";
@@ -21,12 +22,18 @@ export function IncorporationPreparation({ organization }: { organization?: Lega
 
   return (
     <section className="card" style={{ padding: 16, marginBottom: 20 }}>
-      <h2 style={{ fontSize: 16, marginTop: 0 }}>{guide.title}</h2>
-      <p className="muted">{guide.statute}. Prepare the information here, then complete incorporation in the official registry service.</p>
-      <p><strong>Online filing:</strong> {guide.filingChannel.summary}{" "}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+        <h2 style={{ fontSize: 16, margin: 0 }}>{guide.title}</h2>
+        <InfoPopover label="About filing">
+          <p>{guide.statute}. Prepare the information here, then complete incorporation in the official registry service.</p>
+          <p><strong>Online filing:</strong> {guide.filingChannel.summary}</p>
+          <p><strong>Paper or mail:</strong> {guide.filingChannel.mailSummary}</p>
+        </InfoPopover>
+      </div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Prepare it here, then file with the registry.{" "}
         <a href={guide.filingChannel.onlineUrl} target="_blank" rel="noreferrer">Open official service <ExternalLink size={12} style={{ verticalAlign: "middle" }} /></a>
       </p>
-      <p><strong>Paper or mail:</strong> {guide.filingChannel.mailSummary}</p>
       <details>
         <summary style={{ cursor: "pointer" }}>What to prepare ({guide.requirements.length} steps)</summary>
         <ol style={{ paddingLeft: 22 }}>

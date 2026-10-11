@@ -3,11 +3,14 @@ import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 // DataTable that receives its data + row callbacks from the orchestrator, so the
 // page component stays focused on state and the tables stay independently
 // readable.
-import { Link } from "react-router-dom";
-import { Boxes, ChevronDown, ChevronRight, ClipboardList, History, Layers, Link2, MapPin, Package, Pencil, QrCode, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Archive, Boxes, ChevronDown, ChevronRight, ClipboardList, ExternalLink, History, Layers, Link2, MapPin, MoreHorizontal, Package, Pencil, QrCode, Trash2 } from "lucide-react";
+import { Menu } from "../../components/Menu";
+import { Segmented } from "../../components/primitives";
 import { Badge } from "../../components/ui";
 import { DataTable } from "../../components/DataTable";
-import { money } from "../../lib/format";
+import { formatDate, money } from "../../lib/format";
 import { ItemThumb, LocationGlyph, ReceiptEvidence } from "./components";
 import { EXPIRY_SOON_DAYS, daysUntil, formatQuantity, movementTone, receiptLinksForMovement, trackingLabel } from "./helpers";
 
@@ -65,9 +68,23 @@ export function StockTab({
     locationNamesByItemId.set(String(b.inventoryItemId), set);
   }
   const categoryOptions = Array.from(new Set(itemRows.map((r) => r.category).filter(Boolean))).sort();
+  const navigate = useNavigate();
+  // Items, balances and the movement ledger are three different lists; show one at a time.
+  const [view, setView] = useState<"items" | "balances" | "movements">("items");
   return (
     <>
-      <DataTable
+      <div style={{ margin: "8px 0 12px" }}>
+        <Segmented<"items" | "balances" | "movements">
+          value={view}
+          onChange={setView}
+          items={[
+            { id: "items", label: `Items (${itemRows.length})` },
+            { id: "balances", label: `Balances (${balanceRows.length})` },
+            { id: "movements", label: `Movements (${movementRows.length})` },
+          ]}
+        />
+      </div>
+      {view === "items" && <DataTable
         label="Item catalog"
         icon={<Package size={14} />}
         data={itemRows}
@@ -80,7 +97,7 @@ export function StockTab({
           { id: "category", label: "Category", options: categoryOptions, match: (row: any, q: string) => String(row.category ?? "").toLowerCase() === q.toLowerCase() },
           { id: "location", label: "Stored in", options: locationOptions, match: (row: any, q: string) => Array.from(locationNamesByItemId.get(String(row._id)) ?? new Set<string>()).some((n) => n.toLowerCase() === q.toLowerCase()) },
         ]}
-        emptyMessage="No items yet. Add an item, backfill from the asset register, or import an OpenBoxes snapshot."
+        emptyMessage="No items yet."
         columns={[
           {
             id: "item",
@@ -111,18 +128,31 @@ export function StockTab({
         renderRowActions={(row) => (
           <>
             <button className="btn btn--ghost btn--sm" onClick={() => onPlace(row)} disabled={!canWrite}><MapPin size={12} /> Place / move</button>
-            <button className="btn btn--ghost btn--sm" onClick={() => onLink(row)} disabled={!canWrite}><Link2 size={12} /> Link purchase</button>
-            {(row.trackLot || row.trackSerial) && <button className="btn btn--ghost btn--sm" onClick={() => onAddLot(row._id)} disabled={!canWrite}><Layers size={12} /> Lot</button>}
-            <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)} disabled={!canWrite}><Pencil size={12} /> Edit</button>
-            <button className="btn btn--ghost btn--sm" onClick={() => onArchive(row)} disabled={!canWrite}>{row.status === "archived" ? "Restore" : "Archive"}</button>
-            <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
-            {row.assetId && <Link className="btn btn--ghost btn--sm" to={`/app/assets/${row.assetId}`}>Asset</Link>}
+            <Menu
+              align="right"
+              trigger={
+                <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.name}`}>
+                  <MoreHorizontal size={14} />
+                </button>
+              }
+              sections={[{
+                id: "item",
+                items: [
+                  { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canWrite, onSelect: () => onEdit(row) },
+                  { id: "link", label: "Link purchase", icon: <Link2 size={14} />, disabled: !canWrite, onSelect: () => onLink(row) },
+                  ...(row.trackLot || row.trackSerial ? [{ id: "lot", label: "Add lot", icon: <Layers size={14} />, disabled: !canWrite, onSelect: () => onAddLot(row._id) }] : []),
+                  ...(row.assetId ? [{ id: "asset", label: "Open asset", icon: <ExternalLink size={14} />, onSelect: () => navigate(`/app/assets/${row.assetId}`) }] : []),
+                  { id: "archive", label: row.status === "archived" ? "Restore" : "Archive", icon: <Archive size={14} />, disabled: !canWrite, onSelect: () => onArchive(row) },
+                  { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => onDelete(row) },
+                ],
+              }]}
+            />
           </>
         )}
-      />
+      />}
 
-      <DataTable
-        label="Societyer stock balances"
+      {view === "balances" && <DataTable
+        label="Stock balances"
         icon={<Boxes size={14} />}
         data={balanceRows}
         rowKey={(row) => row._id}
@@ -139,7 +169,7 @@ export function StockTab({
         filterFields={[
           { id: "location", label: "Location", options: locationOptions, match: (row: any, q: string) => String(locationById.get(row.locationId)?.name ?? "").toLowerCase() === q.toLowerCase() },
         ]}
-        emptyMessage="No stock balances yet. Backfill assets or post a receive movement to create the first ledger balance."
+        emptyMessage="No stock balances yet."
         columns={[
           {
             id: "item",
@@ -179,12 +209,12 @@ export function StockTab({
             accessor: (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" ") ?? "",
             render: (row) => <ReceiptEvidence links={receiptLinksByItemId.get(row.inventoryItemId) ?? []} />,
           },
-          { id: "lastCounted", header: "Last counted", sortable: true, accessor: (row) => row.lastCountedAtISO ?? "", render: (row) => row.lastCountedAtISO?.slice(0, 10) ?? <span className="muted">-</span> },
+          { id: "lastCounted", header: "Last counted", sortable: true, accessor: (row) => row.lastCountedAtISO ?? "", render: (row) => row.lastCountedAtISO ? formatDate(row.lastCountedAtISO) : <span className="muted">-</span> },
         ]}
-      />
+      />}
 
-      <DataTable
-        label="Inventory movement ledger"
+      {view === "movements" && <DataTable
+        label="Movement ledger"
         icon={<History size={14} />}
         data={movementRows}
         rowKey={(row) => row._id}
@@ -200,7 +230,7 @@ export function StockTab({
         ]}
         emptyMessage="No stock movements yet."
         columns={[
-          { id: "date", header: "Date", sortable: true, accessor: (row) => row.movementDate, render: (row) => <span className="mono">{row.movementDate}</span> },
+          { id: "date", header: "Date", sortable: true, accessor: (row) => row.movementDate, render: (row) => <span>{formatDate(row.movementDate)}</span> },
           { id: "type", header: "Type", sortable: true, accessor: (row) => row.movementType, render: (row) => <Badge tone={movementTone(row.movementType) as any}>{row.movementType}</Badge> },
           { id: "item", header: "Item", sortable: true, accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "", render: (row) => itemById.get(row.inventoryItemId)?.name ?? "Unknown item" },
           {
@@ -235,7 +265,7 @@ export function StockTab({
           },
           { id: "source", header: "Source", sortable: true, accessor: (row) => row.sourceSystem ?? "", render: (row) => <span className="muted">{row.sourceSystem ?? "manual"}</span> },
         ]}
-      />
+      />}
     </>
   );
 }
@@ -460,7 +490,7 @@ export function LotsTab({
             if (!row.expiresAt) return <span className="muted">-</span>;
             const d = daysUntil(row.expiresAt);
             const tone = d != null && d <= EXPIRY_SOON_DAYS ? "warn" : "neutral";
-            return <span className="row" style={{ gap: 4 }}><span className="mono">{row.expiresAt}</span>{d != null && d <= EXPIRY_SOON_DAYS && <Badge tone={tone as any}>{d < 0 ? "expired" : `${d}d`}</Badge>}</span>;
+            return <span className="row" style={{ gap: 4 }}><span>{formatDate(row.expiresAt)}</span>{d != null && d <= EXPIRY_SOON_DAYS && <Badge tone={tone as any}>{d < 0 ? "expired" : `${d}d`}</Badge>}</span>;
           },
         },
         { id: "manufacturer", header: "Manufacturer", accessor: (row) => row.manufacturer ?? "", render: (row) => <span className="muted">{row.manufacturer || "-"}</span> },
@@ -516,7 +546,7 @@ export function CountsTab({
             return <span className="mono">{counted}/{lines.length}{variances ? ` · ${variances}Δ` : ""}</span>;
           },
         },
-        { id: "started", header: "Started", sortable: true, accessor: (row) => row.startedAtISO ?? "", render: (row) => <span className="mono">{row.startedAtISO?.slice(0, 10)}</span> },
+        { id: "started", header: "Started", sortable: true, accessor: (row) => row.startedAtISO ?? "", render: (row) => <span>{row.startedAtISO ? formatDate(row.startedAtISO) : "-"}</span> },
       ]}
       renderRowActions={(row) => (
         <>

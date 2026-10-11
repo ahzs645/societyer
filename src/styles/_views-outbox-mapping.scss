@@ -488,7 +488,8 @@
     min-width: 0;
   }
 
-  .workflow-topbar__title strong {
+  .workflow-topbar__title strong,
+  .workflow-topbar__heading {
     flex: 1 1 auto;
     min-width: 0;
   }

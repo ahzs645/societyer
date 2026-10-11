@@ -1,6 +1,7 @@
 import { ReactNode, useRef, useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { MenuRow, MenuSectionLabel } from "./ui";
+import { isOutsidePointerEvent } from "../lib/floatingLayer";
 
 function readCssPx(name: string, fallback: number): number {
   if (typeof window === "undefined") return fallback;
@@ -134,8 +135,7 @@ export function FilterPopover<T>({
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!ref.current) return;
-      if (ref.current.contains(e.target as Node)) return;
-      if (anchorRef.current?.contains(e.target as Node)) return;
+      if (!isOutsidePointerEvent(e, ref, anchorRef)) return;
       onClose();
     };
     document.addEventListener("mousedown", onDoc);

@@ -17,12 +17,16 @@ export function FilingBotRunner({
   filingId,
   societyId,
   filingLabel,
+  filingKind,
 }: {
   open: boolean;
   onClose: () => void;
   filingId: Id<"filings"> | null;
   societyId: Id<"societies">;
+  /** Display text only ("Change of directors: 2026 AGM director slate"). */
   filingLabel: string;
+  /** The filing's stored kind (e.g. "ChangeOfDirectors"), which selects the packet. */
+  filingKind: string;
 }) {
   const { loaded, can } = usePermissions();
   const canPrepare = !isLocalDataRuntime() && loaded && can("filings:write");
@@ -33,7 +37,7 @@ export function FilingBotRunner({
   const packet = useQuery(
     api.filingBot.buildFilingPacket,
     filingId && open
-      ? { societyId, kind: (filingLabel.split(":")[0] || "AnnualReport").trim() }
+      ? { societyId, kind: filingKind || "AnnualReport" }
       : "skip",
   );
   const runBot = useAction(api.filingBot.run);

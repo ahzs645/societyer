@@ -205,6 +205,7 @@ export function GrantEditorForm({
   reports,
   accountById,
   layout = "drawer",
+  errors,
 }: {
   grantDraft: any;
   setGrantDraft: (draft: any) => void;
@@ -215,6 +216,8 @@ export function GrantEditorForm({
   reports: any[];
   accountById: Map<string, any>;
   layout?: "drawer" | "page";
+  /** Field-keyed validation messages (see shared/recordValidation.ts). */
+  errors?: Record<string, string>;
 }) {
   if (layout === "page") {
     return (
@@ -227,6 +230,7 @@ export function GrantEditorForm({
         documents={documents}
         reports={reports}
         accountById={accountById}
+        errors={errors}
       />
     );
   }
@@ -240,9 +244,9 @@ export function GrantEditorForm({
         documents={documents}
         reports={reports}
       />
-      <Field label="Title"><input className="input" value={grantDraft.title} onChange={(e) => setGrantDraft({ ...grantDraft, title: e.target.value })} /></Field>
+      <Field label="Title" required error={errors?.title}><input className="input" value={grantDraft.title} onChange={(e) => setGrantDraft({ ...grantDraft, title: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Funder"><input className="input" value={grantDraft.funder} onChange={(e) => setGrantDraft({ ...grantDraft, funder: e.target.value })} /></Field>
+        <Field label="Funder" required error={errors?.funder}><input className="input" value={grantDraft.funder} onChange={(e) => setGrantDraft({ ...grantDraft, funder: e.target.value })} /></Field>
         <Field label="Program"><input className="input" value={grantDraft.program ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, program: e.target.value })} /></Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
@@ -256,7 +260,7 @@ export function GrantEditorForm({
         </Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Fit score" hint="0 to 100"><input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, fitScore: e.target.value })} /></Field>
+        <Field label="Fit score" hint="0 to 100" error={errors?.fitScore}><input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, fitScore: e.target.value })} /></Field>
         <Field label="Opportunity URL"><input className="input" type="url" value={grantDraft.opportunityUrl ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityUrl: e.target.value })} /></Field>
       </div>
       <Field label="Next action"><input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextAction: e.target.value })} /></Field>
@@ -271,8 +275,8 @@ export function GrantEditorForm({
         </Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Requested" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedDollars: e.target.value })} /></Field>
-        <Field label="Awarded" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
+        <Field label="Requested" hint="Dollars" error={errors?.amountRequestedCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountRequestedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountRequestedDollars: e.target.value })} /></Field>
+        <Field label="Awarded" hint="Dollars" error={errors?.amountAwardedCents}><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={grantDraft.amountAwardedDollars ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, amountAwardedDollars: e.target.value })} /></Field>
       </div>
       <Field label="Restricted purpose"><MarkdownEditor rows={4} value={grantDraft.restrictedPurpose ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, restrictedPurpose: markdown })} /></Field>
       <GrantRequirementsEditor
@@ -289,7 +293,7 @@ export function GrantEditorForm({
       </div>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Start"><DatePicker value={grantDraft.startDate ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, startDate: value })} /></Field>
-        <Field label="End"><DatePicker value={grantDraft.endDate ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, endDate: value })} /></Field>
+        <Field label="End" error={errors?.endDate}><DatePicker value={grantDraft.endDate ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, endDate: value })} /></Field>
       </div>
       <Field label="Board owner">
         <Select value={grantDraft.boardOwnerUserId ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, boardOwnerUserId: value })}
@@ -365,11 +369,13 @@ export function GrantDossierStack({
   editorPanel?: ReactNode;
   layout?: "stack" | "tabs" | "compact";
 }) {
-  const [activeTab, setActiveTab] = useState<GrantDossierTabId>(editorPanel ? "edit" : "overview");
+  // While editing, the editor takes the Overview tab's place rather than
+  // adding a separate "Edit" tab at the far end of the row.
+  const [activeTab, setActiveTab] = useState<GrantDossierTabId>("overview");
   useEffect(() => {
     const syncHashToTab = () => {
       if (window.location.hash === "#funded-employees") setActiveTab("people");
-      if (editorPanel && window.location.hash.startsWith("#grant-edit-")) setActiveTab("edit");
+      if (editorPanel && window.location.hash.startsWith("#grant-edit-")) setActiveTab("overview");
     };
     syncHashToTab();
     window.addEventListener("hashchange", syncHashToTab);
@@ -454,7 +460,6 @@ export function GrantDossierStack({
       { id: "evidence", label: "Evidence", count: grantRelatedDocuments(grant, documents).length },
       { id: "financials", label: "Financials", count: asUseOfFunds(grant.useOfFunds).length },
       { id: "source", label: "Source", count: cleanSourceKeyFacts(grant.keyFacts).length },
-      ...(editorPanel ? [{ id: "edit" as const, label: "Edit" }] : []),
     ];
     const renderTab = () => {
       if (activeTab === "timeline") return timelinePanels;
@@ -462,7 +467,7 @@ export function GrantDossierStack({
       if (activeTab === "evidence") return evidencePanels;
       if (activeTab === "financials") return financialPanels;
       if (activeTab === "source") return sourcePanels;
-      if (activeTab === "edit" && editorPanel) return editorPanel;
+      if (editorPanel) return editorPanel;
       return overviewPanels;
     };
 

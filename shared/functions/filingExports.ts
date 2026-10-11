@@ -7,6 +7,7 @@
  * convex-test oracle. `monthsAfter` is a pure date helper.
  */
 
+import { isMeetingHeld } from "../meetingStatus";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requirePermissionPortable } from "./permissions";
 import { bcSocietyPreparationKind, CRA_PRE_FILL_KINDS, filingDueDateMonthsAfter } from "../filingPreparation";
@@ -41,7 +42,7 @@ export async function societiesOnlinePreFillPortable(
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
         .collect()
     )
-      .filter((m: Record<string, any>) => m.type === "AGM" && m.status === "Held")
+      .filter((m: Record<string, any>) => m.type === "AGM" && isMeetingHeld(m.status))
       .sort((a: any, b: any) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
     return {
       formName: "BC Societies Annual Report",

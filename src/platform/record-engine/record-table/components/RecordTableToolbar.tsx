@@ -1,4 +1,5 @@
 import { ViewportPopover } from "@/components/ViewportPopover";
+import { lowerLabel } from "../utils/lowerLabel";
 import { createElement, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import {
@@ -14,6 +15,8 @@ import {
   SlidersHorizontal,
   Table2,
   X,
+  ListChecks,
+  List,
 } from "lucide-react";
 import {
   useRecordTableIsDirty,
@@ -23,9 +26,13 @@ import {
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { useToast } from "../../../../components/Toast";
+import { usePrompt } from "../../../../components/Modal";
+import { useTranslation } from "react-i18next";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -46,6 +53,8 @@ function resetScrollForViewSwitch() {
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
+export type TableListViewOption = { active: boolean; onSelect: () => void; onLeave: () => void };
+
 export function RecordTableToolbar({
   icon,
   label,
@@ -56,6 +65,7 @@ export function RecordTableToolbar({
   onSaveView,
   onSaveAsView,
   actions,
+  listView,
 }: {
   icon?: ReactNode;
   label: string;
@@ -74,6 +84,12 @@ export function RecordTableToolbar({
   // something (filters, sort, columns, density).
   onSaveAsView?: (name: string) => void | Promise<unknown>;
   actions?: ReactNode;
+  /**
+   * Adds a "List view" button ahead of the table/kanban/calendar switch for
+   * pages that render their own grouped list. While it is active the page
+   * owns the body; choosing any other type calls `onLeave`.
+   */
+  listView?: TableListViewOption;
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
@@ -88,7 +104,21 @@ export function RecordTableToolbar({
   const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
   const toast = useToast();
+  const prompt = usePrompt();
+  const { t } = useTranslation();
   const canPersistView = usePermissions().can("settings:write");
+  // Phones: search is an icon until tapped, and the "Select records" toggle
+  // sits in this row instead of taking a row of its own above the table.
+  const isMobile = useIsMobile();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const mobileSelectable = useRecordTableState((s) => s.mobileSelectable);
+  const mobileSelectionMode = useRecordTableState((s) => s.mobileSelectionMode);
+  useEffect(() => {
+    handle.get().setToolbarMounted(true);
+    return () => handle.get().setToolbarMounted(false);
+  }, [handle]);
+  const showSearch = !isMobile || searchOpen || Boolean(searchTerm);
 
   // The section icon comes from the route registry so a table's icon always
   // matches its page header and sidebar nav (single source of truth, same as
@@ -98,52 +128,33 @@ export function RecordTableToolbar({
   const resolvedIcon: ReactNode = routeIdentity
     ? createElement(routeIdentity.icon, { size: 14 })
     : icon;
-  // The view-options dropdown only configures kanban/calendar grouping fields,
-  // so it's hidden in plain table view where it would otherwise be empty.
-  const showViewOptions = viewType === "kanban" || viewType === "board" || viewType === "calendar";
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
-  const viewOptionsRef = useRef<HTMLDivElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
 
   // Click-outside for dropdowns.
   useEffect(() => {
-    if (!columnMenuOpen && !viewMenuOpen && !viewOptionsOpen) return;
+    if (!columnMenuOpen && !viewMenuOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (
-        columnMenuOpen &&
-        columnMenuRef.current &&
-        !columnMenuRef.current.contains(e.target as Node)
-      ) {
+      // Portaled Select menus inside these dropdowns count as inside.
+      if (columnMenuOpen && columnMenuRef.current && isOutsidePointerEvent(e, columnMenuRef)) {
         setColumnMenuOpen(false);
       }
-      if (
-        viewMenuOpen &&
-        viewMenuRef.current &&
-        !viewMenuRef.current.contains(e.target as Node)
-      ) {
+      if (viewMenuOpen && viewMenuRef.current && isOutsidePointerEvent(e, viewMenuRef)) {
         setViewMenuOpen(false);
-      }
-      if (
-        viewOptionsOpen &&
-        viewOptionsRef.current &&
-        !viewOptionsRef.current.contains(e.target as Node)
-      ) {
-        setViewOptionsOpen(false);
       }
     };
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
-  }, [columnMenuOpen, viewMenuOpen, viewOptionsOpen]);
+  }, [columnMenuOpen, viewMenuOpen]);
 
   const activeViewName =
-    (views ?? []).find((v) => v._id === currentViewId)?.name ?? "All records";
+    (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
   const selectableKanbanFields = columns.filter((column) => {
     const type = column.field.fieldType;
     return type === "SELECT" || type === "MULTI_SELECT" || type === "BOOLEAN" || type === "RELATION";
@@ -197,29 +208,69 @@ export function RecordTableToolbar({
             <span className="record-table__view-count">{filteredRecords.length}</span>
           </div>
         )}
+        {isMobile && (
+          <div className="record-table__mobile-tools">
+            {!showSearch && (
+              <button
+                type="button"
+                className="record-table__icon-button"
+                aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
+                onClick={() => {
+                  setSearchOpen(true);
+                  window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                }}
+              >
+                <Search size={16} />
+              </button>
+            )}
+            {mobileSelectable && (
+              <button
+                type="button"
+                className={`record-table__icon-button${mobileSelectionMode ? " is-active" : ""}`}
+                aria-pressed={mobileSelectionMode}
+                aria-label={mobileSelectionMode ? "Exit selection" : "Select records"}
+                title={mobileSelectionMode ? "Exit selection" : "Select records"}
+                onKeyDown={(event) => {
+                  if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
+                }}
+                onClick={() => {
+                  if (mobileSelectionMode) handle.get().clearSelection();
+                  handle.get().setMobileSelectionMode(!mobileSelectionMode);
+                }}
+              >
+                <ListChecks size={16} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
+      {showSearch && (
       <div className="record-table__toolbar-center">
         <div className="record-table__search">
           <Search size={12} />
           <input
+            ref={searchInputRef}
             className="record-table__search-input"
-            placeholder={`Search ${objectMetadata.labelPlural.toLowerCase()}…`}
+            placeholder={`Search ${lowerLabel(objectMetadata.labelPlural)}…`}
             value={searchTerm}
             onChange={(e) => handle.get().setSearchTerm(e.target.value)}
+            onBlur={() => { if (!searchTerm) setSearchOpen(false); }}
           />
-          {searchTerm && (
+          {(searchTerm || (isMobile && searchOpen)) && (
             <button
               type="button"
               className="record-table__search-clear"
-              aria-label="Clear search"
-              onClick={() => handle.get().setSearchTerm("")}
+              aria-label={searchTerm ? "Clear search" : "Close search"}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => { handle.get().setSearchTerm(""); setSearchOpen(false); }}
             >
-              <X size={11} />
+              <X size={isMobile ? 14 : 11} />
             </button>
           )}
         </div>
       </div>
+      )}
 
       <div className="record-table__toolbar-right">
         {onSaveView && isDirty && (
@@ -244,7 +295,7 @@ export function RecordTableToolbar({
               title="Save the current column layout, filters and sort into this view"
             >
               <Save size={12} />
-              <span>{isSaving ? "Saving…" : "Save changes"}</span>
+              <span>{isSaving ? t("common.saving", "Saving…") : t("common.saveChanges", "Save changes")}</span>
             </button>
             <button
               type="button"
@@ -254,7 +305,7 @@ export function RecordTableToolbar({
               title="Revert to the last saved view"
             >
               <RotateCcw size={12} />
-              <span>Discard</span>
+              <span>{t("common.discard", "Discard")}</span>
             </button>
           </>
         )}
@@ -265,7 +316,13 @@ export function RecordTableToolbar({
             className="record-table__toolbar-button"
             disabled={isSaving || !canPersistView}
             onClick={async () => {
-              const name = window.prompt("Name this view");
+              const name = await prompt({
+                title: t("recordTable.saveViewTitle", "Save as a new view"),
+                message: t("recordTable.saveViewMessage", "Saves the current columns, filters and sort as a personal view."),
+                placeholder: t("recordTable.viewName", "View name"),
+                confirmLabel: t("recordTable.saveView", "Save view"),
+                required: true,
+              });
               if (!name?.trim()) return;
               try {
                 setIsSaving(true);
@@ -282,63 +339,108 @@ export function RecordTableToolbar({
             title="Save the current table setup as a new personal view"
           >
             <Save size={12} />
-            <span>Save as</span>
+            <span>{t("common.saveAs", "Save as")}</span>
           </button>
         )}
 
         <div className="record-table__segmented" aria-label="View type">
+          {listView && (
+            <button
+              type="button"
+              className={listView.active ? "is-active" : ""}
+              aria-pressed={listView.active}
+              onClick={() => {
+                listView.onSelect();
+                resetScrollForViewSwitch();
+              }}
+              title={t("recordTable.listView", "List view")}
+            >
+              <List size={12} />
+            </button>
+          )}
           <button
             type="button"
-            className={viewType === "table" ? "is-active" : ""}
+            className={!listView?.active && viewType === "table" ? "is-active" : ""}
             onClick={() => {
+              listView?.onLeave();
               handle.get().setType("table");
               resetScrollForViewSwitch();
             }}
-            title="Table view"
+            title={t("recordTable.tableView", "Table view")}
           >
             <Table2 size={12} />
           </button>
           <button
             type="button"
-            className={viewType === "kanban" || viewType === "board" ? "is-active" : ""}
+            className={!listView?.active && (viewType === "kanban" || viewType === "board") ? "is-active" : ""}
             onClick={() => {
+              listView?.onLeave();
               const firstField = kanbanFieldMetadataId ?? selectableKanbanFields[0]?.fieldMetadataId;
               handle.get().setType("kanban");
               if (firstField) handle.get().setKanbanFieldMetadataId(firstField);
               resetScrollForViewSwitch();
             }}
-            title="Kanban view"
+            title={t("recordTable.kanbanView", "Kanban view")}
           >
             <Kanban size={12} />
           </button>
           <button
             type="button"
-            className={viewType === "calendar" ? "is-active" : ""}
+            className={!listView?.active && viewType === "calendar" ? "is-active" : ""}
             onClick={() => {
+              listView?.onLeave();
               const firstField = calendarFieldMetadataId ?? selectableCalendarFields[0]?.fieldMetadataId;
               handle.get().setType("calendar");
               if (firstField) handle.get().setCalendarFieldMetadataId(firstField);
               resetScrollForViewSwitch();
             }}
-            title="Calendar view"
+            title={t("recordTable.calendarView", "Calendar view")}
           >
             <CalendarDays size={12} />
           </button>
         </div>
 
-        {showViewOptions && (
-        <div className="record-table__view-switcher" ref={viewOptionsRef}>
+        {onOpenFilter && (
+          <button
+            type="button"
+            className={
+              "record-table__toolbar-button" +
+              (filters.length > 0 ? " record-table__toolbar-button--active" : "")
+            }
+            onClick={onOpenFilter}
+          >
+            <Filter size={12} />
+            <span>{t("common.filter", "Filter")}{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          className={
+            "record-table__toolbar-button" +
+            (sorts.length > 0 ? " record-table__toolbar-button--active" : "")
+          }
+          ref={sortButtonRef}
+          aria-haspopup="dialog"
+          aria-expanded={sortMenuOpen}
+          onClick={() => setSortMenuOpen((x) => !x)}
+        >
+          <ArrowDownUp size={12} />
+          <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
+        </button>
+        <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
+
+        <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button
             type="button"
             className="record-table__toolbar-button"
-            onClick={() => setViewOptionsOpen((x) => !x)}
-            title="View options"
+            onClick={() => setColumnMenuOpen((x) => !x)}
           >
             <SlidersHorizontal size={12} />
-            <span>Options</span>
+            <span>{t("common.options", "Options")}</span>
           </button>
-          {viewOptionsOpen && (
-            <ViewportPopover open onClose={() => setViewOptionsOpen(false)} anchorRef={viewOptionsRef} label="View options" className="record-table__menu record-table__menu--right record-table__menu--wide">
+          {columnMenuOpen && (
+            <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
                   <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
@@ -384,52 +486,6 @@ export function RecordTableToolbar({
                   </select>
                 </div>
               )}
-            </ViewportPopover>
-          )}
-        </div>
-        )}
-
-        {onOpenFilter && (
-          <button
-            type="button"
-            className={
-              "record-table__toolbar-button" +
-              (filters.length > 0 ? " record-table__toolbar-button--active" : "")
-            }
-            onClick={onOpenFilter}
-          >
-            <Filter size={12} />
-            <span>Filter{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          className={
-            "record-table__toolbar-button" +
-            (sorts.length > 0 ? " record-table__toolbar-button--active" : "")
-          }
-          ref={sortButtonRef}
-          aria-haspopup="dialog"
-          aria-expanded={sortMenuOpen}
-          onClick={() => setSortMenuOpen((x) => !x)}
-        >
-          <ArrowDownUp size={12} />
-          <span>Sort{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
-        </button>
-        <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
-
-        <div className="record-table__view-switcher" ref={columnMenuRef}>
-          <button
-            type="button"
-            className="record-table__toolbar-button"
-            onClick={() => setColumnMenuOpen((x) => !x)}
-          >
-            <SlidersHorizontal size={12} />
-            <span>Options</span>
-          </button>
-          {columnMenuOpen && (
-            <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
               <div className="record-table__menu-section">
                 <span className="record-table__menu-label">Density</span>
                 <div className="record-table__density-options" role="radiogroup" aria-label="Row density">
