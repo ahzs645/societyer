@@ -72,6 +72,7 @@
     "test:corporation-packets": "tsx scripts/check-corporation-document-packets.ts",
     "test:corporation-mvp": "tsx scripts/check-corporation-mvp-flow.ts",
     "test:corporation-flow": "npx playwright test --config playwright.corporation.config.ts",
+    "test:entity-sweep": "playwright test --config playwright.entity-sweep.config.ts",
     "test:dashboard-compliance": "tsx scripts/check-dashboard-compliance-rules.ts && tsx scripts/check-entity-rule-scope.ts",
     "test:entity-rule-scope": "tsx scripts/check-entity-rule-scope.ts",
     "test:jurisdiction-guides": "tsx scripts/validate-jurisdiction-guide-packs.ts && tsx scripts/check-jurisdiction-guide-tracks.ts",
