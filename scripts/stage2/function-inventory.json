@@ -21869,6 +21869,22 @@
     ]
   },
   {
+    "key": "convex:writtenResolutions:certifyVoteCount",
+    "surface": "convex",
+    "name": "writtenResolutions:certifyVoteCount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/writtenResolutions.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:writtenResolutions:create",
     "surface": "convex",
     "name": "writtenResolutions:create",
@@ -40989,6 +41005,22 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:writtenResolutions:certifyVoteCount",
+    "surface": "portable",
+    "name": "writtenResolutions:certifyVoteCount",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": false
       }
     ]
   },

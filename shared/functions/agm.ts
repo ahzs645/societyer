@@ -20,19 +20,62 @@ import {
   auditorNoticeRecipients,
   type NoticeRecipient,
 } from "../meetingNoticeAudience";
+import { readableRoleHolderTypes } from "./roleHolderReadAccess";
+import { requirePermissionPortable, type Permission } from "./permissions";
 
-/** Voting shareholders from the share register / shareholder role holders. */
-async function shareholderNoticeAudience(ctx: PortableQueryCtx, societyId: string) {
+/** Meeting access does not grant the director or auditor registers. */
+async function canRead(ctx: PortableQueryCtx, societyId: string, permission: Permission) {
+  try {
+    await requirePermissionPortable(ctx, societyId, permission);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && [`Permission ${permission} required.`, `Service scope ${permission} required.`].includes(error.message)) return false;
+    throw error;
+  }
+}
+
+type RegisterAccess = { directors: boolean; auditors: boolean; roleType: (roleType: unknown) => boolean };
+async function registerAccess(ctx: PortableQueryCtx, societyId: string): Promise<RegisterAccess> {
+  const [roleType, auditors] = await Promise.all([readableRoleHolderTypes(ctx, societyId), canRead(ctx, societyId, "auditors:read")]);
+  return { directors: roleType("director"), auditors, roleType };
+}
+
+/**
+ * Voting shareholders from the share register / shareholder role holders, plus
+ * directors and the auditor. Director and auditor rows are included only for a
+ * caller who can read those registers (directors:read, auditors:read).
+ */
+async function shareholderNoticeAudience(ctx: PortableQueryCtx, societyId: string, access: RegisterAccess) {
   const [classes, holdings, roleHolders, directors, auditors, organization] = await Promise.all([
     ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("rightsHoldings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    access.directors ? ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
+    access.auditors ? ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
     ctx.db.get(societyId, "societies"),
   ]);
   return votingShareholderNoticeAudience({
-    classes, holdings, roleHolders, directors, auditors, organization,
+    classes, holdings, roleHolders: roleHolders.filter((row) => access.roleType(row.roleType)), directors, auditors, organization,
+  });
+}
+
+function restrictedAudienceNote(access: RegisterAccess, corporation: boolean) {
+  const hidden = [corporation && !access.directors ? "directors" : "", !access.auditors ? "the auditor" : ""].filter(Boolean);
+  return hidden.length ? `Coverage excludes ${hidden.join(" and ")} because this account cannot read ${hidden.length > 1 ? "those registers" : "that register"}; it is incomplete.` : "";
+}
+
+/** Delivery rows name their recipient, so director and auditor rows follow those registers' read permissions. */
+async function visibleDeliveries(ctx: PortableQueryCtx, societyId: string, rows: Record<string, any>[], access: RegisterAccess) {
+  if (access.directors && access.auditors) return rows;
+  const roleHolders = rows.some((row) => row.roleHolderId)
+    ? await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : [];
+  const roleType = new Map(roleHolders.map((row) => [String(row._id), row.roleType]));
+  return rows.filter((row) => {
+    const key = String(row.recipientKey ?? "");
+    if (!access.directors && (row.directorId || key.startsWith("director:"))) return false;
+    if (!access.auditors && (row.auditorAppointmentId || key.startsWith("auditor:"))) return false;
+    if (row.roleHolderId && !access.roleType(roleType.get(String(row.roleHolderId)))) return false;
+    return true;
   });
 }
 
@@ -49,16 +92,19 @@ export async function noticeCoverage(ctx: PortableQueryCtx, { meetingId }: { mee
     ctx.db.query("agmRuns").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).collect(),
   ]);
   const corporation = organizationRuleScope(society).isCorporation;
-  return meetingNoticeCoverage({
+  const access = await registerAccess(ctx, societyId);
+  const coverage = meetingNoticeCoverage({
     organization: society,
     members: corporation
       ? []
       : await ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    shareholders: corporation ? await shareholderNoticeAudience(ctx, societyId) : null,
-    additionalRecipients: corporation ? [] : auditorNoticeRecipients(await ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()),
-    deliveries,
+    shareholders: corporation ? await shareholderNoticeAudience(ctx, societyId, access) : null,
+    additionalRecipients: corporation || !access.auditors ? [] : auditorNoticeRecipients(await ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()),
+    deliveries: await visibleDeliveries(ctx, societyId, deliveries, access),
     recordedRecipientCount: runs[0]?.noticeRecipientCount,
   });
+  const note = restrictedAudienceNote(access, corporation);
+  return note ? { ...coverage, detail: `${coverage.detail}; ${note}`, tone: "warn" as const, restricted: true } : coverage;
 }
 
 export async function runForMeeting(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
@@ -158,11 +204,13 @@ export async function logNoticeDelivery(
 }
 
 export async function noticeDeliveries(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  await requireOwnedRow(ctx, "meetings", meetingId);
-  return ctx.db
+  const meeting = await requireOwnedRow(ctx, "meetings", meetingId);
+  const societyId = String(meeting.societyId);
+  const rows = await ctx.db
     .query("noticeDeliveries")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
     .collect();
+  return visibleDeliveries(ctx, societyId, rows, await registerAccess(ctx, societyId));
 }
 
 /** Bulk-create notice delivery records for all voting members (voting
@@ -180,15 +228,22 @@ export async function queueNoticeToAllVotingMembers(
   await requireSocietyMembership(ctx, societyId);
   await getOwned(ctx, "meetings", meetingId, societyId);
   const society = await ctx.db.get(societyId, "societies");
-  const voting: NoticeRecipient[] = organizationRuleScope(society).isCorporation
-    ? (await shareholderNoticeAudience(ctx, societyId)).recipients
+  const corporation = organizationRuleScope(society).isCorporation;
+  const auditorRows = await ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  // A notice must reach every director and the auditor. The sender must be able to read those
+  // registers, rather than silently sending an incomplete notice or reading names it cannot see.
+  if (corporation) await requirePermissionPortable(ctx, societyId, "directors:read");
+  if (auditorNoticeRecipients(auditorRows).length) await requirePermissionPortable(ctx, societyId, "auditors:read");
+  const access = await registerAccess(ctx, societyId);
+  const voting: NoticeRecipient[] = corporation
+    ? (await shareholderNoticeAudience(ctx, societyId, access)).recipients
     : votingMemberNoticeRecipients(
       await ctx.db
         .query("members")
         .withIndex("by_society", (q) => q.eq("societyId", societyId))
         .collect(),
     );
-  if (!organizationRuleScope(society).isCorporation) voting.push(...auditorNoticeRecipients(await ctx.db.query("auditorAppointments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()));
+  if (!corporation) voting.push(...auditorNoticeRecipients(auditorRows));
   if (!["email", "mail", "in-person"].includes(channel)) throw new Error("Choose email, mail or in-person notice.");
   const now = new Date().toISOString();
   const isEmail = channel === "email";

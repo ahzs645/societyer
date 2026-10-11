@@ -71,7 +71,7 @@ async function qualify(label: string, ids: Awaited<ReturnType<typeof seed>>, sto
   const consent = (who: Actor, id: string, electorKey: string, signedAtISO = "2026-10-12T10:00:00.000Z", extra: any = {}) => who.mutation("sign", { id, electorKey, signedAtISO, consentEvidence: "Signed counterpart inspected and retained with verified voter identity.", ...extra });
   await assert.rejects(() => create(member, ids.societyId), /Permission|permission|authorized|authority/i);
   await assert.rejects(() => create(owner, ids.societyId, { requiredCount: 3 }), /statutory baseline \(4\)/);
-  await assert.rejects(() => create(owner, ids.societyId, { circulatedAtISO: "2026-10-10T12:00:00.000Z" }), /UTC calendar date/);
+  await assert.rejects(() => create(owner, ids.societyId, { circulatedAtISO: "2026-10-08T19:59:59.000Z" }), /within 72 hours/);
   await assert.rejects(() => create(owner, ids.societyId, { circulatedAtISO: "2026-10-12T12:00:00.000Z" }), /future/);
   await assert.rejects(() => create(owner, ids.societyId, { circulatedAtISO: "2026-02-31T12:00:00.000Z" }), /valid UTC timestamp/);
   const ordinaryId = await create(owner, ids.societyId);
@@ -89,7 +89,7 @@ async function qualify(label: string, ids: Awaited<ReturnType<typeof seed>>, sto
   assert.equal(persisted.circulatedAtISO, circulation);
   assert.equal(persisted.circulationRecordedAtISO, clockISO);
   assert.equal(persisted.circulationRecordedByUserId, ids.ownerId);
-  assert.deepEqual(persisted.approvalRule, { numerator: 2, denominator: 3, strict: false, unit: "people" });
+  assert.deepEqual(persisted.approvalRule, { numerator: 2, denominator: 3, strict: false, unit: "people", basis: "eligible" });
   assert.equal(persisted.electorate.length, 5, "Active nonvoters do not enter the ordinary written voting electorate");
   const ontario = await store.get(weightedId);
   assert.equal(ontario.countUnit, "shares");
@@ -157,11 +157,18 @@ async function qualify(label: string, ids: Awaited<ReturnType<typeof seed>>, sto
   await assert.rejects(() => on.mutation("recordNotice", { id: chronologyId, notices: [{ ...noticeEntry, documentId: ids.foreignDocumentId }] }), /not found|workspace|society/i);
   await assert.rejects(() => on.mutation("recordNotice", { id: chronologyId, notices: [{ ...noticeEntry, givenAtISO: "2026-10-13T12:00:00.000Z" }] }), /cannot precede/);
   await assert.rejects(() => on.mutation("recordNotice", { id: chronologyId, notices: [{ ...noticeEntry, givenAtISO: "2026-10-21T12:00:00.000Z" }] }), /future/);
+  // The reviewed deadline must be the statutory tenth business day, allowing only for holidays.
+  await assert.rejects(() => on.mutation("recordNotice", { id: chronologyId, notices: [], ...calendar, dueDateISO: "2099-01-01" }), /10th business day.*2026-10-28.*2026-11-04/);
+  await assert.rejects(() => on.mutation("recordNotice", { id: chronologyId, notices: [], ...calendar, dueDateISO: "2026-10-27" }), /10th business day/);
   await on.mutation("recordNotice", { id: chronologyId, notices: [noticeEntry] });
   assert.equal((await record(on, ids.onSocietyId, chronologyId)).nonSignerNoticeStatus, "Deadline review required", "Notice coverage alone cannot certify business-day timing");
   await on.mutation("recordNotice", { id: chronologyId, notices: [], ...calendar });
   result = await record(on, ids.onSocietyId, chronologyId);
   assert.equal(result.nonSignerNoticeStatus, "Complete");
+  // A stored far-future "reviewed" deadline cannot certify timely notice.
+  await store.patch(chronologyId, { nonSignerNoticeDueDateISO: "2099-01-01" });
+  assert.equal((await record(on, ids.onSocietyId, chronologyId)).nonSignerNoticeStatus, "Deadline review required");
+  await store.patch(chronologyId, { nonSignerNoticeDueDateISO: calendar.dueDateISO });
   assert.equal(result.nonSignerNotices[0].givenAtISO, noticeEntry.givenAtISO);
   assert.equal(result.nonSignerNotices[0].recordedAtISO, clockISO);
 

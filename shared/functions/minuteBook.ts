@@ -18,6 +18,7 @@ import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
 import { isCorporation, type LegalEntityLike } from "../organizationDomain";
 import { todayDateOnly } from "../dateOnly";
+import { writtenResolutionView } from "./writtenResolutions";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
 const DOCUMENT_PREVIEW_LIMIT_PER_CATEGORY = 1;
@@ -144,7 +145,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     memberProposals,
     tasks,
     bylawAmendments,
-    writtenResolutions,
+    storedWrittenResolutions,
     agendas,
     agendaItems,
     recordsLocations,
@@ -176,6 +177,9 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     read("agendaItems", SUPPORT_RECORD_LIMIT),
     read("recordsLocation", CORE_RECORD_LIMIT),
   ]);
+  // The same derived status as the Written resolutions page: an unverified "Carried" reads "Review required".
+  const nowISO = new Date().toISOString();
+  const writtenResolutions = storedWrittenResolutions.map((row: any) => ({ ...row, status: writtenResolutionView(row, nowISO).status }));
 
   const binderPreview = readable.has("documents:read") ? await collectBinderDocumentPreviews(ctx, societyId) : { documents: [], coverageLimited: false };
   const documents = binderPreview.documents;

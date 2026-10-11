@@ -341,7 +341,8 @@ export function CommunicationsPage() {
   const audiencePreview = useMemo(() => {
     if (!sendDraft) return null;
     const audience = buildAudienceValue(sendDraft);
-    // Resolved on the server from the share register; the count is the same source.
+    // The server resolves this audience from the same voting summary: holders with votes only.
+    // Directors and the auditor receive meeting notices, which are sent from the meeting.
     if (audience === "voting_shareholders") return eligibleVoters.count ?? 0;
     return estimateAudience({
       audience,

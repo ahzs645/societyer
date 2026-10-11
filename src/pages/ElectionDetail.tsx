@@ -209,15 +209,16 @@ export function ElectionDetailPage() {
     try {
       await updateSettings({
       electionId: election._id,
+      // Blank fields are sent as null so the server clears them.
       nominationsOpenAtISO: adminDraft.nominationsOpenAtISO
         ? new Date(adminDraft.nominationsOpenAtISO).toISOString()
-        : undefined,
+        : null,
       nominationsCloseAtISO: adminDraft.nominationsCloseAtISO
         ? new Date(adminDraft.nominationsCloseAtISO).toISOString()
-        : undefined,
+        : null,
       scrutineerUserIds: adminDraft.scrutineerUserIds,
-      resultsSummary: adminDraft.resultsSummary || undefined,
-      evidenceDocumentId: adminDraft.evidenceDocumentId || undefined,
+      resultsSummary: adminDraft.resultsSummary || null,
+      evidenceDocumentId: adminDraft.evidenceDocumentId || null,
       });
       toast.success("Election settings saved");
     } catch (error) {
@@ -649,7 +650,7 @@ export function ElectionDetailPage() {
               <div className="card__head"><h2 className="card__title">Shareholder electorate review</h2></div>
               <div className="card__body" style={{ display: "grid", gap: 12 }}>
                 <p className="muted">Review the legal record date, articles, class rights and authority of the person acting for each registered holder. The server calculates votes from the share register. Historical dates require posted transactions that reconcile to the current register.</p>
-                <Field label="Record date" hint="Positions at the end of this calendar date; verify the statutory or board-selected cutoff."><input className="input" type="date" value={reviewDraft.recordDateISO} onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateISO: event.target.value })} /></Field>
+                <Field label="Record date" hint="A past date reconstructs posted share transactions through the end of that day. Today's date uses the live register at the moment voting opens, so transfers later today are not included. Verify the statutory or board-selected cutoff."><input className="input" type="date" value={reviewDraft.recordDateISO} onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateISO: event.target.value })} /></Field>
                 <Field label="Record-date authority"><textarea className="input" rows={2} value={reviewDraft.recordDateBasis} placeholder="Board resolution or statutory default, notice/voting distinction and meeting date reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, recordDateBasis: event.target.value })} /></Field>
                 <Field label="Articles and voting-rights review"><textarea className="input" rows={2} value={reviewDraft.rightsBasis} placeholder="Articles/version, class or series rights, statutory class votes, cumulative voting and election terms reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, rightsBasis: event.target.value })} /></Field>
                 <Field label="Share register review"><textarea className="input" rows={2} value={reviewDraft.ledgerBasis} placeholder="Register/evidence reference, completed transactions and any transferee demands reviewed…" onChange={(event) => setReviewDraft({ ...reviewDraft, ledgerBasis: event.target.value })} /></Field>
@@ -659,6 +660,7 @@ export function ElectionDetailPage() {
                   {reviewDraft.classIds && (electionBundle.corporatePreview?.classes ?? []).map((cls: any) => <label className="checkbox" key={cls._id}><input type="checkbox" checked={reviewDraft.classIds.includes(cls._id)} onChange={(event) => setReviewDraft({ ...reviewDraft, classIds: event.target.checked ? [...reviewDraft.classIds, cls._id] : reviewDraft.classIds.filter((id: string) => id !== cls._id) })} />{cls.className}</label>)}
                 </Field>
                 {(electionBundle.corporatePreview?.issues ?? []).map((issue: string) => <p className="muted" key={issue}>{issue}</p>)}
+                {(electionBundle.corporatePreview?.reviewNotes ?? []).map((note: string) => <p className="muted" key={note}>{note}</p>)}
                 <p><strong>{electionBundle.corporatePreview?.votingHolders?.length ?? 0} registered voting holders · {electionBundle.corporatePreview?.totalVotes ?? 0} base votes</strong></p>
                 {(electionBundle.corporatePreview?.votingHolders ?? []).map((holder: any) => {
                   const assignment = reviewDraft.representatives.find((row: any) => row.roleHolderId === holder.roleHolderId);

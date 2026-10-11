@@ -31,6 +31,12 @@ function localDateTimeInput(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
+function localDateInput(date = new Date()) {
+  return localDateTimeInput(date).slice(0, 10);
+}
+function optionalTimestamp(value?: string) {
+  return value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString() : undefined;
+}
 function actualTimestamp(value: string) {
   if (!value || !Number.isFinite(new Date(value).getTime())) throw new Error("Enter the actual event date and time.");
   return new Date(value).toISOString();
@@ -49,14 +55,18 @@ export function WrittenResolutionsPage() {
   const markFailed = usePermissionedMutation(api.writtenResolutions.markFailed, canWrite);
   const remove = usePermissionedMutation(api.writtenResolutions.remove, canWrite);
   const recordNotice = usePermissionedMutation(api.writtenResolutions.recordNotice, canWrite);
+  const certifyVoteCount = usePermissionedMutation(api.writtenResolutions.certifyVoteCount, canWrite);
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [consent, setConsent] = useState<any>(null);
   const [notice, setNotice] = useState<any>(null);
   const [details, setDetails] = useState<any>(null);
+  const [certify, setCertify] = useState<any>(null);
   const preview = useQuery(api.writtenResolutions.preview, society && open && form ? {
-    societyId: society._id, body: form.body, kind: form.kind, recordDateISO: form.recordDateISO, specialMajority: form.specialMajority,
+    societyId: society._id, body: form.body, kind: form.kind, recordDateISO: form.recordDateISO || undefined, specialMajority: form.specialMajority || undefined,
+    circulatedAtISO: optionalTimestamp(form.circulatedAtLocal), route: form.body === "members" ? form.route : undefined,
+    directorsOverride: form.body === "directors" && form.directorsOverrideEnabled ? { numerator: Number(form.overrideNumerator), denominator: Number(form.overrideDenominator) } : undefined,
   } : "skip");
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -90,9 +100,13 @@ export function WrittenResolutionsPage() {
       text: "",
       kind: "Special",
       body: vocab.isCorporation ? "shareholders" : "members",
-      recordDateISO: new Date().toISOString().slice(0, 10),
+      // The organization's calendar date of circulation; the server checks it in the organization's time zone.
+      recordDateISO: localDateInput(),
       circulatedAtLocal: localDateTimeInput(),
-      specialMajority: "two_thirds",
+      // The BC company special majority is a default to check against the articles, never preselected.
+      specialMajority: "",
+      route: "written_consent", votingRouteEvidence: "", votingClosesAtLocal: "",
+      directorsOverrideEnabled: false, overrideNumerator: "", overrideDenominator: "", directorsOverrideEvidence: "",
       governingInstrumentEvidence: "", electorateEvidence: "", circulationEvidence: "", authorityReviewed: false,
     });
     setOpen(true);
@@ -100,8 +114,14 @@ export function WrittenResolutionsPage() {
   const save = async () => {
     if (!canWrite) return;
     try {
-      const { circulatedAtLocal, ...payload } = form;
-      await create({ societyId: society._id, ...payload, circulatedAtISO: actualTimestamp(circulatedAtLocal) });
+      const { circulatedAtLocal, votingClosesAtLocal, route, votingRouteEvidence, directorsOverrideEnabled, overrideNumerator, overrideDenominator, directorsOverrideEvidence, specialMajority, ...payload } = form;
+      const voteRoute = payload.body === "members" && route === "mail_electronic_vote";
+      const override = payload.body === "directors" && directorsOverrideEnabled;
+      await create({ societyId: society._id, ...payload, circulatedAtISO: actualTimestamp(circulatedAtLocal),
+        ...(specialMajority ? { specialMajority } : {}),
+        ...(voteRoute ? { route, votingRouteEvidence, votingClosesAtISO: actualTimestamp(votingClosesAtLocal) } : {}),
+        ...(override ? { directorsOverride: { numerator: Number(overrideNumerator), denominator: Number(overrideDenominator) }, directorsOverrideEvidence } : {}),
+      });
       setOpen(false);
       toast.success("Circulation and the legal electorate recorded.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to record the resolution."); }
@@ -153,6 +173,7 @@ export function WrittenResolutionsPage() {
               if (field.name === "kind") return <Badge tone={record.kind === "Special" ? "warn" : "neutral"}>{record.kind}</Badge>;
               if (field.name === "circulatedAtISO") return <span style={{ whiteSpace: "nowrap" }}>{formatDate(record.circulatedAtISO)}</span>;
               if (field.name === "signatureCount") {
+                if (record.voteProgress) return <span className="muted" style={{ fontSize: "var(--fs-xs)", whiteSpace: "nowrap" }}>{record.voteProgress.count} for · {record.voteProgress.against} against{record.voteProgress.cast ? ` · ${record.voteProgress.requiredCount} needed` : ""}</span>;
                 const count = record.consentProgress?.count ?? 0;
                 // Count and bar on one line, centred in the row.
                 return (
@@ -166,6 +187,7 @@ export function WrittenResolutionsPage() {
               }
               if (field.name === "status") {
                 if (record.status === "Review required") return <Badge tone="warn">Review required</Badge>;
+                if (record.status === "Count certification required") return <Badge tone="warn">Voting closed · certify count</Badge>;
                 if (record.noticeProgress?.overdue) return <Badge tone="danger">{record.status} · notice overdue</Badge>;
                 if (record.nonSignerNoticeStatus === "Required") return <Badge tone="warn">{record.status} · notice required</Badge>;
                 if (record.nonSignerNoticeStatus === "Deadline review required") return <Badge tone="warn">{record.status} · notice date review</Badge>;
@@ -183,14 +205,17 @@ export function WrittenResolutionsPage() {
             renderRowActions={(r) => (
               <>
                 <button className="btn btn--ghost btn--sm" onClick={() => setDetails(r)}>Evidence</button>
-                {["Circulating", "Review required", "Carried"].includes(r.status) && !r.legacyEvidence && r.consentProgress?.people < r.electorate?.length && (
+                {(["Circulating", "Review required", "Carried"].includes(r.status) || (r.status === "Count certification required" && !r.voteCountCertifiedAtISO)) && !r.legacyEvidence && r.consentProgress?.people < r.electorate?.length && (
                   <button
                     className="btn btn--ghost btn--sm"
                     disabled={!canWrite}
-                    onClick={() => setConsent({ record: r, electorKey: "", evidence: "", signedAtLocal: "" })}
+                    onClick={() => setConsent({ record: r, electorKey: "", evidence: "", signedAtLocal: "", vote: r.voteProgress ? "" : undefined })}
                   >
-                    <PenLine size={12} /> Record consent
+                    <PenLine size={12} /> {r.voteProgress ? "Record vote" : "Record consent"}
                   </button>
+                )}
+                {r.voteProgress?.closed && !r.voteCountCertifiedAtISO && r.status !== "Failed" && (
+                  <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setCertify({ record: r, evidence: "" })}>Certify count</button>
                 )}
                 {r.noticeProgress?.required && <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setNotice({ record: r, selectedKeys: [], givenAtLocal: "", evidence: "", dueDateISO: r.noticeProgress.deadlineReviewed ? r.nonSignerNoticeDueDateISO : "", calendarEvidence: r.noticeProgress.deadlineReviewed ? r.nonSignerNoticeCalendarEvidence : "", timeZone: r.nonSignerNoticeTimeZone ?? "America/Toronto" })}>Notice records</button>}
                 {r.status === "Circulating" && (
@@ -217,11 +242,29 @@ export function WrittenResolutionsPage() {
               <Field label="Decision body"><Select value={form.body} onChange={(body) => setForm({ ...form, body, requiredCount: undefined })} options={[{ value: vocab.isCorporation ? "shareholders" : "members", label: vocab.isCorporation ? "Shareholders" : "Members" }, { value: "directors", label: "Directors" }]} /></Field>
               <Field label="Kind"><Select value={form.kind} onChange={(kind) => setForm({ ...form, kind, requiredCount: undefined })} options={[{ value: "Ordinary", label: "Ordinary" }, { value: "Special", label: "Special" }]} /></Field>
             </div>
-            <Field label="Actual circulation date and time" hint="Enter your local time. New circulation records must be created on the UTC calendar date when circulation occurred. Keep historical signed resolutions with their original electorate evidence; the current register cannot prove a historical electorate."><input className="input" type="datetime-local" step="1" max={localDateTimeInput()} value={form.circulatedAtLocal} onChange={(e) => setForm({ ...form, circulatedAtLocal: e.target.value })} /></Field>
-            <Field label="Electorate record date" hint={form.body === "shareholders" ? "Historical shareholder dates require a reconciled transaction history." : "The current member or director register is frozen when circulation is recorded."}><input className="input" type="date" value={form.recordDateISO} onChange={(e) => setForm({ ...form, recordDateISO: e.target.value })} /></Field>
-            {profile?.id === "bc_company" && form.kind === "Ordinary" && form.body === "shareholders" && <Field label="Reviewed special majority in the articles"><Select value={form.specialMajority} onChange={(specialMajority) => setForm({ ...form, specialMajority, requiredCount: undefined })} options={[{ value: "two_thirds", label: "Two-thirds" }, { value: "three_quarters", label: "Three-quarters / applicable legacy company" }]} /></Field>}
-            {preview && <div className="notice"><p>{preview.electorate.length} eligible people · {preview.total} {preview.rule.unit}. Required: {preview.requiredCount} {preview.rule.unit}.</p>{preview.rule.sourceIds.map((id: string) => <CitationBadge key={id} citationId={id} />)}{preview.caveat && <p>{preview.caveat}</p>}{preview.issues.map((issue: string) => <p key={issue}>{issue}</p>)}</div>}
-            <Field label="Higher required count, if the governing documents require one" hint="The server rejects a count below the statutory baseline."><input className="input" type="number" min={preview?.requiredCount ?? 1} max={preview?.total} value={form.requiredCount ?? ""} placeholder={String(preview?.requiredCount ?? "")} onChange={(e) => setForm({ ...form, requiredCount: e.target.value ? Number(e.target.value) : undefined })} /></Field>
+            <Field label="Actual circulation date and time" hint={`Enter your local time. Record a new circulation within 72 hours after it occurred; dates are checked on the organization's calendar${preview?.timeZone ? ` (${preview.timeZone})` : ""}. Keep historical signed resolutions with their original electorate evidence; the current register cannot prove a historical electorate.`}><input className="input" type="datetime-local" step="1" max={localDateTimeInput()} value={form.circulatedAtLocal} onChange={(e) => setForm({ ...form, circulatedAtLocal: e.target.value })} /></Field>
+            <Field label="Electorate record date" hint={form.body === "shareholders" ? "On or before the circulation date and within the record-date window. Historical shareholder dates require a reconciled transaction history." : `Must be the circulation date${preview?.circulationDateISO ? ` (${preview.circulationDateISO})` : ""}. The current member or director register is frozen when circulation is recorded.`}><input className="input" type="date" value={form.recordDateISO} onChange={(e) => setForm({ ...form, recordDateISO: e.target.value })} /></Field>
+            {profile?.id === "bc_company" && form.kind === "Ordinary" && form.body === "shareholders" && <Field label="Special majority set by the articles" hint="Two-thirds is the statutory default only when the articles are silent. The articles may set up to three-quarters, and specified legacy companies use three-quarters. Check the articles before choosing."><Select value={form.specialMajority} onChange={(specialMajority) => setForm({ ...form, specialMajority, requiredCount: undefined })} options={[{ value: "", label: "Check the articles, then choose" }, { value: "two_thirds", label: "Two-thirds (statutory default; articles checked)" }, { value: "three_quarters", label: "Three-quarters (articles or legacy company)" }]} /></Field>}
+            {profile?.resolutions.memberMailElectronicVote && form.body === "members" && <>
+              <Field label="Decision route" hint="Voting by mail or electronic means is available only where the bylaws authorize it. It counts votes cast: a simple majority for an ordinary resolution, at least two-thirds for a special resolution."><Select value={form.route} onChange={(route) => setForm({ ...form, route, requiredCount: undefined })} options={[{ value: "written_consent", label: "Written consent of voting members" }, { value: "mail_electronic_vote", label: "Vote by mail or electronic means (bylaws authorize)" }]} /></Field>
+              {form.route === "mail_electronic_vote" && <>
+                <Field label="Bylaw provision and voting procedure"><textarea className="input" value={form.votingRouteEvidence} onChange={(e) => setForm({ ...form, votingRouteEvidence: e.target.value })} placeholder="Bylaw clause authorizing mail or electronic voting, ballot method and how votes are verified" /></Field>
+                <Field label="Voting closes" hint="Enter your local time. Votes cast after this time are not counted."><input className="input" type="datetime-local" step="1" value={form.votingClosesAtLocal} onChange={(e) => setForm({ ...form, votingClosesAtLocal: e.target.value })} /></Field>
+              </>}
+            </>}
+            {profile?.resolutions.directorsWrittenOverride && form.body === "directors" && <>
+              <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={form.directorsOverrideEnabled} onChange={(e) => setForm({ ...form, directorsOverrideEnabled: e.target.checked, requiredCount: undefined })} />The {vocab.isCorporation ? "articles" : "bylaws"} set a lesser number than all directors</label>
+              {form.directorsOverrideEnabled && <>
+                <p className="muted">{profile.resolutions.directorsWrittenOverride.provision} Unanimous consent remains the default.</p>
+                <div className="row" style={{ gap: 12 }}>
+                  <Field label="Directors required (numerator)"><input className="input" type="number" min={1} value={form.overrideNumerator} onChange={(e) => setForm({ ...form, overrideNumerator: e.target.value })} /></Field>
+                  <Field label="Out of (denominator)"><input className="input" type="number" min={2} value={form.overrideDenominator} onChange={(e) => setForm({ ...form, overrideDenominator: e.target.value })} /></Field>
+                </div>
+                <Field label="Governing-instrument clause"><textarea className="input" value={form.directorsOverrideEvidence} onChange={(e) => setForm({ ...form, directorsOverrideEvidence: e.target.value })} placeholder="Document version and clause that sets the lesser number" /></Field>
+              </>}
+            </>}
+            {preview && <div className="notice"><p>{preview.electorate.length} eligible people · {preview.total} {preview.rule.unit}. {preview.rule.basis === "votes_cast" ? `Required: ${preview.rule.strict ? "more than" : "at least"} ${preview.rule.numerator}/${preview.rule.denominator} of votes cast.` : `Required: ${preview.requiredCount} ${preview.rule.unit}.`}</p>{preview.rule.sourceIds.map((id: string) => <CitationBadge key={id} citationId={id} />)}{preview.caveat && <p>{preview.caveat}</p>}{preview.issues.map((issue: string) => <p key={issue}>{issue}</p>)}{(preview.reviewNotes ?? []).map((note: string) => <p key={note} className="muted">{note}</p>)}</div>}
+            {preview?.rule.basis !== "votes_cast" && <Field label="Higher required count, if the governing documents require one" hint="The server rejects a count below the statutory baseline."><input className="input" type="number" min={preview?.requiredCount ?? 1} max={preview?.total} value={form.requiredCount ?? ""} placeholder={String(preview?.requiredCount ?? "")} onChange={(e) => setForm({ ...form, requiredCount: e.target.value ? Number(e.target.value) : undefined })} /></Field>}
             <Field label="Articles / by-laws and threshold evidence"><textarea className="input" value={form.governingInstrumentEvidence} onChange={(e) => setForm({ ...form, governingInstrumentEvidence: e.target.value })} placeholder="Document version, clause, and any higher majority or unanimous agreement" /></Field>
             <Field label="Electorate and authority review"><textarea className="input" value={form.electorateEvidence} onChange={(e) => setForm({ ...form, electorateEvidence: e.target.value })} placeholder="Register completeness, record-date authority, voting classes, and director conflicts where relevant" /></Field>
             <Field label="Evidence of circulation to every eligible voter"><textarea className="input" value={form.circulationEvidence} onChange={(e) => setForm({ ...form, circulationEvidence: e.target.value })} placeholder="Recipients, dispatch date, and the exact circulated text or document reference" /></Field>
@@ -229,9 +272,10 @@ export function WrittenResolutionsPage() {
           </div>
         )}
       </Drawer>
-      <Drawer open={!!consent && canWrite} onClose={() => setConsent(null)} title="Record consent evidence" footer={<><button className="btn" onClick={() => setConsent(null)}>Cancel</button><button className="btn btn--accent" disabled={!consent?.electorKey || !consent?.evidence?.trim() || !consent?.signedAtLocal} onClick={async () => {
-        try { await sign({ id: consent.record._id, electorKey: consent.electorKey, consentEvidence: consent.evidence, signedAtISO: actualTimestamp(consent.signedAtLocal) }); setConsent(null); toast.success("Consent evidence and its actual date recorded."); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to record consent."); }
-      }}>Record consent</button></>}>
+      <Drawer open={!!consent && canWrite} onClose={() => setConsent(null)} title="Record consent evidence" footer={<><button className="btn" onClick={() => setConsent(null)}>Cancel</button><button className="btn btn--accent" disabled={!consent?.electorKey || !consent?.evidence?.trim() || !consent?.signedAtLocal || (consent?.vote !== undefined && !consent?.vote)} onClick={async () => {
+        try { await sign({ id: consent.record._id, electorKey: consent.electorKey, consentEvidence: consent.evidence, signedAtISO: actualTimestamp(consent.signedAtLocal), ...(consent.vote ? { vote: consent.vote } : {}) }); setConsent(null); toast.success(consent.vote ? "Vote evidence and its actual time recorded." : "Consent evidence and its actual date recorded."); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to record consent."); }
+      }}>{consent?.vote !== undefined ? "Record vote" : "Record consent"}</button></>}>
+        {consent?.vote !== undefined && <Field label="Vote cast" hint="Votes cast by mail or electronic means count for or against; members who did not vote are not counted."><Select value={consent.vote} onChange={(vote) => setConsent({ ...consent, vote })} options={[{ value: "", label: "Choose" }, { value: "for", label: "For" }, { value: "against", label: "Against" }]} /></Field>}
         {consent && <><p>Record consent already given by the named voter. Keep the signed counterpart or verified electronic consent with the organization’s records. Your account and the time of entry are recorded separately from the signer's actual consent time.</p><Field label="Signer from the frozen electorate"><Select value={consent.electorKey} onChange={(electorKey) => setConsent({ ...consent, electorKey })} options={[{ value: "", label: "Choose a signer" }, ...consent.record.electorate.filter((elector: any) => !consent.record.signatures.some((signature: any) => signature.electorKey === elector.key)).map((elector: any) => ({ value: elector.key, label: `${elector.name} · ${elector.weight} ${consent.record.countUnit}` }))]} /></Field><Field label="Actual consent date and time" hint={`Enter local time from the evidence. Circulation: ${eventTime(consent.record.circulatedAtISO)}. Passage is determined from the chronological consent evidence, including consents entered later.`}><input className="input" type="datetime-local" step="1" max={localDateTimeInput()} value={consent.signedAtLocal} onChange={(e) => setConsent({ ...consent, signedAtLocal: e.target.value })} /></Field><Field label="Consent evidence"><textarea className="input" value={consent.evidence} onChange={(e) => setConsent({ ...consent, evidence: e.target.value })} placeholder="Signed document or counterpart reference, actual consent date, and verification details" /></Field></>}
       </Drawer>
       <Drawer open={!!notice && canWrite} onClose={() => setNotice(null)} title="Notice to non-signing shareholders" footer={<><button className="btn" onClick={() => setNotice(null)}>Cancel</button><button className="btn btn--accent" onClick={async () => {
@@ -253,6 +297,11 @@ export function WrittenResolutionsPage() {
           <Field label="Notice evidence"><textarea className="input" value={notice.evidence} onChange={(e) => setNotice({ ...notice, evidence: e.target.value })} placeholder="Recipients, delivery method and proof, exact resolution, description and reasons, and document reference" /></Field>
           <p>You can save a deadline review without selecting recipients. Notice coverage is complete only when individual evidence covers every required recipient. Timing remains under review until a deadline is reviewed.</p>
         </>}
+      </Drawer>
+      <Drawer open={!!certify && canWrite} onClose={() => setCertify(null)} title="Certify the count of votes cast" footer={<><button className="btn" onClick={() => setCertify(null)}>Cancel</button><button className="btn btn--accent" disabled={!certify?.evidence?.trim()} onClick={async () => {
+        try { const result = await certifyVoteCount({ id: certify.record._id, evidence: certify.evidence }); setCertify(null); toast.success(`Count certified: ${result?.status ?? "recorded"}.`); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to certify the count."); }
+      }}>Certify count</button></>}>
+        {certify && <><p>Voting closed {eventTime(certify.record.votingClosesAtISO)}. Recorded: {certify.record.voteProgress?.count ?? 0} for, {certify.record.voteProgress?.against ?? 0} against. Certify only when every vote cast by mail or electronic means is recorded; no votes can be added afterwards.</p><Field label="Scrutineer or officer report"><textarea className="input" value={certify.evidence} onChange={(e) => setCertify({ ...certify, evidence: e.target.value })} placeholder="Who counted, the ballot system or mail log, rejected or late votes, and the report reference" /></Field></>}
       </Drawer>
       <Drawer open={!!details} onClose={() => setDetails(null)} title={details?.title ?? "Resolution evidence"}>
         {details && <>

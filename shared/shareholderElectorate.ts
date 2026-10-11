@@ -9,6 +9,10 @@
  * Ontario OBCA ss. 95, 100, 102. See docs/legal-research/meetings-records.md.
  */
 
+import type { RecordDateLimit } from "./legalGovernanceTypes";
+import { legalGovernanceProfile, type GovernanceOrganization } from "./legalGovernanceProfiles";
+import { earliestPermittedNoticeDate, shiftCalendarMonths } from "./legalMeetingNotice";
+
 type Row = Record<string, any>;
 
 export type ShareholderClassVotes = {
@@ -143,4 +147,45 @@ export function buildShareholderElectorate(input: {
   const totalVotes = votingHolders.reduce((sum, row) => sum + row.totalVotes, 0);
   if (!Number.isFinite(totalVotes)) issues.add("The total voting weight is outside the supported numeric range.");
   return { recordDateISO: input.recordDateISO, holders: allHolders, votingHolders, totalVotes, issues: [...issues], complete: issues.size === 0 };
+}
+
+export type RecordDatePurpose = "meeting" | "writtenResolution";
+
+/** Applied when no verified profile states a limit. The record date then also needs review. */
+export const CONSERVATIVE_RECORD_DATE_LIMIT: RecordDateLimit = {
+  maxAgeDays: 60, basis: "conservative", researchAnchor: "meetings-records.md#mtg-5", sourceIds: [],
+  note: "No verified record-date limit applies to this organization. A 60-day bound applies pending legal review.",
+};
+
+export function recordDateLimitFor(organization: GovernanceOrganization | null | undefined, purpose: RecordDatePurpose): RecordDateLimit {
+  return legalGovernanceProfile(organization)?.recordDates?.[purpose] ?? CONSERVATIVE_RECORD_DATE_LIMIT;
+}
+
+/** The earliest permitted record date, counted back from the event's calendar date. */
+export function earliestRecordDate(referenceDateISO: string, limit: RecordDateLimit): string | null {
+  if (limit.maxAgeMonths !== undefined) return shiftCalendarMonths(referenceDateISO, -limit.maxAgeMonths);
+  return earliestPermittedNoticeDate(referenceDateISO, limit.maxAgeDays ?? 60);
+}
+
+function describeLimit(limit: RecordDateLimit) {
+  return limit.maxAgeMonths !== undefined ? `${limit.maxAgeMonths} calendar months` : `${limit.maxAgeDays ?? 60} days`;
+}
+
+/**
+ * Lower bound for a reviewed record date. An older date would make former
+ * holders or members the electorate. `issue` blocks; `reviewNote` flags a
+ * conservative bound that the research does not establish for this entity.
+ */
+export function recordDateWindow(recordDateISO: string, referenceDateISO: string, limit: RecordDateLimit, eventLabel: string) {
+  const earliestISO = earliestRecordDate(referenceDateISO, limit);
+  const section = limit.section ? ` (${limit.section})` : "";
+  const issue = !earliestISO
+    ? `The ${eventLabel} date is not a valid calendar date, so the record-date window cannot be checked.`
+    : recordDateISO < earliestISO
+      ? `The record date ${recordDateISO} is more than ${describeLimit(limit)} before the ${eventLabel} on ${referenceDateISO}${section}. Choose a record date on or after ${earliestISO}; an older register can include former holders.`
+      : undefined;
+  const reviewNote = limit.basis === "conservative"
+    ? `Record-date window: ${describeLimit(limit)} before the ${eventLabel} is a conservative bound, not a verified statutory limit. ${limit.note}`
+    : undefined;
+  return { earliestISO: earliestISO ?? undefined, issue, reviewNote, limit };
 }

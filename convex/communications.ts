@@ -23,7 +23,7 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 import { organizationRuleScope } from "../shared/entityRuleScope";
-import { votingShareholderNoticeAudience, auditorNoticeRecipients } from "../shared/meetingNoticeAudience";
+import { votingShareholderNoticeAudience, auditorNoticeRecipients, allMemberNoticeRecipients, votingHolderRecipients } from "../shared/meetingNoticeAudience";
 
 const DEFAULT_TEMPLATE_SLUGS = [
   {
@@ -70,6 +70,8 @@ type Audience =
   | "all_members"
   | "voting_members"
   | "voting_shareholders"
+  // Internal: the statutory meeting-notice audience, used only by sendMeetingNotice.
+  | "meeting_notice"
   | "directors"
   | "overdue_subscribers"
   | "volunteers"
@@ -181,16 +183,32 @@ async function resolveAudienceRecipients(
   ctx: any,
   args: { societyId: string; audience: Audience },
 ): Promise<Recipient[]> {
-  // A corporation's meeting notice goes to its voting shareholders: the share
-  // register, or the shareholder role holders when the register is empty.
+  // Campaign audience: shareholders holding votes on the share register, the
+  // same voting summary the Communications page counts. Directors, the auditor
+  // and non-voting holders belong only to the meeting-notice audience.
   if (args.audience === "voting_shareholders") {
-    const [ledger, directors, auditors, societies] = await Promise.all([
+    const [ledger, voting] = await Promise.all([
+      ctx.runQuery(api.legalOperations.rightsLedger, { societyId: args.societyId as any }),
+      ctx.runQuery(api.legalOperations.votingPower, { societyId: args.societyId as any }),
+    ]);
+    return mergeRecipients(votingHolderRecipients(voting?.voting ?? [], ledger?.roleHolders));
+  }
+  // Statutory meeting notice: a corporation's entitled shareholders, every
+  // director and the auditor (CBCA/OBCA/BC BCA); for a society every member
+  // and the auditor. Reached only through sendMeetingNotice.
+  if (args.audience === "meeting_notice") {
+    const societies = await ctx.runQuery(api.society.list, {});
+    const organization = societies.find((row: any) => row._id === args.societyId);
+    const auditors = await ctx.runQuery(api.auditors.list, { societyId: args.societyId as any });
+    if (!organizationRuleScope(organization).isCorporation) {
+      const members = await ctx.runQuery(api.members.list, { societyId: args.societyId as any });
+      return mergeRecipients([...allMemberNoticeRecipients(members), ...auditorNoticeRecipients(auditors)]);
+    }
+    const [ledger, directors] = await Promise.all([
       ctx.runQuery(api.legalOperations.rightsLedger, { societyId: args.societyId as any }),
       ctx.runQuery(api.directors.list, { societyId: args.societyId as any }),
-      ctx.runQuery(api.auditors.list, { societyId: args.societyId as any }),
-      ctx.runQuery(api.society.list, {}),
     ]);
-    return mergeRecipients(votingShareholderNoticeAudience({ ...ledger, directors, auditors, organization: societies.find((row: any) => row._id === args.societyId) }).recipients);
+    return mergeRecipients(votingShareholderNoticeAudience({ ...ledger, directors, auditors, organization }).recipients);
   }
 
   const [members, directors, subscriptions, volunteers, committees] = await Promise.all([
@@ -246,7 +264,7 @@ async function resolveAudienceRecipients(
     const segment = await ctx.db.get(segmentId as any);
     if (!segment) return [];
     const baseAudience =
-      segment.includeAudience === "custom"
+      segment.includeAudience === "custom" || segment.includeAudience === "meeting_notice"
         ? ("all_members" as Audience)
         : (segment.includeAudience as Audience);
     const baseRecipients = await resolveAudienceRecipients(ctx, {
@@ -655,12 +673,8 @@ async function sendCampaignInternal(
   if (society.disabledModules?.includes("communications")) throw new Error("Communications is disabled for this workspace.");
 
   const meetingNotice = args.kind === "notice" && !!args.meetingId;
-  const noticeAudience = meetingNotice ? (organizationRuleScope(society).isCorporation ? "voting_shareholders" : "all_members") : args.audience;
+  const noticeAudience: Audience = meetingNotice ? "meeting_notice" : args.audience;
   const recipients = await resolveAudienceRecipients(ctx, { societyId: args.societyId, audience: noticeAudience });
-  if (meetingNotice && !organizationRuleScope(society).isCorporation) {
-    const auditors = await ctx.runQuery(api.auditors.list, { societyId: args.societyId as any });
-    recipients.push(...auditorNoticeRecipients(auditors));
-  }
   const prefByMemberId = new Map(
     (prefs ?? []).map((pref: any) => [String(pref.memberId), pref]),
   );
@@ -1028,6 +1042,7 @@ export const sendCampaign = authorizedAction("communications:sendCampaign", acti
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (args.audience === "meeting_notice") throw new Error("Send a meeting notice from the meeting so its statutory audience and proof of notice are recorded.");
     return sendCampaignInternal(ctx, {
       societyId: args.societyId as any,
       templateId: args.templateId as any,
@@ -1068,7 +1083,7 @@ export const sendMeetingNotice = authorizedAction("communications:sendMeetingNot
       meetingId: args.meetingId as any,
       templateId: template?._id as any,
       actingUserId: args.actingUserId as any,
-      audience: corporation ? "voting_shareholders" : "all_members",
+      audience: "meeting_notice",
       kind: template?.kind ?? "notice",
       channel: args.channel,
       subject: corporation && usesSocietyDefault ? CORPORATION_MEETING_NOTICE.subject : template?.subject,
