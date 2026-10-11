@@ -9,7 +9,7 @@ import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { useToast } from "../../../components/Toast";
 import { formatDate } from "../../../lib/format";
 import { useSociety } from "../../../hooks/useSociety";
-import { governanceVocabulary } from "../../../lib/governanceVocabulary";
+import { organizationVocabulary } from "../../../lib/organizationVocabulary";
 import { Users, Trash2, Ban } from "lucide-react";
 
 function memberName(member: any): string {
@@ -45,7 +45,7 @@ export function MeetingProxiesCard({
   const revokeProxy = usePermissionedMutation(api.proxies.revoke, canWrite);
   const removeProxy = usePermissionedMutation(api.proxies.remove, canWrite);
   const toast = useToast();
-  const societyLaw = governanceVocabulary(useSociety()).societyLaw;
+  const societyLaw = organizationVocabulary(useSociety()).societyLaw;
 
   const memberOptions = useMemo(
     () => (members ?? []).map(memberName).filter(Boolean).sort(),

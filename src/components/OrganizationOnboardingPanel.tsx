@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { usePermissions } from "../hooks/usePermissions";
 import { isCorporation } from "../../shared/organizationDomain";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { onboardingGovernanceSummary, readOnboardingAnswersJson } from "../../shared/onboarding";
 import { IncorporationPreparation } from "./IncorporationPreparation";
 
@@ -13,7 +14,7 @@ export function OrganizationOnboardingPanel({ organization }: { organization: Re
   const steps = [
     { title: "Review organization profile", path: "/app/society", permission: "society:read", detail: "Check the legal name, governing Act, dates and contact details." },
     { title: "Confirm registered locations", path: "/app/organization-details", permission: "society:read", detail: "Review the registered office, mailing address and records location." },
-    { title: "Upload governance documents", path: "/app/documents", permission: "documents:read", detail: corporate ? "Keep the official certificate, articles, bylaws and signed agreements." : "Keep the official certificate, constitution and bylaws." },
+    { title: "Upload governance documents", path: "/app/documents", permission: "documents:read", detail: corporate ? `Keep the official certificate, ${organizationVocabulary(organization).governingDocuments} and signed agreements.` : "Keep the official certificate, constitution and bylaws." },
     ...(corporate ? [
       { title: "Add directors, officers and shareholders", path: "/app/role-holders", permission: "society:read", detail: "Add actual legal role holders from the company's records." },
       { title: "Review share classes and securities", path: "/app/rights-ledger", permission: "society:read", detail: "Confirm authorized share rights before recording actual issuances or transfers." },

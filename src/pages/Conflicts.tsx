@@ -5,6 +5,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -109,6 +110,8 @@ export function ConflictsPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+  // s.56 is the BC Societies Act section; other entities get neutral wording.
+  const vocab = organizationVocabulary(society);
 
   return (
     <div className="page">
@@ -116,8 +119,10 @@ export function ConflictsPage() {
         title="Conflicts of interest"
         icon={<AlertTriangle size={16} />}
         iconColor="red"
-        subtitle="Disclosures of directors' material interests (s.56)."
-        info={<p>Directors and senior managers must disclose material interests, leave the room, and abstain.</p>}
+        subtitle={vocab.societyLaw ? "Disclosures of directors' material interests (s.56)." : "Disclosures of directors' and officers' material interests."}
+        info={vocab.societyLaw
+          ? <p>Directors and senior managers must disclose material interests, leave the room, and abstain.</p>
+          : <p>Record each disclosed interest and how the board handled it. Confirm disclosure and abstention rules under the governing Act and the {vocab.governingDocuments}.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New disclosure

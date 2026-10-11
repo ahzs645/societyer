@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode } from "../../shared/organizationDomain";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { evaluateLegalDecision, type LegalDecisionInput } from "../../shared/legalDecision";
 import { Select } from "./Select";
 import { Field, Badge } from "./ui";
@@ -24,7 +24,7 @@ function plainWarning(warning: string, corporate: boolean): string {
 
 /** Evidence-aware arithmetic preview; it does not adopt a resolution or update registers. */
 export function DecisionAssessmentCard({ organization }: { organization: any }) {
-  const vocab = governanceVocabulary(organization);
+  const vocab = organizationVocabulary(organization);
   // Only societies and business corporations have reviewed decision rules. A
   // custom entity (co-operative, partnership, ...) must not be evaluated as a
   // business corporation, so the card is hidden for it.

@@ -2,11 +2,12 @@ import { Field, Badge } from "./ui";
 import { Select } from "./Select";
 import { DatePicker } from "./DatePicker";
 import { CHARITY_STATUS_OPTIONS, FORMATION_STATUS_OPTIONS, ENTITY_DATE_FIELDS, LEGAL_SUBTYPE_OPTIONS, TAX_STATUS_OPTIONS, entityPreparationDecision } from "../../shared/entitySetup";
-import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, isSociety } from "../../shared/organizationDomain";
 
 export function EntitySetupFields({ form, set, includeDates = false, documents = [], showFormationStatus = true }: { form: Record<string, any>; set: (key: string, value: any) => void; includeDates?: boolean; documents?: any[]; showFormationStatus?: boolean }) {
   const code = canonicalizeJurisdictionCode(homeJurisdictionCode(form));
   const society = isSociety(form);
+  const corporation = isCorporation(form);
   const route = entityPreparationDecision(form);
   const subtypeOptions = LEGAL_SUBTYPE_OPTIONS.filter(({ value }) => value === "other" || (code === "CA-BC" ? society ? value.includes("society") : value.includes("company") : code === "CA-FED-CBCA" && value === "federal_private_corporation"));
   const dateFields = ENTITY_DATE_FIELDS.filter(({ value }) => value === "anniversaryDate" || value === "annualMeetingDate" || (society ? value === "agmExtensionDate" : code === "CA-BC" ? ["annualReferenceDate", "transparencyAwarenessDate", "transparencyEntryDate", "transparencyCessationEntryDate"].includes(value) : code === "CA-FED-CBCA" && ["iscAwarenessDate", "iscRegisterEntryDate"].includes(value)));
@@ -29,17 +30,18 @@ export function EntitySetupFields({ form, set, includeDates = false, documents =
     <div><Badge tone={route.allowed ? "info" : "warn"}>{route.allowed ? "Preparation route" : "Review required"}</Badge><p className="muted" style={{ margin: "6px 0 0" }}>{route.message}</p></div>
     <div className="society-field-grid">
       {[{ key: "craBnStatus", label: "Business number (BN) receipt" }, { key: "craRcStatus", label: "Corporation income tax (RC) account" }, { key: "gstHstStatus", label: "GST/HST account assessment" }, { key: "payrollStatus", label: "Payroll account assessment" }].map(({ key, label }) => <Field key={key} label={label}><Select value={form[key] ?? "unknown"} onChange={(value) => set(key, value)} options={TAX_STATUS_OPTIONS} /></Field>)}
-      <Field label="Charitable registration"><Select value={form.charityStatus ?? (form.isCharity ? "registered" : "unknown")} onChange={(value) => { set("isCharity", value === "registered"); set("charityStatus", value); }} options={CHARITY_STATUS_OPTIONS} /></Field>
-      <Field label="Tax / charity evidence reference" hint="Reference the CRA receipt or approval document; do not include account credentials."><input className="input" value={form.taxStatusEvidence ?? ""} onChange={(event) => set("taxStatusEvidence", event.target.value)} /></Field>
+      {/* Charitable registration is not available to a business corporation; the stored field is kept. */}
+      {!corporation && <Field label="Charitable registration"><Select value={form.charityStatus ?? (form.isCharity ? "registered" : "unknown")} onChange={(value) => { set("isCharity", value === "registered"); set("charityStatus", value); }} options={CHARITY_STATUS_OPTIONS} /></Field>}
+      <Field label={corporation ? "Tax evidence reference" : "Tax / charity evidence reference"} hint="Reference the CRA receipt or approval document; do not include account credentials."><input className="input" value={form.taxStatusEvidence ?? ""} onChange={(event) => set("taxStatusEvidence", event.target.value)} /></Field>
     </div>
-    <p className="muted" style={{ margin: 0 }}>Participating BC and federal business incorporations normally receive BN and RC accounts automatically. Verify receipt before requesting a new account. GST/HST, payroll and charitable registration depend on separate assessments and approvals.</p>
+    <p className="muted" style={{ margin: 0 }}>Participating BC and federal business incorporations normally receive BN and RC accounts automatically. Verify receipt before requesting a new account. GST/HST, payroll{corporation ? "" : " and charitable registration"} depend on separate assessments and approvals.</p>
     {includeDates && <>
-      <div className="society-field-grid">{dateFields.map(({ value, label }) => <Field key={value} label={label}><DatePicker value={form[value] ?? ""} onChange={(date) => set(value, date)} /></Field>)}</div>
+      <div className="society-field-grid">{dateFields.map(({ value, label }) => <Field key={value} label={value === "annualMeetingDate" && !society ? "Last annual meeting date" : label}><DatePicker value={form[value] ?? ""} onChange={(date) => set(value, date)} /></Field>)}</div>
       {society && <div className="society-field-grid">
         <Field label="AGM reporting year" hint="If an AGM is held under an extension, record the year that it satisfies."><input className="input" inputMode="numeric" value={form.annualMeetingYear ?? ""} onChange={(event) => set("annualMeetingYear", event.target.value ? Number(event.target.value) : undefined)} placeholder="2026" /></Field>
         <Field label="AGM extension approval evidence"><input className="input" value={form.agmExtensionEvidence ?? ""} onChange={(event) => set("agmExtensionEvidence", event.target.value)} /></Field>
       </div>}
-      <p className="muted" style={{ margin: 0 }}>The registry anniversary, AGM / annual reference date, extra-provincial registration and start of business activity are separate anchors. Save registration and activity dates in Registration records below.</p>
+      <p className="muted" style={{ margin: 0 }}>The registry anniversary, {society ? "AGM" : "annual meeting"} / annual reference date, extra-provincial registration and start of business activity are separate anchors. Save registration and activity dates in Registration records below.</p>
     </>}
   </div>;
 }

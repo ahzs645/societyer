@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
-import { organizationCopy, type OrganizationCopy } from "../lib/organizationCopy";
+import { organizationVocabulary, type OrganizationVocabulary } from "../lib/organizationVocabulary";
 import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
 import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
@@ -67,8 +67,8 @@ export function Dashboard() {
   const welcomeWorkflowId = searchParams.get("welcome");
   const { can } = usePermissions();
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
-  const entityCopy = organizationCopy(society);
-  const corporation = entityCopy.corporation;
+  const entityCopy = organizationVocabulary(society);
+  const corporation = entityCopy.isCorporation;
   const navigate = useNavigate();
   const toast = useToast();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
@@ -344,7 +344,7 @@ export function Dashboard() {
         {corporation
           ? roleHolders !== undefined && <Stat label="Shareholders" value={roleHolderCounts.shareholders} icon={<Users size={14} />} tooltip="Current shareholders in the role-holder register" />
           : canRead("members:read") && <Stat label="Active members" value={counts.members} icon={<Users size={14} />} tooltip="with voting rights counted separately in members list" />}
-        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={!entityCopy.bcSociety ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
+        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={!entityCopy.societyLaw ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
         {canRead("meetings:read") && <Stat label="Meetings this year" value={counts.meetingsThisYear} icon={<Calendar size={14} />} />}
         {canRead("filings:read") && <Stat label="Overdue filings" value={counts.overdueFilings} tone={counts.overdueFilings ? "danger" : "ok"} icon={<AlertTriangle size={14} />} />}
       </div>
@@ -558,7 +558,7 @@ export function Dashboard() {
 
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">{entityCopy.entityTitle}</h2>
+              <h2 className="card__title">{entityCopy.organizationTitle}</h2>
             </div>
             <div className="card__body col">
               <div><strong>{society.name}</strong></div>
@@ -567,7 +567,7 @@ export function Dashboard() {
               <div className="muted">{society.registeredOfficeAddress}</div>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                 {!corporation && society.isCharity && <Badge tone="accent">CRA charity</Badge>}
-                {entityCopy.bcSociety && society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
+                {entityCopy.societyLaw && society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
                 {society.boardCadence && <Badge>Board meets {society.boardCadence.toLowerCase()}</Badge>}
               </div>
             </div>
@@ -727,10 +727,10 @@ function getOnboardingSteps({
   upcomingMeetings: any[];
   upcomingFilings: any[];
   overdueFilings: any[];
-  entityCopy: OrganizationCopy;
+  entityCopy: OrganizationVocabulary;
   roleHolderCounts: { directors: number; shareholders: number };
 }) {
-  const corporation = entityCopy.corporation;
+  const corporation = entityCopy.isCorporation;
   const hasSocietyProfile = Boolean(
     society?.name && society?.incorporationNumber && society?.registeredOfficeAddress,
   );
@@ -753,7 +753,7 @@ function getOnboardingSteps({
   return [
     {
       id: "profile",
-      title: `Set up ${entityCopy.entityNoun} profile`,
+      title: `Set up ${entityCopy.organizationNoun} profile`,
       description: hasSocietyProfile ? "Legal identity and registered office are recorded." : "Add the legal name, incorporation number, and registered office.",
       to: "/app/society",
       complete: hasSocietyProfile,
@@ -771,10 +771,10 @@ function getOnboardingSteps({
     },
     {
       id: "documents",
-      title: corporation ? `Upload ${entityCopy.bcCompany ? "articles" : "articles/by-laws"}` : entityCopy.society ? "Upload constitution/bylaws" : "Upload governing documents",
+      title: corporation ? `Upload ${entityCopy.bcCompany ? "articles" : "articles/by-laws"}` : entityCopy.isSociety ? "Upload constitution/bylaws" : "Upload governing documents",
       description: hasCoreDocuments
         ? "Core governing documents are attached."
-        : entityCopy.society ? "Attach the filed constitution and current bylaws." : `Attach the ${entityCopy.governingDocuments}.`,
+        : entityCopy.isSociety ? "Attach the filed constitution and current bylaws." : `Attach the ${entityCopy.governingDocuments}.`,
       to: "/app/documents",
       complete: hasCoreDocuments,
       icon: UploadCloud,

@@ -1,4 +1,4 @@
-import { capitalize, governanceVocabulary } from "../../../lib/governanceVocabulary";
+import { capitalize, organizationVocabulary } from "../../../lib/organizationVocabulary";
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, splitPipeTables, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
 import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
@@ -587,8 +587,14 @@ function renderFormalAgmMinutes({
   minutes,
 }: MinutesRenderArgs, options: Required<MinutesExportOptions>): string {
   const eh = escapeHtml;
-  const meetingKind = meeting.type === "AGM" ? "Annual General Meeting" : `${meeting.type} Meeting`;
-  const vocab = governanceVocabulary(society);
+  const vocab = organizationVocabulary(society);
+  // Societies and BC companies hold an "Annual General Meeting"; CBCA and other
+  // corporations hold an "Annual Meeting" (see organizationVocabulary).
+  const meetingKind = meeting.type === "AGM"
+    ? vocab.annualMeetingFormal
+    : meeting.type === "SGM" && vocab.isCorporation
+      ? "Special Meeting"
+      : `${meeting.type} Meeting`;
   const voters = capitalize(vocab.voterNounPlural);
   const entity = capitalize(vocab.organizationNoun);
   const chair = minutes.chairName ?? placeholder("Chair", options);

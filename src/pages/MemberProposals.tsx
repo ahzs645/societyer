@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { useEligibleVoters } from "../hooks/useEligibleVoters";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Plus, Vote, Trash2 } from "lucide-react";
@@ -29,7 +30,7 @@ export function MemberProposalsPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("motions:write");
   const { rules } = useBylawRules();
-  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
+  const voters = useEligibleVoters(society);
   const items = useQuery(api.memberProposals.list, society ? { societyId: society._id } : "skip");
   const create = usePermissionedMutation(api.memberProposals.create, canWrite);
   const update = usePermissionedMutation(api.memberProposals.update, canWrite);
@@ -49,8 +50,8 @@ export function MemberProposalsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const eligibleVoters = (members ?? []).filter((m: any) => m.status === "Active" && m.votingRights).length;
-  const vocab = governanceVocabulary(society);
+  const eligibleVoters = voters.count ?? 0;
+  const vocab = organizationVocabulary(society);
 
   const openNew = () => {
     if (!canWrite) return;
@@ -77,7 +78,7 @@ export function MemberProposalsPage() {
         title={vocab.isCorporation ? "Shareholder proposals" : "Member proposals"}
         icon={<Vote size={16} />}
         iconColor="purple"
-        subtitle={vocab.isCorporation ? "Proposals for the annual shareholder meeting." : `Proposals from members. ${eligibleVoters} voting members today.`}
+        subtitle={vocab.isCorporation ? `Proposals for the annual shareholder meeting. ${voters.label}.` : `Proposals from members. ${eligibleVoters} voting members today.`}
         info={vocab.isCorporation ? (
           <p>
             The active rule set uses a {rules?.memberProposalThresholdPct ?? 5}% threshold with a floor of {rules?.memberProposalMinSignatures ?? 1} signature(s) and
@@ -164,7 +165,7 @@ export function MemberProposalsPage() {
               <Field label="Signature count"><input className="input" type="number" value={form.signatureCount} onChange={(e) => setForm({ ...form, signatureCount: Number(e.target.value) })} /></Field>
               <Field label="Threshold %"><input className="input" type="number" value={form.thresholdPercent} onChange={(e) => setForm({ ...form, thresholdPercent: Number(e.target.value) })} /></Field>
             </div>
-            <Field label="Eligible voters at submission"><input className="input" type="number" value={form.eligibleVotersAtSubmission ?? eligibleVoters} onChange={(e) => setForm({ ...form, eligibleVotersAtSubmission: Number(e.target.value) })} /></Field>
+            <Field label="Eligible voters at submission" hint={voters.label}><input className="input" type="number" value={form.eligibleVotersAtSubmission ?? eligibleVoters} onChange={(e) => setForm({ ...form, eligibleVotersAtSubmission: Number(e.target.value) })} /></Field>
           </div>
         )}
       </Drawer>

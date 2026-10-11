@@ -97,7 +97,7 @@ import { RouteAccessGate } from "./RouteAccessGate";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
-import { getRouteIdentity, routeAllowedForEntityKind, routeLabelForEntityKind, type IconTone, type LucideIcon } from "../lib/routeIdentity";
+import { getRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { organizationKind } from "../../shared/organizationDomain";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
@@ -666,7 +666,7 @@ export function Layout() {
     [groupedNav, society, entityKind, isMultiEntity, can],
   );
   const getNavItemLabel = (item: NavItem) => {
-    const label = routeLabelForEntityKind(item, entityKind);
+    const label = routeLabelForOrganization(item, society as any);
     return t(NAV_ITEM_LABEL_KEYS[label] ?? label, label);
   };
   // Drawer nav filter (mobile): match on the translated label; groups with no

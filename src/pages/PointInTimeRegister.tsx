@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { History } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { DatePicker } from "../components/DatePicker";
 import { Badge } from "../components/ui";
@@ -20,10 +21,17 @@ import { normalizeOptionValue, SOURCE_OPTION_VALUES } from "../../shared/orgHubO
  *
  * Read-only: no mutations, so it does not touch the static-mirror write gate.
  */
-const ROLES: Array<{ roleType: string; label: string }> = [
+const SOCIETY_ROLES: Array<{ roleType: string; label: string }> = [
   { roleType: "director", label: "Directors" },
   { roleType: "officer", label: "Officers" },
   { roleType: "member", label: "Members" },
+];
+// A corporation's general-meeting voters are its shareholders (role holders),
+// not the society member register.
+const CORPORATION_ROLES: Array<{ roleType: string; label: string }> = [
+  { roleType: "director", label: "Directors" },
+  { roleType: "officer", label: "Officers" },
+  { roleType: "shareholder", label: "Shareholders" },
 ];
 
 type HolderRow = { _id?: string; fullName?: string; startDate?: string; title?: string };
@@ -93,6 +101,7 @@ export function PointInTimeRegisterPage() {
   const society = useSociety();
   const { can } = usePermissions();
   const canReadHistory = can("settings:read");
+  const ROLES = organizationRuleScope(society).isCorporation ? CORPORATION_ROLES : SOCIETY_ROLES;
   const visibleRoles = ROLES.filter((role) => canReadHistory && can(role.roleType === "member" ? "members:read" : "directors:read"));
   const [asOf, setAsOf] = useState<string>(() => todayDateOnly());
   const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");

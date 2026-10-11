@@ -9,6 +9,7 @@ import { Drawer, Field, Badge } from "../components/ui";
 import { Select } from "../components/Select";
 import { Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { appliesBcPrivacyRules } from "../../shared/entityRuleScope";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
@@ -55,12 +56,15 @@ export function PipaTrainingPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  // PIPA is BC privacy law; other jurisdictions log general privacy training.
+  const bcPrivacy = appliesBcPrivacyRules(society);
+
   const openNew = () => {
     if (!canWrite) return;
     setForm({
       participantName: "",
       role: "Staff",
-      topic: "PIPA",
+      topic: bcPrivacy ? "PIPA" : "Privacy-refresh",
       completedAtISO: todayDateOnly(),
       nextDueAtISO: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
     });
@@ -78,11 +82,13 @@ export function PipaTrainingPage() {
   return (
     <div className="page">
       <PageHeader
-        title="PIPA training"
+        title={bcPrivacy ? "PIPA training" : "Privacy training"}
         icon={<ShieldCheck size={16} />}
         iconColor="green"
         subtitle="Privacy and anti-spam training for directors, staff and volunteers."
-        info={<p>Training records for BC's Personal Information Protection Act (PIPA) and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>}
+        info={bcPrivacy
+          ? <p>Training records for BC's Personal Information Protection Act (PIPA) and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>
+          : <p>Training records for the privacy law that applies to this organization and Canada's anti-spam law (CASL). Annual renewal is recommended.</p>}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log training

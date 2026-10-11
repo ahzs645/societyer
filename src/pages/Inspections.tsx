@@ -5,7 +5,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { capitalize, governanceVocabulary } from "../lib/governanceVocabulary";
+import { capitalize, organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -50,7 +50,7 @@ export function InspectionsPage() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
-  const vocab = governanceVocabulary(society);
+  const vocab = organizationVocabulary(society);
   const insiderLabel = capitalize(vocab.voterNoun);
   const records = useMemo(() => (items ?? []).map((r: any) => ({
     ...r,

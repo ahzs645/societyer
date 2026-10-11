@@ -91,6 +91,8 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ModuleKey } from "./modules";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
+import { organizationKind, type LegalEntityLike } from "../../shared/organizationDomain";
 
 export type RouteGroup =
   | "workspace"
@@ -171,6 +173,12 @@ export type RouteIdentity = {
    * Resolve via `routeLabelForEntityKind`.
    */
   labelByEntityKind?: Partial<Record<RouteEntityKind, string>>;
+  /**
+   * Label for workspaces whose home jurisdiction is not BC, for routes whose
+   * default name cites BC law (e.g. "Privacy (PIPA)" → "Privacy"). Resolve via
+   * `routeLabelForOrganization`.
+   */
+  labelOutsideBc?: string;
   /** Optional module gate; page is hidden when the module is disabled. */
   module?: ModuleKey;
   /**
@@ -209,6 +217,20 @@ export function routeLabelForEntityKind(
     return identity.labelByEntityKind?.[kind] ?? identity.label;
   }
   return identity.label;
+}
+
+/**
+ * Label for a loaded workspace: the per-kind label, except that routes naming
+ * BC law use `labelOutsideBc` when the home jurisdiction is not BC. Before the
+ * workspace loads, the default label is shown.
+ */
+export function routeLabelForOrganization(
+  identity: Pick<RouteIdentity, "label" | "labelByEntityKind" | "labelOutsideBc">,
+  organization: LegalEntityLike | null | undefined,
+): string {
+  if (!organization) return identity.label;
+  if (identity.labelOutsideBc && !organizationRuleScope(organization).isBcHome) return identity.labelOutsideBc;
+  return routeLabelForEntityKind(identity, organizationKind(organization));
 }
 
 /** Path → identity. Add new pages here. Keys are exact router paths. */
@@ -305,8 +327,9 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/retention": { icon: Timer, group: "compliance", label: "Records retention", module: "recordsInspection" },
   "/app/records-archive": { icon: Archive, group: "compliance", label: "Records archive" },
   "/app/inspections": { icon: Eye, group: "compliance", label: "Records inspections", module: "recordsInspection" },
-  "/app/privacy": { icon: Shield, group: "compliance", label: "Privacy (PIPA)" },
-  "/app/pipa-training": { icon: ShieldCheck, group: "compliance", label: "PIPA training", module: "pipaTraining" },
+  // PIPA is BC privacy law; other jurisdictions see a neutral label.
+  "/app/privacy": { icon: Shield, group: "compliance", label: "Privacy (PIPA)", labelOutsideBc: "Privacy" },
+  "/app/pipa-training": { icon: ShieldCheck, group: "compliance", label: "PIPA training", labelOutsideBc: "Privacy training", module: "pipaTraining" },
   "/app/insurance": { icon: Umbrella, group: "compliance", label: "Insurance", module: "insurance" },
   "/app/access-custody": { icon: KeyRound, group: "compliance", label: "Access custody", module: "secrets" },
   "/app/transparency": { icon: Globe, group: "compliance", label: "Public transparency", module: "transparency" },

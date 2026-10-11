@@ -26,7 +26,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
-import { organizationCopy } from "../lib/organizationCopy";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 
 export function ReceiptsPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -108,7 +108,7 @@ export function ReceiptsPage() {
         title="Donation receipts"
         icon={<Receipt size={16} />}
         iconColor="pink"
-        subtitle={society.isCharity ? "CRA-compliant official donation receipts with serial numbering." : `Your ${organizationCopy(society).entityNoun} isn't flagged as a registered charity. Receipts are for reference only and won't be tax-deductible.`}
+        subtitle={society.isCharity ? "CRA-compliant official donation receipts with serial numbering." : `Your ${organizationVocabulary(society).organizationNoun} isn't flagged as a registered charity. Receipts are for reference only and won't be tax-deductible.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Issue receipt

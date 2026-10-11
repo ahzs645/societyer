@@ -6,7 +6,7 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Field } from "../components/ui";
@@ -90,7 +90,7 @@ export function BylawsHistoryPage() {
   const canScanPaperless = loaded && can("documents:write") && can("settings:write");
   // The BC Registry bylaws connector reads BC society bylaw filings (Societies
   // Online). Other entity types do not file bylaws there.
-  const registryBylawsApply = governanceVocabulary(society).societyLaw;
+  const registryBylawsApply = organizationVocabulary(society).societyLaw;
   const canStageRegistry = loaded && can("settings:manage") && registryBylawsApply;
   const toast = useToast();
   const amendments = useQuery(

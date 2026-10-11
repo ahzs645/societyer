@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
@@ -157,7 +158,7 @@ export function CustomFieldsPage() {
         iconColor="purple"
         description={
           <span className="settings-shell__description-row">
-            Extra fields for members, directors, volunteers and staff.
+            Extra fields for {organizationVocabulary(society).isCorporation ? "contacts" : "members"}, directors, volunteers and staff.
             <InfoPopover label="About custom fields">
               <p>
                 Add extra fields to any person category (members, directors, volunteers, employees). Saved values appear

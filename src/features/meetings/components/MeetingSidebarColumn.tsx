@@ -13,7 +13,7 @@ import {
 } from "../lib/minutesExportStyles";
 import { formatDate } from "../../../lib/format";
 import { resolveJurisdictionCode } from "../../../lib/jurisdictionGuideTracks";
-import { governanceVocabulary } from "../../../lib/governanceVocabulary";
+import { organizationVocabulary } from "../../../lib/organizationVocabulary";
 import {
   Check,
   Detail,
@@ -153,7 +153,7 @@ export function MeetingSidebarColumn({
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
   // The 14–60 day notice and 30-day annual report windows are BC Societies Act
   // defaults; other entities follow their Act, articles/by-laws and registry.
-  const societyLaw = governanceVocabulary(society).societyLaw;
+  const societyLaw = organizationVocabulary(society).societyLaw;
   const minutesExportBlocked = formalExportBlockers.length > 0;
   const sourceDocumentsAccessible = can("documents:read") && (minutes?.sourceDocumentIds ?? []).every((id: string) => (sourceDocuments ?? []).some((document: any) => document._id === id));
   const agmRun = useQuery(

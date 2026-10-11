@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, InspectorNote } from "../components/ui";
@@ -412,7 +412,7 @@ function cleanAliases(value: unknown) {
 }
 
 function membersSubtitle(society: any): string {
-  const vocab = governanceVocabulary(society);
+  const vocab = organizationVocabulary(society);
   if (vocab.societyLaw) return "Register of members as required under s.20 of the Societies Act.";
   if (vocab.isCorporation) {
     return "Member and contact records for this corporation. Shareholders, directors and officers are recorded in Role holders and the share register.";

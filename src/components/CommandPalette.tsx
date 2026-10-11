@@ -58,7 +58,7 @@ import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useDialogFocus } from "../lib/useDialogFocus";
-import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForEntityKind, type RouteGroup } from "../lib/routeIdentity";
+import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 
 type CommandCategory =
@@ -592,7 +592,7 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
       const identity = item.to ? ROUTE_IDENTITY[item.to] : undefined;
       if (!identity) return [item];
       if (!routeAllowedForEntityKind(identity, entityKind)) return [];
-      const label = routeLabelForEntityKind(identity, entityKind);
+      const label = routeLabelForOrganization(identity, society as any);
       return [label === item.label ? item : { ...item, label, keywords: [...(item.keywords ?? []), item.label] }];
     });
     const all = [

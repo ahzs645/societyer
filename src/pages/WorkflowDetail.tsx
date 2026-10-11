@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { presentRecipe } from "../lib/workflowRecipePresentation";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
@@ -142,7 +143,8 @@ export function WorkflowDetailPage() {
   const [busy, setBusy] = useState(false);
   const [intake, setIntake] = useState<Record<string, any>>({});
 
-  const recipe = catalog?.find((item: any) => item.key === workflow?.recipe);
+  const rawRecipe = catalog?.find((item: any) => item.key === workflow?.recipe);
+  const recipe = useMemo(() => (rawRecipe ? presentRecipe(rawRecipe, society) : rawRecipe), [rawRecipe, society]);
   const preview = (workflow?.nodePreview?.length ? workflow.nodePreview : recipe?.nodePreview ?? []) as any[];
   const recipeNodeKeys = new Set<string>(
     (recipe?.nodePreview ?? []).map((node: any) => node.key),

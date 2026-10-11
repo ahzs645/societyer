@@ -6,6 +6,9 @@ import { Select } from "../components/Select";
 import { formatDate } from "../lib/format";
 import research from "../lib/research/societyerResearch.json";
 import implementation from "../lib/research/implementationStatus.json";
+import { useSociety } from "../hooks/useSociety";
+import { Badge } from "../components/ui";
+import { researchAreaApplies, researchAreasForOrganization, researchAudienceLabel } from "../lib/researchApplicability";
 
 type Entry = Record<string, unknown>;
 type Collection = "templates" | "rules" | "findings" | "open_questions" | "sources" | "implementation";
@@ -35,11 +38,24 @@ function humanDates(text: string) {
 }
 function display(value: unknown) { return humanDates(Array.isArray(value) ? value.join(", ") : String(value)); }
 
+type Scope = "workspace" | "all";
+
 export function ResearchLibraryPage() {
+  const society = useSociety();
   const [collection, setCollection] = useState<Collection>("templates");
   const [search, setSearch] = useState("");
   const [area, setArea] = useState("");
-  const entries = (collection === "implementation" ? implementation.items : research[collection]) as Entry[];
+  const [scope, setScope] = useState<Scope>("workspace");
+  // Entity research (BC society, BC company, federal/Ontario) is shown for the
+  // workspace it applies to by default; "All entity types" shows every record,
+  // labelled. Platform research (storage, authentication, …) always shows.
+  const applicableAreas = useMemo(() => researchAreasForOrganization(society), [society]);
+  const scoped = Boolean(applicableAreas) && scope === "workspace";
+  const allEntries = (collection === "implementation" ? implementation.items : research[collection]) as Entry[];
+  const entries = useMemo(
+    () => scoped ? allEntries.filter((entry) => researchAreaApplies(entry.research_area, applicableAreas)) : allEntries,
+    [allEntries, applicableAreas, scoped],
+  );
   const areas = useMemo(() => [...new Set(entries.map((entry) => String(entry.research_area)))].sort(), [entries]);
   const filtered = entries.filter((entry) => (!area || entry.research_area === area)
     && (!search.trim() || JSON.stringify(entry).toLowerCase().includes(search.trim().toLowerCase())));
@@ -56,6 +72,7 @@ export function ResearchLibraryPage() {
       actions={<Link className="btn-action" to="/app/compliance-obligations">Open obligations</Link>} />
     <div className="research-filters">
       <Select aria-label="Collection" value={collection} options={collections} onChange={(value) => { setCollection(value as Collection); setArea(""); }} />
+      {applicableAreas && <Select aria-label="Applies to" value={scope} options={[{ value: "workspace", label: "This workspace" }, { value: "all", label: "All entity types" }]} onChange={(value) => { setScope(value as Scope); setArea(""); }} />}
       <Select aria-label="Area" value={area} options={[{ value: "", label: "All areas" }, ...areas.map((value) => ({ value, label: label(value) }))]} onChange={setArea} />
       <input className="input research-filters__search" type="search" aria-label="Search evidence" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" />
     </div>
@@ -65,11 +82,16 @@ export function ResearchLibraryPage() {
       {filtered.map((entry) => {
         const title = display(entry.name ?? entry.topic ?? entry.title ?? entry.question ?? entry.item ?? entry.id);
         const url = safeSource(entry.url);
+        const audience = researchAudienceLabel(entry.research_area);
+        const otherEntity = Boolean(applicableAreas) && !researchAreaApplies(entry.research_area, applicableAreas);
         return <article className="research-entry" key={String(entry.id)}>
           <div className="research-entry__head">
             <div>
               <h2 className="research-entry__title">{title}</h2>
-              <div className="muted research-entry__meta">{label(String(entry.research_area))} · {String(entry.id)}</div>
+              <div className="muted research-entry__meta">
+                {label(String(entry.research_area))} · {String(entry.id)}
+                {audience && <> · <Badge tone={otherEntity ? "warn" : "info"}>{otherEntity ? `Other entity type: ${audience}` : `For ${audience}`}</Badge></>}
+              </div>
             </div>
             {url && <a className="btn-action" href={url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Open source</a>}
           </div>

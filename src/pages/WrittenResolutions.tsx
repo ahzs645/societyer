@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { useEligibleVoters } from "../hooks/useEligibleVoters";
 import { useSociety } from "../hooks/useSociety";
-import { governanceVocabulary } from "../lib/governanceVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -30,7 +31,9 @@ export function WrittenResolutionsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("motions:write");
-  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
+  // Members with voting rights for a society; voting shareholders on the share
+  // register for a corporation.
+  const voters = useEligibleVoters(society);
   const items = useQuery(api.writtenResolutions.list, society ? { societyId: society._id } : "skip");
   const create = usePermissionedMutation(api.writtenResolutions.create, canWrite);
   const sign = usePermissionedMutation(api.writtenResolutions.sign, canWrite);
@@ -62,8 +65,8 @@ export function WrittenResolutionsPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const eligibleVoters = (members ?? []).filter((m: any) => m.status === "Active" && m.votingRights).length;
-  const vocab = governanceVocabulary(society);
+  const eligibleVoters = voters.count ?? 0;
+  const vocab = organizationVocabulary(society);
 
   const openNew = () => {
     if (!canWrite) return;
@@ -212,8 +215,8 @@ export function WrittenResolutionsPage() {
                   ]} />
               </Field>
               <Field label="Required signatures" hint={vocab.isCorporation
-                ? `Voting members on the member register: ${eligibleVoters}. Confirm the count against the shareholder and director registers.`
-                : `Eligible voting members: ${eligibleVoters}`}>
+                ? `${voters.label}. For a directors' resolution, count the directors instead. Confirm the required signatures against the articles and by-laws.`
+                : voters.label}>
                 <input className="input" type="number" value={form.requiredCount} onChange={(e) => setForm({ ...form, requiredCount: Number(e.target.value) })} />
               </Field>
             </div>

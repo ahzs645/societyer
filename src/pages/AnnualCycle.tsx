@@ -22,7 +22,7 @@ import { Select } from "../components/Select";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { InfoPopover } from "../components/InfoPopover";
 import { formatDate, relative } from "../lib/format";
-import { organizationCopy, type OrganizationCopy } from "../lib/organizationCopy";
+import { organizationVocabulary, type OrganizationVocabulary } from "../lib/organizationVocabulary";
 
 type CycleItem = {
   id: string;
@@ -78,8 +78,8 @@ const CORPORATE_PHASE_COPY: Record<Phase["id"], Pick<Phase, "title" | "subtitle"
   ongoing: { title: "Ongoing", subtitle: "Privacy, conflicts, retention, policy reviews, deadlines, register updates." },
 };
 
-function phasesFor(entity: OrganizationCopy): Phase[] {
-  return entity.corporation ? PHASES.map((phase) => ({ ...phase, ...CORPORATE_PHASE_COPY[phase.id] })) : PHASES;
+function phasesFor(entity: OrganizationVocabulary): Phase[] {
+  return entity.isCorporation ? PHASES.map((phase) => ({ ...phase, ...CORPORATE_PHASE_COPY[phase.id] })) : PHASES;
 }
 
 export function AnnualCyclePage() {
@@ -96,7 +96,7 @@ export function AnnualCyclePage() {
   if (society === null) return <SeedPrompt />;
   if (!data) return <PageLoading />;
 
-  const entity = organizationCopy(society);
+  const entity = organizationVocabulary(society);
   const visiblePhases = phasesFor(entity);
   const phases = data.phases ?? {};
   const fallbackItems = visiblePhases.flatMap((phase) => phases[phase.id] ?? []) as CycleItem[];
@@ -118,7 +118,7 @@ export function AnnualCyclePage() {
         icon={<ListChecks size={16} />}
         iconColor="orange"
         subtitle={`This year's ${entity.annualMeeting}, filings and records in one checklist.`}
-        info={<p>A guided compliance view that pulls {entity.society ? "AGM" : "the annual meeting"}, filings, financials, records, and ongoing governance into one workflow.</p>}
+        info={<p>A guided compliance view that pulls {entity.isSociety ? "AGM" : "the annual meeting"}, filings, financials, records, and ongoing governance into one workflow.</p>}
         actions={
           <Select
             value={String(year)}
@@ -131,7 +131,7 @@ export function AnnualCyclePage() {
       <section className="onboarding-flow annual-cycle-hero" aria-labelledby="annual-cycle-title">
         <div className="onboarding-flow__story">
           <div>
-            <h2 id="annual-cycle-title">{data.society?.name ?? entity.entityTitle} annual compliance cycle</h2>
+            <h2 id="annual-cycle-title">{data.society?.name ?? entity.organizationTitle} annual compliance cycle</h2>
             <p>
               {data.currentStage ?? "Annual cycle"}. {counts.completed}/{counts.total} evidence checks are complete,
               with {counts.blocked} blocked and {counts.attention} needing attention.
@@ -163,7 +163,7 @@ export function AnnualCyclePage() {
 
       <div className="stat-grid stat-grid--3 annual-cycle-stats">
         {/* votingMembers counts the society member register. */}
-        {entity.society && <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
+        {entity.isSociety && <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
         <Stat label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
         <Stat
           label="Annual report due"
