@@ -114,6 +114,12 @@ const corpTemplateCount = packetSeed.insertedTemplates + packetSeed.updatedTempl
 const corpPrecedentCount = packetSeed.insertedPrecedents + packetSeed.updatedPrecedents;
 assert.ok(corpTemplateCount > 0, "corporation packet catalog should seed templates");
 assert.ok(corpPrecedentCount > 0, "corporation packet catalog should seed precedents");
+const sourcePackets = await source.query("legalOperations:templateEngine", { societyId: federalWorkspace.societyId });
+const annualPrecedent = sourcePackets.precedents.find((row: any) =>
+  row.sourceExternalIds.includes("societyer:corporation-packet-precedent:annual-resolutions"));
+assert.ok(annualPrecedent, "The annual preparation precedent must be seeded");
+assert.equal(annualPrecedent.packageName, "Annual business and return preparation");
+assert.match(annualPrecedent.description, /Preparation only/);
 const issuancePacket = await source.mutation("legalOperations:stageShareIssuancePacket", {
   societyId: federalWorkspace.societyId,
   transferId: issuanceId,
@@ -202,7 +208,12 @@ assert.equal(importedPackets.precedents.length, corpPrecedentCount);
 assert.ok(importedPackets.runs.some((row: any) => row._id === issuancePacket.runId));
 assert.ok(importedPackets.generatedDocuments.some((row: any) => row._id === issuancePacket.generatedDocumentId));
 assert.ok(importedPackets.templates.some((row: any) => row.name === "Issue shares"));
-assert.ok(importedPackets.precedents.some((row: any) => row.packageName === "Annual resolutions and return packet"));
+const importedAnnualPrecedent = importedPackets.precedents.find((row: any) => row._id === annualPrecedent._id);
+assert.ok(importedAnnualPrecedent, "The same annual preparation precedent must survive export/import");
+assert.equal(importedAnnualPrecedent.packageName, annualPrecedent.packageName);
+assert.equal(importedAnnualPrecedent.description, annualPrecedent.description, "Preparation-only legal limits must survive the round trip");
+assert.deepEqual(importedAnnualPrecedent.templateIds, annualPrecedent.templateIds);
+assert.deepEqual(importedAnnualPrecedent.sourceExternalIds, annualPrecedent.sourceExternalIds);
 const importedDocxVersion = await imported.query("documentVersions:latest", { documentId: issuancePacket.draftDocumentId });
 assert.equal(importedDocxVersion._id, issuancePacket.draftDocumentVersionId);
 assert.equal(importedDocxVersion.storageProvider, "generated-inline");

@@ -1032,6 +1032,24 @@
         "table": "members",
         "array": false,
         "optional": true
+      },
+      {
+        "path": "roleHolderId",
+        "table": "roleHolders",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "directorId",
+        "table": "directors",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "auditorAppointmentId",
+        "table": "auditorAppointments",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -6586,6 +6604,12 @@
         "table": "elections",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "eligibilityId",
+        "table": "electionEligibleVoters",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",
@@ -21893,6 +21917,38 @@
     ]
   },
   {
+    "key": "convex:writtenResolutions:preview",
+    "surface": "convex",
+    "name": "writtenResolutions:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/writtenResolutions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:writtenResolutions:recordNotice",
+    "surface": "convex",
+    "name": "writtenResolutions:recordNotice",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/writtenResolutions.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:writtenResolutions:remove",
     "surface": "convex",
     "name": "writtenResolutions:remove",
@@ -21921,6 +21977,12 @@
         "table": "writtenResolutions",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "consentDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       },
       {
         "path": "memberId",
@@ -23107,6 +23169,24 @@
       {
         "path": "memberId",
         "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "roleHolderId",
+        "table": "roleHolders",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "directorId",
+        "table": "directors",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "auditorAppointmentId",
+        "table": "auditorAppointments",
         "array": false,
         "optional": true
       }
@@ -27636,6 +27716,12 @@
         "table": "elections",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "eligibilityId",
+        "table": "electionEligibleVoters",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",
@@ -40955,6 +41041,38 @@
     ]
   },
   {
+    "key": "portable:writtenResolutions:preview",
+    "surface": "portable",
+    "name": "writtenResolutions:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:writtenResolutions:recordNotice",
+    "surface": "portable",
+    "name": "writtenResolutions:recordNotice",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:writtenResolutions:remove",
     "surface": "portable",
     "name": "writtenResolutions:remove",
@@ -40983,6 +41101,12 @@
         "table": "writtenResolutions",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "consentDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       },
       {
         "path": "memberId",

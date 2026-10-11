@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "recordedAt": "2026-10-11T19:51:40.646788+00:00",
+  "recordedAt": "2026-10-11T20:02:19.025145+00:00",
   "branch": "codex/entity-law-2026-10-11",
   "foundationCommit": "24500708d8a61678aedcf1e90d20f9d0df566b01",
   "environment": {
@@ -3553,6 +3553,68 @@
   "limits": [
     "Synthetic fixtures and a native Convex harness do not constitute production acceptance or a legal opinion.",
     "The strict browser sweep preceded only two behaviour-preserving TypeScript narrowing/array annotations; the final production build and all 38 legal gates include those annotations.",
-    "Some external source retrieval and legal applicability limits are documented in README.md and the detailed answers."
-  ]
+    "Some external source retrieval and legal applicability limits are documented in README.md and the detailed answers.",
+    "The final portability follow-up changes only test fixtures, the generated function inventory and documentation; it introduces no application behaviour changes. Latest published CI results are available in PR #60 checks."
+  ],
+  "stage2Enforced": {
+    "command": "node --import tsx scripts/check-stage2-enforced.ts",
+    "passed": true,
+    "exitCode": 0,
+    "accessEnforcementEnabled": true,
+    "suitesPassed": 21,
+    "suitesTotal": 21,
+    "wallSeconds": 19.246,
+    "generatedInventoryEntries": 2130,
+    "tenancy": {
+      "blocked": 3719,
+      "leakedRead": 0,
+      "leakedWrite": 0,
+      "newLeaks": 0,
+      "harnessError": 11,
+      "notApplicable": 1217
+    },
+    "baselineOrSuppressionChanged": false,
+    "corrections": [
+      "Annual preparation precedent identity, legal limits, links and provenance checked through snapshot roundtrip",
+      "Stage 2 function inventory regenerated for actual endpoint and ID-argument changes"
+    ]
+  },
+  "downstreamDomainChecks": {
+    "passed": true,
+    "commands": [
+      "node --import tsx scripts/check-voting-power.ts",
+      "node --import tsx scripts/check-static-corporation-people-register.ts"
+    ],
+    "equityLedgerCoveredBy": "stage2Enforced"
+  },
+  "initialPublishedCIEvidence": {
+    "commit": "d6b2b35acb1ff164683fa36d40c460674bd94765",
+    "legalGovernance": {
+      "conclusion": "success",
+      "runUrl": "https://github.com/ahzs645/societyer/actions/runs/38170071802"
+    },
+    "portableConformance": {
+      "conclusion": "failure",
+      "runUrl": "https://github.com/ahzs645/societyer/actions/runs/38170071815",
+      "failedStage": "Stage 2 enforcement-readiness gate",
+      "cause": "Outdated annual preparation packet title in the snapshot roundtrip fixture; corrected in the follow-up",
+      "matrix": {
+        "passed": true,
+        "registeredFunctions": 987,
+        "query": {
+          "total": 384,
+          "exercised": 276,
+          "consistentThrow": 108,
+          "divergent": 0
+        },
+        "mutation": {
+          "total": 603,
+          "exercised": 165,
+          "consistentThrow": 438,
+          "divergent": 0
+        }
+      }
+    },
+    "latestChecksUrl": "https://github.com/ahzs645/societyer/pull/60/checks"
+  }
 }

@@ -1,6 +1,6 @@
 # Verification of the entity-aware legal implementation
 
-**Verified 11 October 2026.** The final production build, all **38 legal/evidence regression scripts**, and the strict **22-test browser sweep** passed. The browser visited **540 routes** across five independently created workspace types, with no uncaught page errors or unallowlisted entity-copy leaks.
+**Verified 11 October 2026.** The final production build, all **38 legal/evidence regression scripts**, the **21-suite run with access enforcement enabled**, and the strict **22-test browser sweep** passed. The browser visited **540 routes** across five independently created workspace types, with no uncaught page errors or unallowlisted entity-copy leaks.
 
 The [machine-readable results](verification-results.json) retain the individual gate names and durations, browser route inventory, environment, source-coverage count and runtime-parity results. The [coverage manifest](coverage.json) independently maps all 102 brief questions to their answers, official authorities, available runtime source IDs and implementation boundaries.
 
@@ -13,11 +13,22 @@ The [machine-readable results](verification-results.json) retain the individual 
 | `npm run test:portable-manifest` | Passed; 5 scanner tests passed | Hosted delegation and portable registry remain in sync |
 | `node --import tsx scripts/check-static-convex-parity.ts` | Passed | 347 frontend writes: 329 handled, 18 intentional offline no-ops, zero pending/unimplemented |
 | `node --import tsx scripts/check-record-validation.ts` | Passed | Native/local record validation for the exercised documents, people, grants, financial and custody records |
+| `node --import tsx scripts/check-stage2-enforced.ts` | 21/21 suites passed; exit 0 in 19.246 seconds | Access enforcement, identity binding, snapshot roundtrip, tenancy, accounting, equity, meetings, documents, connectors and integrated organization flows |
+| Voting-power and static corporation people-register checks | Passed | The downstream domain checks skipped by the initial failed CI run also pass; the equity-ledger check passes inside the enforced runner |
+| Portable conformance matrix in GitHub Actions | 987 registered functions; 0 divergent results | 441 exercised query/mutation cases and 546 consistent rejection cases agree across the compared runtimes |
 | `npm run build` | Passed | Convex TypeScript, project TypeScript and Vite production build; Vite completed in 39.85 seconds |
 | `npm run test:entity-sweep` with the available Chromium executable | 22/22 tests passed | Guided setup, complete route inventory, entity-copy assertions, privacy conditional-state assertions and uncaught-error checks |
 | `git diff --check` | Passed | No patch whitespace errors |
 
 The production build emitted Vite's warning about chunks larger than 1000 kB after minification. This was a warning, not a failed build; this change does not establish a performance budget or redesign the application's large editor/dependency bundles.
+
+## Final portability corrections and CI
+
+The first published implementation commit (`d6b2b35acb1ff164683fa36d40c460674bd94765`) passed the complete [legal-governance workflow](https://github.com/ahzs645/societyer/actions/runs/38170071802), including the production build. Its [portable workflow](https://github.com/ahzs645/societyer/actions/runs/38170071815) passed the conformance matrix, authorization and earlier checks, then found an outdated snapshot fixture expecting the former annual-packet name. Once that fixture was corrected, the local full enforced runner also exposed the stale generated Stage 2 function inventory.
+
+The follow-up changes only the fixture, derived inventory and documentation. The roundtrip test now verifies that the same annual preparation precedent preserves its preparation disclaimer, template links and source provenance through export/import. Regenerating the 2,130-entry inventory adds or updates ten entries for actual authenticated endpoints and ID arguments. No access classification, leak baseline or suppression changed.
+
+The final local enforced run exited 0 after all 21 suites. Its tenancy check recorded 3,719 blocked attempts, zero leaked reads, zero leaked writes and zero new leaks. The existing harness also reports 11 error and 1,217 not-applicable cases; these are not counted as successfully exercised authorization cases. The live [PR checks](https://github.com/ahzs645/societyer/pull/60/checks) show both workflows for the latest published revision. The machine-readable record below distinguishes the initial CI observations from the corrected local run instead of describing the initially failed portability workflow as a pass.
 
 ## Evidence and authorization coverage
 
@@ -79,6 +90,9 @@ npm run test:legal
 npm run test:portable-manifest
 node --import tsx scripts/check-static-convex-parity.ts
 node --import tsx scripts/check-record-validation.ts
+node --import tsx scripts/check-stage2-enforced.ts
+node --import tsx scripts/check-voting-power.ts
+node --import tsx scripts/check-static-corporation-people-register.ts
 npm run build
 npm run test:entity-sweep
 ```
