@@ -210,6 +210,8 @@ export const policyTables = {
     completedAt: v.optional(v.string()),
     completedByUserId: v.optional(v.id("users")),
     completionNote: v.optional(v.string()),
+    // Steps ticked off inside the task (see shared/taskChecklist.ts).
+    checklist: v.optional(v.array(v.object({ id: v.string(), title: v.string(), done: v.boolean() }))),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"])

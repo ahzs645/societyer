@@ -1379,7 +1379,7 @@ select.record-table__menu-select,
 // (`--{name}-4`, `--{name}-11`, `--{name}-7`) so every tone automatically
 // flips when `.dark` is applied to `<html>`. Do NOT hard-code hex values
 // here — that breaks dark mode.
-$chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink", "violet");
+$chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink", "violet", "orange", "yellow");
 
 // Table-cell chip — 20px tall, pill radius (matches `.badge`/`.pill` so
 // every chip across the app shares one shape), 8px horiz padding. No icon

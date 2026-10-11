@@ -16,6 +16,7 @@ import {
   Table2,
   X,
   ListChecks,
+  List,
 } from "lucide-react";
 import {
   useRecordTableIsDirty,
@@ -52,6 +53,8 @@ function resetScrollForViewSwitch() {
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
+export type TableListViewOption = { active: boolean; onSelect: () => void; onLeave: () => void };
+
 export function RecordTableToolbar({
   icon,
   label,
@@ -62,6 +65,7 @@ export function RecordTableToolbar({
   onSaveView,
   onSaveAsView,
   actions,
+  listView,
 }: {
   icon?: ReactNode;
   label: string;
@@ -80,6 +84,12 @@ export function RecordTableToolbar({
   // something (filters, sort, columns, density).
   onSaveAsView?: (name: string) => void | Promise<unknown>;
   actions?: ReactNode;
+  /**
+   * Adds a "List view" button ahead of the table/kanban/calendar switch for
+   * pages that render their own grouped list. While it is active the page
+   * owns the body; choosing any other type calls `onLeave`.
+   */
+  listView?: TableListViewOption;
 }) {
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
@@ -334,10 +344,25 @@ export function RecordTableToolbar({
         )}
 
         <div className="record-table__segmented" aria-label="View type">
+          {listView && (
+            <button
+              type="button"
+              className={listView.active ? "is-active" : ""}
+              aria-pressed={listView.active}
+              onClick={() => {
+                listView.onSelect();
+                resetScrollForViewSwitch();
+              }}
+              title={t("recordTable.listView", "List view")}
+            >
+              <List size={12} />
+            </button>
+          )}
           <button
             type="button"
-            className={viewType === "table" ? "is-active" : ""}
+            className={!listView?.active && viewType === "table" ? "is-active" : ""}
             onClick={() => {
+              listView?.onLeave();
               handle.get().setType("table");
               resetScrollForViewSwitch();
             }}
@@ -347,8 +372,9 @@ export function RecordTableToolbar({
           </button>
           <button
             type="button"
-            className={viewType === "kanban" || viewType === "board" ? "is-active" : ""}
+            className={!listView?.active && (viewType === "kanban" || viewType === "board") ? "is-active" : ""}
             onClick={() => {
+              listView?.onLeave();
               const firstField = kanbanFieldMetadataId ?? selectableKanbanFields[0]?.fieldMetadataId;
               handle.get().setType("kanban");
               if (firstField) handle.get().setKanbanFieldMetadataId(firstField);
@@ -360,8 +386,9 @@ export function RecordTableToolbar({
           </button>
           <button
             type="button"
-            className={viewType === "calendar" ? "is-active" : ""}
+            className={!listView?.active && viewType === "calendar" ? "is-active" : ""}
             onClick={() => {
+              listView?.onLeave();
               const firstField = calendarFieldMetadataId ?? selectableCalendarFields[0]?.fieldMetadataId;
               handle.get().setType("calendar");
               if (firstField) handle.get().setCalendarFieldMetadataId(firstField);

@@ -64,6 +64,17 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
     ],
   },
   {
+    id: "tasks",
+    label: "Tasks list",
+    items: [
+      { keys: ["N"], label: "New task" },
+      { keys: ["↑", "↓"], label: "Move between tasks" },
+      { keys: ["Enter"], label: "Open the focused task" },
+      { keys: ["Space"], label: "Select the focused task" },
+      { keys: ["Enter"], label: "Add the typed task and start the next one" },
+    ],
+  },
+  {
     id: "menus",
     label: "Dropdowns & menus",
     items: [

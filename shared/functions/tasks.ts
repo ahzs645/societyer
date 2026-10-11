@@ -10,6 +10,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { HISTORICAL_ACTION_TAG, PROMOTED_ACTION_TAG, TASK_STATUSES, actionTitleKey, isHistoricalSourceAction, sourceAssigneeFromTitle } from "../taskStatus";
+import { normalizeTaskChecklist, type TaskChecklistItem } from "../taskChecklist";
 
 /** B6: an agenda item must belong to the task's meeting (or any meeting of the society when none is set). */
 async function assertAgendaItem(ctx: PortableMutationCtx, agendaItemId: string, societyId: string, meetingId?: string) {
@@ -115,6 +116,7 @@ export async function taskCreate(
     commitmentId?: string;
     eventId?: string;
     tags: string[];
+    checklist?: TaskChecklistItem[];
   },
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
@@ -134,6 +136,7 @@ export async function taskCreate(
   }
   const id = await ctx.db.insert("tasks", {
     ...args,
+    ...(args.checklist ? { checklist: normalizeTaskChecklist(args.checklist) } : {}),
     createdAtISO: new Date().toISOString(),
   });
   await ctx.db.insert("activity", {
@@ -179,6 +182,7 @@ export async function taskUpdate(
       completedAt?: string;
       completedByUserId?: string;
       completionNote?: string;
+      checklist?: TaskChecklistItem[];
       clearMeetingId?: boolean;
     };
   },
@@ -203,6 +207,7 @@ export async function taskUpdate(
   }
   const { clearMeetingId, clearAssigneePersonId, clearAgendaItemId, ...rest } = patch;
   const next: Record<string, unknown> = { ...rest };
+  if (patch.checklist) next.checklist = normalizeTaskChecklist(patch.checklist);
   if (clearAgendaItemId || clearMeetingId) next.agendaItemId = undefined;
   if (clearAssigneePersonId) next.assigneePersonId = undefined;
   // `undefined` fields are stripped from the wire, so unlinking arrives as an

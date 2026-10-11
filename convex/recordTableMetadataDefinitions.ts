@@ -3571,20 +3571,14 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "dueDate", size: 130 },
       ],
     },
-    // Review queues are ordinary filtered views, so they can be tweaked,
-    // cleared or saved like any other table filter.
     extraViews: [
       {
-        name: "Needs source review",
-        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
+        name: "Open work",
+        filters: [{ fieldName: "status", operator: "in", value: ["Todo", "InProgress", "Blocked"] }],
       },
       {
-        name: "Held, no minutes",
-        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
-      },
-      {
-        name: "Same-day duplicates",
-        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
+        name: "Blocked",
+        filters: [{ fieldName: "status", operator: "in", value: ["Blocked"] }],
       },
       {
         name: "Board",

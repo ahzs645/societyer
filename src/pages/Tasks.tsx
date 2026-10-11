@@ -1,8 +1,8 @@
 import { ActionRegisterCard } from "../components/ActionRegisterCard";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUpRight, Check, History, ListTodo, MoreHorizontal, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { ArrowUpRight, Check, History, ListTodo, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2, Wand2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { isHistoricalSourceAction, taskStatusLabel as sharedTaskStatusLabel } from "../../shared/taskStatus";
@@ -37,6 +37,25 @@ import {
   type TaskFormValue,
 } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { TaskListView } from "../features/tasks/TaskListView";
+import { TaskBoardView } from "../features/tasks/TaskBoardView";
+import { TaskScopeBar } from "../features/tasks/TaskScopeBar";
+import { TaskChecklist } from "../features/tasks/TaskChecklist";
+import { TaskDiscussion, TaskStateBanner } from "../features/tasks/TaskDetailExtras";
+import type { TaskViewActions } from "../features/tasks/TaskMenus";
+import {
+  isClosedStatus,
+  isOpenStatus,
+  isoDay,
+  isMine,
+  startOfToday,
+  taskInScope,
+  type TaskGroupBy,
+  type TaskLinkKind,
+  type TaskRecord,
+  type TaskScope,
+} from "../features/tasks/taskModel";
+import type { TaskChecklistItem } from "../../shared/taskChecklist";
 import { useSociety } from "../hooks/useSociety";
 import { formatDate, isPastDue } from "../lib/format";
 import { useIsMobile } from "../lib/useIsMobile";
@@ -45,21 +64,25 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 type EditableTaskForm = TaskFormValue & {
   _id?: Id<"tasks">;
   tags?: string[];
+  checklist: TaskChecklistItem[];
 };
 
-type TaskRecord = Doc<"tasks"> & {
-  _searchText: string;
-  responsibleUserIdsLabel?: string;
-  committeeIdLabel?: string;
-  meetingIdLabel?: string;
-  goalIdLabel?: string;
-  filingIdLabel?: string;
-  workflowIdLabel?: string;
-  documentIdLabel?: string;
-  commitmentIdLabel?: string;
-  completedByUserIdLabel?: string;
-  linkedTo: TaskLinkKind[];
-};
+type TaskLayout = "list" | "engine";
+const LAYOUT_KEY = "societyer:tasks:layout";
+const GROUP_KEY = "societyer:tasks:group-by";
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try { window.localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
 
 export function taskStatusLabel(status: string) {
   return sharedTaskStatusLabel(status);
@@ -96,6 +119,13 @@ export function TasksPage() {
   const [form, setForm] = useState<EditableTaskForm | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Current tasks open as a grouped list; the record views (table, board,
+  // calendar) stay one click away in the toolbar's view switch.
+  const [layout, setLayoutState] = useState<TaskLayout>(() => readStored(LAYOUT_KEY, ["list", "engine"] as const, "list"));
+  const [groupBy, setGroupByState] = useState<TaskGroupBy>(() => readStored(GROUP_KEY, ["status", "priority", "due", "owner", "none"] as const, "status"));
+  const [scope, setScope] = useState<TaskScope>("all");
+  const setLayout = useCallback((next: TaskLayout) => { setLayoutState(next); writeStored(LAYOUT_KEY, next); }, []);
+  const setGroupBy = useCallback((next: TaskGroupBy) => { setGroupByState(next); writeStored(GROUP_KEY, next); }, []);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -247,9 +277,24 @@ export function TasksPage() {
 
   // Committee, goal and link filtering is the table's own Filter (see
   // TaskUrlFilters for deep links); only the register split stays here.
-  const pageFilteredRecords = useMemo(
+  const registerRecords = useMemo(
     () => records.filter((task) => (register === "historical") === isHistoricalSourceAction(task)),
     [records, register],
+  );
+  const scopeCounts = useMemo(() => {
+    const open = registerRecords.filter((task) => isOpenStatus(task.status));
+    return {
+      all: registerRecords.length,
+      mine: open.filter((task) => isMine(task, currentUserId)).length,
+      overdue: registerRecords.filter((task) => taskInScope(task, "overdue", currentUserId)).length,
+      week: registerRecords.filter((task) => taskInScope(task, "week", currentUserId)).length,
+      unowned: registerRecords.filter((task) => taskInScope(task, "unowned", currentUserId)).length,
+    } satisfies Record<TaskScope, number>;
+  }, [registerRecords, currentUserId]);
+  const activeScope: TaskScope = register === "current" ? scope : "all";
+  const pageFilteredRecords = useMemo(
+    () => (activeScope === "all" ? registerRecords : registerRecords.filter((task) => taskInScope(task, activeScope, currentUserId))),
+    [registerRecords, activeScope, currentUserId],
   );
   const registerCounts = useMemo(() => {
     const historical = records.filter(isHistoricalSourceAction).length;
@@ -264,9 +309,25 @@ export function TasksPage() {
         goalId: requestedGoalId || undefined,
       }),
       tags: [],
+      checklist: [],
     });
     setOpen(true);
   }, [requestedCommitteeId, requestedGoalId, canManage]);
+
+  // "N" starts a new task while the page has focus (not while typing or in a dialog).
+  useEffect(() => {
+    if (!canManage) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "n" || event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='menu'], [role='listbox']")) return;
+      if (document.querySelector("[role='dialog'][aria-modal='true']")) return;
+      event.preventDefault();
+      openNew();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canManage, openNew]);
 
   useEffect(() => {
     if (!canManage || !openNewFromUrl || open || society === undefined || society === null) return;
@@ -322,8 +383,21 @@ export function TasksPage() {
       }),
       _id: task._id,
       tags: task.tags ?? [],
+      checklist: task.checklist ?? [],
     });
     setOpen(true);
+  };
+
+  /** An existing task's checklist saves on every change; a new task's saves with the form. */
+  const changeChecklist = async (items: TaskChecklistItem[]) => {
+    const id = form?._id;
+    setForm((previous) => (previous ? { ...previous, checklist: items } : previous));
+    if (!id || !canManage) return;
+    try {
+      await update({ id, patch: { checklist: items } });
+    } catch (error) {
+      toast.error("Could not save the checklist", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   const save = async () => {
@@ -404,6 +478,7 @@ export function TasksPage() {
           : undefined,
         eventId: form.eventId || undefined,
         tags: form.tags ?? [],
+        checklist: form.checklist.length ? form.checklist : undefined,
       });
       setOpen(false);
       toast.success("Task created", form.title);
@@ -504,7 +579,11 @@ export function TasksPage() {
           completedByUserId: currentUserId ?? undefined,
         },
       });
-      toast.success("Task completed", task.title);
+      const previous = task.status;
+      toast.success("Task completed", {
+        description: task.title,
+        action: { label: "Undo", onClick: () => void update({ id: task._id, patch: { status: previous } }).catch(() => toast.error("Could not reopen the task")) },
+      });
     } catch (error) {
       toast.error("Could not complete task", error instanceof Error ? error.message : "Please try again.");
     }
@@ -594,6 +673,75 @@ export function TasksPage() {
     }
   };
 
+  const viewActions: TaskViewActions = {
+    canManage,
+    open: openEdit,
+    setStatus: async (task, status) => {
+      if (status === task.status) return;
+      if (status === "Done") return markComplete(task);
+      try {
+        await update({ id: task._id, patch: { status } });
+        if (isClosedStatus(task.status) && !isClosedStatus(status)) toast.success("Task reopened", task.title);
+      } catch (error) {
+        toast.error("Could not change the status", error instanceof Error ? error.message : "Please try again.");
+      }
+    },
+    setPriority: async (task, priority) => {
+      if (priority === task.priority) return;
+      try { await update({ id: task._id, patch: { priority } }); }
+      catch (error) { toast.error("Could not change the priority", error instanceof Error ? error.message : "Please try again."); }
+    },
+    setDue: async (task, dueDate) => {
+      try { await update({ id: task._id, patch: { dueDate } }); }
+      catch (error) { toast.error("Could not change the due date", error instanceof Error ? error.message : "Please try again."); }
+    },
+    remove: (task) => confirmDelete(task._id, task.title),
+    promote: canManage ? promoteToCurrent : undefined,
+    quickAdd: async (title, defaults) => {
+      if (!canManage) return false;
+      try {
+        await create({
+          societyId: society._id,
+          title,
+          status: defaults.status ?? "Todo",
+          priority: defaults.priority ?? "Medium",
+          dueDate: defaults.dueDate || undefined,
+          committeeId: requestedCommitteeId ? (requestedCommitteeId as Id<"committees">) : undefined,
+          goalId: requestedGoalId ? (requestedGoalId as Id<"goals">) : undefined,
+          // Added while looking at "Assigned to me": keep it in view.
+          responsibleUserIds: activeScope === "mine" && currentUserId ? [currentUserId] : undefined,
+          tags: [],
+        });
+        toast.success("Task added", title);
+        return true;
+      } catch (error) {
+        toast.error("Could not add the task", error instanceof Error ? error.message : "Please try again.");
+        return false;
+      }
+    },
+  };
+
+  const bulkSetStatus = async (selectedRecords: TaskRecord[], status: string) => {
+    const changing = selectedRecords.filter((task) => task.status !== status && !isHistoricalSourceAction(task));
+    let failures = 0;
+    for (const task of changing) {
+      try { await update({ id: task._id, patch: { status, completedByUserId: status === "Done" && currentUserId ? currentUserId : undefined } }); }
+      catch { failures += 1; }
+    }
+    const succeeded = changing.length - failures;
+    if (succeeded > 0) {
+      toast.success(`${succeeded} task${succeeded === 1 ? "" : "s"} ${status === "Done" ? "completed" : "reopened"}`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            for (const task of changing) void update({ id: task._id, patch: { status: task.status } }).catch(() => undefined);
+          },
+        },
+      });
+    }
+    if (failures > 0) toast.error(`${failures} task${failures === 1 ? "" : "s"} could not be changed`);
+  };
+
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   return (
     <div className="page">
@@ -621,6 +769,16 @@ export function TasksPage() {
           <History size={12} /> History ({registerCounts.historical})
         </button>
       </div>
+      {register === "current" && (
+        <TaskScopeBar
+          scope={scope}
+          onScope={setScope}
+          counts={scopeCounts}
+          groupBy={groupBy}
+          onGroupBy={setGroupBy}
+          showGrouping={layout === "list"}
+        />
+      )}
       </div>
       {register === "historical" && (
         <div className="card" style={{ marginBottom: 12 }}>
@@ -662,7 +820,9 @@ export function TasksPage() {
             views={tableData.views}
             currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
             onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onViewPicked={() => setLayout("engine")}
             onOpenFilter={() => setFilterOpen((value) => !value)}
+            listView={register === "current" ? { active: layout === "list", onSelect: () => setLayout("list"), onLeave: () => setLayout("engine") } : undefined}
           />
           <RecordTableFilterPopover
             open={filterOpen}
@@ -671,6 +831,18 @@ export function TasksPage() {
           <TaskUrlFilters committeeId={requestedCommitteeId} goalId={requestedGoalId} />
           <RecordTableFilterChips />
 
+          {register === "current" && layout === "list" ? (
+            tableData.loading || tasks === undefined ? (
+              <div className="record-table__loading">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="record-table__loading-row" />
+                ))}
+              </div>
+            ) : (
+              <TaskListView groupBy={groupBy} actions={viewActions} hasTasks={registerRecords.length > 0} />
+            )
+          ) : (
+          <TaskBoardSwitch enabled={register === "current"} actions={viewActions}>
           {isMobile ? (
             tableData.loading || tasks === undefined ? (
               <div className="record-table__loading">
@@ -743,9 +915,27 @@ export function TasksPage() {
               )}
             />
           )}
+          </TaskBoardSwitch>
+          )}
 
           <RecordTableBulkBar
             actions={canManage ? [
+              ...(register === "current"
+                ? [
+                    {
+                      id: "complete",
+                      label: "Mark done",
+                      icon: <Check size={12} />,
+                      onRun: (_ids: string[], selectedRecords: unknown[]) => bulkSetStatus(selectedRecords as TaskRecord[], "Done"),
+                    },
+                    {
+                      id: "reopen",
+                      label: "Reopen",
+                      icon: <RotateCcw size={12} />,
+                      onRun: (_ids: string[], selectedRecords: unknown[]) => bulkSetStatus((selectedRecords as TaskRecord[]).filter((task) => isClosedStatus(task.status)), "Todo"),
+                    },
+                  ]
+                : []),
               {
                 id: "delete",
                 label: bulkDeleting ? "Deleting…" : "Delete",
@@ -820,6 +1010,17 @@ export function TasksPage() {
             )}
             {form._id && (() => {
               const task = records.find((record) => record._id === form._id);
+              return task ? (
+                <TaskStateBanner
+                  task={task}
+                  canManage={canManage}
+                  onReopen={() => { void viewActions.setStatus(task, "Todo"); setForm((previous) => previous ? { ...previous, status: "Todo" } : previous); }}
+                  onRescheduleToday={() => { const today = isoDay(startOfToday()); void viewActions.setDue(task, today); setForm((previous) => previous ? { ...previous, dueDate: today } : previous); }}
+                />
+              ) : null;
+            })()}
+            {form._id && (() => {
+              const task = records.find((record) => record._id === form._id);
               return task && (isHistoricalSourceAction(task) || task.sourceObservations?.length || task.meetingId) ? (
                 <HistoricalActionSource
                   task={task}
@@ -841,11 +1042,29 @@ export function TasksPage() {
               mode={form._id ? "edit" : "create"}
             />
             </fieldset>
+            <TaskChecklist items={form.checklist} onChange={(items) => void changeChecklist(items)} readOnly={!canManage} />
+            {form._id && <TaskDiscussion taskId={String(form._id)} />}
           </>
         )}
       </Drawer>
     </div>
   );
+}
+
+/**
+ * The toolbar's Board view: current tasks get the task board (grouped by the
+ * view's kanban field when it is status or priority); anything else falls
+ * through to the generic record views.
+ */
+function TaskBoardSwitch({ enabled, actions, children }: { enabled: boolean; actions: TaskViewActions; children: ReactNode }) {
+  const viewType = useRecordTableState((state) => state.type);
+  const savedView = useRecordTableState((state) => state.savedView);
+  const columns = useRecordTableState((state) => state.columns);
+  // A saved board keeps its own field; switching to Board ad hoc groups by status.
+  const savedField = savedView && (savedView.type === "kanban" || savedView.type === "board") ? savedView.kanbanFieldMetadataId : undefined;
+  const fieldName = columns.find((column) => column.fieldMetadataId === savedField)?.field.name ?? "status";
+  if (!enabled || (viewType !== "kanban" && viewType !== "board") || (fieldName !== "status" && fieldName !== "priority")) return <>{children}</>;
+  return <TaskBoardView by={fieldName} actions={actions} />;
 }
 
 function TaskPhoneList({
@@ -1020,8 +1239,7 @@ function userNames(
     .join(", ");
 }
 
-const TASK_LINK_KINDS = ["meeting", "goal", "filing", "workflow", "document", "commitment", "event"] as const;
-type TaskLinkKind = (typeof TASK_LINK_KINDS)[number];
+const TASK_LINK_KINDS: readonly TaskLinkKind[] = ["meeting", "goal", "filing", "workflow", "document", "commitment", "event"];
 
 /** What a task is linked to, as values of the read-only "Linked to" column. */
 function linkedKinds(task: Doc<"tasks">): TaskLinkKind[] {

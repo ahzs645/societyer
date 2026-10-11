@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { usePersistView } from "../hooks/usePersistView";
-import { RecordTableToolbar } from "./RecordTableToolbar";
+import { RecordTableToolbar, type TableListViewOption } from "./RecordTableToolbar";
 
 /**
  * Toolbar wrapper that wires up `usePersistView` so Save / Discard
@@ -22,6 +22,8 @@ export function RecordTableViewToolbar({
   onChangeView,
   onOpenFilter,
   actions,
+  listView,
+  onViewPicked,
 }: {
   societyId: Id<"societies">;
   objectMetadataId: Id<"objectMetadata">;
@@ -32,6 +34,10 @@ export function RecordTableViewToolbar({
   onChangeView?: (viewId: string) => void;
   onOpenFilter?: () => void;
   actions?: ReactNode;
+  /** See RecordTableToolbar: a page-owned grouped list ahead of the view types. */
+  listView?: TableListViewOption;
+  /** Called when the user picks or saves a view (not when one is restored on load). */
+  onViewPicked?: (viewId: string) => void;
 }) {
   const { saveCurrentView, saveAsNewView } = usePersistView({ societyId, objectMetadataId });
   const storageKey = `societyer:record-view:${societyId}:${objectMetadataId}`;
@@ -50,6 +56,7 @@ export function RecordTableViewToolbar({
     ? (viewId: string) => {
         rememberView(storageKey, viewId);
         onChangeView(viewId);
+        onViewPicked?.(viewId);
       }
     : undefined;
 
@@ -68,6 +75,7 @@ export function RecordTableViewToolbar({
         return viewId;
       }}
       actions={actions}
+      listView={listView}
     />
   );
 }

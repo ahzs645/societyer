@@ -43,6 +43,7 @@
 @use "views-documents"; // pdf/signature, attendance, org chart, source docs, notes/audio
 @use "views-governance"; // bylaw rules, motion library
 @use "views-widgets"; // tabs, progress, kanban, priority, timeline, activity, segmented
+@use "views-tasks"; // task status/priority icons, grouped list, task board, checklist, scopes
 @use "views-import"; // import sessions: scan, review, session rows
 @use "views-documents-review"; // documents facets/markers, document detail panels, import review queue
 @use "views-workflow"; // workflow detail/topbar/canvas/nodes/sidepanel
