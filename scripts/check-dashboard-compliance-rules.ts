@@ -8,6 +8,10 @@ let fixtureCount = 0;
 
 for (const rule of bcSocietiesDashboardComplianceRulePack.rules) {
   assert.ok(rule.id, "rule id is required");
+  assert.ok(["bc_society", "bc_organization", "general"].includes(rule.audience), `${rule.id} audience is required`);
+  if (/Societies Act|Society bylaws|model bylaws/i.test(rule.citation)) {
+    assert.equal(rule.audience, "bc_society", `${rule.id}: Societies Act rules must be BC-society-only`);
+  }
   assert.ok(rule.jurisdiction, `${rule.id} jurisdiction is required`);
   assert.ok(rule.societyType, `${rule.id} society type is required`);
   assert.ok(rule.effectiveDate, `${rule.id} effective date is required`);
