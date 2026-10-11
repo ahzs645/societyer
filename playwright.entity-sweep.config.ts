@@ -5,7 +5,8 @@ import { defineConfig } from "@playwright/test";
 // Playwright loads the config in every worker, so the flag reaches the spec.
 process.env.SOCIETYER_ENTITY_SWEEP = "1";
 
-const PORT = 4183;
+// Overridable so parallel checkouts on one machine do not collide.
+const PORT = Number(process.env.ENTITY_SWEEP_PORT ?? 4183);
 
 /**
  * Entity copy sweep: builds a BC corporation, a CBCA corporation, an OBCA

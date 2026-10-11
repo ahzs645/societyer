@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+// Overridable so parallel checkouts on one machine do not collide.
+const PORT = Number(process.env.INTERFACE_AUDIT_PORT ?? 4177);
+
 export default defineConfig({
   testDir: "tests",
   testMatch: "interface-*.spec.ts",
@@ -11,7 +14,7 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"], ["json", { outputFile: process.env.INTERFACE_AUDIT_REPORT ?? "tmp/interface-results.json" }]],
   use: {
-    baseURL: process.env.INTERFACE_AUDIT_URL ?? "http://127.0.0.1:4177",
+    baseURL: process.env.INTERFACE_AUDIT_URL ?? `http://127.0.0.1:${PORT}`,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     // Machines with a preinstalled Chromium (rather than `playwright install`)
@@ -19,8 +22,8 @@ export default defineConfig({
     launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
   },
   webServer: process.env.INTERFACE_AUDIT_URL ? undefined : {
-    command: "VITE_E2E_TEST_HARNESS=1 npx vite --host 127.0.0.1 --port 4177 --strictPort",
-    port: 4177,
+    command: `VITE_E2E_TEST_HARNESS=1 npx vite --host 127.0.0.1 --port ${PORT} --strictPort`,
+    port: PORT,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

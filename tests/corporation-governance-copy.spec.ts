@@ -77,7 +77,10 @@ test("governance and people pages show no Societies Act copy for a CBCA corporat
   expect(agmText).not.toContain("14–60 days before meeting");
 
   await visit("/app/attestations", /Director attestations/);
-  await expect(page.getByText(/have not yet attested/)).toBeVisible();
+  // Corporate statutes impose no annual director attestation, so a missing one
+  // is an informational practice note rather than a statutory warning.
+  await expect(page.getByText(/1 director have no optional annual attestation recorded for \d{4}\./)).toBeVisible();
+  await expect(page.getByText(/have not yet attested/)).toHaveCount(0);
   expect(await pageText(page)).not.toMatch(SOCIETY_ONLY);
 
   for (const [path, heading] of [
@@ -94,7 +97,7 @@ test("governance and people pages show no Societies Act copy for a CBCA corporat
   }
   // s.56 is the Societies Act conflict section.
   await visit("/app/conflicts", "Conflicts of interest");
-  await expect(page.getByText("Disclosures of directors' and officers' material interests.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Directors’ disclosed interests and the recorded handling of each matter.", { exact: true })).toBeVisible();
   expect(await pageText(page)).not.toContain("(s.56)");
 
   expect(errors).toEqual([]);
@@ -170,11 +173,17 @@ test("a CBCA corporation sees corporate profile, communications, workflow, resea
   // Item 8: eligible voters come from the share register (Sera holds 100 voting shares).
   await visit("/app/written-resolutions", "Written resolutions");
   await page.getByRole("button", { name: "New resolution" }).click();
-  await expect(page.getByText("Shareholders holding voting shares on the share register: 1", { exact: false })).toBeVisible();
+  // The drawer previews the electorate it will freeze from the share register:
+  // one voting shareholder (Sera). CBCA s.142 written resolutions need every
+  // shareholder entitled to vote, so the count is in people, not shares.
+  const resolutionDrawer = page.getByRole("dialog", { name: "New written resolution" });
+  await expect(resolutionDrawer.getByRole("button", { name: "Decision body", exact: true })).toContainText("Shareholders");
+  await expect(resolutionDrawer.getByText(/^1 eligible (person|people) · 1 (person|people)\. Required: 1 (person|people)\.$/)).toBeVisible();
   await page.keyboard.press("Escape");
   await visit("/app/elections", "Elections");
   await expect(page.getByTestId("election-voter-source")).toContainText("Shareholders holding voting shares on the share register: 1");
-  await expect(page.getByText("Shareholder elections with anonymous ballots.", { exact: true })).toBeVisible();
+  // Corporate elections weight ballots by shares and verify proxies/representatives.
+  await expect(page.getByText("Shareholder elections with verified representation and share-weighted ballots.", { exact: true })).toBeVisible();
 
   await visit("/app/point-in-time-register", "Point-in-time register");
   await expect(page.getByRole("heading", { name: /^Shareholders \(\d+\)$/ })).toBeVisible();
@@ -196,9 +205,20 @@ test("a BC company keeps BC privacy wording without society-only fields", async 
   await setupCorporation(page, "CA-BC");
   const visit = visitor(page, BC_COMPANY_NAME);
 
+  // BC PIPA s. 3(1) applies to every organization unless federal law governs,
+  // so a BC company with no recorded privacy facts presumes it.
   await visit("/app", "Dashboard");
   await openAllSidebarGroups(page);
-  await expect(page.locator(".sidebar").first().getByRole("link", { name: "Privacy (PIPA)", exact: true })).toBeVisible();
+  const sidebar = page.locator(".sidebar").first();
+  await expect(sidebar.getByRole("link", { name: "Privacy (PIPA)", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "PIPA training", exact: true })).toBeVisible();
+
+  // The assessment labels the presumption and asks for the facts that could displace it.
+  await visit("/app/privacy", "Privacy (BC PIPA — presumed: confirm facts)");
+  const assessment = page.getByRole("region", { name: "Privacy-law scope", exact: true });
+  await expect(assessment.locator("summary").filter({ hasText: /^BC PIPA Presumed: confirm facts$/ })).toHaveCount(1);
+  await expect(assessment).not.toContainText("Assessed as applicable");
+  await expect(assessment).toContainText("federal work, undertaking or business");
 
   await visit("/app/society", "Organization profile");
   await expect(page.getByText("Registered CRA charity", { exact: true })).toHaveCount(0);

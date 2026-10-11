@@ -15,7 +15,8 @@ const dialogCases: ReadonlyArray<readonly [string, string, string, string?]> = [
   ["corporate-history", "Add", "Name", "Name change"],
   ["significant-individuals", "Record step", "Individual name"],
   ["policies", "New policy", "Policy name"],
-  ["auditors", "New appointment", "Firm name"],
+  // An auditor can be an individual public accountant or a firm.
+  ["auditors", "New appointment", "Auditor or firm name"],
   ["court-orders", "Record order", "Title"],
   ["inspections", "Log inspection", "Inspector name"],
   ["pipa-training", "Log training", "Participant"],
@@ -41,7 +42,8 @@ const dialogCases: ReadonlyArray<readonly [string, string, string, string?]> = [
 
 for (const width of [320, 390, 768, 1440]) {
   test(`legal record forms remain usable at ${width}px`, async ({ page }) => {
-    test.setTimeout(120_000);
+    // 28 dialogs plus three page checks per width; shared CI runners need headroom.
+    test.setTimeout(300_000);
     await page.setViewportSize({ width, height: 900 });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
