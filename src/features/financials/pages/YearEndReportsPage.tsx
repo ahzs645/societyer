@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSociety } from "../../../hooks/useSociety";
-import { isCorporation } from "../../../../shared/organizationDomain";
+import { organizationCopy } from "../../../lib/organizationCopy";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { Badge, Field } from "../../../components/ui";
 import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../../../lib/format";
@@ -278,8 +278,8 @@ export function YearEndReportsPage() {
         subtitle="Assemble and export the year-end financial reports."
         info={
           // BC Community Gaming Grants are a nonprofit program; keep that
-          // framing out of a corporation workspace.
-          isCorporation(society)
+          // framing out of a non-society workspace.
+          !organizationCopy(society).society
             ? <p>Covers the annual statement, restricted funds, program actuals and budget, and a readiness checklist.</p>
             : <p>Covers the annual statement, restricted funds, BC Community Gaming Grants actuals and budget, and a readiness checklist.</p>
         }
@@ -464,7 +464,7 @@ export function YearEndReportsPage() {
                 <p className="muted">Loading…</p>
               ) : statements.length === 0 ? (
                 <p className="muted">
-                  {isCorporation(society)
+                  {!organizationCopy(society).society
                     ? "No program statements yet. Create one to track grant program actuals and budget."
                     : "No program statements yet. Create one to reproduce the BC Community Gaming Grants form."}
                 </p>

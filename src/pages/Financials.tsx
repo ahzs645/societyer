@@ -20,7 +20,7 @@ import { Tabs } from "../components/primitives";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
-import { isCorporation } from "../../shared/organizationDomain";
+import { appliesBcSocietyRules } from "../../shared/entityRuleScope";
 import { useConfirm } from "../components/Modal";
 import { hasErrors, validateBudgetLineInput, type FieldErrors } from "../../shared/recordValidation";
 import {
@@ -365,8 +365,8 @@ export function FinancialsPage() {
               Year-over-year figures come from each year's recorded financial statements, so they may differ from the
               ledger if a statement predates recent postings.
             </p>
-            {/* The s.36 remuneration disclosure is a Societies Act duty; a corporation does not see it. */}
-            {!isCorporation(society) && <p>Societies must disclose remuneration of $75,000 or more in the AGM financial statements (s.36).</p>}
+            {/* The s.36 remuneration disclosure is a Societies Act duty; other entities do not see it. */}
+            {appliesBcSocietyRules(society) && <p>Societies must disclose remuneration of $75,000 or more in the AGM financial statements (s.36).</p>}
           </>
         }
         actions={
@@ -859,7 +859,7 @@ export function FinancialsPage() {
 
       {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}
 
-      {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && !isCorporation(society) && (
+      {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && appliesBcSocietyRules(society) && (
         <>
           <div className="spacer-6" />
           <div className="card">

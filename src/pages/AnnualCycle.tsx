@@ -117,8 +117,8 @@ export function AnnualCyclePage() {
         title="Annual Cycle"
         icon={<ListChecks size={16} />}
         iconColor="orange"
-        subtitle={`This year's ${entity.corporation ? "annual meeting" : "AGM"}, filings and records in one checklist.`}
-        info={<p>A guided compliance view that pulls {entity.corporation ? "the annual meeting" : "AGM"}, filings, financials, records, and ongoing governance into one workflow.</p>}
+        subtitle={`This year's ${entity.annualMeeting}, filings and records in one checklist.`}
+        info={<p>A guided compliance view that pulls {entity.society ? "AGM" : "the annual meeting"}, filings, financials, records, and ongoing governance into one workflow.</p>}
         actions={
           <Select
             value={String(year)}
@@ -163,7 +163,7 @@ export function AnnualCyclePage() {
 
       <div className="stat-grid stat-grid--3 annual-cycle-stats">
         {/* votingMembers counts the society member register. */}
-        {!entity.corporation && <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
+        {entity.society && <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
         <Stat label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
         <Stat
           label="Annual report due"

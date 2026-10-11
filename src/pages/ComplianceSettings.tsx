@@ -165,7 +165,7 @@ export function ComplianceSettingsPage() {
         title="Compliance settings"
         icon={<CalendarClock size={16} />}
         iconColor="orange"
-        subtitle={`Your ${entity.corporation ? "annual meeting" : "AGM"} date and fiscal year end set the annual deadlines.`}
+        subtitle={`Your ${entity.annualMeeting} date and fiscal year end set the annual deadlines.`}
         actions={
           <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving || !canSaveSettings}>
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}

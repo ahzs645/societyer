@@ -18,7 +18,7 @@ import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { maintenanceErrorMessage, seedDemoSociety } from "./maintenanceApi";
 import type { ModuleKey } from "./modules";
-import { isCorporation } from "../../shared/organizationDomain";
+import { organizationCopy } from "./organizationCopy";
 
 export type StaticCommand = {
   id: string;
@@ -35,7 +35,7 @@ export function useStaticCommands(): StaticCommand[] {
   const toast = useToast();
   const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
   // "AGM" is society vocabulary; a corporation holds an annual meeting.
-  const corporation = isCorporation(society);
+  const meetingLabel = society ? organizationCopy(society).annualMeeting : "AGM";
 
   return useMemo<StaticCommand[]>(
     () => [
@@ -62,7 +62,7 @@ export function useStaticCommands(): StaticCommand[] {
       },
       {
         id: "action-generate-agm-package",
-        label: corporation ? "Generate annual meeting package" : "Generate AGM package",
+        label: `Generate ${meetingLabel} package`,
         icon: FileCog,
         run: () => navigate("/app/meetings?intent=generate-agm-package&type=AGM"),
       },
@@ -173,6 +173,6 @@ export function useStaticCommands(): StaticCommand[] {
           ]
         : []),
     ],
-    [corporation, navigate, seedSharedViews, society, toast],
+    [meetingLabel, navigate, seedSharedViews, society, toast],
   );
 }

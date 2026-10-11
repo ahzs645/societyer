@@ -1,6 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
-import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
+import { legalCopyForOrganization } from "../lib/legalCopy";
+import type { LegalEntityLike } from "../../shared/organizationDomain";
 
 /**
  * Personal-information notice for public intake forms. A one-line summary is
@@ -14,20 +15,24 @@ export function IntakePrivacyNotice({
   publicSlug,
   privacyOfficerName,
   contactEmail,
+  organization,
 }: {
   societyName: string;
+  /** Entity identity, so the default notice uses the right noun (society / corporation). */
+  organization?: LegalEntityLike | null;
   customNotice?: string | null;
   publicSlug?: string;
   privacyOfficerName?: string | null;
   contactEmail?: string | null;
 }) {
-  const body = customNotice?.trim() || PIPA_INTAKE_NOTICE.body;
+  const notice = legalCopyForOrganization(organization ?? { name: societyName }).intakeNotice;
+  const body = customNotice?.trim() || notice.body;
   return (
     <details className="intake-notice">
       <summary>
         <ShieldCheck size={14} aria-hidden="true" />
         <span>
-          <strong>{PIPA_INTAKE_NOTICE.title}.</strong> {societyName} uses these details only to review this request.
+          <strong>{notice.title}.</strong> {societyName} uses these details only to review this request.
         </span>
         <span className="intake-notice__more">Learn more</span>
       </summary>

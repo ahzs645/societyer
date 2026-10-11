@@ -35,6 +35,7 @@ import {
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { organizationCopy, type OrganizationCopy } from "../lib/organizationCopy";
+import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
 import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
@@ -343,7 +344,7 @@ export function Dashboard() {
         {corporation
           ? roleHolders !== undefined && <Stat label="Shareholders" value={roleHolderCounts.shareholders} icon={<Users size={14} />} tooltip="Current shareholders in the role-holder register" />
           : canRead("members:read") && <Stat label="Active members" value={counts.members} icon={<Users size={14} />} tooltip="with voting rights counted separately in members list" />}
-        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={corporation ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
+        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={!entityCopy.bcSociety ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
         {canRead("meetings:read") && <Stat label="Meetings this year" value={counts.meetingsThisYear} icon={<Calendar size={14} />} />}
         {canRead("filings:read") && <Stat label="Overdue filings" value={counts.overdueFilings} tone={counts.overdueFilings ? "danger" : "ok"} icon={<AlertTriangle size={14} />} />}
       </div>
@@ -354,7 +355,7 @@ export function Dashboard() {
             <div className="card__head">
               <h2 className="card__title">Compliance posture</h2>
               <InfoPopover label="About compliance posture">
-                <p>{corporation ? "Automated record and evidence checks." : "Automated checks against the Societies Act."} Citations and full detail are available on each item.</p>
+                <p>{automatedComplianceChecksLabel(society)}. Citations and full detail are available on each item.</p>
               </InfoPopover>
             </div>
             <div className="card__body dashboard-compliance">
@@ -566,7 +567,7 @@ export function Dashboard() {
               <div className="muted">{society.registeredOfficeAddress}</div>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                 {!corporation && society.isCharity && <Badge tone="accent">CRA charity</Badge>}
-                {!corporation && society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
+                {entityCopy.bcSociety && society.isMemberFunded && <Badge tone="info">Member-funded</Badge>}
                 {society.boardCadence && <Badge>Board meets {society.boardCadence.toLowerCase()}</Badge>}
               </div>
             </div>
@@ -770,10 +771,10 @@ function getOnboardingSteps({
     },
     {
       id: "documents",
-      title: corporation ? `Upload ${entityCopy.bcCompany ? "articles" : "articles/by-laws"}` : "Upload constitution/bylaws",
+      title: corporation ? `Upload ${entityCopy.bcCompany ? "articles" : "articles/by-laws"}` : entityCopy.society ? "Upload constitution/bylaws" : "Upload governing documents",
       description: hasCoreDocuments
         ? "Core governing documents are attached."
-        : corporation ? `Attach the ${entityCopy.governingDocuments}.` : "Attach the filed constitution and current bylaws.",
+        : entityCopy.society ? "Attach the filed constitution and current bylaws." : `Attach the ${entityCopy.governingDocuments}.`,
       to: "/app/documents",
       complete: hasCoreDocuments,
       icon: UploadCloud,
