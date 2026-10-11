@@ -6,6 +6,7 @@
 export const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Dashboard: "nav.dashboard",
   Society: "nav.society",
+  Corporation: "nav.corporation",
   "Org details": "nav.orgDetails",
   "Org history": "nav.orgHistory",
   Timeline: "nav.timeline",
