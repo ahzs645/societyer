@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
@@ -417,7 +418,7 @@ export function CorporateHistoryPage() {
             <Field label="Legislation" error={eventProblems.find((p) => /legislation/.test(p))}>
               <input
                 className="input"
-                placeholder="e.g. Societies Act"
+                placeholder={governanceVocabulary(society).isCorporation ? "e.g. Business Corporations Act" : "e.g. Societies Act"}
                 value={eventForm.legislation}
                 onChange={(e) => setEventForm({ ...eventForm, legislation: e.target.value })}
               />

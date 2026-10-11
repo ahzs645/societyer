@@ -1,3 +1,4 @@
+import { capitalize, governanceVocabulary } from "../../../lib/governanceVocabulary";
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, splitPipeTables, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
 import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
@@ -124,6 +125,10 @@ export type MinutesRenderArgs = {
   society: {
     name: string;
     incorporationNumber?: string | null;
+    /** Entity identity, so general-meeting minutes say members/society or shareholders/corporation. */
+    entityType?: string | null;
+    actFormedUnder?: string | null;
+    jurisdictionCode?: string | null;
     logoUrl?: string | null;
     letterheadUrl?: string | null;
   };
@@ -583,6 +588,9 @@ function renderFormalAgmMinutes({
 }: MinutesRenderArgs, options: Required<MinutesExportOptions>): string {
   const eh = escapeHtml;
   const meetingKind = meeting.type === "AGM" ? "Annual General Meeting" : `${meeting.type} Meeting`;
+  const vocab = governanceVocabulary(society);
+  const voters = capitalize(vocab.voterNounPlural);
+  const entity = capitalize(vocab.organizationNoun);
   const chair = minutes.chairName ?? placeholder("Chair", options);
   const secretary = minutes.secretaryName ?? minutes.recorderName ?? placeholder("Secretary", options);
   const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
@@ -591,7 +599,7 @@ function renderFormalAgmMinutes({
   const nonAdjournmentMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
 
   return `
-    <h1>MINUTES OF THE ${eh(meetingKind.toUpperCase())} OF MEMBERS</h1>
+    <h1>MINUTES OF THE ${eh(meetingKind.toUpperCase())} OF ${eh(voters.toUpperCase())}</h1>
     <p><strong>${eh(society.name)}</strong>${society.incorporationNumber ? ` (${eh(society.incorporationNumber)})` : ""}</p>
     <p class="meta">Held ${meeting.location ? `at ${eh(meeting.location)}` : "at the recorded meeting location"} on ${eh(formatLongDate(minutes.heldAt))}</p>
     ${renderRemoteParticipation(minutes.remoteParticipation)}
@@ -600,7 +608,7 @@ function renderFormalAgmMinutes({
     ${renderAttendance(minutes)}
 
     <h2>1. Call the Meeting to Order</h2>
-    <p>The ${eh(meetingKind)} of the Members of the Society was convened at ${eh(callTime)} by ${eh(chair)}, who acted as Chair of the meeting. ${meeting.noticeSentAt ? `Notice of meeting was sent on ${eh(formatLongDate(meeting.noticeSentAt))}.` : placeholderSentence("Notice date", options)} ${recordedMinutesQuorum(minutes) === true ? "Quorum was declared present." : recordedMinutesQuorum(minutes) === false ? "Quorum was not met." : "Quorum was not recorded in the source."} ${eh(secretary)} acted as Secretary of the Meeting.</p>
+    <p>The ${eh(meetingKind)} of the ${eh(voters)} of the ${eh(entity)} was convened at ${eh(callTime)} by ${eh(chair)}, who acted as Chair of the meeting. ${meeting.noticeSentAt ? `Notice of meeting was sent on ${eh(formatLongDate(meeting.noticeSentAt))}.` : placeholderSentence("Notice date", options)} ${recordedMinutesQuorum(minutes) === true ? "Quorum was declared present." : recordedMinutesQuorum(minutes) === false ? "Quorum was not met." : "Quorum was not recorded in the source."} ${eh(secretary)} acted as Secretary of the Meeting.</p>
 
     ${renderAgendaAdoption(meeting.agendaItems ?? [], options, meeting.agendaItemTree)}
 

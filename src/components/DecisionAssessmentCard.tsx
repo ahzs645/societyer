@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
+import { canonicalizeJurisdictionCode, homeJurisdictionCode } from "../../shared/organizationDomain";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { evaluateLegalDecision, type LegalDecisionInput } from "../../shared/legalDecision";
 import { Select } from "./Select";
 import { Field, Badge } from "./ui";
@@ -14,13 +15,21 @@ const PLAIN_WARNINGS: Record<string, string> = {
     "Note which bylaws and member register this relies on.",
 };
 
-function plainWarning(warning: string): string {
+function plainWarning(warning: string, corporate: boolean): string {
+  if (corporate && warning === "Record the operative articles/bylaws and applicable electorate evidence before relying on this result.") {
+    return "Note which articles, by-laws and shareholder register this relies on.";
+  }
   return PLAIN_WARNINGS[warning] ?? warning;
 }
 
 /** Evidence-aware arithmetic preview; it does not adopt a resolution or update registers. */
 export function DecisionAssessmentCard({ organization }: { organization: any }) {
-  const society = isSociety(organization);
+  const vocab = governanceVocabulary(organization);
+  // Only societies and business corporations have reviewed decision rules. A
+  // custom entity (co-operative, partnership, ...) must not be evaluated as a
+  // business corporation, so the card is hidden for it.
+  const society = vocab.kind === "society" || vocab.societyLaw;
+  const supportedEntity = society || vocab.isCorporation;
   const [body, setBody] = useState<LegalDecisionInput["body"]>(society ? "members" : "shareholders");
   const [mode, setMode] = useState<LegalDecisionInput["mode"]>("meeting");
   const [resolution, setResolution] = useState<LegalDecisionInput["resolution"]>("ordinary");
@@ -32,7 +41,7 @@ export function DecisionAssessmentCard({ organization }: { organization: any }) 
   const [circulated, setCirculated] = useState(false);
   const [specialMajority, setSpecialMajority] = useState<"two_thirds" | "three_quarters">("two_thirds");
   const jurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
-  if (!["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA"].includes(jurisdiction)) return null;
+  if (!supportedEntity || !["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA"].includes(jurisdiction)) return null;
   const result = evaluateLegalDecision({
     jurisdiction: jurisdiction as LegalDecisionInput["jurisdiction"],
     entityType: society ? "society" : "corporation__business_",
@@ -73,7 +82,7 @@ export function DecisionAssessmentCard({ organization }: { organization: any }) 
       {mode === "meeting" ? <label className="checkbox"><input type="checkbox" checked={quorumMet} onChange={(event) => setQuorumMet(event.target.checked)} /> Quorum was established under the operative governing documents</label>
         : <label className="checkbox"><input type="checkbox" checked={circulated} onChange={(event) => setCirculated(event.target.checked)} /> Distribution to every eligible voter is evidenced</label>}
       <p style={{ margin: 0 }}>{result.denominator === "eligible_votes" ? "All eligible votes" : "Votes cast"}: {Number.isFinite(result.denominatorCount) ? result.denominatorCount : "not supplied"} · {result.strict ? "More than" : "At least"} {result.thresholdNumerator}/{result.thresholdDenominator}</p>
-      {result.warnings.length > 0 && <ul style={{ margin: 0 }}>{result.warnings.map((warning) => <li key={warning}>{plainWarning(warning)}</li>)}</ul>}
+      {result.warnings.length > 0 && <ul style={{ margin: 0 }}>{result.warnings.map((warning) => <li key={warning}>{plainWarning(warning, !society)}</li>)}</ul>}
     </div>
   </section>;
 }

@@ -6,6 +6,7 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
+import { governanceVocabulary } from "../lib/governanceVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Field } from "../components/ui";
@@ -87,7 +88,10 @@ export function BylawsHistoryPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canScanPaperless = loaded && can("documents:write") && can("settings:write");
-  const canStageRegistry = loaded && can("settings:manage");
+  // The BC Registry bylaws connector reads BC society bylaw filings (Societies
+  // Online). Other entity types do not file bylaws there.
+  const registryBylawsApply = governanceVocabulary(society).societyLaw;
+  const canStageRegistry = loaded && can("settings:manage") && registryBylawsApply;
   const toast = useToast();
   const amendments = useQuery(
     api.bylawAmendments.list,
@@ -131,7 +135,7 @@ export function BylawsHistoryPage() {
     const bodyHtml = `
       <h1>${escapeHtml(society.name)} — Bylaws (current)</h1>
       <p class="meta">Effective ${escapeHtml(formatDate(current.filedAtISO))} · Last amended ${escapeHtml(formatDateTime(current.filedAtISO))}</p>
-      <p class="meta">Filed via Societies Online${current.filingId ? "" : ""}.</p>
+      ${registryBylawsApply ? `<p class="meta">Filed via Societies Online.</p>` : ""}
       <pre style="font-family: inherit; white-space: pre-wrap; font-size: 11pt; line-height: 1.5;">${escapeHtml(current.proposedText)}</pre>
       <h2>Amendment history</h2>
       <ol>
@@ -234,7 +238,7 @@ export function BylawsHistoryPage() {
                 ...(canScanPaperless || canStageRegistry
                   ? [{
                       id: "import",
-                      label: "Import from Paperless or BC Registry…",
+                      label: registryBylawsApply ? "Import from Paperless or BC Registry…" : "Import from Paperless…",
                       icon: <Bot size={12} />,
                       hint: needsServer ? "Needs a server connection" : undefined,
                       disabled: needsServer,
@@ -278,7 +282,7 @@ export function BylawsHistoryPage() {
         <div className="card__head">
           <h2 className="card__title"><Bot size={14} /> Import bylaw versions</h2>
           <InfoPopover label="About importing bylaw versions">
-            <p>Stage BC Registry and Paperless sources as markdown bylaw versions, then approve them in Import Sessions before they update this timeline.</p>
+            <p>{registryBylawsApply ? "Stage BC Registry and Paperless sources" : "Stage Paperless sources"} as markdown bylaw versions, then approve them in Import Sessions before they update this timeline.</p>
             <p>Digital OCR is normalized into Markdown automatically. Scan-only PDFs are queued for page-by-page vision transcription and should stay pending until a reviewer confirms the text.</p>
           </InfoPopover>
           <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
@@ -317,9 +321,11 @@ export function BylawsHistoryPage() {
             <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy || needsServer} title={needsServer ? serverConnectionMessage("Scanning Paperless") : undefined} onClick={runPaperlessBot}>
               <Database size={12} /> {paperlessBusy ? "Scanning..." : "Scan Paperless"}
             </button>
-            <button className="btn-action" disabled={!canStageRegistry || registryBusy || needsServer} title={needsServer ? serverConnectionMessage("Staging BC Registry bylaws") : undefined} onClick={runRegistryBot}>
-              <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
-            </button>
+            {registryBylawsApply && (
+              <button className="btn-action" disabled={!canStageRegistry || registryBusy || needsServer} title={needsServer ? serverConnectionMessage("Staging BC Registry bylaws") : undefined} onClick={runRegistryBot}>
+                <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
+              </button>
+            )}
           </div>
         </div>
       </div>
