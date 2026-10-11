@@ -146,21 +146,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "email", size: 240 },
       ],
     },
-    // Review queues are ordinary filtered views, so they can be tweaked,
-    // cleared or saved like any other table filter.
     extraViews: [
-      {
-        name: "Needs source review",
-        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
-      },
-      {
-        name: "Held, no minutes",
-        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
-      },
-      {
-        name: "Same-day duplicates",
-        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
-      },
       {
         name: "Board",
         type: "kanban",
@@ -506,21 +492,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "confirmationNumber", size: 160 },
       ],
     },
-    // Review queues are ordinary filtered views, so they can be tweaked,
-    // cleared or saved like any other table filter.
     extraViews: [
-      {
-        name: "Needs source review",
-        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
-      },
-      {
-        name: "Held, no minutes",
-        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
-      },
-      {
-        name: "Same-day duplicates",
-        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
-      },
       {
         name: "Board",
         type: "kanban",
@@ -2140,21 +2112,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "openTaskCount", size: 110 },
       ],
     },
-    // Review queues are ordinary filtered views, so they can be tweaked,
-    // cleared or saved like any other table filter.
     extraViews: [
-      {
-        name: "Needs source review",
-        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
-      },
-      {
-        name: "Held, no minutes",
-        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
-      },
-      {
-        name: "Same-day duplicates",
-        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
-      },
       {
         name: "Board",
         type: "kanban",
@@ -2683,21 +2641,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "purchaseEvidence", size: 170 },
       ],
     },
-    // Review queues are ordinary filtered views, so they can be tweaked,
-    // cleared or saved like any other table filter.
     extraViews: [
-      {
-        name: "Needs source review",
-        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
-      },
-      {
-        name: "Held, no minutes",
-        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
-      },
-      {
-        name: "Same-day duplicates",
-        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
-      },
       {
         name: "Board",
         type: "kanban",
@@ -3341,21 +3285,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "createdAtISO", size: 140 },
       ],
     },
-    // Review queues are ordinary filtered views, so they can be tweaked,
-    // cleared or saved like any other table filter.
     extraViews: [
-      {
-        name: "Needs source review",
-        filters: [{ fieldName: "sourceReviewStatus", operator: "in", value: ["imported_needs_review"] }],
-      },
-      {
-        name: "Held, no minutes",
-        filters: [{ fieldName: "minutesMissing", operator: "isTrue", value: true }],
-      },
-      {
-        name: "Same-day duplicates",
-        filters: [{ fieldName: "duplicateCount", operator: "gt", value: 0 }],
-      },
       {
         name: "Board",
         type: "kanban",

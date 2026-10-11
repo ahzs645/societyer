@@ -17,6 +17,15 @@
 import type { PortableMutationCtx } from "../portable/ctx";
 import { requirePermissionPortable } from "./permissions";
 
+/**
+ * Extra views the seeder once added to objects that don't define them. The
+ * meeting review queues were copied onto members, filings, committees,
+ * assets, motions and tasks, where their filters named meeting-only fields,
+ * were dropped, and left unfiltered duplicates of "All". A reseed removes
+ * untouched seeder copies; anything a person created or changed stays.
+ */
+export const RETIRED_SEEDED_VIEW_NAMES = ["Needs source review", "Held, no minutes", "Same-day duplicates"] as const;
+
 export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: string, objects: any[]) {
   const now = new Date().toISOString();
   for (const obj of objects) {
@@ -210,6 +219,29 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       }
     }
 
+    // True when a stored view still has exactly the columns the seeder gives it.
+    const hasSeededColumns = async (viewId: string, columns: { fieldName: string }[]) => {
+      const existingColumns = await ctx.db
+        .query("viewFields")
+        .withIndex("by_view", (q) => q.eq("viewId", viewId))
+        .collect();
+      const seededColumnFieldIds = columns
+        .map((column) => resolveFieldId(column.fieldName))
+        .filter((fieldId): fieldId is string => !!fieldId);
+      const existingColumnFieldIds = new Set(existingColumns.map((column: any) => String(column.fieldMetadataId)));
+      return {
+        existingColumns,
+        matches:
+          existingColumns.length === seededColumnFieldIds.length &&
+          seededColumnFieldIds.every((fieldId) => existingColumnFieldIds.has(fieldId)),
+      };
+    };
+    // Extra views predate the visibility marker. That missing marker, no
+    // creator and the seed's exact column set distinguish seeded extras from
+    // user-created views with the same name.
+    const looksSeederCreated = (view: any) =>
+      view.isShared === true && view.isSystem === false && !view.visibility && !view.createdByUserId;
+
     // Seed any extra views (e.g. an unfiltered "All" view) beyond the default.
     // Idempotent by name; columns default to the default view's columns.
     for (const extra of (obj.extraViews ?? []) as any[]) {
@@ -222,27 +254,9 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       const extraViewType = extra.type ?? "table";
       const extraKanbanFieldMetadataId = resolveFieldId(extra.kanbanFieldName);
       if (existingExtraView) {
-        const existingColumns = await ctx.db
-          .query("viewFields")
-          .withIndex("by_view", (q) => q.eq("viewId", existingExtraView._id))
-          .collect();
-        const seededColumnFieldIds = columns
-          .map((column: any) => resolveFieldId(column.fieldName))
-          .filter((fieldId: string | undefined): fieldId is string => !!fieldId);
-        const existingColumnFieldIds = new Set(
-          existingColumns.map((column) => String(column.fieldMetadataId)),
-        );
-        const hasSeededColumnSet =
-          existingColumns.length === seededColumnFieldIds.length &&
-          seededColumnFieldIds.every((fieldId: string) => existingColumnFieldIds.has(fieldId));
-        // Extra views predate the visibility marker. That missing marker,
-        // together with the seed's exact column set and lack of a creator,
-        // distinguishes old seeded extras from user-created same-name views.
+        const { matches: hasSeededColumnSet } = await hasSeededColumns(existingExtraView._id, columns);
         const isSeederCreatedExtra =
-          existingExtraView.isShared === true &&
-          existingExtraView.isSystem === false &&
-          !existingExtraView.visibility &&
-          !existingExtraView.createdByUserId &&
+          looksSeederCreated(existingExtraView) &&
           hasSeededColumnSet &&
           (!existingExtraView.type ||
             existingExtraView.type === "table" ||
@@ -293,6 +307,26 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
           createdAtISO: now,
           updatedAtISO: now,
         });
+      }
+    }
+
+    // Remove untouched copies of views the seeder no longer defines here.
+    // They never had a working filter (the fields didn't exist), so a stored
+    // filter means someone set one and the view is theirs now.
+    const definedViewNames = new Set<string>([obj.defaultView.name, ...((obj.extraViews ?? []) as any[]).map((view) => view.name)]);
+    const retired = RETIRED_SEEDED_VIEW_NAMES.filter((name) => !definedViewNames.has(name));
+    if (retired.length > 0) {
+      const viewsForObject = await ctx.db
+        .query("views")
+        .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
+        .collect();
+      for (const view of viewsForObject as any[]) {
+        if (!(retired as readonly string[]).includes(view.name) || !looksSeederCreated(view) || view.filtersJson) continue;
+        if ((view.type ?? "table") !== "table") continue;
+        const { existingColumns, matches } = await hasSeededColumns(view._id, obj.defaultView.columns);
+        if (!matches) continue;
+        for (const column of existingColumns) await ctx.db.delete(column._id);
+        await ctx.db.delete(view._id);
       }
     }
   }
