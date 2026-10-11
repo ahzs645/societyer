@@ -1,5 +1,5 @@
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, type LegalEntityLike } from "../../shared/organizationDomain";
-import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
+import { hasRecordedEntityType, legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import { legalSourceById } from "../../shared/legalSources";
 import { resolvePrivacyProfile, PRIVACY_LAWS, PRIVACY_CITATIONS, PRIVACY_REVIEWED_ON, type PrivacyAssessmentInput, type PrivacyRule } from "../../shared/privacyRuleProfiles";
 import { JURISDICTION_GUIDE_PACK_JSON } from "./jurisdictionGuidePackRegistry";
@@ -120,7 +120,7 @@ export function resolveJurisdictionCode(organization?: LegalEntityLike | null): 
   if (profile) return profile.jurisdictionCode;
   // An untyped jurisdiction selector may preview a pack; an explicit unmatched
   // Act/entity must not inherit that preview as applicable guidance.
-  if (!organization.entityType && !organization.kind && !organization.organizationKind && !organization.actFormedUnder) return code;
+  if (!hasRecordedEntityType(organization) && !organization.actFormedUnder?.trim()) return code;
   return code === "CA-BC" ? BC_ENTITY_REVIEW_GUIDE_CODE : `${code}-ENTITY-REVIEW`;
 }
 

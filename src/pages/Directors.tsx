@@ -32,7 +32,6 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
-import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
 
@@ -359,9 +358,9 @@ export function DirectorsPage() {
             )}
             {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
             <InspectorNote tone="warn" title="Director register">
-              {organizationVocabulary(society).societyLaw
-                ? "Keep this register current. Changes to directors normally need to be reflected in your filing workflow within 30 days."
-                : "Keep this register current. Changes to directors usually need a registry notice; check the deadline under the governing Act."}
+              {/* Timing comes from the governing-Act profile: the Societies Act
+                  has no general 15- or 30-day director-change deadline. */}
+              Keep this register current. Director-change filing: {directorProfile.directorChangeSubtext}
             </InspectorNote>
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>

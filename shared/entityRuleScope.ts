@@ -1,4 +1,4 @@
-import { legalGovernanceProfile } from "./legalGovernanceProfiles";
+import { hasDeclaredJurisdiction, hasRecordedEntityType, legalGovernanceProfile } from "./legalGovernanceProfiles";
 import { hasApplicablePrivacyLaw, resolvePrivacyProfile, type PrivacyLawId } from "./privacyRuleProfiles";
 import {
   canonicalizeJurisdictionCode,
@@ -40,10 +40,6 @@ function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function hasRecordedEntityType(organization: LegalEntityLike): boolean {
-  return Boolean(clean(organization.entityType) || clean(organization.kind) || clean(organization.organizationKind));
-}
-
 /**
  * Resolve which rule families apply to a workspace. Unknown or missing
  * organizations get an empty scope so society-only content stays hidden while
@@ -64,17 +60,22 @@ export function organizationRuleScope(organization?: LegalEntityLike | null): Or
   const kind = organizationKind(organization);
   const act = clean(organization.actFormedUnder).toLowerCase();
   const rawJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
-  const bcOrUnknown = rawJurisdiction === BC || rawJurisdiction === "unknown";
+  // Only a missing or blank jurisdiction is the legacy default. A recorded
+  // jurisdiction that canonicalizes to "unknown" is an affirmative review state.
+  const undeclaredJurisdiction = rawJurisdiction === "unknown" && !hasDeclaredJurisdiction(organization);
+  const bcOrUndeclared = rawJurisdiction === BC || undeclaredJurisdiction;
   const bcSocietyAct = act === "" || act === "societies_act";
   // Workspaces created before entity types were recorded are BC societies
   // (DEFAULT_HOME_JURISDICTION_CODE); anything with an explicit identity is not.
-  const legacyIdentity = !hasRecordedEntityType(organization) && kind !== "corporation" && bcSocietyAct && bcOrUnknown;
+  const legacyIdentity = !hasRecordedEntityType(organization) && kind !== "corporation" && bcSocietyAct && bcOrUndeclared;
   const jurisdictionCode =
-    rawJurisdiction === "unknown" && (legacyIdentity || (kind === "society" && bcSocietyAct))
+    undeclaredJurisdiction && (legacyIdentity || (kind === "society" && bcSocietyAct))
       ? DEFAULT_HOME_JURISDICTION_CODE
       : rawJurisdiction;
   const isSociety = kind === "society" || legacyIdentity;
-  const isBcSociety = isSociety && jurisdictionCode === BC && bcSocietyAct;
+  // The governance registry is the single authority for which Act applies, so
+  // Societies Act warnings, inspection copy and the dashboard always agree.
+  const isBcSociety = legalGovernanceProfile(organization)?.id === "bc_society";
   return {
     kind: legacyIdentity ? "society" : kind,
     jurisdictionCode,

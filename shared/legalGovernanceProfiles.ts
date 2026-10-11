@@ -7,6 +7,17 @@ export type GovernanceOrganization = LegalEntityLike & {
   isMemberFunded?: boolean; distributing?: boolean; solicitingPublicBenefit?: boolean;
   legalSubtype?: string | null; incorporationDate?: string; fiscalYearEnd?: string;
 };
+const recordedText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+/** An entity type was recorded. Whitespace-only values count as not recorded. */
+export function hasRecordedEntityType(organization: LegalEntityLike): boolean {
+  return Boolean(recordedText(organization.entityType) || recordedText(organization.kind) || recordedText(organization.organizationKind));
+}
+/** A home jurisdiction was recorded, even one that canonicalizes to "unknown".
+ * Only a missing or blank jurisdiction is the legacy (pre-entity-type) state. */
+export function hasDeclaredJurisdiction(organization: LegalEntityLike): boolean {
+  return [organization.jurisdictionCode, organization.homeJurisdictionCode, organization.homeJurisdiction, organization.jurisdiction]
+    .some(value => recordedText(value).length > 0);
+}
 /** Explicit Act wins over a province label. Unknown/custom Acts never inherit the local company Act. */
 export function createLegalProfileRegistry(profiles: readonly LegalGovernanceProfile[]) {
   const byAct = new Map<string, LegalGovernanceProfile>();
@@ -30,9 +41,7 @@ export function createLegalProfileRegistry(profiles: readonly LegalGovernancePro
       // An absent jurisdiction can support the established legacy default or
       // an explicit Act. A recorded "unknown" is an affirmative review state
       // and must not be replaced by a BC fallback or an inferred Act profile.
-      const hasDeclaredJurisdiction = [organization.jurisdictionCode, organization.homeJurisdictionCode, organization.homeJurisdiction, organization.jurisdiction]
-        .some(value => typeof value === 'string' && value.trim().length > 0);
-      if (jurisdiction === 'unknown' && hasDeclaredJurisdiction) return undefined;
+      if (jurisdiction === 'unknown' && hasDeclaredJurisdiction(organization)) return undefined;
       const entity = organizationEntityType(organization).toLowerCase();
       if (act) {
         const profile = byAct.get(act);
@@ -44,7 +53,7 @@ export function createLegalProfileRegistry(profiles: readonly LegalGovernancePro
         if (entity === 'corporation__business_' && profile.kind === 'society') return undefined;
         return profile;
       }
-      const legacy = !organization.entityType && !organization.kind && !organization.organizationKind;
+      const legacy = !hasRecordedEntityType(organization);
       if ((entity === 'society' || legacy) && ['unknown', 'CA-BC'].includes(jurisdiction)) return byId.get('bc_society');
       if (entity === 'corporation__business_') {
         return profiles.find(p => p.kind === 'corporation' && p.jurisdictionCode === jurisdiction && ['bc_company', 'federal_cbca', 'ontario_obca'].includes(p.id));
