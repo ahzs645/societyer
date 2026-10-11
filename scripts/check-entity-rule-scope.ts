@@ -70,10 +70,17 @@ for (const key of NON_BC_SOCIETY) assert.equal(appliesBcSocietyRules(ENTITIES[ke
 assert.equal(appliesBcSocietyRules(null), false, "a missing profile shows no society rules");
 assert.equal(appliesBcPrivacyRules(ENTITIES.bcCompany), true, "BC PIPA applies to the assessed private-sector BC handling");
 assert.equal(appliesBcPrivacyRules(ENTITIES.federalCbca), false);
-assert.equal(appliesBcPrivacyRules(ENTITIES.legacyBcSociety), false, "legacy incorporation alone never certifies privacy scope");
-assert.equal(resolvePrivacyProfile(ENTITIES.legacyBcSociety).status, "unassessed");
-assert.equal(organizationVocabulary(ENTITIES.legacyBcSociety).privacyLabel, "Privacy");
-assert.match(organizationVocabulary(ENTITIES.bcCompany).privacyLabel, /BC PIPA/);
+// BC PIPA s. 3(1) applies to every organization, so a BC-home workspace with no
+// recorded facts is presumed covered and told to confirm the facts.
+assert.equal(appliesBcPrivacyRules(ENTITIES.legacyBcSociety), true, "BC PIPA is presumed for a BC-home workspace");
+assert.equal(resolvePrivacyProfile(ENTITIES.legacyBcSociety).status, "presumed");
+assert.deepEqual(resolvePrivacyProfile(ENTITIES.legacyBcSociety).presumedLawIds, ["bc_pipa"]);
+assert.equal(organizationVocabulary(ENTITIES.legacyBcSociety).privacyLabel, "Privacy (PIPA)");
+const federalWorkBc = { ...ENTITIES.legacyBcSociety, privacyFederalWork: "yes" as const };
+assert.equal(appliesBcPrivacyRules(federalWorkBc), false, "recorded federal-work status displaces the BC presumption");
+assert.equal(organizationVocabulary(federalWorkBc).privacyLabel, "Privacy", "PIPEDA stays conditional until the sector facts are recorded");
+assert.equal(organizationVocabulary(ENTITIES.bcCompany).privacyLabel, "Privacy (PIPA)");
+assert.deepEqual(resolvePrivacyProfile(ENTITIES.bcCompany).presumedLawIds, [], "recorded BC handling is not a presumption");
 for (const key of ["federalNfp", "ontarioNfp"] as const) {
   assert.equal(legalGovernanceProfile(ENTITIES[key]), undefined, `${key}: no business-corporation profile`);
   assert.equal(organizationVocabulary(ENTITIES[key]).isCorporation, false, `${key}: membership entity does not get shareholder wording`);
@@ -230,8 +237,15 @@ for (const [key, profile] of [["bcCompany", "bc_company"], ["federalCbca", "fede
   assert.ok(ruleIds(ENTITIES[key]).includes(`LEGAL-${profile}-DIRECTOR-CONSENT`));
   assert.ok(!ruleIds(ENTITIES[key]).some((id) => id.startsWith("BC-SOC-")), `${key}: no Society Act checks`);
 }
-for (const key of ["albertaSociety", "bcCustomEntity", "federalNfp", "ontarioNfp"] as const) assert.deepEqual(ruleIds(ENTITIES[key]), ["PRIVACY-APPLICABILITY"]);
-assert.ok(!ruleIds(ENTITIES.legacyBcSociety).some((id) => id.startsWith("PIPA-")), "unassessed legacy society gets applicability guidance instead of a guessed privacy law");
+for (const key of ["albertaSociety", "federalNfp", "ontarioNfp"] as const) assert.deepEqual(ruleIds(ENTITIES[key]), ["PRIVACY-APPLICABILITY"]);
+// A BC-home entity of any form gets the presumed BC PIPA checks plus the
+// request to confirm its privacy facts, but never Societies Act checks.
+const bcCustomRules = ruleIds(ENTITIES.bcCustomEntity);
+assert.ok(bcCustomRules.includes("PRIVACY-APPLICABILITY") && bcCustomRules.includes("PIPA-POLICY-DOCUMENTED") && bcCustomRules.includes("PRIVACY-bc_pipa-OFFICER"), "BC-home custom entity: presumed PIPA checks");
+assert.ok(!bcCustomRules.some((id) => id.startsWith("BC-SOC-")), "BC-home custom entity: no Society Act checks");
+assert.ok(ruleIds(ENTITIES.legacyBcSociety).includes("PIPA-POLICY-DOCUMENTED"), "legacy BC society keeps presumed PIPA checks");
+assert.ok(ruleIds(ENTITIES.legacyBcSociety).includes("PRIVACY-APPLICABILITY"), "and is asked to confirm the presumption");
+assert.ok(!ruleIds({ ...ENTITIES.legacyBcSociety, privacyFederalWork: "yes" }).some((id) => id.startsWith("PIPA-")), "a recorded federal work removes BC PIPA checks");
 
 /* --------------------- live queries via convex-test ---------------------- */
 
@@ -300,8 +314,9 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
     assert.ok(ids.includes(`LEGAL-${governance.id}-GOVERNING-DOCUMENTS`), `${key}: own-Act document check`);
   }
   if (appliesBcPrivacyRules(ENTITIES[key])) {
-    assert.ok(ids.includes("PIPA-POLICY-DOCUMENTED") && ids.includes("PIPA-POLICY-EVIDENCE"), `${key}: assessed BC handling keeps BC PIPA checks`);
-    assert.ok(!ids.includes("PRIVACY-APPLICABILITY"), `${key}: complete privacy scope is recognized`);
+    assert.ok(ids.includes("PIPA-POLICY-DOCUMENTED") && ids.includes("PIPA-POLICY-EVIDENCE"), `${key}: assessed or presumed BC handling keeps BC PIPA checks`);
+    if (resolvePrivacyProfile(ENTITIES[key]).presumedLawIds.length) assert.ok(ids.includes("PRIVACY-APPLICABILITY"), `${key}: a presumed BC PIPA scope still asks for the facts`);
+    else assert.ok(!ids.includes("PRIVACY-APPLICABILITY"), `${key}: complete privacy scope is recognized`);
   } else {
     assert.ok(ids.includes("PRIVACY-APPLICABILITY"), `${key}: unknown privacy scope remains visible`);
     assert.ok(!ids.some((id: string) => id.startsWith("PIPA-")), `${key}: no guessed BC PIPA check`);

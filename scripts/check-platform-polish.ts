@@ -50,13 +50,21 @@ for (const identity of Object.values(ROUTE_IDENTITY) as Array<{ label: string; l
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/bylaws-history"], { entityType: "society", jurisdictionCode: "CA-BC" }), "Bylaws history");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/bylaws-history"], { entityType: "corporation__business_", jurisdictionCode: "CA-BC" }), "Articles history");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/bylaws-history"], { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA" }), "By-laws history");
-// Nav labels that name BC law (PIPA) switch to a neutral label outside BC.
+// BC PIPA applies to every organization (s. 3(1)), so BC-home workspaces keep the
+// PIPA labels by default; recorded federal-work facts or non-BC homes are neutral.
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "society", jurisdictionCode: "CA-BC" }), "Privacy (PIPA)");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act" }), "Privacy (PIPA)");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], { entityType: "society", jurisdictionCode: "CA-BC" }), "PIPA training");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "society", jurisdictionCode: "CA-BC", privacyFederalWork: "yes" } as any), "Privacy", "a recorded federal work displaces the BC PIPA presumption");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], { entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act", privacyFederalWork: "yes" } as any), "Privacy training");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" }), "Privacy");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], { entityType: "corporation__business_", jurisdictionCode: "CA-ON-OBCA" }), "Privacy");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/rights-ledger"], { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA" }), "Share register");
-assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], null), "Privacy (PIPA)");
+// The sidebar builds its own nav items from ROUTE_IDENTITY; dropping privacyMode
+// there silently reverts every privacy label to the neutral default.
+assert.match(readFileSync("src/components/Layout.internal.tsx", "utf8"), /privacyMode: id\.privacyMode/, "sidebar nav items keep privacyMode");
+// While the workspace loads no law is named.
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], null), "Privacy");
 const untranslated = [...labels].filter((label) => !mapped.has(label));
 assert.deepEqual(untranslated, [], "navigation labels without a translation key");
 for (const [label, key] of mapped) {

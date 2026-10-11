@@ -4,7 +4,7 @@ import { Checkbox } from "./Controls";
 import { Select } from "./Select";
 import { LegalGuideBadge } from "./LegalGuide";
 import { getPrivacyLegalGuideRules } from "../lib/jurisdictionGuideTracks";
-import { PRIVACY_CITATIONS, PRIVACY_LAWS, PRIVACY_OPERATING_JURISDICTIONS, resolvePrivacyProfile, type PrivacyAssessmentInput } from "../../shared/privacyRuleProfiles";
+import { PRESUMED_PRIVACY_LAW_LABEL, PRIVACY_CITATIONS, PRIVACY_LAWS, PRIVACY_OPERATING_JURISDICTIONS, resolvePrivacyProfile, type PrivacyAssessmentInput } from "../../shared/privacyRuleProfiles";
 
 const ANSWERS = [{ value: "unknown", label: "Not assessed" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }];
 
@@ -71,8 +71,9 @@ export function PrivacyScopeAssessment({ organization, canEdit, saving, onChange
         {profile.assessments.map((assessment) => {
           const law = PRIVACY_LAWS[assessment.lawId];
           const definite = assessment.applicability === "applies";
+          const presumed = assessment.basis === "presumed";
           return <details key={law.id} open={definite} style={{ marginTop: 16 }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600 }}>{law.label} <Badge tone={definite ? "info" : "warn"}>{definite ? "Assessed as applicable" : "Conditional"}</Badge></summary>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>{law.label} <Badge tone={definite && !presumed ? "info" : "warn"}>{presumed ? PRESUMED_PRIVACY_LAW_LABEL : definite ? "Assessed as applicable" : "Conditional"}</Badge></summary>
             <p>{assessment.reason}</p>
             <ul className="privacy-bullet-list">
               {law.rules.map((rule) => {

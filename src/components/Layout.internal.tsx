@@ -242,6 +242,8 @@ type NavItem = {
   labelByEntityKind?: Partial<Record<"society" | "corporation", string>>;
   labelOutsideBc?: string;
   labelForBcCompany?: string;
+  /** Privacy routes resolve their label from the privacy profile. */
+  privacyMode?: "policy" | "training";
   icon: LucideIcon;
   color: IconTone;
   end?: boolean;
@@ -275,6 +277,7 @@ function navItem(to: string, end?: boolean): NavItem {
     ...(id.labelByEntityKind ? { labelByEntityKind: id.labelByEntityKind } : {}),
     ...(id.labelOutsideBc ? { labelOutsideBc: id.labelOutsideBc } : {}),
     ...(id.labelForBcCompany ? { labelForBcCompany: id.labelForBcCompany } : {}),
+    ...(id.privacyMode ? { privacyMode: id.privacyMode } : {}),
     icon: id.icon,
     color: id.color,
     ...(end ? { end } : {}),

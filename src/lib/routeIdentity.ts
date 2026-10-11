@@ -337,7 +337,8 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/retention": { icon: Timer, group: "compliance", label: "Records retention", module: "recordsInspection" },
   "/app/records-archive": { icon: Archive, group: "compliance", label: "Records archive" },
   "/app/inspections": { icon: Eye, group: "compliance", label: "Records inspections", module: "recordsInspection" },
-  // Privacy labels use the saved activity assessment, including while loading.
+  // Privacy labels follow the privacy profile: BC PIPA is presumed for a BC-home
+  // workspace until recorded facts displace it; neutral while loading.
   "/app/privacy": { icon: Shield, group: "compliance", label: "Privacy", privacyMode: "policy" },
   "/app/pipa-training": { icon: ShieldCheck, group: "compliance", label: "Privacy training", privacyMode: "training", module: "pipaTraining" },
   "/app/insurance": { icon: Umbrella, group: "compliance", label: "Insurance", module: "insurance" },

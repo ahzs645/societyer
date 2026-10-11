@@ -71,7 +71,11 @@ for (const code of ["CA-BC-BCA", "CA-FED-CBCA", "CA-ON-OBCA"]) {
 const federalRecords = getLegalGuideRules({ jurisdictionCode: "CA-FED-CBCA", dateISO: "2026-10-11", topics: ["records"] });
 assert.ok(federalRecords.some((rule) => rule.sourceCurrentToISO === "2026-09-21" && rule.currentAsOfISO === "2026-10-11"), "source currency and review dates remain separate");
 assert.equal(getJurisdictionGuidePack(resolveJurisdictionCode({ jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__nfp_", actFormedUnder: "canada_not_for_profit_corporations_act" })).rules.length, 0);
-assert.deepEqual(getPrivacyLegalGuideRules({ organization: { jurisdictionCode: "CA-BC", entityType: "society" } }), [], "privacy guides never infer activity from incorporation");
+// BC PIPA applies to every organization (s. 3(1)), so a BC-home workspace gets
+// the presumed BC PIPA guides and nothing else; a recorded federal work removes them.
+assert.deepEqual([...new Set(getPrivacyLegalGuideRules({ organization: { jurisdictionCode: "CA-BC", entityType: "society" } }).map((rule) => rule.statuteKey))], ["bc_pipa"], "BC-home privacy guides are limited to the presumed BC PIPA");
+assert.deepEqual(getPrivacyLegalGuideRules({ organization: { jurisdictionCode: "CA-BC", entityType: "society", privacyFederalWork: "yes" } }), [], "a recorded federal work displaces the BC presumption");
+assert.deepEqual(getPrivacyLegalGuideRules({ organization: { jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_" } }), [], "privacy guides never infer activity from incorporation outside BC");
 const bcHandling = { privacyOperatingJurisdictions: ["CA-BC"], privacyFederalWork: "no" as const, privacyCommercialActivity: "yes" as const, privacyCrossBorderCommercial: "yes" as const, privacySectorSpecific: "none" as const };
 const privacy = getPrivacyLegalGuideRules({ organization: bcHandling });
 assert.ok(privacy.some((rule) => rule.statuteKey === "bc_pipa"));

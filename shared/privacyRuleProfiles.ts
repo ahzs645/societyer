@@ -1,7 +1,13 @@
 import type { LegalEntityLike } from "./organizationDomain";
+import { organizationRuleScope } from "./entityRuleScope";
 
-/** Privacy follows the activity, information and operating territory. Never infer
- * these answers from incorporation jurisdiction, entity type or a postal address.
+/** Privacy follows the activity, information and operating territory. Recorded
+ * facts always decide. The one default is BC PIPA for a BC-home workspace: BC
+ * PIPA s. 1 defines "organization" to include a not-for-profit and s. 3(1)
+ * applies it to every organization, so it is presumed (and labelled as a
+ * presumption) until the assessment records federal-work status or operations
+ * that exclude BC. Never infer any other law from incorporation jurisdiction,
+ * entity type or a postal address.
  * Sources and research limitations: docs/legal-research/privacy.md. */
 export const PRIVACY_REVIEWED_ON = "2026-10-11";
 export type PrivacyAnswer = "yes" | "no" | "unknown";
@@ -46,6 +52,7 @@ const fed = (id: string, title: string, section: string, summary: string) => cit
 /** Paraphrases, not statutory quotations. Keep provenance attached when a new
  * jurisdiction or obligation is added; dates denote the consolidation read. */
 export const PRIVACY_CITATIONS: Record<string, PrivacyCitation> = Object.fromEntries([
+  bc("PIPA-SCOPE", "Application", "ss. 1, 3(1)-(2)", "\"Organization\" includes a not-for-profit organization; the Act applies to every organization except where the federal Act applies, such as to a federal work, undertaking or business or to interprovincial or international commercial transfers."),
   bc("PIPA-OFFICER", "Accountability", "s. 4(3)-(4)", "Designate at least one individual responsible for compliance and make their contact details available on request."),
   bc("PIPA-POLICY", "Policies and complaints", "s. 5", "Develop and follow privacy practices and a complaints process, and make information about them available on request."),
   bc("PIPA-CONSENT", "Consent", "ss. 6-9", "Obtain consent where required; document a permitted exception or deemed consent when relying on it."),
@@ -143,11 +150,18 @@ export const PRIVACY_LAWS: Record<PrivacyLawId, PrivacyLawDefinition> = {
   },
 };
 
-export type PrivacyLawAssessment = { lawId: PrivacyLawId; applicability: "applies" | "possible"; reason: string };
+/** `basis: "presumed"` marks the BC-home default: treated as applicable for
+ * checks and labels, but shown as "Presumed: confirm facts" until recorded. */
+export type PrivacyLawAssessment = { lawId: PrivacyLawId; applicability: "applies" | "possible"; reason: string; basis?: "recorded" | "presumed" };
+export const PRESUMED_PRIVACY_LAW_LABEL = "Presumed: confirm facts";
 export type ResolvedPrivacyProfile = {
-  status: "unassessed" | "conditional" | "assessed" | "no-general-law-identified";
+  /** `presumed`: no operating facts are recorded and BC PIPA is presumed for a BC-home workspace. */
+  status: "unassessed" | "presumed" | "conditional" | "assessed" | "no-general-law-identified";
   label: string;
+  /** Includes presumed laws; see `presumedLawIds`. */
   applicableLawIds: PrivacyLawId[];
+  /** Applicable laws that rest on the BC-home presumption rather than recorded facts. */
+  presumedLawIds: PrivacyLawId[];
   possibleLawIds: PrivacyLawId[];
   assessments: PrivacyLawAssessment[];
   unresolvedFacts: string[];
@@ -172,9 +186,9 @@ export function resolvePrivacyProfile(organization?: PrivacyAssessmentInput | nu
   const locations = [...new Set(rawLocations.filter((value) => typeof value === "string" && PROVINCES.has(value)))];
   const unresolved = new Set<string>();
   const results = new Map<PrivacyLawId, PrivacyLawAssessment>();
-  const add = (lawId: PrivacyLawId, applicability: PrivacyLawAssessment["applicability"], reason: string) => {
+  const add = (lawId: PrivacyLawId, applicability: PrivacyLawAssessment["applicability"], reason: string, basis?: PrivacyLawAssessment["basis"]) => {
     if (results.get(lawId)?.applicability === "applies") return;
-    results.set(lawId, { lawId, applicability, reason });
+    results.set(lawId, { lawId, applicability, reason, ...(applicability === "applies" ? { basis: basis ?? "recorded" } : {}) });
   };
   const federal = org.privacyFederalWork;
   const commercial = org.privacyCommercialActivity;
@@ -188,6 +202,14 @@ export function resolvePrivacyProfile(organization?: PrivacyAssessmentInput | nu
   const conflictingActivity = isNo(commercial) && isYes(crossBorder);
   if (conflictingActivity) unresolved.add("Resolve the conflicting answers: cross-border commercial handling is marked yes while commercial activity is marked no.");
   const base = isNo(federal) && sectorClear ? "applies" : "possible";
+  // BC PIPA is presumed for a BC-home workspace unless the assessment records
+  // federal-work status, a health/public-sector regime, or operations without BC.
+  const bcHome = organization ? organizationRuleScope(organization).isBcHome : false;
+  const sectorExcluded = sector === "health" || sector === "public";
+  const presumeBcPipa = bcHome && !isYes(federal) && !sectorExcluded && (!locations.length || locations.includes("CA-BC")) && base !== "applies";
+  if (presumeBcPipa) {
+    add("bc_pipa", "applies", `${PRESUMED_PRIVACY_LAW_LABEL}. BC PIPA applies to every organization, including a not-for-profit, unless federal privacy law governs the handling (for example, a federal work, undertaking or business, or interprovincial or international commercial transfers). Record operating locations and federal-work status to confirm or displace this presumption.`, "presumed");
+  }
   if (isYes(federal)) {
     add("pipeda", sectorClear ? "applies" : "possible", "Federal-work status is recorded: PIPEDA covers commercial handling and qualifying employee/applicant information. Assess the specific records.");
   } else {
@@ -224,15 +246,17 @@ export function resolvePrivacyProfile(organization?: PrivacyAssessmentInput | nu
     add("pipeda", "possible", "Determine whether personal information crosses provincial or national borders in commercial activity.");
     unresolved.add("Record whether commercial personal information crosses provincial or national borders.");
   }
-  if (!locations.length && !isYes(federal)) {
+  if (!locations.length && !isYes(federal) && !presumeBcPipa) {
     for (const lawId of ["bc_pipa", "ab_pipa", "qc_private"] as const) add(lawId, "possible", "Operating jurisdictions and statutory applicability have not been assessed.");
   }
   const assessments = [...results.values()];
   const applicableLawIds = assessments.filter((item) => item.applicability === "applies").map((item) => item.lawId);
+  const presumedLawIds = assessments.filter((item) => item.basis === "presumed").map((item) => item.lawId);
   const possibleLawIds = assessments.filter((item) => item.applicability === "possible").map((item) => item.lawId);
-  const status = !locations.length && !isYes(federal) ? "unassessed" : unresolved.size || possibleLawIds.length ? "conditional" : applicableLawIds.length ? "assessed" : "no-general-law-identified";
-  const label = applicableLawIds.length ? `Privacy (${applicableLawIds.map((id) => PRIVACY_LAWS[id].label).join(" + ")})` : status === "no-general-law-identified" ? "Privacy — general-law scope assessed" : "Privacy — applicability needs assessment";
-  return { status, label, applicableLawIds, possibleLawIds, assessments, unresolvedFacts: [...unresolved], operatingJurisdictions: locations, assessCommunicationsSeparately: true };
+  const status = !locations.length && !isYes(federal) ? (presumedLawIds.length ? "presumed" : "unassessed") : unresolved.size || possibleLawIds.length ? "conditional" : applicableLawIds.length ? "assessed" : "no-general-law-identified";
+  const lawLabels = applicableLawIds.map((id) => PRIVACY_LAWS[id].label).join(" + ");
+  const label = applicableLawIds.length ? `Privacy (${lawLabels}${presumedLawIds.length ? ` — ${PRESUMED_PRIVACY_LAW_LABEL.toLowerCase()}` : ""})` : status === "no-general-law-identified" ? "Privacy — general-law scope assessed" : "Privacy — applicability needs assessment";
+  return { status, label, applicableLawIds, presumedLawIds, possibleLawIds, assessments, unresolvedFacts: [...unresolved], operatingJurisdictions: locations, assessCommunicationsSeparately: true };
 }
 
 export function hasApplicablePrivacyLaw(organization: PrivacyAssessmentInput | null | undefined, lawId: PrivacyLawId): boolean {

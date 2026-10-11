@@ -37,7 +37,7 @@ for (const key of ["bcSociety", "legacyBcSociety"] as const) {
   assert.equal(vocab[key].voterNounPlural, "members");
   assert.equal(vocab[key].annualMeeting, "AGM");
   assert.equal(vocab[key].annualMeetingFormal, "Annual General Meeting");
-  assert.equal(vocab[key].privacyLabel, "Privacy", "incorporation alone does not select PIPA");
+  assert.equal(vocab[key].privacyLabel, "Privacy (PIPA)", "BC PIPA is presumed for a BC-home workspace until facts are recorded");
 }
 for (const key of CORPORATIONS) {
   assert.equal(vocab[key].isCorporation, true, key);
@@ -51,7 +51,7 @@ assert.equal(vocab.federalCbca.annualMeetingFormal, "Annual Meeting");
 assert.equal(vocab.ontarioObca.annualMeetingFormal, "Annual Meeting");
 assert.equal(vocab.bcCompany.governingDocuments, "articles");
 assert.equal(vocab.federalCbca.governingDocuments, "articles and by-laws");
-assert.equal(vocab.bcCompany.privacyLabel, "Privacy", "unassessed BC company has neutral privacy label");
+assert.equal(vocab.bcCompany.privacyLabel, "Privacy (PIPA)", "BC PIPA applies to every organization, so it is presumed for a BC company");
 assert.equal(vocab.federalCbca.privacyLabel, "Privacy");
 assert.equal(vocab.albertaSociety.societyLaw, false, "a society formed outside BC gets no Societies Act wording");
 assert.equal(vocab.albertaSociety.privacyLabel, "Privacy");
@@ -79,7 +79,7 @@ for (const key of KEYS) {
   assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], ENTITIES[key]), vocab[key].privacyLabel, `${key}: privacy nav label`);
 }
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], ENTITIES.federalCbca), "Privacy training");
-assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], ENTITIES.bcCompany), "Privacy training");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], ENTITIES.bcCompany), "PIPA training");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/society"], ENTITIES.federalCbca), "Corporation");
 for (const path of ["/app/members", "/app/proposals", "/app/receipts", "/app/membership"]) {
   assert.deepEqual(ROUTE_IDENTITY[path].entityKinds, ["society"], `${path} stays society-only (EntityKindGate reads this)`);
@@ -144,13 +144,19 @@ const view = applyEntityViewLabels("roleHolder", { columns: roleHolderObject.fie
 assert.equal(view.columns[0].field.label, "Share / right class", "view columns carry their own field copies");
 const pipa = { nameSingular: "pipaTraining", labelSingular: "PIPA training record", labelPlural: "PIPA training", fields: [] };
 assert.equal(applyEntityObjectLabels(pipa, ENTITIES.federalCbca)!.labelPlural, "Privacy training");
-assert.equal(applyEntityObjectLabels(pipa, ENTITIES.bcCompany)!.labelPlural, "Privacy training");
+assert.equal(applyEntityObjectLabels(pipa, ENTITIES.bcCompany)!.labelPlural, "PIPA training");
+const federalWorkBcCompany = { ...ENTITIES.bcCompany, privacyFederalWork: "yes" as const };
+assert.equal(organizationVocabulary(federalWorkBcCompany).privacyLabel, "Privacy", "a recorded federal work displaces the BC PIPA presumption");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], federalWorkBcCompany), "Privacy training");
+assert.equal(applyEntityObjectLabels(pipa, federalWorkBcCompany)!.labelPlural, "Privacy training");
 
 const assessedBc = { ...ENTITIES.federalCbca, privacyOperatingJurisdictions: ["CA-BC"], privacyFederalWork: "no" as const, privacyCommercialActivity: "no" as const, privacyCrossBorderCommercial: "no" as const, privacySectorSpecific: "none" as const };
-assert.equal(organizationVocabulary(assessedBc).privacyLabel, "Privacy (BC PIPA)");
-assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], assessedBc), "Privacy (BC PIPA)");
+assert.equal(organizationVocabulary(assessedBc).privacyLabel, "Privacy (PIPA)");
+assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], assessedBc), "Privacy (PIPA)");
+const assessedBcAndFederal = { ...assessedBc, privacyCommercialActivity: "yes" as const, privacyCrossBorderCommercial: "yes" as const };
+assert.equal(organizationVocabulary(assessedBcAndFederal).privacyLabel, "Privacy (BC PIPA + PIPEDA)", "several laws are named individually");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/pipa-training"], assessedBc), "PIPA training");
 assert.equal(applyEntityObjectLabels(pipa, assessedBc)!.labelPlural, "PIPA training");
 assert.equal(routeLabelForOrganization(ROUTE_IDENTITY["/app/privacy"], null), "Privacy", "no false BC-law label while loading");
 
-console.log("Organization vocabulary passed: one wording module (old names re-exported), activity-scoped PIPA nav labels, corporate workflow recipes, research applicability by entity/jurisdiction, and render-time record-table labels.");
+console.log("Organization vocabulary passed: one wording module (old names re-exported), BC-presumed and activity-scoped PIPA nav labels, corporate workflow recipes, research applicability by entity/jurisdiction, and render-time record-table labels.");
