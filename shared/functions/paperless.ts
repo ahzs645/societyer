@@ -27,7 +27,7 @@ export async function tagProfilesPortable() {
     {
       scope: "Governance",
       tags: ["constitution", "bylaws", "minutes", "election", "auditor"],
-      usage: "Society profile, meetings, elections, bylaws, and auditor records.",
+      usage: "Organization profile, governing documents, meetings, elections and auditor records.",
     },
     {
       scope: "Compliance",

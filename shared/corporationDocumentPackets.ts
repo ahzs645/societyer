@@ -152,7 +152,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
     jurisdictions: COMMON_JURISDICTIONS,
     timeline: "Prepare when the board appoints or changes an officer.",
     deliverable: "Officer appointment resolution, consent, officer register update, and signing authority update checklist.",
-    terms: "Confirm the appointing body and title authority under the bylaws or prior delegation.",
+    terms: "Confirm the appointing body and title authority under the articles, by-laws or a prior delegation.",
     sections: [
       {
         heading: "Officer Appointment",

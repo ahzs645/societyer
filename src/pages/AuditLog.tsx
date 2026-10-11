@@ -135,7 +135,8 @@ export function AuditLogPage() {
               // look. Everything else falls through to the default
               // metadata-driven display.
               if (field.name === "entityType") {
-                return value ? <Badge>{sentenceLabel(value)}</Badge> : null;
+                // "society" is the stored name of the organization-profile record for every entity kind.
+                return value ? <Badge>{value === "society" ? "Organization" : sentenceLabel(value)}</Badge> : null;
               }
               if (field.name === "action") {
                 return <span>{sentenceLabel(value)}</span>;

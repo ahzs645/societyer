@@ -67,13 +67,48 @@
       "channel": "title",
       "snippet": "require member/shareholder approval",
       "reason": "Entity-neutral profile hint naming both members and shareholders."
+    },
+    {
+      "pattern": "*",
+      "route": "/app/portfolio",
+      "reason": "Firm-wide portfolio across every entity the user manages: it intentionally lists society and corporation packets side by side, grouped as 'Society packets' and 'Corporation packets'."
+    },
+    {
+      "pattern": "members",
+      "route": "/app/exports",
+      "channel": "title",
+      "snippet": "members",
+      "reason": "Raw Convex table name in the data-export list (the table is called members for every entity kind)."
+    },
+    {
+      "pattern": "bylaws",
+      "route": "/app/paperless",
+      "snippet": "bylaws",
+      "reason": "Stable Paperless tag identifier (document-category tag), not legal copy; renaming would orphan existing tagged documents."
+    },
+    {
+      "pattern": "constitution",
+      "route": "/app/paperless",
+      "snippet": "constitution",
+      "reason": "Stable Paperless tag identifier (the Constitution document category also holds a corporation's articles); renaming would orphan existing tagged documents."
+    },
+    {
+      "pattern": "members",
+      "route": "/app/integrations",
+      "snippet": "Map Societyer members, donors, volunteers",
+      "reason": "Describes the optional nonprofit-CRM integration itself, which is only meaningful for nonprofits; it is an opt-in catalogue entry, not guidance for this entity."
+    },
+    {
+      "pattern": "bylaws",
+      "route": "/app/integrations",
+      "snippet": "bylaws history",
+      "reason": "Describes what the BC Registry / Paperless integrations sync (the app's 'Bylaws history' feature); catalogue description, not guidance for this entity."
     }
   ],
   "knownLeaks": [
     "bc-corp | (sidebar) | agm",
     "bc-corp | (sidebar) | bylaws",
     "bc-corp | (sidebar) | society",
-    "bc-corp | /app/annual-cycle | agm",
     "bc-corp | /app/attestations | bylaws",
     "bc-corp | /app/audit | society",
     "bc-corp | /app/auditors | agm",
@@ -91,8 +126,6 @@
     "bc-corp | /app/employees | societies-act",
     "bc-corp | /app/employees | societies-section",
     "bc-corp | /app/exports | members",
-    "bc-corp | /app/financials/year-end | agm",
-    "bc-corp | /app/financials/year-end | members",
     "bc-corp | /app/integrations | agm",
     "bc-corp | /app/integrations | bylaws",
     "bc-corp | /app/integrations | members",
@@ -136,7 +169,6 @@
     "cbca-corp | (sidebar) | bylaws",
     "cbca-corp | (sidebar) | pipa",
     "cbca-corp | (sidebar) | society",
-    "cbca-corp | /app/annual-cycle | agm",
     "cbca-corp | /app/attestations | bylaws",
     "cbca-corp | /app/audit | society",
     "cbca-corp | /app/auditors | agm",
@@ -154,8 +186,6 @@
     "cbca-corp | /app/employees | societies-act",
     "cbca-corp | /app/employees | societies-section",
     "cbca-corp | /app/exports | members",
-    "cbca-corp | /app/financials/year-end | agm",
-    "cbca-corp | /app/financials/year-end | members",
     "cbca-corp | /app/integrations | agm",
     "cbca-corp | /app/integrations | bylaws",
     "cbca-corp | /app/integrations | members",
@@ -203,7 +233,6 @@
     "obca-corp | (sidebar) | bylaws",
     "obca-corp | (sidebar) | pipa",
     "obca-corp | (sidebar) | society",
-    "obca-corp | /app/annual-cycle | agm",
     "obca-corp | /app/attestations | bylaws",
     "obca-corp | /app/audit | society",
     "obca-corp | /app/auditors | agm",
@@ -221,8 +250,6 @@
     "obca-corp | /app/employees | societies-act",
     "obca-corp | /app/employees | societies-section",
     "obca-corp | /app/exports | members",
-    "obca-corp | /app/financials/year-end | agm",
-    "obca-corp | /app/financials/year-end | members",
     "obca-corp | /app/integrations | agm",
     "obca-corp | /app/integrations | bylaws",
     "obca-corp | /app/integrations | members",
@@ -270,7 +297,6 @@
     "custom | (sidebar) | bylaws",
     "custom | (sidebar) | pipa",
     "custom | (sidebar) | society",
-    "custom | /app/annual-cycle | agm",
     "custom | /app/attestations | bylaws",
     "custom | /app/audit | society",
     "custom | /app/auditors | agm",
@@ -288,8 +314,6 @@
     "custom | /app/employees | societies-act",
     "custom | /app/employees | societies-section",
     "custom | /app/exports | members",
-    "custom | /app/financials/year-end | agm",
-    "custom | /app/financials/year-end | members",
     "custom | /app/integrations | agm",
     "custom | /app/integrations | bylaws",
     "custom | /app/integrations | members",

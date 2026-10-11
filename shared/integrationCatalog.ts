@@ -105,7 +105,7 @@ export const INTEGRATION_CATALOG: IntegrationManifest[] = [
     name: "Google Calendar",
     kind: "calendar",
     category: "Calendar",
-    summary: "Export or sync meetings, AGM dates, filing deadlines, insurance renewals, grant reports, and task due dates.",
+    summary: "Export or sync meetings, annual meeting dates, filing deadlines, insurance renewals, grant reports, and task due dates.",
     description:
       "Defines the calendar mapping and token scopes needed for a future Google Calendar provider without coupling Societyer to a specific OAuth implementation.",
     status: "planned",
