@@ -1,3 +1,7 @@
+import type { LegalEntityLike } from "../../shared/organizationDomain";
+import { organizationRuleScope } from "../../shared/entityRuleScope";
+import { citationIdsForOrganization } from "./regulatoryCitations";
+
 export const LEGAL_COPY_REVIEWED = "Reviewed April 2026";
 
 export const PIPA_INTAKE_NOTICE = {
@@ -66,3 +70,45 @@ export const DIRECTOR_ATTESTATION_COPY = {
     residency: "My residency and other eligibility criteria remain accurate.",
   },
 };
+
+export type OrganizationLegalCopy = {
+  /** "society", "corporation" or "organization" — for sentence copy. */
+  entityNoun: string;
+  /** "PIPA" for BC-home organizations; otherwise a neutral label. */
+  privacyLawLabel: string;
+  intakeNotice: typeof PIPA_INTAKE_NOTICE;
+  policyRequirements: string[];
+  /** Drafting resources whose citations apply to this organization (BC OIPC sources only for BC). */
+  templateResources: typeof PIPA_TEMPLATE_RESOURCES;
+  /** Societies Act records-inspection guidance; empty unless the workspace is a BC society. */
+  recordsInspectionGuidance: string[];
+  directorAttestation: typeof DIRECTOR_ATTESTATION_COPY;
+};
+
+/**
+ * Entity-aware versions of the copy above. The constants are written for a BC
+ * society; pages showing a corporation or another entity should read this
+ * instead so society wording, Societies Act guidance and BC-only resources do
+ * not leak. Empty arrays mean "hide the section", not "nothing is required".
+ */
+export function legalCopyForOrganization(organization: LegalEntityLike | null | undefined): OrganizationLegalCopy {
+  const scope = organizationRuleScope(organization);
+  const entityNoun = scope.isCorporation ? "corporation" : scope.isSociety ? "society" : "organization";
+  const noun = (text: string) => text.replace(/\bsociety\b/g, entityNoun);
+  return {
+    entityNoun,
+    privacyLawLabel: scope.isBcHome ? "PIPA" : "applicable privacy law",
+    intakeNotice: { ...PIPA_INTAKE_NOTICE, body: noun(PIPA_INTAKE_NOTICE.body) },
+    policyRequirements: PIPA_POLICY_REQUIREMENTS.map((item) =>
+      scope.isSociety ? item : item.replace(/^Member notice preferences:/, "Notice preferences:"),
+    ),
+    templateResources: PIPA_TEMPLATE_RESOURCES
+      .filter((resource) => citationIdsForOrganization(resource.citationIds, organization).length > 0)
+      .map((resource) => ({ ...resource, body: noun(resource.body) })),
+    recordsInspectionGuidance: scope.isBcSociety ? RECORDS_INSPECTION_GUIDANCE : [],
+    directorAttestation: {
+      ...DIRECTOR_ATTESTATION_COPY,
+      note: DIRECTOR_ATTESTATION_COPY.note.replace(/\bThe society\b/, `The ${entityNoun}`),
+    },
+  };
+}

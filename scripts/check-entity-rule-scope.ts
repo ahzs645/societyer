@@ -33,6 +33,7 @@ import {
 import { getJurisdictionGuidePack, resolveJurisdictionCode } from "../src/lib/jurisdictionGuideTracks";
 import { jurisdictionDisplayCopy } from "../shared/jurisdictionWorkspace";
 import { evaluateLegalDecision, legalMeetingQuorum } from "../shared/legalDecision";
+import { legalCopyForOrganization, RECORDS_INSPECTION_GUIDANCE } from "../src/lib/legalCopy";
 
 const ENTITIES = {
   bcSociety: { name: "Riverside Community Society", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act" },
@@ -96,6 +97,17 @@ const writtenDirectors = { jurisdiction: "CA-BC" as const, body: "directors" as 
 assert.ok(evaluateLegalDecision({ ...writtenDirectors, entityType: "corporation__business_" }).warnings.every((warning) => !/society/i.test(warning)));
 assert.ok(evaluateLegalDecision({ ...writtenDirectors, entityType: "society" }).warnings.some((warning) => /society bylaw/.test(warning)));
 assert.doesNotMatch(legalMeetingQuorum({ entityType: "society", jurisdiction: "CA-ON-OBCA", eligiblePeople: 10, presentPeople: 5 }).citation, /Societies Act/);
+
+const societyCopy = legalCopyForOrganization(ENTITIES.bcSociety);
+assert.deepEqual(societyCopy.recordsInspectionGuidance, RECORDS_INSPECTION_GUIDANCE);
+assert.equal(societyCopy.privacyLawLabel, "PIPA");
+for (const key of CORPORATIONS) {
+  const copy = legalCopyForOrganization(ENTITIES[key]);
+  assert.deepEqual(copy.recordsInspectionGuidance, [], `${key}: no Societies Act records guidance`);
+  assert.doesNotMatch(JSON.stringify([copy.intakeNotice, copy.directorAttestation, copy.templateResources, copy.policyRequirements]), /\bsociety\b|Member notice/i, `${key}: no society wording`);
+}
+assert.ok(legalCopyForOrganization(ENTITIES.federalCbca).templateResources.every((resource) => !/BC OIPC/.test(resource.title)), "BC OIPC resources stay BC-only");
+assert.equal(legalCopyForOrganization(ENTITIES.federalCbca).privacyLawLabel, "applicable privacy law");
 
 /* ------------------------------ rule pack -------------------------------- */
 
@@ -172,4 +184,4 @@ for (const key of Object.keys(ENTITIES) as (keyof typeof ENTITIES)[]) {
   }
 }
 
-console.log("Entity rule scope passed: BC societies keep Societies Act warnings and citations; BC/federal/Ontario corporations, non-BC societies and custom entities receive none (dashboard, annual cycle, minute book, guide tracks, citations, decision warnings).");
+console.log("Entity rule scope passed: BC societies keep Societies Act warnings and citations; BC/federal/Ontario corporations, non-BC societies and custom entities receive none (dashboard, annual cycle, minute book, guide tracks, citations, legal copy, decision warnings).");
