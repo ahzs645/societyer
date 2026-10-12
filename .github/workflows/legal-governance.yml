@@ -22,6 +22,11 @@ jobs:
       - run: npm ci
       - name: Source coverage, profiles, evidence and authorization
         run: npm run test:legal
+      # Dates must come from the organization's time zone, not the UTC date.
+      # A second pass just after midnight UTC catches checks or code that get
+      # this wrong, instead of only when CI happens to run in the evening.
+      - name: Same checks just after midnight UTC
+        run: npm run test:legal:after-utc-midnight
       - name: Navigation labels, translations and privacy labels
         run: npx tsx scripts/check-platform-polish.ts
       - name: Portable manifest drift

@@ -307,6 +307,7 @@
     "test:people-identity-ui": "playwright test --config playwright.people-identity.config.ts",
     "test:governance-retest-ui": "playwright test --config playwright.governance-retest.config.ts",
     "test:legal": "node scripts/run-legal-checks.mjs",
+    "test:legal:after-utc-midnight": "node scripts/run-legal-checks.mjs --after-utc-midnight",
     "research:coverage": "node --import tsx scripts/build-legal-research-coverage.ts"
   },
   "dependencies": {

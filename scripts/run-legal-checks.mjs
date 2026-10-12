@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 // Keep this list explicit: a new legal profile must pass the same evidence,
 // authority, source and integration gates as the existing profiles.
@@ -28,10 +29,14 @@ const scripts = [
   'check-annual-deadline-review-fixes.ts',
   'check-deadline-source-key.ts', 'check-clone-society.ts',
 ];
+// --after-utc-midnight runs every check with the clock just past 00:00 UTC.
+const clockShift = process.argv.includes('--after-utc-midnight');
+const preload = clockShift ? ['--import', fileURLToPath(new URL('./lib/after-utc-midnight-clock.mjs', import.meta.url))] : [];
+if (clockShift) console.log('Clock shifted to 00:30 UTC tomorrow (the UTC date is ahead of Canadian local dates).');
 const results = [];
 for (const script of scripts) {
   const started = Date.now();
-  const result = spawnSync(process.execPath, ['--import', 'tsx', `scripts/${script}`], { encoding: 'utf8', env: process.env, maxBuffer: 8 * 1024 * 1024 });
+  const result = spawnSync(process.execPath, [...preload, '--import', 'tsx', `scripts/${script}`], { encoding: 'utf8', env: process.env, maxBuffer: 8 * 1024 * 1024 });
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
   results.push({ script, passed: result.status === 0, durationMs: Date.now() - started });
   console.log(`${result.status === 0 ? 'PASS' : 'FAIL'} ${script} (${Date.now() - started} ms)`);
