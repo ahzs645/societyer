@@ -25,6 +25,7 @@ import {
 import { annualGovernanceSettings } from "../annualGovernanceEvidence";
 import { isAgmMeeting } from "../agmEvidence";
 import { legalGovernanceProfile } from "../legalGovernanceProfiles";
+import { cleanOperativeArticles, operativeArticlesProblems, type OperativeArticles } from "../operativeArticles";
 import { getOwned, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { listPortable as listWrittenResolutionsPortable } from "./writtenResolutions";
@@ -241,5 +242,33 @@ export async function updateAnnualEvidenceSettingsPortable(
     patch[field] = value || undefined;
   }
   await ctx.db.patch(args.societyId, { ...patch, updatedAt: Date.now() });
+  return args.societyId;
+}
+
+/**
+ * Record which articles a BC company adopted (Table 1 version or custom),
+ * its custom Parts and the article overrides. `operativeArticles: null`
+ * clears the record. Only BC companies may record articles here; the linked
+ * articles document must belong to the same workspace.
+ */
+export async function updateOperativeArticlesPortable(
+  ctx: PortableMutationCtx,
+  args: { societyId: string; operativeArticles: OperativeArticles | null },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const society = await ctx.db.get(args.societyId, "societies");
+  if (!society) throw new Error("societies not found.");
+  if (args.operativeArticles === null) {
+    await ctx.db.patch(args.societyId, { operativeArticles: undefined, updatedAt: Date.now() });
+    return args.societyId;
+  }
+  const problems = operativeArticlesProblems(args.operativeArticles, society);
+  if (problems.length) throw new Error(problems.join(" "));
+  const cleaned = cleanOperativeArticles(args.operativeArticles);
+  if (cleaned.sourceDocumentId) {
+    const document = await ctx.db.get(cleaned.sourceDocumentId).catch(() => null);
+    if (!document || String(document.societyId) !== String(args.societyId)) throw new Error("The articles document was not found in this workspace.");
+  }
+  await ctx.db.patch(args.societyId, { operativeArticles: { ...cleaned, recordedAtISO: new Date().toISOString() }, updatedAt: Date.now() });
   return args.societyId;
 }

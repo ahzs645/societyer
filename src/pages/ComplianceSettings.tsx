@@ -31,6 +31,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { annualGovernanceSettings } from "../../shared/annualGovernanceEvidence";
 import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import { CitationBadge } from "../components/CitationTooltip";
+import { OperativeArticlesSettings } from "../features/corporation/OperativeArticlesSettings";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -244,6 +245,8 @@ export function ComplianceSettingsPage() {
             canReadResolutions={permissions.loaded && permissions.can("motions:read")}
             filingsAvailable={canReadFilings && filings !== undefined}
           />
+
+          <OperativeArticlesSettings society={society} canWrite={canSaveSettings} />
 
           <section className="card settings-section">
             <h2 className="settings-section__title">Documents</h2>

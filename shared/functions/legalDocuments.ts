@@ -65,6 +65,7 @@ import { activeAsOf, type IntervalRow } from "../registerHistory";
 import { annualResolutionDataWithAuthority, buildAnnualResolutionContext, type AnnualResolutionContext } from "../annualResolution";
 import { buildDividendResolutionContext } from "../dividendResolution";
 import { generatedPreparationReviewView } from "../preparationDocumentState";
+import { articlesPacketView } from "../articlesPartSkeleton";
 
 export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<any> {
   await requireSocietyMembership(ctx, societyId);
@@ -1127,6 +1128,11 @@ async function buildPacketDataContext(
   renderCtx: { dir: { list: Array<{ name: string }> }; date?: { long?: string } },
   runData?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  if (packet.key === "bc-incorporation-agreement" || packet.key === "bc-articles-preparation" || packet.key === "bc-officer-indemnity-agreement") {
+    // Recorded articles + a Part skeleton per share class (shared/articlesPartSkeleton.ts).
+    const classes = await ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    return articlesPacketView(society, classes);
+  }
   if (packet.key === "share-split" && runData) {
     const lines = Array.isArray(runData.lines) ? (runData.lines as Array<Record<string, unknown>>) : [];
     return {

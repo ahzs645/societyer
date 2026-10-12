@@ -5185,6 +5185,22 @@
     ]
   },
   {
+    "key": "convex:corporationSettings:updateOperativeArticles",
+    "surface": "convex",
+    "name": "corporationSettings:updateOperativeArticles",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporationSettings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:courtOrders:create",
     "surface": "convex",
     "name": "courtOrders:create",
@@ -26568,6 +26584,22 @@
     "key": "portable:corporationSettings:updateAnnualEvidenceSettings",
     "surface": "portable",
     "name": "corporationSettings:updateAnnualEvidenceSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporationSettings:updateOperativeArticles",
+    "surface": "portable",
+    "name": "corporationSettings:updateOperativeArticles",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

@@ -6,7 +6,9 @@ import {
   recordAnnualDeadlineCalendarReviewPortable,
   recordWrittenAnnualBusinessCompletionPortable,
   updateAnnualEvidenceSettingsPortable,
+  updateOperativeArticlesPortable,
 } from "../shared/functions/corporationSettings";
+import { operativeArticlesValidator } from "./validators/operativeArticles";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 
 /**
@@ -65,4 +67,14 @@ export const updateAnnualEvidenceSettings = authorizedMutation("corporationSetti
   },
   returns: v.any(),
   handler: async (ctx, args) => updateAnnualEvidenceSettingsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** Which articles a BC company adopted (Table 1 version or custom), custom Parts and overrides. */
+export const updateOperativeArticles = authorizedMutation("corporationSettings:updateOperativeArticles", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    operativeArticles: v.union(operativeArticlesValidator, v.null()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => updateOperativeArticlesPortable(await toPortableMutationCtx(ctx), args as any),
 });

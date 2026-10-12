@@ -55,12 +55,14 @@ export type ResolvedQuorumRule = {
 
 /** Pick the rule that governs a meeting, or null when none applies. */
 export function resolveMeetingQuorumRule(
-  rules: { quorumType?: string; quorumValue?: number; quorumMinimumCount?: number; bodyQuorumRules?: BodyQuorumRule[] | null } | null | undefined,
+  rules: { quorumType?: string; quorumValue?: number; quorumMinimumCount?: number; bodyQuorumRules?: BodyQuorumRule[] | null; governingInstrumentLabel?: string } | null | undefined,
   meeting: { type?: string | null; committeeId?: string | null },
   committee?: { _id?: string; name?: string; quorumRule?: QuorumRuleLike | null } | null,
 ): ResolvedQuorumRule | null {
   const body = meetingBodyKind(meeting.type, meeting.committeeId);
   const bodyRules = Array.isArray(rules?.bodyQuorumRules) ? rules!.bodyQuorumRules! : [];
+  // Corporations take quorum from their articles; societies from bylaws.
+  const instrument = rules?.governingInstrumentLabel === "articles" ? "articles" : "bylaw rules";
   if (body === "committee") {
     if (committee?.quorumRule?.quorumType) {
       return { rule: committee.quorumRule, body, source: "committee", label: `${committee.name ?? "Committee"} quorum rule` };
@@ -69,10 +71,10 @@ export function resolveMeetingQuorumRule(
     const specific = bodyRules.find((row) => row.body === "committee" && committeeId && String(row.committeeId ?? "") === committeeId);
     const generic = bodyRules.find((row) => row.body === "committee" && !row.committeeId);
     const match = specific ?? generic;
-    if (match) return { rule: match, body, source: "body_rule", label: `${match.committeeName ?? committee?.name ?? "Committee"} quorum (bylaw rules)` };
+    if (match) return { rule: match, body, source: "body_rule", label: `${match.committeeName ?? committee?.name ?? "Committee"} quorum (${instrument})` };
   } else {
     const match = bodyRules.find((row) => row.body === body);
-    if (match) return { rule: match, body, source: "body_rule", label: `${body === "general" ? "General meeting" : "Board"} quorum (bylaw rules)` };
+    if (match) return { rule: match, body, source: "body_rule", label: `${body === "general" ? "General meeting" : "Board"} quorum (${instrument})` };
   }
   if (!rules?.quorumType) return null;
   if (rules.quorumType === "fixed") return { rule: { quorumType: "fixed", quorumValue: rules.quorumValue, quorumMinimumCount: rules.quorumMinimumCount }, body, source: "society", label: "Society quorum" };

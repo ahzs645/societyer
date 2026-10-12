@@ -4,6 +4,7 @@ import { reviewEvidenceTables } from "./tables/reviewEvidence";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { integrationSettingsValidator } from "./lib/integrationSettings";
+import { operativeArticlesValidator } from "./validators/operativeArticles";
 import { ycnRegisterTables } from "./tables/ycnRegisters";
 import { legalDocsTables } from "./tables/legalDocs";
 import { formationTables } from "./tables/formation";
@@ -171,6 +172,9 @@ export default defineSchema({
     restrictPeoplePicker: v.optional(v.boolean()),
     // YCN FMT_Page_DOC_ID: stamp a deterministic document id atop generated docs.
     includeDocumentIdHeader: v.optional(v.boolean()),
+    // BC company only: which articles were adopted (Table 1 version or custom),
+    // custom Parts and article overrides. See shared/operativeArticles.ts.
+    operativeArticles: v.optional(operativeArticlesValidator),
     updatedAt: v.number(),
   })
     .index("by_public_slug", ["publicSlug"])

@@ -93,6 +93,8 @@ export function legalMeetingQuorum(input: {
   presentVotingShares?: number;
   adoptedModel?: "bc_society" | "bc_table_1";
   configuredMinimum?: number;
+  /** Share fraction for a BC articles quorum; Table 1 Art. 8.2 uses 1/20. */
+  votingShareFraction?: { numerator: number; denominator: number };
 }): { met: boolean | null; minimumPeople: number; minimumVotes?: number; citation: string } {
   const { eligiblePeople, presentPeople } = input;
   if (![eligiblePeople, presentPeople].every(n => Number.isSafeInteger(n) && n >= 0) || presentPeople > eligiblePeople || eligiblePeople === 0) {
@@ -115,8 +117,13 @@ export function legalMeetingQuorum(input: {
   }
   const minimumPeople = Math.min(eligiblePeople, input.configuredMinimum ?? 2);
   if (input.adoptedModel === "bc_table_1" && eligiblePeople > 1) {
-    if (input.eligibleVotingShares === undefined || input.presentVotingShares === undefined) return { met: null, minimumPeople, citation: "Adopted Table 1 article 8.2 requires the issued voting share denominator" };
-    return { met: presentPeople >= minimumPeople && input.presentVotingShares * 20 >= input.eligibleVotingShares, minimumPeople, citation: "Adopted Table 1 article 8.2" };
+    const fraction = input.votingShareFraction ?? { numerator: 1, denominator: 20 };
+    if (![fraction.numerator, fraction.denominator].every(n => Number.isSafeInteger(n) && n > 0) || fraction.numerator > fraction.denominator) return { met: null, minimumPeople, citation: "Review the articles' voting-share quorum fraction" };
+    const citation = input.votingShareFraction ? "Articles quorum provision (BCA s. 172(1)(a))" : "Adopted Table 1 article 8.2";
+    if (input.eligibleVotingShares === undefined || input.presentVotingShares === undefined) return { met: null, minimumPeople, citation: `${citation} requires the issued voting share denominator` };
+    // Integer cross-multiplication: present/eligible >= numerator/denominator.
+    const sharesMet = BigInt(input.presentVotingShares) * BigInt(fraction.denominator) >= BigInt(input.eligibleVotingShares) * BigInt(fraction.numerator);
+    return { met: presentPeople >= minimumPeople && sharesMet, minimumPeople, citation };
   }
   return { met: presentPeople >= minimumPeople, minimumPeople, citation: "BC BCA s.172; applicable articles" };
 }
