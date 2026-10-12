@@ -51,6 +51,8 @@ export function CorporateHistoryPage() {
         name: string;
         shortName?: string;
         startISO: string;
+        endISO?: string;
+        sourceDocumentIds?: string[];
         regPosn?: number;
       }>
     | undefined;
@@ -70,6 +72,8 @@ export function CorporateHistoryPage() {
         legislation: string;
         regNumber?: string;
         startISO: string;
+        endISO?: string;
+        sourceDocumentIds?: string[];
       }>
     | undefined;
   const constatingNarrative = useQuery(
@@ -77,6 +81,13 @@ export function CorporateHistoryPage() {
     society && canReadEvents ? { societyId: society._id } : "skip",
   ) as string | undefined;
 
+  // Constating documents and name-change certificates link to the documents register.
+  const documents = useQuery(api.documents.list, society && canReadEvents ? { societyId: society._id } : "skip") as
+    Array<{ _id: string; title?: string; fileName?: string }> | undefined;
+  const documentOptions = [{ value: "", label: "Not linked" }, ...(documents ?? []).map((doc) => ({ value: String(doc._id), label: doc.title || doc.fileName || "Untitled document" }))];
+  // Keep any further linked ids when the first one is unchanged.
+  const linkedIds = (selected: string, previous?: string[]) =>
+    !selected ? [] : previous?.[0] === selected ? previous : [selected, ...(previous ?? []).filter((id) => id !== selected)];
   const nameUpsert = usePermissionedMutation(api.nameHistory.upsert, canWriteNames);
   const nameRemove = usePermissionedMutation(api.nameHistory.remove, canWriteNames);
   const constatingCreate = usePermissionedMutation(api.constating.create, canWriteEvents);
@@ -97,6 +108,7 @@ export function CorporateHistoryPage() {
     ? [
         ...(!String(nameForm.name ?? "").trim() ? ["Enter the corporate name."] : []),
         ...(!/^\d{4}-\d{2}-\d{2}$/.test(String(nameForm.startISO ?? "")) ? ["Choose the date the name took effect."] : []),
+        ...(nameForm.endISO && nameForm.endISO < nameForm.startISO ? ["A name cannot end before it took effect."] : []),
       ]
     : [];
   const eventProblems = eventForm
@@ -104,12 +116,13 @@ export function CorporateHistoryPage() {
         ...(!String(eventForm.jurisdiction ?? "").trim() ? ["Enter the jurisdiction."] : []),
         ...(!String(eventForm.legislation ?? "").trim() ? ["Enter the legislation (the Act)."] : []),
         ...(!/^\d{4}-\d{2}-\d{2}$/.test(String(eventForm.startISO ?? "")) ? ["Choose the effective date."] : []),
+        ...(eventForm.endISO && eventForm.endISO < eventForm.startISO ? ["An event cannot end before it took effect."] : []),
       ]
     : [];
 
   const editName = (row: any) => {
     if (!canWriteNames || !row._id) return;
-    setNameForm({ id: row._id, name: row.name, shortName: row.shortName ?? "", startISO: row.startISO, regPosn: row.regPosn ?? "" });
+    setNameForm({ id: row._id, name: row.name, shortName: row.shortName ?? "", startISO: row.startISO, endISO: row.endISO ?? "", regPosn: row.regPosn ?? "", sourceDocumentId: row.sourceDocumentIds?.[0] ?? "", previousDocumentIds: row.sourceDocumentIds });
     setNameOpen(true);
   };
   const removeName = async (row: any) => {
@@ -130,7 +143,7 @@ export function CorporateHistoryPage() {
   };
   const editEvent = (row: any) => {
     if (!canWriteEvents || !row._id) return;
-    setEventForm({ id: row._id, action: row.action, jurisdiction: row.jurisdiction, legislation: row.legislation, regNumber: row.regNumber ?? "", startISO: row.startISO });
+    setEventForm({ id: row._id, action: row.action, jurisdiction: row.jurisdiction, legislation: row.legislation, regNumber: row.regNumber ?? "", startISO: row.startISO, endISO: row.endISO ?? "", sourceDocumentId: row.sourceDocumentIds?.[0] ?? "", previousDocumentIds: row.sourceDocumentIds });
     setEventOpen(true);
   };
   const removeEvent = async (row: any) => {
@@ -156,7 +169,9 @@ export function CorporateHistoryPage() {
       name: "",
       shortName: "",
       startISO: todayDateOnly(),
+      endISO: "",
       regPosn: "",
+      sourceDocumentId: "",
     });
     setNameOpen(true);
   };
@@ -175,6 +190,8 @@ export function CorporateHistoryPage() {
         shortName: nameForm.shortName?.trim() || undefined,
         startISO: nameForm.startISO,
         regPosn: nameForm.regPosn === "" ? undefined : Number(nameForm.regPosn),
+        endISO: nameForm.endISO || (nameForm.id ? null : undefined),
+        ...(canReadEvents ? { sourceDocumentIds: linkedIds(nameForm.sourceDocumentId, nameForm.previousDocumentIds) } : {}),
         nowISO: new Date().toISOString(),
       });
       setNameOpen(false);
@@ -192,6 +209,8 @@ export function CorporateHistoryPage() {
       legislation: "",
       regNumber: "",
       startISO: todayDateOnly(),
+      endISO: "",
+      sourceDocumentId: "",
     });
     setEventOpen(true);
   };
@@ -209,6 +228,8 @@ export function CorporateHistoryPage() {
         legislation: eventForm.legislation.trim(),
         regNumber: eventForm.regNumber?.trim() || undefined,
         startISO: eventForm.startISO,
+        endISO: eventForm.endISO || (eventForm.id ? null : undefined),
+        sourceDocumentIds: linkedIds(eventForm.sourceDocumentId, eventForm.previousDocumentIds),
       };
       if (eventForm.id) await constatingUpdate({ id: eventForm.id, ...values });
       else await constatingCreate({ societyId: society._id, ...values, nowISO: new Date().toISOString() });
@@ -264,7 +285,7 @@ export function CorporateHistoryPage() {
                 <span>
                   {n.name}
                   {n.shortName ? ` — ${n.shortName}` : ""}
-                  <span style={{ color: "var(--text-tertiary)" }}> — since {formatDate(n.startISO)}</span>
+                  <span style={{ color: "var(--text-tertiary)" }}> — {n.endISO ? `${formatDate(n.startISO)} to ${formatDate(n.endISO)}` : `since ${formatDate(n.startISO)}`}{n.sourceDocumentIds?.length ? ` · ${n.sourceDocumentIds.length} linked ${n.sourceDocumentIds.length === 1 ? "document" : "documents"}` : ""}</span>
                 </span>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
@@ -309,6 +330,8 @@ export function CorporateHistoryPage() {
                 <span>
                   <strong>{constatingActionLabel(c.action)}</strong> — {c.legislation} ({c.jurisdiction}) — {formatDate(c.startISO)}
                   {c.regNumber ? ` — No. ${c.regNumber}` : ""}
+                  {c.endISO ? ` — ended ${formatDate(c.endISO)}` : ""}
+                  {c.sourceDocumentIds?.length ? ` · ${c.sourceDocumentIds.length} linked ${c.sourceDocumentIds.length === 1 ? "document" : "documents"}` : ""}
                 </span>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
@@ -379,6 +402,14 @@ export function CorporateHistoryPage() {
                 />
               </Field>
             </div>
+            <Field label="Ended on" hint="For a former name, the day before the next name took effect.">
+              <DatePicker value={nameForm.endISO} onChange={(value) => setNameForm({ ...nameForm, endISO: value })} />
+            </Field>
+            {canReadEvents && (
+              <Field label="Supporting document" hint="For example, the certificate of change of name.">
+                <Select value={nameForm.sourceDocumentId} onChange={(value) => setNameForm({ ...nameForm, sourceDocumentId: value })} searchable options={documentOptions} />
+              </Field>
+            )}
           </div>
         )}
       </Drawer>
@@ -438,6 +469,12 @@ export function CorporateHistoryPage() {
                 />
               </Field>
             </div>
+            <Field label="Ended on" hint="For example, when a later continuance or amalgamation replaced this regime.">
+              <DatePicker value={eventForm.endISO} onChange={(value) => setEventForm({ ...eventForm, endISO: value })} />
+            </Field>
+            <Field label="Constating document" hint="The certificate, articles or order for this event.">
+              <Select value={eventForm.sourceDocumentId} onChange={(value) => setEventForm({ ...eventForm, sourceDocumentId: value })} searchable options={documentOptions} />
+            </Field>
           </div>
         )}
       </Drawer>

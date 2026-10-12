@@ -50,6 +50,8 @@ export const upsert = authorizedMutation("nameHistory:upsert", mutation)({
     shortName: v.optional(v.string()),
     startISO: v.string(),
     regPosn: v.optional(v.number()),
+    endISO: v.optional(v.union(v.string(), v.null())),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     nowISO: v.string(),
   },
   returns: v.any(),

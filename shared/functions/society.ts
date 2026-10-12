@@ -291,80 +291,182 @@ const CLONE_CHILD_TABLES = [
  * Remap a single field value through the old→new Id map. Cloned rows reference
  * each other by Convex Id (e.g. rightsHoldings.rightsClassId → rightsClasses);
  * a flat copy would leave those references pointing at the SOURCE society. We
- * remap any value (scalar or array element) that is an Id of a row we cloned;
- * cross-tenant Ids we did NOT clone (e.g. directoryPersonId → peopleDirectory,
- * sourceDocumentIds → documents) are absent from the map and pass through.
+ * remap any value (scalar or array element) that is an Id of a row we cloned,
+ * including a "roleHolder:<id>" holder key; cross-tenant Ids we did NOT clone
+ * (e.g. directoryPersonId → peopleDirectory, sourceDocumentIds → documents)
+ * are absent from the map and pass through.
  */
 function remapValue(value: unknown, idMap: Map<string, string>): unknown {
+  const one = (item: string) => {
+    const direct = idMap.get(item);
+    if (direct) return direct;
+    const holder = /^roleHolder:(.+)$/.exec(item);
+    const mapped = holder ? idMap.get(holder[1]) : undefined;
+    return mapped ? `roleHolder:${mapped}` : item;
+  };
   if (typeof value === "string") {
-    return idMap.get(value) ?? value;
+    return one(value);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => (typeof item === "string" ? idMap.get(item) ?? item : item));
+    return value.map((item) => (typeof item === "string" ? one(item) : item));
   }
   return value;
 }
 
+/** Start/effective date fields a template clone may reset (YCN Date_Over_Ride). */
+export const CLONE_EFFECTIVE_DATE_FIELDS: Partial<Record<(typeof CLONE_CHILD_TABLES)[number], readonly string[]>> = {
+  roleHolders: ["startDate"],
+  organizationAddresses: ["effectiveFrom"],
+  rightsClasses: ["startDate"],
+  rightsholdingTransfers: ["transferDate"],
+  serviceProviders: ["appointedOn"],
+  societyNameHistory: ["startISO"],
+  constatingEvents: ["startISO"],
+  shareCertificates: ["issuedOn"],
+  entitySigners: ["validFromISO"],
+};
+const CLONE_END_DATE_FIELDS = ["endDate", "effectiveTo", "removedOn", "endISO", "cancelledOn", "validToISO"];
+/** Ownership registers: holdings, the ledger, certificates and dividends. */
+const CLONE_HOLDING_TABLES = new Set(["rightsHoldings", "rightsholdingTransfers", "shareCertificates", "dividends"]);
+/** Roles that make a role-holder row a significant individual / controller. */
+const SIGNIFICANT_ROLE_TYPES = new Set(["controller", "significant_individual"]);
+export const MAX_CLONE_COPIES = 20;
+
+export type CloneSocietyOptions = {
+  /** YYYY-MM-DD: reset every start/effective date to this date. */
+  resetEffectiveDatesTo?: string;
+  /** Leave out shareholdings, the share ledger, certificates and dividends. */
+  excludeHoldings?: boolean;
+  /** Leave out significant individuals and their diligence steps. */
+  excludeSignificantIndividuals?: boolean;
+  /** Leave out every person (role holders and signers); implies the two above. */
+  excludePeople?: boolean;
+  /** Create this many clones, named "<name> 1" … "<name> N". */
+  copies?: number;
+  /** Registry number of the new entity (single clone only). */
+  incorporationNumber?: string;
+};
+
+function validDateOnly(value: string) {
+  const time = /^\d{4}-\d{2}-\d{2}$/.test(value) ? Date.parse(`${value}T00:00:00Z`) : NaN;
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
 export async function cloneSocietyPortable(
   ctx: PortableMutationCtx,
-  args: { sourceSocietyId: string; newName: string; nowISO: string },
+  args: { sourceSocietyId: string; newName: string; nowISO: string } & CloneSocietyOptions,
 ) {
   await requireSocietyMembership(ctx, args.sourceSocietyId);
   const name = args.newName.trim();
   if (!name) throw new Error("New society name is required.");
   const source = await ctx.db.get(args.sourceSocietyId);
   if (!source) throw new Error("Source society not found.");
+  const copies = args.copies ?? 1;
+  if (!Number.isInteger(copies) || copies < 1 || copies > MAX_CLONE_COPIES) throw new Error(`Choose between 1 and ${MAX_CLONE_COPIES} copies.`);
+  const resetDate = args.resetEffectiveDatesTo?.trim() || undefined;
+  if (resetDate && !validDateOnly(resetDate)) throw new Error("Enter the reset date as a valid date (YYYY-MM-DD).");
+  const targetNumber = args.incorporationNumber?.trim() || undefined;
+  if (targetNumber && copies > 1) throw new Error("A registry number can be set only when creating one clone.");
+  const excludePeople = args.excludePeople === true;
+  const excludeHoldings = excludePeople || args.excludeHoldings === true;
+  const excludeSignificant = excludePeople || args.excludeSignificantIndividuals === true;
 
-  const { _id, _creationTime, ...sourceFields } = source as Record<string, unknown>;
-  void _id;
-  void _creationTime;
-  const newSocietyId = await ctx.db.insert("societies", {
-    ...(sourceFields as any),
-    name,
-    incorporationNumber: undefined, // a clone is a distinct legal entity
-    // Annual-business evidence belongs to the source entity (and its written
-    // resolutions); a clone records its own.
-    annualDeadlineCalendarReviews: undefined,
-    annualMeetingCompletions: undefined,
-    annualMeetingFinancialYearEnd: undefined,
-    annualReturnPeriodEnd: undefined,
-    updatedAt: Date.now(),
-  });
+  // Warn, without blocking, when the target number is already in use by an
+  // organization this user can see (never search other tenants).
+  const warnings: string[] = [];
+  if (targetNumber) {
+    const normalized = targetNumber.replace(/\s+/g, "").toUpperCase();
+    const visible = await listAuthorizedSocietyRows(ctx);
+    const clash = visible.find((row) => String(row.incorporationNumber ?? "").replace(/\s+/g, "").toUpperCase() === normalized);
+    if (clash) warnings.push(`Registry number ${targetNumber} is already recorded for ${clash.name ?? "another organization"}. Check that the clone is a different entity.`);
+  }
 
-  // Pass 1: insert every child row under the new society, recording the
-  // old→new Id mapping. Cross-references are not yet rewritten.
-  const idMap = new Map<string, string>();
-  const inserted: Array<{ table: (typeof CLONE_CHILD_TABLES)[number]; newId: string }> = [];
+  // Read the source registers once; each copy is inserted from the same rows.
+  const sourceRows: Array<{ table: (typeof CLONE_CHILD_TABLES)[number]; rows: Array<Record<string, unknown>> }> = [];
   for (const table of CLONE_CHILD_TABLES) {
+    if (excludeHoldings && CLONE_HOLDING_TABLES.has(table)) continue;
+    if (excludeSignificant && table === "significantIndividualSteps") continue;
+    if (excludePeople && (table === "roleHolders" || table === "entitySigners")) continue;
     const rows = await ctx.db
       .query(table)
       .withIndex("by_society", (q: any) => q.eq("societyId", args.sourceSocietyId))
       .collect();
-    for (const row of rows) {
-      const { _id: rid, _creationTime: rct, ...fields } = row as Record<string, unknown>;
-      void rct;
-      const newId = await ctx.db.insert(table, { ...(fields as any), societyId: newSocietyId });
-      idMap.set(String(rid), newId as unknown as string);
-      inserted.push({ table, newId: newId as unknown as string });
+    sourceRows.push({ table, rows: rows.filter((row: any) => !(table === "roleHolders" && excludeSignificant && SIGNIFICANT_ROLE_TYPES.has(String(row.roleType)))) });
+  }
+  // A row that points at a person left out of the clone is left out too, so
+  // no clone row references the source workspace's people.
+  const keptRoleHolders = new Set((sourceRows.find((entry) => entry.table === "roleHolders")?.rows ?? []).map((row) => String(row._id)));
+  const allRoleHolders = await ctx.db.query("roleHolders").withIndex("by_society", (q: any) => q.eq("societyId", args.sourceSocietyId)).collect();
+  const excludedRoleHolders = new Set(allRoleHolders.map((row: any) => String(row._id)).filter((id: string) => !keptRoleHolders.has(id)));
+  if (excludedRoleHolders.size) {
+    for (const entry of sourceRows) {
+      if (entry.table === "roleHolders") continue;
+      entry.rows = entry.rows.filter((row) => !Object.entries(row).some(([key, value]) => key !== "_id" && key !== "societyId" && typeof value === "string" && (excludedRoleHolders.has(value) || excludedRoleHolders.has(value.replace(/^roleHolder:/, "")))));
     }
   }
-
-  // Pass 2: rewrite intra-clone Id references now that the full map exists, so
-  // cloned holdings/transfers/asset-events point at the cloned rows, not the
-  // source society's. Only patch rows that actually carry a remapped value.
-  for (const { newId } of inserted) {
-    const row = (await ctx.db.get(newId as any)) as Record<string, unknown> | null;
-    if (!row) continue;
-    const patch: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (key === "_id" || key === "_creationTime" || key === "societyId") continue;
-      const remapped = remapValue(value, idMap);
-      if (remapped !== value) patch[key] = remapped;
-    }
-    if (Object.keys(patch).length > 0) await ctx.db.patch(newId as any, patch);
+  if (resetDate) {
+    const ended = sourceRows.reduce((sum, { rows }) => sum + rows.filter((row) => CLONE_END_DATE_FIELDS.some((field) => typeof row[field] === "string" && String(row[field]).slice(0, 10) < resetDate)).length, 0);
+    if (ended) warnings.push(`${ended} copied ${ended === 1 ? "row ends" : "rows end"} before ${resetDate}; review or remove ${ended === 1 ? "it" : "them"} in the clone.`);
   }
 
-  return { societyId: newSocietyId, copiedRows: inserted.length };
+  const { _id, _creationTime, ...sourceFields } = source as Record<string, unknown>;
+  void _id;
+  void _creationTime;
+  // The signed articles document belongs to the source workspace.
+  const operativeArticles = (sourceFields as any).operativeArticles
+    ? (({ sourceDocumentId: _doc, ...rest }) => rest)((sourceFields as any).operativeArticles)
+    : undefined;
+  const societyIds: string[] = [];
+  let copiedRows = 0;
+  for (let index = 1; index <= copies; index++) {
+    const newSocietyId = await ctx.db.insert("societies", {
+      ...(sourceFields as any),
+      name: copies > 1 ? `${name} ${index}` : name,
+      incorporationNumber: targetNumber, // a clone is a distinct legal entity
+      operativeArticles,
+      // Annual-business evidence belongs to the source entity (and its written
+      // resolutions); a clone records its own.
+      annualDeadlineCalendarReviews: undefined,
+      annualMeetingCompletions: undefined,
+      annualMeetingFinancialYearEnd: undefined,
+      annualReturnPeriodEnd: undefined,
+      updatedAt: Date.now(),
+    });
+    societyIds.push(newSocietyId as unknown as string);
+
+    // Pass 1: insert every child row under the new society, recording the
+    // old→new Id mapping. Cross-references are not yet rewritten.
+    const idMap = new Map<string, string>();
+    const inserted: Array<{ table: (typeof CLONE_CHILD_TABLES)[number]; newId: string }> = [];
+    for (const { table, rows } of sourceRows) {
+      for (const row of rows) {
+        const { _id: rid, _creationTime: rct, ...fields } = row;
+        void rct;
+        const reset = resetDate ? Object.fromEntries((CLONE_EFFECTIVE_DATE_FIELDS[table] ?? []).filter((field) => field in fields).map((field) => [field, resetDate])) : {};
+        const newId = await ctx.db.insert(table, { ...(fields as any), ...reset, societyId: newSocietyId });
+        idMap.set(String(rid), newId as unknown as string);
+        inserted.push({ table, newId: newId as unknown as string });
+      }
+    }
+
+    // Pass 2: rewrite intra-clone Id references now that the full map exists, so
+    // cloned holdings/transfers/asset-events point at the cloned rows, not the
+    // source society's. Only patch rows that actually carry a remapped value.
+    for (const { newId } of inserted) {
+      const row = (await ctx.db.get(newId as any)) as Record<string, unknown> | null;
+      if (!row) continue;
+      const patch: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key === "_id" || key === "_creationTime" || key === "societyId") continue;
+        const remapped = remapValue(value, idMap);
+        if (JSON.stringify(remapped) !== JSON.stringify(value)) patch[key] = remapped;
+      }
+      if (Object.keys(patch).length > 0) await ctx.db.patch(newId as any, patch);
+    }
+    copiedRows += inserted.length;
+  }
+
+  return { societyId: societyIds[0], societyIds, copiedRows, warnings };
 }
 
 // YCN-style compliance settings (AGM date + financials-prep waiver). Consumed by

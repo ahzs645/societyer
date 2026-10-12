@@ -12,12 +12,15 @@ import { useToast } from "../components/Toast";
 import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPackets";
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { portfolioEntityMatches } from "../../shared/portfolioSearch";
 
 type FirmEntity = {
   _id: string;
   name: string;
   kind: string;
   incorporationNumber: string | null;
+  shortName?: string | null;
+  formerNames?: string[];
   status: string | null;
   overdueDeadlines: number;
   upcomingDeadlines: number;
@@ -53,8 +56,12 @@ export function PortfolioPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [packetKey, setPacketKey] = useState("");
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const entities = data?.entities ?? [];
+  const allEntities = data?.entities ?? [];
+  // Find an entity by current name, short name, registry number or a former name.
+  const matches = useMemo(() => new Map(allEntities.map((e) => [e._id, portfolioEntityMatches(e, search)])), [allEntities, search]);
+  const entities = useMemo(() => allEntities.filter((e) => matches.get(e._id)?.matches), [allEntities, matches]);
   const selectedIds = useMemo(() => entities.filter((e) => selected[e._id]).map((e) => e._id), [entities, selected]);
 
   if (data === undefined) return <PageLoading />;
@@ -116,8 +123,18 @@ export function PortfolioPage() {
         </div>
       </div>
 
-      {entities.length === 0 ? (
+      {allEntities.length > 0 && (
+        <div className="portfolio-batch" role="search">
+          <input className="input" type="search" aria-label="Search entities" placeholder="Search by name, former name or registry number"
+            value={search} onChange={(e) => setSearch(e.target.value)} />
+          {search.trim() && <span className="muted">{entities.length} of {allEntities.length}</span>}
+        </div>
+      )}
+
+      {allEntities.length === 0 ? (
         <div className="card"><p>No entities yet. Create one from the workspace switcher.</p></div>
+      ) : entities.length === 0 ? (
+        <div className="card"><p>No entity matches "{search.trim()}".</p></div>
       ) : (
         <>
           {/* Batch generate (Multiple_Copy) */}
@@ -170,6 +187,7 @@ export function PortfolioPage() {
                       <div className="muted">
                         <span className="portfolio-table__narrow">{KIND_LABEL[e.kind] ?? e.kind} · </span>
                         {e.incorporationNumber || (e.status ?? "")}
+                        {matches.get(e._id)?.formerName && <> · formerly {matches.get(e._id)?.formerName}</>}
                       </div>
                     </td>
                     <td className="portfolio-table__wide">{KIND_LABEL[e.kind] ?? e.kind}</td>

@@ -14,6 +14,7 @@ import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { assertRegisterRowMayBeDeleted } from "../registerRetention";
 
 export function transferChronologicalSort(left: any, right: any): number {
   const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
@@ -160,6 +161,8 @@ export async function removeRightsholdingTransferPortable(
   { id }: { id: string },
 ): Promise<void> {
   const existing = await requireOwnedRow(ctx, "rightsholdingTransfers", id);
+  // A posted transaction is part of the permanent securities register.
+  assertRegisterRowMayBeDeleted(await ctx.db.get(String(existing.societyId)), "rightsholdingTransfers", existing);
   await ctx.db.delete(id);
   if (existing?.societyId) await syncRightsHoldings(ctx, String(existing.societyId));
 }

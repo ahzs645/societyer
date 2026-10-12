@@ -4831,6 +4831,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -4911,6 +4917,12 @@
         "table": "constatingEvents",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -14870,6 +14882,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -26243,6 +26261,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -26323,6 +26347,12 @@
         "table": "constatingEvents",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -35617,6 +35647,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },

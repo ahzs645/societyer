@@ -72,6 +72,9 @@ export const sharedRegisterTables = {
     name: v.string(),
     shortName: v.optional(v.string()),
     startISO: v.string(),
+    // End date of a former name and the evidence (certificate of name change).
+    endISO: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     regPosn: v.optional(v.number()),
     createdAtISO: v.string(),
   })
@@ -85,6 +88,9 @@ export const sharedRegisterTables = {
     legislation: v.string(),
     regNumber: v.optional(v.string()),
     startISO: v.string(),
+    // End date and the constating documents (certificate, articles, order), BCA s. 42.
+    endISO: v.optional(v.string()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"]),

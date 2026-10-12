@@ -86,5 +86,64 @@ assert.deepEqual(clonedHolding.sourceDocumentIds, ["doc-ext-1"], "uncloned docum
 
 // --- the source society's rows are untouched --------------------------------
 assert.equal(inSrc("rightsHoldings")[0].rightsClassId, "rc-1", "source holding unchanged");
+assert.equal(clonedHolding.holderKey, `roleHolder:${clonedHolder._id}`, "holder key remapped to the cloned role holder");
 
-console.log("OK clone-society");
+// --- template-clone options (YCN Date_Over_Ride / Multiple_Copy) -------------
+const TPL = "soc-template";
+const templateClient = new StaticConvexClient({
+  databaseName: `societyer-clone-template-${Date.now()}`,
+  seed: {
+    societies: [
+      { _id: TPL, name: "Template Holdings Ltd.", incorporationNumber: "BC0000001", entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act",
+        operativeArticles: { base: "bc_table_1", table1Version: "am_50_2023", sourceDocumentId: "doc-src-articles" } },
+      { _id: "soc-other", name: "Existing Numbered Ltd.", incorporationNumber: "BC0000099", entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act" },
+    ],
+    roleHolders: [
+      { _id: "rh-dir", societyId: TPL, roleType: "director", fullName: "Synthetic Director", status: "current", startDate: "2019-03-01" },
+      { _id: "rh-si", societyId: TPL, roleType: "controller", fullName: "Synthetic Controller", status: "current", startDate: "2019-03-01" },
+      { _id: "rh-old", societyId: TPL, roleType: "officer", fullName: "Synthetic Former Officer", status: "former", startDate: "2019-03-01", endDate: "2020-01-01" },
+    ],
+    organizationAddresses: [{ _id: "addr-1", societyId: TPL, type: "registered_office", status: "current", effectiveFrom: "2019-03-01", street: "1 Example St", city: "Victoria", country: "CA", createdAtISO: "2019-03-01T00:00:00Z", updatedAtISO: "2019-03-01T00:00:00Z" }],
+    rightsClasses: [{ _id: "rc-t", societyId: TPL, className: "Common", classType: "share", status: "active", startDate: "2019-03-01" }],
+    rightsholdingTransfers: [{ _id: "xfer-t", societyId: TPL, transferType: "issuance", status: "posted", transferDate: "2019-03-02", rightsClassId: "rc-t", destinationRoleHolderId: "rh-dir", quantity: 10, sourceDocumentIds: [], sourceExternalIds: [] }],
+    rightsHoldings: [{ _id: "hold-t", societyId: TPL, rightsClassId: "rc-t", holderRoleHolderId: "rh-dir", holderKey: "roleHolder:rh-dir", quantity: 10, status: "current", sourceDocumentIds: [], sourceExternalIds: [] }],
+    significantIndividualSteps: [{ _id: "si-t", societyId: TPL, individualName: "Synthetic Controller", roleHolderId: "rh-si", stepsNarrative: "Inquiry", stepDate: "2020-01-02" }],
+    societyNameHistory: [{ _id: "nh-t", societyId: TPL, name: "Template Holdings Ltd.", startISO: "2019-03-01", createdAtISO: "2019-03-01T00:00:00Z" }],
+  } as never,
+});
+const template = await templateClient.mutation("society:cloneSociety", {
+  sourceSocietyId: TPL, newName: "Numbered Co", nowISO: new Date().toISOString(),
+  resetEffectiveDatesTo: "2026-11-01", excludeHoldings: true, excludeSignificantIndividuals: true, incorporationNumber: "BC0000099",
+}) as { societyId: string; societyIds: string[]; copiedRows: number; warnings: string[] };
+const tplTables = (templateClient as unknown as { exportLocalWorkspaceSnapshot(): { tables: Record<string, any[]> } }).exportLocalWorkspaceSnapshot().tables;
+const tplRows = (table: string, societyId: string) => (tplTables[table] ?? []).filter((row) => row.societyId === societyId);
+assert.ok(template.warnings.some((w) => /BC0000099 is already recorded for Existing Numbered Ltd\./.test(w)), "registry number clash is warned, not blocked");
+assert.ok(template.warnings.some((w) => /1 copied row ends before 2026-11-01/.test(w)), "ended rows are flagged after a date reset");
+const tplSociety = (tplTables.societies ?? []).find((row) => row._id === template.societyId);
+assert.equal(tplSociety.incorporationNumber, "BC0000099");
+assert.equal(tplSociety.operativeArticles.base, "bc_table_1", "the articles record travels");
+assert.equal(tplSociety.operativeArticles.sourceDocumentId, undefined, "but not the source workspace's articles document");
+assert.deepEqual(tplRows("roleHolders", template.societyId).map((row) => row.fullName).sort(), ["Synthetic Director", "Synthetic Former Officer"], "significant individuals left out");
+assert.ok(tplRows("roleHolders", template.societyId).every((row) => row.startDate === "2026-11-01"), "start dates reset");
+assert.equal(tplRows("roleHolders", template.societyId).find((row) => row.fullName === "Synthetic Former Officer").endDate, "2020-01-01", "end dates are kept for review");
+assert.equal(tplRows("organizationAddresses", template.societyId)[0].effectiveFrom, "2026-11-01");
+assert.equal(tplRows("societyNameHistory", template.societyId)[0].startISO, "2026-11-01");
+for (const table of ["rightsHoldings", "rightsholdingTransfers", "significantIndividualSteps"]) assert.equal(tplRows(table, template.societyId).length, 0, `${table} left out`);
+assert.equal(tplRows("rightsClasses", template.societyId).length, 1, "share classes are kept for a template");
+assert.equal(tplRows("roleHolders", TPL).find((row) => row._id === "rh-dir").startDate, "2019-03-01", "source dates untouched");
+
+const batch = await templateClient.mutation("society:cloneSociety", { sourceSocietyId: TPL, newName: "Batch Co", nowISO: new Date().toISOString(), copies: 3, excludePeople: true }) as { societyIds: string[]; warnings: string[] };
+assert.equal(batch.societyIds.length, 3);
+assert.deepEqual(batch.societyIds.map((id) => (tplTables.societies ?? []).length && (templateClient as any).exportLocalWorkspaceSnapshot().tables.societies.find((row: any) => row._id === id).name), ["Batch Co 1", "Batch Co 2", "Batch Co 3"]);
+const batchTables = (templateClient as any).exportLocalWorkspaceSnapshot().tables;
+for (const id of batch.societyIds) {
+  for (const table of ["roleHolders", "rightsHoldings", "rightsholdingTransfers", "significantIndividualSteps", "entitySigners"]) {
+    assert.equal((batchTables[table] ?? []).filter((row: any) => row.societyId === id).length, 0, `${table} left out when people are excluded`);
+  }
+  assert.equal((batchTables.rightsClasses ?? []).filter((row: any) => row.societyId === id).length, 1);
+}
+await assert.rejects(templateClient.mutation("society:cloneSociety", { sourceSocietyId: TPL, newName: "Too many", nowISO: new Date().toISOString(), copies: 21 }), /between 1 and 20/);
+await assert.rejects(templateClient.mutation("society:cloneSociety", { sourceSocietyId: TPL, newName: "Two", nowISO: new Date().toISOString(), copies: 2, incorporationNumber: "BC1" }), /only when creating one clone/);
+await assert.rejects(templateClient.mutation("society:cloneSociety", { sourceSocietyId: TPL, newName: "Bad date", nowISO: new Date().toISOString(), resetEffectiveDatesTo: "2026-02-30" }), /valid date/);
+
+console.log("OK clone-society (including template options: date reset, exclusions, batch copies, registry-number warning)");
