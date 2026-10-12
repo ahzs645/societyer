@@ -5708,10 +5708,10 @@
     "source": "convex/dividends.ts",
     "idArguments": [
       {
-        "path": "societyId",
-        "table": "societies",
+        "path": "declaredByResolutionId",
+        "table": "writtenResolutions",
         "array": false,
-        "optional": false
+        "optional": true
       }
     ]
   },
@@ -5732,6 +5732,31 @@
     ]
   },
   {
+    "key": "convex:dividends:options",
+    "surface": "convex",
+    "name": "dividends:options",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/dividends.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:dividends:preview",
+    "surface": "convex",
+    "name": "dividends:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/dividends.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:dividends:remove",
     "surface": "convex",
     "name": "dividends:remove",
@@ -5744,6 +5769,28 @@
         "table": "dividends",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:dividends:setStatus",
+    "surface": "convex",
+    "name": "dividends:setStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/dividends.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "dividends",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "declaredByResolutionId",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -19005,6 +19052,38 @@
     ]
   },
   {
+    "key": "convex:significantIndividualSteps:transparencyDeadlines",
+    "surface": "convex",
+    "name": "significantIndividualSteps:transparencyDeadlines",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/significantIndividualSteps.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:significantIndividualSteps:updateDates",
+    "surface": "convex",
+    "name": "significantIndividualSteps:updateDates",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/significantIndividualSteps.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "significantIndividualSteps",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:society:clearDarkLogo",
     "surface": "convex",
     "name": "society:clearDarkLogo",
@@ -27190,10 +27269,10 @@
     "source": "shared/functions/registry.ts",
     "idArguments": [
       {
-        "path": "societyId",
-        "table": "societies",
+        "path": "declaredByResolutionId",
+        "table": "writtenResolutions",
         "array": false,
-        "optional": false
+        "optional": true
       }
     ]
   },
@@ -27214,6 +27293,31 @@
     ]
   },
   {
+    "key": "portable:dividends:options",
+    "surface": "portable",
+    "name": "dividends:options",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:dividends:preview",
+    "surface": "portable",
+    "name": "dividends:preview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
     "key": "portable:dividends:remove",
     "surface": "portable",
     "name": "dividends:remove",
@@ -27226,6 +27330,28 @@
         "table": "dividends",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:dividends:setStatus",
+    "surface": "portable",
+    "name": "dividends:setStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "dividends",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "declaredByResolutionId",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -38983,6 +39109,38 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:significantIndividualSteps:transparencyDeadlines",
+    "surface": "portable",
+    "name": "significantIndividualSteps:transparencyDeadlines",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:significantIndividualSteps:updateDates",
+    "surface": "portable",
+    "name": "significantIndividualSteps:updateDates",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "significantIndividualSteps",
         "array": false,
         "optional": false
       }
