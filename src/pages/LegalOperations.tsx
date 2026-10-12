@@ -35,6 +35,8 @@ import {
 } from "../../shared/organizationDomain";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { deriveCurrentHoldings } from "../lib/equity";
+import { isRedeemableClass } from "../../shared/equityLedger";
+import { SHARE_CLASS_PRESETS } from "../../shared/shareClassPresets";
 
 type RoleHolderDraft = {
   _id?: Id<"roleHolders">;
@@ -522,15 +524,22 @@ export function RightsLedgerPage() {
   const [classDraft, setClassDraft] = useState<any>(null);
   const [transferDraft, setTransferDraft] = useState<any>(null);
   const [splitDraft, setSplitDraft] = useState<any>(null);
+  const [presetDraft, setPresetDraft] = useState<{ presetId: string; confirmed: boolean } | null>(null);
   const currentHoldings = useMemo(() => deriveCurrentHoldings(data?.transfers ?? []), [data?.transfers]);
   const corporationWorkspace = society ? isCorporation(society) : false;
+  // Evidence that can be linked to a ledger row (directors' consent to a transfer).
+  const evidenceArgs = society && corporationWorkspace && transferDraft ? { societyId: society._id } : "skip";
+  const documents = useQuery(api.documents.list, evidenceArgs) as any[] | undefined;
+  const resolutions = useQuery(api.writtenResolutions.list, can("motions:read") ? evidenceArgs : "skip") as any[] | undefined;
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const saveClass = async () => {
     if (!classDraft || !canWrite) return;
+    try {
     await upsertClass({
+      ...(corporationWorkspace ? structuredRightsArgs(classDraft) : {}),
       id: classDraft._id,
       societyId: society._id,
       className: classDraft.className || "Unnamed class",
@@ -549,12 +558,54 @@ export function RightsLedgerPage() {
       sourceExternalIds: csv(classDraft.sourceExternalIdsText ?? classDraft.sourceExternalIds),
       notes: empty(classDraft.notes),
     });
+    } catch (error) {
+      toast.error("Class not saved", error instanceof Error ? error.message : String(error));
+      return;
+    }
     setClassDraft(null);
     toast.success("Rights class saved");
   };
 
+  const createPresetClasses = async () => {
+    const preset = SHARE_CLASS_PRESETS.find((row) => row.id === presetDraft?.presetId);
+    if (!preset || !presetDraft?.confirmed || !canWrite) return;
+    const existing = new Set((data?.classes ?? []).map((row: any) => String(row.className).trim().toLowerCase()));
+    let created = 0;
+    try {
+      for (const cls of preset.classes) {
+        if (existing.has(cls.className.toLowerCase())) continue;
+        await upsertClass({
+          societyId: society._id,
+          className: cls.className,
+          classType: cls.classType,
+          // Pre-filled only: the user confirms each class against the articles, then sets it active.
+          status: "needs_review",
+          votesPerShare: cls.votesPerShare,
+          votingRights: cls.votingRights,
+          conditionsToTransfer: cls.conditionsToTransfer,
+          otherProvisions: cls.otherProvisions,
+          dividendEntitlement: cls.dividendEntitlement,
+          redemption: cls.redemption,
+          liquidationRank: cls.liquidationRank,
+          preEmptiveRights: cls.preEmptiveRights,
+          singularDescription: cls.singularDescription,
+          pluralDescription: cls.pluralDescription,
+          sourceExternalIds: [`societyer:share-class-preset:${preset.id}`],
+          notes: "Created from a preset. Confirm every field against the articles and notice of articles, then set the status to Active.",
+        });
+        created += 1;
+      }
+    } catch (error) {
+      toast.error("Preset not applied", error instanceof Error ? error.message : String(error));
+      return;
+    }
+    setPresetDraft(null);
+    toast.success("Preset classes added", `${created} class${created === 1 ? "" : "es"} added for review. Existing classes with the same name were left unchanged.`);
+  };
+
   const saveTransfer = async () => {
     if (!transferDraft || !canWrite) return;
+    try {
     await upsertTransfer({
       id: transferDraft._id,
       societyId: society._id,
@@ -578,9 +629,41 @@ export function RightsLedgerPage() {
       sourceDocumentIds: transferDraft.sourceDocumentIds ?? [],
       sourceExternalIds: csv(transferDraft.sourceExternalIdsText ?? transferDraft.sourceExternalIds),
       notes: empty(transferDraft.notes),
+      sequence: numberOrUndefined(transferDraft.sequence),
+      fullyPaidConfirmedAt: empty(transferDraft.fullyPaidConfirmedAt),
+      directorConsentDocumentId: empty(transferDraft.directorConsentDocumentId) as any,
+      directorConsentResolutionId: empty(transferDraft.directorConsentResolutionId) as any,
+      redemptionNoticeDate: empty(transferDraft.redemptionNoticeDate),
+      redemptionNoticeWaivedOn: empty(transferDraft.redemptionNoticeWaivedOn),
+      solvencyConfirmedAt: empty(transferDraft.solvencyConfirmedAt),
+      solvencyBasis: empty(transferDraft.solvencyBasis),
     });
+    } catch (error) {
+      toast.error("Ledger entry not saved", error instanceof Error ? error.message : String(error));
+      return;
+    }
     setTransferDraft(null);
     toast.success("Ledger transfer saved");
+  };
+
+  const startRedemption = (holding?: { rightsClassId: string; holderKey: string; quantity: number }) => {
+    const rightsClass = holding ? data?.classes?.find((item: any) => item._id === holding.rightsClassId) : undefined;
+    const price = rightsClass?.redemption?.priceCents;
+    setTransferDraft({
+      transferType: "redemption",
+      status: "draft",
+      rightsClassId: holding?.rightsClassId,
+      ...(holding?.holderKey.startsWith("roleHolder:")
+        ? {
+            sourceRoleHolderId: holding.holderKey.slice("roleHolder:".length),
+            sourceHolderName: roleHolderForHolding(data?.roleHolders ?? [], holding.holderKey)?.fullName,
+          }
+        : holding?.holderKey.startsWith("name:") ? { sourceHolderName: holding.holderKey.slice("name:".length) } : {}),
+      quantity: holding ? String(holding.quantity) : "",
+      priceToVendor: typeof price === "number" && holding ? String((price * holding.quantity) / 100) : "",
+      priceToOrganizationCurrency: "cad",
+      priceToVendorCurrency: "cad",
+    });
   };
 
   const deleteRow = async (kind: "class" | "transfer", row: any) => {
@@ -592,8 +675,13 @@ export function RightsLedgerPage() {
       tone: "danger",
     });
     if (!ok) return;
-    if (kind === "class") await removeClass({ id: row._id });
-    else await removeTransfer({ id: row._id });
+    try {
+      if (kind === "class") await removeClass({ id: row._id });
+      else await removeTransfer({ id: row._id });
+    } catch (error) {
+      toast.error("Not deleted", error instanceof Error ? error.message : String(error));
+      return;
+    }
     toast.success("Ledger row deleted");
   };
 
@@ -651,6 +739,10 @@ export function RightsLedgerPage() {
               items={[
                 { id: "class", label: corporationWorkspace ? "Share class" : "Class", onSelect: () => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" }) },
                 { id: "transfer", label: corporationWorkspace ? "Issuance" : "Transfer", onSelect: () => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" }) },
+                ...(corporationWorkspace ? [
+                  { id: "redemption", label: "Redemption", onSelect: () => startRedemption() },
+                  { id: "preset", label: "Share classes from a preset", onSelect: () => setPresetDraft({ presetId: SHARE_CLASS_PRESETS[0].id, confirmed: false }) },
+                ] : []),
               ]}
             />
           </>
@@ -679,7 +771,7 @@ export function RightsLedgerPage() {
                 <tr key={row._id}>
                   <td><strong>{row.className}</strong><div className="muted">{row.idPrefix || "No ID prefix"}</div></td>
                   <td>{optionLabel("rightsClassTypes", row.classType)}</td>
-                  <td><div>{row.votingRights || "No voting text"}</div><div className="muted">{row.conditionsToHold || row.conditionsToTransfer || "No conditions"}</div></td>
+                  <td><div>{row.votingRights || "No voting text"}</div><div className="muted">{row.conditionsToHold || row.conditionsToTransfer || "No conditions"}</div>{corporationWorkspace && structuredRightsSummary(row) && <div className="muted">{structuredRightsSummary(row)}</div>}</td>
                   <td>{dateLabel(row.startDate)} to {dateLabel(row.endDate)}</td>
                   <td><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsClassStatuses", row.status)}</Badge></td>
                   <td>
@@ -716,7 +808,14 @@ export function RightsLedgerPage() {
                     </td>
                     <td>{rightsClass?.className || holding.rightsClassId}<div className="muted">{rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}</div></td>
                     <td>{holding.quantity}</td>
-                    <td><Badge tone="success">Posted ledger</Badge></td>
+                    <td>
+                      <div className="row" style={{ gap: 6, alignItems: "center" }}>
+                        <Badge tone="success">Posted ledger</Badge>
+                        {corporationWorkspace && isRedeemableClass(rightsClass) && (
+                          <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => startRedemption(holding)}>Redeem</button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -848,8 +947,48 @@ export function RightsLedgerPage() {
             <Field label="Holding conditions"><MarkdownEditor rows={4} value={classDraft.conditionsToHold ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, conditionsToHold: markdown })} /></Field>
             <Field label="Transfer conditions"><MarkdownEditor rows={4} value={classDraft.conditionsToTransfer ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, conditionsToTransfer: markdown })} /></Field>
             <Field label="Other provisions"><MarkdownEditor rows={4} value={classDraft.otherProvisions ?? ""} onChange={(markdown) => setClassDraft({ ...classDraft, otherProvisions: markdown })} /></Field>
+            {corporationWorkspace && <StructuredRightsFields draft={classDraft} setDraft={setClassDraft} />}
           </>
         )}
+      </Drawer>
+
+      <Drawer
+        open={Boolean(presetDraft)}
+        onClose={() => setPresetDraft(null)}
+        title="Share classes from a preset"
+        footer={<><button className="btn" onClick={() => setPresetDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || !presetDraft?.confirmed} onClick={createPresetClasses}>Add classes for review</button></>}
+      >
+        {presetDraft && (() => {
+          const preset = SHARE_CLASS_PRESETS.find((row) => row.id === presetDraft.presetId) ?? SHARE_CLASS_PRESETS[0];
+          return (
+            <div className="col" style={{ gap: 12 }}>
+              <Field label="Preset">
+                <Select value={preset.id} onChange={(value) => setPresetDraft({ presetId: value, confirmed: false })} options={SHARE_CLASS_PRESETS.map((row) => ({ value: row.id, label: row.label }))} />
+              </Field>
+              <p className="muted" style={{ margin: 0 }}>{preset.description}</p>
+              <div className="table-wrap">
+              <table className="table">
+                <thead><tr><th>Class</th><th>Votes per share</th><th>Redemption</th><th>Liquidation rank</th></tr></thead>
+                <tbody>
+                  {preset.classes.map((cls) => (
+                    <tr key={cls.className}>
+                      <td>{cls.className}</td>
+                      <td>{cls.votesPerShare}</td>
+                      <td>{structuredRightsSummary({ redemption: cls.redemption }) || "Not redeemable"}</td>
+                      <td>{cls.liquidationRank ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+              <p className="muted" style={{ margin: 0 }}>The classes are added with the status Needs review. Classes with the same name as an existing class are skipped.</p>
+              <label className="checkbox" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <input type="checkbox" checked={presetDraft.confirmed} onChange={(event) => setPresetDraft({ ...presetDraft, confirmed: event.target.checked })} />
+                {preset.confirmation}
+              </label>
+            </div>
+          );
+        })()}
       </Drawer>
 
       <Drawer open={Boolean(transferDraft)} onClose={() => setTransferDraft(null)} title={transferDraft?._id ? "Edit ledger transfer" : "New ledger transfer"} footer={<><button className="btn" onClick={() => setTransferDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={saveTransfer}>Save</button></>}>
@@ -873,6 +1012,16 @@ export function RightsLedgerPage() {
               <Field label="Consideration type"><input className="input" value={transferDraft.considerationType ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, considerationType: e.target.value })} /></Field>
             </div>
             <Field label="Consideration description"><MarkdownEditor rows={4} value={transferDraft.considerationDescription ?? ""} onChange={(markdown) => setTransferDraft({ ...transferDraft, considerationDescription: markdown })} /></Field>
+            <Field label="Same-day order" hint="Optional. Entries on the same date are applied in this order (0, 1, 2 ...), before entries without one."><input className="input" type="number" min="0" step="1" value={transferDraft.sequence ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, sequence: e.target.value })} /></Field>
+            {corporationWorkspace && (
+              <TransferEvidenceFields
+                draft={transferDraft}
+                setDraft={setTransferDraft}
+                rightsClass={(data?.classes ?? []).find((row: any) => row._id === transferDraft.rightsClassId)}
+                documents={documents ?? []}
+                resolutions={resolutions ?? []}
+              />
+            )}
           </>
         )}
       </Drawer>
@@ -1697,7 +1846,170 @@ function editRoleHolder(row: RoleHolderDraft) {
 }
 
 function editRightsClass(row: any) {
-  return { ...row, sourceExternalIdsText: (row.sourceExternalIds ?? []).join(", ") };
+  return { ...row, ...structuredRightsDraft(row), sourceExternalIdsText: (row.sourceExternalIds ?? []).join(", ") };
+}
+
+const DIVIDEND_ENTITLEMENT_OPTIONS = [
+  { value: "", label: "Not recorded" },
+  { value: "discretionary_by_class", label: "Discretionary, declared class by class" },
+  { value: "fixed_rate", label: "Fixed rate (non-cumulative)" },
+  { value: "cumulative_fixed", label: "Cumulative at a fixed rate" },
+  { value: "participating", label: "Participating" },
+];
+
+const REDEMPTION_OPTIONS = [
+  { value: "", label: "Not recorded" },
+  { value: "none", label: "Not redeemable" },
+  { value: "company", label: "Redeemable by the company" },
+  { value: "holder", label: "Retractable by the holder" },
+  { value: "both", label: "Redeemable by the company or the holder" },
+];
+
+function money(valueCents?: number) {
+  return typeof valueCents === "number" ? `$${(valueCents / 100).toFixed(2)}` : "";
+}
+
+/** Draft (form) values for a class's structured rights. */
+function structuredRightsDraft(row: any) {
+  const redemption = row.redemption;
+  return {
+    parValue: row.parValueCents != null ? String(row.parValueCents / 100) : "",
+    maxAuthorized: row.maxAuthorized != null ? String(row.maxAuthorized) : "",
+    dividendEntitlement: row.dividendEntitlement ?? "",
+    dividendRatePercent: row.dividendRateBps != null ? String(row.dividendRateBps / 100) : "",
+    redemptionMode: !redemption ? "" : redemption.byCompany && redemption.byHolder ? "both" : redemption.byCompany ? "company" : redemption.byHolder ? "holder" : "none",
+    redemptionPrice: redemption?.priceCents != null ? String(redemption.priceCents / 100) : "",
+    redemptionIncludesDeclaredUnpaid: redemption?.includesDeclaredUnpaid === true,
+    redemptionMinNoticeDays: redemption?.minNoticeDays != null ? String(redemption.minNoticeDays) : "",
+    redemptionNonProRata: redemption?.nonProRataPermitted === true,
+    liquidationRank: row.liquidationRank != null ? String(row.liquidationRank) : "",
+    preEmptive: row.preEmptiveRights === undefined ? "" : row.preEmptiveRights ? "yes" : "no",
+  };
+}
+
+/** Mutation args for a class's structured rights, from the draft. */
+function structuredRightsArgs(draft: any) {
+  const mode = String(draft.redemptionMode ?? "");
+  const redeemable = mode === "company" || mode === "holder" || mode === "both";
+  const rate = numberOrUndefined(draft.dividendRatePercent);
+  return {
+    parValueCents: cents(draft.parValue),
+    maxAuthorized: numberOrUndefined(draft.maxAuthorized),
+    dividendEntitlement: (empty(draft.dividendEntitlement) as any) || undefined,
+    dividendRateBps: rate == null ? undefined : Math.round(rate * 100),
+    redemption: !mode ? undefined : {
+      byCompany: mode === "company" || mode === "both",
+      byHolder: mode === "holder" || mode === "both",
+      ...(redeemable ? {
+        priceCents: cents(draft.redemptionPrice),
+        includesDeclaredUnpaid: draft.redemptionIncludesDeclaredUnpaid ? true : undefined,
+        minNoticeDays: numberOrUndefined(draft.redemptionMinNoticeDays),
+        nonProRataPermitted: draft.redemptionNonProRata ? true : undefined,
+      } : {}),
+    },
+    liquidationRank: numberOrUndefined(draft.liquidationRank),
+    preEmptiveRights: draft.preEmptive === "yes" ? true : draft.preEmptive === "no" ? false : undefined,
+    articlesPart: empty(draft.articlesPart),
+    singularDescription: empty(draft.singularDescription),
+    pluralDescription: empty(draft.pluralDescription),
+  };
+}
+
+/** One-line summary of the structured rights for the class table. */
+function structuredRightsSummary(row: any): string {
+  const parts: string[] = [];
+  if (row.parValueCents != null) parts.push(`Par value ${money(row.parValueCents)}`);
+  if (row.maxAuthorized != null) parts.push(`Maximum ${Number(row.maxAuthorized).toLocaleString()}`);
+  const redemption = row.redemption;
+  if (redemption) {
+    if (redemption.byCompany || redemption.byHolder) {
+      const who = redemption.byCompany && redemption.byHolder ? "company or holder" : redemption.byCompany ? "company" : "holder";
+      parts.push(`Redeemable by ${who}${redemption.priceCents != null ? ` at ${money(redemption.priceCents)}${redemption.includesDeclaredUnpaid ? " plus declared unpaid dividends" : ""}` : ""}${redemption.minNoticeDays ? `, ${redemption.minNoticeDays} days' notice` : ""}`);
+    } else parts.push("Not redeemable");
+  }
+  if (row.liquidationRank != null) parts.push(`Liquidation rank ${row.liquidationRank}`);
+  if (row.articlesPart) parts.push(row.articlesPart);
+  return parts.join(" · ");
+}
+
+function StructuredRightsFields({ draft, setDraft }: { draft: any; setDraft: (draft: any) => void }) {
+  const set = (patch: Record<string, unknown>) => setDraft({ ...draft, ...patch });
+  const mode = String(draft.redemptionMode ?? "");
+  const redeemable = mode === "company" || mode === "holder" || mode === "both";
+  const rateNeeded = draft.dividendEntitlement === "fixed_rate" || draft.dividendEntitlement === "cumulative_fixed";
+  return (
+    <fieldset style={{ display: "grid", gap: 8, border: "1px solid var(--border)", padding: 12 }}>
+      <legend>Summary of the articles</legend>
+      <p className="muted" style={{ margin: 0 }}>These fields summarize the class's special rights and restrictions so the register can check issues, transfers and redemptions. The articles' text above stays authoritative; leave a field blank if the articles do not say.</p>
+      <div className="grid two">
+        <Field label="Articles part" hint="For example Part 22."><input className="input" value={draft.articlesPart ?? ""} onChange={(e) => set({ articlesPart: e.target.value })} /></Field>
+        <Field label="Par value ($)" hint="Blank = shares without par value."><input className="input" type="number" min="0" step="0.0001" value={draft.parValue ?? ""} onChange={(e) => set({ parValue: e.target.value })} /></Field>
+        <Field label="Maximum number authorized" hint="From the notice of articles. Blank = no maximum."><input className="input" type="number" min="1" step="1" value={draft.maxAuthorized ?? ""} onChange={(e) => set({ maxAuthorized: e.target.value })} /></Field>
+        <Field label="Liquidation rank" hint="1 = paid first; equal numbers rank equally."><input className="input" type="number" min="1" step="1" value={draft.liquidationRank ?? ""} onChange={(e) => set({ liquidationRank: e.target.value })} /></Field>
+        <Field label="Singular description" hint="For example Class B Non-Voting Preferred Share."><input className="input" value={draft.singularDescription ?? ""} onChange={(e) => set({ singularDescription: e.target.value })} /></Field>
+        <Field label="Plural description"><input className="input" value={draft.pluralDescription ?? ""} onChange={(e) => set({ pluralDescription: e.target.value })} /></Field>
+      </div>
+      <div className="grid two">
+        <Field label="Dividend entitlement"><Select value={draft.dividendEntitlement ?? ""} onChange={(value) => set({ dividendEntitlement: value })} options={DIVIDEND_ENTITLEMENT_OPTIONS} /></Field>
+        <Field label="Dividend rate (% a year)" hint={rateNeeded ? "Required for a fixed or cumulative entitlement." : "Only for a fixed, cumulative or participating entitlement."}><input className="input" type="number" min="0" step="0.01" value={draft.dividendRatePercent ?? ""} onChange={(e) => set({ dividendRatePercent: e.target.value })} /></Field>
+        <Field label="Pre-emptive rights"><Select value={draft.preEmptive ?? ""} onChange={(value) => set({ preEmptive: value })} options={[{ value: "", label: "Not recorded" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }]} /></Field>
+        <Field label="Redemption"><Select value={mode} onChange={(value) => set({ redemptionMode: value })} options={REDEMPTION_OPTIONS} /></Field>
+      </div>
+      {redeemable && (
+        <div className="grid two">
+          <Field label="Redemption price per share ($)"><input className="input" type="number" min="0" step="0.01" value={draft.redemptionPrice ?? ""} onChange={(e) => set({ redemptionPrice: e.target.value })} /></Field>
+          <Field label="Minimum notice (days)"><input className="input" type="number" min="0" step="1" value={draft.redemptionMinNoticeDays ?? ""} onChange={(e) => set({ redemptionMinNoticeDays: e.target.value })} /></Field>
+          <label className="checkbox"><input type="checkbox" checked={draft.redemptionIncludesDeclaredUnpaid === true} onChange={(e) => set({ redemptionIncludesDeclaredUnpaid: e.target.checked })} /> Price includes dividends declared but unpaid</label>
+          <label className="checkbox"><input type="checkbox" checked={draft.redemptionNonProRata === true} onChange={(e) => set({ redemptionNonProRata: e.target.checked })} /> May be redeemed other than pro rata</label>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+/** Evidence the share register needs before an entry can be posted. */
+function TransferEvidenceFields({ draft, setDraft, rightsClass, documents, resolutions }: { draft: any; setDraft: (draft: any) => void; rightsClass?: any; documents: any[]; resolutions: any[] }) {
+  const set = (patch: Record<string, unknown>) => setDraft({ ...draft, ...patch });
+  const type = String(draft.transferType ?? "");
+  if (type === "issuance") {
+    return (
+      <div className="grid two">
+        <Field label="Consideration received ($)"><input className="input" type="number" min="0" step="0.01" value={draft.priceToOrganization ?? ""} onChange={(e) => set({ priceToOrganization: e.target.value })} /></Field>
+        <Field label="Fully paid on" hint="Date the directors confirmed the consideration was received in full. Required to post an issuance; not needed for shares issued as a dividend or on a conversion."><DatePicker value={draft.fullyPaidConfirmedAt ?? ""} onChange={(value) => set({ fullyPaidConfirmedAt: value })} /></Field>
+      </div>
+    );
+  }
+  if (type === "transfer") {
+    return (
+      <div className="grid two">
+        <Field label="Directors' consent (resolution)" hint="Required to post a transfer when the articles require the directors' consent.">
+          <Select value={draft.directorConsentResolutionId ?? ""} onChange={(value) => set({ directorConsentResolutionId: value || undefined })} options={[{ value: "", label: "None linked" }, ...resolutions.map((row: any) => ({ value: row._id, label: row.title ?? row._id }))]} />
+        </Field>
+        <Field label="Directors' consent (document)">
+          <Select value={draft.directorConsentDocumentId ?? ""} onChange={(value) => set({ directorConsentDocumentId: value || undefined })} options={[{ value: "", label: "None linked" }, ...documents.map((row: any) => ({ value: row._id, label: row.title ?? row._id }))]} />
+        </Field>
+      </div>
+    );
+  }
+  if (type === "redemption") {
+    const terms = rightsClass?.redemption;
+    return (
+      <>
+        <p className="muted" style={{ margin: "8px 0" }}>
+          A posted redemption returns the shares to authorized but unissued capital. Save it as a draft with the notice date first: while the notice is outstanding, those shares cannot be transferred.
+          {terms ? ` Articles summary: ${structuredRightsSummary({ redemption: terms })}.` : " Record the class's redemption terms before posting."}
+        </p>
+        <div className="grid two">
+          <Field label="Notice of redemption given on"><DatePicker value={draft.redemptionNoticeDate ?? ""} onChange={(value) => set({ redemptionNoticeDate: value })} /></Field>
+          <Field label="Notice waived on" hint="If the holder waived notice, the date of the waiver."><DatePicker value={draft.redemptionNoticeWaivedOn ?? ""} onChange={(value) => set({ redemptionNoticeWaivedOn: value })} /></Field>
+          <Field label="Solvency confirmed on" hint="Date the directors confirmed the company is not insolvent and the payment will not make it insolvent."><DatePicker value={draft.solvencyConfirmedAt ?? ""} onChange={(value) => set({ solvencyConfirmedAt: value })} /></Field>
+          <Field label="Amount paid to the holder ($)"><input className="input" type="number" min="0" step="0.01" value={draft.priceToVendor ?? ""} onChange={(e) => set({ priceToVendor: e.target.value })} /></Field>
+        </div>
+        <Field label="Solvency basis"><input className="input" value={draft.solvencyBasis ?? ""} placeholder="Financial statements or other evidence the directors relied on" onChange={(e) => set({ solvencyBasis: e.target.value })} /></Field>
+      </>
+    );
+  }
+  return null;
 }
 
 function editTransfer(row: any) {

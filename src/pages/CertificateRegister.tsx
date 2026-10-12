@@ -46,6 +46,12 @@ export function CertificateRegisterPage() {
     api.shareCertificates.list,
     society ? { societyId: society._id } : "skip",
   ) as Array<Certificate> | undefined;
+  const reconciliation = useQuery(
+    api.shareCertificates.reconcile,
+    society && isCorporation(society) ? { societyId: society._id, asOf } : "skip",
+  ) as
+    | { rows: Array<{ rightsClassId?: string; className: string; holderKey: string; holderName: string; certificateShares: number; ledgerShares: number; status: string }>; issues: string[]; notes: string[]; balanced: boolean }
+    | undefined;
   const create = useMutation(api.shareCertificates.create);
   const update = useMutation(api.shareCertificates.update);
   const remove = useMutation(api.shareCertificates.remove);
@@ -229,6 +235,40 @@ export function CertificateRegisterPage() {
         )}
       </div>
 
+      {isCorporation(society) && list !== undefined && list.length > 0 && reconciliation && (
+        <div className="card">
+          <div className="card__head"><h2 className="card__title">Certificates against the share ledger on {asOf}</h2></div>
+          <div className="card__body" style={{ display: "grid", gap: 8 }}>
+            <p className="muted" style={{ margin: 0 }}>
+              For each holder and class, the shares on outstanding certificates should equal the posted share ledger at the end of this date.
+              When a certificate is cancelled on a transfer, the new certificate and any balance certificate together must equal the cancelled one.
+            </p>
+            {reconciliation.balanced
+              ? <p style={{ margin: 0 }}><strong>Certificates match the ledger.</strong></p>
+              : reconciliation.issues.map((issue) => <p key={issue} style={{ margin: 0, color: "var(--danger)" }}>{issue}</p>)}
+            {reconciliation.notes.map((note) => <p key={note} className="muted" style={{ margin: 0 }}>{note}</p>)}
+            {reconciliation.rows.length > 0 && (
+              <div className="table-scroll" role="region" aria-label="Certificate reconciliation" tabIndex={0}>
+                <table className="table">
+                  <thead><tr><th>Holder</th><th>Class</th><th>Certificates</th><th>Ledger</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {reconciliation.rows.map((row) => (
+                      <tr key={`${row.rightsClassId}:${row.holderKey}`}>
+                        <td>{row.holderName}</td>
+                        <td>{row.className}</td>
+                        <td>{row.certificateShares.toLocaleString()}</td>
+                        <td>{row.ledgerShares.toLocaleString()}</td>
+                        <td>{RECONCILIATION_STATUS[row.status] ?? row.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
@@ -283,7 +323,7 @@ export function CertificateRegisterPage() {
                 onChange={(value) => setForm({ ...form, issuedOn: value })}
               />
             </Field>
-            <Field label="Replaces certificate number (optional)">
+            <Field label="Replaces certificate number (optional)" hint="On a transfer, the transferee's certificate and any balance certificate both name the cancelled certificate. Certificate numbers must be unique.">
               <input
                 className="input"
                 value={form.replacesCertificateNumber}
@@ -298,5 +338,12 @@ export function CertificateRegisterPage() {
     </div>
   );
 }
+
+const RECONCILIATION_STATUS: Record<string, string> = {
+  matched: "Matches",
+  mismatch: "Does not match",
+  uncertificated: "No certificate",
+  no_ledger_holding: "Not in ledger",
+};
 
 export default CertificateRegisterPage;
