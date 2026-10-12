@@ -108,7 +108,7 @@ const SECTION_MUTATION_DOMAINS = {
   roleHolder: "legalOperations", rightsClass: "legalOperations", rightsholdingTransfer: "legalOperations",
   serviceProvider: "serviceProviders", dividend: "dividends", nameHistory: "nameHistory",
   constatingEvent: "constating", significantIndividualStep: "significantIndividualSteps", asset: "assets",
-  shareCertificate: "shareCertificates", legalTemplateDataField: "legalOperations", legalTemplate: "legalOperations",
+  shareCertificate: "shareCertificates", annualFiling: "annualFilings", legalTemplateDataField: "legalOperations", legalTemplate: "legalOperations",
   legalPrecedent: "legalOperations", legalPrecedentRun: "legalOperations", generatedLegalDocument: "legalOperations",
   legalSigner: "legalOperations", formationRecord: "legalOperations", nameSearchItem: "legalOperations",
   entityAmendment: "legalOperations", annualMaintenanceRecord: "legalOperations", jurisdictionMetadata: "legalOperations",
@@ -972,7 +972,8 @@ export async function applyApprovedSectionRecordsPortable(
   // Registers other kinds refer to by name are created first (a committee
   // before its members and quorum rules, a grant before its reports, people
   // before the conflicts and proxies that name them).
-  const KIND_PRIORITY: Record<string, number> = { committee: 0, member: 1, director: 1, grant: 1, committeeMember: 2, organizationSeat: 2 };
+  // Share classes and role holders come before the share ledger rows that name them.
+  const KIND_PRIORITY: Record<string, number> = { committee: 0, member: 1, director: 1, grant: 1, rightsClass: 1, roleHolder: 1, committeeMember: 2, organizationSeat: 2 };
   const sectionRecords = records.filter(
     (record: any) =>
       SECTION_RECORD_KINDS.includes(record.recordKind) &&

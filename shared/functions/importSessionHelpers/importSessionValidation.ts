@@ -1,5 +1,6 @@
 import { extraPromotionIssues } from "./importSectionHandlersExtra";
 import { agreementPromotionIssues } from "./importAgreementApply";
+import { importedRightsClassId, importedRoleHolderId, namesRightsClass } from "./importShareLinks";
 import { exactDay } from "../../evidenceReview";
 // Import-session pre-promotion validation and issue collection.
 
@@ -30,6 +31,31 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   if (kind === "financialStatement") for (const key of ["revenueCents", "expensesCents", "netAssetsCents"]) if (!Number.isSafeInteger(raw[key])) safeIssues.push(`${key} is unknown. Do not post a financial statement with invented zero totals.`);
   if (kind === "rightsholdingTransfer" && (!Number.isFinite(raw.quantity ?? raw.shares) || (raw.quantity ?? raw.shares) <= 0)) safeIssues.push("A source-supported positive transfer quantity is required.");
   if (kind === "insurancePolicy") for (const key of ["startDate", "renewalDate"]) if (raw[key] != null && !exactDay(raw[key])) safeIssues.push(`${key} requires an exact day or must remain in review.`);
+  if (kind === "rightsholdingTransfer") {
+    // A ledger row must post against its share class and holders: wait until those records are applied.
+    if (namesRightsClass(raw) && !await importedRightsClassId(ctx, societyId, raw)) {
+      safeIssues.push("Its share class is not in the register yet; apply (or approve) the share class record first.");
+    }
+    for (const side of ["source", "destination"] as const) {
+      const externalId = raw[`${side}HolderExternalId`];
+      if (cleanText(externalId) && !await importedRoleHolderId(ctx, societyId, raw[`${side}RoleHolderId`], externalId, raw[`${side}HolderName`])) {
+        safeIssues.push(`Its ${side} holder is not in the register yet; apply (or approve) that shareholder record first.`);
+      }
+    }
+  }
+  if (kind === "annualFiling") {
+    // Same rules as annualFilings:upsert: a jurisdiction, a four-digit year, a filed-on day when filed, one row per year.
+    const jurisdiction = cleanText(raw.jurisdiction);
+    const year = cleanText(raw.year);
+    if (!jurisdiction || !/^[1-9]\d{3}$/.test(year ?? "")) safeIssues.push("An annual filing needs a jurisdiction and a four-digit filing year.");
+    if (raw.filed === true && !exactDay(String(raw.filedOn ?? ""))) safeIssues.push("Add a valid filed-on date before importing this filing as filed.");
+    if (jurisdiction && year) {
+      const rows = await ctx.db.query("annualFilingLedger").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+      if (rows.some((row: any) => String(row.jurisdiction).trim().toLowerCase() === jurisdiction.toLowerCase() && row.year === year)) {
+        safeIssues.push("Another annual ledger entry already tracks this jurisdiction and year.");
+      }
+    }
+  }
   safeIssues.push(...await extraPromotionIssues(ctx, societyId, record));
   safeIssues.push(...await agreementPromotionIssues(ctx, societyId, record));
 
@@ -79,7 +105,11 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
       postalCode: cleanText(payload.postalCode),
       country: cleanText(payload.country) || "Canada",
     });
-    if (key && rows.some((row: any) => addressKey(row) === key)) issues.push("Duplicate structured address already exists.");
+    // Office history can return to an earlier address: a dated row only duplicates the same address from the same date.
+    const from = cleanText(payload.effectiveFrom)?.slice(0, 10);
+    if (key && rows.some((row: any) => addressKey(row) === key && (!from || cleanText(row.effectiveFrom)?.slice(0, 10) === from))) {
+      issues.push("Duplicate structured address already exists.");
+    }
   }
 
   if (kind === "organizationRegistration") {

@@ -16,6 +16,7 @@ import type {
   PortableQueryCtx,
 } from "../portable/ctx";
 import { validateIntegrationSettings, type IntegrationSettings } from "../integrationSettings";
+import { isValidFiscalYearEnd } from "../entitySetup";
 import { requirePermissionPortable } from "./permissions";
 import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership } from "./access";
@@ -375,6 +376,7 @@ export async function updateComplianceSettingsPortable(
     societyId: string;
     agmMonth?: number;
     agmDay?: number;
+    fiscalYearEnd?: string;
     waivePrepFinancials?: boolean;
     shortName?: string;
     primaryContactName?: string;
@@ -392,6 +394,9 @@ export async function updateComplianceSettingsPortable(
   },
 ) {
   await requireSocietyMembership(ctx, societyId);
+  if (settings.fiscalYearEnd !== undefined && !isValidFiscalYearEnd(settings.fiscalYearEnd)) {
+    throw new Error("Fiscal year end must be a valid month and day (MM-DD), for example 03-31.");
+  }
   await ctx.db.patch(societyId, { ...settings, updatedAt: Date.now() });
   return societyId;
 }
