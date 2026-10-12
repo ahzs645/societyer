@@ -378,7 +378,7 @@ const regs = { transfers, classes, roleHolders, certificates };
   const common = await client.mutation("legalOperations:upsertRightsClass", { societyId, className: "Class A Common", classType: "share", status: "active", votesPerShare: 1 });
   const preferred = await client.mutation("legalOperations:upsertRightsClass", { societyId, className: "Class B Preferred", classType: "share", status: "active", votesPerShare: 0 });
   for (const [holder, cls, quantity, date] of [[holderA, common, 100, "2020-01-01"], [holderB, preferred, 10, "2020-01-01"], [holderB, common, 5, "2026-04-01"]] as const) {
-    await client.mutation("legalOperations:upsertRightsholdingTransfer", { societyId, transferType: "issuance", status: "posted", transferDate: date, rightsClassId: cls, destinationRoleHolderId: holder, quantity, considerationType: "cash", priceToOrganizationCents: quantity * 100, priceToOrganizationCurrency: "cad" });
+    await client.mutation("legalOperations:upsertRightsholdingTransfer", { societyId, transferType: "issuance", status: "posted", transferDate: date, rightsClassId: cls, destinationRoleHolderId: holder, quantity, considerationType: "cash", fullyPaidConfirmedAt: date, priceToOrganizationCents: quantity * 100, priceToOrganizationCurrency: "cad" });
   }
   void director;
   const engine = await client.query("legalOperations:templateEngine", { societyId });
@@ -388,16 +388,19 @@ const regs = { transfers, classes, roleHolders, certificates };
   const docText = async (packetKey: string, effectiveDate: string) => {
     const result = await client.mutation("legalOperations:generateDocumentFromCatalog", { societyId, packetKey, effectiveDate });
     const doc = await client.query("documents:get", { id: result.draftDocumentId });
-    return { result, xml: Buffer.from(doc.url.split(",")[1], "base64").toString("utf8") };
+    const xml = Buffer.from(doc.url.split(",")[1], "base64").toString("utf8");
+    // Visible text with table cells separated by spaces, as a reader sees it.
+    const text = xml.replace(/<[^>]+>/g, " ").replace(/&apos;/g, "'").replace(/\s+/g, " ");
+    return { result, xml, text };
   };
   const issue = await docText("issue-shares", "2026-04-01");
-  assert.ok(issue.xml.includes("Finley Park | 5 | Class A Common Share"), "the 2026-04-01 subscription only");
-  assert.ok(!issue.xml.includes("Avery Stone | 100"), "earlier issuances are not listed");
-  assert.ok(issue.xml.includes("The undersigned, being the sole director of Harbour Pine Holdings Ltd., hereby adopts the foregoing resolutions"));
+  assert.ok(issue.text.includes("Finley Park 5 Class A Common Shares"), "the 2026-04-01 subscription only");
+  assert.ok(!issue.text.includes("Avery Stone 100"), "earlier issuances are not listed");
+  assert.ok(issue.text.includes("The foregoing resolutions are consented to in writing by the sole director of Harbour Pine Holdings Ltd."));
   const removal = await docText("director-removal", "2026-03-01");
-  assert.ok(removal.xml.includes("Blake Rivers") && removal.xml.includes("AS A SPECIAL RESOLUTION"));
-  assert.ok(removal.xml.includes("The undersigned, being the sole voting shareholder of Harbour Pine Holdings Ltd., hereby adopts"), "only the voting shareholder adopts the removal");
-  assert.ok(removal.xml.includes("Avery Stone, Voting Shareholder") && !removal.xml.includes("Finley Park, Voting Shareholder"));
+  assert.ok(removal.text.includes("Blake Rivers") && removal.text.includes("AS A SPECIAL RESOLUTION"));
+  assert.ok(removal.text.includes("consented to in writing by the sole voting shareholder of Harbour Pine Holdings Ltd."), "only the voting shareholder adopts the removal");
+  assert.ok(removal.text.includes("Avery Stone, Voting Shareholder") && !removal.text.includes("Finley Park, Voting Shareholder"));
   const removalDoc = (await client.query("legalOperations:templateEngine", { societyId })).generatedDocuments.find((d: any) => d._id === removal.result.generatedDocumentId);
   assert.deepEqual(removalDoc.signersRequiredRoleHolderIds, [holderA], "signer placeholders are the voting shareholders");
   const shell = await docText("all-shareholders-resolution", "2026-06-25");
