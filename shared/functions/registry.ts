@@ -350,7 +350,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // dividends
   definePortableQuery({ name: "dividends:list", handler: dividendsFns.listPortable }),
   definePortableQuery({ name: "dividends:summary", handler: dividendsFns.summaryPortable }),
+  definePortableQuery({ name: "dividends:options", handler: dividendsFns.optionsPortable }),
+  definePortableQuery({ name: "dividends:preview", handler: dividendsFns.previewPortable }),
   definePortableMutation({ name: "dividends:create", handler: dividendsFns.createPortable }),
+  definePortableMutation({ name: "dividends:setStatus", handler: dividendsFns.setStatusPortable }),
   definePortableMutation({ name: "dividends:remove", handler: dividendsFns.removePortable }),
 
   // receipts
@@ -417,6 +420,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "significantIndividualSteps:reviewsDue", handler: significantIndividualStepsFns.reviewsDuePortable }),
   definePortableMutation({ name: "significantIndividualSteps:create", handler: significantIndividualStepsFns.createPortable }),
   definePortableMutation({ name: "significantIndividualSteps:remove", handler: significantIndividualStepsFns.removePortable }),
+  definePortableMutation({ name: "significantIndividualSteps:updateDates", handler: significantIndividualStepsFns.updateDatesPortable }),
+  definePortableQuery({ name: "significantIndividualSteps:transparencyDeadlines", handler: significantIndividualStepsFns.transparencyDeadlinesPortable }),
 
   // documentComments
   definePortableQuery({ name: "documentComments:listForDocument", handler: documentCommentsFns.listForDocumentPortable }),

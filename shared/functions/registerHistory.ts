@@ -128,6 +128,14 @@ export async function significantIndividualsAsOfPortable(
       const status = si.becameSignificantOn
         ? deriveSignificanceStatus(si, asOf)
         : "current";
-      return { ...si, status, roleHolderId: row._id };
+      return {
+        ...si,
+        status,
+        roleHolderId: row._id,
+        canadianStatus: row.canadianStatus ?? undefined,
+        citizenshipCountries: Array.isArray(row.citizenshipCountries) ? row.citizenshipCountries : [],
+        taxResidentHomeJurisdiction: row.taxResidentHomeJurisdiction ?? undefined,
+        significanceBases: Array.isArray(row.significanceBases) ? row.significanceBases : [],
+      };
     });
 }

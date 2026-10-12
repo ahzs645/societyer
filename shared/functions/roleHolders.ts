@@ -22,6 +22,9 @@ import { normalizeGender } from "../nlg";
 import { planRoleHolderRevision } from "../roleHolderHistory";
 import { personReferenceConstraint, validatePersonReference } from "../personReference";
 import { materializeRightsHoldings } from "../equityLedger";
+import { eligibilityScopeFor, roleHolderEligibility } from "../registerValidation";
+import { transparencyParticularProblems } from "../significantIndividuals";
+import { todayDateOnly } from "../dateOnly";
 import { directoryPersonForSociety } from "./peopleDirectory";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
@@ -130,6 +133,13 @@ export interface UpsertRoleHolderArgs {
   nonNaturalPersonType?: string;
   nonNaturalJurisdiction?: string;
   natureOfControl?: string;
+  /** Transparency register (controllers): how the individual is significant. */
+  significanceReason?: string;
+  significanceBases?: string[];
+  /** s. 119.2 (2) (b): citizen | permanent_resident | neither | unknown. */
+  canadianStatus?: string;
+  /** s. 119.2 (2) (d): resident in Canada for Income Tax Act purposes (yes | no | unknown). */
+  taxResidentHomeJurisdiction?: string;
   authorizedRepresentative?: boolean;
   relatedRoleHolderId?: string;
   relatedShareholderIds?: string[];
@@ -177,6 +187,16 @@ export async function upsertRoleHolderPortable(
   assertAllowedOption("officerTitles", args.officerTitle, "Officer title");
   assertAllowedOption("directorTerms", args.directorTerm, "Director term");
   assertAllowedOption("citizenshipResidencies", args.citizenshipResidency, "Citizenship/residency");
+  const particularProblems = transparencyParticularProblems({ canadianStatus: cleanText(args.canadianStatus), significanceBases: args.significanceBases });
+  if (args.taxResidentHomeJurisdiction !== undefined && cleanText(args.taxResidentHomeJurisdiction) && !["yes", "no", "unknown"].includes(String(cleanText(args.taxResidentHomeJurisdiction)))) {
+    particularProblems.push("Choose whether the individual is resident in Canada for income tax purposes: yes, no or unknown.");
+  }
+  if (particularProblems.length) throw new Error(particularProblems.join(" "));
+  // Director/officer eligibility: BC company directors must be individuals aged
+  // 18 or more (BCA s. 124); officers must meet the same qualifications
+  // (s. 141 (3)). Societies and other corporations are not checked here.
+  const eligibility = roleHolderEligibility(args, eligibilityScopeFor(await ctx.db.get(args.societyId, "societies") as any), todayDateOnly());
+  if (eligibility.blocking.length) throw new Error(eligibility.blocking.join(" "));
   // Enforce the society's People Directory constraint (free unless restricted).
   const directoryPersonId = await enforcePersonReference(
     ctx,
@@ -232,6 +252,10 @@ export async function upsertRoleHolderPortable(
     nonNaturalPersonType: cleanText(args.nonNaturalPersonType),
     nonNaturalJurisdiction: cleanText(args.nonNaturalJurisdiction),
     natureOfControl: cleanText(args.natureOfControl),
+    ...(args.significanceReason !== undefined ? { significanceReason: cleanText(args.significanceReason) } : {}),
+    ...(args.significanceBases !== undefined ? { significanceBases: cleanList(args.significanceBases) } : {}),
+    ...(args.canadianStatus !== undefined ? { canadianStatus: cleanText(args.canadianStatus) } : {}),
+    ...(args.taxResidentHomeJurisdiction !== undefined ? { taxResidentHomeJurisdiction: cleanText(args.taxResidentHomeJurisdiction) } : {}),
     authorizedRepresentative: args.authorizedRepresentative,
     relatedRoleHolderId: args.relatedRoleHolderId,
     relatedShareholderIds: cleanList(args.relatedShareholderIds),

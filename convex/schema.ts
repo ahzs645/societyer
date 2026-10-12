@@ -316,6 +316,9 @@ export default defineSchema({
     // individuals), read by convex/registerHistory.ts significantIndividualsAsOf.
     significanceReason: v.optional(v.string()),
     taxResidentHomeJurisdiction: v.optional(v.string()), // yes | no | unknown
+    // Structured transparency particulars (BCA s. 119.2 (2) (b), s. 119.11 categories).
+    canadianStatus: v.optional(v.string()), // citizen | permanent_resident | neither | unknown
+    significanceBases: v.optional(v.array(v.string())), // shared/significantIndividuals.ts SIGNIFICANCE_BASIS_OPTIONS
     // Link to the cross-tenant people directory (YCN ENT_PEOPLE.GLOB_ID) and
     // concurrent extra officer titles (YCN OFFICER PRES/SECR/OTHER).
     directoryPersonId: v.optional(v.id("peopleDirectory")),

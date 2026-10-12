@@ -1244,19 +1244,30 @@ async function buildPacketDataContext(
       .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
       .collect();
     // The latest declaration date's rows make up one multi-class declaration.
+    // Cancelled declarations are not part of it.
+    const live = rows.filter((row: any) => row.status !== "cancelled");
     let latest = "";
-    for (const row of rows) {
+    for (const row of live) {
       const declaredOn = String(row.declaredOn ?? "");
       if (declaredOn > latest) latest = declaredOn;
     }
-    const declarationRows = rows
+    const classNames = new Map<string, string>();
+    for (const rightsClass of await ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()) {
+      classNames.set(String(rightsClass._id), String(rightsClass.className ?? ""));
+    }
+    const declarationRows = live
       .filter((row: any) => String(row.declaredOn ?? "") === latest)
       .map((row: any) => ({
         shareClass: String(row.shareClass ?? ""),
         perShareCents: Number(row.perShareCents ?? 0),
+        perShareAmount: typeof row.perShareAmount === "string" ? row.perShareAmount : undefined,
         sharesOutstanding: Number(row.sharesOutstanding ?? 0),
         totalCents: Number(row.totalCents ?? 0),
         currency: String(row.currency ?? ""),
+        recordDate: typeof row.recordDate === "string" ? row.recordDate : undefined,
+        paymentDate: typeof row.paymentDate === "string" ? row.paymentDate : undefined,
+        excludedClassNames: (row.excludedClassIds ?? []).map((id: string) => classNames.get(String(id)) ?? "").filter(Boolean),
+        solvencyConfirmed: Boolean(row.solvencyConfirmedAt && String(row.solvencyBasis ?? "").trim()),
       }));
     return {
       dividend: buildDividendResolutionContext(declarationRows, { declaredDate: latest || undefined }),

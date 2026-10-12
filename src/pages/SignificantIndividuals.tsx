@@ -1,35 +1,66 @@
 import { useState } from "react";
-import { calendarDateKey } from "../lib/calendarDates";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { InfoPopover } from "../components/InfoPopover";
+import { Select } from "../components/Select";
 import { formatDate } from "../lib/format";
 import type { ReactNode } from "react";
 import { Info, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { useToast } from "../components/Toast";
 import { isCorporation } from "../../shared/organizationDomain";
+import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
+import { looksLikeOrganization } from "../../shared/nlg";
 import { todayDateOnly } from "../../shared/dateOnly";
+import {
+  CANADIAN_STATUS_OPTIONS,
+  CANDIDATE_REVIEW_REMINDERS,
+  SIGNIFICANCE_BASIS_OPTIONS,
+  TRANSPARENCY_STEP_KINDS,
+  candidateFactsFromRegister,
+  candidateSignificantIndividuals,
+  displayDateOfBirth,
+  type TransparencyDeadline,
+} from "../../shared/significantIndividuals";
+
+type StepRow = {
+  _id: string;
+  individualName: string;
+  stepsNarrative: string;
+  stepDate: string;
+  nextReviewDate?: string;
+  stepKind?: string;
+  awareOn?: string;
+  recordedOn?: string;
+  notifiedOn?: string;
+};
+
+const stepKindLabel = (kind?: string) => TRANSPARENCY_STEP_KINDS.find((option) => option.value === kind)?.label;
 
 /**
- * BC Transparency Register of Significant Individuals + a diligence-steps
- * sub-register. This register is required for BC private corporations under
- * the Business Corporations Act — not for societies — but it is tracked here
- * for organizations that operate on the corporations track.
+ * BC Transparency Register of Significant Individuals (Business Corporations
+ * Act Part 4.1) with a diligence-steps sub-register. The BC rules, deadlines
+ * and citations show only for a BC company; other corporations see a neutral
+ * register, and a society sees that the register is not required.
  */
 export function SignificantIndividualsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("deadlines:write");
+  const canReadLedger = loaded && can("documents:read");
   const [asOf, setAsOf] = useState(todayDateOnly());
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [revealDob, setRevealDob] = useState(false);
+  const [dateEdit, setDateEdit] = useState<{ step: StepRow; field: "recordedOn" | "notifiedOn"; value: string } | null>(null);
   const toast = useToast();
+  const bcCompany = society ? legalGovernanceProfile(society)?.id === "bc_company" : false;
+  const corporation = society ? isCorporation(society) : false;
 
   const individuals = useQuery(
     api.registerHistory.significantIndividualsAsOf,
@@ -42,44 +73,67 @@ export function SignificantIndividualsPage() {
         ceasedSignificantOn?: string;
         reason: string;
         status?: string;
+        roleHolderId?: string;
+        canadianStatus?: string;
+        citizenshipCountries?: string[];
+        significanceBases?: string[];
       }>
     | undefined;
 
   const steps = useQuery(
     api.significantIndividualSteps.list,
     society ? { societyId: society._id } : "skip",
-  ) as
-    | Array<{
-        _id: string;
-        individualName: string;
-        stepsNarrative: string;
-        stepDate: string;
-        nextReviewDate?: string;
-      }>
-    | undefined;
+  ) as StepRow[] | undefined;
 
   const reviewsDue = useQuery(
     api.significantIndividualSteps.reviewsDue,
     society ? { societyId: society._id, asOf } : "skip",
   ) as Array<{ _id: string }> | undefined;
 
+  const deadlines = useQuery(
+    api.significantIndividualSteps.transparencyDeadlines,
+    society && bcCompany ? { societyId: society._id, asOf } : "skip",
+  ) as TransparencyDeadline[] | undefined;
+
+  // Candidate suggestions come from the share register as of the chosen date.
+  const voting = useQuery(
+    api.legalOperations.votingPower,
+    society && corporation && canReadLedger ? { societyId: society._id, asOf } : "skip",
+  ) as { voting: any[]; nonVoting: any[] } | undefined;
+  const ledger = useQuery(
+    api.legalOperations.rightsLedger,
+    society && corporation && canReadLedger ? { societyId: society._id, asOf } : "skip",
+  ) as { roleHolders: any[] } | undefined;
+
   const createStep = usePermissionedMutation(api.significantIndividualSteps.create, canWrite);
   const removeStep = usePermissionedMutation(api.significantIndividualSteps.remove, canWrite);
+  const updateDates = usePermissionedMutation(api.significantIndividualSteps.updateDates, canWrite);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const holders = [...(voting?.voting ?? []), ...(voting?.nonVoting ?? [])];
+  const candidates = holders.length
+    ? candidateSignificantIndividuals(holders, candidateFactsFromRegister(holders, ledger?.roleHolders ?? [], looksLikeOrganization))
+    : [];
 
   const openNew = () => {
     if (!canWrite) return;
     setForm({
       individualName: "",
+      roleHolderId: "",
+      stepKind: "",
       stepDate: todayDateOnly(),
       stepsNarrative: "",
       nextReviewDate: "",
+      awareOn: "",
+      recordedOn: "",
+      notifiedOn: "",
     });
     setOpen(true);
   };
 
+  const notifiable = form?.stepKind === "became_significant" || form?.stepKind === "ceased_significant";
   const formProblems = form
     ? [
         !String(form.individualName ?? "").trim() ? "the individual's name" : "",
@@ -97,9 +151,14 @@ export function SignificantIndividualsPage() {
       await createStep({
         societyId: society._id,
         individualName: form.individualName.trim(),
+        ...(form.roleHolderId ? { roleHolderId: form.roleHolderId } : {}),
         stepsNarrative: form.stepsNarrative.trim(),
         stepDate: form.stepDate,
         nextReviewDate: form.nextReviewDate || undefined,
+        ...(form.stepKind ? { stepKind: form.stepKind } : {}),
+        ...(form.awareOn ? { awareOn: form.awareOn } : {}),
+        ...(form.recordedOn ? { recordedOn: form.recordedOn } : {}),
+        ...(notifiable && form.notifiedOn ? { notifiedOn: form.notifiedOn } : {}),
         nowISO: new Date().toISOString(),
       });
       setOpen(false);
@@ -108,9 +167,19 @@ export function SignificantIndividualsPage() {
       toast.error("Step not recorded", error instanceof Error ? error.message : String(error));
     }
   };
-  const notApplicable = !isCorporation(society);
+  const saveDate = async () => {
+    if (!canWrite || !dateEdit?.value) return;
+    try {
+      await updateDates({ id: dateEdit.step._id, [dateEdit.field]: dateEdit.value });
+      setDateEdit(null);
+      toast.success(dateEdit.field === "recordedOn" ? "Register entry date recorded" : "Notice date recorded");
+    } catch (error) {
+      toast.error("Date not recorded", error instanceof Error ? error.message : String(error));
+    }
+  };
 
   const dueCount = reviewsDue?.length ?? 0;
+  const controllerOptions = (individuals ?? []).filter((ind) => ind.roleHolderId);
 
   return (
     <div className="page">
@@ -120,7 +189,11 @@ export function SignificantIndividualsPage() {
         iconColor="green"
         subtitle="Significant individuals (controllers) and the steps taken to identify them."
         info={
-          <p>The transparency register as of a chosen date, with the reasonable-diligence steps taken. Required for BC private corporations under the Business Corporations Act, not for societies.</p>
+          bcCompany
+            ? <p>The transparency register as of a chosen date, with the reasonable steps taken. A BC private company keeps it under Part 4.1 of the Business Corporations Act. Only directors and authorized inspecting officials may inspect it.</p>
+            : corporation
+              ? <p>The register of individuals who own or control the corporation, as of a chosen date, with the steps taken. Check the register rules of the corporation's governing Act.</p>
+              : <p>Records of individuals who own or control an organization. A society is not required to keep this register.</p>
         }
         actions={
           <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
@@ -129,11 +202,55 @@ export function SignificantIndividualsPage() {
         }
       />
 
-      {notApplicable && (
+      {!corporation && (
         <NotRequiredNote>
-          {society.name} is not a BC company, so the BC Business Corporations Act transparency register does not apply.
-          Records kept here are optional and are not a statutory register for a society.
+          {society.name} is not a company with shares, so a register of significant individuals is not required. Records kept here are optional and are not a statutory register.
         </NotRequiredNote>
+      )}
+
+      {bcCompany && deadlines && deadlines.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h2 className="page__section-title">Transparency register deadlines</h2>
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {deadlines.map((deadline) => (
+              <div key={deadline.key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <strong>{deadline.title}</strong>
+                  <Badge tone={deadline.status === "overdue" ? "danger" : deadline.status === "due" ? "warn" : "neutral"}>
+                    {deadline.status === "overdue" ? "Overdue" : deadline.status === "due" ? "Due today" : "Upcoming"}
+                  </Badge>
+                  <span className="muted">{deadline.opensOn ? `${formatDate(deadline.opensOn)} to ${formatDate(deadline.dueDate)}` : `Due ${formatDate(deadline.dueDate)}`}</span>
+                </div>
+                <div className="muted">{deadline.basis}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {corporation && canReadLedger && candidates.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h2 className="page__section-title">Candidates to review</h2>
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {candidates.map((candidate) => (
+              <div key={candidate.holderKey} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <strong>{candidate.holderName}</strong>
+                  <Badge tone={candidate.action === "look_through" ? "warn" : candidate.recorded ? "success" : "info"}>
+                    {candidate.action === "look_through" ? "Look through" : candidate.recorded ? "On the register" : "Review"}
+                  </Badge>
+                  <span className="muted">
+                    {candidate.percentOfShares.toFixed(1)}% of issued shares · {candidate.percentOfVotes.toFixed(1)}% of votes
+                  </span>
+                </div>
+                <div className="muted">{candidate.prompt}</div>
+              </div>
+            ))}
+            <div className="muted" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {(bcCompany ? CANDIDATE_REVIEW_REMINDERS : CANDIDATE_REVIEW_REMINDERS.slice(0, 1)).map((line) => <span key={line}>{line}</span>)}
+            </div>
+          </div>
+        </section>
       )}
 
       <section style={{ marginBottom: 24 }}>
@@ -147,6 +264,11 @@ export function SignificantIndividualsPage() {
               {individuals.length} significant individual{individuals.length === 1 ? "" : "s"}
             </span>
           )}
+          {individuals?.some((ind) => ind.dateOfBirth) && (
+            <button className="btn btn--ghost btn--sm" onClick={() => setRevealDob(!revealDob)}>
+              {revealDob ? "Hide dates of birth" : "Show dates of birth"}
+            </button>
+          )}
         </div>
         {individuals === undefined ? (
           <div className="card">Loading…</div>
@@ -154,9 +276,9 @@ export function SignificantIndividualsPage() {
           <div className="card">No significant individuals as of this date.</div>
         ) : (
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {individuals.map((ind: any, i: number) => (
+            {individuals.map((ind, i) => (
               <div
-                key={i}
+                key={ind.roleHolderId ?? i}
                 style={{ display: "flex", flexDirection: "column", gap: 4 }}
               >
                 <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
@@ -164,12 +286,22 @@ export function SignificantIndividualsPage() {
                   {ind.status && <span className="muted">{ind.status}</span>}
                 </div>
                 <div className="muted">{ind.reason}</div>
+                {!!ind.significanceBases?.length && (
+                  <div className="muted">
+                    {ind.significanceBases.map((basis) => {
+                      const option = SIGNIFICANCE_BASIS_OPTIONS.find((item) => item.value === basis);
+                      return option ? (bcCompany ? `${option.label} (${option.section})` : option.label) : basis;
+                    }).join("; ")}
+                  </div>
+                )}
                 <div className="muted" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                   <span>Became significant: {formatDate(ind.becameSignificantOn)}</span>
                   {ind.ceasedSignificantOn && (
                     <span>Ceased: {formatDate(ind.ceasedSignificantOn)}</span>
                   )}
-                  {ind.dateOfBirth && <span>DOB: {formatDate(ind.dateOfBirth)}</span>}
+                  {ind.canadianStatus && <span>{CANADIAN_STATUS_OPTIONS.find((option) => option.value === ind.canadianStatus)?.label ?? ind.canadianStatus}</span>}
+                  {ind.canadianStatus === "neither" && !!ind.citizenshipCountries?.length && <span>Citizenship: {ind.citizenshipCountries.join(", ")}</span>}
+                  {ind.dateOfBirth && <span>Date of birth: {revealDob ? formatDate(ind.dateOfBirth) : displayDateOfBirth(ind.dateOfBirth, false)}</span>}
                 </div>
               </div>
             ))}
@@ -190,31 +322,48 @@ export function SignificantIndividualsPage() {
           <div className="card">No diligence steps recorded.</div>
         ) : (
           <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {steps.map((s: any) => (
-              <div
-                key={s._id}
-                style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
-              >
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                    <strong>{s.individualName}</strong>
-                    <span className="muted">{formatDate(s.stepDate)}</span>
-                  </div>
-                  <div className="muted">{s.stepsNarrative}</div>
-                  {s.nextReviewDate && (
-                    <div className="muted">Next review: {formatDate(s.nextReviewDate)}</div>
-                  )}
-                </div>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Remove step for ${s.individualName}`}
-                  disabled={!canWrite}
-                  onClick={() => { if (canWrite) void removeStep({ id: s._id }); }}
+            {steps.map((s) => {
+              const entry = s.stepKind === "became_significant" || s.stepKind === "ceased_significant";
+              return (
+                <div
+                  key={s._id}
+                  style={{ display: "flex", gap: 12, alignItems: "flex-start" }}
                 >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                      <strong>{s.individualName}</strong>
+                      <span className="muted">{formatDate(s.stepDate)}</span>
+                      {stepKindLabel(s.stepKind) && <Badge tone="neutral">{stepKindLabel(s.stepKind)}</Badge>}
+                    </div>
+                    <div className="muted">{s.stepsNarrative}</div>
+                    <div className="muted" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      {s.awareOn && <span>Aware: {formatDate(s.awareOn)}</span>}
+                      {s.recordedOn && <span>Recorded in register: {formatDate(s.recordedOn)}</span>}
+                      {s.notifiedOn && <span>Individual notified: {formatDate(s.notifiedOn)}</span>}
+                      {s.nextReviewDate && <span>Next review: {formatDate(s.nextReviewDate)}</span>}
+                    </div>
+                  </div>
+                  {s.awareOn && !s.recordedOn && (
+                    <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDateEdit({ step: s, field: "recordedOn", value: todayDateOnly() })}>
+                      Record entry
+                    </button>
+                  )}
+                  {entry && s.recordedOn && !s.notifiedOn && (
+                    <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDateEdit({ step: s, field: "notifiedOn", value: todayDateOnly() })}>
+                      Record notice
+                    </button>
+                  )}
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`Remove step for ${s.individualName}`}
+                    disabled={!canWrite}
+                    onClick={() => { if (canWrite) void removeStep({ id: s._id }); }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -232,6 +381,25 @@ export function SignificantIndividualsPage() {
       >
         {form && (
           <div>
+            <Field label="What this step records">
+              <Select
+                value={form.stepKind}
+                onChange={(value) => setForm({ ...form, stepKind: value })}
+                options={[{ value: "", label: "A diligence note" }, ...TRANSPARENCY_STEP_KINDS.map((kind) => ({ value: kind.value, label: kind.label }))]}
+              />
+            </Field>
+            {controllerOptions.length > 0 && (
+              <Field label="Significant individual on the register">
+                <Select
+                  value={form.roleHolderId}
+                  onChange={(value) => {
+                    const match = controllerOptions.find((ind) => ind.roleHolderId === value);
+                    setForm({ ...form, roleHolderId: value, individualName: match ? match.name : form.individualName });
+                  }}
+                  options={[{ value: "", label: "Not linked" }, ...controllerOptions.map((ind) => ({ value: String(ind.roleHolderId), label: ind.name }))]}
+                />
+              </Field>
+            )}
             <Field label="Individual name">
               <input
                 disabled={!canWrite}
@@ -255,12 +423,50 @@ export function SignificantIndividualsPage() {
                 onChange={(e) => setForm({ ...form, stepsNarrative: e.target.value })}
               />
             </Field>
+            {form.stepKind && form.stepKind !== "annual_review" && form.stepKind !== "information_request" && form.stepKind !== "other" && (
+              <>
+                <Field label="Date the company became aware" hint={bcCompany ? "The change must be recorded in the register within 30 days after this date (Business Corporations Act s. 119.31 (1))." : undefined}>
+                  <DatePicker disabled={!canWrite} value={form.awareOn} onChange={(value) => setForm({ ...form, awareOn: value })} />
+                </Field>
+                <Field label="Date recorded in the register">
+                  <DatePicker disabled={!canWrite} value={form.recordedOn} onChange={(value) => setForm({ ...form, recordedOn: value })} />
+                </Field>
+              </>
+            )}
+            {notifiable && (
+              <Field label="Date the individual was notified" hint={bcCompany ? "Send the notice within 10 days after the register entry (Business Corporations Act s. 119.41)." : undefined}>
+                <DatePicker disabled={!canWrite} value={form.notifiedOn} onChange={(value) => setForm({ ...form, notifiedOn: value })} />
+              </Field>
+            )}
             <Field label="Next review date">
               <DatePicker
                 disabled={!canWrite}
                 value={form.nextReviewDate}
                 onChange={(value) => setForm({ ...form, nextReviewDate: value })}
               />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        open={Boolean(dateEdit)}
+        onClose={() => setDateEdit(null)}
+        title={dateEdit?.field === "notifiedOn" ? "Record notice to the individual" : "Record register entry"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setDateEdit(null)}>Cancel</button>
+            <button className="btn btn--accent" disabled={!canWrite || !dateEdit?.value} onClick={saveDate}>Save</button>
+          </>
+        }
+      >
+        {dateEdit && (
+          <div>
+            <InspectorNote tone="info" title={dateEdit.step.individualName}>
+              {dateEdit.field === "notifiedOn" ? "The date the notice was sent to the individual." : "The date the information was entered in the register."}
+            </InspectorNote>
+            <Field label="Date">
+              <DatePicker value={dateEdit.value} onChange={(value) => setDateEdit({ ...dateEdit, value })} />
             </Field>
           </div>
         )}

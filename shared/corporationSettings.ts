@@ -1,6 +1,7 @@
 import { nextBcSocietyAgmDeadline } from './agmEvidence';
 import { entityMeetingWording } from './entityMeetingWording';
 import { legalGovernanceProfile } from './legalGovernanceProfiles';
+import { deriveTransparencyDeadlines, type TransparencyEventInput } from './significantIndividuals';
 
 /** A filing discharges only its explicitly identified reporting period. */
 export interface AnnualReturnFilingEvidence {
@@ -73,6 +74,8 @@ export interface ComplianceSettings {
   lastAnnualReturnCycleYear?: number;
   lastAnnualReturnPeriodEnd?: string;
   annualDeadlineCalendarReviews?: readonly AnnualDeadlineCalendarReview[];
+  /** BC transparency-register steps (annual reviews, changes, entries, notices). */
+  transparencyEvents?: readonly TransparencyEventInput[];
 }
 /** Earlier cycles with no recorded completion or filing evidence. This is an
  * informational evidence gap, never the open deadline: an unrecorded history
@@ -571,6 +574,12 @@ export function deriveComplianceDeadlines(s: ComplianceSettings, fromISOOrTimest
   if (yearEnd) deadlines.push({ key: 'fiscal-year-end', title: 'Fiscal Year End', dueDate: yearEnd, category: 'financial', deadlineCategory: 'Governance', cycleYear: Number(yearEnd.slice(0, 4)), basis: `Next fiscal-calendar year-end; prepare the statements required for the ${wording.annualMeeting}.` });
   const report = assessAnnualReturnDeadline(s, fromISO);
   if (report.dueDate && !['satisfied', 'not_applicable'].includes(report.status)) deadlines.push({ key: 'annual-report', title: profile?.annualReturn.label ?? 'Annual filing', dueDate: report.dueDate, category: 'annual-report', deadlineCategory: 'Governance', basis: report.basis + (report.issues.length ? ` Review: ${report.issues.join(' ')}` : ''), sourceIds: report.sourceIds, cycleYear: report.cycleYear, status: report.status });
+  // BC Business Corporations Act Part 4.1 transparency register: BC companies only.
+  if (profile?.id === 'bc_company') {
+    for (const item of deriveTransparencyDeadlines({ recognitionDate: recognition(s), events: s.transparencyEvents ?? [] }, fromISO)) {
+      deadlines.push({ key: item.key, title: item.title, dueDate: item.dueDate, category: 'transparency', deadlineCategory: 'Governance', basis: item.basis, sourceIds: item.key.startsWith('transparency-disposal') ? ['BC-BCA-TRANSPARENCY-ACCESS'] : ['BC-BCA-TRANSPARENCY'], cycleYear: item.cycleYear, status: item.status });
+    }
+  }
   return deadlines;
 }
 
