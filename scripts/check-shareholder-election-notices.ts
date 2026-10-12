@@ -8,6 +8,7 @@ import { allMemberNoticeRecipients, votingShareholderNoticeAudience, meetingNoti
 import { earliestPermittedNoticeDate } from "../shared/legalMeetingNotice";
 import { noticeWindowSatisfied } from "../src/features/meetings/lib/noticeWindow";
 import { organizationRuleScope } from "../shared/entityRuleScope";
+import { organizationToday } from "../shared/functions/electionElectorate";
 
 const bc = { entityType: "corporation__business_", jurisdictionCode: "CA-BC", actFormedUnder: "business_corporations_act" };
 const federal = { entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA", actFormedUnder: "canada_business_corporations_act" };
@@ -69,7 +70,7 @@ const ids = await test.run(async ctx => {
 const owner = test.withIdentity({ subject: "weighted-owner", issuer });
 const rep = test.withIdentity({ subject: "weighted-representative", issuer });
 const spoof = test.withIdentity({ subject: "weighted-spoof", issuer });
-const review = { recordDateISO: new Date().toISOString().slice(0, 10), recordDateBasis: "Board adopted voting record date verified against meeting notice.", rightsBasis: "Filed articles: Common 2 votes/share, Multiple voting 10 votes/share; ordinary poll.", ledgerBasis: "Current complete certified register and all effective transfers verified.", votingMethod: "per_share" as const, representatives: [{ roleHolderId: ids.personId, userId: ids.representativeId, authorityBasis: "Verified personal identity and signed appointment to vote." }, { roleHolderId: ids.bodyId, userId: ids.representativeId, authorityBasis: "Corporate shareholder board resolution appoints this representative." }] };
+const review = { recordDateISO: organizationToday(federal), recordDateBasis: "Board adopted voting record date verified against meeting notice.", rightsBasis: "Filed articles: Common 2 votes/share, Multiple voting 10 votes/share; ordinary poll.", ledgerBasis: "Current complete certified register and all effective transfers verified.", votingMethod: "per_share" as const, representatives: [{ roleHolderId: ids.personId, userId: ids.representativeId, authorityBasis: "Verified personal identity and signed appointment to vote." }, { roleHolderId: ids.bodyId, userId: ids.representativeId, authorityBasis: "Corporate shareholder board resolution appoints this representative." }] };
 const electionId = await owner.mutation(api.elections.create, { societyId: ids.societyId, title: "Weighted ballot", opensAtISO: "2020-01-01T00:00:00Z", closesAtISO: "2099-01-01T00:00:00Z", initialQuestion: { title: "Elect director", maxSelections: 1, options: [{ id: "yes", label: "For" }, { id: "no", label: "Against" }] } });
 await assert.rejects(() => owner.mutation(api.elections.snapshotEligibleVoters, { electionId }), /Review the record date/);
 await assert.rejects(() => owner.mutation(api.elections.updateSettings, { electionId, corporateReview: { ...review, representatives: [{ ...review.representatives[0], userId: ids.foreignUserId }] } }), /not found|workspace|society/i);

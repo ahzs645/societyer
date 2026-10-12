@@ -8,6 +8,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
+import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -20,6 +21,7 @@ import { isAuthenticatedAuthMode } from "../lib/authMode";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { useConfirm } from "../components/Modal";
 import { validateElectionQuestion } from "../../shared/electionValidation";
+import { resolutionCalendarDate, resolutionTimeZone } from "../../shared/writtenResolutionEvidence";
 
 /** Matches the 12-hour clock of the nomination window pickers ("4:00 PM"). */
 const NOMINATION_TIME_FORMAT = "MMM d, yyyy · h:mm a";
@@ -27,6 +29,7 @@ const NOMINATION_TIME_FORMAT = "MMM d, yyyy · h:mm a";
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const currentUser = useCurrentUser();
+  const society = useSociety();
   const { loaded, can } = usePermissions();
   const canManage = loaded && can("elections:write");
   const canPublishResults = canManage && can("elections:tally");
@@ -99,15 +102,17 @@ export function ElectionDetailPage() {
   const cumulative = election?.corporateReview?.votingMethod === "cumulative";
 
   useEffect(() => {
-    if (!election || !isCorporation) return;
+    if (!election || !isCorporation || !society) return;
+    // Default to today in the organization's own time zone, the day the record-date check compares against.
+    const nowISO = new Date().toISOString();
     setReviewDraft((current: any) => current?.electionId === election._id ? current : {
-      electionId: election._id, recordDateISO: election.corporateReview?.recordDateISO ?? new Date().toISOString().slice(0, 10),
+      electionId: election._id, recordDateISO: election.corporateReview?.recordDateISO ?? resolutionCalendarDate(nowISO, resolutionTimeZone(society)) ?? nowISO.slice(0, 10),
       recordDateSource: election.corporateReview?.recordDateSource ?? "fixed",
       recordDateBasis: election.corporateReview?.recordDateBasis ?? "", rightsBasis: election.corporateReview?.rightsBasis ?? "",
       ledgerBasis: election.corporateReview?.ledgerBasis ?? "", votingMethod: election.corporateReview?.votingMethod ?? "per_share",
       classIds: election.corporateReview?.classIds, representatives: election.corporateReview?.representatives ?? [],
     });
-  }, [election, isCorporation]);
+  }, [election, isCorporation, society]);
 
   useEffect(() => {
     if (!election) return;
