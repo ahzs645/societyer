@@ -127,8 +127,10 @@ function positiveInteger(value: unknown): value is number {
  * it for a public company. Nothing is inferred when no articles are recorded.
  */
 export function transferConsentRequired(org: any): boolean {
+  // An explicit answer wins, even before the rest of the articles record is entered.
+  const explicit = org?.operativeArticles?.transferConsentRequired;
+  if (typeof explicit === "boolean") return explicit;
   const articles = operativeArticlesOf(org);
-  if (typeof articles?.transferConsentRequired === "boolean") return articles.transferConsentRequired;
   return articles?.base === "bc_table_1" && articlesApplyTo(org) && org?.distributing !== true;
 }
 

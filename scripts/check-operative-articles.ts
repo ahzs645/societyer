@@ -245,7 +245,7 @@ const holders: string[] = [];
 for (const fullName of ["Holder Alpha", "Holder Beta"]) holders.push(await client.mutation("legalOperations:upsertRoleHolder", { societyId, roleType: "shareholder", status: "current", fullName }));
 const common = await client.mutation("legalOperations:upsertRightsClass", { societyId, className: "Common shares", classType: "share", status: "active", votesPerShare: 1 });
 for (const [index, holder] of holders.entries()) {
-  await client.mutation("legalOperations:upsertRightsholdingTransfer", { societyId, transferType: "issuance", status: "posted", transferDate: "2026-01-16", rightsClassId: common, destinationRoleHolderId: holder, quantity: index ? 30 : 70, considerationType: "cash", priceToOrganizationCents: 100, priceToOrganizationCurrency: "cad" });
+  await client.mutation("legalOperations:upsertRightsholdingTransfer", { societyId, transferType: "issuance", status: "posted", transferDate: "2026-01-16", rightsClassId: common, destinationRoleHolderId: holder, quantity: index ? 30 : 70, considerationType: "cash", priceToOrganizationCents: 100, priceToOrganizationCurrency: "cad", fullyPaidConfirmedAt: "2026-01-16" });
 }
 const agmId = await client.mutation("meetings:create", { societyId, type: "AGM", title: "Annual general meeting", scheduledAt: "2026-12-01T17:00:00Z", electronic: false, status: "Scheduled", attendeeIds: ["Holder Alpha", "Holder Beta"] });
 const agm = await client.query("meetings:get", { id: agmId });
