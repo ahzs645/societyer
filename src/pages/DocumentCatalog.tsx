@@ -68,6 +68,8 @@ type CatalogPrecedent = {
 type CatalogData = {
   templates: CatalogTemplate[];
   precedents: CatalogPrecedent[];
+  /** Dates on which each transaction-scoped packet has a recorded transaction (newest first). */
+  packetEventDates?: Record<string, string[]>;
 };
 
 /** Turn a snake/kebab/lower tag like "board_resolution" into "Board resolution". */
@@ -102,6 +104,7 @@ export function DocumentCatalogPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [doneKey, setDoneKey] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [eventDateByKey, setEventDateByKey] = useState<Record<string, string>>({});
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -124,13 +127,23 @@ export function DocumentCatalogPage() {
     }
   };
 
+  // A transaction-scoped packet renders only the transaction of its date, so
+  // offer the dates on which that kind of transaction is recorded.
+  const eventDatesFor = (key: string | null) => (key ? data?.packetEventDates?.[key] ?? [] : []);
+  const selectedEventDate = (key: string | null) => {
+    const dates = eventDatesFor(key);
+    if (!key || !dates.length) return todayDateOnly();
+    const chosen = eventDateByKey[key];
+    return chosen && dates.includes(chosen) ? chosen : dates[0];
+  };
+
   const onGenerate = async (t: CatalogTemplate) => {
     const key = packetKeyOf(t);
     if (!key || !society) return;
     setBusyKey(t._id);
     setGenerationError(null);
     try {
-      await generate({ societyId: society._id, packetKey: key, effectiveDate: todayDateOnly() });
+      await generate({ societyId: society._id, packetKey: key, effectiveDate: selectedEventDate(key) });
       setDoneKey(t._id);
       setTimeout(() => setDoneKey(null), 4000);
     } catch (error: any) {
@@ -275,6 +288,23 @@ export function DocumentCatalogPage() {
                           )}
                         </span>
                       </div>
+                      {packet && "transactionScoped" in packet && packet.transactionScoped && (
+                        eventDatesFor(key).length > 0 ? (
+                          <label className="row" style={{ gap: 8, marginTop: 6, fontSize: 13, alignItems: "center" }}>
+                            <span className="muted">Transaction date</span>
+                            <select
+                              className="input"
+                              style={{ width: "auto" }}
+                              value={selectedEventDate(key)}
+                              onChange={(event) => key && setEventDateByKey((current) => ({ ...current, [key]: event.target.value }))}
+                            >
+                              {eventDatesFor(key).map((date) => <option key={date} value={date}>{date}</option>)}
+                            </select>
+                          </label>
+                        ) : (
+                          <p className="muted" style={{ margin: "6px 0", fontSize: 13 }}>No transaction of this kind is recorded yet. The draft uses today's date and contains prompts to complete.</p>
+                        )
+                      )}
                       {packet?.preparationOnly && <p className="muted" style={{ margin: "6px 0", fontSize: 13 }}>Original preparation worksheet — unresolved drafting prompts require tailored legal review before execution or registry submission.</p>}
                       {!compatibleJurisdiction && <Badge tone="warn">Different home jurisdiction</Badge>}
                       {!compatibleEntity && <Badge tone="warn">Different entity type</Badge>}
