@@ -13,6 +13,7 @@ const scripts = [
   'check-written-resolution-evidence.ts', 'check-shareholder-election-notices.ts',
   'check-written-resolution-routes.ts', 'check-meeting-notice-authority.ts',
   'check-annual-resolution.ts', 'check-corporation-document-packets.ts',
+  'check-packet-instruments.ts', 'check-packet-grammar.ts', 'check-packet-operative-data.ts',
   'check-corporation-settings.ts', 'check-annual-filings.ts',
   'check-entity-rule-scope.ts', 'check-organization-domain.ts',
   'check-organization-vocabulary.ts', 'check-dashboard-compliance-rules.ts',

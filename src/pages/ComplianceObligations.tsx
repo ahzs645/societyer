@@ -345,6 +345,7 @@ export function ComplianceObligationsPage() {
                     filingKind,
                     obligationKey: obligation.obligationKey,
                     ruleId: obligation.ruleId,
+                    organization,
                   }) : undefined;
                   const decision = decisionsByRuleId.get(obligation.occurrenceKey);
                   const isDismissed = decision?.status === "dismissed";

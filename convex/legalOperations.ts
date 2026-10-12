@@ -342,6 +342,9 @@ export const generateDocumentFromCatalog = authorizedMutation("legalOperations:g
     societyId: v.id("societies"),
     packetKey: v.string(),
     effectiveDate: v.optional(v.string()),
+    // Optional register row ids of the transaction being approved; otherwise
+    // the packet uses the rows effective on effectiveDate.
+    transactionIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
   handler: async (ctx, args) => {

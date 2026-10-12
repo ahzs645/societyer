@@ -47,24 +47,37 @@ import { buildSubscriptionAgreementBlocks } from "../subscriptionAgreement";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../societyDocumentPackets";
 import { isCorporation } from "../organizationDomain";
 import { assertPacketCompatible, packetDataWithProvenance } from "../templateProvenance";
-import { materializeRightsHoldings } from "../equityLedger";
+import { deriveCurrentHoldings, materializeRightsHoldings, type RightsholdingTransferRecord } from "../equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../shareSplit";
-import { buildSocietyRenderContext } from "../societyRenderContext";
-import { resolveLocale } from "../locale";
+import { bodyRowsAsOf, buildSocietyRenderContext, roleHoldersInOffice } from "../societyRenderContext";
+import { formatLongDate, resolveLocale } from "../locale";
 import {
+  addressInForce,
   assetTransferView,
+  corporateLawContext,
   directorAppointmentView,
-  directorRemovalView,
+  directorDepartureView,
+  dividendDeclarationView,
+  formatAddress,
+  isoDay,
   officeChangeView,
   officerAppointmentView,
+  packetEventDatesByKind,
   shareCertificateView,
+  shareIssuanceView,
+  shareRedemptionView,
+  shareSplitView,
   shareTransferView,
+  type PacketScope,
 } from "../packetOperativeData";
-import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../executionBlock";
+import { bodySigners, buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../executionBlock";
 import { activeAsOf, type IntervalRow } from "../registerHistory";
 import { annualResolutionDataWithAuthority, buildAnnualResolutionContext, type AnnualResolutionContext } from "../annualResolution";
-import { buildDividendResolutionContext } from "../dividendResolution";
 import { generatedPreparationReviewView } from "../preparationDocumentState";
+import { renderInstrument, renderedPacketBlocks, withExecution } from "../packetInstrument";
+import { renderTemplate } from "../templateAssembly";
+import { capitalizeFirst } from "../nlg";
+import type { RenderContext, GroupContext } from "../renderContext";
 
 export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<any> {
   await requireSocietyMembership(ctx, societyId);
@@ -83,7 +96,23 @@ export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId 
     runs: (await filterDocumentLinkedRows(ctx, societyId, runs, "legalPrecedentRuns")).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
     generatedDocuments: (await filterDocumentLinkedRows(ctx, societyId, generatedDocuments, "generatedLegalDocuments")).map(generatedPreparationReviewView).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
     signers: (await filterDocumentLinkedRows(ctx, societyId, signers, "legalSigners")).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
+    packetEventDates: await packetEventDatesForSociety(ctx, societyId),
   };
+}
+
+/**
+ * The dates on which each transaction-scoped corporate packet has a recorded
+ * transaction (newest first), so the catalog offers only meaningful dates.
+ * Societies get an empty map.
+ */
+async function packetEventDatesForSociety(ctx: PortableQueryCtx, societyId: string): Promise<Record<string, string[]>> {
+  const society = await ctx.db.get(societyId as any);
+  if (!isCorporation(society as any)) return {};
+  const read = (table: string) => ctx.db.query(table as any).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect() as Promise<any[]>;
+  const [roleHolders, transfers, certificates, addresses, assets, dividends] = await Promise.all([
+    read("roleHolders"), read("rightsholdingTransfers"), read("shareCertificates"), read("organizationAddresses"), read("assets"), read("dividends"),
+  ]);
+  return packetEventDatesByKind({ roleHolders, transfers, certificates, addresses, assets, dividends });
 }
 
 export async function seedStarterPolicyTemplatesPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }): Promise<any> {
@@ -168,9 +197,13 @@ export async function seedSocietyDocumentPacketsPortable(ctx: PortableMutationCt
  */
 export async function generatePacketForSocietyPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: any; packetKey: string; effectiveDate?: string },
+  args: { societyId: any; packetKey: string; effectiveDate?: string; transactionIds?: string[] },
 ): Promise<any> {
   {
+    const runPayload = JSON.stringify({
+      packetKey: args.packetKey,
+      ...(args.transactionIds?.length ? { transactionIds: args.transactionIds.map(String) } : {}),
+    });
     const corpPacket = CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const packet = corpPacket ?? socPacket;
@@ -200,7 +233,7 @@ export async function generatePacketForSocietyPortable(
       status: "draft",
       precedentId: precedent._id,
       dateTime: args.effectiveDate,
-      dataJson: JSON.stringify({ packetKey: packet.key }),
+      dataJson: runPayload,
       dataJsonList: [],
       dataReviewed: false,
       searchIds: [],
@@ -221,7 +254,7 @@ export async function generatePacketForSocietyPortable(
       packet,
       runId,
       effectiveDate: args.effectiveDate,
-      dataJson: JSON.stringify({ packetKey: packet.key }),
+      dataJson: runPayload,
       notes: "Generated from the document catalog.",
     });
     return { runId, packetKey: packet.key, precedentId: precedent._id, ...artifacts };
@@ -230,7 +263,7 @@ export async function generatePacketForSocietyPortable(
 
 export async function generateDocumentFromCatalogPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: string; packetKey: string; effectiveDate?: string },
+  args: { societyId: string; packetKey: string; effectiveDate?: string; transactionIds?: string[] },
 ): Promise<any> {
   await requireSocietyMembership(ctx, args.societyId);
   return generatePacketForSocietyPortable(ctx, args);
@@ -280,6 +313,7 @@ export async function stageCorporationDocumentPacketPortable(
         filingKind: args.filingKind,
         obligationKey: args.obligationKey,
         ruleId: args.obligationRuleId,
+        organization: await ctx.db.get(args.societyId),
       });
   if (!packet) throw new Error("No corporation document packet matches this obligation.");
   assertPacketCompatible(await ctx.db.get(args.societyId), packet);
@@ -808,9 +842,6 @@ async function createPacketRunArtifacts(ctx: any, args: {
   notes?: string;
 }) {
   const now = new Date().toISOString();
-  const signerRoleHolderIds = args.packet.preparationOnly || !args.packet.signatureRequired ? [] : args.signerRoleHolderIds?.length
-    ? args.signerRoleHolderIds
-    : await defaultPacketSignerRoleHolderIds(ctx, args.societyId);
   const run = await ctx.db.get(args.runId);
   const sourceExternalIds = [
     ...(run?.sourceExternalIds ?? []),
@@ -818,48 +849,78 @@ async function createPacketRunArtifacts(ctx: any, args: {
     `societyer:legal-precedent-run:${args.runId}`,
   ];
   // Build a grammar/data context so generated packet prose binds {token}/{#if}/
-  // {#each} markup (token-free packets are unaffected). Logic in the tested
-  // shared/societyRenderContext.ts.
+  // {#each} markup (token-free packets are unaffected). Every fact is read as
+  // at the document date (YCN start <= date < end): the legal name, the Act,
+  // the directors, the shareholders and the voting shareholders. Logic in the
+  // tested shared/societyRenderContext.ts.
   const society = await ctx.db.get(args.societyId);
   assertPacketCompatible(society, args.packet);
   let provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
-  const roleHolders = await ctx.db
-    .query("roleHolders")
-    .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
-    .collect();
+  const asOf = args.effectiveDate ?? now;
+  const read = (table: string): Promise<any[]> => ctx.db.query(table).withIndex("by_society", (q: any) => q.eq("societyId", args.societyId)).collect();
+  const [roleHolders, transfers, rightsClasses, nameHistory, constating] = await Promise.all([
+    read("roleHolders"), read("rightsholdingTransfers"), read("rightsClasses"), read("societyNameHistory"), read("constatingEvents"),
+  ]);
+  const registers = { roleHolders, transfers, rightsClasses };
   const renderCtx = society
-    ? buildSocietyRenderContext(society, roleHolders, args.effectiveDate ?? now)
+    ? buildSocietyRenderContext(society, roleHolders, asOf, {
+        transfers,
+        rightsClasses,
+        nameHistory: nameHistory.map((row: any) => ({ name: String(row.name ?? ""), shortName: row.shortName, startISO: String(row.startISO ?? ""), regPosn: row.regPosn })),
+        constating: constating.map((row: any) => ({ action: row.action, jurisdiction: String(row.jurisdiction ?? ""), legislation: String(row.legislation ?? ""), regNumber: row.regNumber, startISO: String(row.startISO ?? "") })),
+      })
     : undefined;
+  const body = resolvingBodyFor(args.packet.requiredSigners ?? []);
+  // Default signer placeholders: the resolving body's members as at the date.
+  const bodyRows = renderCtx ? bodyRowsAsOf(roleHolders, asOf, { transfers, rightsClasses })[groupRowsKey(body.group)] : [];
+  const signerRoleHolderIds = args.packet.preparationOnly || !args.packet.signatureRequired ? [] : args.signerRoleHolderIds?.length
+    ? args.signerRoleHolderIds
+    : bodyRows.length
+      ? bodyRows.map((row: any) => row._id)
+      : body.group === "dir" ? await defaultPacketSignerRoleHolderIds(ctx, args.societyId) : [];
   // Compute the execution/signature block (adoption clause + signature page) so
   // the generated DOCX is a signable instrument, not a checklist. Signatories
-  // come from the per-entity signer roster (entitySigners) when one exists,
-  // otherwise from the resolving body's current role holders.
+  // are the resolving body's members as at the date (directors for a directors'
+  // resolution, voting shareholders for theirs), enriched from the per-entity
+  // signer roster (entitySigners) for corporate "By:" blocks.
   let context: Record<string, unknown> | undefined = renderCtx as unknown as
     | Record<string, unknown>
     | undefined;
+  let docPacket = args.packet;
   if (renderCtx) {
-    const asOf = args.effectiveDate ?? now;
-    const body = resolvingBodyFor(args.packet.requiredSigners ?? []);
-    const signerRoster = await ctx.db
-      .query("entitySigners")
-      .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
-      .collect();
+    const signerRoster = await read("entitySigners");
     const activeRoster = activeAsOf(signerRoster as unknown as IntervalRow[], asOf, {
       start: "validFromISO",
       end: "validToISO",
     }) as Array<{ name?: string; corpSign?: string | null; signOrder?: number }>;
+    const group = (renderCtx as unknown as Record<string, GroupContext>)[body.group];
     let signers: SignerLine[];
-    if (activeRoster.length) {
+    if (group?.list.length) {
+      signers = bodySigners(group.list, body, activeRoster);
+    } else if (body.group === "dir" && activeRoster.length) {
+      // Legacy: a roster with no recorded directors signs a directors' resolution.
       signers = [...activeRoster]
         .sort((a, b) => (a.signOrder ?? Infinity) - (b.signOrder ?? Infinity))
         .map((s) => ({ name: String(s.name ?? ""), corpSign: s.corpSign ?? null }));
     } else {
-      signers = roleHolders
-        .filter((r: any) => body.roleTypes.includes(r.roleType) && !r.endDate)
-        .map((r: any) => ({ name: String(r.fullName ?? ""), capacity: body.capacity }));
+      signers = [];
     }
-    const resolutionsPlural =
-      args.packet.sections.reduce((sum, section) => sum + section.body.length, 0) > 1;
+    // Packet-specific operative data so the resolution body renders real clauses
+    // for the transaction of the date (YCN Doc - * sheets), not a generic blurb.
+    let runData: Record<string, unknown> | undefined;
+    try {
+      runData = args.dataJson ? JSON.parse(args.dataJson) : undefined;
+    } catch {
+      runData = undefined;
+    }
+    const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx, runData, { asOf, ...registers });
+    const baseContext: Record<string, unknown> = { ...renderCtx, ...dataContext };
+    const instrument = args.packet.instrument ? renderInstrument(args.packet.instrument, baseContext) : undefined;
+    // "resolution" vs "resolutions" follows the numbered clauses actually present.
+    const resolutionsPlural = instrument
+      ? instrument.resolutionsPlural
+      : args.packet.sections.reduce((sum, section) => sum + section.body.length, 0) > 1;
+    const locale = resolveLocale(society?.docPrepLanguage);
     const execution = args.packet.preparationOnly || !args.packet.signatureRequired ? undefined : buildExecutionBlock({
       shortName: renderCtx.org.shortName,
       legislation: renderCtx.org.legislation,
@@ -867,18 +928,30 @@ async function createPacketRunArtifacts(ctx: any, args: {
       resolutionsPlural,
       signers,
       dateLong: renderCtx.date.long,
-      locale: resolveLocale(society?.docPrepLanguage),
+      locale,
     });
-    // Packet-specific operative data so the resolution body renders real clauses
-    // (YCN Doc - Annual / Doc - Dividends), not a generic blurb.
-    let runData: Record<string, unknown> | undefined;
-    try {
-      runData = args.dataJson ? JSON.parse(args.dataJson) : undefined;
-    } catch {
-      runData = undefined;
+    context = {
+      ...baseContext,
+      ...(execution ? { execution } : {}),
+      ...(instrument
+        ? {
+            instrument: {
+              blocks: withExecution(instrument, execution ? { adoptionClause: execution.adoptionClause, dateLong: renderCtx.date.long, signers, datedLabel: locale === "fr" ? "Daté le" : "Dated" } : undefined),
+              clauseCount: instrument.clauseCount,
+              resolutionsPlural: instrument.resolutionsPlural,
+            },
+          }
+        : {}),
+    };
+    // The DOCX renders section body blocks (shared/packetBlocks.ts): hand it the
+    // instrument as rendered for this transaction (rows, numbering and
+    // cross-references resolved) in place of the templated catalog sections.
+    if (instrument && !args.packet.preparationOnly) {
+      docPacket = {
+        ...args.packet,
+        sections: [{ heading: args.packet.templateName, body: renderedPacketBlocks(instrument) }],
+      };
     }
-    const dataContext = await buildPacketDataContext(ctx, args.packet, args.societyId, society, renderCtx, runData);
-    context = { ...renderCtx, ...(execution ? { execution } : {}), ...dataContext };
     if (args.packet.key === "annual-resolutions" && dataContext.annual) {
       provenanceData = annualResolutionDataWithAuthority(provenanceData, dataContext.annual as AnnualResolutionContext, now);
     }
@@ -888,7 +961,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
   if (society?.includeDocumentIdHeader) {
     context = { ...(context ?? {}), documentId: corporationPacketDocumentId(args.packet, fileOpts) };
   }
-  const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
+  const docxDataUrl = corporationPacketDocxDataUrl(docPacket, context);
   const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
   const draftDocumentId = await ctx.db.insert("documents", {
@@ -1116,122 +1189,168 @@ async function createSubscriptionAnnexes(
 
 /**
  * Build the packet-specific operative data context that the resolution body
- * binds (YCN Doc - Annual / Doc - Dividends). Keyed off packet.key so generic
- * packets are unaffected. Logic lives in the tested shared/* helpers.
+ * binds (YCN Doc - * sheets). Keyed off packet.key so generic packets are
+ * unaffected. Every transaction-scoped view reads only the rows effective on
+ * the document date, or the selected transaction ids (`runData.transactionIds`,
+ * or the staged ledger row `runData.transferId`). Logic lives in the tested
+ * shared/packetOperativeData.ts helpers.
  */
 async function buildPacketDataContext(
   ctx: any,
   packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number],
   societyId: any,
   society: any,
-  renderCtx: { dir: { list: Array<{ name: string }> }; date?: { long?: string } },
-  runData?: Record<string, unknown>,
+  renderCtx: RenderContext,
+  runData: Record<string, unknown> | undefined,
+  registers: { asOf: string; roleHolders: any[]; transfers: any[]; rightsClasses: any[] },
 ): Promise<Record<string, unknown>> {
-  if (packet.key === "share-split" && runData) {
-    const lines = Array.isArray(runData.lines) ? (runData.lines as Array<Record<string, unknown>>) : [];
-    return {
-      ShareClass: String(runData.shareClassName ?? ""),
-      SplitRatio: String(runData.ratioLabel ?? ""),
-      EffectiveDate: renderCtx.date?.long ?? String(runData.effectiveDate ?? ""),
-      PreSplitCount: Number(runData.totalBefore ?? 0),
-      PostSplitCount: Number(runData.totalAfter ?? 0),
-      ConsolidationFlag: runData.kind === "consolidation" ? "Yes" : "No",
-      FractionalShareTreatment: "rounded down (no fractional shares issued)",
-      split: {
-        ratioLabel: String(runData.ratioLabel ?? ""),
-        kind: String(runData.kind ?? ""),
-        totalBefore: Number(runData.totalBefore ?? 0),
-        totalAfter: Number(runData.totalAfter ?? 0),
-        sharesDropped: Number(runData.sharesDropped ?? 0),
-        hasLines: lines.length > 0,
-        hasDroppedShares: Number(runData.sharesDropped ?? 0) > 0,
-        lines: lines.map((line) => ({
-          holderName: String(line.holderName ?? ""),
-          before: Number(line.before ?? 0),
-          after: Number(line.after ?? 0),
-        })),
-      },
-    };
-  }
-  if (packet.key === "appoint-officer" || packet.key === "appoint-director" || packet.key === "director-removal") {
-    const roleHolders = await ctx.db
-      .query("roleHolders")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    if (packet.key === "appoint-officer") return officerAppointmentView(roleHolders);
-    if (packet.key === "appoint-director") return directorAppointmentView(roleHolders);
-    return directorRemovalView(roleHolders);
-  }
-  if (packet.key === "share-transfer") {
-    const [transfers, classes] = await Promise.all([
-      ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("rightsClasses").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-    ]);
-    const classNameById: Record<string, string> = {};
-    for (const c of classes) classNameById[String(c._id)] = String(c.className ?? "");
-    return shareTransferView(transfers, classNameById);
-  }
-  if (packet.key === "share-certificate") {
-    const certs = await ctx.db
-      .query("shareCertificates")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    return shareCertificateView(certs);
-  }
-  if (packet.key === "change-of-offices") {
-    const addresses = await ctx.db
-      .query("organizationAddresses")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    return officeChangeView(addresses);
-  }
-  if (packet.key === "asset-transfer") {
-    const assets = await ctx.db
-      .query("assets")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    return assetTransferView(assets);
-  }
-  if (packet.key === "annual-resolutions") {
-    return {
-      annual: buildAnnualResolutionContext({
-        organization: society,
-        waivePrepFinancials: society?.waivePrepFinancials,
-        waiveAuditor: runData?.waiveAuditor === true,
-        auditorName: typeof runData?.auditorName === "string" ? runData.auditorName : undefined,
-        fiscalYearEnd: society?.fiscalYearEnd,
-        financialPeriodEnd: typeof runData?.financialPeriodEnd === "string" ? runData.financialPeriodEnd : undefined,
-        annualBusinessYear: typeof runData?.annualBusinessYear === "number" ? runData.annualBusinessYear : undefined,
-        annualReferenceDate: typeof runData?.annualReferenceDate === "string" ? runData.annualReferenceDate : undefined,
-        directors: renderCtx.dir.list,
-      }),
-    };
-  }
-  if (packet.key === "dividend-declaration") {
-    const rows = await ctx.db
-      .query("dividends")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    // The latest declaration date's rows make up one multi-class declaration.
-    let latest = "";
-    for (const row of rows) {
-      const declaredOn = String(row.declaredOn ?? "");
-      if (declaredOn > latest) latest = declaredOn;
+  const data = runData ?? {};
+  const selected = Array.isArray(data.transactionIds) ? (data.transactionIds as unknown[]).map(String).filter(Boolean)
+    : typeof data.transferId === "string" && data.transferId ? [data.transferId] : undefined;
+  const scope: PacketScope = { asOf: isoDay(registers.asOf) || registers.asOf, ids: selected };
+  const read = (table: string): Promise<any[]> => ctx.db.query(table).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+  const corporate = CORPORATION_DOCUMENT_PACKETS.some((candidate) => candidate.key === packet.key);
+  // Law fragments may carry {org.*} tokens; bind them once against the render context.
+  const lawRaw = corporateLawContext(society, renderCtx.org.legislation);
+  const law = Object.fromEntries(Object.entries(lawRaw).map(([key, value]) => [key, typeof value === "string" ? renderTemplate(value, renderCtx as unknown as Record<string, unknown>) : value]));
+  const president = roleHoldersInOffice(registers.roleHolders, "officer", scope.asOf)
+    .some((row: any) => [row.officerTitle, ...(row.additionalOfficerTitles ?? [])].some((title: unknown) => /president/i.test(String(title ?? "")) && !/vice/i.test(String(title ?? ""))));
+  const officerPhrase = president ? "the President" : "any director";
+  const common = corporate ? { law, signing: { officerPhrase, OfficerPhrase: capitalizeFirst(officerPhrase) } } : {};
+  const shareRegisters = async () => ({
+    transfers: registers.transfers,
+    classes: registers.rightsClasses,
+    roleHolders: registers.roleHolders,
+    certificates: await read("shareCertificates"),
+  });
+
+  switch (packet.key) {
+    case "appoint-officer":
+      return { ...common, ...officerAppointmentView(registers.roleHolders, scope) };
+    case "appoint-director":
+      return { ...common, ...directorAppointmentView(registers.roleHolders, scope) };
+    case "appoint-director-by-directors": {
+      const view = directorAppointmentView(registers.roleHolders, scope);
+      return { ...common, appointment: { ...view.appointment, isAdditional: data.basis === "additional" } };
     }
-    const declarationRows = rows
-      .filter((row: any) => String(row.declaredOn ?? "") === latest)
-      .map((row: any) => ({
-        shareClass: String(row.shareClass ?? ""),
-        perShareCents: Number(row.perShareCents ?? 0),
-        sharesOutstanding: Number(row.sharesOutstanding ?? 0),
-        totalCents: Number(row.totalCents ?? 0),
-        currency: String(row.currency ?? ""),
-      }));
-    return {
-      dividend: buildDividendResolutionContext(declarationRows, { declaredDate: latest || undefined }),
-    };
+    case "director-removal":
+    case "director-resignation":
+      return { ...common, ...directorDepartureView(registers.roleHolders, scope) };
+    case "issue-shares":
+      return { ...common, ...shareIssuanceView(await shareRegisters(), scope) };
+    case "share-transfer":
+      return { ...common, ...shareTransferView(await shareRegisters(), scope, { consentRequired: transferConsentRequiredFor(society, registers.rightsClasses) }) };
+    case "share-certificate":
+      return { ...common, ...shareCertificateView(await read("shareCertificates"), scope, registers.rightsClasses) };
+    case "share-redemption":
+      return { ...common, ...shareRedemptionView(await shareRegisters(), scope, data) };
+    case "share-split": {
+      const lines = Array.isArray(data.lines) && data.lines.length ? data : splitRunDataFromLedger(registers, scope);
+      const cls = registers.rightsClasses.find((row: any) => String(row._id) === String(lines.rightsClassId ?? data.rightsClassId ?? ""));
+      const view = shareSplitView(lines, cls);
+      return {
+        ...common,
+        ShareClass: String(lines.shareClassName ?? cls?.className ?? ""),
+        SplitRatio: String(lines.ratioLabel ?? ""),
+        EffectiveDate: renderCtx.date?.long ?? String(lines.effectiveDate ?? ""),
+        PreSplitCount: Number(lines.totalBefore ?? 0),
+        PostSplitCount: Number(lines.totalAfter ?? 0),
+        ConsolidationFlag: lines.kind === "consolidation" ? "Yes" : "No",
+        FractionalShareTreatment: "rounded down (no fractional shares issued)",
+        ...view,
+      };
+    }
+    case "change-of-offices":
+      return { ...common, ...officeChangeView(await read("organizationAddresses"), scope) };
+    case "asset-transfer":
+      return { ...common, ...assetTransferView(await read("assets"), scope) };
+    case "dividend-declaration":
+      return {
+        ...common,
+        ...dividendDeclarationView(await read("dividends"), scope, registers.rightsClasses, {
+          recordDate: typeof data.recordDate === "string" ? data.recordDate : undefined,
+          paymentDate: typeof data.paymentDate === "string" ? data.paymentDate : undefined,
+        }),
+      };
+    case "annual-resolutions":
+      return {
+        ...common,
+        annual: buildAnnualResolutionContext({
+          organization: society,
+          waivePrepFinancials: society?.waivePrepFinancials,
+          waiveAuditor: data.waiveAuditor === true,
+          auditorName: typeof data.auditorName === "string" ? data.auditorName : undefined,
+          fiscalYearEnd: society?.fiscalYearEnd,
+          financialPeriodEnd: typeof data.financialPeriodEnd === "string" ? data.financialPeriodEnd : undefined,
+          annualBusinessYear: typeof data.annualBusinessYear === "number" ? data.annualBusinessYear : undefined,
+          annualReferenceDate: typeof data.annualReferenceDate === "string" ? data.annualReferenceDate : undefined,
+          includeRatification: data.includeRatification === true,
+          directors: renderCtx.dir.list,
+        }),
+      };
+    case "annual-directors-resolution": {
+      const addresses = await read("organizationAddresses");
+      const office = (type: string) => formatAddress(addressInForce(addresses, type, scope.asOf) ?? addresses.find((row: any) => row.type === type && row.status === "current"));
+      const period = typeof data.financialPeriodEnd === "string" ? isoDay(data.financialPeriodEnd) : "";
+      const year = typeof data.annualBusinessYear === "number" ? String(data.annualBusinessYear) : scope.asOf.slice(0, 4);
+      const registered = office("registered_office");
+      const records = office("records_office");
+      return {
+        ...common,
+        ...officerAppointmentView(registers.roleHolders, scope, { allInOffice: true }),
+        annualDirectors: {
+          year,
+          hasFinancialPeriod: Boolean(period),
+          financialPeriodLong: period ? formatLongDate(period) : "",
+          registered, records, hasRegistered: Boolean(registered), hasRecords: Boolean(records),
+        },
+      };
+    }
+    default:
+      return common;
   }
-  return {};
+}
+
+/** Map a resolving-body group to its row list in bodyRowsAsOf. */
+function groupRowsKey(group: "dir" | "shareholders" | "votingShareholders" | "members" | "officers") {
+  return group === "dir" ? "directors" : group;
+}
+
+/**
+ * Whether the articles require the directors' consent to a transfer. Reads the
+ * operative-articles record when present (COMMON contract:
+ * `operativeArticles.transferConsentRequired`, or the organization flag
+ * `transferRequiresDirectorConsent`), else the class transfer conditions.
+ */
+function transferConsentRequiredFor(society: any, classes: any[]): boolean {
+  if (society?.operativeArticles?.transferConsentRequired === true || society?.transferRequiresDirectorConsent === true) return true;
+  if (society?.operativeArticles?.transferConsentRequired === false || society?.transferRequiresDirectorConsent === false) return false;
+  return classes.some((row: any) => /consent of the (?:board|directors)|directors'? consent|board consent/i.test(String(row.conditionsToTransfer ?? "")));
+}
+
+/**
+ * Split lines for a catalog-generated split packet: per-holder subdivision or
+ * consolidation rows posted on the event date, with holdings just before it.
+ */
+function splitRunDataFromLedger(registers: { transfers: any[]; roleHolders: any[] }, scope: PacketScope): Record<string, unknown> {
+  const rows = registers.transfers.filter((t: any) => (t.transferType === "subdivision" || t.transferType === "consolidation") && t.status !== "void"
+    && (scope.ids?.length ? scope.ids.includes(String(t._id)) : isoDay(t.transferDate) === scope.asOf));
+  if (!rows.length) return {};
+  const before = deriveCurrentHoldings(registers.transfers.filter((t: any) => t.status === "posted" && isoDay(t.transferDate) < isoDay(rows[0].transferDate)) as RightsholdingTransferRecord[]);
+  const name = (id: unknown, fallback: unknown) => String(registers.roleHolders.find((r: any) => String(r._id) === String(id ?? ""))?.fullName ?? fallback ?? "");
+  const lines = rows.map((t: any) => {
+    const gains = Boolean(t.destinationRoleHolderId || t.destinationHolderName);
+    const holderKey = gains ? (t.destinationRoleHolderId ? `roleHolder:${t.destinationRoleHolderId}` : `name:${t.destinationHolderName}`) : (t.sourceRoleHolderId ? `roleHolder:${t.sourceRoleHolderId}` : `name:${t.sourceHolderName}`);
+    const held = before.find((h) => h.rightsClassId === String(t.rightsClassId ?? "") && h.holderKey === holderKey)?.quantity ?? 0;
+    const quantity = Number(t.quantity ?? 0);
+    return { holderName: gains ? name(t.destinationRoleHolderId, t.destinationHolderName) : name(t.sourceRoleHolderId, t.sourceHolderName), before: held, after: gains ? held + quantity : held - quantity };
+  });
+  return {
+    rightsClassId: rows[0].rightsClassId,
+    kind: rows[0].transferType,
+    ratioLabel: String(rows[0].considerationDescription ?? ""),
+    lines,
+  };
 }
 
 async function defaultPacketSignerRoleHolderIds(ctx: any, societyId: any) {
