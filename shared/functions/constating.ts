@@ -12,6 +12,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { assertRegisterRowMayBeDeleted } from "../registerRetention";
 import {
   constatingTimeline,
   currentRegime as computeCurrentRegime,
@@ -19,6 +20,22 @@ import {
   validateConstatingEvent,
   type ConstatingEvent,
 } from "../constating";
+
+/** Linked constating documents (certificate, articles, order) and the end date. */
+async function constatingEvidence(ctx: PortableMutationCtx, societyId: string, args: { endISO?: string | null; sourceDocumentIds?: string[]; startISO: string }) {
+  const out: Record<string, unknown> = {};
+  if (args.endISO !== undefined) {
+    const end = args.endISO ? String(args.endISO).slice(0, 10) : undefined;
+    if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) throw new Error("Enter the end date as a valid date.");
+    if (end && end < String(args.startISO).slice(0, 10)) throw new Error("An event cannot end before it took effect.");
+    out.endISO = end;
+  }
+  if (args.sourceDocumentIds !== undefined) {
+    for (const documentId of args.sourceDocumentIds) await getOwned(ctx, "documents", documentId, societyId);
+    out.sourceDocumentIds = args.sourceDocumentIds.length ? args.sourceDocumentIds : undefined;
+  }
+  return out;
+}
 
 /** Map a stored constatingEvents row into the plain shared ConstatingEvent shape. */
 function toConstatingEvent(row: Record<string, any>): ConstatingEvent {
@@ -39,8 +56,8 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
   // Keep each row's id so the page can edit and remove events (G-14).
-  const events = rows.map((row) => ({ ...toConstatingEvent(row), _id: row._id }));
-  return constatingTimeline(events) as Array<ConstatingEvent & { _id: string }>;
+  const events = rows.map((row) => ({ ...toConstatingEvent(row), _id: row._id, endISO: row.endISO, sourceDocumentIds: row.sourceDocumentIds }));
+  return constatingTimeline(events) as Array<ConstatingEvent & { _id: string; endISO?: string; sourceDocumentIds?: string[] }>;
 }
 
 /** The governing Act as of a given ISO date (null when none has taken effect). */
@@ -78,6 +95,8 @@ export async function createPortable(
     regNumber,
     startISO,
     nowISO,
+    endISO,
+    sourceDocumentIds,
   }: {
     societyId: string;
     action: string;
@@ -86,6 +105,8 @@ export async function createPortable(
     regNumber?: string;
     startISO: string;
     nowISO: string;
+    endISO?: string | null;
+    sourceDocumentIds?: string[];
   },
 ) {
   await requireSocietyMembership(ctx, societyId);
@@ -100,6 +121,7 @@ export async function createPortable(
   if (!ok) {
     throw new Error(errors.join("; "));
   }
+  const evidence = await constatingEvidence(ctx, societyId, { endISO, sourceDocumentIds, startISO });
   return ctx.db.insert("constatingEvents", {
     societyId,
     action,
@@ -107,6 +129,7 @@ export async function createPortable(
     legislation,
     regNumber,
     startISO,
+    ...evidence,
     createdAtISO: nowISO,
   });
 }
@@ -114,13 +137,15 @@ export async function createPortable(
 /** Correct an existing constating event (same validation as create). */
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  { id, action, jurisdiction, legislation, regNumber, startISO }: {
+  { id, action, jurisdiction, legislation, regNumber, startISO, endISO, sourceDocumentIds }: {
     id: string;
     action: string;
     jurisdiction: string;
     legislation: string;
     regNumber?: string;
     startISO: string;
+    endISO?: string | null;
+    sourceDocumentIds?: string[];
   },
 ) {
   const candidate = await ctx.db.get(id, "constatingEvents");
@@ -136,7 +161,8 @@ export async function updatePortable(
   };
   const { ok, errors } = validateConstatingEvent(event);
   if (!ok) throw new Error(errors.join("; "));
-  await ctx.db.patch(id, { ...event });
+  const evidence = await constatingEvidence(ctx, String(candidate.societyId), { endISO, sourceDocumentIds, startISO });
+  await ctx.db.patch(id, { ...event, ...evidence });
   return id;
 }
 
@@ -145,5 +171,6 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   if (!candidate) return;
   await requireSocietyMembership(ctx, String(candidate.societyId));
   await getOwned(ctx, "constatingEvents", id, String(candidate.societyId));
+  assertRegisterRowMayBeDeleted(await ctx.db.get(String(candidate.societyId)), "constatingEvents", candidate);
   await ctx.db.delete(id);
 }

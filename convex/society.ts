@@ -348,7 +348,16 @@ export const updateModules = authorizedMutation("society:updateModules", mutatio
 });
 
 export const cloneSociety = authorizedMutation("society:cloneSociety", mutation)({
-  args: { sourceSocietyId: v.id("societies"), newName: v.string(), nowISO: v.string() },
+  args: {
+    sourceSocietyId: v.id("societies"), newName: v.string(), nowISO: v.string(),
+    // Template-clone options (YCN Date_Over_Ride / Multiple_Copy).
+    resetEffectiveDatesTo: v.optional(v.string()),
+    excludeHoldings: v.optional(v.boolean()),
+    excludeSignificantIndividuals: v.optional(v.boolean()),
+    excludePeople: v.optional(v.boolean()),
+    copies: v.optional(v.number()),
+    incorporationNumber: v.optional(v.string()),
+  },
   returns: v.any(),
   handler: async (ctx, args) => cloneSocietyPortable(await toPortableMutationCtx(ctx), args),
 });

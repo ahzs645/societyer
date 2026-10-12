@@ -147,6 +147,18 @@ Board quorum comes from the Act and the operative articles/directors' authorized
 
 **Implementation and confidence:** Settled default; actual quorum requires governing-document, class, attendance, proxy and conflict facts. Separate shareholder headcount from voting-share thresholds and the board's eligible-director count.
 
+#### Operative articles, Table 1, indemnity and electronic participation (added 2026-10-12)
+
+**Authority (law):** BC Regulation s. 42 and Table 1; BC BCA ss. 16, 261, 159–165, 140(1)–(2), 166(2)–(3), 169(1.1), 174 and s. 1(1) definitions. Source IDs: `BC-BCA-TABLE1-ARTICLES`, `BC-BCA-INDEMNITY`, `BC-BCA-ELECTRONIC-MEETINGS`. Verified against the consolidations current to 2026-10-06.
+
+Table 1 (amended by B.C. Regs. 315/2004, 186/2007, 64/2021, 114/2022 and 50/2023) applies only where a company has it: its incorporators signed no articles (s. 16(b)) or its articles adopt it. Where it applies, shareholder quorum is two persons who are, or represent by proxy, shareholders holding at least 1/20 of the issued shares entitled to vote, or one person for a sole voting shareholder (Arts. 8.2–8.3). Board quorum is set by the directors and otherwise is a majority, or one where the number of directors is one (Arts. 11.10–11.11). The chair has no casting vote (Arts. 8.19, 11.3, 12.4(d)). Directors must be indemnified to the extent Part 5, Division 5 permits (Arts. 15.1–15.2); officers are not mentioned. Shares of a non-public company cannot be transferred without director consent (Arts. 20.1–20.2). Under s. 261(2), a Table 1 amendment alters articles that have Table 1 by operation of the Act or adopt it by reference, unless the articles provide otherwise or the provision was altered, so the version adopted and the way Table 1 was incorporated are both recorded.
+
+Indemnity (ss. 159–165): a company may indemnify eligible penalties and pay expenses after final disposition (s. 160), must pay the expenses of a wholly or substantially successful eligible party who was not reimbursed (s. 161), and may advance expenses only against a written repayment undertaking (s. 162). Section 163 prohibits indemnity or payment where the articles prohibited it, where the party did not act honestly and in good faith with a view to the company's best interests, or (outside civil proceedings) lacked reasonable grounds to believe the conduct lawful; and in proceedings brought by or on behalf of the company or an associated corporation. Only a court order under s. 164 can then provide relief. Insurance is permitted (s. 165).
+
+Electronic participation: unless the memorandum or articles provide otherwise, directors (s. 140(1)(b)) and shareholders or proxy holders (s. 174(1)) may participate by telephone or other communications medium and are deemed present. An electronic meeting's notice includes participation and voting instructions (s. 169(1.1)). Correction to the review brief: shareholder participation is s. 174, not s. 173 (s. 173 governs voting).
+
+**Implementation and confidence:** Settled. `societies.operativeArticles` records the base (Table 1 with its version, or custom), custom Parts, overrides and the signed-articles document (`shared/operativeArticles.ts`). Table 1 is never inferred from silence; only BC companies with verified formation feed the record into the meeting baseline. Board meetings then use the articles' board quorum; general meetings show the Table 1 persons and voting-share test against the securities register and are never confirmed from attendee names alone.
+
 <a id="bcc-10"></a>
 
 ### BCC-10 — Ordinary, special and director written resolutions

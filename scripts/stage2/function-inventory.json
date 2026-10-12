@@ -4831,6 +4831,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -4911,6 +4917,12 @@
         "table": "constatingEvents",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -5172,6 +5184,22 @@
     "key": "convex:corporationSettings:updateAnnualEvidenceSettings",
     "surface": "convex",
     "name": "corporationSettings:updateAnnualEvidenceSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporationSettings.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:corporationSettings:updateOperativeArticles",
+    "surface": "convex",
+    "name": "corporationSettings:updateOperativeArticles",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/corporationSettings.ts",
@@ -14866,6 +14894,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -26279,6 +26313,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -26359,6 +26399,12 @@
         "table": "constatingEvents",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },
@@ -26620,6 +26666,22 @@
     "key": "portable:corporationSettings:updateAnnualEvidenceSettings",
     "surface": "portable",
     "name": "corporationSettings:updateAnnualEvidenceSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporationSettings:updateOperativeArticles",
+    "surface": "portable",
+    "name": "corporationSettings:updateOperativeArticles",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
@@ -35649,6 +35711,12 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "sourceDocumentIds",
+        "table": "documents",
+        "array": true,
+        "optional": true
       }
     ]
   },

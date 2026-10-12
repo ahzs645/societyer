@@ -31,6 +31,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { annualGovernanceSettings } from "../../shared/annualGovernanceEvidence";
 import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import { CitationBadge } from "../components/CitationTooltip";
+import { OperativeArticlesSettings } from "../features/corporation/OperativeArticlesSettings";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -55,6 +56,8 @@ export function ComplianceSettingsPage() {
   const cloneSociety = useMutation(api.society.cloneSociety);
   const [cloneName, setCloneName] = useState("");
   const [cloneResult, setCloneResult] = useState<string | null>(null);
+  const [cloneOptions, setCloneOptions] = useState({ resetEffectiveDatesTo: "", excludeHoldings: false, excludeSignificantIndividuals: false, excludePeople: false, copies: 1, incorporationNumber: "" });
+  const [cloning, setCloning] = useState(false);
   const existing = useQuery(
     api.deadlines.list,
     society ? { societyId: society._id } : "skip",
@@ -248,6 +251,8 @@ export function ComplianceSettingsPage() {
             filingsAvailable={canReadFilings && filings !== undefined}
           />
 
+          <OperativeArticlesSettings society={society} canWrite={canSaveSettings} />
+
           <section className="card settings-section">
             <h2 className="settings-section__title">Documents</h2>
             <Checkbox
@@ -301,30 +306,66 @@ export function ComplianceSettingsPage() {
           <details className="card settings-section settings-section--collapsible">
             <summary className="settings-section__title">Clone this entity</summary>
             <p className="settings-section__hint">
-              Copies role holders, addresses, share classes, name and constating history, filings and signers into a new entity.
+              Copies role holders, addresses, share classes, name and constating history, filings and signers into a new entity. To use this entity as a template, leave out ownership and people, and reset effective dates.
             </p>
-            <div className="settings-section__row settings-section__row--action">
-              <Field label="New entity name">
+            <div className="settings-section__row settings-section__row--pair">
+              <Field label="New entity name" hint={cloneOptions.copies > 1 ? `Creates "${cloneName.trim() || "Name"} 1" to "${cloneName.trim() || "Name"} ${cloneOptions.copies}".` : undefined}>
                 <input className="input" value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
               </Field>
+              <Field label="Number of copies">
+                <input className="input" type="number" min={1} max={20} value={cloneOptions.copies}
+                  onChange={(e) => setCloneOptions((o) => ({ ...o, copies: Math.max(1, Math.min(20, Number(e.target.value) || 1)), incorporationNumber: Number(e.target.value) > 1 ? "" : o.incorporationNumber }))} />
+              </Field>
+            </div>
+            <div className="settings-section__row settings-section__row--pair">
+              <Field label="Reset effective dates to" hint="Leave blank to keep the copied dates.">
+                <DatePicker value={cloneOptions.resetEffectiveDatesTo} onChange={(value) => setCloneOptions((o) => ({ ...o, resetEffectiveDatesTo: value }))} />
+              </Field>
+              {cloneOptions.copies === 1 && (
+                <Field label="Registry number of the new entity" hint="Optional. You are warned if another entity already has it.">
+                  <input className="input" value={cloneOptions.incorporationNumber} onChange={(e) => setCloneOptions((o) => ({ ...o, incorporationNumber: e.target.value }))} />
+                </Field>
+              )}
+            </div>
+            <Checkbox checked={cloneOptions.excludeHoldings || cloneOptions.excludePeople} disabled={cloneOptions.excludePeople}
+              onChange={(checked) => setCloneOptions((o) => ({ ...o, excludeHoldings: checked }))}
+              label={entity.isCorporation ? "Leave out shareholdings, the share ledger, certificates and dividends" : "Leave out holdings, the ledger, certificates and dividends"} />
+            <Checkbox checked={cloneOptions.excludeSignificantIndividuals || cloneOptions.excludePeople} disabled={cloneOptions.excludePeople}
+              onChange={(checked) => setCloneOptions((o) => ({ ...o, excludeSignificantIndividuals: checked }))}
+              label="Leave out significant individuals" />
+            <Checkbox checked={cloneOptions.excludePeople} onChange={(checked) => setCloneOptions((o) => ({ ...o, excludePeople: checked }))}
+              label="Leave out all people" hint="Also leaves out holdings and significant individuals, which refer to people." />
+            <div className="settings-section__row settings-section__row--action">
               <button
                 className="btn"
-                disabled={!cloneName.trim() || !canClone}
+                disabled={!cloneName.trim() || !canClone || cloning}
                 onClick={async () => {
-                  const r = (await cloneSociety({
-                    sourceSocietyId: society._id,
-                    newName: cloneName.trim(),
-                    nowISO: new Date().toISOString(),
-                  })) as { copiedRows?: number } | undefined;
-                  setCloneResult(`Cloned (${r?.copiedRows ?? 0} records copied).`);
-                  setCloneName("");
-                  setTimeout(() => setCloneResult(null), 4000);
+                  setCloning(true);
+                  try {
+                    const r = (await cloneSociety({
+                      sourceSocietyId: society._id,
+                      newName: cloneName.trim(),
+                      nowISO: new Date().toISOString(),
+                      ...(cloneOptions.resetEffectiveDatesTo ? { resetEffectiveDatesTo: cloneOptions.resetEffectiveDatesTo } : {}),
+                      ...(cloneOptions.excludeHoldings ? { excludeHoldings: true } : {}),
+                      ...(cloneOptions.excludeSignificantIndividuals ? { excludeSignificantIndividuals: true } : {}),
+                      ...(cloneOptions.excludePeople ? { excludePeople: true } : {}),
+                      ...(cloneOptions.copies > 1 ? { copies: cloneOptions.copies } : {}),
+                      ...(cloneOptions.incorporationNumber.trim() ? { incorporationNumber: cloneOptions.incorporationNumber.trim() } : {}),
+                    })) as { copiedRows?: number; societyIds?: string[]; warnings?: string[] } | undefined;
+                    const made = r?.societyIds?.length ?? 1;
+                    setCloneResult(`Created ${made} ${made === 1 ? "clone" : "clones"} (${r?.copiedRows ?? 0} records copied).${r?.warnings?.length ? ` ${r.warnings.join(" ")}` : ""}`);
+                    setCloneName("");
+                    if (!r?.warnings?.length) setTimeout(() => setCloneResult(null), 4000);
+                  } catch (error) {
+                    toast.error("Could not clone", error instanceof Error ? error.message : String(error));
+                  } finally { setCloning(false); }
                 }}
               >
-                Clone
+                {cloning ? "Cloning…" : "Clone"}
               </button>
             </div>
-            {cloneResult && <p style={{ color: "var(--success)", margin: 0 }}>{cloneResult}</p>}
+            {cloneResult && <p className="settings-section__hint" role="status">{cloneResult}</p>}
           </details>
         </div>
 

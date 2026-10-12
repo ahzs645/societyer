@@ -15,7 +15,7 @@ import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
-import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
+import { bylawBaselineForOrganization, quorumRequiresLegalRegisterFor } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
 import { useRecordQuery } from "../hooks/useRecordQuery";
@@ -553,7 +553,9 @@ export function MeetingDetailPage() {
   const transcriptProvider = transcriptOnFile
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
-  const requiresLegalQuorumRegister = bylawBaselineForOrganization(society, String(society?._id ?? "")).quorumRequiresLegalRegister;
+  // A board meeting of a BC company with recorded articles counts directors in
+  // office; shareholder quorum still needs the legal registers.
+  const requiresLegalQuorumRegister = quorumRequiresLegalRegisterFor(bylawBaselineForOrganization(society, String(society?._id ?? "")), meeting.type, meeting.committeeId);
   const recordedQuorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const quorumSnapshot = requiresLegalQuorumRegister ? { ...recordedQuorumSnapshot, required: undefined } : recordedQuorumSnapshot;
   const presentCountForQuorum = quorumPresentCount(minutes);

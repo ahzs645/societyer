@@ -19,6 +19,7 @@ import type { PortableQueryCtx } from "../portable/ctx";
 import { organizationKind, organizationLabel } from "../organizationDomain";
 import { postIncorporationStepsForOrganization } from "../postIncorporationSteps";
 import { todayDateOnly } from "../dateOnly";
+import { formerNamesFrom } from "../portfolioSearch";
 
 async function permits(ctx: PortableQueryCtx, societyId: string, permission: Permission) {
   try { await requirePermissionPortable(ctx, societyId, permission); return true; }
@@ -54,9 +55,10 @@ export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { to
   for (const society of societies) {
     // Portfolio counts expose compliance and legal-operation records.
     if (!await permits(ctx, society._id, "deadlines:read") || !await permits(ctx, society._id, "documents:read")) continue;
-    const [deadlines, runs] = await Promise.all([
+    const [deadlines, runs, names] = await Promise.all([
       ctx.db.query("deadlines").withIndex("by_society", (q) => q.eq("societyId", society._id)).collect(),
       ctx.db.query("legalPrecedentRuns").withIndex("by_society", (q) => q.eq("societyId", society._id)).collect(),
+      ctx.db.query("societyNameHistory").withIndex("by_society", (q) => q.eq("societyId", society._id)).collect(),
     ]);
     const open = deadlines.filter(deadlineOpen);
     const overdue = open.filter((d: any) => String(d.dueDate ?? "") < today).length;
@@ -71,6 +73,9 @@ export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { to
       name: organizationLabel(society as any),
       kind: organizationKind(society as any),
       incorporationNumber: society.incorporationNumber ?? null,
+      shortName: society.shortName ?? null,
+      // Earlier legal names, so the portfolio finds an entity by a former name.
+      formerNames: formerNamesFrom(names as Array<{ name?: string; startISO?: string }>, String(society.name ?? "")),
       status: society.organizationStatus ?? null,
       overdueDeadlines: overdue,
       upcomingDeadlines: open.length - overdue,

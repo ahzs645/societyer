@@ -1845,6 +1845,13 @@
       "classification": "portable"
     },
     {
+      "name": "corporationSettings:updateOperativeArticles",
+      "module": "corporationSettings",
+      "export": "updateOperativeArticles",
+      "kind": "mutation",
+      "classification": "portable"
+    },
+    {
       "name": "courtOrders:create",
       "module": "courtOrders",
       "export": "create",

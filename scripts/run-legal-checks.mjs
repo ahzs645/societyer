@@ -31,6 +31,7 @@ const scripts = [
   'check-ycn-date-codec.ts', 'check-ycn-share-conversion.ts', 'check-ycn-access-import.ts',
   'check-minute-book-reports.ts',
   'check-share-ledger-rules.ts',
+  'check-operative-articles.ts', 'check-register-retention.ts',
 ];
 // --after-utc-midnight runs every check with the clock just past 00:00 UTC.
 const clockShift = process.argv.includes('--after-utc-midnight');

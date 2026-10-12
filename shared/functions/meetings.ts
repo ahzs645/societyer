@@ -71,10 +71,12 @@ async function buildQuorumSnapshot(
     args.societyId,
     args.meetingDateISO,
   );
-  const ruleRequired = await computeRequiredQuorum(ctx, rules, args);
+  const { required: ruleRequired, articlesLabel } = await computeRequiredQuorum(ctx, rules, args);
   const quorumRequired =
     args.quorumRequiredOverride ?? ruleRequired;
-  const label = quorumSourceLabel(
+  // A BC company's recorded articles describe the shareholder quorum (persons
+  // and voting shares); a manual override keeps the generic label.
+  const label = articlesLabel && args.quorumRequiredOverride == null ? articlesLabel : quorumSourceLabel(
     rules,
     quorumRequired != null &&
       ruleRequired != null &&
@@ -83,7 +85,7 @@ async function buildQuorumSnapshot(
 
   return {
     bylawRuleSetId: rules._id,
-    quorumRuleVersion: rules.version,
+    quorumRuleVersion: articlesLabel ? undefined : rules.version,
     quorumRuleEffectiveFromISO: rules.effectiveFromISO,
     quorumSourceLabel: label,
     quorumRequired,
@@ -102,7 +104,7 @@ async function computeRequiredQuorum(
 ) {
   // A3: per-body rules (general / board / each committee) with the legacy
   // society rule as the fallback. See shared/bodyQuorum.ts.
-  return (await requiredQuorumForMeeting(ctx, rules, args)).required;
+  return requiredQuorumForMeeting(ctx, rules, args);
 }
 
 function quorumSourceLabel(

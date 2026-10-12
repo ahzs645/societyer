@@ -11,6 +11,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { assertRegisterRowMayBeDeleted } from "../registerRetention";
 import {
   nameAsOf,
   currentName,
@@ -28,6 +29,22 @@ function toNameRecord(row: Record<string, any>): NameRecord {
   };
 }
 
+/** Linked evidence (certificate of name change, articles) and the recorded end date. */
+async function nameEvidence(ctx: PortableMutationCtx, societyId: string, args: { endISO?: string | null; sourceDocumentIds?: string[]; startISO: string }) {
+  const out: Record<string, unknown> = {};
+  if (args.endISO !== undefined) {
+    const end = args.endISO ? String(args.endISO).slice(0, 10) : undefined;
+    if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) throw new Error("Enter the end date as a valid date.");
+    if (end && end < String(args.startISO).slice(0, 10)) throw new Error("A name cannot end before it took effect.");
+    out.endISO = end;
+  }
+  if (args.sourceDocumentIds !== undefined) {
+    for (const documentId of args.sourceDocumentIds) await getOwned(ctx, "documents", documentId, societyId);
+    out.sourceDocumentIds = args.sourceDocumentIds.length ? args.sourceDocumentIds : undefined;
+  }
+  return out;
+}
+
 /** Full name timeline (sorted by startISO, tie-broken by regPosn). */
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -37,8 +54,8 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
     .collect();
   // Keep each row's id so the page can edit and remove entries (G-14: the
   // stripped rows made every Remove button a silent no-op).
-  const records = rows.map((row) => ({ ...toNameRecord(row), _id: row._id }));
-  return nameTimeline(records) as Array<NameRecord & { _id: string }>;
+  const records = rows.map((row) => ({ ...toNameRecord(row), _id: row._id, endISO: row.endISO, sourceDocumentIds: row.sourceDocumentIds }));
+  return nameTimeline(records) as Array<NameRecord & { _id: string; endISO?: string; sourceDocumentIds?: string[] }>;
 }
 
 /** The legal name in effect on a specific ISO date. */
@@ -73,6 +90,9 @@ export async function upsertPortable(
     shortName?: string;
     startISO: string;
     regPosn?: number;
+    /** End date of this name (former names); null clears it. */
+    endISO?: string | null;
+    sourceDocumentIds?: string[];
     nowISO: string;
   },
 ) {
@@ -81,9 +101,10 @@ export async function upsertPortable(
   await requireSocietyMembership(ctx, societyId);
   if (!name) throw new Error("Enter the corporate name.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(startISO ?? "").slice(0, 10))) throw new Error("Enter the date the name took effect.");
+  const evidence = await nameEvidence(ctx, societyId, args);
   if (id) {
     await getOwned(ctx, "societyNameHistory", id, societyId);
-    await ctx.db.patch(id, { name, shortName, startISO, regPosn });
+    await ctx.db.patch(id, { name, shortName, startISO, regPosn, ...evidence });
     return id;
   }
   return ctx.db.insert("societyNameHistory", {
@@ -92,6 +113,7 @@ export async function upsertPortable(
     shortName,
     startISO,
     regPosn,
+    ...evidence,
     createdAtISO: nowISO,
   });
 }
@@ -102,6 +124,7 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("societyNameHistory not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "societyNameHistory", id, candidate.societyId);
+  assertRegisterRowMayBeDeleted(await ctx.db.get(candidate.societyId), "societyNameHistory", candidate);
   await ctx.db.delete(id);
 }
 

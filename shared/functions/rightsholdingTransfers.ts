@@ -23,6 +23,7 @@ import { transferConsentRequired } from "../operativeArticles";
 import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { assertRegisterRowMayBeDeleted } from "../registerRetention";
 
 /** Ledger order: date, then the optional same-day sequence, then creation time. */
 export function transferChronologicalSort(left: any, right: any): number {
@@ -219,6 +220,8 @@ export async function removeRightsholdingTransferPortable(
   { id }: { id: string },
 ): Promise<void> {
   const existing = await requireOwnedRow(ctx, "rightsholdingTransfers", id);
+  // A posted transaction is part of the permanent securities register.
+  assertRegisterRowMayBeDeleted(await ctx.db.get(String(existing.societyId)), "rightsholdingTransfers", existing);
   if (existing?.status === "posted") {
     // Re-validate what remains: deleting an issuance must not leave a later
     // transfer or redemption drawing on shares that no longer exist.

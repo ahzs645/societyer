@@ -14,6 +14,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { assertRegisterRowMayBeDeleted } from "../registerRetention";
 import {
   activeCertificates,
   certificateChain,
@@ -198,6 +199,8 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "shareCertificates", id);
+  const existing = await requireOwnedRow(ctx, "shareCertificates", id);
+  // An issued certificate is part of the permanent securities register.
+  assertRegisterRowMayBeDeleted(await ctx.db.get(String(existing.societyId)), "shareCertificates", existing);
   await ctx.db.delete(id);
 }
