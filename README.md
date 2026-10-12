@@ -4,6 +4,8 @@ A React + Convex app for governance records, meetings, filings, deadlines, docum
 
 The app distinguishes statutory rules, governing-document choices and recorded evidence. Privacy applicability follows actual operating activities. See the [102-question legal research and implementation record](docs/legal-research/README.md), [extension guide](docs/legal-research/extending-legal-profiles.md) and [verification results](docs/legal-research/verification.md), reviewed 11 October 2026.
 
+For corporations it keeps the securities ledger and certificates, share-class rights, redemptions, dividends, the BC transparency register and the record of adopted articles, and generates signable resolutions and minute-book reports. It can also import a YCN Access corporate records database. See the [corporate records guide](docs/corporate-records.md). The Tasks page is described in the [tasks guide](docs/tasks.md), and contributor checks are in [CONTRIBUTING](CONTRIBUTING.md).
+
 ---
 
 ## WebMCP challenge demo
@@ -340,6 +342,8 @@ The meeting detail UI already uploads audio, tracks transcription jobs, stores t
 - `npm run dev:k8s` — run a local Vite frontend against the Kubernetes Convex backend at `societyer.k8s.home:3220`.
 - `npm run lint` / `npm run lint:convex` — ESLint for the app or Convex functions.
 - `npm run test:smoke` — Playwright smoke tests.
+- `npm run test:legal` / `npm run test:legal:after-utc-midnight` — legal, evidence and corporate-records checks, the second with the clock just after midnight UTC.
+- `npx tsx scripts/import-ycn-access.ts --db <file.accdb> --list-entities` — list the entities in a YCN Access database before importing one (see the [corporate records guide](docs/corporate-records.md#ycn-access-importer)).
 - `npm run test:api-contract` — API gateway contract check.
 - `npm run test:dashboard-compliance` — dashboard compliance rule check.
 - `npm run test:org-details` — organization detail smoke check.

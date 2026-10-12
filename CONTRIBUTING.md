@@ -63,7 +63,29 @@ npm run test:static-parity                  # every frontend write is handled or
 
 # Broader smoke (if you touched UI/flows)
 npm run test:smoke                          # Playwright
+
+# Legal rules, evidence and corporate records (if you touched shared/ legal, packet or register code)
+npm run test:legal                          # every legal and evidence check (scripts/run-legal-checks.mjs)
+npm run test:legal:after-utc-midnight       # the same checks with the clock just after 00:00 UTC
+
+# Portable functions (if you added or changed a shared/functions or Convex endpoint)
+npm run manifest:portable && npm run test:portable-manifest
+npx tsx scripts/stage2/function-inventory.ts --write && npm run test:stage2-enforced
+
+# Entity-specific copy (if you changed UI text)
+ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep   # no society-only copy in corporation workspaces, or the reverse
 ```
+
+> **Dates:** use the organization's local date (`organizationToday`, `resolutionCalendarDate`),
+> never `new Date().toISOString().slice(0, 10)`. The after-midnight run catches checks or code
+> that use the UTC date. `stage2-tenancy-report.md` is rewritten by the tenancy checks; restore it
+> with `git checkout -- stage2-tenancy-report.md` unless you mean to change it.
+
+The legal-governance and portable-conformance workflows in `.github/workflows/` run these on
+every pull request. Feature guides: [corporate records](./docs/corporate-records.md),
+[tasks](./docs/tasks.md), [legal research and profiles](./docs/legal-research/README.md),
+[entity copy audit](./docs/entity-copy-audit.md) and
+[portable functions](./docs/portable-functions-architecture.md).
 
 > **Static-mirror parity:** the offline/desktop runtime is served by the static mirror
 > (`src/lib/staticConvex.ts`). Any mutation/action the frontend calls must be handled there

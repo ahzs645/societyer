@@ -77,7 +77,11 @@ The PR review produced these corrections, each covered by the legal checks:
 - **Meeting notices and campaigns.** Meeting-notice registers are filtered by the caller's register permissions again, and the `meeting_notice` audience (shareholders, directors and auditor) is separate from `voting_shareholders` (holders with votes).
 - **Guide packs.** Verified commencement dates are restored so past meetings keep their guidance; rules new in this PR carry a "commencement not verified" caveat.
 - **Privacy.** BC PIPA is presumed for BC-home workspaces until facts displace it, and the dashboard warning asks for those facts. See [TRM-7](privacy.md#trm-7).
-- **CI.** A browser job runs the entity browser suites and the polish check.
+- **CI.** A browser job runs the entity browser suites and the polish check. The legal checks run a second time with the clock just after midnight UTC (`npm run test:legal:after-utc-midnight`).
+
+## Corporate records
+
+The share ledger, share-class rights, redemptions, dividends, BC transparency register, director eligibility, operative articles, resolution packets, minute-book reports and the YCN Access importer are described in the [corporate records guide](../corporate-records.md). That work verified its new BC sources against the consolidation current to 2026-10-06. It corrected the transparency register reference (Part 4.1, 30-day updates), fully paid before issue (s. 64(2)), redemption (ss. 77–79, 82), electronic participation (s. 174) and director removal (s. 128; directors have no removal power).
 
 ## Boundaries that remain explicit
 
@@ -97,4 +101,4 @@ npm run test:portable-manifest
 npm run build
 ```
 
-`test:legal` invokes the 44 focused legal checks with `node --import tsx`, including real Convex-schema and portable-runtime evidence tests. It does not require the `tsx` command's IPC server. The dedicated pull-request workflow runs the legal gates, manifest check and production build. The Stage 2 tenancy gate's generated function inventory (`scripts/stage2/function-inventory.json`) holds 2138 entries. Source currency still needs human review when legislation changes; a passing test suite does not update the law by itself.
+`test:legal` invokes the 57 focused legal checks with `node --import tsx`, including real Convex-schema and portable-runtime evidence tests. It does not require the `tsx` command's IPC server. The dedicated pull-request workflow runs the legal gates, manifest check and production build. The Stage 2 tenancy gate's generated function inventory (`scripts/stage2/function-inventory.json`) holds 2152 entries. Source currency still needs human review when legislation changes; a passing test suite does not update the law by itself.
