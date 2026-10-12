@@ -21,6 +21,8 @@ import { triggerBlobDownload } from "../lib/zip";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { humanizeKey } from "../../shared/documentProvenance";
 import { pathwayForPacket } from "../../shared/pathways/registry";
+import { MinuteBookReportsCard } from "../components/MinuteBookReportsCard";
+import { isReportPacketKey } from "../../shared/corporationReportPackets";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -153,6 +155,9 @@ export function DocumentCatalogPage() {
   // within each group.
   const groups = new Map<string, CatalogTemplate[]>();
   for (const t of templates ?? []) {
+    // Report-style outputs are generated from the "Minute book reports" card,
+    // which asks for the as-of date.
+    if (isReportPacketKey(packetKeyOf(t))) continue;
     const tag = t.documentTag || "other";
     const list = groups.get(tag);
     if (list) list.push(t);
@@ -196,6 +201,15 @@ export function DocumentCatalogPage() {
       <RelatedDocumentViews current="/app/document-catalog" />
       {!preparation.allowed && <Banner tone="warn">Incorporation route review required. {preparation.message}{allowedPacketKeys.size > 0 ? " Individually reviewed preparation drafts are available below." : ""}</Banner>}
       {generationError && <p role="alert">{generationError}</p>}
+
+      {isCorporation(society) && (
+        <MinuteBookReportsCard
+          society={society}
+          allowedPacketKeys={allowedPacketKeys}
+          canWrite={permissions.loaded && permissions.can("documents:write")}
+          role={permissions.role}
+        />
+      )}
 
       {templates === undefined ? (
         <div className="card">

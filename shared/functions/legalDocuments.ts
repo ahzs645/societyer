@@ -42,7 +42,10 @@ import {
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
   documentDocxDataUrl,
+  nextPacketDocumentSequence,
 } from "../corporationPacketDocx";
+import { isReportPacketKey, isRestrictedReportPacketKey } from "../corporationReportPackets";
+import { assertMinuteBookReportAccess, loadMinuteBookReport } from "../minuteBookReportData";
 import { buildSubscriptionAgreementBlocks } from "../subscriptionAgreement";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../societyDocumentPackets";
 import { isCorporation } from "../organizationDomain";
@@ -182,6 +185,7 @@ export async function generatePacketForSocietyPortable(
     if (isCorporation(organization) !== Boolean(corpPacket)) {
       throw new Error(`The ${markerKind} document packet does not apply to this workspace's entity type.`);
     }
+    await assertMinuteBookReportAccess(ctx, String(args.societyId), packet.key);
     if (markerKind === "corporation") await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
     else await seedSocietyDocumentPacketsForSociety(ctx, args.societyId);
 
@@ -283,6 +287,7 @@ export async function stageCorporationDocumentPacketPortable(
       });
   if (!packet) throw new Error("No corporation document packet matches this obligation.");
   assertPacketCompatible(await ctx.db.get(args.societyId), packet);
+  await assertMinuteBookReportAccess(ctx, args.societyId, packet.key);
   await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
 
   const precedent = await corporationPacketPrecedentForSociety(ctx, args.societyId, packet);
@@ -884,10 +889,24 @@ async function createPacketRunArtifacts(ctx: any, args: {
     }
   }
   // Deterministic file name (YCN ENT-DOCTYPE-DATE) + optional doc-ID header.
-  const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate ?? now };
+  // The registry number and a per-day sequence keep document IDs unique.
+  const priorGeneratedDocuments = await ctx.db
+    .query("generatedLegalDocuments")
+    .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
+    .collect();
+  const fileOpts = {
+    shortName: society?.shortName,
+    effectiveDate: args.effectiveDate ?? now,
+    registryNumber: society?.incorporationNumber,
+    sequence: nextPacketDocumentSequence(priorGeneratedDocuments, args.packet.key, args.effectiveDate ?? now),
+  };
   if (society?.includeDocumentIdHeader) {
     context = { ...(context ?? {}), documentId: corporationPacketDocumentId(args.packet, fileOpts) };
   }
+  if (society?.omitAdoptionClause) {
+    context = { ...(context ?? {}), omitAdoptionClause: true };
+  }
+  const restrictedOutput = isRestrictedReportPacketKey(args.packet.key);
   const docxDataUrl = corporationPacketDocxDataUrl(args.packet, context);
   const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
   const docxMimeType = corporationPacketDocxMimeType();
@@ -906,7 +925,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
     flaggedForDeletion: false,
     sourceExternalIds,
     sourcePayloadJson: provenanceData,
-    tags: ["corporation-packet", args.packet.key, "editable-docx"],
+    tags: ["corporation-packet", args.packet.key, "editable-docx", ...(restrictedOutput ? ["restricted-register"] : [])],
   });
   const draftDocumentVersionId = await ctx.db.insert("documentVersions", {
     societyId: args.societyId,
@@ -965,8 +984,8 @@ async function createPacketRunArtifacts(ctx: any, args: {
     evidenceKind: "provenance",
     targetTable: "generatedLegalDocuments",
     targetId: String(generatedDocumentId),
-    sensitivity: "standard",
-    accessLevel: "internal",
+    sensitivity: restrictedOutput ? "restricted" : "standard",
+    accessLevel: restrictedOutput ? "restricted" : "internal",
     summary: args.packet.preparationOnly ? `Editable preparation draft and provenance staged for ${args.packet.packageName}; execution and filing remain separate.` : `Editable document, generated-document row, signer placeholders, and minute-book record staged for ${args.packet.packageName}.`,
     status: "Linked",
     notes: args.notes,
@@ -1124,9 +1143,15 @@ async function buildPacketDataContext(
   packet: (typeof CORPORATION_DOCUMENT_PACKETS)[number],
   societyId: any,
   society: any,
-  renderCtx: { dir: { list: Array<{ name: string }> }; date?: { long?: string } },
+  renderCtx: { dir: { list: Array<{ name: string }> }; date?: { long?: string; iso?: string } },
   runData?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  // Report-style packets (shared/corporationReportPackets.ts): the report is
+  // built from the registers as of the effective date.
+  if (isReportPacketKey(packet.key)) {
+    const asOf = String(renderCtx.date?.iso ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+    return { report: await loadMinuteBookReport(ctx, { societyId: String(societyId), packetKey: packet.key, society, asOf }) };
+  }
   if (packet.key === "share-split" && runData) {
     const lines = Array.isArray(runData.lines) ? (runData.lines as Array<Record<string, unknown>>) : [];
     return {

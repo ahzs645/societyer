@@ -56,9 +56,14 @@ assert.ok(!withCtx.includes("{org.shortName}"), "no raw tokens should remain");
 const withoutCtx = docxText(corporationPacketDocxBytes(tokenPacket as typeof basePacket));
 assert.ok(withoutCtx.includes("{org.shortName}"), "without context, tokens pass through literally");
 
-// --- existing token-free packets are byte-identical with/without context -----
-const plainNo = corporationPacketDocxBytes(basePacket);
-const plainCtx = corporationPacketDocxBytes(basePacket, ctx as unknown as Record<string, unknown>);
-assert.equal(Buffer.from(plainNo).toString("latin1"), Buffer.from(plainCtx).toString("latin1"), "token-free packet unchanged by context");
+// --- token-free packet prose is unchanged by context -------------------------
+// (The instrument frame — company name, date and adoption clause — now comes
+// from the context; the section prose itself must not change.)
+const plainNo = Buffer.from(corporationPacketDocxBytes(basePacket)).toString("latin1");
+const plainCtx = Buffer.from(corporationPacketDocxBytes(basePacket, ctx as unknown as Record<string, unknown>)).toString("latin1");
+for (const line of basePacket.sections.flatMap((section) => section.body)) {
+  const escaped = String(line).replace(/'/g, "&apos;");
+  assert.ok(plainNo.includes(escaped) && plainCtx.includes(escaped), "token-free packet prose unchanged by context");
+}
 
 console.log("OK packet-grammar");

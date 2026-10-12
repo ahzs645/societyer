@@ -77,6 +77,7 @@ export function ComplianceSettingsPage() {
   const [waive, setWaive] = useState<boolean>(Boolean(society?.waivePrepFinancials));
   const [restrictPeople, setRestrictPeople] = useState<boolean>(Boolean(society?.restrictPeoplePicker));
   const [docIdHeader, setDocIdHeader] = useState<boolean>(Boolean(society?.includeDocumentIdHeader));
+  const [omitAdoption, setOmitAdoption] = useState<boolean>(Boolean(society?.omitAdoptionClause));
   const [docLanguage, setDocLanguage] = useState<string>(society?.docPrepLanguage ?? "");
   const [contacts, setContacts] = useState({
     shortName: society?.shortName ?? "",
@@ -96,6 +97,7 @@ export function ComplianceSettingsPage() {
     setWaive(Boolean(society.waivePrepFinancials));
     setRestrictPeople(Boolean(society.restrictPeoplePicker));
     setDocIdHeader(Boolean(society.includeDocumentIdHeader));
+    setOmitAdoption(Boolean(society.omitAdoptionClause));
     setDocLanguage(society.docPrepLanguage ?? "");
     setContacts({ shortName: society.shortName ?? "", primaryContactName: society.primaryContactName ?? "",
       primaryContactEmail: society.primaryContactEmail ?? "", minuteBookLocation: society.minuteBookLocation ?? "",
@@ -148,6 +150,7 @@ export function ComplianceSettingsPage() {
       responsibleLawyer: contacts.responsibleLawyer || undefined,
       restrictPeoplePicker: restrictPeople,
       includeDocumentIdHeader: docIdHeader,
+      omitAdoptionClause: omitAdoption,
       docPrepLanguage: docLanguage || undefined,
     });
     setSaved(true);
@@ -257,6 +260,11 @@ export function ComplianceSettingsPage() {
               checked={docIdHeader}
               onChange={setDocIdHeader}
               label="Stamp a document ID on generated documents"
+            />
+            <Checkbox
+              checked={omitAdoption}
+              onChange={setOmitAdoption}
+              label="Leave out the adoption clause above the signatures"
             />
             <Field label="Document language">
               <Select value={docLanguage} onChange={(value) => setDocLanguage(value)}

@@ -554,7 +554,7 @@ export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
       },
     ],
   },
-];
+  ...CORPORATION_REPORT_PACKETS]; import { CORPORATION_REPORT_PACKETS } from "./corporationReportPackets"; // report-style outputs (Agent REPORTS)
 
 export function corporationPacketTemplateMarker(packet: CorporationDocumentPacket) {
   return `societyer:corporation-packet-template:${packet.key}`;
