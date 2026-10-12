@@ -134,6 +134,33 @@ export const corporationRegisterTables = {
     totalCents: v.number(),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
+    // Declaration detail (all optional so older rows stay valid). The decimal
+    // per-share amount is authoritative when present; perShareCents is kept
+    // for older readers and is rounded only when the rate has fractions of a cent.
+    rightsClassId: v.optional(v.id("rightsClasses")),
+    perShareAmount: v.optional(v.string()),
+    recordDate: v.optional(v.string()),
+    paymentDate: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("draft"), v.literal("declared"), v.literal("paid"), v.literal("cancelled"))),
+    solvencyConfirmedAt: v.optional(v.string()),
+    solvencyBasis: v.optional(v.string()),
+    declaredByResolutionId: v.optional(v.id("writtenResolutions")),
+    // Classes deliberately not declared on this occasion (class-by-class).
+    excludedClassIds: v.optional(v.array(v.id("rightsClasses"))),
+    // Where sharesOutstanding came from: the posted ledger at the record date,
+    // or a manually entered count (no ledger rows for the class).
+    sharesSource: v.optional(v.union(v.literal("ledger"), v.literal("manual"))),
+    // Per-holder snapshot at the record date (who is entitled, and how much).
+    entitlements: v.optional(v.array(v.object({
+      holderKey: v.string(),
+      holderName: v.string(),
+      roleHolderId: v.optional(v.string()),
+      shares: v.number(),
+      amount: v.string(),
+      amountCents: v.number(),
+    }))),
+    totalAmount: v.optional(v.string()),
+    updatedAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_class", ["societyId", "shareClass"]),
@@ -148,6 +175,18 @@ export const corporationRegisterTables = {
     stepDate: v.string(),
     nextReviewDate: v.optional(v.string()),
     createdAtISO: v.string(),
+    // What the step records, and the dates that drive the BCA Part 4.1 clocks
+    // (shared/significantIndividuals.ts deriveTransparencyDeadlines): the day
+    // the company became aware of new information (30 days to record it,
+    // s. 119.31), the day it was recorded, and the day the individual was
+    // notified of a became/ceased entry (10 days, s. 119.41).
+    stepKind: v.optional(v.union(
+      v.literal("annual_review"), v.literal("change"), v.literal("became_significant"),
+      v.literal("ceased_significant"), v.literal("information_request"), v.literal("other"),
+    )),
+    awareOn: v.optional(v.string()),
+    recordedOn: v.optional(v.string()),
+    notifiedOn: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_review", ["societyId", "nextReviewDate"]),

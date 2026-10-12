@@ -28,6 +28,7 @@ import { legalGovernanceProfile } from "../legalGovernanceProfiles";
 import { getOwned, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { listPortable as listWrittenResolutionsPortable } from "./writtenResolutions";
+import { transparencyEventsFromSteps } from "../significantIndividuals";
 
 async function canReadFilings(ctx: PortableQueryCtx, societyId: string): Promise<boolean> {
   try {
@@ -59,7 +60,11 @@ export async function complianceDeadlinesPortable(
     ? await ctx.db.query("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()
     : [];
   const agms = meetings.filter((meeting) => isAgmMeeting(meeting as any) && !/^cancel/i.test(String(meeting.status ?? "")));
-  const settings = annualGovernanceSettings(society as any, agms as any[], filings, today);
+  const steps = await ctx.db
+    .query("significantIndividualSteps")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const settings = { ...annualGovernanceSettings(society as any, agms as any[], filings, today), transparencyEvents: transparencyEventsFromSteps(steps as any[]) };
   return deriveComplianceDeadlines(settings, today).map((deadline) =>
     deadline.key === "annual-report" && !filingsReadable
       ? { ...deadline, status: "review_required" as const, basis: `${deadline.basis} Filing evidence is not available in this view; completion and overdue status require someone with filing access to review the register.` }

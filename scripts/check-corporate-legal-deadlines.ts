@@ -185,6 +185,22 @@ assert.deepEqual(assessAnnualReturnDeadline({ ...latestSociety, annualReturnFili
 assert.equal(assessAnnualReturnDeadline({ ...latestSociety, annualReturnCycleYear: 2025 }, asOf).status, 'satisfied');
 assert.equal(assessAnnualReturnDeadline({ ...latestSociety, annualReturnCycleYear: 2026 }, asOf).cycleYear, 2026);
 
+// BC transparency register (BCA Part 4.1, ss. 119.3, 119.31, 119.41): BC
+// companies only, anchored on the recognition anniversary and recorded changes.
+{
+  const transparencyKeys = (s: ComplianceSettings) => deriveComplianceDeadlines(s, asOf).filter(d => d.category === 'transparency');
+  const review = transparencyKeys(currentBC).find(d => d.key === 'transparency-review');
+  assert.equal(review?.dueDate, '2027-05-10', 'the 2026 window (Mar 10 to May 10) has passed; the 2027 window ends two months after the anniversary');
+  assert.deepEqual(review?.sourceIds, ['BC-BCA-TRANSPARENCY']);
+  const changed = transparencyKeys({ ...currentBC, transparencyEvents: [{ id: 'c1', individualName: 'Synthetic Holder', stepKind: 'became_significant', awareOn: '2026-10-01', recordedOn: '2026-10-05' }] });
+  assert.equal(changed.find(d => d.key === 'transparency-notice:c1')?.dueDate, '2026-10-15', 'notify within 10 days of the entry');
+  const pending = transparencyKeys({ ...currentBC, transparencyEvents: [{ id: 'c2', individualName: 'Synthetic Holder', stepKind: 'change', awareOn: '2026-10-01' }] });
+  assert.equal(pending.find(d => d.key === 'transparency-update:c2')?.dueDate, '2026-10-31', 'record within 30 days of awareness');
+  for (const other of [fed, on, society]) assert.deepEqual(transparencyKeys({ ...other, transparencyEvents: [{ id: 'c2', individualName: 'X', stepKind: 'change', awareOn: '2026-10-01' }] }), [], 'no BC transparency deadlines outside BC companies');
+  const source = CORPORATE_LEGAL_SOURCES.find(s => s.id === 'BC-BCA-TRANSPARENCY')!;
+  assert.ok(/30 days of awareness/.test(source.summary) && /ten days/.test(source.summary), 'verified 30-day update and 10-day notice periods');
+}
+
 // Every corporate profile requirement has a resolvable official source.
 const ids = new Set(CORPORATE_LEGAL_SOURCES.map(s => s.id));
 assert.equal(ids.size, CORPORATE_LEGAL_SOURCES.length, 'unique corporate source IDs');

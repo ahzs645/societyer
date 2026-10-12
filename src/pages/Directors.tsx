@@ -11,7 +11,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
 import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
-import { directorProblems, directorTermLapsed } from "../../shared/registerValidation";
+import { directorProblems, directorTermLapsed, eligibilityScopeFor, roleHolderEligibility, sharedOfficeWarnings } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -351,6 +351,26 @@ export function DirectorsPage() {
                 {selectedProblems.join(" ")}
               </InspectorNote>
             )}
+            {(() => {
+              // Corporations only: BC company directors must be individuals
+              // (BCA s. 124 (1)); single offices held twice are flagged. A
+              // society's director register keeps the Societies Act rules.
+              const scope = eligibilityScopeFor(society);
+              if (scope === "not_corporation") return null;
+              const fullName = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim();
+              const status = ["Resigned", "Removed"].includes(selected.status) ? "former" : "current";
+              const eligibility = roleHolderEligibility({ roleType: "director", status, fullName, startDate: selected.termStart }, scope, calendarDateKey(new Date()));
+              const others = (directors ?? []).filter((d: any) => d._id !== selected._id);
+              const shared = sharedOfficeWarnings([...others, selected].map((d: any) => ({ id: d._id, fullName: `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim(), status: d.status, position: d.position })))
+                .filter((warning) => warning.includes(fullName || "Unnamed"));
+              const warnings = [...eligibility.warnings, ...shared];
+              return (
+                <>
+                  {warnings.length > 0 && <InspectorNote tone="warn" title="Check before saving">{warnings.join(" ")}</InspectorNote>}
+                  {eligibility.notes.length > 0 && <InspectorNote tone="info" title="Qualifications">{eligibility.notes.join(" ")}</InspectorNote>}
+                </>
+              );
+            })()}
             {directorTermLapsed(selected, calendarDateKey(new Date())) && (
               <InspectorNote tone="warn" title="Term has ended">
                 This director's term ended {selected.termEnd} but the record is still Active. Record the re-election (new term end) or the date they left office.

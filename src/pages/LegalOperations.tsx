@@ -5,7 +5,11 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
+import { Checkbox } from "../components/Controls";
+import { eligibilityScopeFor, roleHolderEligibility, sharedOfficeWarnings } from "../../shared/registerValidation";
+import { CANADIAN_STATUS_OPTIONS, SIGNIFICANCE_BASIS_OPTIONS, transparencyParticularNotes } from "../../shared/significantIndividuals";
+import { legalGovernanceProfile } from "../../shared/legalGovernanceProfiles";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
@@ -34,6 +38,7 @@ import {
   organizationLabel,
 } from "../../shared/organizationDomain";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { todayDateOnly } from "../../shared/dateOnly";
 import { deriveCurrentHoldings } from "../lib/equity";
 
 type RoleHolderDraft = {
@@ -85,6 +90,11 @@ type RoleHolderDraft = {
   nonNaturalPersonType?: string;
   nonNaturalJurisdiction?: string;
   natureOfControl?: string;
+  significanceReason?: string;
+  significanceBases?: string[];
+  canadianStatus?: string;
+  taxResidentHomeJurisdiction?: string;
+  additionalOfficerTitles?: string[];
   gender?: string;
   pronouns?: string;
   authorizedRepresentative?: boolean;
@@ -193,6 +203,14 @@ export function RoleHoldersPage() {
       nonNaturalPersonType: empty(roleHolder.nonNaturalPersonType),
       nonNaturalJurisdiction: empty(roleHolder.nonNaturalJurisdiction),
       natureOfControl: empty(roleHolder.natureOfControl),
+      // Transparency particulars are sent only for controllers, so editing
+      // another role never clears or invents them.
+      ...(roleHolder.roleType === "controller" ? {
+        significanceReason: empty(roleHolder.significanceReason) ?? "",
+        significanceBases: roleHolder.significanceBases ?? [],
+        canadianStatus: empty(roleHolder.canadianStatus) ?? "",
+        taxResidentHomeJurisdiction: empty(roleHolder.taxResidentHomeJurisdiction) ?? "",
+      } : {}),
       gender: empty(roleHolder.gender),
       pronouns: empty(roleHolder.pronouns),
       authorizedRepresentative: roleHolder.authorizedRepresentative,
@@ -440,6 +458,23 @@ export function RoleHoldersPage() {
       >
         {draft && (
           <>
+            {(() => {
+              const eligibility = roleHolderEligibility(draft, eligibilityScopeFor(society), todayDateOnly());
+              const others = records.filter((row) => row._id !== draft._id && row.roleType === draft.roleType && ["officer", "director"].includes(String(draft.roleType)));
+              const shared = corporationWorkspace && draft.roleType === "officer" ? sharedOfficeWarnings([...others, draft].map((row) => ({ id: row._id, fullName: row.fullName, status: row.status, officerTitle: row.officerTitle, additionalOfficerTitles: row.additionalOfficerTitles })))
+                .filter((warning) => warning.includes(String(draft.fullName ?? "").trim() || "Unnamed")) : [];
+              return (
+                <>
+                  {eligibility.blocking.length > 0 && <InspectorNote tone="danger" title="Not qualified">{eligibility.blocking.join(" ")}</InspectorNote>}
+                  {eligibility.notes.length > 0 && <InspectorNote tone="info" title="Qualifications">{eligibility.notes.join(" ")}</InspectorNote>}
+                  {[...eligibility.warnings, ...shared].length > 0 && (
+                    <InspectorNote tone="warn" title="Check before saving">
+                      {[...eligibility.warnings, ...shared].map((warning) => <p key={warning} style={{ margin: "0 0 4px" }}>{warning}</p>)}
+                    </InspectorNote>
+                  )}
+                </>
+              );
+            })()}
             <Field label="Full name"><input className="input" value={draft.fullName ?? ""} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })} /></Field>
             <div className="grid two">
               <OptionSelect label="Role type" setName="representativeTypes" value={draft.roleType ?? ""} onChange={(value) => setDraft({ ...draft, roleType: value })} />
@@ -488,6 +523,43 @@ export function RoleHoldersPage() {
               <label><input type="checkbox" checked={Boolean(draft.nonNaturalPerson)} onChange={(e) => setDraft({ ...draft, nonNaturalPerson: e.target.checked })} /> Non-natural person</label>
             </div>
             <Field label="Nature of control"><MarkdownEditor rows={4} value={draft.natureOfControl ?? ""} onChange={(markdown) => setDraft({ ...draft, natureOfControl: markdown })} /></Field>
+            {draft.roleType === "controller" && corporationWorkspace && (() => {
+              const bcCompany = legalGovernanceProfile(society)?.id === "bc_company";
+              const notes = transparencyParticularNotes({ canadianStatus: draft.canadianStatus, citizenshipCountries: csv(draft.citizenshipCountriesText ?? draft.citizenshipCountries) });
+              return (
+                <>
+                  <div className="grid two">
+                    <Field label="Canadian citizen or permanent resident">
+                      <Select value={draft.canadianStatus ?? ""} onChange={(value) => setDraft({ ...draft, canadianStatus: value })}
+                        options={[{ value: "", label: "—" }, ...CANADIAN_STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label }))]} />
+                    </Field>
+                    <Field label="Resident in Canada for income tax purposes">
+                      <Select value={draft.taxResidentHomeJurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, taxResidentHomeJurisdiction: value })}
+                        options={[{ value: "", label: "—" }, { value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "unknown", label: "Not yet confirmed" }]} />
+                    </Field>
+                  </div>
+                  <Field label="How the individual is significant">
+                    <div className="col" style={{ gap: 4 }}>
+                      {SIGNIFICANCE_BASIS_OPTIONS.map((option) => (
+                        <Checkbox
+                          key={option.value}
+                          label={bcCompany ? `${option.label} (${option.section})` : option.label}
+                          checked={(draft.significanceBases ?? []).includes(option.value)}
+                          onChange={(checked) => setDraft({
+                            ...draft,
+                            significanceBases: checked
+                              ? [...(draft.significanceBases ?? []), option.value]
+                              : (draft.significanceBases ?? []).filter((value) => value !== option.value),
+                          })}
+                        />
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Description of significance"><input className="input" value={draft.significanceReason ?? ""} onChange={(e) => setDraft({ ...draft, significanceReason: e.target.value })} /></Field>
+                  {notes.map((note) => <p key={note} className="muted">{note}</p>)}
+                </>
+              );
+            })()}
             <StructuredAddressFields value={draft} onChange={(address) => setDraft({ ...draft, ...address })} />
             <Field label="Service address"><input className="input" value={draft.serviceStreet ?? ""} onChange={(e) => setDraft({ ...draft, serviceStreet: e.target.value })} /></Field>
             <Field label={corporationWorkspace ? "Related shareholder/controller IDs" : "Related member/controller IDs"}><input className="input" value={draft.relatedShareholderIdsText ?? ""} onChange={(e) => setDraft({ ...draft, relatedShareholderIdsText: e.target.value })} /></Field>

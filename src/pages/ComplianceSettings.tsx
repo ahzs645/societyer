@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { CalendarClock } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
+import { transparencyEventsFromSteps } from "../../shared/significantIndividuals";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field } from "../components/ui";
 import { Checkbox } from "../components/Controls";
@@ -66,6 +67,11 @@ export function ComplianceSettingsPage() {
   const todayISO = calendarDateKey(new Date());
   const canReadFilings = permissions.loaded && permissions.can("filings:read");
   const filings = useQuery(api.filings.list, society && canReadFilings ? { societyId: society._id } : "skip");
+  // BC transparency-register steps drive the Part 4.1 review, update and notice deadlines.
+  const transparencySteps = useQuery(
+    api.significantIndividualSteps.list,
+    society && legalGovernanceProfile(society)?.id === "bc_company" ? { societyId: society._id } : "skip",
+  ) as Array<Record<string, any>> | undefined;
   // Only held AGMs are evidence (a scheduled or draft AGM is not).
   const agmFacts = deriveAgmFacts(society ?? null, meetings ?? [], todayISO);
   const lastAgmDay = agmFacts.annualMeetingDate
@@ -118,7 +124,7 @@ export function ComplianceSettingsPage() {
     jurisdictionCode: society.jurisdictionCode,
     entityType: society.entityType,
     actFormedUnder: society.actFormedUnder,
-
+    transparencyEvents: transparencyEventsFromSteps(transparencySteps ?? []),
   };
   const today = todayDateOnly();
   const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today).map(deadline =>
