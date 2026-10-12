@@ -21,7 +21,7 @@
  * certifies anything, and nothing here describes tax effects.
  */
 
-import { deriveCurrentHoldings, type RightsholdingTransferRecord } from "./equityLedger";
+import { deriveCurrentHoldings, holdingsAsOf, type RightsholdingTransferRecord } from "./equityLedger";
 import { activeCertificates, type CertificateEvent } from "./shareCertificates";
 import { computeVotingPower, votesPerShareOf } from "./votingPower";
 import { formatLongDate } from "./locale";
@@ -293,7 +293,8 @@ export function postedTransfersAsOf(transfers: readonly ReportTransfer[], asOf: 
 }
 
 export function ledgerHoldingsAsOf(transfers: readonly ReportTransfer[], asOf: string) {
-  return deriveCurrentHoldings(postedTransfersAsOf(transfers, asOf)).filter((holding) => holding.quantity > 0);
+  // The ledger's own as-of rule (same-day sequence included), over dated rows only.
+  return holdingsAsOf(postedTransfersAsOf(transfers, asOf) as any, asOf).filter((holding) => holding.quantity > 0);
 }
 
 function holderNameResolver(roleHolders: readonly ReportRoleHolder[]) {

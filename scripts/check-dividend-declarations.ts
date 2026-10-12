@@ -61,7 +61,7 @@ assert.equal(reconcileTotals(100000, 100900).reconciled, true, "0.9% is within t
 assert.equal(reconcileTotals(100000, 102000).reconciled, false, "2% is flagged");
 assert.equal(reconcileTotals(0, 1).reconciled, true, "1-cent floor");
 
-// --- holdings as at the record date (local stand-in for equityLedger.holdingsAsOf) ---
+// --- holdings as at the record date (equityLedger.holdingsAsOf without undated rows) ---
 const ledger = [
   { societyId: "s", transferType: "issuance", status: "posted", transferDate: "2026-01-10", rightsClassId: "B", destinationRoleHolderId: "alex", quantity: 60, sourceDocumentIds: [], sourceExternalIds: [], createdAtISO: "", updatedAtISO: "" },
   { societyId: "s", transferType: "issuance", status: "posted", transferDate: "2026-01-10", rightsClassId: "B", destinationHolderName: "Birch Holdings Ltd.", quantity: 40, sourceDocumentIds: [], sourceExternalIds: [], createdAtISO: "", updatedAtISO: "" },

@@ -1,15 +1,9 @@
 /**
- * LOCAL STAND-IN for `holdingsAsOf` (shared/equityLedger.ts).
- *
- * The shared field contract gives the share ledger (Agent SHARES) ownership of
- * `holdingsAsOf(transfers, isoDate)` in shared/equityLedger.ts. That helper is
- * not in this branch yet, so the dividend record-date snapshot uses this file,
- * which has the same name and signature. At merge, delete this file and
- * import `holdingsAsOf` from "./equityLedger" in shared/functions/dividends.ts
- * (and the static mirror); `toDividendHoldingRows` accepts either result shape.
+ * Dividend helpers over the share ledger's as-of holdings
+ * (`holdingsAsOf` in shared/equityLedger.ts).
  */
 
-import { deriveCurrentHoldings, type CurrentHolding, type RightsholdingTransferRecord } from "./equityLedger";
+import { holdingsAsOf as ledgerHoldingsAsOf, type CurrentHolding, type RightsholdingTransferRecord } from "./equityLedger";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -20,17 +14,15 @@ function effectiveDay(transfer: Pick<RightsholdingTransferRecord, "transferDate"
 }
 
 /**
- * Holdings per holder per class as at the end of `isoDate` (inclusive), from
- * posted ledger rows dated on or before that day. Undated rows cannot be placed
- * in time and are left out; `undatedPostedTransfers` reports them.
+ * Holdings at the end of the record date for a dividend entitlement. Unlike the
+ * ledger helper, a row with no transfer date is left out rather than placed on
+ * the day it was entered: an entitlement must not rest on a guessed date.
+ * `undatedPostedTransfers` reports those rows so they can be fixed.
  */
 export function holdingsAsOf(transfers: readonly RightsholdingTransferRecord[], isoDate: string): CurrentHolding[] {
   const day = String(isoDate ?? "").slice(0, 10);
   if (!DATE_ONLY.test(day)) throw new Error("Choose a valid as-of date.");
-  return deriveCurrentHoldings(transfers.filter((transfer) => {
-    const effective = effectiveDay(transfer);
-    return effective !== null && effective <= day;
-  }));
+  return ledgerHoldingsAsOf(transfers.filter((transfer) => effectiveDay(transfer) !== null), day);
 }
 
 /** Posted ledger rows with no transfer date (left out of an as-of snapshot). */
