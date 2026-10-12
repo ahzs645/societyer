@@ -7,6 +7,7 @@ import { normalizeDocumentCategory } from "../../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../../documentVersioning";
 import { EXTRA_SECTION_RECORD_HANDLERS, resolveMeetingReference } from "./importSectionHandlersExtra";
 import { AGREEMENT_SECTION_RECORD_HANDLERS } from "./importAgreementApply";
+import { importedRightsClassId, importedRoleHolderId } from "./importShareLinks";
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
@@ -880,8 +881,11 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       provinceState: cleanText(payload.provinceState) || cleanText(payload.province),
       postalCode: cleanText(payload.postalCode),
       country: cleanText(payload.country) || "Canada",
+      // YCN BUS_ADDRESS: named contacts and the address lines as recorded.
+      contacts: importedAddressContacts(payload.contacts),
+      freeformLines: cleanTextList(payload.freeformLines),
       sourceDocumentIds,
-      notes: sourceNote,
+      notes: withPayloadNotes(sourceNote, payload),
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
@@ -890,6 +894,8 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
   organizationRegistration: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
     return await ctx.db.insert("organizationRegistrations", {
       societyId,
+      registrationType: cleanText(payload.registrationType),
+      homeJurisdiction: cleanText(payload.homeJurisdiction),
       jurisdiction: cleanText(payload.jurisdiction) || "Needs review",
       assumedName: cleanText(payload.assumedName),
       registrationNumber: cleanText(payload.registrationNumber),
@@ -901,7 +907,7 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       representativeIds: arrayOf(payload.representativeIds).map(String).map(cleanText).filter(Boolean),
       status: cleanText(payload.status) || "needs_review",
       sourceDocumentIds,
-      notes: sourceNote,
+      notes: withPayloadNotes(sourceNote, payload),
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
@@ -1055,9 +1061,12 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       relatedShareholderIds: arrayOf(payload.relatedShareholderIds).map(String).map(cleanText).filter(Boolean),
       controllingIndividualIds: arrayOf(payload.controllingIndividualIds).map(String).map(cleanText).filter(Boolean),
       extraProvincialRegistrationId: cleanText(payload.extraProvincialRegistrationId) as any,
+      // YCN: the directory person (ENT_PEOPLE.GLOB_ID) and concurrent offices (PRES + SECR + OTHER).
+      directoryPersonId: await importedDirectoryPersonId(ctx, societyId, payload.directoryPersonId),
+      additionalOfficerTitles: cleanTextList(payload.additionalOfficerTitles),
       sourceDocumentIds,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
-      notes: sourceNote,
+      notes: withPayloadNotes(sourceNote, payload),
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
@@ -1072,6 +1081,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       idPrefix: cleanText(payload.idPrefix),
       highestAssignedNumber: numberOrUndefined(payload.highestAssignedNumber),
       votingRights: cleanText(payload.votingRights),
+      // YCN SHARE_CAPTL SHR_SINGLE (singular wording) and VOTING (votes per share).
+      singularForm: cleanText(payload.singularForm),
+      votesPerShare: numberOrUndefined(payload.votesPerShare),
       startDate: cleanDate(payload.startDate),
       endDate: cleanDate(payload.endDate),
       conditionsToHold: cleanText(payload.conditionsToHold),
@@ -1080,13 +1092,17 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       otherProvisions: cleanText(payload.otherProvisions),
       sourceDocumentIds,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
-      notes: sourceNote,
+      notes: withPayloadNotes(sourceNote, payload),
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
   },
 
   rightsholdingTransfer: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
+    // YCN imports name the class and holders by their import ids; link them to the applied records.
+    const rightsClassId = await importedRightsClassId(ctx, societyId, payload);
+    const sourceRoleHolderId = await importedRoleHolderId(ctx, societyId, payload.sourceRoleHolderId, payload.sourceHolderExternalId, payload.sourceHolderName);
+    const destinationRoleHolderId = await importedRoleHolderId(ctx, societyId, payload.destinationRoleHolderId, payload.destinationHolderExternalId, payload.destinationHolderName);
     return await ctx.db.insert("rightsholdingTransfers", {
       societyId,
       transferType: cleanText(payload.transferType) || cleanText(payload.type) || "transfer",
@@ -1094,9 +1110,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       transferDate: cleanDate(payload.transferDate) || cleanDate(payload.date),
       eventId: cleanText(payload.eventId) || cleanText(payload.relatedEventId),
       precedentRunId: cleanText(payload.precedentRunId) as any,
-      rightsClassId: cleanText(payload.rightsClassId) as any,
-      sourceRoleHolderId: cleanText(payload.sourceRoleHolderId) as any,
-      destinationRoleHolderId: cleanText(payload.destinationRoleHolderId) as any,
+      rightsClassId: rightsClassId as any,
+      sourceRoleHolderId: sourceRoleHolderId as any,
+      destinationRoleHolderId: destinationRoleHolderId as any,
       sourceHolderName: cleanText(payload.sourceHolderName) || cleanText(payload.sourceShareholder),
       destinationHolderName: cleanText(payload.destinationHolderName) || cleanText(payload.destinationShareholder),
       quantity: numberOrUndefined(payload.quantity),
@@ -1108,7 +1124,7 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       priceToVendorCurrency: cleanText(payload.priceToVendorCurrency),
       sourceDocumentIds,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
-      notes: sourceNote,
+      notes: withPayloadNotes(sourceNote, payload),
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
@@ -1209,9 +1225,37 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       condition: cleanText(payload.condition) || "unknown",
       status: cleanText(payload.status) || "needs_review",
       capitalized: optionalBoolean(payload.capitalized) ?? false,
+      // YCN CORP_ASSETS acquisition and disposition sides.
+      acquiredFrom: cleanText(payload.acquiredFrom),
+      acquisitionCurrency: cleanText(payload.acquisitionCurrency),
+      acquisitionComments: cleanText(payload.acquisitionComments),
+      assetJurisdiction: cleanText(payload.assetJurisdiction),
+      disposedAt: cleanDate(payload.disposedAt),
+      disposalValueCents: numberOrUndefined(payload.disposalValueCents),
+      dispositionCurrency: cleanText(payload.dispositionCurrency),
+      disposedTo: cleanText(payload.disposedTo),
+      dispositionComments: cleanText(payload.dispositionComments),
+      sourceDocumentIds: [],
+      disposalDocumentIds: [],
       notes: cleanText(payload.notes),
       createdAtISO: now,
       updatedAtISO: now,
+    });
+  },
+
+  // YCN REG_FILING annual filings -> the per-year, per-jurisdiction ledger.
+  annualFiling: async ({ ctx, societyId, payload }: SectionRecordContext) => {
+    await requirePermissionPortable(ctx, societyId, "filings:write");
+    const filed = optionalBoolean(payload.filed) ?? false;
+    return await ctx.db.insert("annualFilingLedger", {
+      societyId,
+      jurisdiction: cleanText(payload.jurisdiction) || "Needs review",
+      year: cleanText(payload.year) || "",
+      filed,
+      filedOn: filed ? cleanDate(payload.filedOn) : undefined,
+      regnNature: cleanText(payload.regnNature),
+      regnLegislation: cleanText(payload.regnLegislation),
+      createdAtISO: new Date().toISOString(),
     });
   },
 
@@ -1652,6 +1696,37 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
  * adoption date (or the adopting meeting's date) becomes the effective date;
  * only a full day counts, so "May 2022" never becomes a made-up day.
  */
+/** Staged notes (e.g. YCN review notes) after the source note. */
+function withPayloadNotes(sourceNote: any, payload: any) {
+  return [cleanText(sourceNote), cleanText(payload?.notes)].filter(Boolean).join("\n\n") || undefined;
+}
+
+function cleanTextList(value: unknown): string[] | undefined {
+  const rows = arrayOf(value).map(String).map(cleanText).filter(Boolean) as string[];
+  return rows.length ? rows : undefined;
+}
+
+function importedAddressContacts(value: unknown) {
+  const contacts = arrayOf(value)
+    .map((contact: any) => ({ name: cleanText(contact?.name), role: cleanText(contact?.role) }))
+    .filter((contact) => contact.name)
+    .map((contact) => (contact.role ? { name: contact.name as string, role: contact.role } : { name: contact.name as string }));
+  return contacts.length ? contacts : undefined;
+}
+
+/** A directory person id from an import, kept only when it is this organization's (or an unowned local) record. */
+async function importedDirectoryPersonId(ctx: any, societyId: string, value: unknown) {
+  const id = cleanText(value);
+  if (!id) return undefined;
+  try {
+    const person = await ctx.db.get(id, "peopleDirectory");
+    if (!person || person.mergedIntoId) return undefined;
+    return !person.societyId || String(person.societyId) === String(societyId) ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function policyEffectiveDate(payload: any): string | undefined {
   const explicit = cleanDate(payload?.effectiveDate);
   if (explicit) return explicit;

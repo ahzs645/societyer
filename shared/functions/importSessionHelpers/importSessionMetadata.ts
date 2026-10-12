@@ -69,6 +69,7 @@ function titleForRecord(recordKind: string, payload: any) {
   if (recordKind === "significantIndividualStep") return cleanText(payload?.individualName) || cleanText(payload?.name) || "Diligence step";
   if (recordKind === "asset") return cleanText(payload?.name) || cleanText(payload?.assetTag) || "Asset";
   if (recordKind === "shareCertificate") return cleanText(payload?.certificateNumber) || cleanText(payload?.holderName) || "Share certificate";
+  if (recordKind === "annualFiling") return [cleanText(payload?.jurisdiction), cleanText(payload?.year)].filter(Boolean).join(" ") || "Annual filing";
   if (recordKind === "legalTemplateDataField") return cleanText(payload?.name) || cleanText(payload?.fieldName) || "Template data field";
   if (recordKind === "legalTemplate") return cleanText(payload?.name) || cleanText(payload?.templateName) || "Legal template";
   if (recordKind === "legalPrecedent") return cleanText(payload?.packageName) || cleanText(payload?.name) || "Legal precedent";

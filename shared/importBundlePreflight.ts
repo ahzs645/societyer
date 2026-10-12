@@ -13,7 +13,7 @@ export const IMPORT_BUNDLE_COLLECTION_GROUPS: readonly (readonly string[])[] = [
   ["workflowPackages"], ["minuteBookItems"], ["roleHolders", "representatives"],
   ["rightsClasses", "shareClasses"], ["rightsholdingTransfers", "shareTransfers"],
   ["serviceProviders"], ["dividends"], ["nameHistory"], ["constatingEvents"],
-  ["significantIndividualSteps"], ["assets"], ["shareCertificates"],
+  ["significantIndividualSteps"], ["assets"], ["shareCertificates"], ["annualFilingLedger"],
   ["legalTemplateDataFields", "dataFields"], ["legalTemplates", "templates"],
   ["legalPrecedents", "parts", "partPrecedents"], ["legalPrecedentRuns", "partRuns"],
   ["generatedLegalDocuments", "draftDocuments"], ["legalSigners", "signers"],

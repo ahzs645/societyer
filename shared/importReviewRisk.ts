@@ -27,7 +27,7 @@ const HIGH_WEIGHT_KINDS = new Set([
 const MEDIUM_WEIGHT_KINDS = new Set([
   "meetingAttendance", "motionEvidence", "budget", "budgetSnapshot", "operatingBudget", "treasurerReport", "grant",
   "grantReport", "committee", "committeeMember", "deadline", "commitment", "fundingSource", "organizationSeat",
-  "organizationAddress", "organizationIdentifier", "employee", "volunteer", "pipaTraining", "task", "transactionCandidate",
+  "organizationAddress", "organizationIdentifier", "employee", "volunteer", "pipaTraining", "task", "transactionCandidate", "annualFiling",
   "minuteBookItem", "secretVaultItem", "legalTemplate", "generatedLegalDocument",
 ]);
 const WEIGHTY_TARGETS = /(meeting|minute|motion|financ|statement|polic|insurance|director|bylaw|filing|member)/i;

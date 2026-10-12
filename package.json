@@ -108,6 +108,7 @@
     "test:nlg-grammar": "tsx scripts/check-nlg-grammar.ts",
     "test:ycn-date-codec": "tsx scripts/check-ycn-date-codec.ts",
     "test:ycn-access-import": "tsx scripts/check-ycn-access-import.ts",
+    "test:ycn-share-conversion": "tsx scripts/check-ycn-share-conversion.ts",
     "test:versioned-register": "tsx scripts/check-versioned-register.ts",
     "test:member-history": "tsx scripts/check-member-history.ts",
     "test:role-holder-history": "tsx scripts/check-role-holder-history.ts",

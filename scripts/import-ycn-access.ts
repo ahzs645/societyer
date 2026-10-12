@@ -2,20 +2,26 @@
  * One-shot importer for a YCN BC-corporate-records Access database (`.accdb`).
  *
  * Extracts the `DB_GLOB_*` tables with `mdb-export`, decodes YCN float dates, and
- * builds a Societyer import bundle (see shared/ycnAccessImport.ts). The bundle is
- * either written to disk (`--out`) or pushed to `importSessions.createFromBundle`
- * so it flows through the normal staged review → promote pipeline.
- *
- * Mirrors the existing `import-ote-*.mjs` offline-import scripts.
+ * builds a Societyer import bundle for ONE entity (see shared/ycnAccessImport.ts).
+ * A YCN database usually holds several companies; each one is imported into its
+ * own Societyer organization, never merged.
  *
  * Requirements: `mdbtools` on PATH (provides `mdb-tables` / `mdb-export`).
  *
  * Usage:
- *   # offline — just produce the bundle JSON for inspection / fixtures
- *   tsx scripts/import-ycn-access.ts --db path/to/DBS.accdb --out bundle.json
+ *   # list the entities in the database
+ *   tsx scripts/import-ycn-access.ts --db path/to/DBS.accdb --list-entities
  *
- *   # push into a workspace (needs VITE_CONVEX_URL / CONVEX_URL in .env.local)
- *   tsx scripts/import-ycn-access.ts --db path/to/DBS.accdb --society <societyId>
+ *   # offline — produce one entity's bundle JSON (with the share reconciliation report)
+ *   tsx scripts/import-ycn-access.ts --db path/to/DBS.accdb --entity <ENT_ID> --out bundle.json
+ *
+ *   # push into an organization (needs VITE_CONVEX_URL / CONVEX_URL in .env.local)
+ *   tsx scripts/import-ycn-access.ts --db path/to/DBS.accdb --entity <ENT_ID> --society <societyId>
+ *
+ * Options:
+ *   --cancellation-kind redemption|cancellation  ledger kind for a certificate
+ *       cancelled with nothing replacing it (default redemption; review either way)
+ *   --reference-date YYYY-MM-DD  "today" for current/former status and birth years
  */
 
 import { execFileSync } from "node:child_process";
@@ -26,20 +32,29 @@ import { pathToFileURL } from "node:url";
 import {
   buildBundleFromAccessTables,
   countBundleRecords,
+  linkDirectoryPeople,
+  listYcnEntities,
+  stagedBundle,
+  YCN_STAGED_KEYS,
+  type YcnImportBundle,
   type YcnRow,
   type YcnTables,
 } from "../shared/ycnAccessImport";
+import { dedupeKey } from "../shared/peopleDirectory";
 
 interface CliArgs {
   db?: string;
   out?: string;
   society?: string;
   name?: string;
-  includeSuperseded: boolean;
+  entity?: string;
+  listEntities: boolean;
+  cancellationKind?: "redemption" | "cancellation";
+  referenceDate?: string;
 }
 
-function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { includeSuperseded: false };
+export function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = { listEntities: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const next = () => argv[(i += 1)];
@@ -47,7 +62,18 @@ function parseArgs(argv: string[]): CliArgs {
     else if (flag === "--out") args.out = next();
     else if (flag === "--society") args.society = next();
     else if (flag === "--name") args.name = next();
-    else if (flag === "--include-superseded") args.includeSuperseded = true;
+    else if (flag === "--entity") args.entity = next();
+    else if (flag === "--list-entities") args.listEntities = true;
+    else if (flag === "--reference-date") args.referenceDate = next();
+    else if (flag === "--cancellation-kind") {
+      const kind = next();
+      if (kind !== "redemption" && kind !== "cancellation") throw new Error("--cancellation-kind must be redemption or cancellation");
+      args.cancellationKind = kind;
+    } else if (flag === "--include-superseded") {
+      throw new Error("--include-superseded is no longer supported: superseded YCN rows are an audit trail, not live register rows.");
+    } else {
+      throw new Error(`Unknown option ${flag}`);
+    }
   }
   return args;
 }
@@ -103,7 +129,10 @@ export function parseCsv(text: string): YcnRow[] {
     });
 }
 
-/** Pull every table out of the Access DB into a name → rows map. */
+/**
+ * Pull every table out of the Access DB into a name → rows map. Dates are
+ * exported with 4-digit years so birth dates are never guessed from 2 digits.
+ */
 export function extractTables(dbPath: string): YcnTables {
   const tableNames = execFileSync("mdb-tables", ["-1", dbPath], { encoding: "utf8" })
     .split("\n")
@@ -112,13 +141,34 @@ export function extractTables(dbPath: string): YcnTables {
 
   const tables: YcnTables = {};
   for (const name of tableNames) {
-    const csv = execFileSync("mdb-export", [dbPath, name], {
+    const csv = execFileSync("mdb-export", ["-D", "%Y-%m-%d", "-T", "%Y-%m-%d %H:%M:%S", dbPath, name], {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
+      // mdb-export warns on stderr about the Access decimal type (SHARE_CAPTL.VOTING).
+      stdio: ["ignore", "pipe", "ignore"],
     });
     tables[name] = parseCsv(csv);
   }
   return tables;
+}
+
+/** A summary of the bundle for the console: counts and issue codes, no personal particulars. */
+export function describeBundle(bundle: YcnImportBundle): string[] {
+  const lines = [`Entity ${bundle.metadata.ycnEntityId}: ${countBundleRecords(bundle)} staged record(s)`];
+  for (const key of YCN_STAGED_KEYS) lines.push(`  ${key.padEnd(27)}${bundle[key].length}`);
+  lines.push(`  ${"directoryPeople".padEnd(27)}${bundle.directoryPeople.length} (this entity's roster; applied directly)`);
+  lines.push(`  ${"societySettings".padEnd(27)}${bundle.societySettings ? "present" : "none"} (applied directly)`);
+  const share = bundle.report.shareConversion;
+  lines.push(
+    `Share register: ${share.movements} ledger movement(s), ${share.certificates} certificate(s); `
+      + `reconciled at ${share.reconciledDates.length} event date(s), ${share.checkedPoints} holder/class/date point(s), `
+      + `${share.mismatches} mismatch(es) — ${share.clean ? "clean, staged as posted" : "NOT clean, staged for review"}.`,
+  );
+  const codes = new Map<string, number>();
+  for (const issue of share.issues) codes.set(`${issue.severity}:${issue.code}`, (codes.get(`${issue.severity}:${issue.code}`) ?? 0) + 1);
+  for (const [code, count] of codes) lines.push(`  ${code} × ${count}`);
+  if (bundle.report.warnings.length) lines.push(`${bundle.report.warnings.length} other warning(s); see the bundle's report.`);
+  return lines;
 }
 
 async function main() {
@@ -128,27 +178,21 @@ async function main() {
   }
 
   const tables = extractTables(args.db);
-  const bundle = buildBundleFromAccessTables(tables, {
-    name: args.name || `YCN import — ${path.basename(args.db)}`,
-    includeSuperseded: args.includeSuperseded,
-  });
+  if (args.listEntities) {
+    for (const entity of listYcnEntities(tables)) {
+      const counts = Object.entries(entity.rowCounts).map(([table, n]) => `${table.replace(/^DB_GLOB_/, "")}=${n}`).join(" ");
+      console.log(`${entity.entityId}\t${entity.name ?? "(no name)"}\t${counts}`);
+    }
+    return;
+  }
 
-  const total = countBundleRecords(bundle);
-  console.log(`Built bundle with ${total} record(s):`);
-  console.log(`  roleHolders:               ${bundle.roleHolders.length}`);
-  console.log(`  rightsClasses:             ${bundle.rightsClasses.length}`);
-  console.log(`  rightsholdingTransfers:    ${bundle.rightsholdingTransfers.length}`);
-  console.log(`  organizationRegistrations: ${bundle.organizationRegistrations.length}`);
-  console.log(`  organizationAddresses:     ${bundle.organizationAddresses.length}`);
-  console.log(`  serviceProviders:          ${bundle.serviceProviders.length}`);
-  console.log(`  dividends:                 ${bundle.dividends.length}`);
-  console.log(`  nameHistory:               ${bundle.nameHistory.length}`);
-  console.log(`  constatingEvents:          ${bundle.constatingEvents.length}`);
-  console.log(`  significantIndividualSteps:${bundle.significantIndividualSteps.length}`);
-  console.log(`  assets:                    ${bundle.assets.length}`);
-  console.log(`  shareCertificates:         ${bundle.shareCertificates.length}`);
-  console.log(`  directoryPeople:           ${bundle.directoryPeople.length} (applied directly, not staged)`);
-  console.log(`  societySettings:           ${bundle.societySettings ? "present" : "none"} (applied directly, not staged)`);
+  const bundle = buildBundleFromAccessTables(tables, {
+    name: args.name,
+    entityId: args.entity,
+    referenceDate: args.referenceDate,
+    cancellationKind: args.cancellationKind,
+  });
+  for (const line of describeBundle(bundle)) console.log(line);
 
   if (args.out) {
     writeFileSync(args.out, JSON.stringify(bundle, null, 2));
@@ -174,29 +218,37 @@ async function main() {
   if (!url) throw new Error("Missing VITE_CONVEX_URL / CONVEX_SELF_HOSTED_URL / CONVEX_URL");
 
   const client = new ConvexHttpClient(url);
+
+  // 1. Directory people first (this entity's roster only), reusing a matching person,
+  //    so the staged directors, officers and shareholders can link to them.
+  const existing = (await client.query(anyApi.peopleDirectory.list, { societyId: args.society })) as Array<{ _id: string; fullName: string; dob?: string }>;
+  const byKey = new Map(existing.map((person) => [dedupeKey(person), person._id]));
+  const directoryIds = new Map<string, string>();
+  const nowISO = new Date().toISOString();
+  for (const person of bundle.directoryPeople) {
+    const { globalId, dobNeedsReview: _review, ...fields } = person as Record<string, any>;
+    const id = byKey.get(dedupeKey({ fullName: fields.fullName, dob: fields.dob }));
+    const savedId = await client.mutation(anyApi.peopleDirectory.upsert, { ...fields, ...(id ? { id } : {}), societyId: args.society, nowISO });
+    if (globalId) directoryIds.set(globalId, String(savedId));
+  }
+  const linked = linkDirectoryPeople(bundle, directoryIds);
+  console.log(`Upserted ${bundle.directoryPeople.length} directory person(s); linked ${linked} role holder(s).`);
+
+  // 2. The staged registers.
   const sessionId = await client.mutation(anyApi.importSessions.createFromBundle, {
     societyId: args.society,
     name: bundle.metadata.name,
-    bundle,
+    bundle: stagedBundle(bundle),
   });
-  console.log(`\nCreated import session ${sessionId} — review and promote in the app.`);
+  console.log(`Created import session ${sessionId} — review and promote in the app.`);
 
-  // Settings + the cross-tenant directory aren't staged records — apply directly.
+  // 3. Settings patch the organization directly.
   if (bundle.societySettings) {
     await client.mutation(anyApi.society.updateComplianceSettings, {
       societyId: args.society,
       ...bundle.societySettings,
     });
-    console.log("Applied YCN Corporation_Settings (AGM/fiscal/contacts/locations/people-picker).");
-  }
-  if (bundle.directoryPeople.length) {
-    const nowISO = new Date().toISOString();
-    let upserted = 0;
-    for (const person of bundle.directoryPeople) {
-      await client.mutation(anyApi.peopleDirectory.upsert, { ...person, societyId: args.society, nowISO });
-      upserted += 1;
-    }
-    console.log(`Upserted ${upserted} People Directory record(s).`);
+    console.log("Applied YCN Corporation_Settings (AGM, fiscal year end, contacts, locations, people picker, responsible lawyer).");
   }
 }
 

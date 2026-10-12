@@ -57,6 +57,7 @@ const SECTION_RECORD_KINDS = [
   "significantIndividualStep",
   "asset",
   "shareCertificate",
+  "annualFiling",
   "legalTemplateDataField",
   "legalTemplate",
   "legalPrecedent",

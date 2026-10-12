@@ -69,6 +69,7 @@ function recordsFromBundle(bundle: any) {
   for (const step of arrayOf(bundle?.significantIndividualSteps)) records.push(makeRecord("significantIndividualStep", "significantIndividualSteps", step));
   for (const asset of arrayOf(bundle?.assets)) records.push(makeRecord("asset", "assets", asset));
   for (const cert of arrayOf(bundle?.shareCertificates)) records.push(makeRecord("shareCertificate", "shareCertificates", cert));
+  for (const filing of arrayOf(bundle?.annualFilingLedger)) records.push(makeRecord("annualFiling", "annualFilingLedger", filing));
   for (const field of arrayOf(bundle?.legalTemplateDataFields ?? bundle?.dataFields)) records.push(makeRecord("legalTemplateDataField", "legalTemplateDataFields", field));
   for (const template of arrayOf(bundle?.legalTemplates ?? bundle?.templates)) records.push(makeRecord("legalTemplate", "legalTemplates", template));
   for (const precedent of arrayOf(bundle?.legalPrecedents ?? bundle?.parts ?? bundle?.partPrecedents)) records.push(makeRecord("legalPrecedent", "legalPrecedents", precedent));
@@ -162,6 +163,7 @@ function targetTableForRecordKind(kind: string) {
     significantIndividualStep: "significantIndividualSteps",
     asset: "assets",
     shareCertificate: "shareCertificates",
+    annualFiling: "annualFilingLedger",
     legalTemplateDataField: "legalTemplateDataFields",
     legalTemplate: "legalTemplates",
     legalPrecedent: "legalPrecedents",

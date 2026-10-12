@@ -360,6 +360,7 @@ export const updateComplianceSettings = authorizedMutation("society:updateCompli
     societyId: v.id("societies"),
     agmMonth: v.optional(v.number()),
     agmDay: v.optional(v.number()),
+    fiscalYearEnd: v.optional(v.string()),
     waivePrepFinancials: v.optional(v.boolean()),
     shortName: v.optional(v.string()),
     primaryContactName: v.optional(v.string()),
