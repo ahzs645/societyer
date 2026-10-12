@@ -29,6 +29,7 @@ const scripts = [
   'check-annual-deadline-review-fixes.ts',
   'check-deadline-source-key.ts', 'check-clone-society.ts',
   'check-ycn-date-codec.ts', 'check-ycn-share-conversion.ts', 'check-ycn-access-import.ts',
+  'check-minute-book-reports.ts',
 ];
 // --after-utc-midnight runs every check with the clock just past 00:00 UTC.
 const clockShift = process.argv.includes('--after-utc-midnight');

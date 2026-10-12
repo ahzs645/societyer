@@ -83,11 +83,13 @@ assert.ok(packet && !packet.preparationOnly, "organize-corporation packet is exe
 const withExec = Buffer.from(
   corporationPacketDocxBytes(packet, { execution: board } as unknown as Record<string, unknown>),
 ).toString("latin1");
-assert.ok(withExec.includes("Execution"), "Execution heading present");
+assert.ok(withExec.includes("Dated:"), "Dated line opens the execution group");
+assert.ok(withExec.includes("[Signature page to the consent directors&apos; resolution"), "signature page caption");
 assert.ok(
   withExec.includes("being all the directors of Acme"),
-  "adoption clause rendered into the DOCX",
+  "without an organization in the context, the execution block's adoption clause is printed",
 );
+assert.ok(withExec.includes("Dana Wells, Director") && withExec.includes("Sam Okoro, Director"), "signatories in the signature table");
 
 // --- no execution field → unchanged (back-compat) ----------------------------
 const plain = Buffer.from(corporationPacketDocxBytes(packet)).toString("latin1");

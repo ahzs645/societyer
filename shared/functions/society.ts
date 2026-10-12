@@ -391,6 +391,7 @@ export async function updateComplianceSettingsPortable(
     responsibleLawyer?: string;
     restrictPeoplePicker?: boolean;
     includeDocumentIdHeader?: boolean;
+    omitAdoptionClause?: boolean;
   },
 ) {
   await requireSocietyMembership(ctx, societyId);

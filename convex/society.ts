@@ -375,6 +375,7 @@ export const updateComplianceSettings = authorizedMutation("society:updateCompli
     responsibleLawyer: v.optional(v.string()),
     restrictPeoplePicker: v.optional(v.boolean()),
     includeDocumentIdHeader: v.optional(v.boolean()),
+    omitAdoptionClause: v.optional(v.boolean()),
   },
   returns: v.id("societies"),
   handler: async (ctx, args) => updateComplianceSettingsPortable(await toPortableMutationCtx(ctx), args),

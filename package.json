@@ -129,6 +129,7 @@
     "test:packet-grammar": "tsx scripts/check-packet-grammar.ts",
     "test:packet-operative-data": "tsx scripts/check-packet-operative-data.ts",
     "test:execution-block": "tsx scripts/check-execution-block.ts",
+    "test:minute-book-reports": "tsx scripts/check-minute-book-reports.ts",
     "test:annual-resolution": "tsx scripts/check-annual-resolution.ts",
     "test:dividend-resolution": "tsx scripts/check-dividend-resolution.ts",
     "test:voting-power": "tsx scripts/check-voting-power.ts",
