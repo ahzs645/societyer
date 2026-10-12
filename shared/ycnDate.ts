@@ -127,3 +127,71 @@ export function encodeYcnDate(iso: string | null | undefined): number | null {
   const n = Number.parseFloat(numericString);
   return Number.isNaN(n) ? null : n;
 }
+
+/**
+ * YCN writes `29991231` (or any date in the year 2999 or later) into an end
+ * column to mean "no end" — an open interval. Treat it as no end date rather
+ * than importing a literal 2999 date.
+ */
+const OPEN_END_THRESHOLD = 29990101;
+
+/** true when the value is the YCN "open-ended" sentinel (year 2999 or later). */
+export function isYcnOpenEndDate(value: number | string | null | undefined): boolean {
+  const dp = datePartNumber(value);
+  return dp !== null && dp >= OPEN_END_THRESHOLD;
+}
+
+/** Result of reading a two-digit year in a birth date. */
+export interface ResolvedBirthYear {
+  year: number;
+  /** Both centuries were plausible and the choice needs a person to confirm it. */
+  ambiguous: boolean;
+  reason: string;
+}
+
+/**
+ * Resolve the two-digit year of a BIRTH date ("02/17/20" from an Access export
+ * without a 4-digit year format) to a four-digit year.
+ *
+ * Rules, in order:
+ *  - a birth year can't be after the reference year (the export or import year);
+ *  - a living person is assumed to be at most `maxAgeYears` old (default 110);
+ *  - when the record says the person has reached the age of majority, they must
+ *    be at least `majorityAge` years old (default 19, the BC age of majority);
+ *    when it says they have not, they must be younger than that.
+ * If exactly one century satisfies these rules it is used. If both do, the
+ * earlier century is chosen (corporate records are mostly about adults) and the
+ * result is flagged `ambiguous` so a reviewer confirms it. If neither does, the
+ * later century is used and flagged.
+ */
+export function resolveTwoDigitBirthYear(
+  twoDigitYear: number,
+  options: { referenceYear: number; atAgeOfMajority?: boolean; majorityAge?: number; maxAgeYears?: number },
+): ResolvedBirthYear {
+  const yy = ((Math.trunc(twoDigitYear) % 100) + 100) % 100;
+  const majorityAge = options.majorityAge ?? 19;
+  const maxAge = options.maxAgeYears ?? 110;
+  const ref = options.referenceYear;
+  const plausible = (year: number) => {
+    if (year > ref || ref - year > maxAge) return false;
+    if (options.atAgeOfMajority === true && ref - year < majorityAge) return false;
+    if (options.atAgeOfMajority === false && ref - year >= majorityAge) return false;
+    return true;
+  };
+  const candidates = [1900 + yy, 2000 + yy].filter(plausible);
+  if (candidates.length === 1) {
+    return { year: candidates[0], ambiguous: false, reason: `two-digit year ${String(yy).padStart(2, "0")} read as ${candidates[0]}` };
+  }
+  if (candidates.length === 2) {
+    return {
+      year: candidates[0],
+      ambiguous: true,
+      reason: `two-digit year ${String(yy).padStart(2, "0")} could be ${candidates[0]} or ${candidates[1]}; ${candidates[0]} assumed, confirm the birth date`,
+    };
+  }
+  return {
+    year: 2000 + yy > ref ? 1900 + yy : 2000 + yy,
+    ambiguous: true,
+    reason: `two-digit year ${String(yy).padStart(2, "0")} does not fit the age-of-majority flag; confirm the birth date`,
+  };
+}

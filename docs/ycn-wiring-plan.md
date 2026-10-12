@@ -103,22 +103,34 @@ data each feature needs:
 **Feature:** import a real `.accdb` into a workspace through the existing staged
 review → promote pipeline.
 
-- `shared/ycnAccessImport.ts` — pure, framework-free: decode every `*_DT_TM` /
-  `*_DT` float via `decodeYcnDate` (treat `isYcnNullDate` as null), drop superseded
-  rows (`REVISE_DT_TM` set) unless asked otherwise, and map the YCN tables onto the
-  import-bundle record kinds that already exist in `recordsFromBundle`:
-  - `DB_GLOB_DIRECTOR` / `DB_GLOB_OFFICER` / `DB_GLOB_ENT_PEOPLE` → `roleHolders`
-  - `DB_GLOB_SHARE_CAPTL` → `rightsClasses`
-  - `DB_GLOB_SHARE_TRANS` → `rightsholdingTransfers`
-  - `DB_GLOB_REG_FILING` → `organizationRegistrations`
-  - `DB_GLOB_BUS_ADDRESS` / `REG_OFFICE` / `REC_OFFICE` → `organizationAddresses`
-- `scripts/import-ycn-access.ts` — runner mirroring `import-ote-*.mjs`: `mdb-export`
-  each table → build a bundle via the pure lib → either `--out bundle.json` (offline)
-  or push to `importSessions.createFromBundle`.
-- **Swap candidate:** teach `importSessionUtils.cleanDate` / `cleanDateTime` to
-  recognise YCN floats (an 8-digit date previously degraded to `YYYY-01-01`).
-- **Risk:** low — standalone, offline, no schema change. The sample `.accdb` is the
-  test fixture.
+- `shared/ycnAccessImport.ts` — pure, framework-free. A YCN database holds many
+  companies keyed by `ENT_ID`: `listYcnEntities` lists them and the bundle is built
+  for ONE entity (never merged). Decodes every `*_DT_TM` / `*_DT` float
+  (`<19000101` = null, `29991231` = no end), drops superseded rows (`REVISE_DT_TM`
+  set; they are an audit trail, not live rows), and maps:
+  - `DIRECTOR` / `OFFICER` / `TRANSPARENCY_REG` → `roleHolders`, with name and address
+    from the entity roster (`ENT_PEOPLE`, effective-dated) and a `GLOB_ID` link the
+    runner turns into `directoryPersonId`; PRES + SECR + OTHER → `officerTitle` +
+    `additionalOfficerTitles`. The roster itself is NOT imported as signers
+    (`entitySigners` would override role-based signatories in every document); there
+    is no valid-time particulars table, so earlier names/addresses go into the notes.
+  - `SHARE_CAPTL` → `rightsClasses` (`singularForm`, `votesPerShare`).
+  - `SHARE_TRANS` → `shared/ycnShareConversion.ts`: the certificate register becomes
+    ledger movements (issuance, transfer with its source holder, subdivision,
+    consolidation, redemption) plus `shareCertificates` with back pointers; one
+    `shareholder` role holder per holder; a reconciliation of ledger vs active
+    certificates at every event date decides posted vs needs_review.
+  - `REG_FILING` → `organizationRegistrations` (number, date, type) and
+    `annualFilingLedger` (bundle key `annualFilingLedger`, record kind `annualFiling`).
+  - `REG_OFFICE` / `REC_OFFICE` / `BUS_ADDRESS` → `organizationAddresses` with
+    `effectiveFrom`/`effectiveTo` (the next row's start) and current/past status.
+  - `CORP_SETTINGS` (incl. `FIN_MONTH/FIN_DAY` → `fiscalYearEnd`) and `Retain_List.RESP_LWYR`
+    → `responsibleLawyer` (Retain_List is a client list, not a retention schedule).
+- `scripts/import-ycn-access.ts` — `--list-entities`, then `--entity <ENT_ID>` with
+  `--out bundle.json` (offline) or `--society <id>` (upserts the roster's directory
+  people, stages the registers, applies settings). Exports dates with 4-digit years.
+- Checks: `scripts/check-ycn-access-import.ts`, `scripts/check-ycn-share-conversion.ts`
+  on the synthetic fixture `scripts/fixtures/ycnSynthetic.ts` (never real data).
 
 ## WS2a · referenceField → enforce restrictPeoplePicker (low risk)
 
