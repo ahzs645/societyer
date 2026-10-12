@@ -193,6 +193,8 @@ File the prescribed notice within 15 days of a change in directors or their pres
 
 **Implementation and confidence:** Settled. Track effective change, statutory due date, filing date and acceptance, including late submissions. Do not wait until the annual report to report a director change.
 
+**Who acts (law):** BC BCA s. 128, ss. 122(2)–(3), 130–131. Source ID: `BC-BCA-DIRECTOR-REMOVAL`. A resignation takes effect when the written resignation is provided (or at the later time it states), so the directors only record it. Removal before the end of the term is a shareholder decision: a special resolution, or the lesser resolution or other method the memorandum or articles provide; class directors are removed by their class. The directors have no statutory removal power. They may fill a casual vacancy and, only if the articles allow, appoint additional directors up to one-third of the other current directors. The document packets follow this split: `director-resignation` (directors record the letter), `director-removal` (voting shareholders), `appoint-director` (voting shareholders elect) and `appoint-director-by-directors` (casual vacancy or additional director). Federal and Ontario packets use the shareholders' ordinary resolution (CBCA s. 109(1); OBCA s. 122(1)).
+
 <a id="bcc-14"></a>
 
 ### BCC-14 — Conflicts
