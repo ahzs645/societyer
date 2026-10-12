@@ -240,3 +240,85 @@ export function actorGrammar(actors: Actor[]): ActorGrammar {
     wasWere,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Sentence and quantity helpers (YCN PROPER(SHORT_NAME), Share_Single/Share_Desc).
+// ---------------------------------------------------------------------------
+
+/** Capitalize the first letter, e.g. "the Company records" -> "The Company records". */
+export function capitalizeFirst(text: string | null | undefined): string {
+  const value = String(text ?? "");
+  const index = value.search(/\S/);
+  if (index < 0) return value;
+  return value.slice(0, index) + value.charAt(index).toUpperCase() + value.slice(index + 1);
+}
+
+const AN_EXCEPTIONS = /^(hour|honest|honou?r|heir)/i;
+const A_EXCEPTIONS = /^(uni|use|usu|uti|eu|one\b|once|ubi|ura|ure|uri)/i;
+
+/** "a" or "an" for the word that follows, by its opening sound (heuristic). */
+export function indefiniteArticle(word: string | null | undefined): "a" | "an" {
+  const value = String(word ?? "").trim();
+  if (!value) return "a";
+  // Acronyms read by letter name: "an MBA", "a CBCA corporation".
+  if (/^[A-Z]{2,}\b/.test(value)) return /^[AEFHILMNORSX]/.test(value) ? "an" : "a";
+  if (AN_EXCEPTIONS.test(value)) return "an";
+  if (A_EXCEPTIONS.test(value)) return "a";
+  return /^[aeiou]/i.test(value) ? "an" : "a";
+}
+
+/** "an application" / "a subscription". */
+export function withIndefiniteArticle(phrase: string): string {
+  return `${indefiniteArticle(phrase)} ${phrase}`;
+}
+
+/** Singular when exactly one, otherwise plural (zero reads plural: "no shares"). */
+export function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? singular : plural ?? `${singular}s`;
+}
+
+/** "it" for one item, "them" otherwise. */
+export function itThem(count: number): "it" | "them" {
+  return count === 1 ? "it" : "them";
+}
+
+/** "A", "A and B", "A, B and C". */
+export function joinNames(names: readonly string[], conjunction = "and"): string {
+  const items = names.map((n) => String(n ?? "").trim()).filter(Boolean);
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} ${conjunction} ${items[items.length - 1]}`;
+}
+
+/** Share-class naming inputs (a rightsClasses row satisfies it). */
+export interface ShareClassNaming {
+  className?: string | null;
+  /** COMMON contract: "Class A Voting Preferred Share". */
+  singularDescription?: string | null;
+  /** COMMON contract: "Class A Voting Preferred Shares". */
+  pluralDescription?: string | null;
+  /** Legacy YCN SHR_SINGLE display form ("Common Share"). */
+  singularForm?: string | null;
+}
+
+/**
+ * Quantity-aware class noun: "Class A Common Share" for one, "Class A Common
+ * Shares" otherwise. Uses the stored singular/plural descriptions first and
+ * falls back to the class name. Never produces "share(s)".
+ */
+export function shareClassNoun(count: number, cls: ShareClassNaming | null | undefined): string {
+  const singularStored = String(cls?.singularDescription ?? cls?.singularForm ?? "").trim();
+  const pluralStored = String(cls?.pluralDescription ?? "").trim();
+  const name = String(cls?.className ?? "").trim();
+  const base = name.replace(/\s+shares?$/i, "").trim();
+  const shareWord = /\bshares?$/.test(name) ? "share" : "Share";
+  const singular = singularStored || (base ? `${base} ${shareWord}` : "share");
+  const plural = pluralStored
+    || (singularStored ? (/s$/i.test(singularStored) ? singularStored : `${singularStored}s`) : base ? `${base} ${shareWord}s` : "shares");
+  return count === 1 ? singular : plural;
+}
+
+/** "100 Class A Common Shares" / "1 Class A Common Share". */
+export function shareQuantityLabel(count: number, cls: ShareClassNaming | null | undefined): string {
+  const n = Number.isFinite(count) ? count : 0;
+  return `${n.toLocaleString("en-CA")} ${shareClassNoun(n, cls)}`;
+}
