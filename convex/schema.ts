@@ -368,6 +368,25 @@ export default defineSchema({
     conditionsToTransfer: v.optional(v.string()),
     conditionsForRemoval: v.optional(v.string()),
     otherProvisions: v.optional(v.string()),
+    // Structured summary of the articles' special rights and restrictions.
+    // The free-text fields above stay authoritative. Logic: shared/equityLedger.ts.
+    parValueCents: v.optional(v.number()), // absent = shares without par value
+    maxAuthorized: v.optional(v.number()), // absent = no maximum
+    dividendEntitlement: v.optional(v.string()), // discretionary_by_class | fixed_rate | cumulative_fixed | participating
+    dividendRateBps: v.optional(v.number()),
+    redemption: v.optional(v.object({
+      byCompany: v.boolean(),
+      byHolder: v.boolean(),
+      priceCents: v.optional(v.number()),
+      includesDeclaredUnpaid: v.optional(v.boolean()),
+      minNoticeDays: v.optional(v.number()),
+      nonProRataPermitted: v.optional(v.boolean()),
+    })),
+    liquidationRank: v.optional(v.number()), // 1 = paid first; equal numbers rank equally
+    preEmptiveRights: v.optional(v.boolean()),
+    articlesPart: v.optional(v.string()),
+    singularDescription: v.optional(v.string()),
+    pluralDescription: v.optional(v.string()),
     sourceDocumentIds: v.array(v.id("documents")),
     sourceExternalIds: v.array(v.string()),
     notes: v.optional(v.string()),
@@ -395,6 +414,14 @@ export default defineSchema({
     priceToOrganizationCurrency: v.optional(v.string()),
     priceToVendorCents: v.optional(v.number()),
     priceToVendorCurrency: v.optional(v.string()),
+    sequence: v.optional(v.number()), // same-day order (lower first)
+    fullyPaidConfirmedAt: v.optional(v.string()), // issuance: directors confirmed fully paid
+    directorConsentDocumentId: v.optional(v.id("documents")), // transfer: directors' consent
+    directorConsentResolutionId: v.optional(v.id("writtenResolutions")),
+    redemptionNoticeDate: v.optional(v.string()),
+    redemptionNoticeWaivedOn: v.optional(v.string()),
+    solvencyConfirmedAt: v.optional(v.string()), // redemption: solvency confirmation date
+    solvencyBasis: v.optional(v.string()),
     sourceDocumentIds: v.array(v.id("documents")),
     sourceExternalIds: v.array(v.string()),
     notes: v.optional(v.string()),

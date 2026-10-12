@@ -13,14 +13,18 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireOwnedRow, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import {
   activeCertificates,
   certificateChain,
+  duplicateCertificateNumber,
+  reconcileCertificatesWithLedger,
   validateCertificate,
   sharesOutstandingByClass,
   type CertificateEvent,
 } from "../shareCertificates";
+import { holdingsAsOf } from "../equityLedger";
+import { filterRoleHolderRegisters } from "./roleHolderReadAccess";
 
 /** Map a stored row onto the plain CertificateEvent shape the shared fns expect. */
 function toEvent(row: Record<string, any>): CertificateEvent {
@@ -32,7 +36,54 @@ function toEvent(row: Record<string, any>): CertificateEvent {
     issuedOn: row.issuedOn,
     replacesCertificateNumber: row.replacesCertificateNumber ?? null,
     cancelledOn: row.cancelledOn ?? null,
+    rightsClassId: row.rightsClassId ?? null,
+    holderRoleHolderId: row.holderRoleHolderId ?? null,
   };
+}
+
+async function societyCertificates(ctx: PortableQueryCtx, societyId: string) {
+  return ctx.db
+    .query("shareCertificates")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+}
+
+function assertUniqueNumber(rows: Record<string, any>[], certificateNumber: string, excludeId?: string) {
+  const clash = duplicateCertificateNumber(rows as any[], certificateNumber, excludeId);
+  if (clash) {
+    throw new Error(`Certificate number ${String(certificateNumber).trim()} is already used (${clash.shareClass}, ${clash.holderName}). Certificate numbers must be unique within the organization.`);
+  }
+}
+
+async function assertLinks(ctx: PortableQueryCtx, societyId: string, links: { rightsClassId?: string; holderRoleHolderId?: string }) {
+  if (links.rightsClassId) await getOwned(ctx, "rightsClasses", links.rightsClassId, societyId);
+  if (links.holderRoleHolderId) await getOwned(ctx, "roleHolders", links.holderRoleHolderId, societyId);
+}
+
+/**
+ * Outstanding certificates against the share ledger as of a date: per holder
+ * and class, certificate shares must equal ledger holdings, and each cancelled
+ * certificate must equal the transferred shares plus the balance certificate.
+ */
+export async function reconcilePortable(
+  ctx: PortableQueryCtx,
+  { societyId, asOf }: { societyId: string; asOf: string },
+) {
+  await requireSocietyMembership(ctx, societyId);
+  const [certificates, transfers, classes, roleHolders] = await Promise.all([
+    societyCertificates(ctx, societyId),
+    ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+  ]);
+  return reconcileCertificatesWithLedger({
+    certificates: certificates.map(toEvent),
+    holdings: holdingsAsOf(transfers as any, asOf),
+    classes: classes.map((row: any) => ({ _id: String(row._id), className: row.className, idPrefix: row.idPrefix, singularForm: row.singularForm, singularDescription: row.singularDescription, pluralDescription: row.pluralDescription })),
+    // Only the id and display name are needed to match certificate holders.
+    roleHolders: (await filterRoleHolderRegisters(ctx, societyId, roleHolders as any)).map((row: any) => ({ _id: String(row._id), fullName: row.fullName })),
+    asOfISO: asOf,
+  });
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -84,10 +135,13 @@ export async function createPortable(
     shares: number;
     issuedOn: string;
     replacesCertificateNumber?: string;
+    rightsClassId?: string;
+    holderRoleHolderId?: string;
     nowISO: string;
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  await assertLinks(ctx, args.societyId, args);
   const event: CertificateEvent = {
     certificateNumber: args.certificateNumber,
     holderName: args.holderName,
@@ -101,6 +155,7 @@ export async function createPortable(
   if (!result.ok) {
     throw new Error(`Invalid certificate: ${result.errors.join("; ")}`);
   }
+  assertUniqueNumber(await societyCertificates(ctx, args.societyId), args.certificateNumber);
   return ctx.db.insert("shareCertificates", {
     societyId: args.societyId,
     certificateNumber: args.certificateNumber,
@@ -109,6 +164,8 @@ export async function createPortable(
     shares: args.shares,
     issuedOn: args.issuedOn,
     replacesCertificateNumber: args.replacesCertificateNumber,
+    rightsClassId: args.rightsClassId,
+    holderRoleHolderId: args.holderRoleHolderId,
     createdAtISO: args.nowISO,
   });
 }
@@ -125,10 +182,17 @@ export async function updatePortable(
       issuedOn?: string;
       replacesCertificateNumber?: string;
       cancelledOn?: string;
+      rightsClassId?: string;
+      holderRoleHolderId?: string;
     };
   },
 ) {
-  await requireOwnedRow(ctx, "shareCertificates", id);
+  const existing = await requireOwnedRow(ctx, "shareCertificates", id);
+  const societyId = String(existing.societyId);
+  await assertLinks(ctx, societyId, patch);
+  const result = validateCertificate(toEvent({ ...existing, ...patch }));
+  if (!result.ok) throw new Error(`Invalid certificate: ${result.errors.join("; ")}`);
+  if (patch.certificateNumber !== undefined) assertUniqueNumber(await societyCertificates(ctx, societyId), patch.certificateNumber, id);
   await ctx.db.patch(id, patch);
   return null;
 }

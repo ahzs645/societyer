@@ -61,7 +61,7 @@ async function capTableScenario(ids: Ids, exec: Exec) {
     await exec.transfer({ transferType: "cancellation", status: "posted", rightsClassId: ids.classId, sourceRoleHolderId: ids.alice, quantity: 200, transferDate: "2026-01-05" });
   } catch (error) {
     threw = true;
-    assert.match(String(error), /negative holding/, "invalid cancellation should fail validateLedger");
+    assert.match(String(error), /negative holding|exceeds source balance/, "invalid cancellation should fail validateLedger");
   }
   assert.ok(threw, "invalid cancellation must throw");
   const afterInvalid = await exec.holdings();

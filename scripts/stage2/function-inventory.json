@@ -12629,6 +12629,18 @@
         "optional": true
       },
       {
+        "path": "directorConsentDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "directorConsentResolutionId",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "sourceDocumentIds",
         "table": "documents",
         "array": true,
@@ -18626,6 +18638,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "rightsClassId",
+        "table": "rightsClasses",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "holderRoleHolderId",
+        "table": "roleHolders",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -18633,6 +18657,22 @@
     "key": "convex:shareCertificates:list",
     "surface": "convex",
     "name": "shareCertificates:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/shareCertificates.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:shareCertificates:reconcile",
+    "surface": "convex",
+    "name": "shareCertificates:reconcile",
     "kind": "query",
     "access": "authenticated",
     "source": "convex/shareCertificates.ts",
@@ -18690,6 +18730,18 @@
         "table": "shareCertificates",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "patch.rightsClassId",
+        "table": "rightsClasses",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.holderRoleHolderId",
+        "table": "roleHolders",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -33408,6 +33460,18 @@
         "optional": true
       },
       {
+        "path": "directorConsentDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "directorConsentResolutionId",
+        "table": "writtenResolutions",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "sourceDocumentIds",
         "table": "documents",
         "array": true,
@@ -38524,6 +38588,18 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "rightsClassId",
+        "table": "rightsClasses",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "holderRoleHolderId",
+        "table": "roleHolders",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -38531,6 +38607,22 @@
     "key": "portable:shareCertificates:list",
     "surface": "portable",
     "name": "shareCertificates:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:shareCertificates:reconcile",
+    "surface": "portable",
+    "name": "shareCertificates:reconcile",
     "kind": "query",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
@@ -38588,6 +38680,18 @@
         "table": "shareCertificates",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "patch.rightsClassId",
+        "table": "rightsClasses",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.holderRoleHolderId",
+        "table": "roleHolders",
+        "array": false,
+        "optional": true
       }
     ]
   },

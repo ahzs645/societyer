@@ -115,6 +115,7 @@ async function setupCorporationMvp(options: CorporationMvpOptions = {}): Promise
     transferType: "issuance",
     status: "posted",
     transferDate: "2025-02-11",
+    fullyPaidConfirmedAt: "2025-02-11",
     rightsClassId: shareClassId,
     destinationRoleHolderId: shareholderId,
     quantity: 100,

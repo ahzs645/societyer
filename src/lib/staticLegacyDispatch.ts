@@ -13,7 +13,7 @@ import {
 } from "../../shared/corporationDocumentPackets";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { buildOrgRevenueStatement } from "../../shared/orgRevenueStatement";
-import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { compareLedgerEntries, materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
 import { postIncorporationStepsForOrganization } from "../../shared/postIncorporationSteps";
 import { organizationKind, organizationLabel } from "../../shared/organizationDomain";
@@ -1531,11 +1531,8 @@ function staticUniqueStrings(values: Array<string | undefined>) {
 }
 
 function staticRightsholdingTransferChronologicalSort(left: any, right: any) {
-  const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
-  const rightDate = String(right.transferDate ?? right.createdAtISO ?? right._creationTime ?? "");
-  const dateSort = leftDate.localeCompare(rightDate);
-  if (dateSort !== 0) return dateSort;
-  return Number(left._creationTime ?? 0) - Number(right._creationTime ?? 0);
+  // Date, then the optional same-day sequence, then creation time.
+  return compareLedgerEntries(left, right);
 }
 
 function staticAgentOutput(agent: any, input: string) {

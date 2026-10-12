@@ -208,6 +208,24 @@ export const upsertRightsClass = authorizedMutation("legalOperations:upsertRight
     conditionsToTransfer: v.optional(v.string()),
     conditionsForRemoval: v.optional(v.string()),
     otherProvisions: v.optional(v.string()),
+    // Structured summary of the articles; see shared/equityLedger.ts.
+    parValueCents: v.optional(v.number()),
+    maxAuthorized: v.optional(v.number()),
+    dividendEntitlement: v.optional(v.union(v.literal("discretionary_by_class"), v.literal("fixed_rate"), v.literal("cumulative_fixed"), v.literal("participating"))),
+    dividendRateBps: v.optional(v.number()),
+    redemption: v.optional(v.object({
+      byCompany: v.boolean(),
+      byHolder: v.boolean(),
+      priceCents: v.optional(v.number()),
+      includesDeclaredUnpaid: v.optional(v.boolean()),
+      minNoticeDays: v.optional(v.number()),
+      nonProRataPermitted: v.optional(v.boolean()),
+    })),
+    liquidationRank: v.optional(v.number()),
+    preEmptiveRights: v.optional(v.boolean()),
+    articlesPart: v.optional(v.string()),
+    singularDescription: v.optional(v.string()),
+    pluralDescription: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
@@ -245,6 +263,14 @@ export const upsertRightsholdingTransfer = authorizedMutation("legalOperations:u
     priceToOrganizationCurrency: v.optional(v.string()),
     priceToVendorCents: v.optional(v.number()),
     priceToVendorCurrency: v.optional(v.string()),
+    sequence: v.optional(v.number()),
+    fullyPaidConfirmedAt: v.optional(v.string()),
+    directorConsentDocumentId: v.optional(v.id("documents")),
+    directorConsentResolutionId: v.optional(v.id("writtenResolutions")),
+    redemptionNoticeDate: v.optional(v.string()),
+    redemptionNoticeWaivedOn: v.optional(v.string()),
+    solvencyConfirmedAt: v.optional(v.string()),
+    solvencyBasis: v.optional(v.string()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
@@ -261,6 +287,8 @@ export const upsertRightsholdingTransfer = authorizedMutation("legalOperations:u
     if (args.sourceRoleHolderId) await getOwned(portableCtx, "roleHolders", args.sourceRoleHolderId, args.societyId);
     if (args.destinationRoleHolderId) await getOwned(portableCtx, "roleHolders", args.destinationRoleHolderId, args.societyId);
     for (const documentId of args.sourceDocumentIds ?? []) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    if (args.directorConsentDocumentId) await getOwned(portableCtx, "documents", args.directorConsentDocumentId, args.societyId);
+    if (args.directorConsentResolutionId) await getOwned(portableCtx, "writtenResolutions", args.directorConsentResolutionId, args.societyId);
     return upsertRightsholdingTransferPortable(portableCtx, args);
   },
 });

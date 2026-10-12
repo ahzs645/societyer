@@ -9,18 +9,38 @@
  * the whole thing back (no half-applied cap table). Same handler on Convex.
  */
 
-import { materializeRightsHoldings, validateLedger } from "../equityLedger";
+import {
+  compareLedgerEntries,
+  ledgerPostingIssues,
+  materializeRightsHoldings,
+  validateLedger,
+  validateLedgerWithout,
+} from "../equityLedger";
 import { assertAllowedOption } from "../orgHubOptions";
+import { organizationRuleScope } from "../entityRuleScope";
+import { legalGovernanceProfile } from "../legalGovernanceProfiles";
+import { transferConsentRequired } from "../operativeArticles";
 import { cleanText, cleanList } from "./text";
-import type { PortableMutationCtx } from "../portable/ctx";
+import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
+/** Ledger order: date, then the optional same-day sequence, then creation time. */
 export function transferChronologicalSort(left: any, right: any): number {
-  const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
-  const rightDate = String(right.transferDate ?? right.createdAtISO ?? right._creationTime ?? "");
-  const dateSort = leftDate.localeCompare(rightDate);
-  if (dateSort !== 0) return dateSort;
-  return Number(left._creationTime ?? 0) - Number(right._creationTime ?? 0);
+  return compareLedgerEntries(left, right);
+}
+
+/** Which posting gates apply to an organization's share ledger. */
+export async function ledgerOrganizationContext(ctx: PortableQueryCtx, societyId: string) {
+  const organization = await ctx.db.get(societyId, "societies");
+  return {
+    isCorporation: organizationRuleScope(organization as any).isCorporation,
+    isBcCompany: legalGovernanceProfile(organization as any)?.id === "bc_company",
+    transferConsentRequired: transferConsentRequired(organization as any),
+  };
+}
+
+async function societyClasses(ctx: PortableQueryCtx, societyId: string) {
+  return ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
 }
 
 /** Re-derive rightsHoldings from the transfer ledger. Multi-row write. */
@@ -78,6 +98,14 @@ export interface UpsertRightsholdingTransferArgs {
   priceToOrganizationCurrency?: string;
   priceToVendorCents?: number;
   priceToVendorCurrency?: string;
+  sequence?: number;
+  fullyPaidConfirmedAt?: string;
+  directorConsentDocumentId?: string;
+  directorConsentResolutionId?: string;
+  redemptionNoticeDate?: string;
+  redemptionNoticeWaivedOn?: string;
+  solvencyConfirmedAt?: string;
+  solvencyBasis?: string;
   sourceDocumentIds?: string[];
   sourceExternalIds?: string[];
   notes?: string;
@@ -101,6 +129,11 @@ export async function upsertRightsholdingTransferPortable(
   }
   for (const documentId of args.sourceDocumentIds ?? []) {
     await getOwned(ctx, "documents", documentId, args.societyId);
+  }
+  if (args.directorConsentDocumentId) await getOwned(ctx, "documents", args.directorConsentDocumentId, args.societyId);
+  if (args.directorConsentResolutionId) await getOwned(ctx, "writtenResolutions", args.directorConsentResolutionId, args.societyId);
+  if (args.sequence !== undefined && !(Number.isInteger(args.sequence) && args.sequence >= 0)) {
+    throw new Error("The same-day sequence must be a whole number (0, 1, 2 ...).");
   }
   assertAllowedOption("rightsholdingTransferTypes", args.transferType, "Rights transfer type", false);
   assertAllowedOption("rightsholdingTransferStatuses", args.status, "Rights transfer status");
@@ -126,21 +159,47 @@ export async function upsertRightsholdingTransferPortable(
     priceToOrganizationCurrency: cleanText(args.priceToOrganizationCurrency),
     priceToVendorCents: args.priceToVendorCents,
     priceToVendorCurrency: cleanText(args.priceToVendorCurrency),
+    sequence: args.sequence,
+    fullyPaidConfirmedAt: cleanText(args.fullyPaidConfirmedAt),
+    directorConsentDocumentId: args.directorConsentDocumentId,
+    directorConsentResolutionId: args.directorConsentResolutionId,
+    redemptionNoticeDate: cleanText(args.redemptionNoticeDate),
+    redemptionNoticeWaivedOn: cleanText(args.redemptionNoticeWaivedOn),
+    solvencyConfirmedAt: cleanText(args.solvencyConfirmedAt),
+    solvencyBasis: cleanText(args.solvencyBasis),
     sourceDocumentIds: args.sourceDocumentIds ?? [],
     sourceExternalIds: cleanList(args.sourceExternalIds),
     notes: cleanText(args.notes),
     updatedAtISO: now,
   };
   const existingTransfer = id ? await ctx.db.get(id) : null;
-  const existingTransfers = await ctx.db
-    .query("rightsholdingTransfers")
-    .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-    .collect();
-  const proposedTransfers = existingTransfers
-    .filter((transfer) => !id || String(transfer._id) !== String(id))
-    .concat([{ ...payload, _id: id ?? "proposed", _creationTime: Date.now(), createdAtISO: now } as any])
-    .sort(transferChronologicalSort);
-  validateLedger(proposedTransfers as any);
+  const [existingTransfers, classes, organization] = await Promise.all([
+    ctx.db
+      .query("rightsholdingTransfers")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect(),
+    societyClasses(ctx, args.societyId),
+    ledgerOrganizationContext(ctx, args.societyId),
+  ]);
+  const otherTransfers = existingTransfers.filter((transfer) => !id || String(transfer._id) !== String(id));
+  const proposedRow = {
+    ...payload,
+    _id: id ?? "proposed",
+    _creationTime: existingTransfer?._creationTime ?? Date.now(),
+    createdAtISO: existingTransfer?.createdAtISO ?? now,
+  } as any;
+  const postingIssues = ledgerPostingIssues(proposedRow, {
+    ...organization,
+    rightsClass: classes.find((row) => String(row._id) === String(payload.rightsClassId)) as any,
+    otherTransfers: otherTransfers.slice().sort(transferChronologicalSort) as any,
+  });
+  if (postingIssues.length) throw new Error(postingIssues.join(" "));
+  const proposedTransfers = otherTransfers.concat([proposedRow]).sort(transferChronologicalSort);
+  if (existingTransfer?.status === "posted" && payload.status !== "posted") {
+    // Voiding (or un-posting) a posted row must not orphan the entries after it.
+    validateLedgerWithout(otherTransfers as any, existingTransfer as any, "void", { classes: classes as any });
+  }
+  validateLedger(proposedTransfers as any, { classes: classes as any });
   if (id) {
     await ctx.db.patch(id, payload);
     await syncRightsHoldings(ctx, args.societyId);
@@ -160,6 +219,21 @@ export async function removeRightsholdingTransferPortable(
   { id }: { id: string },
 ): Promise<void> {
   const existing = await requireOwnedRow(ctx, "rightsholdingTransfers", id);
+  if (existing?.status === "posted") {
+    // Re-validate what remains: deleting an issuance must not leave a later
+    // transfer or redemption drawing on shares that no longer exist.
+    const societyId = String(existing.societyId);
+    const [rows, classes] = await Promise.all([
+      ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      societyClasses(ctx, societyId),
+    ]);
+    validateLedgerWithout(
+      rows.filter((row) => String(row._id) !== String(id)) as any,
+      existing as any,
+      "delete",
+      { classes: classes as any },
+    );
+  }
   await ctx.db.delete(id);
   if (existing?.societyId) await syncRightsHoldings(ctx, String(existing.societyId));
 }
