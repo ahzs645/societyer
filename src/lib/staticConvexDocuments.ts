@@ -470,6 +470,7 @@ export function staticStageCorporationDocumentPacket(
         filingKind: args?.filingKind,
         obligationKey: args?.obligationKey,
         ruleId: args?.obligationRuleId,
+        organization: store?.getRow("societies", societyId),
       });
   if (!packet) throw new Error("No corporation document packet matches this obligation.");
   assertPacketCompatible(store?.getRow("societies", societyId), packet);

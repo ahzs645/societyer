@@ -5,6 +5,7 @@ import { corporationPacketDocxBytes } from "../shared/corporationPacketDocx";
 import { renderSections } from "../shared/packetRendering";
 import { buildSocietyRenderContext } from "../shared/societyRenderContext";
 import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
+import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
 
 /**
  * (C) Live-doc-generator wiring: proves grammar/data context binds packet prose
@@ -64,6 +65,62 @@ const plainCtx = Buffer.from(corporationPacketDocxBytes(basePacket, ctx as unkno
 for (const line of basePacket.sections.flatMap((section) => section.body)) {
   const escaped = String(line).replace(/'/g, "&apos;");
   assert.ok(plainNo.includes(escaped) && plainCtx.includes(escaped), "token-free packet prose unchanged by context");
+}
+
+// --- BC company with shareholders: shareholder groups bind ---------------------
+{
+  const company = { name: "Cedar Point Ventures Ltd.", shortName: "the Company", entityType: "corporation__business_", actFormedUnder: "business_corporations_act", jurisdictionCode: "CA-BC" };
+  const people = [
+    { _id: "d1", roleType: "director", fullName: "Jordan Vale", startDate: "2021-01-01" },
+    { _id: "h1", roleType: "shareholder", fullName: "Jordan Vale", startDate: "2021-01-01" },
+    { _id: "h2", roleType: "shareholder", fullName: "Quill Holdings Inc.", startDate: "2021-01-01" },
+    { _id: "h3", roleType: "shareholder", fullName: "Rowan Price", startDate: "2021-01-01" },
+  ];
+  const classes = [{ _id: "v", className: "Common", classType: "share", votesPerShare: 1 }, { _id: "n", className: "Preferred", classType: "share", votesPerShare: 0 }];
+  const ledger = [
+    { transferType: "issuance", status: "posted", transferDate: "2021-01-01", rightsClassId: "v", destinationRoleHolderId: "h1", quantity: 60, sourceDocumentIds: [], sourceExternalIds: [] },
+    { transferType: "issuance", status: "posted", transferDate: "2021-01-01", rightsClassId: "v", destinationRoleHolderId: "h2", quantity: 40, sourceDocumentIds: [], sourceExternalIds: [] },
+    { transferType: "issuance", status: "posted", transferDate: "2021-01-01", rightsClassId: "n", destinationRoleHolderId: "h3", quantity: 10, sourceDocumentIds: [], sourceExternalIds: [] },
+  ];
+  const bcCtx = buildSocietyRenderContext(company, people, "2026-06-25", { transfers: ledger, rightsClasses: classes });
+  assert.equal(bcCtx.org.legislation, "Business Corporations Act (British Columbia)");
+  assert.equal(bcCtx.org.ShortName, "The Company");
+  assert.equal(bcCtx.shareholders.count, 3);
+  assert.equal(bcCtx.votingShareholders.count, 2);
+  assert.equal(bcCtx.members.count, 0, "shareholders are not society members");
+  const render = (key: string) => renderSections(CORPORATION_DOCUMENT_PACKETS.find((p) => p.key === key)!.sections, bcCtx as unknown as Record<string, unknown>).flatMap((s) => s.body).join("\n");
+  const shell = render("all-shareholders-resolution");
+  assert.ok(shell.includes("The undersigned, being all the shareholders of the Company, hereby sign the following resolution"), shell);
+  const voting = render("all-voting-shareholders-resolution");
+  assert.ok(voting.includes("The undersigned, being all the voting shareholders of the Company, hereby sign the following resolution"), voting);
+  assert.ok(voting.includes("as permitted under the Business Corporations Act (British Columbia)."));
+  for (const packet of CORPORATION_DOCUMENT_PACKETS) {
+    const text = renderSections(packet.sections, bcCtx as unknown as Record<string, unknown>).flatMap((s) => s.body).join("\n");
+    assert.ok(!/being\s+of /.test(text), `${packet.key}: no empty body noun ("being  of")`);
+    assert.ok(!text.includes("share(s)"), `${packet.key}: no "share(s)"`);
+  }
+}
+
+// --- Society packets: no regression in the society vocabulary -------------------
+{
+  const societyPeople = [
+    { roleType: "director", fullName: "Avery Chen", gender: "F", endDate: null },
+    { roleType: "director", fullName: "Morgan Patel", gender: "M", endDate: null },
+    { roleType: "director", fullName: "Former Person", gender: "M", startDate: "2019-01-01", endDate: "2024-01-01" },
+    { roleType: "member", fullName: "Sam Lee", gender: "M", endDate: null },
+  ];
+  const socCtx = buildSocietyRenderContext(society, societyPeople, "2026-01-15");
+  assert.equal(socCtx.org.legislation, "Societies Act", "societies keep the Societies Act name");
+  assert.equal(socCtx.dir.count, 2);
+  assert.equal(socCtx.members.count, 1);
+  assert.equal(socCtx.shareholders.count, 0);
+  for (const packet of SOCIETY_DOCUMENT_PACKETS) {
+    const text = renderSections(packet.sections, socCtx as unknown as Record<string, unknown>).flatMap((s) => s.body).join("\n");
+    assert.ok(!/\{[#/a-zA-Z.]/.test(text), `${packet.key}: all society tokens bind`);
+    assert.ok(!/shareholder|Business Corporations Act/i.test(text), `${packet.key}: no corporate wording in a society packet`);
+  }
+  // Backdated society documents read the board as at the date.
+  assert.equal(buildSocietyRenderContext(society, societyPeople, "2023-06-01").dir.count, 3);
 }
 
 console.log("OK packet-grammar");

@@ -63,29 +63,70 @@ export interface ResolvingBody {
   noun: string;
   /** Printed capacity for fallback (role-holder) signers. */
   capacity: string;
+  /** The render-context group (shared/renderContext.ts) holding the body as at the document date. */
+  group: "dir" | "shareholders" | "votingShareholders" | "members" | "officers";
 }
 
 /**
  * Map a packet's `requiredSigners` tags (e.g. "all_voting_shareholders",
  * "all_directors", "officer___president") to the body that adopts the
- * resolution. Most-specific match wins; directors are the default.
+ * resolution. An "all_*" tag names the resolving body and wins over the
+ * individual signers (an entering shareholder or officer signs a consent or
+ * subscription, not the resolution). Otherwise the most specific match wins;
+ * directors are the default.
  */
 export function resolvingBodyFor(requiredSigners: readonly string[]): ResolvingBody {
-  const tags = requiredSigners.map((s) => s.toLowerCase());
+  const lowered = requiredSigners.map((s) => s.toLowerCase());
+  const bodyTag = lowered.find((t) => t.startsWith("all_"));
+  const tags = bodyTag ? [bodyTag] : lowered;
   const has = (needle: string) => tags.some((t) => t.includes(needle));
   if (has("voting_shareholder") || has("voting shareholder")) {
-    return { roleTypes: ["shareholder"], noun: "voting shareholder", capacity: "Voting Shareholder" };
+    return { roleTypes: ["shareholder"], noun: "voting shareholder", capacity: "Voting Shareholder", group: "votingShareholders" };
   }
   if (has("shareholder")) {
-    return { roleTypes: ["shareholder"], noun: "shareholder", capacity: "Shareholder" };
+    return { roleTypes: ["shareholder"], noun: "shareholder", capacity: "Shareholder", group: "shareholders" };
   }
   if (has("member")) {
-    return { roleTypes: ["member"], noun: "member", capacity: "Member" };
+    return { roleTypes: ["member"], noun: "member", capacity: "Member", group: "members" };
   }
   if (has("officer")) {
-    return { roleTypes: ["officer"], noun: "officer", capacity: "Officer" };
+    return { roleTypes: ["officer"], noun: "officer", capacity: "Officer", group: "officers" };
   }
-  return { roleTypes: ["director"], noun: "director", capacity: "Director" };
+  return { roleTypes: ["director"], noun: "director", capacity: "Director", group: "dir" };
+}
+
+/**
+ * Uppercase instrument title with the possessive chosen by count (YCN
+ * `UPPER("Director" & IF(n>1,"s'","'s") & " Resolution")`):
+ * "CONSENT DIRECTOR'S RESOLUTION" / "CONSENT DIRECTORS' RESOLUTION".
+ */
+export function instrumentTitle(noun: string, count: number, prefix = "CONSENT"): string {
+  const possessive = count === 1 ? "'s" : "s'";
+  return `${prefix} ${noun}${possessive} resolution`.trim().toUpperCase();
+}
+
+/**
+ * Signature lines for a resolving body: the body's members as at the document
+ * date, enriched from the entity signer roster (YCN ENT_PEOPLE) where a roster
+ * row names the same person or, for a corporate holder, names that corporation
+ * as `corpSign` (rendered as the corporation, "By:" and the signatory).
+ */
+export function bodySigners(
+  members: ReadonlyArray<{ name: string; isOrganization?: boolean }>,
+  body: Pick<ResolvingBody, "capacity">,
+  roster: ReadonlyArray<{ name?: string; corpSign?: string | null; signOrder?: number }> = [],
+): SignerLine[] {
+  const norm = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  const lines = members.map((member, index) => {
+    const corporate = roster.find((row) => row.corpSign && norm(row.corpSign) === norm(member.name));
+    const personal = roster.find((row) => !row.corpSign && norm(row.name) === norm(member.name));
+    const order = corporate?.signOrder ?? personal?.signOrder ?? Number.POSITIVE_INFINITY;
+    const line: SignerLine = corporate
+      ? { name: String(corporate.name ?? ""), corpSign: String(corporate.corpSign) }
+      : { name: member.name, capacity: body.capacity };
+    return { line, order, index };
+  });
+  return lines.sort((a, b) => a.order - b.order || a.index - b.index).map((entry) => entry.line);
 }
 
 /**

@@ -15,6 +15,8 @@ export interface AnnualResolutionInput {
   annualBusinessYear?: number;
   annualReferenceDate?: string | null;
   directors?: Actor[];
+  /** Opt-in general ratification clause (YCN annual item 4); off by default. */
+  includeRatification?: boolean | null;
 }
 export interface AnnualResolutionContext {
   profileId: string;
@@ -28,6 +30,15 @@ export interface AnnualResolutionContext {
   fiscalYearEnd: string;
   hasDirectors: boolean;
   directorSlate: string;
+  /** The slate as a list, for an indented list in the instrument. */
+  directorSlateList: Array<{ name: string }>;
+  /** Annual-business year, or a bracketed prompt. */
+  year: string;
+  hasRatification: boolean;
+  ratificationClause: string;
+  /** BC only, with a valid annual reference date (s. 182(2)(b), (3), (5)). */
+  hasDeemedMeeting: boolean;
+  deemedMeetingClause: string;
   financialClause: string;
   fiscalCalendarClause: string;
   auditorClause: string;
@@ -86,18 +97,27 @@ export function buildAnnualResolutionContext(input: AnnualResolutionInput): Annu
       : ontario
         ? `This draft uses the unanimous written annual-business route under OBCA s. 104(1)(a)–(b) for ${year}. A non-offering corporation’s ordinary-only majority route under s. 104(1)(c) requires a separate eligible-share calculation, any higher articles/USA threshold and ten-business-day notices. It cannot supply an all-shareholder auditor waiver.`
         : 'Select a reviewed corporate governing Act and its annual-business process before preparing operative resolutions.';
+  const includeRatification = Boolean(input.includeRatification) && supported;
+  const ratificationClause = includeRatification
+    ? `Optional proposed shareholder resolution: all lawful contracts, acts, proceedings, appointments and payments made by the directors in the preceding 12 months, and previously disclosed to the shareholders, are approved, ratified and confirmed. A general ratification does not replace the specific disclosure and approval of a director's conflicting interest (${bc ? 'BC BCA ss. 147–153' : federal ? 'CBCA s. 120' : ontario ? 'OBCA s. 132' : 'the governing Act'}).`
+    : '';
+  const hasDeemedMeeting = bc && supported && Boolean(parseComplianceDate(input.annualReferenceDate));
+  const deemedMeetingClause = hasDeemedMeeting
+    ? `If every shareholder entitled to vote at the annual general meeting consents to all of the business required to be transacted at it (BC BCA s. 182(2)(b)), ${reference} is selected as the annual reference date for ${year} (s. 182(3)) and the company need not hold that meeting (s. 182(5)). Where the articles so provide (Table 1, Article 7.2), the meeting is deemed to have been held on the date of the unanimous resolution; record that date when the last shareholder signs.`
+    : '';
   const sourceText = bc ? 'BC BCA ss. 182, 185, 198–200, 203–204 and 51.' : federal ? 'CBCA ss. 133, 142, 155, 158–159, 162–163 and 263.' : ontario ? 'OBCA ss. 94, 104, 148–149, 154, 159; Ontario CIA s. 3.1 and O. Reg. 400/21.' : 'Governing Act unresolved.';
   return {
     profileId: id, profileName: supported ? profile!.name : 'Corporate Act requires review', profileReviewedOn: supported ? profile!.reviewedOn : undefined, supported, preparationOnly: true,
     waivePrepFinancials: waiveFinancials, waiveAuditor, hasFiscalYearEnd: fiscalYearEnd.length > 0, fiscalYearEnd,
-    hasDirectors: names.length > 0, directorSlate: names.join('; '), financialClause,
+    hasDirectors: names.length > 0, directorSlate: names.join('; '), directorSlateList: names.map(name => ({ name })), financialClause,
+    year, hasRatification: includeRatification, ratificationClause, hasDeemedMeeting, deemedMeetingClause,
     fiscalCalendarClause: `Recorded fiscal-year-end preference: ${fiscalYearEnd || '[insert fiscal calendar]'}. Any change needs the appropriate corporate and tax authorization; this shareholder draft does not automatically change the taxation year.`,
     auditorClause,
     directorClause: `Proposed director slate: ${names.length ? names.join('; ') : '[insert nominees]'}. Record the actual election/re-election, each term, eligibility and consent, with any articles or separate-class requirements. Do not treat the current roster as proof of renewed appointment.`,
     annualBusinessClause,
     filingClause: supported ? `${profile!.annualReturn.label}: ${profile!.annualReturn.anchor === 'fiscal_year_end' ? 'normally within six months after the actual taxation year-end' : profile!.annualReturn.months ? `within ${profile!.annualReturn.months} calendar months after the recognition anniversary` : `within ${profile!.annualReturn.days} days after the recognition anniversary`}. Retain the covered period and accepted filing receipt separately; signing annual resolutions does not file the return.` : 'Confirm the registry filing obligation after resolving the governing Act.',
     reviewNotes: notes.map(message => ({ message })),
-    sourceIds: supported ? [...new Set([...profile!.annualMeeting.sourceIds, ...profile!.resolutions.sourceIds, ...profile!.annualReturn.sourceIds, ...profile!.directors.sourceIds, ...profile!.directors.consentSourceIds, ...['AUDITOR-WAIVER', 'AUDITOR-APPOINTMENT', 'ANNUAL-FINANCIALS'].map(topic => `${bc ? 'BC-BCA' : federal ? 'CBCA' : 'OBCA'}-${topic}`)])] : [],
+    sourceIds: supported ? [...new Set([...profile!.annualMeeting.sourceIds, ...profile!.resolutions.sourceIds, ...profile!.annualReturn.sourceIds, ...profile!.directors.sourceIds, ...profile!.directors.consentSourceIds, ...['AUDITOR-WAIVER', 'AUDITOR-APPOINTMENT', 'ANNUAL-FINANCIALS', ...(includeRatification ? ['CONFLICTS'] : [])].map(topic => `${bc ? 'BC-BCA' : federal ? 'CBCA' : 'OBCA'}-${topic}`)])] : [],
     sourceText,
   };
 }
