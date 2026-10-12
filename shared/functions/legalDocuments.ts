@@ -50,7 +50,7 @@ import { buildSubscriptionAgreementBlocks } from "../subscriptionAgreement";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../societyDocumentPackets";
 import { isCorporation } from "../organizationDomain";
 import { assertPacketCompatible, packetDataWithProvenance } from "../templateProvenance";
-import { materializeRightsHoldings } from "../equityLedger";
+import { compareLedgerEntries, materializeRightsHoldings } from "../equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../shareSplit";
 import { buildSocietyRenderContext } from "../societyRenderContext";
 import { resolveLocale } from "../locale";
@@ -1346,9 +1346,6 @@ function cleanDocumentIds(values: Array<string | undefined>) {
 }
 
 function rightsholdingTransferChronologicalSort(left: any, right: any) {
-  const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
-  const rightDate = String(right.transferDate ?? right.createdAtISO ?? right._creationTime ?? "");
-  const dateSort = leftDate.localeCompare(rightDate);
-  if (dateSort !== 0) return dateSort;
-  return Number(left._creationTime ?? 0) - Number(right._creationTime ?? 0);
+  // Date, then the optional same-day sequence, then creation time.
+  return compareLedgerEntries(left, right);
 }

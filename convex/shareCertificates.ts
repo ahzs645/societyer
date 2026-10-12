@@ -5,6 +5,7 @@ import {
   listPortable,
   registerPortable,
   chainPortable,
+  reconcilePortable,
   createPortable,
   updatePortable,
   removePortable,
@@ -40,6 +41,13 @@ export const chain = authorizedQuery("shareCertificates:chain", query)({
   handler: async (ctx, args) => chainPortable(await toPortableQueryCtx(ctx), args),
 });
 
+/** Certificates against the share ledger as of an ISO date (holdings and conservation). */
+export const reconcile = authorizedQuery("shareCertificates:reconcile", query)({
+  args: { societyId: v.id("societies"), asOf: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => reconcilePortable(await toPortableQueryCtx(ctx), args),
+});
+
 export const create = authorizedMutation("shareCertificates:create", mutation)({
   args: {
     societyId: v.id("societies"),
@@ -49,6 +57,8 @@ export const create = authorizedMutation("shareCertificates:create", mutation)({
     shares: v.number(),
     issuedOn: v.string(),
     replacesCertificateNumber: v.optional(v.string()),
+    rightsClassId: v.optional(v.id("rightsClasses")),
+    holderRoleHolderId: v.optional(v.id("roleHolders")),
     nowISO: v.string(),
   },
   returns: v.any(),
@@ -66,6 +76,8 @@ export const update = authorizedMutation("shareCertificates:update", mutation)({
       issuedOn: v.optional(v.string()),
       replacesCertificateNumber: v.optional(v.string()),
       cancelledOn: v.optional(v.string()),
+      rightsClassId: v.optional(v.id("rightsClasses")),
+      holderRoleHolderId: v.optional(v.id("roleHolders")),
     }),
   },
   returns: v.any(),

@@ -69,6 +69,7 @@ const issuanceId = await client.mutation("legalOperations:upsertRightsholdingTra
   transferType: "issuance",
   status: "posted",
   transferDate: "2025-03-21",
+  fullyPaidConfirmedAt: "2025-03-21",
   rightsClassId: commonSharesId,
   destinationRoleHolderId: shareholderId,
   quantity: 100,

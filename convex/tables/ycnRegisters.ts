@@ -163,6 +163,9 @@ export const corporationRegisterTables = {
     issuedOn: v.string(),
     replacesCertificateNumber: v.optional(v.string()),
     cancelledOn: v.optional(v.string()),
+    // Optional links used to reconcile certificates with the share ledger.
+    rightsClassId: v.optional(v.id("rightsClasses")),
+    holderRoleHolderId: v.optional(v.id("roleHolders")),
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])

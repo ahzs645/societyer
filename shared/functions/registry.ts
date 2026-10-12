@@ -483,6 +483,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "shareCertificates:list", handler: shareCertificatesFns.listPortable }),
   definePortableQuery({ name: "shareCertificates:register", handler: shareCertificatesFns.registerPortable }),
   definePortableQuery({ name: "shareCertificates:chain", handler: shareCertificatesFns.chainPortable }),
+  definePortableQuery({ name: "shareCertificates:reconcile", handler: shareCertificatesFns.reconcilePortable }),
   definePortableMutation({ name: "shareCertificates:create", handler: shareCertificatesFns.createPortable }),
   definePortableMutation({ name: "shareCertificates:update", handler: shareCertificatesFns.updatePortable }),
   definePortableMutation({ name: "shareCertificates:remove", handler: shareCertificatesFns.removePortable }),

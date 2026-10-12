@@ -18,9 +18,20 @@ type Row = Record<string, any>;
 export type ShareholderClassVotes = {
   rightsClassId: string;
   quantity: number;
+  /** Votes per share counted in this vote (1 in a separate class vote). */
   votesPerShare: number;
   votes: number;
+  /** Set when the class votes separately: one vote per share, whatever the class's general voting rights. */
+  basis?: ShareholderVoteBasis;
 };
+
+/**
+ * `general`: each class's votes per share from the articles (an ordinary poll).
+ * `class_separate_resolution`: a separate vote of the selected classes, where
+ * every share of those classes carries one vote, including shares that do not
+ * otherwise vote (for a BC company, BCA s. 61 and s. 173(9)).
+ */
+export type ShareholderVoteBasis = "general" | "class_separate_resolution";
 
 export type ShareholderElector = {
   holderKey: string;
@@ -37,9 +48,14 @@ export type ShareholderElectorate = {
   holders: ShareholderElector[];
   votingHolders: ShareholderElector[];
   totalVotes: number;
+  /** How votes per share were counted. */
+  voteBasis: ShareholderVoteBasis;
   issues: string[];
   complete: boolean;
 };
+
+/** Votes per share counted in a separate class vote: every share of a selected class carries one vote. */
+export const CLASS_SEPARATE_RESOLUTION_VOTES_PER_SHARE = 1;
 
 function nonempty(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -79,9 +95,14 @@ export function buildShareholderElectorate(input: {
   recordDateISO: string;
   /** Date/time at which the caller reconstructed or verified these positions. */
   holdingsAsOfISO: string;
-  /** A reviewed class vote uses only these classes; omit for an ordinary poll. */
+  /**
+   * A reviewed separate class vote uses only these classes, and every share of
+   * them carries one vote (basis `class_separate_resolution`), even where the
+   * class does not otherwise vote. Omit for an ordinary poll.
+   */
   classIds?: string[];
 }): ShareholderElectorate {
+  const voteBasis: ShareholderVoteBasis = input.classIds ? "class_separate_resolution" : "general";
   const issues = new Set<string>();
   if (!validElectorateDate(input.recordDateISO)) issues.add("A valid reviewed record date is required.");
   if (!validElectorateDate(input.holdingsAsOfISO) || input.holdingsAsOfISO !== input.recordDateISO) {
@@ -106,7 +127,9 @@ export function buildShareholderElectorate(input: {
     const cls = byClass.get(classId);
     if (!cls) { issues.add(`Share class ${classId || "(missing)"} is missing from the register.`); continue; }
     if (["proposed", "needs_review"].includes(String(cls.status))) issues.add(`Confirm the issued rights of share class ${cls.className ?? classId}.`);
-    const votesPerShare = explicitVotesPerShare(cls);
+    // In a separate class vote the class's general voting rights do not
+    // matter: non-voting shares vote on their own class's rights.
+    const votesPerShare = voteBasis === "class_separate_resolution" ? CLASS_SEPARATE_RESOLUTION_VOTES_PER_SHARE : explicitVotesPerShare(cls);
     if (votesPerShare === undefined) {
       issues.add(`Record the votes per share for ${cls.className ?? classId}; its voting rights are not unambiguous.`);
       continue;
@@ -137,7 +160,7 @@ export function buildShareholderElectorate(input: {
     elector.totalVotes += votes;
     const existingClass = elector.classVotes.find((row) => row.rightsClassId === classId);
     if (existingClass) { existingClass.quantity += quantity; existingClass.votes += votes; }
-    else elector.classVotes.push({ rightsClassId: classId, quantity, votesPerShare, votes });
+    else elector.classVotes.push({ rightsClassId: classId, quantity, votesPerShare, votes, ...(voteBasis === "class_separate_resolution" ? { basis: voteBasis } : {}) });
     holders.set(holderKey, elector);
   }
   const allHolders = [...holders.values()].sort((a, b) => a.fullName.localeCompare(b.fullName) || a.holderKey.localeCompare(b.holderKey));
@@ -146,7 +169,22 @@ export function buildShareholderElectorate(input: {
   if (!allHolders.length) issues.add("The reviewed share register contains no identified shareholders.");
   const totalVotes = votingHolders.reduce((sum, row) => sum + row.totalVotes, 0);
   if (!Number.isFinite(totalVotes)) issues.add("The total voting weight is outside the supported numeric range.");
-  return { recordDateISO: input.recordDateISO, holders: allHolders, votingHolders, totalVotes, issues: [...issues], complete: issues.size === 0 };
+  return { recordDateISO: input.recordDateISO, holders: allHolders, votingHolders, totalVotes, voteBasis, issues: [...issues], complete: issues.size === 0 };
+}
+
+/**
+ * Explanation shown with a separate class vote. BC citations only for a BC
+ * company; other corporations get the rule without a BC citation and a
+ * prompt to confirm it under their own Act.
+ */
+export function classSeparateResolutionNote(options: { isBcCompany: boolean; classCount: number }): string {
+  const rule = options.isBcCompany
+    ? "Separate class vote: every share of the selected classes counts as one vote, including shares that do not otherwise vote. A change that prejudices or interferes with a class's rights needs that class's consent by special separate resolution (Business Corporations Act s. 61), and shares given a vote by the Act carry at least one vote per share (s. 173(9)). Every share of a class carries the same rights (s. 59(4)), so within one class one vote per share gives the same result as the class's own per-share votes. A special separate resolution needs notice to every holder of the class and the majority the articles set (between 2/3 and 3/4 of the votes cast), otherwise 2/3 (3/4 for a pre-existing company under the Pre-existing Company Provisions), or the written consent of every holder of the class (s. 1, \"special separate resolution\")."
+    : "Separate class vote: every share of the selected classes counts as one vote, including shares that do not otherwise vote. Confirm the class-vote rule, majority and any articles provision on votes per share under the governing Act before relying on the result.";
+  const multiple = options.classCount > 1
+    ? " Each class consents separately: tally each class's votes on its own, using the per-class totals, rather than relying on the combined total."
+    : "";
+  return rule + multiple;
 }
 
 export type RecordDatePurpose = "meeting" | "writtenResolution";

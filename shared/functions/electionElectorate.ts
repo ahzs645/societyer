@@ -1,5 +1,6 @@
 import type { PortableQueryCtx } from "../portable/ctx";
-import { buildShareholderElectorate, recordDateLimitFor, recordDateWindow, validElectorateDate, type RecordDatePurpose, type RecordDateSource } from "../shareholderElectorate";
+import { buildShareholderElectorate, classSeparateResolutionNote, recordDateLimitFor, recordDateWindow, validElectorateDate, type RecordDatePurpose, type RecordDateSource } from "../shareholderElectorate";
+import { legalGovernanceProfile } from "../legalGovernanceProfiles";
 import { materializeRightsHoldings } from "../equityLedger";
 import { meetingCalendarDate } from "../meetingDates";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
@@ -86,10 +87,18 @@ export async function corporateElectionPreview(ctx: PortableQueryCtx, societyId:
     holdings = materializeRightsHoldings(posted.filter((row) => String(row.transferDate).slice(0, 10) <= recordDateISO) as any) as any;
   }
   const electorate = buildShareholderElectorate({ classes, holdings, roleHolders, recordDateISO, holdingsAsOfISO: recordDateISO, classIds: review?.classIds });
-  return { ...electorate, issues: [...issues, ...electorate.issues], reviewNotes, complete: issues.length === 0 && electorate.complete,
+  // A separate class vote: one vote per share of each selected class, with per-class totals,
+  // because each class consents on its own.
+  const classTotals = review?.classIds ? review.classIds.map((classId) => {
+    const entries = electorate.holders.flatMap((holder) => holder.classVotes.filter((entry) => entry.rightsClassId === classId));
+    return { rightsClassId: classId, className: String(classes.find((row) => String(row._id) === classId)?.className ?? classId),
+      holders: entries.length, shares: entries.reduce((sum, entry) => sum + entry.quantity, 0), votes: entries.reduce((sum, entry) => sum + entry.votes, 0) };
+  }) : undefined;
+  if (review?.classIds?.length) reviewNotes.push(classSeparateResolutionNote({ isBcCompany: legalGovernanceProfile(organization as any)?.id === "bc_company", classCount: review.classIds.length }));
+  return { ...electorate, classTotals, issues: [...issues, ...electorate.issues], reviewNotes, complete: issues.length === 0 && electorate.complete,
     // A record date of today uses the live register when the snapshot is taken, not the end of the day.
     registerBasis: recordDateISO === today ? "live_at_snapshot" as const : "reconstructed_end_of_day" as const,
-    classes: classes.map((row) => ({ _id: row._id, className: row.className, votesPerShare: row.votesPerShare, votingRights: row.votingRights })) };
+    classes: classes.map((row) => ({ _id: row._id, className: row.className, classType: row.classType, votesPerShare: row.votesPerShare, votingRights: row.votingRights })) };
 }
 
 export async function validateCorporateElectionReview(ctx: PortableQueryCtx, societyId: string, review: CorporateElectionReview, reference?: RecordDateReference) {

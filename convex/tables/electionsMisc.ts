@@ -298,7 +298,8 @@ export const electionsMiscTables = {
     holderKey: v.optional(v.string()),
     roleHolderId: v.optional(v.id("roleHolders")),
     voteWeight: v.optional(v.number()),
-    classVotes: v.optional(v.array(v.object({ rightsClassId: v.id("rightsClasses"), quantity: v.number(), votesPerShare: v.number(), votes: v.number() }))),
+    // basis "class_separate_resolution": a separate class vote counting one vote per share.
+    classVotes: v.optional(v.array(v.object({ rightsClassId: v.id("rightsClasses"), quantity: v.number(), votesPerShare: v.number(), votes: v.number(), basis: v.optional(v.string()) }))),
     userId: v.optional(v.id("users")),
     email: v.optional(v.string()),
     fullName: v.string(),
