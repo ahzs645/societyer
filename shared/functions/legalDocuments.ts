@@ -880,9 +880,18 @@ async function createPacketRunArtifacts(ctx: any, args: {
   const body = resolvingBodyFor(args.packet.requiredSigners ?? []);
   // Default signer placeholders: the resolving body's members as at the date.
   const bodyRows = renderCtx ? bodyRowsAsOf(roleHolders, asOf, { transfers, rightsClasses })[groupRowsKey(body.group)] : [];
+  // A consent to act is signed by the consenting director alone: default to the
+  // directors whose appointment starts on the document date, never the whole board.
+  const enteringDirectorIds = args.packet.key === "director-consent-to-act"
+    ? roleHolders
+      .filter((row: any) => row.roleType === "director" && String(row.startDate ?? "").slice(0, 10) === String(asOf).slice(0, 10))
+      .map((row: any) => row._id)
+    : undefined;
   const signerRoleHolderIds = args.packet.preparationOnly || !args.packet.signatureRequired ? [] : args.signerRoleHolderIds?.length
     ? args.signerRoleHolderIds
-    : bodyRows.length
+    : enteringDirectorIds
+      ? enteringDirectorIds
+      : bodyRows.length
       ? bodyRows.map((row: any) => row._id)
       : body.group === "dir" ? await defaultPacketSignerRoleHolderIds(ctx, args.societyId) : [];
   // Compute the execution/signature block (adoption clause + signature page) so

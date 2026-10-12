@@ -405,6 +405,15 @@ const regs = { transfers, classes, roleHolders, certificates };
   assert.deepEqual(removalDoc.signersRequiredRoleHolderIds, [holderA], "signer placeholders are the voting shareholders");
   const shell = await docText("all-shareholders-resolution", "2026-06-25");
   assert.ok(shell.xml.includes("being all the shareholders of Harbour Pine Holdings Ltd., hereby sign"), "shareholder shell grammar");
+  // A consent to act is signed by the director who consents, not the whole board.
+  const entering = await up({ roleType: "director", fullName: "Jordan Pike", startDate: "2026-07-01" });
+  const signersFor = async (effectiveDate: string) => {
+    const generated = await client.mutation("legalOperations:generateDocumentFromCatalog", { societyId, packetKey: "director-consent-to-act", effectiveDate });
+    const row = (await client.query("legalOperations:templateEngine", { societyId })).generatedDocuments.find((d: any) => d._id === generated.generatedDocumentId);
+    return row.signersRequiredRoleHolderIds;
+  };
+  assert.deepEqual(await signersFor("2026-07-01"), [entering], "only the entering director signs the consent");
+  assert.deepEqual(await signersFor("2026-08-01"), [], "no entering director: left for the user to choose, never every director");
 }
 
 console.log("OK packet-instruments");
