@@ -132,8 +132,9 @@
   }
 }
 @media (pointer: coarse) {
+  // A taller hit area without pushing the codes out of line.
   .coa-row__toggle {
-    width: 40px;
+    width: 32px;
     height: 40px;
   }
 }
