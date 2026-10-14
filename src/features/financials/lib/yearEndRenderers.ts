@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../../lib/html";
+import { formatMoney } from "../../../lib/money";
 import {
   computeStatementTotals,
   type ProgramStatement,
@@ -13,15 +14,10 @@ import {
 
 type SocietyLike = { name?: string } | null | undefined;
 
-// Always two decimals so columns line up cleanly in the exported statement.
-const MONEY = new Intl.NumberFormat("en-CA", {
-  style: "currency",
-  currency: "CAD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+// Always two decimals so columns line up cleanly in the exported statement;
+// negatives use accounting parentheses like the in-app statements.
 function fmtMoney(cents?: number): string {
-  return MONEY.format((cents ?? 0) / 100);
+  return formatMoney(cents ?? 0, { negativeStyle: "parentheses" });
 }
 
 type CellOpts = { bold?: boolean; rule?: "top" | "header"; width?: string };
