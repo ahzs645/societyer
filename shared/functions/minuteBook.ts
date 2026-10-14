@@ -221,6 +221,8 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     agendas,
     agendaItems,
     recordsLocations,
+    // Corporations hold an annual meeting of shareholders, not an AGM.
+    corporation: isCorporation(societyRow as LegalEntityLike | null),
   };
 
   return {
@@ -411,7 +413,7 @@ async function collectBinderDocumentPreviews(ctx: PortableQueryCtx, societyId: a
   };
 }
 
-function buildRecordBundles(data: Record<string, any[]>) {
+function buildRecordBundles(data: Record<string, any>) {
   const meetings = data.meetings ?? [];
   const minutes = data.minutes ?? [];
   const filings = data.filings ?? [];
@@ -564,7 +566,9 @@ function buildRecordBundles(data: Record<string, any[]>) {
           ? gap("minutes_source_gap", "No minutes source evidence", "info", "Attach the imported minutes document or source evidence.")
           : undefined,
         materials.length === 0 ? gap("materials_gap", "No meeting materials linked", "info", "Attach agenda packets, reports, or board materials when available.") : undefined,
-        isAgm && !agmRun ? gap("agm_workflow_gap", "No AGM workflow run", "info", "AGM notice, financials, elections, minutes approval, and annual report can be tracked together.") : undefined,
+        isAgm && !agmRun ? (data.corporation
+          ? gap("agm_workflow_gap", "No annual meeting workflow run", "info", "Notice, financial statements, the election of directors and minutes approval can be tracked together.")
+          : gap("agm_workflow_gap", "No AGM workflow run", "info", "AGM notice, financials, elections, minutes approval, and annual report can be tracked together.")) : undefined,
       ]),
     }));
   }
@@ -863,7 +867,8 @@ function bundle(value: any) {
 function humanizeLabel(value?: string | null) {
   const raw = String(value ?? "");
   if (!raw || raw.includes(" ")) return raw;
-  const spaced = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  // "BCCompanyAnnualReport" reads "BC Company Annual Report": an acronym ends before a capitalised word.
+  const spaced = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
