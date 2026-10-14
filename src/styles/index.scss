@@ -118,5 +118,8 @@
 // People & Work pages: release QA fixes (dashboard, people, tasks, goals).
 @use "people-work";
 
+// Release QA: compliance, policies, automation, assets and administration pages.
+@use "qa-compliance";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

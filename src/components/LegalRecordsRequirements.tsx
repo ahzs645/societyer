@@ -1,6 +1,7 @@
 import { legalGovernanceProfile, type GovernanceOrganization } from "../../shared/legalGovernanceProfiles";
 import { CitationBadge } from "./CitationTooltip";
 import { Badge } from "./ui";
+import { formatDueDate } from "../lib/format";
 
 /** Legal inventory, separate from document completeness and workspace access. */
 export function LegalRecordsRequirements({ organization, inspection = false }: { organization: GovernanceOrganization; inspection?: boolean }) {
@@ -16,7 +17,7 @@ export function LegalRecordsRequirements({ organization, inspection = false }: {
         {record.caveat && <p>{record.caveat}</p>}
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{record.sourceIds.map((id) => <CitationBadge key={id} citationId={id} />)}</div>
       </details>)}
-      <p className="muted">Source review: {profile.reviewedOn}. Statutory access rights are assessed separately from workspace permissions.</p>
+      <p className="muted">Source review: {formatDueDate(profile.reviewedOn)}. Statutory access rights are assessed separately from workspace permissions.</p>
     </div>
   </section>;
 }

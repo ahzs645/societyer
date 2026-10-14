@@ -1498,7 +1498,18 @@ export function Layout() {
               <input
                 type="text"
                 value={navFilter}
-                onChange={(event) => setNavFilter(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setNavFilter(value);
+                  // The filter sits below Favorites; lift it (and the matches
+                  // under it) to the top of the scrolling nav while typing.
+                  const box = event.currentTarget.parentElement;
+                  const nav = box?.closest<HTMLElement>(".sidebar__nav");
+                  if (value && box && nav) {
+                    const offset = box.getBoundingClientRect().top - nav.getBoundingClientRect().top - 36;
+                    if (offset > 0) nav.scrollBy({ top: offset });
+                  }
+                }}
                 placeholder={t("sidebar.filterNav", "Filter navigation…")}
                 aria-label={t("sidebar.filterNav", "Filter navigation…")}
               />

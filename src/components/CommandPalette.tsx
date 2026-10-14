@@ -58,6 +58,7 @@ import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
 import { ASK_FILTER_COMMAND_PREFIX, getAskFilterTarget } from "../lib/nlFilter/bridge";
 import { useStaticCommands } from "../lib/useStaticCommands";
+import { formatDueDate } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
@@ -205,6 +206,23 @@ const CATEGORY_ORDER: CommandCategory[] = [
 ];
 
 const ASK_QUERY_SUFFIX = ":query";
+/**
+ * "Filter this table by checked out", "filter by overdue", "show me unpaid":
+ * the Ask row already names the table, so the lead-in is dropped before the
+ * text is parsed and echoed back.
+ */
+const ASK_LEAD_IN = /^(?:please\s+)?(?:filter|show(?:\s+me)?|find)\s+(?:(?:this|the)\s+(?:table|list|view)\s+)?(?:(?:by|for|where|with)\s+)?/i;
+function stripAskLeadIn(text: string): string {
+  const stripped = text.replace(ASK_LEAD_IN, "").trim();
+  return stripped || text.trim();
+}
+/** Search hits carry raw status enums and ISO days; show them as people read them. */
+function humanizeSearchHint(text: string): string {
+  return text
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, (day) => formatDueDate(day))
+    .replace(/\b([A-Z][a-z]+)([A-Z][a-z]+)\b/g, (_match, head: string, tail: string) => `${head} ${tail.toLowerCase()}`)
+    .replace(/\bTodo\b/g, "To do");
+}
 const ENABLE_METADATA_COMMANDS = import.meta.env.VITE_ENABLE_METADATA_COMMANDS === "true";
 const RECENTS_KEY = "societyer.kbar.recents";
 const RECENTS_MAX = 5;
@@ -462,10 +480,16 @@ function writeStringArray(key: string, value: string[]) {
   }
 }
 
-export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
+export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
+  initiallyOpen?: boolean;
+  /** Text typed into the loading placeholder before this chunk arrived. */
+  initialQuery?: string;
+}) {
   const [open, setOpen] = useState(initiallyOpen);
   const dialogRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".kbar__input");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initiallyOpen ? initialQuery : "");
+  // Consumed by the first open only; later opens start empty.
+  const pendingQueryRef = useRef(initiallyOpen ? initialQuery : "");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
   const [metadataCommands, setMetadataCommands] = useState<any[]>([]);
@@ -578,7 +602,8 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
 
   useEffect(() => {
     if (open) {
-      setQ("");
+      setQ(pendingQueryRef.current);
+      pendingQueryRef.current = "";
       setActive(0);
       setMetadataCommands([]);
       setRecents(readRecents());
@@ -681,6 +706,7 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
 
     // Cross-entity search hits come pre-matched by the server, so they bypass
     // the local scoreMatch and lead the list as their own group while searching.
+    const multipleOrganizations = (societies?.length ?? 0) > 1;
     const crossEntityItems: CommandItem[] = (crossEntityResults ?? [])
       .filter((r) => {
         // Hits in a disabled module stay hidden, like that module's navigation.
@@ -693,10 +719,11 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
         const kind = SEARCH_KIND_PRESENTATION[r.kind] ?? { label: "Record", icon: CalendarClock };
         return {
           id: `search:${r.kind}:${r.id}`,
-          label: r.societyName ? `${r.title} · ${r.societyName}` : r.title,
+          // The organization name only tells hits apart when there is more than one.
+          label: r.societyName && multipleOrganizations ? `${r.title} · ${r.societyName}` : r.title,
           icon: kind.icon,
           category: "Across entities" as const,
-          hint: [kind.label, r.subtitle].filter(Boolean).join(" · "),
+          hint: humanizeSearchHint([kind.label, r.subtitle].filter(Boolean).join(" · ")),
           run: () => {
             if (r.societyId) setStoredSocietyId(r.societyId as any);
             navigate(r.to);
@@ -724,7 +751,7 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
         .flatMap((command) => {
           const target = getAskFilterTarget(command.id);
           if (!target) return [];
-          const text = q.trim();
+          const text = stripAskLeadIn(q);
           const status = target.preview(text);
           return [{
             item: {

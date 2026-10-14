@@ -1,18 +1,69 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePermissions } from "../hooks/usePermissions";
 import { OPEN_AI_ASSISTANT_EVENT } from "../features/ai/aiAssistantEvents";
 
-const CommandPalette = lazy(() => import("./CommandPalette").then((module) => ({ default: module.CommandPalette })));
+const loadCommandPalette = () => import("./CommandPalette");
+const CommandPalette = lazy(() => loadCommandPalette().then((module) => ({ default: module.CommandPalette })));
 const AiAssistant = lazy(() => import("../features/ai/GlobalAiAssistant").then((module) => ({ default: module.GlobalAiAssistant })));
 
 function LoadingOverlay() {
   return <div className="kbar-backdrop"><div className="kbar" role="status" aria-live="polite" style={{ padding: 24 }}>Loading…</div></div>;
 }
 
+/** Stand-in while the palette chunk loads: a real search field, so the first
+ * keystrokes are kept (and handed to the palette) instead of lost. */
+function PaletteLoadingOverlay({ value, onChange, onClose }: { value: string; onChange: (value: string) => void; onClose: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Hand focus back to the opener before the palette mounts, so the palette
+  // records the opener (not this vanished field) as where Escape returns.
+  useLayoutEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    inputRef.current?.focus({ preventScroll: true });
+    return () => opener?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <div className="kbar-backdrop" onClick={onClose}>
+      <div
+        className="kbar"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        aria-busy="true"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          onClose();
+        }}
+      >
+        <input
+          className="kbar__input"
+          placeholder="Type a command or search…"
+          aria-label="Command palette search"
+          ref={inputRef}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** The first shortcut must survive the asynchronous import. Once mounted, the
  * palette owns its existing listeners, focus handling and toggle behavior. */
 export function DeferredCommandPalette() {
   const [activated, setActivated] = useState(false);
+  const [draft, setDraft] = useState("");
+  // Fetch the palette once the app is idle so the first ⌘K opens instantly.
+  useEffect(() => {
+    const prefetch = () => { void loadCommandPalette().catch(() => {}); };
+    if ("requestIdleCallback" in window) {
+      const handle = window.requestIdleCallback(prefetch);
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = setTimeout(prefetch, 2500);
+    return () => clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (activated) return;
     const activate = () => setActivated(true);
@@ -33,7 +84,11 @@ export function DeferredCommandPalette() {
       window.removeEventListener("keydown", onKey);
     };
   }, [activated]);
-  return activated ? <Suspense fallback={<LoadingOverlay />}><CommandPalette initiallyOpen /></Suspense> : null;
+  return activated ? (
+    <Suspense fallback={<PaletteLoadingOverlay value={draft} onChange={setDraft} onClose={() => { setActivated(false); setDraft(""); }} />}>
+      <CommandPalette initiallyOpen initialQuery={draft} />
+    </Suspense>
+  ) : null;
 }
 
 export function DeferredAiAssistant() {

@@ -207,9 +207,11 @@ export function ImportReviewQueue({
   const firstShown = total ? filters.page * PAGE_SIZE + 1 : 0;
   const lastShown = Math.min(filters.page * PAGE_SIZE + items.length, filters.page * PAGE_SIZE + PAGE_SIZE);
   const activeFilterCount = [filters.recordKind, filters.targetModule, filters.sessionId, filters.risk, filters.source].filter(Boolean).length;
-  const emptyMessage = filters.status === "Pending" && progress.total > 0 && !activeFilterCount && !filters.search
-    ? "Every staged candidate has been reviewed. Apply approved records from their session below."
-    : "No candidates match these filters.";
+  const emptyMessage = progress.total === 0 && !activeFilterCount && !filters.search
+    ? "Nothing to review yet. Staged records from an import session appear here."
+    : filters.status === "Pending" && progress.total > 0 && !activeFilterCount && !filters.search
+      ? "Every staged candidate has been reviewed. Apply approved records from their session below."
+      : "No candidates match these filters.";
   const facetOptions = (facets: any[] | undefined, label: (value: string) => string, all: string) => [
     { value: "", label: all },
     ...(facets ?? []).map((facet: any) => ({ value: facet.value, label: `${label(facet.value)} (${facet.count.toLocaleString()})` })),

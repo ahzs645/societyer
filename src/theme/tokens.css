@@ -199,6 +199,7 @@
   --z-base:             1;    /* sidebar column, main column */
   --z-sticky:           10;   /* sticky topbar / page headers */
   --z-sidebar-peek:     20;   /* floating re-open button when collapsed */
+  --z-spotlight:        22;   /* anchored coachmarks: over page content, under drawers and dialogs */
   --z-bottom-nav:       23;   /* mobile bottom nav */
   --z-sidebar-backdrop: 24;   /* mobile sidebar backdrop */
   --z-sidebar:          25;   /* mobile sidebar panel */

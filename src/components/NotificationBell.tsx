@@ -202,8 +202,8 @@ export function NotificationBell() {
                       </div>
                     )}
                     <div
-                      className="muted mono"
-                      style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}
+                      className="muted"
+                      style={{ fontSize: "var(--fs-xs)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}
                     >
                       {formatDateTime(n.createdAtISO)}
                     </div>

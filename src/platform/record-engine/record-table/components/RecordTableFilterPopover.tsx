@@ -162,6 +162,12 @@ function FilterEditor({ focusIndex, onClose }: { focusIndex?: number; onClose: (
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  // The editor opens in the page flow under the toolbar; on a short phone
+  // screen bring its bottom (Apply) into view instead of leaving it below the fold.
+  useEffect(() => {
+    popoverRef.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+
   useEffect(() => {
     if (!focusId) return;
     const row = popoverRef.current?.querySelector<HTMLElement>(`[data-condition-id="${focusId}"]`);

@@ -143,7 +143,9 @@
 // ---------- Spotlight ----------
 .spotlight {
   position: fixed;
-  z-index: token('z-popover');
+  // Anchored to page content, so it sits under drawers, dialogs and the
+  // shortcut help instead of floating over them.
+  z-index: token('z-spotlight');
   width: min(300px, calc(100vw - #{token('s-6')}));
   padding: token('s-4');
   @include flex-column;
