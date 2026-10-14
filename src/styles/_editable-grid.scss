@@ -25,6 +25,8 @@ $actions-w: 36px;
 }
 .egrid__toolbar-group {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 2px;
   padding-left: token('s-1');
   border-left: 1px solid token('border');
@@ -508,7 +510,7 @@ $actions-w: 36px;
 }
 
 /* --------------------------------------------- host integrations */
-.budget-grid__intro { margin: 0; font-size: token('fs-sm'); }
+.grid-drawer__intro { margin: 0; font-size: token('fs-sm'); }
 .budget-grid__loading { padding: token('s-6') 0; text-align: center; }
 .budget-grid__errors {
   margin: 0;

@@ -83,13 +83,13 @@ export function useJournalLinesGrid({ accounts, variant = "journal", fundRestric
       return null;
     };
     const cols: GridColumn<JournalGridRow>[] = [
-      { key: "accountId", header: "Account", type: "select", width: 240, required: true, options: accountOptions, placeholder: "Choose account" },
-      { key: "description", header: "Description", type: "text", width: 220, placeholder: "Line memo" },
+      { key: "accountId", header: "Account", type: "select", width: 220, required: true, options: accountOptions, placeholder: "Choose account" },
+      { key: "description", header: "Description", type: "text", width: 200, placeholder: "Line memo" },
       {
         key: "debit",
         header: "Debit",
         type: "money",
-        width: 130,
+        width: 120,
         total: true,
         validate: (value, row) => {
           const rule = amountRule("credit")(value, row);
@@ -98,7 +98,7 @@ export function useJournalLinesGrid({ accounts, variant = "journal", fundRestric
           return null;
         },
       },
-      { key: "credit", header: "Credit", type: "money", width: 130, total: true, validate: amountRule("debit") },
+      { key: "credit", header: "Credit", type: "money", width: 120, total: true, validate: amountRule("debit") },
     ];
     if (variant === "journal") {
       cols.push({ key: "programCode", header: "Program", type: "text", width: 150, placeholder: "Unallocated", description: "Program or project code, e.g. 100 - OPERATIONS" });

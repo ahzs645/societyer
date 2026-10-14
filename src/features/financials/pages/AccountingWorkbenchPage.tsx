@@ -678,7 +678,7 @@ export function AccountingWorkbenchPage() {
         title="Post opening balances"
         footer={<LinesDrawerFooter blockedReason={openingGrid.changeset.dirty ? openingGrid.blockedReason : null} onCancel={() => void closeLinesDrawer(openingGrid)} onPost={saveOpening} disabled={!canWrite || busy || Boolean(openingGrid.blockedReason)} />}
       >
-        <p className="muted accounting-note">One line per account. Debits and credits must balance before you can post; paste lines straight from a spreadsheet.</p>
+        <p className="muted grid-drawer__intro">One line per account. Debits and credits must balance before you can post; paste lines straight from a spreadsheet.</p>
         <JournalLinesGrid grid={openingGrid} label="Opening balance lines" readOnly={!canWrite} onSaveShortcut={saveOpening} />
       </GridDrawer>
 

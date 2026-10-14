@@ -4,7 +4,8 @@ import { DatePicker } from "../DatePicker";
 import type { GridColumn, GridRow } from "./types";
 import { columnOptions, searchOptions } from "./values";
 
-export type GridMove = "down" | "up" | "right" | "left" | "none";
+/** Where the selection goes after a commit; "blur" means focus already left the cell. */
+export type GridMove = "down" | "up" | "right" | "left" | "none" | "blur";
 
 type EditorProps<R extends GridRow> = {
   col: GridColumn<R>;
@@ -17,7 +18,8 @@ type EditorProps<R extends GridRow> = {
   label: string;
   onCommitText: (text: string, move: GridMove) => void;
   onCommitValue: (value: unknown, move: GridMove) => void;
-  onCancel: () => void;
+  /** `fromBlur` when focus already moved elsewhere (do not pull it back). */
+  onCancel: (fromBlur?: boolean) => void;
 };
 
 export function GridCellEditor<R extends GridRow>(props: EditorProps<R>) {
@@ -67,7 +69,7 @@ function TextEditor<R extends GridRow>({ col, initialText, mode, label, onCommit
       autoComplete="off"
       spellCheck={col.type === "text"}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => finish("none")}
+      onBlur={() => finish("blur")}
       onKeyDown={(event) => {
         event.stopPropagation();
         if (event.key === "Escape") {
@@ -182,7 +184,7 @@ function SelectEditor<R extends GridRow>({ col, row, value, initialText, mode, a
         onBlur={() => {
           if (!doneRef.current) {
             doneRef.current = true;
-            onCancel();
+            onCancel(true);
           }
         }}
         onKeyDown={(event) => {

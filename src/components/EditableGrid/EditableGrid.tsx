@@ -127,6 +127,17 @@ function GridDesktop<R extends GridRow>({
     tableRef.current?.focus({ preventScroll: true });
   }, []);
 
+  // Focus moves back to the grid synchronously (so keys typed right after
+  // Enter/Tab land in the next cell), and once more after popovers such as
+  // the date picker restore focus to their own (now unmounted) trigger.
+  const refocusAfterEdit = () => {
+    focusGrid();
+    requestAnimationFrame(() => {
+      const activeEl = document.activeElement;
+      if (!activeEl || activeEl === document.body) focusGrid();
+    });
+  };
+
   const select = (cell: CellRef, extend = false) => {
     const next = clampCell(cell);
     if (extend) setExtent(next);
@@ -198,7 +209,7 @@ function GridDesktop<R extends GridRow>({
   const describeCell = (r: number, c: number) => `Row ${r + 1}, ${columns[c]?.header ?? ""}`;
 
   const moveFrom = (r: number, c: number, move: GridMove, maxRows: number) => {
-    if (move === "none") return;
+    if (move === "none" || move === "blur") return;
     let nr = r;
     let nc = c;
     const editable = (ci: number) => columns[ci] && columns[ci].type !== "computed";
@@ -250,7 +261,7 @@ function GridDesktop<R extends GridRow>({
     moveFrom(r, c, move, rowsRef.current.length);
     if (error) announce(`${describeCell(r, c)}: ${error}`);
     else if (changed) announce(`${describeCell(r, c)} set to ${cellDisplay(value, col, rowAfter) || "blank"}${appendRow ? `. Added ${rowNoun} ${r + 2}.` : ""}`);
-    requestAnimationFrame(focusGrid);
+    if (move !== "blur") refocusAfterEdit();
   };
 
   const commitText = (text: string, move: GridMove) => {
@@ -263,9 +274,9 @@ function GridDesktop<R extends GridRow>({
     else finishEdit(invalidCell(text.trim(), parsed.error), move, parsed.error);
   };
 
-  const cancelEdit = () => {
+  const cancelEdit = (fromBlur?: boolean) => {
     setEditing(null);
-    requestAnimationFrame(focusGrid);
+    if (!fromBlur) refocusAfterEdit();
   };
 
   const clearRange = (label = "Clear cells") => {

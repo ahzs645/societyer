@@ -307,7 +307,7 @@ export function BudgetGridDrawer({ open, onClose, societyId, fiscalYear, canWrit
       subtitle={`Category budget, with FY ${priorYear} and actuals to date alongside`}
       footer={<button className="btn" onClick={() => void requestClose()}>Close</button>}
     >
-      <p className="muted budget-grid__intro">
+      <p className="muted grid-drawer__intro">
         Plan each category for FY {fiscalYear}. Type over cells or paste rows from a spreadsheet; nothing is saved until you choose Save.
       </p>
       {(generalErrors.length > 0 || serverErrorList.length > 0) && (
