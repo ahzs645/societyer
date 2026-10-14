@@ -8,6 +8,12 @@ import {
   markManualPortable,
   addManualTransactionPortable,
   unmatchPortable,
+  periodsPortable,
+  startPeriodPortable,
+  updatePeriodPortable,
+  completePeriodPortable,
+  reopenPeriodPortable,
+  removePeriodPortable,
 } from "../shared/functions/reconciliation";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -66,4 +72,59 @@ export const unmatch = authorizedMutation("reconciliation:unmatch", mutation)({
   args: { txnId: v.id("financialTransactions") },
   returns: v.any(),
   handler: async (ctx, args) => unmatchPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Statement reconciliation periods: per bank account, statement start/end
+// dates, beginning/ending balances and an in_progress → completed lifecycle.
+// Closed periods whose lines later change read "out_of_balance".
+export const periods = authorizedQuery("reconciliation:periods", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => periodsPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const startPeriod = authorizedMutation("reconciliation:startPeriod", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    accountId: v.id("financialAccounts"),
+    startDate: v.optional(v.string()),
+    endDate: v.string(),
+    endingBalanceCents: v.number(),
+    openingBalanceCents: v.optional(v.number()),
+    statementDocumentId: v.optional(v.id("documents")),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => startPeriodPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const updatePeriod = authorizedMutation("reconciliation:updatePeriod", mutation)({
+  args: {
+    id: v.id("reconciliationPeriods"),
+    endingBalanceCents: v.optional(v.number()),
+    openingBalanceCents: v.optional(v.number()),
+    statementDocumentId: v.optional(v.id("documents")),
+    clearStatementDocument: v.optional(v.boolean()),
+    notes: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => updatePeriodPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const completePeriod = authorizedMutation("reconciliation:completePeriod", mutation)({
+  args: { id: v.id("reconciliationPeriods") },
+  returns: v.any(),
+  handler: async (ctx, args) => completePeriodPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const reopenPeriod = authorizedMutation("reconciliation:reopenPeriod", mutation)({
+  args: { id: v.id("reconciliationPeriods") },
+  returns: v.any(),
+  handler: async (ctx, args) => reopenPeriodPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const removePeriod = authorizedMutation("reconciliation:removePeriod", mutation)({
+  args: { id: v.id("reconciliationPeriods") },
+  returns: v.any(),
+  handler: async (ctx, args) => removePeriodPortable(await toPortableMutationCtx(ctx), args),
 });

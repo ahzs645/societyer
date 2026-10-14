@@ -178,6 +178,19 @@ export const accountingTables = {
     matchedKind: v.optional(v.string()), // filing | receipt | payroll | manual
     matchedId: v.optional(v.string()),
     reconciliationNote: v.optional(v.string()),
+    // Categorisation provenance: how the category was set (rule | suggestion |
+    // manual) and, for rules, which rule and what it replaced (for undo).
+    categorizedBy: v.optional(v.string()),
+    ruleId: v.optional(v.id("transactionRules")),
+    ruleApplication: v.optional(v.object({
+      ruleName: v.string(),
+      batchId: v.string(),
+      appliedAtISO: v.string(),
+      previous: v.optional(v.any()),
+    })),
+    accountingAccountId: v.optional(v.id("financialAccounts")),
+    fundRestrictionId: v.optional(v.id("fundRestrictions")),
+    reviewedAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])

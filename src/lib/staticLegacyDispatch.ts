@@ -42,6 +42,7 @@ import {
 } from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
+import { rulePatchForTransaction } from "../../shared/transactionRules";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
 import {
   byId,
@@ -1050,6 +1051,9 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
       existing.filter((t: any) => t.accountId === accountId).map((t: any) => t.externalId),
     );
     const rows = (args?.rows ?? []) as any[];
+    const rules = scopedRows(store?.listRows("transactionRules", args) ?? [], args);
+    const appliedAtISO = new Date().toISOString();
+    let categorized = 0;
     let inserted = 0;
     let skipped = 0;
     for (let i = 0; i < rows.length; i++) {
@@ -1061,6 +1065,8 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         skipped += 1;
         continue;
       }
+      const ruled = rulePatchForTransaction(rules as any[], { ...row, accountId }, appliedAtISO, `import-${appliedAtISO}`);
+      if (ruled) categorized += 1;
       store?.upsertRow("financialTransactions", {
         _id: `static_tx_${externalId.replace(/[^a-zA-Z0-9]+/g, "_")}`,
         societyId: args?.societyId ?? SOCIETY_ID,
@@ -1072,11 +1078,12 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         amountCents: row.amountCents,
         category: row.category,
         counterparty: row.counterparty,
+        ...(ruled?.patch ?? {}),
       });
       seen.add(externalId);
       inserted += 1;
     }
-    return { inserted, skipped, total: rows.length };
+    return { inserted, skipped, total: rows.length, categorized };
   }
   if (name === "seed:run") {
     void store?.reseed();

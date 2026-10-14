@@ -90,6 +90,8 @@ import {
   FolderKanban,
   ListChecks,
   FileSignature,
+  Zap,
+  ClipboardCheck,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ModuleKey } from "./modules";
@@ -351,6 +353,8 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/financials/year-end": { icon: CalendarCheck, group: "finance", label: "Year-end reports" },
   "/app/finance-imports": { icon: ArrowDownToLine, group: "finance", label: "Finance imports" },
   "/app/treasurer": { icon: Landmark, group: "finance", label: "Treasurer" },
+  "/app/approvals": { icon: ClipboardCheck, group: "finance", label: "Approvals" },
+  "/app/transaction-rules": { icon: Zap, group: "finance", label: "Transaction rules" },
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },
   "/app/inventory": { icon: Package, group: "finance", label: "Inventory", module: "assets" },
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },

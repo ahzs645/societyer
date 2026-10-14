@@ -40,6 +40,7 @@ import { offlineMeetingTables } from "./tables/offlineMeetings";
 import { gapTables } from "./tables/gaps";
 import { intakeTables } from "./tables/intake";
 import { agreementTables } from "./tables/agreements";
+import { financeWorkflowTables } from "./tables/financeWorkflows";
 
 export default defineSchema({
   ...reviewEvidenceTables,
@@ -47,6 +48,7 @@ export default defineSchema({
   ...offlineMeetingTables,
   ...pathwayTables,
   ...intakeTables,
+  ...financeWorkflowTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     onboardingAnswersJson: v.optional(v.string()),

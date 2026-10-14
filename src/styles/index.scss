@@ -101,6 +101,7 @@
 @use "dashboard";
 // RecordTable grouping, ranges, condensed layout, filter editor, export.
 @use "record-table-extras";
+@use "finance-workflows";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

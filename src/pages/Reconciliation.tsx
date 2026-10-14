@@ -1,6 +1,6 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -25,6 +25,10 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { ReconciliationStatements } from "../features/financials/reconciliation/ReconciliationStatements";
+import { ReconciliationBanner } from "../features/financials/reconciliation/ReconciliationBanner";
+import { StartReconciliationModal } from "../features/financials/reconciliation/StartReconciliationModal";
+import type { ReconPeriodsData } from "../features/financials/reconciliation/types";
 
 /**
  * Bank reconciliation page. The record table on the left is purely
@@ -41,6 +45,21 @@ export function ReconciliationPage() {
     api.reconciliation.overview,
     society ? { societyId: society._id } : "skip",
   );
+  // Statement periods (account -> statements -> reconciliation detail), driven by ?account= and ?period=.
+  const periodsData = useQuery(api.reconciliation.periods, society ? { societyId: society._id } : "skip") as ReconPeriodsData | undefined;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodId = searchParams.get("period") ?? undefined;
+  const accountParam = searchParams.get("account") ?? undefined;
+  const activePeriod = periodsData?.periods.find((period) => period._id === periodId);
+  const [startOpen, setStartOpen] = useState<{ accountId?: string } | null>(null);
+  const setView = (next: { account?: string; period?: string }) => {
+    const params = new URLSearchParams(searchParams);
+    for (const key of ["account", "period"] as const) {
+      if (next[key]) params.set(key, next[key]!);
+      else params.delete(key);
+    }
+    setSearchParams(params);
+  };
   const matchM = useMutation(api.reconciliation.match);
   const markManualM = useMutation(api.reconciliation.markManual);
   const unmatchM = useMutation(api.reconciliation.unmatch);
@@ -57,6 +76,8 @@ export function ReconciliationPage() {
   const navigate = useNavigate();
 
   const [selected, setSelected] = useState<string | null>(null);
+  // Opening another statement starts with an empty match panel.
+  useEffect(() => setSelected(null), [periodId]);
   const selectForMatching = (id: string) => {
     setSelected(id);
     // On narrow screens the match panel stacks below the table; bring it into view.
@@ -117,9 +138,10 @@ export function ReconciliationPage() {
   const rows = overview?.rows ?? [];
   const summary = overview?.summary ?? { total: 0, reconciled: 0, withSuggestions: 0, unmatched: 0 };
 
+  const periodTxnIds = useMemo(() => (activePeriod ? new Set(activePeriod.transactionIds) : null), [activePeriod]);
   const records = useMemo(
     () =>
-      rows.map((r: any) => ({
+      rows.filter((r: any) => !periodTxnIds || periodTxnIds.has(String(r.txn._id))).map((r: any) => ({
         _id: r.txn._id,
         date: r.txn.date,
         description: r.txn.description,
@@ -131,7 +153,7 @@ export function ReconciliationPage() {
             ? "Has suggestion"
             : "Unmatched",
       })),
-    [rows],
+    [rows, periodTxnIds],
   );
 
   const selectedRow = useMemo(
@@ -274,7 +296,39 @@ export function ReconciliationPage() {
         <Field label="Category"><input className="input" value={txnForm.category} onChange={(e) => setTxnForm({ ...txnForm, category: e.target.value })} placeholder="Optional" /></Field>
       </Drawer>
 
-      <div className="stat-grid">
+      {periodsData && (activePeriod ? (
+        <ReconciliationBanner
+          period={activePeriod}
+          account={periodsData.accounts.find((account) => account._id === activePeriod.accountId)}
+          canWrite={canWrite}
+          onBack={() => setView({ account: activePeriod.accountId })}
+          onDiscarded={() => setView({ account: activePeriod.accountId })}
+        />
+      ) : (
+        <ReconciliationStatements
+          data={periodsData}
+          accountId={accountParam}
+          canWrite={canWrite}
+          onSelectAccount={(account) => setView({ account })}
+          onOpenPeriod={(period) => setView({ account: periodsData.periods.find((row) => row._id === period)?.accountId, period })}
+          onStart={(accountId) => setStartOpen({ accountId })}
+        />
+      ))}
+      {periodsData && startOpen && (
+        <StartReconciliationModal
+          open
+          accounts={periodsData.accounts}
+          initialAccountId={startOpen.accountId}
+          societyId={society._id}
+          onClose={() => setStartOpen(null)}
+          onStarted={(period, account) => {
+            setStartOpen(null);
+            setView({ account, period });
+          }}
+        />
+      )}
+
+      {!activePeriod && <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Transactions</div>
           <div className="stat__value" style={{ fontSize: 22 }}>{summary.total}</div>
@@ -294,7 +348,7 @@ export function ReconciliationPage() {
           <div className="stat__value" style={{ fontSize: 22, color: summary.unmatched ? "var(--danger)" : undefined }}>{summary.unmatched}</div>
           <div className="stat__sub">Need a manual note</div>
         </div>
-      </div>
+      </div>}
 
       <div className="two-col">
         <div>
@@ -314,7 +368,7 @@ export function ReconciliationPage() {
                 societyId={society._id}
                 objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
                 icon={<Scale size={14} />}
-                label="All transactions"
+                label={activePeriod ? "Statement transactions" : "All transactions"}
                 views={tableData.views}
                 currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
                 onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}

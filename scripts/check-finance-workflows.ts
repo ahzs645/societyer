@@ -1,0 +1,109 @@
+// Finance workflows end-to-end on the portable engine, seeded with the demo
+// workspace: statement periods (complete, out of balance, reopen), rule
+// application + undo, and server-side approval-rule enforcement.
+import assert from "node:assert/strict";
+import { tables } from "../src/lib/staticConvexFixtures";
+import { MemoryDb } from "../shared/portable/memoryDb";
+import { makeCapabilities } from "../shared/portable/capabilities";
+import * as recon from "../shared/functions/reconciliation";
+import * as rules from "../shared/functions/transactionRules";
+import * as exp from "../shared/functions/expenseReports";
+import { requireFunctionAction } from "../shared/functions/actionPolicy";
+
+const seed: Record<string, any[]> = {};
+for (const [k, v] of Object.entries(tables as Record<string, any[]>)) seed[k] = JSON.parse(JSON.stringify(v));
+seed.users = seed.users.map((u: any) => ({ ...u, status: "Active", authIssuer: "https://issuer.test", authSubject: `sub-${u._id}` }));
+const db = new MemoryDb({ seed });
+const S = seed.users[0].societyId;
+const ctxFor = (userId: string): any => ({
+  db,
+  principal: { kind: "user", runtime: "test", assurance: "trusted-workspace", subject: `sub-${userId}`, issuer: "https://issuer.test", userId, societyId: S },
+  capabilities: makeCapabilities({}),
+  runQuery: async () => { throw new Error("nested"); },
+});
+const mina = ctxFor(seed.users[0]._id);
+const jordan = ctxFor("static_user_treasurer");
+const avery = ctxFor("static_user_secretary");
+
+// ---- periods
+let p = await recon.periodsPortable(mina, { societyId: S });
+const byId = Object.fromEntries(p.periods.map((x: any) => [x._id, x]));
+assert.equal(byId.static_recon_cash_2026_01.effectiveStatus, "completed");
+assert.equal(byId.static_recon_cash_2026_02.effectiveStatus, "out_of_balance");
+assert.equal(byId.static_recon_cash_2026_03.effectiveStatus, "in_progress");
+assert.equal(byId.static_recon_grant_2026_02.effectiveStatus, "auto_reconciled");
+assert.equal(byId.static_recon_cash_2026_01.differenceCents, 0);
+assert.equal(byId.static_recon_cash_2026_03.differenceCents, 38250 - 8105);
+await assert.rejects(() => recon.completePeriodPortable(mina, { id: "static_recon_cash_2026_03" }), /difference/);
+await assert.rejects(() => recon.startPeriodPortable(mina, { societyId: S, accountId: "static_financial_cash", endDate: "2026-04-30", endingBalanceCents: 1 }), /open reconciliation/);
+await recon.markManualPortable(mina, { txnId: "static_tx_mar_hydro", note: "Hydro" });
+await recon.markManualPortable(mina, { txnId: "static_tx_mar_square", note: "Square" });
+p = await recon.periodsPortable(mina, { societyId: S });
+assert.equal(p.periods.find((x: any) => x._id === "static_recon_cash_2026_03").differenceCents, 0);
+await recon.completePeriodPortable(mina, { id: "static_recon_cash_2026_03" });
+// unmatching a line inside a completed period flags it
+await recon.unmatchPortable(mina, { txnId: "static_tx_mar_square" });
+p = await recon.periodsPortable(mina, { societyId: S });
+assert.equal(p.periods.find((x: any) => x._id === "static_recon_cash_2026_03").effectiveStatus, "out_of_balance");
+assert.equal((await db.get("static_recon_cash_2026_03")).status, "out_of_balance", "persisted flag");
+await recon.markManualPortable(mina, { txnId: "static_tx_mar_square", note: "Square again" });
+p = await recon.periodsPortable(mina, { societyId: S });
+assert.equal(p.periods.find((x: any) => x._id === "static_recon_cash_2026_03").effectiveStatus, "completed", "restored lines match again");
+// start April
+const aprilId = await recon.startPeriodPortable(mina, { societyId: S, accountId: "static_financial_cash", endDate: "2026-04-30", endingBalanceCents: 123 });
+p = await recon.periodsPortable(mina, { societyId: S });
+const april = p.periods.find((x: any) => x._id === aprilId);
+assert.equal(april.startDate, "2026-04-01");
+assert.equal(april.beginningBalanceCents, byId.static_recon_cash_2026_03.endingBalanceCents);
+await recon.removePeriodPortable(mina, { id: aprilId });
+
+// ---- rules
+let ws = await rules.workspacePortable(mina, { societyId: S });
+const applied = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+assert.ok(applied.applied >= 5);
+const hydro = await db.get("static_tx_apr_hydro");
+assert.equal(hydro.category, "Utilities");
+assert.equal(hydro.categorizedBy, "rule");
+await rules.undoBatchPortable(mina, { societyId: S, batch: applied.batchId });
+assert.equal((await db.get("static_tx_apr_hydro")).category, undefined);
+assert.equal((await db.get("static_tx_apr_hydro")).categorizedBy, undefined);
+const newRule = await rules.upsertPortable(mina, { societyId: S, name: "Shaw internet", conditions: [{ field: "payee", operator: "contains", value: "shaw" }], actions: { category: "Telephone & internet" } });
+ws = await rules.workspacePortable(mina, { societyId: S });
+assert.equal(ws.rules[ws.rules.length - 1]._id, newRule);
+await rules.reorderPortable(mina, { societyId: S, orderedIds: [newRule, ...ws.rules.filter((r: any) => r._id !== newRule).map((r: any) => r._id)] });
+ws = await rules.workspacePortable(mina, { societyId: S });
+assert.equal(ws.rules[0]._id, newRule);
+await assert.rejects(() => rules.upsertPortable(mina, { societyId: S, name: "", conditions: [], actions: {} }), /name/);
+
+// ---- approvals
+let q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.deepEqual(q.counts, { awaiting: 4, awaitingMe: 3, approved: 1, paid: 1, closed: 2, drafts: 2 });
+assert.equal(q.policy.source, "configured");
+const toner = q.rows.find((r: any) => r._id === "static_expense_printer_toner");
+assert.equal(toner.canApprove, false);
+assert.match(toner.cannotApproveReason, /own claim/);
+await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_printer_toner", decision: "approve" }), /own claim/);
+// dual approval: Mina approves dinner (0->1 of 2), then Jordan completes
+let r = await exp.decidePortable(mina, { id: "static_expense_appreciation_dinner", decision: "approve" });
+assert.deepEqual(r, { status: "Submitted", approvals: 1, required: 2 });
+await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_appreciation_dinner", decision: "approve" }), /already/);
+await assert.rejects(() => exp.decidePortable(avery, { id: "static_expense_appreciation_dinner", decision: "approve" }), /own claim/);
+r = await exp.decidePortable(jordan, { id: "static_expense_appreciation_dinner", decision: "approve" });
+assert.equal(r.status, "Approved");
+// legacy setStatus Approved is a vote
+await exp.setStatusPortable(jordan, { id: "static_expense_workshop_supplies", status: "Approved" });
+assert.equal((await db.get("static_expense_workshop_supplies")).status, "Approved");
+await assert.rejects(() => exp.setStatusPortable(mina, { id: "static_expense_kitchen_deposit", status: "Paid" }), /approved/);
+await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_kitchen_deposit", decision: "decline" }), /reason/);
+await assert.rejects(() => exp.upsertPortable(mina, { id: "static_expense_office_chair", societyId: S, claimantName: "Mina Patel", title: "Chair", category: "Supplies", amountCents: 18900, currency: "CAD", incurredAtISO: "2026-04-16", status: "Approved" }), /approvals queue/);
+const bulk = await exp.bulkApprovePortable(mina, { societyId: S, ids: ["static_expense_kitchen_deposit", "static_expense_printer_toner"] });
+assert.equal(bulk.approved, 1);
+assert.equal(bulk.skipped.length, 1);
+// action policy: a Director can call decide, a Viewer would be stopped by the handler; setStatus needs financials:write
+await requireFunctionAction(jordan, "expenseReports:decide", "mutation", { id: "static_expense_bus_rental", decision: "approve" });
+await assert.rejects(() => requireFunctionAction(jordan, "expenseReports:setStatus", "mutation", { id: "static_expense_bus_rental", status: "Paid" }), /financials:write/);
+await assert.rejects(() => exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [{ minAmountCents: 1000, requiredApprovals: 1 }] }), /\$0/);
+await exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [] });
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.policy.source, "signing_authority");
+console.log("Finance workflow checks passed: periods, rules and approvals.");
