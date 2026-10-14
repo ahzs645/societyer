@@ -1,6 +1,7 @@
 import { FinancialVersionCard } from "../../../components/FinancialVersionCard";
 import { AccountingStatementsCard } from "../components/AccountingStatementsCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { useCreateIntent } from "@/hooks/useCreateIntent";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -171,6 +172,7 @@ export function AccountingWorkbenchPage() {
     setFormErrors({});
     setDrawerState(next);
   };
+  useCreateIntent("new-journal", "financials:write", () => setDrawer("journal"));
   const [busy, setBusy] = useState(false);
   // Excel unless CSV/TSV was the last format chosen anywhere in the app.
   const [exportFormat, setExportFormat] = useState<AccountingExportFormat>(() => (readLastExportFormat("xlsx") === "xlsx" ? "xlsx" : "csv"));
