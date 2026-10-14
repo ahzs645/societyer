@@ -34,9 +34,9 @@ export function GoalDetailPage() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  if (society === undefined) return <PageLoading />;
+  if (society === undefined) return <PageLoading variant="detail" />;
   if (society === null) return <SeedPrompt />;
-  if (goal === undefined) return <PageLoading />;
+  if (goal === undefined) return <PageLoading variant="detail" />;
   if (goal === null) {
     return (
       <div className="page">

@@ -156,7 +156,7 @@ export function WorkflowDetailPage() {
   const graph = useMemo(() => buildGraph(preview), [preview]);
   useDocumentTitle(workflow?.name ? `${workflow.name} · Workflows` : null);
 
-  if (society === undefined || workflow === undefined) return <PageLoading />;
+  if (society === undefined || workflow === undefined) return <PageLoading variant="detail" />;
   if (society === null) return <SeedPrompt />;
   if (!workflow) {
     return <RecordNotFound recordLabel="Workflow" backTo="/app/workflows" backLabel="All workflows" />;

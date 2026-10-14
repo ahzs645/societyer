@@ -73,9 +73,9 @@ export function AgreementDetailPage() {
   const [terminateForm, setTerminateForm] = useState<null | { date: string; reason: string; error?: string }>(null);
   const initialForm = useMemo(() => (data?.agreement ? agreementToForm(data.agreement) : null), [data?.agreement]);
 
-  if (society === undefined) return <PageLoading />;
+  if (society === undefined) return <PageLoading variant="detail" />;
   if (society === null) return <SeedPrompt />;
-  if (data === undefined) return <PageLoading />;
+  if (data === undefined) return <PageLoading variant="detail" />;
   if (data === null) return <RecordNotFound recordLabel="Agreement" backTo="/app/agreements" backLabel="All agreements" icon={<FileSignature size={18} />} />;
 
   const agreement = data.agreement;

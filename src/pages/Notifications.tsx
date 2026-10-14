@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { Segmented } from "../components/primitives";
 import { Bell, CheckCheck, Send, Trash2 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
@@ -153,13 +153,15 @@ export function NotificationsPage() {
         </div>
         <div className="card__body">
           {filtered.length === 0 && (
-            <div className="empty-state empty-state--lg">
-              {scope === "unread"
-                ? "No unread notifications."
-                : scope === "dismissed"
-                ? "Nothing cleared. Notifications you clear from the bell appear here until they're purged after the retention period set in Settings."
-                : "No notifications yet. They'll appear here when deadlines approach, filings are due, AI drafts complete, or bots run."}
-            </div>
+            scope === "unread" ? (
+              <EmptyState variant="caught-up" size="lg" description="No unread notifications." />
+            ) : (
+              <div className="empty-state empty-state--lg">
+                {scope === "dismissed"
+                  ? "Nothing cleared. Notifications you clear from the bell appear here until they're purged after the retention period set in Settings."
+                  : "No notifications yet. They'll appear here when deadlines approach, filings are due, AI drafts complete, or bots run."}
+              </div>
+            )
           )}
           {filtered.map((n) => (
             <div key={n._id} className="notif-row" style={n.dismissedAt ? { opacity: 0.6 } : undefined}>

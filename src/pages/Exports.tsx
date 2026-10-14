@@ -6,7 +6,7 @@ import { CheckCircle2, Database, Download, FileJson, Archive, ShieldAlert, Uploa
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
-import { Badge } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -509,9 +509,12 @@ export function ExportsPage() {
               })()
             ))}
             {visibleTables.length === 0 && (
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                No tables match this filter.
-              </div>
+              <EmptyState
+                variant="filtered"
+                size="sm"
+                description="No tables match this filter."
+                onClearFilters={() => { setSearchText(""); setHideEmpty(false); }}
+              />
             )}
           </div>
         </div>

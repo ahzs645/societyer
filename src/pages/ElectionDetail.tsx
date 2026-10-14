@@ -134,7 +134,7 @@ export function ElectionDetailPage() {
     );
   }, [election]);
 
-  if (electionBundle === undefined) return <PageLoading />;
+  if (electionBundle === undefined) return <PageLoading variant="detail" />;
   if (electionBundle === null || !election) return <RecordNotFound recordLabel="Election" backTo="/app/elections" backLabel="All elections" />;
 
   const canVote =

@@ -115,7 +115,7 @@ $known-tokens: (
   "z-toast" "z-tooltip" "bg-overlay-scrim" "bg-overlay-scrim-dense" "modal-w-sm" "modal-w-md"
   "modal-w-lg" "modal-w-xl" "popover-w-sm" "popover-w-md" "popover-h-md" "bp-mobile-sidebar"
   "bp-mobile" "bp-mobile-card" "bp-bottom-sheet"
-  "bg-hover-alpha" "bg-active-alpha" "bg-selected-alpha" "border-alpha" "border-alpha-strong" "bg-frosted" "money-neutral" "money-in" "money-out" "money-pending" "variance-favourable" "variance-unfavourable" "variance-favourable-soft" "variance-unfavourable-soft" "r-card" "elevation-1" "elevation-2" "elevation-3" "focus-ring-color" "focus-ring-width" "focus-ring-offset" "motion-fade-fast" "motion-fade" "motion-fade-slow" "motion-move-fast" "motion-move" "motion-move-slow" "motion-panel" "ease-fade" "ease-move" "ease-appear" "ease-disappear" "ease-panel" "opacity-disabled" "row-h-compact" "row-h-comfortable"
+  "bg-hover-alpha" "bg-active-alpha" "bg-selected-alpha" "border-alpha" "border-alpha-strong" "bg-frosted" "money-neutral" "money-in" "money-out" "money-pending" "variance-favourable" "variance-unfavourable" "variance-favourable-soft" "variance-unfavourable-soft" "r-card" "elevation-1" "elevation-2" "elevation-3" "focus-ring-color" "focus-ring-width" "focus-ring-offset" "motion-fade-fast" "motion-fade" "motion-fade-slow" "motion-move-fast" "motion-move" "motion-move-slow" "motion-panel" "motion-pulse" "motion-breathe" "ease-fade" "ease-move" "ease-appear" "ease-disappear" "ease-panel" "opacity-disabled" "row-h-compact" "row-h-comfortable"
 );
 
 @function token($name, $fallback: null) {

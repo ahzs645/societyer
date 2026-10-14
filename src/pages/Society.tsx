@@ -30,6 +30,7 @@ import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanc
 import { homeJurisdictionCode, isCorporation, isSociety } from "../../shared/organizationDomain";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { TooltipCopyable } from "../components/TooltipCopyable";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import {
@@ -869,7 +870,7 @@ export function SocietyPage() {
                       <strong>{optionLabel("entityJurisdictions", row.jurisdiction)}</strong>
                       <div className="muted">{optionLabel("registrationTypes", row.registrationType ?? "extra_provincial")}</div>
                     </div>,
-                    <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ?? "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
+                    <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ? <TooltipCopyable value={row.registrationNumber} label="registration number" /> : "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
                     <div key="dates"><div>Registered: {row.registrationDate ? formatDate(row.registrationDate) : "Unknown"}</div><div>Business started: {row.activityCommencementDate ? formatDate(row.activityCommencementDate) : "Unknown"}</div>{row.deRegistrationDate && <div>Ended: {formatDate(row.deRegistrationDate)}</div>}</div>,
                     <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
                     <RowActions key="a" onEdit={() => { setDrawerKind("registration"); setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }); }} onRemove={() => removeDetailRow("registration", row)} />,
@@ -889,7 +890,9 @@ export function SocietyPage() {
                   columns={["Kind", "Number", "Jurisdiction", "Status", ""]}
                   render={(row: any) => [
                     optionLabel("taxNumberTypes", row.kind),
-                    <span key="n" className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>,
+                    row.accessLevel === "restricted" || !row.number
+                      ? <span key="n" className="mono">{row.accessLevel === "restricted" ? mask(row.number) : row.number}</span>
+                      : <TooltipCopyable key="n" value={row.number} label={`${optionLabel("taxNumberTypes", row.kind)} number`} />,
                     row.foreignJurisdiction || row.jurisdiction || "-",
                     <Badge key="s" tone={row.accessLevel === "restricted" ? "danger" : row.status === "active" ? "success" : "warn"}>{optionLabel("identifierStatuses", row.status)}</Badge>,
                     <RowActions key="a" onEdit={() => { setDrawerKind("identifier"); setDraft(row); }} onRemove={() => removeDetailRow("identifier", row)} />,

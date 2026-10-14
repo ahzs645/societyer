@@ -15,6 +15,7 @@ import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { TooltipCopyable } from "../components/TooltipCopyable";
 import { ArrowLeft, KeyRound, Trash2, Copy, Check } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -191,9 +192,7 @@ export function ApiKeysPage() {
           onDismiss={() => setRevealedToken(null)}
         >
           <div className="row" style={{ gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
-            <code className="mono" style={{ maxWidth: "100%", overflowWrap: "anywhere", whiteSpace: "normal", padding: "4px 8px", background: "var(--bg-panel)", borderRadius: 4 }}>
-              {revealedToken}
-            </code>
+            <TooltipCopyable value={revealedToken} label="API token" showIcon={false} className="copyable--block" />
             <Button size="sm" onClick={() => copyToken(revealedToken)}>
               {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? "Copied" : "Copy"}
             </Button>

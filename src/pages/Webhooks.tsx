@@ -8,6 +8,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Banner, Button, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
+import { TooltipCopyable } from "../components/TooltipCopyable";
 import { useToast } from "../components/Toast";
 import { Webhook, Plus, Power } from "lucide-react";
 import { formatDateTime } from "../lib/format";
@@ -131,7 +132,7 @@ export function WebhooksPage() {
             {(subscriptions ?? []).map((sub: any) => (
               <tr key={sub._id}>
                 <td><strong>{sub.name}</strong></td>
-                <td className="mono" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.targetUrl}</td>
+                <td className="mono" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><TooltipCopyable value={sub.targetUrl} label="target URL" className="copyable--truncate" /></td>
                 <td>{(sub.eventTypes ?? []).map((e: string) => <code key={e} className="chip" style={{ fontSize: 11, marginRight: 4 }}>{e}</code>)}</td>
                 <td>{sub.hasSecret ? <Badge tone="success">Set</Badge> : <Badge tone="warn">None</Badge>}</td>
                 <td><Badge tone={sub.status === "active" ? "success" : "neutral"}>{capitalize(sub.status)}</Badge></td>

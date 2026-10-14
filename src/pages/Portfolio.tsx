@@ -7,7 +7,7 @@ import { api } from "@/lib/convexApi";
 import { Layers, AlertTriangle, ListChecks } from "lucide-react";
 import { PageHeader, PageLoading } from "./_helpers";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
-import { Badge } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPackets";
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
@@ -134,7 +134,14 @@ export function PortfolioPage() {
       {allEntities.length === 0 ? (
         <div className="card"><p>No entities yet. Create one from the workspace switcher.</p></div>
       ) : entities.length === 0 ? (
-        <div className="card"><p>No entity matches "{search.trim()}".</p></div>
+        <div className="card">
+          <EmptyState
+            variant="filtered"
+            description={`No entity matches "${search.trim()}".`}
+            clearFiltersLabel="Clear search"
+            onClearFilters={() => setSearch("")}
+          />
+        </div>
       ) : (
         <>
           {/* Batch generate (Multiple_Copy) */}

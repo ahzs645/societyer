@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field } from "../components/ui";
 import { Progress, Segmented } from "../components/primitives";
 import { RecordBoard } from "../components/RecordBoard";
 import { Select } from "../components/Select";
@@ -212,7 +212,15 @@ export function GoalsPage() {
         })}
         {filtered.length === 0 && (
           <div className="card">
-            <div className="card__body muted">No goals match.</div>
+            {all.length > 0 && filter !== "all" ? (
+              filter === "atrisk" ? (
+                <EmptyState variant="caught-up" title="No goals at risk" description="Every goal is on track or complete." />
+              ) : (
+                <EmptyState variant="filtered" onClearFilters={() => setFilter("all")} />
+              )
+            ) : (
+              <div className="card__body muted">No goals yet.</div>
+            )}
           </div>
         )}
       </div>

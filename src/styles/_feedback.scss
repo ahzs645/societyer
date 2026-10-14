@@ -1,0 +1,331 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Feedback: page skeletons, spotlights, copyable values, empty-state
+// variants and the demo banner's role/persona switchers.
+// ============================================================
+
+// ---------- Page skeleton ----------
+@keyframes page-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+// Reduced motion: no flashing, only a slow, shallow change in opacity.
+@keyframes page-skeleton-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.65; }
+}
+
+.page-skeleton {
+  display: block;
+  min-width: 0;
+}
+.page-skeleton__shapes {
+  @include flex-column;
+  gap: token('s-5');
+}
+.page-skeleton__bone {
+  display: block;
+  background: token('bg-hover');
+  border-radius: token('r-sm');
+  animation: page-skeleton-pulse token('motion-pulse') token('ease-fade') infinite;
+}
+.page-skeleton__header {
+  @include flex-center;
+  gap: token('s-3');
+  min-height: token('s-10');
+}
+.page-skeleton__icon {
+  flex: 0 0 auto;
+  width: token('s-8');
+  height: token('s-8');
+  border-radius: token('r-md');
+}
+.page-skeleton__titles {
+  @include flex-column;
+  gap: token('s-2');
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.page-skeleton__title { width: min(240px, 60%); height: token('s-5'); }
+.page-skeleton__subtitle { width: min(380px, 85%); height: token('s-3'); }
+.page-skeleton__action {
+  flex: 0 0 auto;
+  width: 104px;
+  height: token('s-8');
+  border-radius: token('r-md');
+}
+.page-skeleton__line { height: token('s-3'); width: 100%; border-radius: token('r-pill'); }
+.page-skeleton__line--short { width: 40%; }
+.page-skeleton__figure { height: token('s-6'); width: 55%; }
+
+.page-skeleton__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: token('s-3');
+}
+.page-skeleton__stat,
+.page-skeleton__panel {
+  @include flex-column;
+  gap: token('s-3');
+  padding: token('s-4');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+  min-width: 0;
+}
+
+.page-skeleton__table {
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+  overflow: hidden;
+}
+.page-skeleton__toolbar {
+  @include flex-center;
+  gap: token('s-2');
+  padding: token('s-3');
+  border-bottom: 1px solid token('border-alpha');
+}
+.page-skeleton__search { width: min(260px, 50%); height: token('s-8'); border-radius: token('r-md'); }
+.page-skeleton__chip { width: 72px; height: token('s-6'); border-radius: token('r-pill'); }
+.page-skeleton__row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 0.8fr);
+  align-items: center;
+  gap: token('s-4');
+  min-height: token('row-h-comfortable');
+  padding: 0 token('s-4');
+  border-bottom: 1px solid token('border-alpha');
+}
+.page-skeleton__row:last-child { border-bottom: 0; }
+.page-skeleton__cell { width: 70%; }
+.page-skeleton__cell--wide { width: 85%; }
+.page-skeleton__cell--narrow { width: 50%; }
+// Stagger rows so the pulse reads as one gentle wave, not a strobe.
+.page-skeleton__row:nth-child(odd) .page-skeleton__bone { animation-delay: calc(#{token('motion-pulse')} / -4); }
+
+.page-skeleton__detail {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: token('s-4');
+}
+.page-skeleton__field {
+  @include flex-column;
+  gap: token('s-2');
+}
+.page-skeleton__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: token('s-3');
+}
+
+@media (max-width: 760px) {
+  .page-skeleton__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page-skeleton__row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 0.7fr); }
+  .page-skeleton__cell--optional { display: none; }
+  .page-skeleton__detail { grid-template-columns: minmax(0, 1fr); }
+  .page-skeleton__action { width: token('s-8'); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  // Beats the global reduced-motion reset (foundations) on purpose: a slow
+  // opacity change is not movement, and a frozen grey block reads as broken.
+  .page-skeleton .page-skeleton__bone {
+    animation-name: page-skeleton-breathe !important;
+    animation-duration: token('motion-breathe') !important;
+    animation-iteration-count: infinite !important;
+    animation-delay: 0s !important;
+  }
+}
+
+// ---------- Spotlight ----------
+.spotlight {
+  position: fixed;
+  z-index: token('z-popover');
+  width: min(300px, calc(100vw - #{token('s-6')}));
+  padding: token('s-4');
+  @include flex-column;
+  gap: token('s-2');
+  background: token('bg-panel');
+  color: token('text-primary');
+  border-radius: token('r-card');
+  box-shadow: token('elevation-2');
+  font-size: token('fs-sm');
+  line-height: 1.45;
+  animation: spotlight-appear token('motion-move') token('ease-appear');
+}
+@keyframes spotlight-appear {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.spotlight--inline {
+  position: relative;
+  width: auto;
+  z-index: auto;
+  margin-bottom: token('s-4');
+  box-shadow: token('elevation-1');
+  border-left: 3px solid token('accent');
+}
+.spotlight__tail {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: token('bg-panel');
+  transform: rotate(45deg);
+  // The tail shares the card's outline ring on its two outer edges.
+  box-shadow: -1px -1px 0 0 token('border-alpha');
+}
+.spotlight--bottom .spotlight__tail { top: -6px; left: calc(var(--spotlight-tail, 24px) - 6px); }
+.spotlight--top .spotlight__tail { bottom: -6px; left: calc(var(--spotlight-tail, 24px) - 6px); transform: rotate(225deg); }
+.spotlight--right .spotlight__tail { left: -6px; top: calc(var(--spotlight-tail, 24px) - 6px); transform: rotate(-45deg); }
+.spotlight--left .spotlight__tail { right: -6px; top: calc(var(--spotlight-tail, 24px) - 6px); transform: rotate(135deg); }
+.spotlight__image {
+  margin: calc(-1 * #{token('s-4')}) calc(-1 * #{token('s-4')}) token('s-1');
+  border-radius: token('r-card') token('r-card') 0 0;
+  overflow: hidden;
+  background: token('accent-soft');
+}
+.spotlight__image img,
+.spotlight__image svg { display: block; width: 100%; height: auto; }
+.spotlight__head {
+  @include flex-center;
+  align-items: flex-start;
+  gap: token('s-2');
+}
+.spotlight__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: token('fs-md');
+  font-weight: 600;
+  line-height: 1.3;
+}
+.spotlight__close {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: token('s-6');
+  height: token('s-6');
+  margin: calc(-1 * #{token('s-1')}) calc(-1 * #{token('s-1')}) 0 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.spotlight__close:hover { background: token('bg-hover-alpha'); color: token('text-primary'); }
+.spotlight__body { color: token('text-secondary'); }
+.spotlight__actions {
+  @include flex-center;
+  justify-content: flex-end;
+  gap: token('s-2');
+  margin-top: token('s-1');
+}
+
+// ---------- Copyable values ----------
+.copyable {
+  @include inline-flex-center;
+  gap: token('s-1');
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 token('s-1');
+  margin: 0 calc(-1 * #{token('s-1')});
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: copy;
+}
+.copyable--mono { font-family: token('font-mono'); }
+.copyable:hover { background: token('bg-hover-alpha'); }
+.copyable__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.copyable__icon {
+  @include inline-flex-center;
+  flex: 0 0 auto;
+  color: token('text-tertiary');
+  opacity: 0;
+  transition: opacity token('motion-fade') token('ease-fade');
+}
+.copyable:hover .copyable__icon,
+.copyable:focus-visible .copyable__icon,
+.copyable.is-copied .copyable__icon { opacity: 1; }
+.copyable.is-copied .copyable__icon { color: token('money-in'); }
+@media (hover: none) {
+  .copyable__icon { opacity: 1; }
+}
+.copyable--truncate { display: inline-flex; width: 100%; }
+.copyable--truncate .copyable__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.copyable--block {
+  display: flex;
+  width: 100%;
+  margin: 0;
+  padding: token('s-1') token('s-2');
+  background: token('bg-panel');
+  border: 1px solid token('border-alpha');
+}
+.tooltip-copyable {
+  @include flex-column;
+  gap: 2px;
+}
+.tooltip-copyable__value {
+  font-family: token('font-mono');
+  overflow-wrap: anywhere;
+}
+.tooltip-copyable__hint { opacity: 0.75; }
+
+// ---------- Empty-state variants ----------
+.empty-state--filtered .empty-state__icon,
+.empty-state--caught-up .empty-state__icon {
+  color: token('text-secondary');
+}
+.empty-state--caught-up .empty-state__icon {
+  color: token('money-in');
+  background: token('variance-favourable-soft');
+  border-color: transparent;
+}
+
+// ---------- Settings: reset tips row ----------
+.settings-tips-row {
+  @include flex-between;
+  flex-wrap: wrap;
+  gap: token('s-3');
+  padding-top: token('s-3');
+  border-top: 1px solid token('border-alpha');
+}
+.settings-tips-row__label { font-weight: 500; color: token('text-primary'); }
+
+// ---------- Demo banner switchers ----------
+.demo-banner__switch {
+  @include inline-flex-center;
+  gap: token('s-1');
+  max-width: 100%;
+  white-space: nowrap;
+}
+.demo-banner__switch strong { color: token('blue-11'); }
+.demo-banner__compact { display: none; }
+
+// Mid widths: drop the long sentence before the controls start to wrap.
+@media (max-width: 1240px) {
+  .demo-banner__detail { display: none; }
+}
+
+@media (max-width: 760px) {
+  // Phones: "Demo · Owner ▾" opens every demo control in one sheet.
+  .demo-banner__copy { display: none; }
+  .demo-banner__compact {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
