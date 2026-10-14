@@ -452,7 +452,7 @@ function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps)
             left: rect.left,
             minWidth: rect.width,
             zIndex: 1000,
-            background: "var(--bg)",
+            background: "var(--bg-panel)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             padding: 6,

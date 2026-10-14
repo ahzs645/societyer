@@ -3,11 +3,3 @@
 # Format: <repo-relative file> <--property>
 # Owners: replace each read with a real token from src/theme/tokens.css and
 # delete the line here. The check warns when an entry is no longer needed.
-
-# Record engine (owned by the record-table workstream): use --bg-panel.
-src/platform/record-engine/record-field/components/FieldInput.tsx --bg
-
-# Record table styles (owned by the record-table workstream): use
-# token('warn-soft') / token('orange-6') / token('orange-4').
-src/styles/_record-table.scss --warn-border
-src/styles/_record-table.scss --warn-soft-strong

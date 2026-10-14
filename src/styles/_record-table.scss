@@ -103,11 +103,11 @@
 .record-table__toolbar-button--dirty {
   background: var(--warn-soft, rgba(234, 179, 8, 0.12));
   color: var(--warn, #b45309);
-  border-color: var(--warn-border, rgba(234, 179, 8, 0.35));
+  border-color: token('orange-6');
   font-weight: 600;
 
   &:hover:not(:disabled) {
-    background: var(--warn-soft-strong, rgba(234, 179, 8, 0.2));
+    background: token('orange-4');
   }
 
   &:disabled {

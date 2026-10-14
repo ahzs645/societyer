@@ -50,6 +50,8 @@ const DEFINITION_PATTERNS: RegExp[] = [
   /(?<![\w-])--([a-zA-Z0-9_-]+)\s*:/g,
   // Style objects: { "--x": value } or { '--x': value }.
   /["'`]--([a-zA-Z0-9_-]+)["'`]\s*[:,]/g,
+  // Computed keys: { ["--x" as string]: value } or { ["--x"]: value }.
+  /\[\s*["'`]--([a-zA-Z0-9_-]+)["'`](?:\s+as\s+\w+)?\s*\]\s*:/g,
   // element.style.setProperty("--x", ...)
   /setProperty\(\s*["'`]--([a-zA-Z0-9_-]+)["'`]/g,
 ];
