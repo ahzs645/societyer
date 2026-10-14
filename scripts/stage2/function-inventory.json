@@ -2033,6 +2033,60 @@
     ]
   },
   {
+    "key": "convex:aiFilter:_beginFilterSuggestion",
+    "surface": "convex",
+    "name": "aiFilter:_beginFilterSuggestion",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/aiFilter.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:aiFilter:_finishFilterSuggestion",
+    "surface": "convex",
+    "name": "aiFilter:_finishFilterSuggestion",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/aiFilter.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "eventId",
+        "table": "aiAgentAuditEvents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:aiFilterActions:suggestRecordFilter",
+    "surface": "convex",
+    "name": "aiFilterActions:suggestRecordFilter",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/aiFilterActions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:aiSettings:_getModelCatalogCache",
     "surface": "convex",
     "name": "aiSettings:_getModelCatalogCache",

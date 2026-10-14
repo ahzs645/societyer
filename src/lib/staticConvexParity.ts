@@ -32,6 +32,9 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "filingBot:run",
   // Server-side intake field extraction; the local runtime extracts in a browser worker instead.
   "intakeActions:extractRun",
+  // Record-table "Ask AI" through the workspace AI provider. The demo and local
+  // runtimes never offer it (local/desktop use a device key in the browser instead).
+  "aiFilterActions:suggestRecordFilter",
   "financialHub:sync",
   "minutes:generateDraft",
   "notifications:sendDigest",

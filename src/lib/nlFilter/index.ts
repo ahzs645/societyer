@@ -4,4 +4,4 @@ export { nlFieldsFromColumns } from "./fields";
 export { exampleQueries } from "./examples";
 export { combineFilterTrees, canMergeFilters, type ApplyMode } from "./merge";
 export { readRecentQueries, pushRecentQuery } from "./recents";
-export { buildAiFilterPrompt, validateAiFilterReply, extractJsonObject, aiFilterSchema } from "./ai";
+export { buildAiFilterPrompt, validateAiFilterReply, aiFilterToParseResult, extractJsonObject, aiFilterSchema } from "./ai";
