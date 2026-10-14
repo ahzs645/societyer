@@ -144,6 +144,7 @@ import * as calendarFeedFns from "./calendarFeed";
 const communicationsFns = lazyHandlers(() => import("./communications"), "communications");
 import * as documentVersionsFns from "./documentVersions";
 const financialHubFns = lazyHandlers(() => import("./financialHub"), "financialHub");
+const payeeAliasesFns = lazyHandlers(() => import("./payeeAliases"), "payeeAliases");
 const importSessionsFns = lazyHandlers(() => import("./importSessions"), "importSessions");
 const importReviewQueueFns = lazyHandlers(() => import("./importReviewQueue"), "importReviewQueue");
 import * as membersFns from "./members";
@@ -1347,6 +1348,12 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // financialHub
   definePortableMutation({ name: "financialHub:updateTransaction", handler: financialHubFns.updateTransactionPortable }),
+  definePortableMutation({ name: "financialHub:bulkUpdateTransactions", handler: financialHubFns.bulkUpdateTransactionsPortable }),
+  definePortableMutation({ name: "financialHub:restoreTransactions", handler: financialHubFns.restoreTransactionsPortable }),
+  // payeeAliases
+  definePortableQuery({ name: "payeeAliases:list", handler: payeeAliasesFns.listPortable }),
+  definePortableMutation({ name: "payeeAliases:upsert", handler: payeeAliasesFns.upsertPortable }),
+  definePortableMutation({ name: "payeeAliases:remove", handler: payeeAliasesFns.removePortable }),
   definePortableQuery({ name: "financialHub:getConnection", handler: financialHubFns.getConnectionPortable }),
   definePortableQuery({ name: "financialHub:summary", handler: financialHubFns.summaryPortable }),
 

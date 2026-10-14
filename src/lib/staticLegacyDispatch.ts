@@ -43,6 +43,7 @@ import {
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
 import { rulePatchForTransaction } from "../../shared/transactionRules";
+import { aliasedCounterparty } from "../../shared/payeeAliases";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
 import {
   byId,
@@ -1052,6 +1053,7 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
     );
     const rows = (args?.rows ?? []) as any[];
     const rules = scopedRows(store?.listRows("transactionRules", args) ?? [], args);
+    const payeeAliases = scopedRows(store?.listRows("payeeAliases", args) ?? [], args);
     const appliedAtISO = new Date().toISOString();
     let categorized = 0;
     let inserted = 0;
@@ -1077,7 +1079,7 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         description: row.description,
         amountCents: row.amountCents,
         category: row.category,
-        counterparty: row.counterparty,
+        counterparty: aliasedCounterparty(payeeAliases as any[], row) ?? row.counterparty,
         ...(ruled?.patch ?? {}),
       });
       seen.add(externalId);

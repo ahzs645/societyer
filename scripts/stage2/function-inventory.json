@@ -8337,6 +8337,40 @@
     ]
   },
   {
+    "key": "convex:financialHub:bulkUpdateTransactions",
+    "surface": "convex",
+    "name": "financialHub:bulkUpdateTransactions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financialHub.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "financialTransactions",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "patch.fundRestrictionId",
+        "table": "fundRestrictions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:financialHub:connections",
     "surface": "convex",
     "name": "financialHub:connections",
@@ -8561,6 +8595,28 @@
     ]
   },
   {
+    "key": "convex:financialHub:restoreTransactions",
+    "surface": "convex",
+    "name": "financialHub:restoreTransactions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financialHub.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:financialHub:saveBudgetLines",
     "surface": "convex",
     "name": "financialHub:saveBudgetLines",
@@ -8697,6 +8753,12 @@
         "table": "financialTransactions",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "patch.receiptDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",
@@ -17303,6 +17365,72 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payeeAliases:list",
+    "surface": "convex",
+    "name": "payeeAliases:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payeeAliases.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payeeAliases:remove",
+    "surface": "convex",
+    "name": "payeeAliases:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payeeAliases.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payeeAliases",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payeeAliases:upsert",
+    "surface": "convex",
+    "name": "payeeAliases:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payeeAliases.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payeeAliases",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -30230,6 +30358,40 @@
     ]
   },
   {
+    "key": "portable:financialHub:bulkUpdateTransactions",
+    "surface": "portable",
+    "name": "financialHub:bulkUpdateTransactions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "financialTransactions",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "patch.fundRestrictionId",
+        "table": "fundRestrictions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:financialHub:connections",
     "surface": "portable",
     "name": "financialHub:connections",
@@ -30366,6 +30528,28 @@
     ]
   },
   {
+    "key": "portable:financialHub:restoreTransactions",
+    "surface": "portable",
+    "name": "financialHub:restoreTransactions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:financialHub:saveBudgetLines",
     "surface": "portable",
     "name": "financialHub:saveBudgetLines",
@@ -30486,6 +30670,12 @@
         "table": "financialTransactions",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "patch.receiptDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",
@@ -38288,6 +38478,72 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payeeAliases:list",
+    "surface": "portable",
+    "name": "payeeAliases:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payeeAliases:remove",
+    "surface": "portable",
+    "name": "payeeAliases:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payeeAliases",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payeeAliases:upsert",
+    "surface": "portable",
+    "name": "payeeAliases:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payeeAliases",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
       }
     ]
   },

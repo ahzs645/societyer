@@ -197,6 +197,9 @@ export const accountingTables = {
     method: v.optional(v.string()), // e.g. "Interac e-Transfer", "Visa ••4417", "Pre-authorized debit"
     memo: v.optional(v.string()), // free-text note on the transaction
     receiptStatus: v.optional(v.string()), // attached | missing
+    // The receipt document attached from the transaction panel; receiptStatus
+    // follows it (attached while set, missing once removed).
+    receiptDocumentId: v.optional(v.id("documents")),
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])
@@ -323,4 +326,18 @@ export const accountingTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_snapshot", ["snapshotId"]),
+
+  // Payee rename rules: a raw bank payee (matched exactly or by contained
+  // text, ignoring capitals) shows as `displayName` in transaction lists, and
+  // new imports store the display name as the counterparty.
+  payeeAliases: defineTable({
+    societyId: v.id("societies"),
+    match: v.string(),
+    matchType: v.string(), // exact | contains
+    displayName: v.string(),
+    createdByUserId: v.optional(v.id("users")),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"]),
 };

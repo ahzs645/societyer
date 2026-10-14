@@ -12,6 +12,7 @@ import {
 import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
 import { rulePatchForTransaction } from "../shared/transactionRules";
+import { aliasedCounterparty } from "../shared/payeeAliases";
 import {
   connectionsPortable,
   disconnectPortable,
@@ -29,6 +30,8 @@ import {
   saveBudgetLinesPortable,
   getConnectionPortable,
   updateTransactionPortable,
+  bulkUpdateTransactionsPortable,
+  restoreTransactionsPortable,
   summaryPortable,
 } from "../shared/functions/financialHub";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -169,8 +172,9 @@ export const saveBudgetLines = authorizedMutation("financialHub:saveBudgetLines"
 });
 
 // Edit a single imported/synced transaction. Only the user-correctable fields
-// (date, description, category, counterparty, amount) are patchable; the
-// account binding and external/source identifiers stay immutable.
+// (date, description, category, counterparty, amount, notes and the receipt
+// document) are patchable; the account binding and external/source
+// identifiers stay immutable. `receiptDocumentId: null` removes the receipt.
 export const updateTransaction = authorizedMutation("financialHub:updateTransaction", mutation)({
   args: {
     id: v.id("financialTransactions"),
@@ -180,11 +184,40 @@ export const updateTransaction = authorizedMutation("financialHub:updateTransact
       category: v.optional(v.string()),
       counterparty: v.optional(v.string()),
       amountCents: v.optional(v.number()),
+      memo: v.optional(v.string()),
+      receiptDocumentId: v.optional(v.union(v.id("documents"), v.null())),
     }),
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
   handler: async (ctx, args) => updateTransactionPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Bulk island on the transactions table: one change to many lines, returning
+// the previous values so the client can undo with restoreTransactions.
+export const bulkUpdateTransactions = authorizedMutation("financialHub:bulkUpdateTransactions", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    ids: v.array(v.id("financialTransactions")),
+    patch: v.object({
+      category: v.optional(v.string()),
+      fundRestrictionId: v.optional(v.union(v.id("fundRestrictions"), v.null())),
+      reviewed: v.optional(v.boolean()),
+    }),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => bulkUpdateTransactionsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const restoreTransactions = authorizedMutation("financialHub:restoreTransactions", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    rows: v.array(v.object({ id: v.id("financialTransactions"), values: v.any() })),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => restoreTransactionsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const oauthUrl = authorizedQuery("financialHub:oauthUrl", query)({
@@ -730,6 +763,11 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
       .query("transactionRules")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
       .collect()) as any[];
+    // Payee rename rules store the display name as the counterparty.
+    const payeeAliases = (await ctx.db
+      .query("payeeAliases")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect()) as any[];
     const appliedAtISO = new Date().toISOString();
     const ruleBatch = `import-${appliedAtISO}`;
     let categorized = 0;
@@ -756,7 +794,7 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
         description: row.description,
         amountCents: row.amountCents,
         category: row.category,
-        counterparty: row.counterparty,
+        counterparty: aliasedCounterparty(payeeAliases, row) ?? row.counterparty,
         ...(ruled?.patch ?? {}),
       });
       seen.add(externalId);
