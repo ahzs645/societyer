@@ -1,4 +1,4 @@
-import type { ApprovalRule, ApprovalVote } from "../../../../shared/expenseApprovals";
+import type { ApprovalRule, ApprovalVote, ApproverAccess } from "../../../../shared/expenseApprovals";
 
 export type TrailEntry = { atISO: string; action: string; actorName: string; actorUserId?: string; note?: string };
 
@@ -41,8 +41,17 @@ export type ApprovalQueue = {
     source: "configured" | "signing_authority" | "default";
     suggested: ApprovalRule[];
     signingAuthorityCount: number;
+    approverAccess: ApproverAccess;
   };
-  currentUser: { _id: string; role: string; name: string };
+  currentUser: { _id: string; role: string; name: string; hasFinanceWrite: boolean };
+  /** Who may approve: finance edit access (default) or anyone named in the matching rule. */
+  approverAccess: {
+    value: ApproverAccess;
+    isDefault: boolean;
+    canChange: boolean;
+    updatedAtISO?: string;
+    updatedByName?: string;
+  };
   approvers: { _id: string; name: string; role: string }[];
 };
 

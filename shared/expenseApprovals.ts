@@ -23,6 +23,28 @@ export type ApprovalRule = {
   label?: string;
 };
 
+/**
+ * Who may record an approval vote, per workspace:
+ * - "finance_writers" (default): approving needs finance edit access (the
+ *   permission marking claims paid and editing rules needs); the rules still
+ *   apply on top (count, approver roles/people, no self-approval).
+ * - "rule_roles": anyone with finance read access whose role or name is listed
+ *   in the matching rule may approve, including read-only directors.
+ * Viewers and members never approve under either setting.
+ */
+export const APPROVER_ACCESS_MODES = ["finance_writers", "rule_roles"] as const;
+export type ApproverAccess = (typeof APPROVER_ACCESS_MODES)[number];
+export const DEFAULT_APPROVER_ACCESS: ApproverAccess = "finance_writers";
+export const FINANCE_EDIT_REQUIRED_REASON = "Approving requires finance edit access in this workspace.";
+
+/** Stored values outside the known modes fall back to the (stricter) default. */
+export function normalizeApproverAccess(value: unknown): ApproverAccess {
+  return APPROVER_ACCESS_MODES.includes(value as ApproverAccess) ? (value as ApproverAccess) : DEFAULT_APPROVER_ACCESS;
+}
+
+/** The workspace setting plus whether this person holds finance edit access. */
+export type ApproverAccessContext = { approverAccess: ApproverAccess; hasFinanceWrite: boolean };
+
 export type ApprovalVote = { userId: string; name: string; role?: string; atISO: string };
 
 export type ApproverCandidate = { _id: string; role?: string | null; status?: string | null };
@@ -93,9 +115,18 @@ function isApproverRole(role: string | null | undefined): role is ApproverRole {
   return APPROVER_ROLES.includes(String(role) as ApproverRole);
 }
 
-export function approverEligibility(rule: ApprovalRule, user: ApproverCandidate, claim: ClaimForApproval): Eligibility {
+/**
+ * Whether this person may approve the claim under the rule. Pass `access`
+ * (the workspace's approver-access setting and the person's finance edit
+ * access) wherever a vote is recorded or offered; without it only the rule
+ * itself is checked.
+ */
+export function approverEligibility(rule: ApprovalRule, user: ApproverCandidate, claim: ClaimForApproval, access?: ApproverAccessContext): Eligibility {
   if (user.status && user.status !== "Active") return { eligible: false, reason: "Your membership is not active." };
   if (!isApproverRole(user.role)) return { eligible: false, reason: "Only owners, admins and directors can approve claims." };
+  if (access && normalizeApproverAccess(access.approverAccess) === "finance_writers" && !access.hasFinanceWrite) {
+    return { eligible: false, reason: FINANCE_EDIT_REQUIRED_REASON };
+  }
   if (rule.blockSelfApproval && claim.claimantUserId && String(claim.claimantUserId) === String(user._id)) {
     return { eligible: false, reason: "You can't approve your own claim." };
   }
@@ -137,6 +168,13 @@ export function validateApprovalRules(rules: readonly ApprovalRule[]): string[] 
 }
 
 /** Number of eligible approvers available for a rule — a rule nobody can satisfy is a configuration error. */
-export function eligibleApproverCount(rule: ApprovalRule, users: readonly ApproverCandidate[], claim: ClaimForApproval): number {
-  return users.filter((user) => approverEligibility(rule, user, { ...claim, approvals: [] }).eligible).length;
+export function eligibleApproverCount(
+  rule: ApprovalRule,
+  users: readonly ApproverCandidate[],
+  claim: ClaimForApproval,
+  access?: { approverAccess: ApproverAccess; hasFinanceWrite: (user: ApproverCandidate) => boolean },
+): number {
+  return users.filter((user) =>
+    approverEligibility(rule, user, { ...claim, approvals: [] }, access ? { approverAccess: access.approverAccess, hasFinanceWrite: access.hasFinanceWrite(user) } : undefined).eligible,
+  ).length;
 }

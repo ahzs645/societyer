@@ -3,7 +3,9 @@
  * (list / upsert / setStatus / remove).
  *
  * Reads/writes the `expenseReports` table over `ctx.db`, and on payment posts a
- * double-entry journal entry to `journalEntries`/`journalLines`. Each handler
+ * double-entry journal entry to `journalEntries`/`journalLines`. Approval votes
+ * follow `expenseApprovalRules` and the workspace's approver-access setting
+ * (`expenseApprovalSettings`; by default approving needs finance edit access). Each handler
  * runs unchanged on hosted Convex, the local Dexie runtime, and the convex-test
  * oracle.
  */
@@ -11,15 +13,22 @@
 import { getPortable as getAccessibleDocument, requireDocumentAccess } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
 import { todayDateOnly } from "../dateOnly";
 import {
+  APPROVER_ACCESS_MODES,
   APPROVER_ROLES,
   DEFAULT_APPROVAL_RULES,
+  DEFAULT_APPROVER_ACCESS,
+  FINANCE_EDIT_REQUIRED_REASON,
   approverEligibility,
+  normalizeApproverAccess,
   ruleForAmount,
   rulesFromSigningAuthorities,
   validateApprovalRules,
   type ApprovalRule,
+  type ApproverAccess,
+  type ApproverAccessContext,
 } from "../expenseApprovals";
 
 /** Statuses only the approval workflow may set (never a plain edit). */
@@ -165,7 +174,7 @@ export async function setStatusPortable(
   if (status === "Approved") {
     // An approval is a vote under the approval rules, not a status edit.
     const policy = await loadApprovalPolicy(ctx, societyId);
-    await approveOne(ctx, report, actor, policy.rules);
+    await approveOne(ctx, report, actor, policy.rules, await approverAccessFor(ctx, societyId, policy.approverAccess));
     return;
   }
   if (status === "Rejected") throw new Error("Decline claims from the approvals queue so a reason is recorded.");
@@ -274,9 +283,10 @@ function withTrail(report: any, entry: ReturnType<typeof trailEntry>) {
 /** The effective approval rules: configured rows, else rules derived from the
  * recorded signing-authority tiers, else the built-in defaults. */
 async function loadApprovalPolicy(ctx: PortableQueryCtx, societyId: string) {
-  const [configured, authorities] = await Promise.all([
+  const [configured, authorities, settings] = await Promise.all([
     ctx.db.query<ApprovalRuleRow>("expenseApprovalRules").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("signingAuthorities").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    loadApprovalSettings(ctx, societyId),
   ]);
   const ordered = [...configured].sort((a, b) => a.order - b.order || a.minAmountCents - b.minAmountCents);
   const fromSigning = rulesFromSigningAuthorities(authorities as any[], todayDateOnly());
@@ -293,7 +303,35 @@ async function loadApprovalPolicy(ctx: PortableQueryCtx, societyId: string) {
         label: row.label,
       }))
     : fromSigning ?? DEFAULT_APPROVAL_RULES;
-  return { rules, source, suggested: fromSigning ?? DEFAULT_APPROVAL_RULES, signingAuthorityCount: authorities.length };
+  return {
+    rules,
+    source,
+    suggested: fromSigning ?? DEFAULT_APPROVAL_RULES,
+    signingAuthorityCount: authorities.length,
+    approverAccess: normalizeApproverAccess(settings?.approverAccess),
+    approverAccessUpdatedAtISO: settings?.updatedAtISO as string | undefined,
+    approverAccessUpdatedByName: settings?.updatedByName as string | undefined,
+  };
+}
+
+async function loadApprovalSettings(ctx: PortableQueryCtx, societyId: string): Promise<any | null> {
+  const rows = await ctx.db.query("expenseApprovalSettings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  // At most one row is written; prefer the latest if an import ever left two.
+  return [...rows].sort((a: any, b: any) => String(b.updatedAtISO).localeCompare(String(a.updatedAtISO)))[0] ?? null;
+}
+
+/** Finance edit access of the current principal, judged as the action policy would (role and service scopes). */
+async function holdsFinanceWrite(ctx: PortableQueryCtx, societyId: string): Promise<boolean> {
+  try {
+    await requirePermissionPortable(ctx, societyId, "financials:write");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function approverAccessFor(ctx: PortableQueryCtx, societyId: string, approverAccess: ApproverAccess): Promise<ApproverAccessContext> {
+  return { approverAccess, hasFinanceWrite: await holdsFinanceWrite(ctx, societyId) };
 }
 
 function ruleFor(rules: readonly ApprovalRule[], amountCents: number): ApprovalRule {
@@ -313,18 +351,20 @@ const QUEUE_TABS = {
  */
 export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   const actor = await actorFor(ctx, societyId);
-  const [reports, users, policy] = await Promise.all([
+  const [reports, users, policy, hasFinanceWrite] = await Promise.all([
     ctx.db.query("expenseReports").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     loadApprovalPolicy(ctx, societyId),
+    holdsFinanceWrite(ctx, societyId),
   ]);
+  const access: ApproverAccessContext = { approverAccess: policy.approverAccess, hasFinanceWrite };
   const me = { _id: String(actor.user._id), role: actor.role, status: actor.user.status };
   const rows = await Promise.all(
     reports.map(async (report: any) => {
       const rule = ruleFor(policy.rules, report.amountCents ?? 0);
       const required = report.status === "Submitted" ? rule.requiredApprovals : report.requiredApprovals ?? rule.requiredApprovals;
       const approvals = report.approvals ?? [];
-      const eligibility = report.status === "Submitted" ? approverEligibility(rule, me, report) : { eligible: false as const, reason: "Only submitted claims can be approved." };
+      const eligibility = report.status === "Submitted" ? approverEligibility(rule, me, report, access) : { eligible: false as const, reason: "Only submitted claims can be approved." };
       return {
         _id: String(report._id),
         title: report.title,
@@ -370,18 +410,32 @@ export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }
     rows,
     counts,
     policy,
-    currentUser: { _id: me._id, role: me.role, name: actor.name },
+    currentUser: { _id: me._id, role: me.role, name: actor.name, hasFinanceWrite },
+    approverAccess: {
+      value: policy.approverAccess,
+      isDefault: policy.approverAccess === DEFAULT_APPROVER_ACCESS,
+      canChange: hasFinanceWrite,
+      updatedAtISO: policy.approverAccessUpdatedAtISO,
+      updatedByName: policy.approverAccessUpdatedByName,
+    },
     approvers: users
       .filter((u: any) => APPROVER_ROLES.includes(u.role) && (!u.status || u.status === "Active"))
       .map((u: any) => ({ _id: String(u._id), name: String(u.displayName ?? u.name ?? u.email ?? "Member"), role: u.role })),
   };
 }
 
-async function approveOne(ctx: PortableMutationCtx, report: any, actor: Awaited<ReturnType<typeof actorFor>>, rules: readonly ApprovalRule[]) {
+/** Records one approval vote. Every path that approves (decide, bulk approve, setStatus "Approved") goes through here. */
+async function approveOne(
+  ctx: PortableMutationCtx,
+  report: any,
+  actor: Awaited<ReturnType<typeof actorFor>>,
+  rules: readonly ApprovalRule[],
+  access: ApproverAccessContext,
+) {
   if (report.status !== "Submitted") throw new Error("Only submitted claims can be approved.");
   const rule = ruleFor(rules, report.amountCents ?? 0);
   const me = { _id: String(actor.user._id), role: actor.role, status: actor.user.status };
-  const eligibility = approverEligibility(rule, me, report);
+  const eligibility = approverEligibility(rule, me, report, access);
   if (!eligibility.eligible) throw new Error(eligibility.reason);
   const nowISO = new Date().toISOString();
   const approvals = [...(report.approvals ?? []), { userId: me._id, name: actor.name, role: actor.role || undefined, atISO: nowISO }];
@@ -406,13 +460,14 @@ export async function decidePortable(
   const societyId = String(report.societyId);
   const actor = await actorFor(ctx, societyId);
   const policy = await loadApprovalPolicy(ctx, societyId);
-  if (decision === "approve") return approveOne(ctx, report, actor, policy.rules);
+  const access = await approverAccessFor(ctx, societyId, policy.approverAccess);
+  if (decision === "approve") return approveOne(ctx, report, actor, policy.rules, access);
   if (decision !== "decline") throw new Error("Choose approve or decline.");
   if (report.status !== "Submitted" && report.status !== "Approved") throw new Error("Only submitted or approved claims can be declined.");
   const rule = ruleFor(policy.rules, report.amountCents ?? 0);
   // Anyone who could approve this claim may decline it.
-  const eligibility = approverEligibility(rule, { _id: String(actor.user._id), role: actor.role, status: actor.user.status }, { ...report, approvals: [] });
-  if (!eligibility.eligible) throw new Error(eligibility.reason.replace("approve", "decline"));
+  const eligibility = approverEligibility(rule, { _id: String(actor.user._id), role: actor.role, status: actor.user.status }, { ...report, approvals: [] }, access);
+  if (!eligibility.eligible) throw new Error(eligibility.reason.replace("approve", "decline").replace("Approving", "Declining"));
   const text = String(reason ?? "").trim();
   if (text.length < 3) throw new Error("Give a reason for declining.");
   const nowISO = new Date().toISOString();
@@ -431,6 +486,10 @@ export async function decidePortable(
 export async function bulkApprovePortable(ctx: PortableMutationCtx, { societyId, ids }: { societyId: string; ids: string[] }) {
   const actor = await actorFor(ctx, societyId);
   const policy = await loadApprovalPolicy(ctx, societyId);
+  const access = await approverAccessFor(ctx, societyId, policy.approverAccess);
+  // Refuse before looking up any claim, so the outcome never depends on (or
+  // reveals) which of the requested ids exist.
+  if (access.approverAccess === "finance_writers" && !access.hasFinanceWrite) throw new Error(FINANCE_EDIT_REQUIRED_REASON);
   const results: { id: string; status?: string; error?: string }[] = [];
   let notFound = 0;
   for (const id of [...new Set(ids)].slice(0, 200)) {
@@ -443,7 +502,7 @@ export async function bulkApprovePortable(ctx: PortableMutationCtx, { societyId,
       continue;
     }
     try {
-      const outcome = await approveOne(ctx, report, actor, policy.rules);
+      const outcome = await approveOne(ctx, report, actor, policy.rules, access);
       results.push({ id, status: outcome.status });
     } catch (error: any) {
       results.push({ id, error: String(error?.message ?? error) });
@@ -492,4 +551,39 @@ export async function saveApprovalRulesPortable(ctx: PortableMutationCtx, { soci
     await ctx.db.insert("expenseApprovalRules", { societyId, order, ...rule, createdAtISO: nowISO, updatedAtISO: nowISO });
   }
   return { saved: sorted.length };
+}
+
+const APPROVER_ACCESS_LABEL: Record<ApproverAccess, string> = {
+  finance_writers: "people with finance edit access",
+  rule_roles: "anyone named in an approval rule",
+};
+
+/**
+ * Choose who may approve claims in this workspace: people with finance edit
+ * access (the default) or anyone named in the matching approval rule,
+ * including directors with read-only finance access. Needs finance edit
+ * access and is recorded in the workspace activity log.
+ */
+export async function saveApproverAccessPortable(ctx: PortableMutationCtx, { societyId, approverAccess }: { societyId: string; approverAccess: string }) {
+  await requirePermissionPortable(ctx, societyId, "financials:write");
+  if (!APPROVER_ACCESS_MODES.includes(approverAccess as ApproverAccess)) throw new Error("Choose who can approve claims.");
+  const next = approverAccess as ApproverAccess;
+  const actor = await actorFor(ctx, societyId);
+  const existing = await loadApprovalSettings(ctx, societyId);
+  const previous = normalizeApproverAccess(existing?.approverAccess);
+  const nowISO = new Date().toISOString();
+  const stamp = { approverAccess: next, updatedByName: actor.name, updatedAtISO: nowISO, ...(actor.id ? { updatedByUserId: actor.id } : {}) };
+  if (existing) await ctx.db.patch(existing._id, stamp);
+  else await ctx.db.insert("expenseApprovalSettings", { societyId, ...stamp, createdAtISO: nowISO });
+  if (previous !== next) {
+    await ctx.db.insert("activity", {
+      societyId,
+      actor: actor.name,
+      entityType: "expenseApprovalSettings",
+      action: "approver-access-changed",
+      summary: `Changed who can approve expense claims from ${APPROVER_ACCESS_LABEL[previous]} to ${APPROVER_ACCESS_LABEL[next]}.`,
+      createdAtISO: nowISO,
+    });
+  }
+  return { approverAccess: next, changed: previous !== next };
 }

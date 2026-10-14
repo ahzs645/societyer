@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 /**
  * Finance workflow tables: transaction categorisation rules, bank statement
- * reconciliation periods and expense-claim approval rules.
+ * reconciliation periods, expense-claim approval rules and approval settings.
  */
 
 export const transactionRuleConditionValidator = v.object({
@@ -76,6 +76,17 @@ export const financeWorkflowTables = {
     blockSelfApproval: v.boolean(),
     enabled: v.boolean(),
     label: v.optional(v.string()),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  }).index("by_society", ["societyId"]),
+
+  // One row per workspace at most; no row means the defaults
+  // (approverAccess "finance_writers": approving needs finance edit access).
+  expenseApprovalSettings: defineTable({
+    societyId: v.id("societies"),
+    approverAccess: v.string(), // finance_writers | rule_roles
+    updatedByUserId: v.optional(v.id("users")),
+    updatedByName: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   }).index("by_society", ["societyId"]),

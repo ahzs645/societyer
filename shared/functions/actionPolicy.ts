@@ -125,7 +125,11 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (name === "workflows:generatedDocumentPreflight") return "tasks:write";
   if (["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"].includes(name)) return "documents:read";
   if (name === "minutes:approve") return "minutes:approve";
-  // Approval votes are governed by the expense approval rules in the handler (directors may approve; viewers never can).
+  // Approval votes need finance read here; the handler then applies the
+  // workspace's approver-access setting (by default finance edit access, i.e.
+  // financials:write, is required) and the expense approval rules. Viewers
+  // never approve. setStatus keeps financials:write; saveApproverAccess
+  // falls through to financials:write below.
   if (name === "expenseReports:decide" || name === "expenseReports:bulkApprove") return "financials:read";
   if (resource === "exports") return kind === "query" && action === "list" ? "exports:read" : "exports:download";
   return `${resource}:${kind === "query" ? "read" : "write"}` as Permission;

@@ -1,6 +1,6 @@
 // Finance workflows end-to-end on the portable engine, seeded with the demo
 // workspace: statement periods (complete, out of balance, reopen), rule
-// application + undo, and server-side approval-rule enforcement.
+// application + undo, and server-side approval-rule and approver-access enforcement.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
 import { DEMO_RECONCILIATION, feedTransactionId } from "../src/lib/staticFinanceWorkflowFixtures";
@@ -10,6 +10,7 @@ import * as recon from "../shared/functions/reconciliation";
 import * as rules from "../shared/functions/transactionRules";
 import * as exp from "../shared/functions/expenseReports";
 import { requireFunctionAction } from "../shared/functions/actionPolicy";
+import { FINANCE_EDIT_REQUIRED_REASON } from "../shared/expenseApprovals";
 
 const seed: Record<string, any[]> = {};
 for (const [k, v] of Object.entries(tables as Record<string, any[]>)) seed[k] = JSON.parse(JSON.stringify(v));
@@ -139,23 +140,43 @@ ws = await rules.workspacePortable(mina, { societyId: S });
 assert.equal(ws.rules[0]._id, newRule);
 await assert.rejects(() => rules.upsertPortable(mina, { societyId: S, name: "", conditions: [], actions: {} }), /name/);
 
-// ---- approvals
+// ---- approvals (default approver access: finance edit access required)
+// Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with
+// read-only finance access; a Viewer is added below.
 let q = await exp.approvalQueuePortable(mina, { societyId: S });
 assert.deepEqual(q.counts, { awaiting: 4, awaitingMe: 3, approved: 1, paid: 1, closed: 2, drafts: 2 });
 assert.equal(q.policy.source, "configured");
+assert.deepEqual(
+  { value: q.approverAccess.value, isDefault: q.approverAccess.isDefault, canChange: q.approverAccess.canChange },
+  { value: "finance_writers", isDefault: true, canChange: true },
+  "no stored setting means the default: finance writers approve",
+);
 const toner = q.rows.find((r: any) => r._id === "static_expense_printer_toner");
 assert.equal(toner.canApprove, false);
 assert.match(toner.cannotApproveReason, /own claim/);
 await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_printer_toner", decision: "approve" }), /own claim/);
-// dual approval: Mina approves dinner (0->1 of 2), then Jordan completes
+// The default blocks a read-only director everywhere a vote can be recorded, and says why.
+let jq = await exp.approvalQueuePortable(jordan, { societyId: S });
+assert.equal(jq.counts.awaitingMe, 0, "a read-only director has nothing to approve by default");
+assert.equal(jq.approverAccess.canChange, false);
+const jordanSupplies = jq.rows.find((r: any) => r._id === "static_expense_workshop_supplies");
+assert.equal(jordanSupplies.canApprove, false);
+assert.equal(jordanSupplies.cannotApproveReason, FINANCE_EDIT_REQUIRED_REASON);
+await assert.rejects(() => exp.decidePortable(jordan, { id: "static_expense_workshop_supplies", decision: "approve" }), /finance edit access/);
+await assert.rejects(() => exp.decidePortable(jordan, { id: "static_expense_workshop_supplies", decision: "decline", reason: "Not budgeted" }), /Declining requires finance edit access/);
+await assert.rejects(() => exp.setStatusPortable(jordan, { id: "static_expense_workshop_supplies", status: "Approved" }), /finance edit access/);
+await assert.rejects(() => exp.bulkApprovePortable(jordan, { societyId: S, ids: ["static_expense_workshop_supplies"] }), /finance edit access/);
+assert.equal((await db.get("static_expense_workshop_supplies")).approvals.length, 0, "no vote was recorded");
+// dual approval by two finance writers: Mina approves dinner (0->1 of 2), then Avery completes
 let r = await exp.decidePortable(mina, { id: "static_expense_appreciation_dinner", decision: "approve" });
 assert.deepEqual(r, { status: "Submitted", approvals: 1, required: 2 });
 await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_appreciation_dinner", decision: "approve" }), /already/);
-await assert.rejects(() => exp.decidePortable(avery, { id: "static_expense_appreciation_dinner", decision: "approve" }), /own claim/);
-r = await exp.decidePortable(jordan, { id: "static_expense_appreciation_dinner", decision: "approve" });
+await assert.rejects(() => exp.decidePortable(jordan, { id: "static_expense_appreciation_dinner", decision: "approve" }), /finance edit access/);
+r = await exp.decidePortable(avery, { id: "static_expense_appreciation_dinner", decision: "approve" });
 assert.equal(r.status, "Approved");
-// legacy setStatus Approved is a vote
-await exp.setStatusPortable(jordan, { id: "static_expense_workshop_supplies", status: "Approved" });
+// legacy setStatus Approved is a vote (and obeys the rules: Avery can't approve her own claim)
+await assert.rejects(() => exp.setStatusPortable(avery, { id: "static_expense_workshop_supplies", status: "Approved" }), /own claim/);
+await exp.setStatusPortable(mina, { id: "static_expense_workshop_supplies", status: "Approved" });
 assert.equal((await db.get("static_expense_workshop_supplies")).status, "Approved");
 await assert.rejects(() => exp.setStatusPortable(mina, { id: "static_expense_kitchen_deposit", status: "Paid" }), /approved/);
 await assert.rejects(() => exp.decidePortable(mina, { id: "static_expense_kitchen_deposit", decision: "decline" }), /reason/);
@@ -163,11 +184,75 @@ await assert.rejects(() => exp.upsertPortable(mina, { id: "static_expense_office
 const bulk = await exp.bulkApprovePortable(mina, { societyId: S, ids: ["static_expense_kitchen_deposit", "static_expense_printer_toner"] });
 assert.equal(bulk.approved, 1);
 assert.equal(bulk.skipped.length, 1);
-// action policy: a Director can call decide, a Viewer would be stopped by the handler; setStatus needs financials:write
+
+// A Viewer and a claim in another workspace, for the checks below.
+const viewerId = await db.insert("users", { societyId: S, displayName: "Vic Viewer", email: "vic@riverside.example", role: "Viewer", status: "Active" });
+const viewer = ctxFor(viewerId);
+const otherSociety = await db.insert("societies", { name: "Elsewhere Society" });
+const foreignClaim = await db.insert("expenseReports", { societyId: otherSociety, claimantName: "Someone Else", title: "Foreign claim", category: "Travel", amountCents: 5000, currency: "CAD", incurredAtISO: "2026-04-01", status: "Submitted", approvals: [] });
+const newClaim = (title: string) => exp.upsertPortable(avery, { societyId: S, claimantName: "Avery Santos", claimantUserId: "static_user_secretary", title, category: "Supplies", amountCents: 4200, currency: "CAD", incurredAtISO: "2026-04-20", status: "Submitted" });
+const pens = await newClaim("Pens");
+const chairs = await newClaim("Folding chairs");
+// Viewers never approve, under either setting.
+await assert.rejects(() => exp.decidePortable(viewer, { id: pens, decision: "approve" }), /owners, admins and directors/);
+
+// ---- saving the setting needs finance edit access and is audited
+await assert.rejects(() => exp.saveApproverAccessPortable(jordan, { societyId: S, approverAccess: "rule_roles" }), /financials:write/);
+await assert.rejects(() => exp.saveApproverAccessPortable(viewer, { societyId: S, approverAccess: "rule_roles" }), /financials:write/);
+await assert.rejects(() => requireFunctionAction(jordan, "expenseReports:saveApproverAccess", "mutation", { societyId: S, approverAccess: "rule_roles" }), /financials:write/);
+await assert.rejects(() => exp.saveApproverAccessPortable(mina, { societyId: S, approverAccess: "everyone" }), /who can approve/);
+const auditCount = async () => (await db.query("activity").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).filter((a: any) => a.action === "approver-access-changed").length;
+assert.equal(await auditCount(), 0);
+await requireFunctionAction(mina, "expenseReports:saveApproverAccess", "mutation", { societyId: S, approverAccess: "rule_roles" });
+assert.deepEqual(await exp.saveApproverAccessPortable(mina, { societyId: S, approverAccess: "rule_roles" }), { approverAccess: "rule_roles", changed: true });
+assert.equal(await auditCount(), 1, "the change is in the activity log");
+await exp.saveApproverAccessPortable(mina, { societyId: S, approverAccess: "rule_roles" });
+assert.equal(await auditCount(), 1, "saving the same value records nothing new");
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.approverAccess.value, "rule_roles");
+assert.equal(q.approverAccess.isDefault, false);
+assert.equal(q.approverAccess.updatedByName, "Mina Patel");
+
+// ---- rule_roles: a read-only director named by the rule may approve; Viewers still never
+jq = await exp.approvalQueuePortable(jordan, { societyId: S });
+assert.equal(jq.rows.find((row: any) => row._id === pens).canApprove, true);
+await requireFunctionAction(jordan, "expenseReports:decide", "mutation", { id: pens, decision: "approve" });
+r = await exp.decidePortable(jordan, { id: pens, decision: "approve" });
+assert.equal(r.status, "Approved");
+await assert.rejects(() => exp.decidePortable(viewer, { id: chairs, decision: "approve" }), /owners, admins and directors/);
+const viewerBulk = await exp.bulkApprovePortable(viewer, { societyId: S, ids: [chairs] });
+assert.equal(viewerBulk.approved + viewerBulk.recorded, 0, "a Viewer's bulk approve records nothing");
+// bulk approve obeys the setting and never echoes another workspace's ids
+const jordanBulk = await exp.bulkApprovePortable(jordan, { societyId: S, ids: [chairs, foreignClaim] });
+assert.equal(jordanBulk.approved, 1);
+assert.equal(jordanBulk.notFound, 1);
+assert.equal(jordanBulk.skipped.length, 0);
+assert.ok(!JSON.stringify(jordanBulk).includes(String(foreignClaim)), "foreign ids are counted, never echoed");
+assert.equal((await db.get(foreignClaim)).approvals.length, 0);
+// The rules still apply on top: a rule naming only owners blocks the director.
+await exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [{ minAmountCents: 0, requiredApprovals: 1, approverRoles: ["Owner"] }] });
+const ownersOnly = await newClaim("Stamps");
+await assert.rejects(() => exp.decidePortable(jordan, { id: ownersOnly, decision: "approve" }), /aren't an approver/);
+
+// ---- back to the default: the director is blocked again, foreign ids still not echoed
+await exp.saveApproverAccessPortable(mina, { societyId: S, approverAccess: "finance_writers" });
+assert.equal(await auditCount(), 2);
+await assert.rejects(() => exp.decidePortable(jordan, { id: ownersOnly, decision: "approve" }), /finance edit access/);
+await assert.rejects(
+  () => exp.bulkApprovePortable(jordan, { societyId: S, ids: [ownersOnly, foreignClaim] }),
+  (error: any) => /finance edit access/.test(error.message) && !error.message.includes(String(foreignClaim)),
+);
+const minaBulk = await exp.bulkApprovePortable(mina, { societyId: S, ids: [ownersOnly, foreignClaim] });
+assert.equal(minaBulk.approved, 1);
+assert.equal(minaBulk.notFound, 1);
+assert.ok(!JSON.stringify(minaBulk).includes(String(foreignClaim)));
+
+// action policy: decide/bulkApprove need finance read (the handler applies the setting); setStatus needs financials:write
 await requireFunctionAction(jordan, "expenseReports:decide", "mutation", { id: "static_expense_bus_rental", decision: "approve" });
+await requireFunctionAction(viewer, "expenseReports:bulkApprove", "mutation", { societyId: S, ids: [] });
 await assert.rejects(() => requireFunctionAction(jordan, "expenseReports:setStatus", "mutation", { id: "static_expense_bus_rental", status: "Paid" }), /financials:write/);
 await assert.rejects(() => exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [{ minAmountCents: 1000, requiredApprovals: 1 }] }), /\$0/);
 await exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [] });
 q = await exp.approvalQueuePortable(mina, { societyId: S });
 assert.equal(q.policy.source, "signing_authority");
-console.log("Finance workflow checks passed: periods, rules and approvals.");
+console.log("Finance workflow checks passed: periods, rules, approvals and approver access.");

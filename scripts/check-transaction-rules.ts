@@ -17,6 +17,7 @@ import {
   DEFAULT_APPROVAL_RULES,
   approvalProgress,
   approverEligibility,
+  normalizeApproverAccess,
   ruleForAmount,
   rulesFromSigningAuthorities,
   validateApprovalRules,
@@ -155,5 +156,16 @@ assert.equal(approverEligibility({ ...dual, approverRoles: ["Owner"], approverUs
 const voted = { ...claim, approvals: [{ userId: "mina", name: "Mina", atISO: "x" }] };
 assert.equal(approverEligibility(dual, { _id: "mina", role: "Owner" }, voted).eligible, false, "one vote per person");
 assert.deepEqual(approvalProgress(dual, voted), { required: 2, count: 1, remaining: 1, complete: false });
+// approver access: by default finance edit access is required on top of the rule; "rule_roles" relaxes only that
+const readOnly = { approverAccess: "finance_writers" as const, hasFinanceWrite: false };
+assert.match((approverEligibility(dual, { _id: "jordan", role: "Director" }, claim, readOnly) as any).reason, /finance edit access/, "default blocks read-only directors");
+assert.equal(approverEligibility(dual, { _id: "mina", role: "Owner" }, claim, { approverAccess: "finance_writers", hasFinanceWrite: true }).eligible, true);
+assert.equal(approverEligibility(dual, { _id: "jordan", role: "Director" }, claim, { approverAccess: "rule_roles", hasFinanceWrite: false }).eligible, true, "rule_roles lets a named director approve");
+assert.equal(approverEligibility({ ...dual, approverRoles: ["Owner"] }, { _id: "jordan", role: "Director" }, claim, { approverAccess: "rule_roles", hasFinanceWrite: false }).eligible, false, "rules still apply");
+assert.equal(approverEligibility(dual, { _id: "viewer", role: "Viewer" }, claim, { approverAccess: "rule_roles", hasFinanceWrite: false }).eligible, false, "viewers never approve");
+assert.equal(approverEligibility(dual, { _id: "avery", role: "Admin" }, claim, { approverAccess: "finance_writers", hasFinanceWrite: true }).eligible, false, "self-approval still blocked");
+assert.equal(normalizeApproverAccess(undefined), "finance_writers");
+assert.equal(normalizeApproverAccess("anything"), "finance_writers", "unknown values fall back to the stricter default");
+assert.equal(normalizeApproverAccess("rule_roles"), "rule_roles");
 
 console.log("Transaction rule and approval policy checks passed.");

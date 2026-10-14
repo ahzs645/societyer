@@ -15,6 +15,7 @@ import { formatDate, pluralize } from "../lib/format";
 import { formatMoney } from "../lib/money";
 import { ApprovalProgress, CLAIM_STATUS_LABEL, CLAIM_STATUS_TONE } from "../features/financials/approvals/ApprovalProgress";
 import { ApprovalRulesEditor } from "../features/financials/approvals/ApprovalRulesEditor";
+import { ApproverAccessSetting } from "../features/financials/approvals/ApproverAccessSetting";
 import { ClaimDetailDrawer } from "../features/financials/approvals/ClaimDetailDrawer";
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
 
@@ -182,15 +183,18 @@ export function ApprovalsPage() {
       {queue === undefined ? (
         <div className="card"><div className="card__body"><div className="record-table__loading">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div></div>
       ) : tab === "rules" ? (
-        <div className="card">
-          <div className="card__head">
-            <div>
-              <h2 className="card__title">Approval rules</h2>
-              <span className="card__subtitle">The rule with the highest threshold a claim meets applies.</span>
+        <div className="approvals-settings">
+          <ApproverAccessSetting queue={queue} societyId={society._id} />
+          <div className="card">
+            <div className="card__head">
+              <div>
+                <h2 className="card__title">Approval rules</h2>
+                <span className="card__subtitle">The rule with the highest threshold a claim meets applies.</span>
+              </div>
             </div>
-          </div>
-          <div className="card__body">
-            <ApprovalRulesEditor queue={queue} societyId={society._id} canWrite={canWrite} />
+            <div className="card__body">
+              <ApprovalRulesEditor queue={queue} societyId={society._id} canWrite={canWrite} />
+            </div>
           </div>
         </div>
       ) : (
@@ -200,7 +204,9 @@ export function ApprovalsPage() {
               <span>
                 {counts?.awaitingMe
                   ? <><strong>{pluralize(counts.awaitingMe, "claim")}</strong> {counts.awaitingMe === 1 ? "needs" : "need"} your approval.</>
-                  : "Nothing needs your approval right now."}
+                  : queue.approverAccess.value === "finance_writers" && !queue.currentUser.hasFinanceWrite
+                    ? "You can review claims here. Approving requires finance edit access in this workspace."
+                    : "Nothing needs your approval right now."}
               </span>
               <span className="muted approvals-policy__rules">
                 {policyRules.map((rule) => `${formatMoney(rule.minAmountCents, { trimWholeCents: true })}+ needs ${rule.requiredApprovals}`).join(" · ")}

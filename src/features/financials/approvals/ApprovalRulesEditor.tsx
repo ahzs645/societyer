@@ -110,7 +110,12 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
       : queue.policy.source === "default"
         ? "These are the built-in defaults. Save to make them your own."
         : null;
-  const suggestedDiffers = queue.policy.signingAuthorityCount > 0 && describeTiers(queue.policy.suggested) !== describeTiers(queue.policy.rules);
+  // With the default approver access, directors (read-only finance) can't
+  // approve even when a rule names them; say so next to the rules.
+  const financeWritersOnly = queue.approverAccess.value === "finance_writers";
+  const directorIds = new Set(queue.approvers.filter((person) => person.role === "Director").map((person) => person._id));
+  const namesDirectors = financeWritersOnly && drafts.some((draft) => draft.approverRoles.includes("Director") || draft.approverUserIds.some((id) => directorIds.has(id)));
+  const suggestedDiffers =queue.policy.signingAuthorityCount > 0 && describeTiers(queue.policy.suggested) !== describeTiers(queue.policy.rules);
 
   return (
     <div className="approval-rules">
@@ -185,7 +190,9 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
                 </button>
               ))}
               {draft.approverRoles.length === 0 && draft.approverUserIds.length === 0 && (
-                <span className="muted approval-rule__any">Any owner, admin or director</span>
+                <span className="muted approval-rule__any">
+                  {financeWritersOnly ? "Any owner or admin (finance edit access)" : "Any owner, admin or director"}
+                </span>
               )}
             </div>
             <div className="approval-rule__options">
@@ -210,6 +217,12 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
           </li>
         ))}
       </ol>
+
+      {namesDirectors && (
+        <p className="muted approval-rules__note">
+          Directors named here can approve only when “Who can approve claims” is set to anyone named in an approval rule.
+        </p>
+      )}
 
       {errors.length > 0 && (
         <div className="rule-editor__errors" role="alert">

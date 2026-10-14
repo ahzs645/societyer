@@ -7436,6 +7436,22 @@
     ]
   },
   {
+    "key": "convex:expenseReports:saveApproverAccess",
+    "surface": "convex",
+    "name": "expenseReports:saveApproverAccess",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:expenseReports:setStatus",
     "surface": "convex",
     "name": "expenseReports:setStatus",
@@ -29542,6 +29558,22 @@
     "key": "portable:expenseReports:saveApprovalRules",
     "surface": "portable",
     "name": "expenseReports:saveApprovalRules",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:saveApproverAccess",
+    "surface": "portable",
+    "name": "expenseReports:saveApproverAccess",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
