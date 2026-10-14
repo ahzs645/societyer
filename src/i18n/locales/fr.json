@@ -163,7 +163,19 @@
     "corporateBylawAmendments": "Modifications des règlements administratifs",
     "articlesAlterations": "Modifications des statuts",
     "corporateBylawsHistory": "Historique des règlements administratifs",
-    "articlesHistory": "Historique des statuts"
+    "articlesHistory": "Historique des statuts",
+    "approvals": "Approbations",
+    "transactionRules": "Règles de transactions",
+    "organization": "Organisation",
+    "documentsRecords": "Documents et dossiers",
+    "votesResolutions": "Votes et résolutions",
+    "governingRules": "Règles de gouvernance interne",
+    "policiesPrivacy": "Politiques et confidentialité",
+    "assetsGroup": "Actifs",
+    "automation": "Automatisation",
+    "tree": {
+      "overview": "Aperçu"
+    }
   },
   "sidebar": {
     "openNavigation": "Ouvrir la navigation",

@@ -163,7 +163,19 @@
     "corporateBylawAmendments": "By-law amendments",
     "articlesAlterations": "Articles alterations",
     "corporateBylawsHistory": "By-laws history",
-    "articlesHistory": "Articles history"
+    "articlesHistory": "Articles history",
+    "approvals": "Approvals",
+    "transactionRules": "Transaction rules",
+    "organization": "Organization",
+    "documentsRecords": "Documents & records",
+    "votesResolutions": "Votes & resolutions",
+    "governingRules": "Governing rules",
+    "policiesPrivacy": "Policies & privacy",
+    "assetsGroup": "Assets",
+    "automation": "Automation",
+    "tree": {
+      "overview": "Overview"
+    }
   },
   "sidebar": {
     "openNavigation": "Open navigation",
