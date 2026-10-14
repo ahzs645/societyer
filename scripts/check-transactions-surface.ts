@@ -19,7 +19,7 @@ import {
   attentionReasons,
   categorizedByValue,
   RECEIPT_ATTENTION_THRESHOLD_CENTS,
-} from "../src/features/financials/transactions/transactionAttention";
+} from "../shared/transactionAttention";
 import { draftFromSelection, selectionPayees } from "../src/features/financials/transactions/selectionRuleDraft";
 
 const seed: Record<string, any[]> = {};

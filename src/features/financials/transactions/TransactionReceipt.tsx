@@ -8,7 +8,7 @@ import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { uploadDocumentVersion } from "../../../lib/documentVersionUpload";
 import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
-import { RECEIPT_ATTENTION_THRESHOLD_CENTS } from "./transactionAttention";
+import { RECEIPT_ATTENTION_THRESHOLD_CENTS } from "../../../../shared/transactionAttention";
 import { formatMoney } from "../../../lib/money";
 
 /** Receipts kept as documents follow the usual seven-year finance retention. */

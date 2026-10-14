@@ -7,6 +7,7 @@
  * each channel does by default.
  */
 import type { Permission } from "./functions/permissions";
+import { attentionReasons } from "./transactionAttention";
 
 export type NotificationChannel = "inApp" | "email" | "sms";
 
@@ -207,12 +208,12 @@ export function clampRuleValue(def: NotificationRuleDef, value: number): number 
 }
 
 /**
- * A transaction "needs attention" when it has no category or is missing a
- * receipt. Internal transfers never need a receipt.
+ * The digest's view of a transaction that needs attention: no category, or a
+ * missing receipt on a payment large enough to need one. Uses the same rules
+ * as the transactions table's "Needs attention" view. Internal transfers are
+ * skipped by the caller.
  */
-export function transactionNeedsAttention(txn: { category?: unknown; receiptStatus?: unknown } | Record<string, any>): { uncategorized: boolean; missingReceipt: boolean } {
-  const category = String(txn.category ?? "").trim();
-  const uncategorized = !category || /^uncategori[sz]ed$/i.test(category);
-  const missingReceipt = txn.receiptStatus === "missing";
-  return { uncategorized, missingReceipt };
+export function transactionNeedsAttention(txn: Record<string, any>): { uncategorized: boolean; missingReceipt: boolean } {
+  const reasons = attentionReasons({ ...txn, amountCents: Number(txn.amountCents ?? 0) });
+  return { uncategorized: reasons.includes("uncategorized"), missingReceipt: reasons.includes("receipt") };
 }

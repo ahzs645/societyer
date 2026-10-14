@@ -7,7 +7,7 @@ import { transactionPayee } from "../../../../shared/transactionRules";
 import { useRulePromptAfterCategorise } from "../rules/useRulePrompt";
 import { useRuleDrawerHost } from "./RuleDrawerHost";
 import { TransactionDetailPanel, type PanelTransaction } from "./TransactionDetailPanel";
-import { attentionReasons, categorizedByValue } from "./transactionAttention";
+import { attentionReasons, categorizedByValue } from "../../../../shared/transactionAttention";
 import { usePayeeAliases } from "./usePayeeAliases";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
 

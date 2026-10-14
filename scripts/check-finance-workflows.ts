@@ -423,7 +423,12 @@ await assert.rejects(() => exp.remindApproversPortable(mina, { id: "static_expen
 q = await exp.approvalQueuePortable(mina, { societyId: S });
 assert.equal(q.rows.find((row: any) => row._id === "static_expense_bus_rental_repeat").canRemind, false);
 await db.patch("static_expense_bus_rental_repeat", { lastReminderAtISO: new Date(Date.now() - 25 * 3600_000).toISOString() });
+assert.ok(((await db.get("static_user_secretary")) as any)?.email, "the approver has an email address, so only the preference can skip it");
+const optOut = await db.insert("notificationPrefs", { userId: "static_user_secretary", channel: "email", kind: "approval", enabled: false });
+const outboxBeforeOptOut = (await db.query("pendingEmails").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).length;
 assert.equal((await exp.remindApproversPortable(mina, { id: "static_expense_bus_rental_repeat" })).notified, 1, "after 24h; the sender is not reminded");
+assert.equal((await db.query("pendingEmails").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).length, outboxBeforeOptOut, "an approver who turned approval emails off still gets the in-app reminder but no email");
+await db.delete(optOut);
 await assert.rejects(() => exp.remindApproversPortable(mina, { id: "static_expense_zoom_plan" }), /awaiting approval/);
 await assert.rejects(() => exp.remindApproversPortable(mina, { id: foreignClaim }));
 

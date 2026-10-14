@@ -17,7 +17,7 @@ import {
   CATEGORIZED_BY_LABELS,
   attentionReasons,
   categorizedByValue,
-} from "./transactionAttention";
+} from "../../../../shared/transactionAttention";
 import type { PayeeAliasRow } from "./usePayeeAliases";
 
 /** A transactions-table row as the Financials page maps it. */

@@ -1,4 +1,4 @@
-import { isUncategorized } from "../../../../shared/transactionRules";
+import { isUncategorized } from "./transactionRules";
 
 /**
  * Money out at or above this needs a receipt before the line stops asking for

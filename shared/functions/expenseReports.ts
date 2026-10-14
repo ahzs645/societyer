@@ -20,6 +20,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { hasPermission, requirePermissionPortable } from "./permissions";
 import { todayDateOnly } from "../dateOnly";
+import { prefAllows, type NotificationPrefRow } from "../notificationCatalog";
 import {
   APPROVER_ACCESS_MODES,
   APPROVER_ROLES,
@@ -655,7 +656,15 @@ export async function remindApproversPortable(ctx: PortableMutationCtx, { id }: 
       createdAtISO: nowISO,
     });
   }
-  const emails = recipients.map((user: any) => String(user.email ?? "").trim()).filter(Boolean);
+  // Email only approvers who haven't turned approval emails off.
+  const emailRecipients = [];
+  for (const user of recipients) {
+    const prefs: NotificationPrefRow[] = (
+      await ctx.db.query("notificationPrefs").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()
+    ).map((row: any) => ({ channel: String(row.channel), kind: String(row.kind), enabled: row.enabled === true }));
+    if (prefAllows(prefs, "email", "approval")) emailRecipients.push(user);
+  }
+  const emails = emailRecipients.map((user: any) => String(user.email ?? "").trim()).filter(Boolean);
   if (emails.length) {
     const organizationName = String((organization as any)?.name ?? "our organization");
     await ctx.db.insert("pendingEmails", {
