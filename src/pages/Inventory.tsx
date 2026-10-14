@@ -25,7 +25,6 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { ImageUploadField } from "../components/ImageUploadField";

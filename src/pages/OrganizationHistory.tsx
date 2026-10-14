@@ -11,7 +11,6 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
 import { Modal } from "../components/Modal";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
@@ -25,6 +24,8 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTableEmpty,
+  ObjectRecordTable,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -241,38 +242,24 @@ export function OrganizationHistoryPage() {
     [facts],
   );
 
-  const motionOutcomeOptions = useMemo(
-    () => uniqueOptions(motions.map((motion: any) => motion.outcome)),
-    [motions],
+  // Converted motions as flat records: every column (and the outcome group /
+  // record source used by the saved views) is a plain value the record table
+  // can search, filter, group, export and show in its sidebar.
+  const motionRecords = useMemo(
+    () =>
+      motions.map((motion: any) => ({
+        ...motion,
+        motionTitle: motionTitle(motion),
+        people: motionPeopleText(motion),
+        votes: motionVoteText(motion),
+        outcome: motion.outcome || "NeedsReview",
+        outcomeGroup: motionOutcomeGroup(motion.outcome),
+        recordSource: motionReviewSourceLabel(motion),
+        sources: sourceSearchText(motion.sourceIds, sourceById),
+        _searchText: [motion.motionText, sourceSearchText(motion.sourceIds, sourceById), motionReviewSourceLabel(motion)].filter(Boolean).join(" "),
+      })),
+    [motions, sourceById],
   );
-  const motionRecordSourceOptions = useMemo(
-    () => uniqueOptions(motions.map(motionReviewSourceLabel)),
-    [motions],
-  );
-  const motionFilterFields = useMemo(() => [
-    {
-      id: "outcome",
-      label: "Outcome",
-      options: motionOutcomeOptions,
-      match: (motion: any, query: string) => String(motion.outcome ?? "").toLowerCase() === query.toLowerCase(),
-    },
-    {
-      id: "meeting",
-      label: "Meeting",
-      match: (motion: any, query: string) => String(motion.meetingTitle ?? "").toLowerCase().includes(query.toLowerCase()),
-    },
-    {
-      id: "source",
-      label: "Source",
-      match: (motion: any, query: string) => sourceSearchText(motion.sourceIds, sourceById).toLowerCase().includes(query.toLowerCase()),
-    },
-    {
-      id: "recordSource",
-      label: "Record source",
-      options: motionRecordSourceOptions,
-      match: (motion: any, query: string) => motionReviewSourceLabel(motion).toLowerCase() === query.toLowerCase(),
-    },
-  ], [motionOutcomeOptions, motionRecordSourceOptions, sourceById]);
 
   const peopleConnections = useMemo(
     () => buildPeopleConnections(boardTerms, motions),
@@ -665,64 +652,25 @@ export function OrganizationHistoryPage() {
               <span className="card__subtitle">Paperless minute motions merged with editable org-history records</span>
             </div>
           </div>
-          <DataTable<any>
+          <ObjectRecordTable
+            societyId={society?._id}
+            nameSingular="historyMotion"
             label="Converted motions"
+            objectLabel="converted motion"
             icon={<BookOpen size={14} />}
-            data={motions}
-            rowKey={(motion) => motion._id}
-            pagination
-            initialPageSize={50}
-            pageSizeOptions={[25, 50, 100]}
-            defaultSort={{ columnId: "meetingDate", dir: "asc" }}
-            searchPlaceholder="Search motions, meetings, people, or sources..."
-            searchExtraFields={[
-              (motion) => sourceSearchText(motion.sourceIds, sourceById),
-              (motion) => motionPeopleText(motion),
-              (motion) => motionReviewSourceLabel(motion),
-            ]}
-            filterFields={motionFilterFields}
-            emptyMessage="No converted motions yet."
-            columns={[
-              {
-                id: "motion",
-                header: "Motion",
-                sortable: true,
-                accessor: (motion) => motion.motionText,
-                render: (motion) => <MotionReviewCell motion={motion} sourceById={sourceById} />,
-                width: "52%",
-              },
-              {
-                id: "meetingDate",
-                header: "Date",
-                sortable: true,
-                accessor: (motion) => motion.meetingDate,
-                render: (motion) => <span className="muted">{formatDueDate(motion.meetingDate) || "-"}</span>,
-                width: 120,
-              },
-              {
-                id: "meeting",
-                header: "Meeting",
-                sortable: true,
-                accessor: (motion) => motion.meetingTitle,
-                render: (motion) => <span className="org-history__motion-meeting">{motion.meetingTitle || "-"}</span>,
-                width: "22%",
-              },
-              {
-                id: "people",
-                header: "Moved / seconded",
-                accessor: motionPeopleText,
-                render: (motion) => <MotionPeople motion={motion} />,
-                width: 180,
-              },
-              {
-                id: "outcome",
-                header: "Outcome",
-                sortable: true,
-                accessor: (motion) => motion.outcome,
-                render: (motion) => <MotionOutcomeBadge outcome={motion.outcome} />,
-                width: 130,
-              },
-            ]}
+            records={motionRecords}
+            loading={data === undefined}
+            onRecordClick={(_id, motion) => setMotionForm(motionEditForm(motion))}
+            emptyState={<RecordTableEmpty title="No converted motions yet." />}
+            renderCell={({ record: motion, field }) => {
+              if (field.name === "motionTitle") return <MotionReviewCell motion={motion} />;
+              if (field.name === "meetingDate") return <span className="muted">{formatDueDate(motion.meetingDate) || "-"}</span>;
+              if (field.name === "meetingTitle") return <span className="org-history__motion-meeting">{motion.meetingTitle || "-"}</span>;
+              if (field.name === "people") return <MotionPeople motion={motion} />;
+              if (field.name === "outcome") return <MotionOutcomeBadge outcome={motion.outcome} />;
+              if (field.name === "sources") return <SourceBadges ids={motion.sourceIds} sourceById={sourceById} />;
+              return undefined;
+            }}
             renderRowActions={(motion) => (
               <>
                 <IconButton label={isPersistedMotion(motion) ? "Edit motion" : "Review motion as org-history item"} onClick={() => setMotionForm(motionEditForm(motion))}>
@@ -1555,18 +1503,19 @@ function motionTitle(motion: any) {
   return String(motion?.motionText || motion?.meetingTitle || motion?.category || "Motion").trim();
 }
 
-function MotionReviewCell({ motion, sourceById }: { motion: any; sourceById: Map<any, any> }) {
+function MotionReviewCell({ motion }: { motion: any }) {
+  // Rendered inside the record's open button, so it stays free of links; the
+  // source documents have their own column.
   return (
-    <div className="org-history__motion-cell">
-      <div className="org-history__motion-text">{motionTitle(motion)}</div>
-      <div className="org-history__motion-meta">
+    <span className="org-history__motion-cell">
+      <span className="org-history__motion-text">{motionTitle(motion)}</span>
+      <span className="org-history__motion-meta">
         <span>{formatDueDate(motion.meetingDate) || "Undated"}</span>
         {motion.meetingTitle && <span>{motion.meetingTitle}</span>}
         <Badge tone={motionReviewSourceTone(motion)}>{motionReviewSourceLabel(motion)}</Badge>
         {motion.matchedPaperlessMinutes && isPersistedMotion(motion) && <Badge tone="info">Matched minutes</Badge>}
-      </div>
-      <SourceBadges ids={motion.sourceIds} sourceById={sourceById} />
-    </div>
+      </span>
+    </span>
   );
 }
 
@@ -1636,13 +1585,17 @@ function motionOutcomeTone(outcome: string): BadgeTone {
   return "neutral";
 }
 
+function motionOutcomeGroup(outcome: unknown) {
+  const text = String(outcome ?? "").toLowerCase();
+  if (isPositiveMotionOutcome(text)) return "passed";
+  if (text.includes("defeat") || text.includes("reject") || text.includes("fail")) return "defeated";
+  if (text.includes("table") || text.includes("pending")) return "pending";
+  return "unclear";
+}
+
 function isPositiveMotionOutcome(outcome: unknown) {
   const text = String(outcome ?? "").toLowerCase();
   return text.includes("pass") || text.includes("approv") || text.includes("carried") || text.includes("carry") || text.includes("unanimous");
-}
-
-function uniqueOptions(values: unknown[]) {
-  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeBudget(form: any) {

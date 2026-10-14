@@ -1,15 +1,18 @@
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 // Tab views for the Inventory page. Each is a thin presentational wrapper over
-// DataTable that receives its data + row callbacks from the orchestrator, so the
-// page component stays focused on state and the tables stay independently
-// readable.
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+// a metadata-driven record table that receives its data + row callbacks from
+// the orchestrator, so the page component stays focused on state and the
+// tables stay independently readable. Rows are flattened here (joined names,
+// roll-ups, computed flags) so search, filters, sorting, group-by, export and
+// the preview sidebar all work from the same plain values.
+import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Archive, Boxes, ChevronDown, ChevronRight, ClipboardList, ExternalLink, History, Layers, Link2, MapPin, MoreHorizontal, Package, Pencil, QrCode, Trash2 } from "lucide-react";
 import { Menu } from "../../components/Menu";
 import { Segmented } from "../../components/primitives";
 import { Badge } from "../../components/ui";
-import { DataTable } from "../../components/DataTable";
+import { useSociety } from "../../hooks/useSociety";
+import { ObjectRecordTable, RecordTableEmpty, type HydratedView } from "@/platform/record-engine";
 import { formatDate, money } from "../../lib/format";
 import { ItemThumb, LocationGlyph, ReceiptEvidence } from "./components";
 import { EXPIRY_SOON_DAYS, daysUntil, formatQuantity, movementTone, receiptLinksForMovement, trackingLabel } from "./helpers";
@@ -21,6 +24,10 @@ type Maps = {
   receiptLinksByItemId: Map<string, any[]>;
   balancesByLocationId: Map<string, any[]>;
 };
+
+function receiptTitles(links: any[] | undefined) {
+  return (links ?? []).map((link) => link.receiptDocument?.title ?? link.receiptDocumentId).filter(Boolean).join(", ");
+}
 
 export function StockTab({
   itemRows,
@@ -48,29 +55,66 @@ export function StockTab({
   onDelete: (item: any) => void;
 }) {
   const { canWrite } = useFinancePermissions();
+  const society = useSociety();
   const { itemById, locationById, onHandByItemId, receiptLinksByItemId } = maps;
-  // Locations that currently hold stock, used as preset options for the Location
-  // filter on both tables.
-  const locationOptions = Array.from(
-    new Set(
-      balanceRows
-        .map((b) => locationById.get(b.locationId)?.name)
-        .filter((name): name is string => Boolean(name)),
-    ),
-  ).sort();
-  // item id -> the location names it has any balance in, for the catalog filter.
-  const locationNamesByItemId = new Map<string, Set<string>>();
-  for (const b of balanceRows) {
-    const name = locationById.get(b.locationId)?.name;
-    if (!name) continue;
-    const set = locationNamesByItemId.get(String(b.inventoryItemId)) ?? new Set<string>();
-    set.add(name);
-    locationNamesByItemId.set(String(b.inventoryItemId), set);
-  }
-  const categoryOptions = Array.from(new Set(itemRows.map((r) => r.category).filter(Boolean))).sort();
   const navigate = useNavigate();
   // Items, balances and the movement ledger are three different lists; show one at a time.
   const [view, setView] = useState<"items" | "balances" | "movements">("items");
+
+  const itemRecords = useMemo(() => {
+    // item id -> the location names it has any balance in ("Stored in" filter).
+    const locationNamesByItemId = new Map<string, Set<string>>();
+    for (const balance of balanceRows) {
+      const name = locationById.get(balance.locationId)?.name;
+      if (!name) continue;
+      const set = locationNamesByItemId.get(String(balance.inventoryItemId)) ?? new Set<string>();
+      set.add(name);
+      locationNamesByItemId.set(String(balance.inventoryItemId), set);
+    }
+    return itemRows.map((row) => {
+      const onHand = onHandByItemId.get(row._id) ?? 0;
+      const links = receiptLinksByItemId.get(row._id) ?? [];
+      return {
+        ...row,
+        onHand,
+        isLowStock: row.reorderPoint != null && onHand <= row.reorderPoint,
+        linkedPurchase: receiptTitles(links),
+        storedIn: Array.from(locationNamesByItemId.get(String(row._id)) ?? []).sort().join(", "),
+        tracking: trackingLabel(row).replace(/^ · /, ""),
+        _searchText: [row.sku, row.category, row.itemType, receiptTitles(links)].filter(Boolean).join(" "),
+      };
+    });
+  }, [itemRows, balanceRows, locationById, onHandByItemId, receiptLinksByItemId]);
+
+  const balanceRecords = useMemo(() => balanceRows.map((row) => {
+    const item = itemById.get(row.inventoryItemId);
+    const location = locationById.get(row.locationId);
+    return {
+      ...row,
+      itemName: item?.name ?? "Unknown item",
+      sku: item?.sku ?? "",
+      locationName: location?.name ?? "Unknown location",
+      locationCode: location?.code ?? "",
+      locationType: location?.locationType ?? "",
+      receipt: receiptTitles(receiptLinksByItemId.get(row.inventoryItemId)),
+    };
+  }), [balanceRows, itemById, locationById, receiptLinksByItemId]);
+
+  const movementRecords = useMemo(() => movementRows.map((row) => {
+    const fromLocationName = row.fromLocationId ? locationById.get(row.fromLocationId)?.name ?? "Unknown" : "External";
+    const toLocationName = row.toLocationId ? locationById.get(row.toLocationId)?.name ?? "Unknown" : "External";
+    return {
+      ...row,
+      itemName: itemById.get(row.inventoryItemId)?.name ?? "Unknown item",
+      fromLocationName,
+      toLocationName,
+      path: `${fromLocationName} -> ${toLocationName}`,
+      reference: [row.reference, row.reason].filter(Boolean).join(" · "),
+      receipt: receiptTitles(receiptLinksForMovement(row, receiptLinksByItemId)) || (row.receiptDocumentId ?? ""),
+      sourceSystem: row.sourceSystem ?? "manual",
+    };
+  }), [movementRows, itemById, locationById, receiptLinksByItemId]);
+
   return (
     <>
       <div style={{ margin: "8px 0 12px" }}>
@@ -84,188 +128,119 @@ export function StockTab({
           ]}
         />
       </div>
-      {view === "items" && <DataTable
-        label="Item catalog"
-        icon={<Package size={14} />}
-        data={itemRows}
-        rowKey={(row) => row._id}
-        loading={loading.items}
-        viewsKey="inventory-items"
-        searchPlaceholder="Search item, SKU, category..."
-        searchExtraFields={[(row) => row.sku, (row) => row.category, (row) => row.itemType]}
-        filterFields={[
-          { id: "category", label: "Category", options: categoryOptions, match: (row: any, q: string) => String(row.category ?? "").toLowerCase() === q.toLowerCase() },
-          { id: "location", label: "Stored in", options: locationOptions, match: (row: any, q: string) => Array.from(locationNamesByItemId.get(String(row._id)) ?? new Set<string>()).some((n) => n.toLowerCase() === q.toLowerCase()) },
-        ]}
-        emptyMessage="No items yet."
-        columns={[
-          {
-            id: "item",
-            header: "Item",
-            sortable: true,
-            accessor: (row) => row.name ?? "",
-            render: (row) => (
-              <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
+      {view === "items" && (
+        <ObjectRecordTable
+          societyId={society?._id}
+          nameSingular="inventoryItem"
+          label="Item catalog"
+          objectLabel="inventory item"
+          icon={<Package size={14} />}
+          records={itemRecords}
+          loading={loading.items}
+          onRecordClick={(_id, row) => onEdit(row)}
+          emptyState={<RecordTableEmpty title="No items yet." description="Use New › Item to add a supply, consumable or tracked item." />}
+          renderCell={({ record: row, field }) => {
+            if (field.name === "name") return (
+              <span className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
                 <ItemThumb item={row} />
-                <div>
-                  <strong>{row.name}</strong>{row.status === "archived" && <Badge tone="neutral">archived</Badge>}
-                  <div className="muted mono">{row.sku ?? "No SKU"}</div>
-                </div>
-              </div>
-            ),
-          },
-          { id: "category", header: "Category", sortable: true, accessor: (row) => row.category ?? "", render: (row) => <div><span>{row.category}</span><div className="muted">{row.itemType}{trackingLabel(row)}</div></div> },
-          { id: "onHand", header: "On hand", sortable: true, align: "right", accessor: (row) => onHandByItemId.get(row._id) ?? 0, render: (row) => <span className="mono">{formatQuantity(onHandByItemId.get(row._id) ?? 0, row.unitOfMeasure)}</span> },
-          { id: "reorder", header: "Reorder", align: "right", accessor: (row) => row.reorderPoint ?? "", render: (row) => row.reorderPoint != null ? <span className="mono">{row.reorderPoint}</span> : <span className="muted">-</span> },
-          { id: "cost", header: "Unit cost", align: "right", accessor: (row) => row.defaultCostCents ?? 0, render: (row) => row.defaultCostCents != null ? <span className="mono">{money(row.defaultCostCents)}</span> : <span className="muted">-</span> },
-          {
-            id: "purchase",
-            header: "Linked purchase",
-            accessor: (row) => receiptLinksByItemId.get(row._id)?.length ?? 0,
-            render: (row) => <ReceiptEvidence links={receiptLinksByItemId.get(row._id) ?? []} />,
-          },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => onPlace(row)} disabled={!canWrite}><MapPin size={12} /> Place / move</button>
-            <Menu
-              align="right"
-              trigger={
-                <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.name}`}>
-                  <MoreHorizontal size={14} />
-                </button>
-              }
-              sections={[{
-                id: "item",
-                items: [
-                  { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canWrite, onSelect: () => onEdit(row) },
-                  { id: "link", label: "Link purchase", icon: <Link2 size={14} />, disabled: !canWrite, onSelect: () => onLink(row) },
-                  ...(row.trackLot || row.trackSerial ? [{ id: "lot", label: "Add lot", icon: <Layers size={14} />, disabled: !canWrite, onSelect: () => onAddLot(row._id) }] : []),
-                  ...(row.assetId ? [{ id: "asset", label: "Open asset", icon: <ExternalLink size={14} />, onSelect: () => navigate(`/app/assets/${row.assetId}`) }] : []),
-                  { id: "archive", label: row.status === "archived" ? "Restore" : "Archive", icon: <Archive size={14} />, disabled: !canWrite, onSelect: () => onArchive(row) },
-                  { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => onDelete(row) },
-                ],
-              }]}
-            />
-          </>
-        )}
-      />}
-
-      {view === "balances" && <DataTable
-        label="Stock balances"
-        icon={<Boxes size={14} />}
-        data={balanceRows}
-        rowKey={(row) => row._id}
-        loading={loading.balances || loading.items || loading.locations}
-        viewsKey="inventory-balances"
-        searchPlaceholder="Search item, SKU, location..."
-        searchExtraFields={[
-          (row) => itemById.get(row.inventoryItemId)?.name,
-          (row) => itemById.get(row.inventoryItemId)?.sku,
-          (row) => locationById.get(row.locationId)?.name,
-          (row) => locationById.get(row.locationId)?.code,
-          (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" "),
-        ]}
-        filterFields={[
-          { id: "location", label: "Location", options: locationOptions, match: (row: any, q: string) => String(locationById.get(row.locationId)?.name ?? "").toLowerCase() === q.toLowerCase() },
-        ]}
-        emptyMessage="No stock balances yet."
-        columns={[
-          {
-            id: "item",
-            header: "Item",
-            sortable: true,
-            accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "",
-            render: (row) => {
-              const item = itemById.get(row.inventoryItemId);
-              return (
-                <div>
-                  <strong>{item?.name ?? "Unknown item"}</strong>
-                  <div className="muted mono">{item?.sku ?? "No SKU"}</div>
-                </div>
-              );
-            },
-          },
-          {
-            id: "location",
-            header: "Location",
-            sortable: true,
-            accessor: (row) => locationById.get(row.locationId)?.name ?? "",
-            render: (row) => {
-              const location = locationById.get(row.locationId);
-              return (
-                <div>
-                  <span>{location?.name ?? "Unknown location"}</span>
-                  <div className="muted">{location?.code ? `${location.code} · ` : ""}{location?.locationType ?? "location"}</div>
-                </div>
-              );
-            },
-          },
-          { id: "onHand", header: "On hand", sortable: true, align: "right", accessor: (row) => row.quantityOnHand ?? 0, render: (row) => <span className="mono">{formatQuantity(row.quantityOnHand, itemById.get(row.inventoryItemId)?.unitOfMeasure)}</span> },
-          { id: "available", header: "Available", sortable: true, align: "right", accessor: (row) => row.quantityAvailable ?? 0, render: (row) => <span className="mono">{formatQuantity(row.quantityAvailable, itemById.get(row.inventoryItemId)?.unitOfMeasure)}</span> },
-          {
-            id: "receipt",
-            header: "Receipt",
-            accessor: (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" ") ?? "",
-            render: (row) => <ReceiptEvidence links={receiptLinksByItemId.get(row.inventoryItemId) ?? []} />,
-          },
-          { id: "lastCounted", header: "Last counted", sortable: true, accessor: (row) => row.lastCountedAtISO ?? "", render: (row) => row.lastCountedAtISO ? formatDate(row.lastCountedAtISO) : <span className="muted">-</span> },
-        ]}
-      />}
-
-      {view === "movements" && <DataTable
-        label="Movement ledger"
-        icon={<History size={14} />}
-        data={movementRows}
-        rowKey={(row) => row._id}
-        loading={loading.movements || loading.items || loading.locations}
-        viewsKey="stock-movements"
-        searchPlaceholder="Search movement, item, reference, reason..."
-        searchExtraFields={[
-          (row) => itemById.get(row.inventoryItemId)?.name,
-          (row) => row.reference,
-          (row) => row.reason,
-          (row) => row.sourceSystem,
-          (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" "),
-        ]}
-        emptyMessage="No stock movements yet."
-        columns={[
-          { id: "date", header: "Date", sortable: true, accessor: (row) => row.movementDate, render: (row) => <span>{formatDate(row.movementDate)}</span> },
-          { id: "type", header: "Type", sortable: true, accessor: (row) => row.movementType, render: (row) => <Badge tone={movementTone(row.movementType) as any}>{row.movementType}</Badge> },
-          { id: "item", header: "Item", sortable: true, accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "", render: (row) => itemById.get(row.inventoryItemId)?.name ?? "Unknown item" },
-          {
-            id: "path",
-            header: "From / to",
-            accessor: (row) => `${row.fromLocationId ?? ""} ${row.toLocationId ?? ""}`,
-            render: (row) => (
-              <span>
-                {row.fromLocationId ? locationById.get(row.fromLocationId)?.name ?? "Unknown" : "External"}
-                {" -> "}
-                {row.toLocationId ? locationById.get(row.toLocationId)?.name ?? "Unknown" : "External"}
+                <span className="record-table__identifier-lines">
+                  <span className="record-table__identifier-primary">
+                    <strong>{row.name}</strong>{row.status === "archived" && <Badge tone="neutral">archived</Badge>}
+                  </span>
+                  <span className="record-table__identifier-secondary muted mono">{row.sku ?? "No SKU"}</span>
+                </span>
               </span>
-            ),
-          },
-          { id: "quantity", header: "Quantity", sortable: true, align: "right", accessor: (row) => row.quantity, render: (row) => <span className="mono">{formatQuantity(row.quantity, row.unitOfMeasure)}</span> },
-          {
-            id: "reference",
-            header: "Reference / reason",
-            accessor: (row) => `${row.reference ?? ""} ${row.reason ?? ""}`,
-            render: (row) => (
+            );
+            if (field.name === "category") return <div><span>{row.category}</span><div className="muted">{row.itemType}{trackingLabel(row)}</div></div>;
+            if (field.name === "onHand") return <span className="mono">{formatQuantity(row.onHand, row.unitOfMeasure)}</span>;
+            if (field.name === "reorderPoint") return row.reorderPoint != null ? <span className="mono">{row.reorderPoint}</span> : <span className="muted">-</span>;
+            if (field.name === "defaultCostCents") return row.defaultCostCents != null ? <span className="mono">{money(row.defaultCostCents)}</span> : <span className="muted">-</span>;
+            if (field.name === "linkedPurchase") return <ReceiptEvidence links={receiptLinksByItemId.get(row._id) ?? []} />;
+            return undefined;
+          }}
+          renderRowActions={(row) => (
+            <>
+              <button className="btn btn--ghost btn--sm" onClick={() => onPlace(row)} disabled={!canWrite}><MapPin size={12} /> Place / move</button>
+              <Menu
+                align="right"
+                trigger={
+                  <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.name}`}>
+                    <MoreHorizontal size={14} />
+                  </button>
+                }
+                sections={[{
+                  id: "item",
+                  items: [
+                    { id: "edit", label: "Edit", icon: <Pencil size={14} />, disabled: !canWrite, onSelect: () => onEdit(row) },
+                    { id: "link", label: "Link purchase", icon: <Link2 size={14} />, disabled: !canWrite, onSelect: () => onLink(row) },
+                    ...(row.trackLot || row.trackSerial ? [{ id: "lot", label: "Add lot", icon: <Layers size={14} />, disabled: !canWrite, onSelect: () => onAddLot(row._id) }] : []),
+                    ...(row.assetId ? [{ id: "asset", label: "Open asset", icon: <ExternalLink size={14} />, onSelect: () => navigate(`/app/assets/${row.assetId}`) }] : []),
+                    { id: "archive", label: row.status === "archived" ? "Restore" : "Archive", icon: <Archive size={14} />, disabled: !canWrite, onSelect: () => onArchive(row) },
+                    { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite, onSelect: () => onDelete(row) },
+                  ],
+                }]}
+              />
+            </>
+          )}
+        />
+      )}
+
+      {view === "balances" && (
+        <ObjectRecordTable
+          societyId={society?._id}
+          nameSingular="inventoryBalance"
+          label="Stock balances"
+          objectLabel="stock balance"
+          icon={<Boxes size={14} />}
+          records={balanceRecords}
+          loading={loading.balances || loading.items || loading.locations}
+          onRecordClick={(_id, row) => { const item = itemById.get(row.inventoryItemId); if (item) onEdit(item); }}
+          emptyState={<RecordTableEmpty title="No stock balances yet." description="Place or receive stock to see what is held where." />}
+          renderCell={({ record: row, field }) => {
+            if (field.name === "itemName") return (
+              <span className="record-table__identifier-lines">
+                <strong className="record-table__identifier-primary">{row.itemName}</strong>
+                <span className="record-table__identifier-secondary muted mono">{row.sku || "No SKU"}</span>
+              </span>
+            );
+            if (field.name === "locationName") return (
               <div>
-                <span>{row.reference ?? <span className="muted">No reference</span>}</span>
-                {row.reason && <div className="muted">{row.reason}</div>}
+                <span>{row.locationName}</span>
+                <div className="muted">{row.locationCode ? `${row.locationCode} · ` : ""}{row.locationType || "location"}</div>
               </div>
-            ),
-          },
-          {
-            id: "receipt",
-            header: "Receipt",
-            accessor: (row) => row.receiptDocumentId ?? receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" ") ?? "",
-            render: (row) => <ReceiptEvidence links={receiptLinksForMovement(row, receiptLinksByItemId)} receiptDocumentId={row.receiptDocumentId} />,
-          },
-          { id: "source", header: "Source", sortable: true, accessor: (row) => row.sourceSystem ?? "", render: (row) => <span className="muted">{row.sourceSystem ?? "manual"}</span> },
-        ]}
-      />}
+            );
+            if (field.name === "quantityOnHand") return <span className="mono">{formatQuantity(row.quantityOnHand, itemById.get(row.inventoryItemId)?.unitOfMeasure)}</span>;
+            if (field.name === "quantityAvailable") return <span className="mono">{formatQuantity(row.quantityAvailable, itemById.get(row.inventoryItemId)?.unitOfMeasure)}</span>;
+            if (field.name === "receipt") return <ReceiptEvidence links={receiptLinksByItemId.get(row.inventoryItemId) ?? []} />;
+            return undefined;
+          }}
+        />
+      )}
+
+      {view === "movements" && (
+        <ObjectRecordTable
+          societyId={society?._id}
+          nameSingular="stockMovement"
+          label="Movement ledger"
+          objectLabel="stock movement"
+          icon={<History size={14} />}
+          records={movementRecords}
+          loading={loading.movements || loading.items || loading.locations}
+          emptyState={<RecordTableEmpty title="No stock movements yet." description="Receipts, transfers and adjustments are listed here once posted." />}
+          renderCell={({ record: row, field }) => {
+            if (field.name === "movementType") return <Badge tone={movementTone(row.movementType) as any}>{row.movementType}</Badge>;
+            if (field.name === "quantity") return <span className="mono">{formatQuantity(row.quantity, row.unitOfMeasure)}</span>;
+            if (field.name === "reference") return (
+              <div>
+                <span>{row.reference || <span className="muted">No reference</span>}</span>
+              </div>
+            );
+            if (field.name === "receipt") return <ReceiptEvidence links={receiptLinksForMovement(row, receiptLinksByItemId)} receiptDocumentId={row.receiptDocumentId} />;
+            if (field.name === "sourceSystem") return <span className="muted">{row.sourceSystem}</span>;
+            return undefined;
+          }}
+        />
+      )}
     </>
   );
 }
@@ -339,29 +314,53 @@ export function LocationsTab({
   onToggleCollapse: (id: string) => void;
 }) {
   const { canWrite, canExport } = useFinancePermissions();
-  const { balancesByLocationId } = maps;
-  // Locations that hold stock directly — a sole overarching root is only inferred
-  // away when it isn't itself storing anything.
-  const locationsWithDirectStock = new Set<string>();
-  for (const [locId, rows] of balancesByLocationId) {
-    if ((rows ?? []).some((b) => (b.quantityOnHand ?? 0) > 0)) locationsWithDirectStock.add(String(locId));
-  }
-  const { ordered, depthById, childCountById, inferredRoot } = orderLocationTree(locations, collapsedIds, locationsWithDirectStock);
-  // Roll child contents up into ancestors so a facility/room shows everything
-  // stored beneath it, not just items placed directly on it. Walk the full
-  // location set (not the collapse-filtered `ordered`) so totals stay correct.
-  const childrenByParent = new Map<string, any[]>();
-  for (const loc of locations) {
-    if (!loc.parentLocationId) continue;
-    const list = childrenByParent.get(String(loc.parentLocationId)) ?? [];
-    list.push(loc);
-    childrenByParent.set(String(loc.parentLocationId), list);
-  }
-  const rollupQty = (row: any): number => {
-    const direct = (balancesByLocationId.get(row._id) ?? []).reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
-    const kids = childrenByParent.get(String(row._id)) ?? [];
-    return direct + kids.reduce((sum, kid) => sum + rollupQty(kid), 0);
-  };
+  const society = useSociety();
+  const { balancesByLocationId, locationById } = maps;
+  const { records, inferredRoot } = useMemo(() => {
+    // Locations that hold stock directly — a sole overarching root is only inferred
+    // away when it isn't itself storing anything.
+    const locationsWithDirectStock = new Set<string>();
+    for (const [locId, rows] of balancesByLocationId) {
+      if ((rows ?? []).some((b) => (b.quantityOnHand ?? 0) > 0)) locationsWithDirectStock.add(String(locId));
+    }
+    const tree = orderLocationTree(locations, collapsedIds, locationsWithDirectStock);
+    // Roll child contents up into ancestors so a facility/room shows everything
+    // stored beneath it, not just items placed directly on it. Walk the full
+    // location set (not the collapse-filtered `ordered`) so totals stay correct.
+    const childrenByParent = new Map<string, any[]>();
+    for (const loc of locations) {
+      if (!loc.parentLocationId) continue;
+      const list = childrenByParent.get(String(loc.parentLocationId)) ?? [];
+      list.push(loc);
+      childrenByParent.set(String(loc.parentLocationId), list);
+    }
+    const rollupQty = (row: any): number => {
+      const direct = (balancesByLocationId.get(row._id) ?? []).reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
+      const kids = childrenByParent.get(String(row._id)) ?? [];
+      return direct + kids.reduce((sum, kid) => sum + rollupQty(kid), 0);
+    };
+    return {
+      inferredRoot: tree.inferredRoot,
+      records: tree.ordered.map((row) => {
+        const direct = balancesByLocationId.get(row._id) ?? [];
+        return {
+          ...row,
+          depth: tree.depthById.get(String(row._id)) ?? 0,
+          childCount: tree.childCountById.get(String(row._id)) ?? 0,
+          contents: rollupQty(row),
+          directQuantity: direct.reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0),
+          itemCount: direct.length,
+          parentName: row.parentLocationId ? locationById.get(row.parentLocationId)?.name ?? "" : "",
+        };
+      }),
+    };
+  }, [locations, collapsedIds, balancesByLocationId, locationById]);
+  // Only show the custodian column when at least one location is in custody.
+  const hasCustody = locations.some((l) => l.custodianName || l.locationType === "custody");
+  const transformView = useCallback((view: HydratedView | null) => {
+    if (!view || hasCustody) return view;
+    return { ...view, columns: view.columns.map((column) => column.field?.name === "custodianName" ? { ...column, isVisible: false } : column) };
+  }, [hasCustody]);
   return (
     <>
     {inferredRoot && (
@@ -370,75 +369,57 @@ export function LocationsTab({
         <button className="btn btn--ghost btn--sm" style={{ padding: "0 4px" }} onClick={() => onEdit(inferredRoot)} disabled={!canWrite}><Pencil size={12} /> edit</button>
       </div>
     )}
-    <DataTable
+    <ObjectRecordTable
+      societyId={society?._id}
+      nameSingular="inventoryLocation"
       label="Locations & bins"
+      objectLabel="inventory location"
       icon={<MapPin size={14} />}
-      data={ordered}
-      rowKey={(row) => row._id}
+      records={records}
       loading={loading}
-      viewsKey="inventory-locations"
-      searchPlaceholder="Search location, code, type..."
-      searchExtraFields={[(row) => row.code, (row) => row.locationType, (row) => row.address]}
-      emptyMessage="No locations yet. Add a facility, room, shelf, or bin so you can say where things live."
-      columns={[
-        {
-          id: "name",
-          header: "Location",
-          sortable: true,
-          accessor: (row) => row.name ?? "",
-          render: (row) => {
-            const depth = depthById.get(String(row._id)) ?? 0;
-            const childCount = childCountById.get(String(row._id)) ?? 0;
-            const collapsed = collapsedIds.has(String(row._id));
-            return (
-              <div className="row" style={{ gap: 6, alignItems: "center", paddingLeft: depth * 18 }}>
-                {childCount > 0 ? (
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    style={{ marginLeft: depth > 0 ? -12 : 0 }}
-                    aria-label={collapsed ? `Expand ${row.name}` : `Collapse ${row.name}`}
-                    onClick={(e) => { e.stopPropagation(); onToggleCollapse(String(row._id)); }}
-                  >
-                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                ) : (
-                  <span style={{ display: "inline-block", width: depth > 0 ? 12 : 24 }} aria-hidden />
-                )}
-                <LocationGlyph type={row.locationType} />
-                <div>
-                  <strong>{row.name}</strong>{!row.active && <Badge tone="neutral">inactive</Badge>}
-                  {childCount > 0 && <span className="muted"> · {childCount} sub-location{childCount === 1 ? "" : "s"}{collapsed ? " (collapsed)" : ""}</span>}
-                </div>
-              </div>
-            );
-          },
-        },
-        { id: "code", header: "Bin code", sortable: true, accessor: (row) => row.code ?? "", render: (row) => row.code ? <span className="row" style={{ gap: 4 }}><QrCode size={12} /> <span className="mono">{row.code}</span></span> : <span className="muted">-</span> },
-        { id: "type", header: "Type", sortable: true, accessor: (row) => row.locationType ?? "", render: (row) => <Badge tone="info">{row.locationType}</Badge> },
-        // Only show the custodian column when at least one location is in custody.
-        ...(locations.some((l) => l.custodianName || l.locationType === "custody")
-          ? [{ id: "custodian", header: "Custodian", accessor: (row: any) => row.custodianName ?? "", render: (row: any) => row.custodianName ? <span>{row.custodianName}</span> : <span className="muted">-</span> }]
-          : []),
-        {
-          id: "contents",
-          header: "Contents",
-          align: "right",
-          accessor: (row) => rollupQty(row),
-          render: (row) => {
-            const rows = balancesByLocationId.get(row._id) ?? [];
-            const qty = rows.reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
-            const total = rollupQty(row);
-            if (!rows.length && total === 0) return <span className="muted">empty</span>;
-            return <span className="mono">{rows.length} item{rows.length === 1 ? "" : "s"} · {qty}{total !== qty ? ` (${total} incl. sub)` : ""}</span>;
-          },
-        },
-      ]}
+      transformView={transformView}
+      onRecordClick={(_id, row) => onWhatsHere(row)}
+      emptyState={<RecordTableEmpty title="No locations yet." description="Add a facility, room, shelf, or bin so you can say where things live." />}
+      renderCell={({ record: row, field }) => {
+        if (field.name === "name") {
+          const collapsed = collapsedIds.has(String(row._id));
+          return (
+            <span className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap", paddingLeft: row.depth * 18 }}>
+              {row.childCount > 0
+                ? (collapsed ? <ChevronRight size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />)
+                : <span style={{ display: "inline-block", width: 14 }} aria-hidden />}
+              <LocationGlyph type={row.locationType} />
+              <span>
+                <strong>{row.name}</strong>{!row.active && <Badge tone="neutral">inactive</Badge>}
+                {row.childCount > 0 && <span className="muted"> · {row.childCount} sub-location{row.childCount === 1 ? "" : "s"}{collapsed ? " (collapsed)" : ""}</span>}
+              </span>
+            </span>
+          );
+        }
+        if (field.name === "code") return row.code ? <span className="row" style={{ gap: 4 }}><QrCode size={12} /> <span className="mono">{row.code}</span></span> : <span className="muted">-</span>;
+        if (field.name === "locationType") return <Badge tone="info">{row.locationType}</Badge>;
+        if (field.name === "custodianName") return row.custodianName ? <span>{row.custodianName}</span> : <span className="muted">-</span>;
+        if (field.name === "contents") {
+          if (!row.itemCount && row.contents === 0) return <span className="muted">empty</span>;
+          return <span className="mono">{row.itemCount} item{row.itemCount === 1 ? "" : "s"} · {row.directQuantity}{row.contents !== row.directQuantity ? ` (${row.contents} incl. sub)` : ""}</span>;
+        }
+        return undefined;
+      }}
       renderRowActions={(row) => (
         <>
+          {row.childCount > 0 && (
+            <button
+              className="btn btn--ghost btn--sm btn--icon"
+              aria-label={collapsedIds.has(String(row._id)) ? `Expand ${row.name}` : `Collapse ${row.name}`}
+              onClick={() => onToggleCollapse(String(row._id))}
+            >
+              {collapsedIds.has(String(row._id)) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            </button>
+          )}
           <button className="btn btn--ghost btn--sm" onClick={() => onWhatsHere(row)}><Boxes size={12} /> What's here</button>
           {row.code && <button className="btn btn--ghost btn--sm" onClick={() => onLabel(row)} title="Show printable QR label" disabled={!canExport}><QrCode size={12} /> Label</button>}
           <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)} disabled={!canWrite}><Pencil size={12} /> Edit</button>
-          <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
+          <button className="btn btn--ghost btn--sm" aria-label={`Delete ${row.name}`} onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
         </>
       )}
     />
@@ -460,46 +441,51 @@ export function LotsTab({
   onDelete: (lot: any) => void;
 }) {
   const { canWrite } = useFinancePermissions();
+  const society = useSociety();
   const { itemById } = maps;
+  const records = useMemo(() => lotRows.map((row) => {
+    const item = itemById.get(row.inventoryItemId);
+    const days = daysUntil(row.expiresAt);
+    return {
+      ...row,
+      itemName: item?.name ?? "Unknown item",
+      sku: item?.sku ?? "",
+      isExpiringSoon: days != null && days <= EXPIRY_SOON_DAYS,
+    };
+  }), [lotRows, itemById]);
   return (
-    <DataTable
+    <ObjectRecordTable
+      societyId={society?._id}
+      nameSingular="inventoryLot"
       label="Lots & serials"
+      objectLabel="lot or serial"
       icon={<Layers size={14} />}
-      data={lotRows}
-      rowKey={(row) => row._id}
+      records={records}
       loading={loading}
-      viewsKey="inventory-lots"
-      searchPlaceholder="Search lot, serial, item, manufacturer..."
-      searchExtraFields={[
-        (row) => itemById.get(row.inventoryItemId)?.name,
-        (row) => row.lotNumber,
-        (row) => row.serialNumber,
-        (row) => row.manufacturer,
-      ]}
-      emptyMessage="No lots or serials yet. Enable lot/serial tracking on an item, then add a lot."
-      columns={[
-        { id: "item", header: "Item", sortable: true, accessor: (row) => itemById.get(row.inventoryItemId)?.name ?? "", render: (row) => <div><strong>{itemById.get(row.inventoryItemId)?.name ?? "Unknown item"}</strong><div className="muted mono">{itemById.get(row.inventoryItemId)?.sku ?? ""}</div></div> },
-        { id: "lot", header: "Lot #", sortable: true, accessor: (row) => row.lotNumber ?? "", render: (row) => row.lotNumber ? <span className="mono">{row.lotNumber}</span> : <span className="muted">-</span> },
-        { id: "serial", header: "Serial #", sortable: true, accessor: (row) => row.serialNumber ?? "", render: (row) => row.serialNumber ? <span className="mono">{row.serialNumber}</span> : <span className="muted">-</span> },
-        {
-          id: "expiry",
-          header: "Expires",
-          sortable: true,
-          accessor: (row) => row.expiresAt ?? "",
-          render: (row) => {
-            if (!row.expiresAt) return <span className="muted">-</span>;
-            const d = daysUntil(row.expiresAt);
-            const tone = d != null && d <= EXPIRY_SOON_DAYS ? "warn" : "neutral";
-            return <span className="row" style={{ gap: 4 }}><span>{formatDate(row.expiresAt)}</span>{d != null && d <= EXPIRY_SOON_DAYS && <Badge tone={tone as any}>{d < 0 ? "expired" : `${d}d`}</Badge>}</span>;
-          },
-        },
-        { id: "manufacturer", header: "Manufacturer", accessor: (row) => row.manufacturer ?? "", render: (row) => <span className="muted">{row.manufacturer || "-"}</span> },
-        { id: "status", header: "Status", sortable: true, accessor: (row) => row.status ?? "", render: (row) => <Badge tone={row.status === "active" ? "success" : "neutral"}>{row.status}</Badge> },
-      ]}
+      onRecordClick={(_id, row) => onEdit(row)}
+      emptyState={<RecordTableEmpty title="No lots or serials yet." description="Enable lot/serial tracking on an item, then add a lot." />}
+      renderCell={({ record: row, field }) => {
+        if (field.name === "itemName") return (
+          <span className="record-table__identifier-lines">
+            <strong className="record-table__identifier-primary">{row.itemName}</strong>
+            <span className="record-table__identifier-secondary muted mono">{row.sku}</span>
+          </span>
+        );
+        if (field.name === "lotNumber") return row.lotNumber ? <span className="mono">{row.lotNumber}</span> : <span className="muted">-</span>;
+        if (field.name === "serialNumber") return row.serialNumber ? <span className="mono">{row.serialNumber}</span> : <span className="muted">-</span>;
+        if (field.name === "expiresAt") {
+          if (!row.expiresAt) return <span className="muted">-</span>;
+          const d = daysUntil(row.expiresAt);
+          return <span className="row" style={{ gap: 4 }}><span>{formatDate(row.expiresAt)}</span>{d != null && d <= EXPIRY_SOON_DAYS && <Badge tone="warn">{d < 0 ? "expired" : `${d}d`}</Badge>}</span>;
+        }
+        if (field.name === "manufacturer") return <span className="muted">{row.manufacturer || "-"}</span>;
+        if (field.name === "status") return <Badge tone={row.status === "active" ? "success" : "neutral"}>{row.status}</Badge>;
+        return undefined;
+      }}
       renderRowActions={(row) => (
         <>
           <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)} disabled={!canWrite}><Pencil size={12} /> Edit</button>
-          <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
+          <button className="btn btn--ghost btn--sm" aria-label={`Delete lot ${row.lotNumber || row.serialNumber || ""}`.trim()} onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
         </>
       )}
     />
@@ -518,36 +504,43 @@ export function CountsTab({
   onVoid: (count: any) => void;
 }) {
   const { canWrite } = useFinancePermissions();
+  const society = useSociety();
+  const records = useMemo(() => countRows.map((row) => {
+    const lines = row.lines ?? [];
+    const counted = lines.filter((l: any) => l.countedQuantity != null);
+    return {
+      ...row,
+      reviewerName: row.reviewerName ?? "",
+      scope: row.scope ?? "all",
+      lineCount: lines.length,
+      countedLines: counted.length,
+      varianceLines: counted.filter((l: any) => (l.countedQuantity - (l.expectedQuantity ?? 0)) !== 0).length,
+    };
+  }), [countRows]);
   return (
-    <DataTable
+    <ObjectRecordTable
+      societyId={society?._id}
+      nameSingular="inventoryCount"
       label="Physical counts"
+      objectLabel="physical count"
       icon={<ClipboardList size={14} />}
-      data={countRows}
-      rowKey={(row) => row._id}
+      records={records}
       loading={loading}
-      viewsKey="inventory-counts"
-      searchPlaceholder="Search count title, reviewer, scope..."
-      searchExtraFields={[(row) => row.reviewerName, (row) => row.scope]}
-      emptyMessage="No physical counts yet. Start a count to verify what's actually on the shelf."
-      columns={[
-        { id: "title", header: "Count", sortable: true, accessor: (row) => row.title ?? "", render: (row) => <div><strong>{row.title}</strong><div className="muted">{row.reviewerName ?? "Unassigned"}</div></div> },
-        { id: "scope", header: "Scope", sortable: true, accessor: (row) => row.scope ?? "", render: (row) => <Badge tone="info">{row.scope ?? "all"}</Badge> },
-        { id: "status", header: "Status", sortable: true, accessor: (row) => row.status ?? "", render: (row) => <Badge tone={row.status === "open" ? "warn" : row.status === "completed" ? "success" : "neutral"}>{row.status}</Badge> },
-        { id: "lines", header: "Lines", align: "right", accessor: (row) => (row.lines ?? []).length, render: (row) => <span className="mono">{(row.lines ?? []).length}</span> },
-        {
-          id: "variance",
-          header: "Counted / variance",
-          align: "right",
-          accessor: (row) => (row.lines ?? []).filter((l: any) => l.countedQuantity != null).length,
-          render: (row) => {
-            const lines = row.lines ?? [];
-            const counted = lines.filter((l: any) => l.countedQuantity != null).length;
-            const variances = lines.filter((l: any) => l.countedQuantity != null && (l.countedQuantity - (l.expectedQuantity ?? 0)) !== 0).length;
-            return <span className="mono">{counted}/{lines.length}{variances ? ` · ${variances}Δ` : ""}</span>;
-          },
-        },
-        { id: "started", header: "Started", sortable: true, accessor: (row) => row.startedAtISO ?? "", render: (row) => <span>{row.startedAtISO ? formatDate(row.startedAtISO) : "-"}</span> },
-      ]}
+      onRecordClick={(_id, row) => { if (row.status === "open" && canWrite) onEnter(row); }}
+      emptyState={<RecordTableEmpty title="No physical counts yet." description="Start a count to verify what's actually on the shelf." />}
+      renderCell={({ record: row, field }) => {
+        if (field.name === "title") return (
+          <span className="record-table__identifier-lines">
+            <strong className="record-table__identifier-primary">{row.title}</strong>
+            <span className="record-table__identifier-secondary muted">{row.reviewerName || "Unassigned"}</span>
+          </span>
+        );
+        if (field.name === "scope") return <Badge tone="info">{row.scope}</Badge>;
+        if (field.name === "status") return <Badge tone={row.status === "open" ? "warn" : row.status === "completed" ? "success" : "neutral"}>{row.status}</Badge>;
+        if (field.name === "lineCount") return <span className="mono">{row.lineCount}</span>;
+        if (field.name === "countedLines") return <span className="mono">{row.countedLines}/{row.lineCount}{row.varianceLines ? ` · ${row.varianceLines}Δ` : ""}</span>;
+        return undefined;
+      }}
       renderRowActions={(row) => (
         <>
           {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={() => onEnter(row)} disabled={!canWrite}><Pencil size={12} /> Enter counts</button>}

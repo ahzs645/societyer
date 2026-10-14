@@ -3,8 +3,7 @@ import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../../../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "../../../pages/_helpers";
-import { Flag } from "../../../components/ui";
-import { DataTable } from "../../../components/DataTable";
+import { Badge, Flag } from "../../../components/ui";
 import { relative } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { ArrowLeft, Database, Eye, EyeOff, ExternalLink, RefreshCw } from "lucide-react";
@@ -24,10 +23,7 @@ import {
 import {
   type WaveAccountView,
   capitalize,
-  categoryAccountTransactionColumns,
-  counterpartyTransactionColumns,
   filterWaveResourcesForView,
-  financialTransactionColumns,
   isBrowserBackedWaveConnection,
   isWaveCategoryAccount,
   isWaveCounterpartyResource,
@@ -35,7 +31,10 @@ import {
   isWaveTransactionAccount,
   normalizeWaveAccountView,
   normalizeWaveResourceType,
-  waveResourceColumns,
+  WaveResourceValue,
+  humanizeWaveEnum,
+  waveResourceBadgeLabel,
+  waveResourceRecord,
   waveResourceDetailHref,
   waveResourceSingularLabel,
   waveSingularTypeLabel,
@@ -47,8 +46,21 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTableEmpty,
+  ObjectRecordTable,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
+import { WAVE_RESOURCE_VIEW_NAMES } from "../../../../convex/recordTableDomainObjects";
+
+/** Seeded per-resource Wave views; older workspaces are topped up. */
+const WAVE_REQUIRED_VIEWS = Object.values(WAVE_RESOURCE_VIEW_NAMES);
+const PER_RESOURCE_VIEW_NAMES = new Set(WAVE_REQUIRED_VIEWS);
+
+/** A single resource type's page already shows only that type, so the
+ * per-resource views would repeat (or empty) it; they belong to "Wave Data". */
+function withoutPerResourceViews<V extends { name: string }>(views: V[]): V[] {
+  return views.filter((view) => !PER_RESOURCE_VIEW_NAMES.has(view.name));
+}
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export function WaveResourceTablePage() {
@@ -112,6 +124,7 @@ export function WaveResourceTablePage() {
     applyAccountView: tableResourceType === "account" || tableResourceType === "all",
   });
   const hiddenRows = allResources.length - rows.length;
+  const records = rows.map(waveResourceRecord);
   const selectedFallback = allResources.find((row) => row._id === selectedWaveResourceId) ?? null;
   const title = tableResourceType === "all" ? "Wave Data" : `Wave ${waveTypeLabel(tableResourceType)}`;
 
@@ -209,34 +222,44 @@ export function WaveResourceTablePage() {
         />
       )}
 
-      <DataTable
+      <ObjectRecordTable
+        societyId={society._id}
+        nameSingular="waveResource"
+        tableId={`wave-cache-${tableResourceType}`}
         label={title}
+        objectLabel="Wave resource"
         icon={<Database size={14} />}
-        data={rows as any[]}
+        records={records}
         loading={waveResources === undefined}
-        rowKey={(row) => row._id}
-        onRowClick={(row) => openWaveResource(row._id)}
-        rowActionLabel={(row) => `Open ${row.label}`}
-        searchPlaceholder={`Search ${title.toLowerCase()}...`}
-        searchExtraFields={[(row) => row.searchText]}
-        defaultSort={{ columnId: "resource", dir: "asc" }}
-        viewsKey={`wave-cache-${tableResourceType}`}
-        pagination
-        initialPageSize={50}
-        pageSizeOptions={[25, 50, 100]}
-        columns={waveResourceColumns()}
+        requiredViewNames={WAVE_REQUIRED_VIEWS}
+        filterViews={tableResourceType === "all" ? undefined : withoutPerResourceViews}
+        onRecordClick={(recordId) => openWaveResource(recordId)}
+        emptyState={
+          <RecordTableEmpty
+            title={waveSummary ? "No Wave data matches this account view." : "Refresh to load the latest data from your connected Wave account."}
+          />
+        }
+        renderCell={({ record: row, field }) => {
+          if (field.name === "label") return <strong>{row.label}</strong>;
+          if (field.name === "kind") return (
+            <span className="row" style={{ gap: 6, flexWrap: "nowrap", minWidth: 0 }}>
+              <span style={{ flex: "none" }}><Badge>{waveResourceBadgeLabel(row)}</Badge></span>
+              {(row.typeValue || row.subtypeValue) && (
+                <span className="record-cell__text muted">
+                  {[humanizeWaveEnum(row.typeValue), humanizeWaveEnum(row.subtypeValue)].filter(Boolean).join(" · ")}
+                </span>
+              )}
+            </span>
+          );
+          if (field.name === "status") return row.status ? <Badge tone={String(row.status).toLowerCase() === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—";
+          if (field.name === "value") return <span className="record-cell__number"><WaveResourceValue row={row} /></span>;
+          return undefined;
+        }}
         renderRowActions={(row) => (
-          <Link
-            className="btn btn--ghost btn--sm"
-            to={waveResourceDetailHref(row)}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
+          <Link className="btn btn--ghost btn--sm" to={waveResourceDetailHref(row)}>
             <ExternalLink size={12} /> Details
           </Link>
         )}
-        emptyMessage={waveSummary ? "No Wave data matches this account view." : "Refresh to load the latest data from your connected Wave account."}
       />
 
       <WaveResourceDrawer

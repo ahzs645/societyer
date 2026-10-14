@@ -9,7 +9,6 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { DataTable } from "../components/DataTable";
 import { Segmented } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Mail, Plus, Send, Settings2 } from "lucide-react";
@@ -26,11 +25,15 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   RecordTableEmpty,
+  ObjectRecordTable,
   useObjectRecordTableData,
   useRecordTableState,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useEligibleVoters } from "../hooks/useEligibleVoters";
+
+/** Seeded delivery-log views (by status and channel); older workspaces are topped up. */
+const DELIVERY_SEEDED_VIEWS = ["Problems", "Suppressed", "Email", "SMS"] as const;
 
 /**
  * Distinguishes "genuinely zero records" from "filters/search narrowed a
@@ -278,8 +281,6 @@ export function CommunicationsPage() {
   const [segmentsFilterOpen, setSegmentsFilterOpen] = useState(false);
   const [campaignsViewId, setCampaignsViewId] = useState<Id<"views"> | undefined>(undefined);
   const [campaignsFilterOpen, setCampaignsFilterOpen] = useState(false);
-  const [deliveriesViewId, setDeliveriesViewId] = useState<Id<"views"> | undefined>(undefined);
-  const [deliveriesFilterOpen, setDeliveriesFilterOpen] = useState(false);
   const committeeDetail = useQuery(
     api.committees.detail,
     society && can("committees:read") && sendDraft?.audiencePreset === "committee" && sendDraft.audienceTarget
@@ -290,7 +291,6 @@ export function CommunicationsPage() {
   const templatesTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationTemplate", viewId: templatesViewId });
   const segmentsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationSegment", viewId: segmentsViewId });
   const campaignsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationCampaign", viewId: campaignsViewId });
-  const deliveriesTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationDelivery", viewId: deliveriesViewId });
 
   const templateRecords = useMemo(() => (templates ?? []) as any[], [templates]);
   const segmentRecords = useMemo(
@@ -401,6 +401,31 @@ export function CommunicationsPage() {
             preferredChannel: "email",
           } as const),
       };
+    });
+
+  const prefRecords = prefRows.map((row) => ({
+    ...row.pref,
+    _id: String(row.memberId),
+    memberId: row.memberId,
+    pref: row.pref,
+    contactName: row.name,
+    email: row.email,
+    mailEnabled: row.pref.mailEnabled ?? false,
+    _searchText: [row.pref.email, row.pref.phone].filter(Boolean).join(" "),
+  }));
+  const openPrefDraft = (row: (typeof prefRecords)[number]) =>
+    setPrefDraft({
+      memberId: row.memberId,
+      email: row.pref.email ?? row.email,
+      phone: row.pref.phone ?? "",
+      postalAddress: row.pref.postalAddress ?? "",
+      transactionalEmailEnabled: row.pref.transactionalEmailEnabled,
+      noticeEmailEnabled: row.pref.noticeEmailEnabled,
+      newsletterEmailEnabled: row.pref.newsletterEmailEnabled,
+      smsEnabled: row.pref.smsEnabled,
+      mailEnabled: row.pref.mailEnabled ?? false,
+      preferredChannel: row.pref.preferredChannel,
+      memberName: row.contactName,
     });
 
   const sentCount = (deliveries ?? []).filter((row) => row.status === "sent" || row.status === "opened").length;
@@ -679,138 +704,82 @@ export function CommunicationsPage() {
         </RecordTableScope>
       ) : null)}
 
-      {section === "deliveries" && (!deliveriesTable.loading && !deliveriesTable.objectMetadata ? (
-        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="delivery" />
-      ) : deliveriesTable.objectMetadata ? (
-        <RecordTableScope
+      {section === "deliveries" && (
+        <ObjectRecordTable
+          societyId={society._id}
+          nameSingular="communicationDelivery"
           tableId="communicationDeliveries"
-          objectMetadata={deliveriesTable.objectMetadata}
-          hydratedView={deliveriesTable.hydratedView}
+          label="Delivery log"
+          objectLabel="delivery"
+          icon={<Send size={14} />}
           records={deliveryRecords}
-        >
-          <RecordTableViewToolbar
-            societyId={society._id}
-            objectMetadataId={deliveriesTable.objectMetadata._id as Id<"objectMetadata">}
-            icon={<Send size={14} />}
-            label="Delivery log"
-            views={deliveriesTable.views}
-            currentViewId={deliveriesViewId ?? deliveriesTable.views[0]?._id ?? null}
-            onChangeView={(viewId) => setDeliveriesViewId(viewId as Id<"views">)}
-            onOpenFilter={() => setDeliveriesFilterOpen((x) => !x)}
-          />
-          <RecordTableFilterPopover open={deliveriesFilterOpen} onClose={() => setDeliveriesFilterOpen(false)} />
-          <RecordTableFilterChips />
-          <RecordTable
-            loading={deliveriesTable.loading || deliveries === undefined}
-            emptyState={
-              <CommunicationsEmptyState
-                hasAnyRecords={deliveryRecords.length > 0}
-                labelPlural="deliveries"
-                createHint="Send a campaign to generate delivery records."
-              />
-            }
-            renderCell={({ record: row, field }) => {
-              if (field.name === "recipientName") return (
-                <div className="record-table__identifier-lines">
-                  <strong className="record-table__identifier-primary">{row.recipientName}</strong>
-                  <div className="record-table__identifier-secondary muted">{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
-                </div>
-              );
-              if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;
-              if (field.name === "provider") return <span className="cell-tag">{row.provider}</span>;
-              if (field.name === "status") return (
-                <Badge tone={row.status === "sent" || row.status === "opened" ? "success" : row.status === "skipped" ? "warn" : row.status === "unsubscribed" ? "info" : "danger"}>
-                  {row.status}
-                </Badge>
-              );
-              if (field.name === "subject") return <span>{row.subject || "—"}</span>;
-              if (field.name === "proofOfNotice") return <span className="mono">{row.proofOfNotice || "—"}</span>;
-              return undefined;
-            }}
-          />
-        </RecordTableScope>
-      ) : null)}
-
-      {section === "preferences" && <DataTable
-        label={vocab.isSociety ? "Member contact preferences" : "Contact preferences"}
-        icon={<Mail size={14} />}
-        data={prefRows as any[]}
-        rowKey={(row) => String(row.memberId)}
-        searchPlaceholder={`Search ${vocab.contactNoun} or email…`}
-        emptyMessage={vocab.isSociety
-          ? "No active members yet — add a member to manage their contact preferences."
-          : `No active ${vocab.contactNoun} records yet. Contact preferences appear here once contact records are added.`}
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        columns={[
-          {
-            id: "name",
-            header: contactTitle,
-            sortable: true,
-            accessor: (row) => row.name,
-            render: (row) => (
-              <div>
-                <strong>{row.name}</strong>
-                <div className="muted mono" style={{ fontSize: 11 }}>{row.email || "No email on file"}</div>
+          loading={deliveries === undefined}
+          requiredViewNames={DELIVERY_SEEDED_VIEWS}
+          emptyState={
+            <CommunicationsEmptyState
+              hasAnyRecords={deliveryRecords.length > 0}
+              labelPlural="deliveries"
+              createHint="Send a campaign to generate delivery records."
+            />
+          }
+          renderCell={({ record: row, field }) => {
+            if (field.name === "recipientName") return (
+              <div className="record-table__identifier-lines">
+                <strong className="record-table__identifier-primary">{row.recipientName}</strong>
+                <div className="record-table__identifier-secondary muted">{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
               </div>
-            ),
-          },
-          {
-            id: "noticeEmailEnabled",
-            header: "Notice",
-            sortable: true,
-            accessor: (row) => (row.pref.noticeEmailEnabled ? 1 : 0),
-            render: (row) => <Badge tone={row.pref.noticeEmailEnabled ? "success" : "warn"}>{row.pref.noticeEmailEnabled ? "Enabled" : "Off"}</Badge>,
-          },
-          {
-            id: "newsletterEmailEnabled",
-            header: "Newsletter",
-            sortable: true,
-            accessor: (row) => (row.pref.newsletterEmailEnabled ? 1 : 0),
-            render: (row) => <Badge tone={row.pref.newsletterEmailEnabled ? "success" : "warn"}>{row.pref.newsletterEmailEnabled ? "Enabled" : "Off"}</Badge>,
-          },
-          {
-            id: "preferredChannel",
-            header: "Preferred channel",
-            sortable: true,
-            accessor: (row) => row.pref.preferredChannel,
-            render: (row) => <span className="cell-tag">{row.pref.preferredChannel}</span>,
-          },
-          {
-            id: "mailEnabled",
-            header: "Mail",
-            sortable: true,
-            accessor: (row) => (row.pref.mailEnabled ? 1 : 0),
-            render: (row) => (
-              <Badge tone={row.pref.mailEnabled ? "success" : "info"}>
-                {row.pref.mailEnabled ? "Enabled" : "Off"}
+            );
+            if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;
+            if (field.name === "provider") return <span className="cell-tag">{row.provider}</span>;
+            if (field.name === "status") return (
+              <Badge tone={row.status === "sent" || row.status === "opened" ? "success" : row.status === "skipped" ? "warn" : row.status === "unsubscribed" ? "info" : "danger"}>
+                {row.status}
               </Badge>
-            ),
-          },
-        ]}
-        renderRowActions={(row) => (
-          <button
-            className="btn btn--ghost btn--sm"
-            disabled={!canWrite}
-            onClick={() =>
-              setPrefDraft({
-                memberId: row.memberId,
-                email: row.pref.email ?? row.email,
-                phone: row.pref.phone ?? "",
-                postalAddress: row.pref.postalAddress ?? "",
-                transactionalEmailEnabled: row.pref.transactionalEmailEnabled,
-                noticeEmailEnabled: row.pref.noticeEmailEnabled,
-                newsletterEmailEnabled: row.pref.newsletterEmailEnabled,
-                smsEnabled: row.pref.smsEnabled,
-                mailEnabled: row.pref.mailEnabled ?? false,
-                preferredChannel: row.pref.preferredChannel,
-                memberName: row.name,
-              })
-            }
-          >
-            Edit
-          </button>
-        )}
-      />}
+            );
+            if (field.name === "subject") return <span>{row.subject || "—"}</span>;
+            if (field.name === "proofOfNotice") return <span className="mono">{row.proofOfNotice || "—"}</span>;
+            return undefined;
+          }}
+        />
+      )}
+
+      {section === "preferences" && (
+        <ObjectRecordTable
+          societyId={society._id}
+          nameSingular="communicationPreference"
+          label={vocab.isSociety ? "Member contact preferences" : "Contact preferences"}
+          objectLabel="contact preference"
+          icon={<Mail size={14} />}
+          records={prefRecords}
+          loading={members === undefined || prefs === undefined}
+          onRecordClick={(_id, row) => openPrefDraft(row)}
+          emptyState={
+            <RecordTableEmpty
+              title={vocab.isSociety
+                ? "No active members yet — add a member to manage their contact preferences."
+                : `No active ${vocab.contactNoun} records yet. Contact preferences appear here once contact records are added.`}
+            />
+          }
+          renderCell={({ record: row, field }) => {
+            if (field.name === "contactName") return (
+              <span className="record-table__identifier-lines">
+                <strong className="record-table__identifier-primary">{row.contactName}</strong>
+                <span className="record-table__identifier-secondary muted mono">{row.email || "No email on file"}</span>
+              </span>
+            );
+            if (field.name === "noticeEmailEnabled") return <Badge tone={row.noticeEmailEnabled ? "success" : "warn"}>{row.noticeEmailEnabled ? "Enabled" : "Off"}</Badge>;
+            if (field.name === "newsletterEmailEnabled") return <Badge tone={row.newsletterEmailEnabled ? "success" : "warn"}>{row.newsletterEmailEnabled ? "Enabled" : "Off"}</Badge>;
+            if (field.name === "preferredChannel") return <span className="cell-tag">{row.preferredChannel}</span>;
+            if (field.name === "mailEnabled") return <Badge tone={row.mailEnabled ? "success" : "info"}>{row.mailEnabled ? "Enabled" : "Off"}</Badge>;
+            return undefined;
+          }}
+          renderRowActions={(row) => (
+            <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => openPrefDraft(row)}>
+              Edit
+            </button>
+          )}
+        />
+      )}
 
       <Drawer
         open={!!templateDraft}

@@ -32,22 +32,12 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { MarkdownEditor } from "../components/MarkdownEditor";
-import { DataTable } from "../components/DataTable";
 import { Tabs } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { singularUnit } from "./inventory/helpers";
 import { Menu, type MenuSection } from "../components/Menu";
 import { Select as StyledSelect } from "../components/Select";
-import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
-import {
-  RecordTable,
-  RecordTableScope,
-  RecordTableViewToolbar,
-  RecordTableFilterChips,
-  RecordTableFilterPopover,
-  useObjectRecordTableData,
-} from "@/platform/record-engine";
-import type { Id } from "../../convex/_generated/dataModel";
+import { ObjectRecordTable, RecordTableEmpty } from "@/platform/record-engine";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
@@ -92,6 +82,9 @@ import {
 } from "../features/assets/assetUtils";
 import { StatTile } from "../components/StatTile";
 
+/** Seeded asset views this page offers; older workspaces are topped up. */
+const ASSET_SEEDED_VIEWS = ["Needs attention", "Disposed"] as const;
+
 export function AssetsPage() {
   const confirm = useConfirm();
   const { canWrite, canExport } = useFinancePermissions();
@@ -127,16 +120,8 @@ export function AssetsPage() {
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [csvInput, setCsvInput] = useState("");
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
-  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
-  const [filterOpen, setFilterOpen] = useState(false);
   const [mobileQuery, setMobileQuery] = useState("");
 
-  const tableData = useObjectRecordTableData({
-    societyId: society?._id,
-    nameSingular: "asset",
-    viewId: currentViewId,
-  });
-  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const rows = (assets ?? []) as any[];
   const stats = useMemo(() => summarizeAssets(rows, (maintenance ?? []) as any[], (verificationRuns ?? []) as any[]), [rows, maintenance, verificationRuns]);
@@ -146,6 +131,7 @@ export function AssetsPage() {
       custodian: row.custodianName ?? "",
       value: row.bookValueCents ?? row.purchaseValueCents ?? 0,
       purchaseEvidence: row.receiptDocumentId || row.purchaseTransactionId ? "linked" : "",
+      needsAttention: assetNeedsAttention(row),
     })),
     [rows],
   );
@@ -476,46 +462,31 @@ export function AssetsPage() {
       </div>
 
       <div className="asset-desktop-register">
-        {showMetadataWarning ? (
-          <RecordTableMetadataEmpty societyId={society?._id} objectLabel="asset" />
-        ) : tableData.objectMetadata ? (
-          <RecordTableScope
-            tableId="assets"
-            objectMetadata={tableData.objectMetadata}
-            hydratedView={tableData.hydratedView}
-            records={records}
-            onRecordClick={(recordId) => navigate(`/app/assets/${recordId}`)}
-          >
-            <RecordTableViewToolbar
-              societyId={society._id}
-              objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
-              icon={<Package size={14} />}
-              label="All inventory"
-              views={tableData.views}
-              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
-              onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
-              onOpenFilter={() => setFilterOpen((x) => !x)}
-            />
-            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-            <RecordTableFilterChips />
-            <RecordTable
-              loading={tableData.loading || assets === undefined}
-              renderCell={({ record: row, field }) => {
-                if (field.name === "assetTag") return <span className="mono">{row.assetTag}</span>;
-                if (field.name === "name") return <AssetCell row={row} />;
-                if (field.name === "status") return <StatusBadge status={row.status} />;
-                if (field.name === "custodian") return <CustodyCell row={row} />;
-                if (field.name === "location") return <span>{row.location}</span>;
-                if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span>{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
-                if (field.name === "value") return <ValueCell row={row} />;
-                if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
-                if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
-                return undefined;
-              }}
-              rowMenuSections={assetMenuSections}
-            />
-          </RecordTableScope>
-        ) : null}
+        <ObjectRecordTable
+          societyId={society._id}
+          nameSingular="asset"
+          tableId="assets"
+          label="All inventory"
+          objectLabel="asset"
+          icon={<Package size={14} />}
+          records={records}
+          loading={assets === undefined}
+          requiredViewNames={ASSET_SEEDED_VIEWS}
+          onRecordClick={(recordId) => navigate(`/app/assets/${recordId}`)}
+          renderCell={({ record: row, field }) => {
+            if (field.name === "assetTag") return <span className="mono">{row.assetTag}</span>;
+            if (field.name === "name") return <AssetCell row={row} />;
+            if (field.name === "status") return <StatusBadge status={row.status} />;
+            if (field.name === "custodian") return <CustodyCell row={row} />;
+            if (field.name === "location") return <span>{row.location}</span>;
+            if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span>{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
+            if (field.name === "value") return <ValueCell row={row} />;
+            if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
+            if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
+            return undefined;
+          }}
+          rowMenuSections={assetMenuSections}
+        />
       </div>
 
       <Drawer
@@ -694,6 +665,16 @@ export function AssetDetailPage() {
   // rather than dereferencing `asset` and crashing.
   if (Array.isArray(bundle) || !bundle.asset) return <PageLoading />;
   const { asset, events, maintenance } = bundle;
+  const maintenanceRecords = ((maintenance ?? []) as any[]).map((row) => ({
+    ...row,
+    isOverdue: row.status !== "Completed" && isDue(row.dueDate, -1),
+  }));
+  const eventRecords = ((events ?? []) as any[]).map((row) => ({
+    ...row,
+    event: humanizeEventType(row.eventType),
+    custody: row.toCustodianName || row.location || "",
+    quantity: row.quantityAfter == null ? "" : `${row.observedQuantityBefore ?? "—"} + ${row.quantityAdded ?? "—"} = ${row.quantityAfter}`,
+  }));
   const receiptDocument = (documents ?? []).find((doc: any) => doc._id === asset.receiptDocumentId);
   const purchaseTransaction = (transactions ?? []).find((txn: any) => txn._id === asset.purchaseTransactionId);
   // Consumables (food, supplies) have no warranty/maintenance/verification
@@ -885,22 +866,25 @@ export function AssetDetailPage() {
                 <div><dt>Next verification</dt><dd>{asset.nextVerificationDate ? <DueDate date={asset.nextVerificationDate} /> : "—"}</dd></div>
               </dl>
             </section>
-            <DataTable
+            <ObjectRecordTable
+              societyId={society?._id}
+              nameSingular="assetMaintenance"
               label="Maintenance schedule"
+              objectLabel="maintenance schedule"
               icon={<Wrench size={14} />}
-              data={maintenance}
-              rowKey={(row) => row._id as string}
-              columns={[
-                { id: "title", header: "Title", accessor: (row) => row.title },
-                { id: "kind", header: "Kind", accessor: (row) => row.kind, render: (row) => <span className="cell-tag">{row.kind}</span> },
-                { id: "dueDate", header: "Due", sortable: true, accessor: (row) => row.dueDate, render: (row) => <DueDate date={row.dueDate} /> },
-                { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "Completed" ? "success" : "warn"}>{row.status}</Badge> },
-              ]}
+              records={maintenanceRecords}
+              renderCell={({ record: row, field }) => {
+                if (field.name === "kind") return <span className="cell-tag">{row.kind}</span>;
+                if (field.name === "dueDate") return <DueDate date={row.dueDate} />;
+                if (field.name === "status") return <Badge tone={row.status === "Completed" ? "success" : "warn"}>{row.status}</Badge>;
+                return undefined;
+              }}
               renderRowActions={(row) => row.status !== "Completed" ? (
                 <button className="btn btn--ghost btn--sm" onClick={() => completeMaintenance({ id: row._id, completedAtISO: new Date().toISOString(), notes: row.notes })} disabled={!canWrite}>
                   <CheckCircle2 size={12} /> Done
                 </button>
               ) : null}
+              emptyState={<RecordTableEmpty title="No maintenance scheduled" description="Use Schedule maintenance to add a service, calibration or inspection." />}
             />
             <section className="panel">
               <div className="panel__head"><h2 className="card__title">Documentation &amp; resources</h2><FileText size={16} /></div>
@@ -945,20 +929,18 @@ export function AssetDetailPage() {
         )}
 
         {activeTab === "custody" && (
-          <DataTable
+          <ObjectRecordTable
+            societyId={society?._id}
+            nameSingular="assetEvent"
             label="Custody and audit history"
+            objectLabel="custody history"
             icon={<ClipboardCheck size={14} />}
-            data={events}
-            rowKey={(row) => row._id as string}
-            defaultSort={{ columnId: "happenedAtISO", dir: "desc" }}
-            columns={[
-              { id: "happenedAtISO", header: "Date", sortable: true, accessor: (row) => row.happenedAtISO, render: (row) => <span>{formatDate(row.happenedAtISO)}</span> },
-              { id: "eventType", header: "Event", accessor: (row) => row.eventType, render: (row) => <span className="cell-tag">{row.eventType}</span> },
-              { id: "custody", header: "Custody", accessor: (row) => row.toCustodianName, render: (row) => row.toCustodianName || row.location || "—" },
-              { id: "condition", header: "Condition", accessor: (row) => row.condition },
-              { id: "quantity", header: "Quantity", accessor: (row) => row.quantityAfter ?? row.quantityAdded, render: (row) => row.quantityAfter == null ? "—" : `${row.observedQuantityBefore ?? "—"} + ${row.quantityAdded ?? "—"} = ${row.quantityAfter}` },
-              { id: "notes", header: "Notes", accessor: (row) => row.notes },
-            ]}
+            records={eventRecords}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "event") return <span className="cell-tag">{row.eventType}</span>;
+              return undefined;
+            }}
+            emptyState={<RecordTableEmpty title="No custody events yet" description="Record a checkout, transfer or check-in to start the audit trail." />}
           />
         )}
 
@@ -1028,6 +1010,13 @@ export function AssetVerificationPage() {
   );
   const assetById = new Map(((assets ?? []) as any[]).map((asset) => [asset._id, asset]));
   const rows = ((items ?? []) as any[]).map((item) => ({ ...item, asset: assetById.get(item.assetId) }));
+  const verificationRecords = rows.map((row) => ({
+    ...row,
+    assetTag: row.asset?.assetTag ?? String(row.assetId),
+    assetName: row.asset?.name ?? "",
+    expectedLocation: row.asset?.location ?? "",
+    expectedCondition: row.asset?.condition ?? "",
+  }));
   const pending = rows.filter((row) => row.status === "pending").length;
 
   useEffect(() => {
@@ -1081,19 +1070,20 @@ export function AssetVerificationPage() {
         subtitle={`${pending} asset${pending === 1 ? "" : "s"} still pending.`}
         actions={<><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><button className="btn-action" onClick={() => setScanOpen(true)} disabled={!canWrite}><ScanLine size={12} /> Scan to verify</button><button className="btn-action btn-action--primary" disabled={!canWrite || (completing)} onClick={finishRun}><CheckCircle2 size={12} /> {completing ? "Completing…" : "Complete run"}</button></>}
       />
-      <DataTable
+      <ObjectRecordTable
+        societyId={society?._id}
+        nameSingular="assetVerificationItem"
         label="Verification checklist"
+        objectLabel="verification checklist"
         icon={<CalendarCheck size={14} />}
-        data={rows}
-        rowKey={(row) => row._id as string}
+        records={verificationRecords}
         loading={items === undefined || assets === undefined}
-        columns={[
-          { id: "assetTag", header: "Tag", accessor: (row) => row.asset?.assetTag, render: (row) => <span className="mono">{row.asset?.assetTag ?? row.assetId}</span> },
-          { id: "name", header: "Asset", accessor: (row) => row.asset?.name },
-          { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "verified" ? "success" : row.status === "pending" ? "neutral" : "warn"}>{row.status}</Badge> },
-          { id: "location", header: "Expected location", accessor: (row) => row.asset?.location },
-          { id: "condition", header: "Expected condition", accessor: (row) => row.asset?.condition },
-        ]}
+        onRecordClick={(_recordId, row) => navigate(`/app/assets/${row.assetId}`)}
+        renderCell={({ record: row, field }) => {
+          if (field.name === "assetTag") return <span className="mono">{row.assetTag}</span>;
+          if (field.name === "status") return <Badge tone={row.status === "verified" ? "success" : row.status === "pending" ? "neutral" : "warn"}>{row.status}</Badge>;
+          return undefined;
+        }}
         renderRowActions={(row) => (
           <>
             <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "verified", verifiedByName: verifierName, observedLocation: row.asset?.location, observedCondition: row.asset?.condition })} disabled={!canWrite}>
@@ -1352,6 +1342,18 @@ function EvidenceCell({ row, documents, transactions }: { row: any; documents: a
       {txn && <div><Link className="muted" to={`/app/financials?tab=transactions&transaction=${txn._id}`}>{formatDate(txn.date)} · {txn.description}</Link></div>}
     </div>
   );
+}
+
+/** Lost, in for repair or flagged — or maintenance or verification already due. */
+function assetNeedsAttention(row: any) {
+  if (row.status === "Disposed") return false;
+  if (["Needs review", "In maintenance", "Lost"].includes(row.status)) return true;
+  return isDue(row.nextMaintenanceDate, 0) || isDue(row.nextVerificationDate, 0);
+}
+
+function humanizeEventType(eventType?: string) {
+  const text = String(eventType ?? "").replace(/[_-]+/g, " ").trim();
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : "Event";
 }
 
 function StatusBadge({ status }: { status?: string }) {
