@@ -1703,7 +1703,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     defaultView: {
       name: "All receipts",
       columns: [
-        { fieldName: "receiptNumber", size: 100 },
+        { fieldName: "receiptNumber", size: 140 },
         { fieldName: "donorName", size: 220 },
         { fieldName: "receivedOnISO", size: 120 },
         { fieldName: "amountCents", size: 130 },

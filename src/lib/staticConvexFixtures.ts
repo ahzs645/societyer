@@ -4165,7 +4165,10 @@ const tables: Record<string, any[]> = {
     },
   ],
   proxies,
-  receipts: [
+  // receipts:list reads `donationReceipts`. These two were issued from the
+  // charity's previous receipting series, so a receipt issued in the demo
+  // starts this workspace's own serial at 000001 without colliding.
+  donationReceipts: [
     {
       _id: "static_receipt",
       societyId: SOCIETY_ID,
@@ -4176,7 +4179,6 @@ const tables: Record<string, any[]> = {
       eligibleAmountCents: 500000,
       receivedOnISO: "2026-04-03",
       issuedAtISO: "2026-04-03",
-      status: "Issued",
       location: "Vancouver, BC",
       isNonCash: false,
     },
@@ -4190,7 +4192,6 @@ const tables: Record<string, any[]> = {
       eligibleAmountCents: 250000,
       receivedOnISO: "2025-12-22",
       issuedAtISO: "2026-01-08",
-      status: "Issued",
       location: "Vancouver, BC",
       isNonCash: false,
     },
