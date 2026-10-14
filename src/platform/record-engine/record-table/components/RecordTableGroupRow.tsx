@@ -12,6 +12,7 @@ import {
   groupAggregateOperation,
 } from "../utils/aggregateOperations";
 import type { RecordGroup } from "../utils/groupRecords";
+import { Tooltip } from "../../../../components/Tooltip";
 
 const OPERATION_LABEL: Record<string, string> = { sum: "Total", avg: "Average", min: "Minimum", max: "Maximum" };
 
@@ -105,16 +106,17 @@ export function RecordTableGroupRowCells({
         }}
       >
         <span className="record-table__group-heading">
-          <button
-            type="button"
-            className="record-table__group-toggle"
-            aria-expanded={!collapsed}
-            aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.label}`}
-            title={collapsed ? "Expand group" : "Collapse group"}
-            onClick={toggle}
-          >
-            <ChevronRight size={14} aria-hidden="true" />
-          </button>
+          <Tooltip content={collapsed ? "Expand group" : "Collapse group"}>
+            <button
+              type="button"
+              className="record-table__group-toggle"
+              aria-expanded={!collapsed}
+              aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.label}`}
+              onClick={toggle}
+            >
+              <ChevronRight size={14} aria-hidden="true" />
+            </button>
+          </Tooltip>
           <GroupValue group={group} column={groupColumn} />
           <span className="record-table__group-count" aria-label={`${count} ${count === 1 ? "record" : "records"}`}>
             {count}

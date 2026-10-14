@@ -8,6 +8,7 @@ import { RecordTableCell } from "./RecordTableCell";
 import type { RecordTableCellRenderer } from "./RecordTable";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
 import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
+import { Tooltip } from "../../../../components/Tooltip";
 
 /**
  * Class list for a record's `<tr>`: the base row class plus the new-row flash
@@ -103,19 +104,20 @@ export function RecordTableRow({
             void onReorder(orderedIds);
           }}
         >
-          <button
-            type="button"
-            className="record-table__drag-grip"
-            title="Reorder row"
-            aria-label={`Reorder ${objectMetadata.labelSingular.toLowerCase()}`}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", recordId);
-            }}
-          >
-            <GripVertical size={13} />
-          </button>
+          <Tooltip content="Reorder row">
+            <button
+              type="button"
+              className="record-table__drag-grip"
+              aria-label={`Reorder ${objectMetadata.labelSingular.toLowerCase()}`}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", recordId);
+              }}
+            >
+              <GripVertical size={13} />
+            </button>
+          </Tooltip>
         </td>
       )}
       {selectable && (
@@ -162,20 +164,21 @@ export function RecordTableRow({
         >
           <div className="record-table__row-actions">
             {showOpenRecordAction && onRecordClick && (
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm btn--icon record-table__open-record"
-                aria-label={`Preview ${objectMetadata.labelSingular ?? "record"} in sidebar`}
-                title="Preview in sidebar"
-                onClick={() =>
-                  onRecordClick(recordId, record, {
-                    source: "action",
-                    openRecordIn: "drawer",
-                  })
-                }
-              >
-                <PanelRightOpen size={12} />
-              </button>
+              <Tooltip content="Preview in sidebar">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--icon record-table__open-record"
+                  aria-label={`Preview ${objectMetadata.labelSingular ?? "record"} in sidebar`}
+                  onClick={() =>
+                    onRecordClick(recordId, record, {
+                      source: "action",
+                      openRecordIn: "drawer",
+                    })
+                  }
+                >
+                  <PanelRightOpen size={12} />
+                </button>
+              </Tooltip>
             )}
             {renderRowActions?.(record)}
             {rowMenuSections && (

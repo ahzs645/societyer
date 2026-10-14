@@ -30,6 +30,7 @@ import {
   RecordTableViewToolbar,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
+import { Tooltip } from "../components/Tooltip";
 
 type TemplateItemDraft = {
   title: string;
@@ -428,40 +429,43 @@ export function MeetingTemplatesPage() {
                  >
                     <CalendarPlus size={12} /> Schedule meeting
                   </button>
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    type="button"
-                    onClick={() => navigate(`/app/meeting-templates/${template._id}`)}
-                    title="Edit template"
-                    aria-label={`Edit ${template.name}`}
-                  disabled={!canWrite}
-                 >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    type="button"
-                    onClick={async () => {
-                      const copiedId = await duplicate({ templateId: template._id });
-                      toast.success("Template duplicated");
-                      if (copiedId) navigate(`/app/meeting-templates/${copiedId}`);
-                    }}
-                    title="Duplicate template"
-                    aria-label={`Duplicate ${template.name}`}
-                  disabled={!canWrite}
-                 >
-                    <Copy size={12} />
-                  </button>
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    type="button"
-                    onClick={() => { void handleDeleteTemplate(template); }}
-                    title="Delete template"
-                    aria-label={`Delete ${template.name}`}
-                  disabled={!canWrite}
-                 >
-                    <Trash2 size={12} />
-                  </button>
+                  <Tooltip content="Edit template">
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      type="button"
+                      onClick={() => navigate(`/app/meeting-templates/${template._id}`)}
+                      aria-label={`Edit ${template.name}`}
+                    disabled={!canWrite}
+                   >
+                      <Pencil size={12} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Duplicate template">
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      type="button"
+                      onClick={async () => {
+                        const copiedId = await duplicate({ templateId: template._id });
+                        toast.success("Template duplicated");
+                        if (copiedId) navigate(`/app/meeting-templates/${copiedId}`);
+                      }}
+                      aria-label={`Duplicate ${template.name}`}
+                    disabled={!canWrite}
+                   >
+                      <Copy size={12} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Delete template">
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      type="button"
+                      onClick={() => { void handleDeleteTemplate(template); }}
+                      aria-label={`Delete ${template.name}`}
+                    disabled={!canWrite}
+                   >
+                      <Trash2 size={12} />
+                    </button>
+                  </Tooltip>
                 </>
               );
             }}
@@ -744,20 +748,21 @@ export function MeetingTemplateBuilderPage() {
                         {motionEnabled ? "Motion" : formatLabel(item.sectionType)}
                       </span>
                       <span className="meeting-minutes-section-item__actions">
-                        <button
-                          className="btn-action btn-action--icon"
-                          type="button"
-                          title="Remove agenda item"
-                          aria-label="Remove agenda item"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            removeItem(index);
-                          }}
-                        disabled={!canWrite}
-                       >
-                          <MinusCircle size={12} />
-                        </button>
+                        <Tooltip content="Remove agenda item">
+                          <button
+                            className="btn-action btn-action--icon"
+                            type="button"
+                            aria-label="Remove agenda item"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              removeItem(index);
+                            }}
+                          disabled={!canWrite}
+                         >
+                            <MinusCircle size={12} />
+                          </button>
+                        </Tooltip>
                       </span>
                     </summary>
 

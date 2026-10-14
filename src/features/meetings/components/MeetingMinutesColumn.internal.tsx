@@ -31,6 +31,7 @@ import {
   personLinkCandidates,
   type AgendaItemEntry,
 } from "./MeetingDetailSupport";
+import { Tooltip } from "../../../components/Tooltip";
 
 
 const SECTION_TASK_STATUS_ITEMS: { id: string; label: string }[] = [
@@ -132,24 +133,26 @@ function AttendanceRosterRow({
     <>
       <span className="attendance-roster__name">{person.name}</span>
       <div className="attendance-roster__status segmented">
-        <button
-          type="button"
-          className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
-          onClick={() => onSetStatus("present")}
-          aria-label="Present"
-          title="Present"
-        >
-          <Check size={14} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
-          onClick={() => onSetStatus("absent")}
-          aria-label="Absent / regrets"
-          title="Absent / regrets"
-        >
-          <X size={14} aria-hidden />
-        </button>
+        <Tooltip content="Present">
+          <button
+            type="button"
+            className={`segmented__btn${person.status === "present" ? " is-active" : ""}`}
+            onClick={() => onSetStatus("present")}
+            aria-label="Present"
+          >
+            <Check size={14} aria-hidden />
+          </button>
+        </Tooltip>
+        <Tooltip content="Absent / regrets">
+          <button
+            type="button"
+            className={`segmented__btn${person.status === "absent" ? " is-active" : ""}`}
+            onClick={() => onSetStatus("absent")}
+            aria-label="Absent / regrets"
+          >
+            <X size={14} aria-hidden />
+          </button>
+        </Tooltip>
       </div>
     </>
   );

@@ -11,6 +11,7 @@ import { formatDate } from "../../../lib/format";
 import { useSociety } from "../../../hooks/useSociety";
 import { organizationVocabulary } from "../../../lib/organizationVocabulary";
 import { Users, Trash2, Ban } from "lucide-react";
+import { Tooltip } from "../../../components/Tooltip";
 
 function memberName(member: any): string {
   return `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim();
@@ -159,13 +160,17 @@ export function MeetingProxiesCard({
             </div>
             <div className="meeting-conflict-row__actions">
               {!proxy.revokedAtISO && (
-                <button className="btn-action" title="Revoke" aria-label="Revoke proxy" disabled={!canWrite} onClick={() => revokeProxy({ id: proxy._id })}>
-                  <Ban size={12} />
-                </button>
+                <Tooltip content="Revoke">
+                  <button className="btn-action" aria-label="Revoke proxy" disabled={!canWrite} onClick={() => revokeProxy({ id: proxy._id })}>
+                    <Ban size={12} />
+                  </button>
+                </Tooltip>
               )}
-              <button className="btn-action" title="Remove" aria-label="Remove proxy" disabled={!canWrite} onClick={() => removeProxy({ id: proxy._id })}>
-                <Trash2 size={12} />
-              </button>
+              <Tooltip content="Remove">
+                <button className="btn-action" aria-label="Remove proxy" disabled={!canWrite} onClick={() => removeProxy({ id: proxy._id })}>
+                  <Trash2 size={12} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         ))}

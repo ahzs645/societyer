@@ -22,6 +22,7 @@ import { taskDraftFromActionItem } from "../../../../shared/meetingActionTasks";
 import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 import { matchDirectoryPerson } from "../../../../shared/meetingAttendanceGrid";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../lib/actionItemTidy";
+import { Tooltip } from "../../../components/Tooltip";
 
 const STATUS_OPTIONS = ACTION_ITEM_STATUSES.map((value) => ({ value, label: ACTION_ITEM_STATUS_LABELS[value] }));
 
@@ -422,12 +423,16 @@ export function MeetingActionItemsCard({
                   ) : null}
                   {canEdit && rewording?.key !== key && (
                     <>
-                      <button type="button" className="btn-action btn-action--icon" title="Edit wording, due date or agenda item" aria-label={`Edit action: ${row.item.text}`} onClick={() => setRewording({ key, text: String(row.item.text ?? ""), dueDate: String(row.item.dueDate ?? ""), section: row.sectionIndex == null ? GENERAL : String(row.sectionIndex) })}>
-                        <Pencil size={12} />
-                      </button>
-                      <button type="button" className="btn-action btn-action--icon" title="Remove action" aria-label={`Remove action: ${row.item.text}`} onClick={() => { void removeAction(row); }}>
-                        <Trash2 size={12} />
-                      </button>
+                      <Tooltip content="Edit wording, due date or agenda item">
+                        <button type="button" className="btn-action btn-action--icon" aria-label={`Edit action: ${row.item.text}`} onClick={() => setRewording({ key, text: String(row.item.text ?? ""), dueDate: String(row.item.dueDate ?? ""), section: row.sectionIndex == null ? GENERAL : String(row.sectionIndex) })}>
+                          <Pencil size={12} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Remove action">
+                        <button type="button" className="btn-action btn-action--icon" aria-label={`Remove action: ${row.item.text}`} onClick={() => { void removeAction(row); }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </Tooltip>
                     </>
                   )}
                 </div>

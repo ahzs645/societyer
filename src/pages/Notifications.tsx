@@ -13,6 +13,7 @@ import { useToast } from "../components/Toast";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useConfirm } from "../components/Modal";
+import { Tooltip } from "../components/Tooltip";
 
 /** "filing" / "ai_draft" → "Filing" / "AI draft". */
 function kindLabel(kind?: string) {
@@ -203,21 +204,22 @@ export function NotificationsPage() {
                 {formatDateTime(n.createdAtISO)}
               </span>
               {n.dismissedAt && (
-                <button
-                  className="btn-action btn-action--icon"
-                  aria-label="Delete permanently"
-                  title="Delete permanently"
-                  style={{ marginLeft: 8, color: "var(--danger)" }}
-                  onClick={async () => {
-                    try {
-                      await removeNotification({ id: n._id });
-                    } catch (err: any) {
-                      toast.error(err?.message ?? "Couldn't delete notification");
-                    }
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
+                <Tooltip content="Delete permanently">
+                  <button
+                    className="btn-action btn-action--icon"
+                    aria-label="Delete permanently"
+                    style={{ marginLeft: 8, color: "var(--danger)" }}
+                    onClick={async () => {
+                      try {
+                        await removeNotification({ id: n._id });
+                      } catch (err: any) {
+                        toast.error(err?.message ?? "Couldn't delete notification");
+                      }
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </Tooltip>
               )}
             </div>
           ))}

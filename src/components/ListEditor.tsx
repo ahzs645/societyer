@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { MinusCircle } from "lucide-react";
+import { Tooltip } from "./Tooltip";
 
 /**
  * Generic editable list shell shared by the meeting AttendanceRoster and the
@@ -43,15 +44,16 @@ export function ListEditor<T>({
         <ul className="list-editor__list">
           {items.map((item, index) => {
             const removeButton = (
-              <button
-                type="button"
-                className="list-editor__remove"
-                onClick={() => onRemove(index)}
-                aria-label={getRemoveLabel(item, index)}
-                title={getRemoveLabel(item, index)}
-              >
-                <MinusCircle size={16} />
-              </button>
+              <Tooltip content={getRemoveLabel(item, index)}>
+                <button
+                  type="button"
+                  className="list-editor__remove"
+                  onClick={() => onRemove(index)}
+                  aria-label={getRemoveLabel(item, index)}
+                >
+                  <MinusCircle size={16} />
+                </button>
+              </Tooltip>
             );
             return (
               <li key={index} className="list-editor__row">

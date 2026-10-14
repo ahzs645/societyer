@@ -10,6 +10,7 @@ import {
   type DashboardModuleId,
   type DashboardPlacement,
 } from "./dashboardLayout";
+import { Tooltip } from "../../components/Tooltip";
 
 const DEFINITIONS = new Map(DASHBOARD_MODULES.map((module) => [module.id, module]));
 const GROUPS: Array<{ placement: DashboardPlacement; label: string }> = [
@@ -180,15 +181,16 @@ export function CustomizeDashboardDrawer({
                         <ArrowDown size={14} />
                       </button>
                       {group.placement !== "full" && (
-                        <button
-                          type="button"
-                          className="btn-action btn-action--icon"
-                          aria-label={`Move ${definition.label} to the ${GROUP_LABEL[otherColumn(group.placement)]}`}
-                          title={`Move to the ${GROUP_LABEL[otherColumn(group.placement)]}`}
-                          onClick={() => place(id, otherColumn(group.placement), rowsFor(otherColumn(group.placement)).length)}
-                        >
-                          <ArrowLeftRight size={14} />
-                        </button>
+                        <Tooltip content={`Move to the ${GROUP_LABEL[otherColumn(group.placement)]}`}>
+                          <button
+                            type="button"
+                            className="btn-action btn-action--icon"
+                            aria-label={`Move ${definition.label} to the ${GROUP_LABEL[otherColumn(group.placement)]}`}
+                            onClick={() => place(id, otherColumn(group.placement), rowsFor(otherColumn(group.placement)).length)}
+                          >
+                            <ArrowLeftRight size={14} />
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   </li>

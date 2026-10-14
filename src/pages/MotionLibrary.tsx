@@ -13,6 +13,7 @@ import { Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Checkbox } from "../components/Controls";
+import { Tooltip } from "../components/Tooltip";
 
 type FormState = {
   title: string;
@@ -358,29 +359,31 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
                       )}
                     </div>
                     <div className="motion-library__template-actions">
-                      <button
-                        className="btn-action btn-action--icon"
-                        onClick={() => edit(t)}
-                        title="Edit template"
-                        disabled={!canManage}
-                        aria-label={`Edit ${t.title}`}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        className="btn-action btn-action--icon"
-                        onClick={async () => {
-                          const ok = await confirm({ title: "Delete motion template?", message: `Delete “${t.title}” from the reusable library?`, confirmLabel: "Delete", tone: "danger" });
-                          if (!ok) return;
-                          try { await remove({ templateId: t._id }); toast.success("Template deleted"); }
-                          catch (error) { toast.error("Template could not be deleted", error instanceof Error ? error.message : "Please try again."); }
-                        }}
-                        title="Delete template"
-                        disabled={!canManage}
-                        aria-label={`Delete ${t.title}`}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <Tooltip content="Edit template">
+                        <button
+                          className="btn-action btn-action--icon"
+                          onClick={() => edit(t)}
+                          disabled={!canManage}
+                          aria-label={`Edit ${t.title}`}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Delete template">
+                        <button
+                          className="btn-action btn-action--icon"
+                          onClick={async () => {
+                            const ok = await confirm({ title: "Delete motion template?", message: `Delete “${t.title}” from the reusable library?`, confirmLabel: "Delete", tone: "danger" });
+                            if (!ok) return;
+                            try { await remove({ templateId: t._id }); toast.success("Template deleted"); }
+                            catch (error) { toast.error("Template could not be deleted", error instanceof Error ? error.message : "Please try again."); }
+                          }}
+                          disabled={!canManage}
+                          aria-label={`Delete ${t.title}`}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </Tooltip>
                     </div>
                   </article>
                 ))}

@@ -14,6 +14,8 @@ import { distinguishSessionNames } from "../../../shared/importSessionLabels";
 import { REVIEW_RISK_LABELS, type ReviewRiskLevel } from "../../../shared/importReviewRisk";
 import { importKindLabel, importTargetLabel } from "./importKindLabels";
 import { Check, ChevronLeft, ChevronRight, ExternalLink, FileText, Keyboard, Pencil, SkipForward, X } from "lucide-react";
+import { ShortcutHint } from "../../components/ShortcutHint";
+import { Tooltip } from "../../components/Tooltip";
 
 export type QueueFilters = {
   status: "Pending" | "Approved" | "Rejected" | "all";
@@ -297,8 +299,12 @@ export function ImportReviewQueue({
               onClick={() => { setFocusIndex(index); listRef.current?.focus({ preventScroll: true }); }}
             >
               <div className="import-queue-row__actions">
-                <button className="btn btn--sm btn--icon import-queue-row__approve" aria-label={`Approve ${item.title}`} title="Approve (a)" disabled={!canWrite} onClick={(event) => { event.stopPropagation(); setFocusIndex(index); void decide(item, "Approved"); }}><Check size={14} /></button>
-                <button className="btn btn--sm btn--icon import-queue-row__reject" aria-label={`Reject ${item.title}`} title="Reject (r)" disabled={!canWrite} onClick={(event) => { event.stopPropagation(); setFocusIndex(index); void decide(item, "Rejected"); }}><X size={14} /></button>
+                <Tooltip content={<>Approve <ShortcutHint keys={["A"]} tone="inverse" /></>}>
+                  <button className="btn btn--sm btn--icon import-queue-row__approve" aria-label={`Approve ${item.title}`} disabled={!canWrite} onClick={(event) => { event.stopPropagation(); setFocusIndex(index); void decide(item, "Approved"); }}><Check size={14} /></button>
+                </Tooltip>
+                <Tooltip content={<>Reject <ShortcutHint keys={["R"]} tone="inverse" /></>}>
+                  <button className="btn btn--sm btn--icon import-queue-row__reject" aria-label={`Reject ${item.title}`} disabled={!canWrite} onClick={(event) => { event.stopPropagation(); setFocusIndex(index); void decide(item, "Rejected"); }}><X size={14} /></button>
+                </Tooltip>
               </div>
               <div className="import-queue-row__main">
                 <div className="import-queue-row__title">

@@ -36,6 +36,7 @@ import {
 } from "../../../../shared/meetingAttendanceGrid";
 import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
+import { Tooltip } from "../../../components/Tooltip";
 
 const STATUS_OPTIONS = ATTENDANCE_GRID_STATUSES.map((value) => ({ value, label: ATTENDANCE_GRID_STATUS_LABELS[value] }));
 const STATUS_TONE: Record<AttendanceGridStatus, "success" | "neutral" | "warn" | "info"> = {
@@ -383,12 +384,16 @@ export function MeetingAttendanceGrid({
                 <Checkbox checked={row.quorumCounted !== false && (row.status === "present" || row.status === "proxy")} disabled={!(row.status === "present" || row.status === "proxy")} onChange={(checked) => patchRow(row.key, { quorumCounted: checked })} bare ariaLabel={`${row.name || `Attendee ${index + 1}`} counts toward quorum`} />
               </span>
               <span role="cell" className="attendance-grid__actions">
-                <button type="button" className="btn-action btn-action--icon" onClick={() => markNotPerson(row.key)} title="Not a person (role, organization or heading) — keep as source evidence" aria-label={`Mark ${row.name || "row"} as not a person`}>
-                  <UserX size={12} />
-                </button>
-                <button type="button" className="btn-action btn-action--icon" onClick={() => removeRow(row.key)} title="Remove row" aria-label={`Remove ${row.name || "row"}`}>
-                  <Trash2 size={12} />
-                </button>
+                <Tooltip content="Not a person (role, organization or heading) — keep as source evidence">
+                  <button type="button" className="btn-action btn-action--icon" onClick={() => markNotPerson(row.key)} aria-label={`Mark ${row.name || "row"} as not a person`}>
+                    <UserX size={12} />
+                  </button>
+                </Tooltip>
+                <Tooltip content="Remove row">
+                  <button type="button" className="btn-action btn-action--icon" onClick={() => removeRow(row.key)} aria-label={`Remove ${row.name || "row"}`}>
+                    <Trash2 size={12} />
+                  </button>
+                </Tooltip>
               </span>
             </div>
           );
@@ -401,7 +406,9 @@ export function MeetingAttendanceGrid({
           {nonPersons.map((entry) => (
             <span key={entry.name} className="attendance-grid__chip">
               {entry.name}
-              <button type="button" onClick={() => restoreNonPerson(entry.name)} aria-label={`Restore ${entry.name} as an attendee`} title="Restore as attendee"><X size={10} /></button>
+              <Tooltip content="Restore as attendee">
+                <button type="button" onClick={() => restoreNonPerson(entry.name)} aria-label={`Restore ${entry.name} as an attendee`}><X size={10} /></button>
+              </Tooltip>
             </span>
           ))}
         </div>

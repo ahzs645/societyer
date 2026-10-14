@@ -10,6 +10,7 @@ import { TaskQuickAdd } from "./TaskQuickAdd";
 import { TaskAvatar, TaskChecklistBadge, TaskLinkChip, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { TaskDueMenu, TaskMoreMenu, TaskPriorityMenu, type TaskViewActions } from "./TaskMenus";
 import { groupTasks, isClosedStatus, taskOwnerName, taskPrimaryLink, type TaskGroup, type TaskRecord } from "./taskModel";
+import { Tooltip } from "../../components/Tooltip";
 
 export function TaskBoardView({ by, actions }: { by: "status" | "priority"; actions: TaskViewActions }) {
   const records = useFilteredRecords() as TaskRecord[];
@@ -72,13 +73,17 @@ export function TaskBoardView({ by, actions }: { by: "status" | "priority"; acti
               <span className="task-board__col-count">{column.tasks.length}</span>
               <span className="task-board__head-actions">
                 {actions.canManage && column.defaults && (
-                  <button type="button" className="task-icon-button" aria-label={`Add task to ${column.label}`} title="Add task" onClick={() => setComposerFor(column.key)}>
-                    <Plus size={14} />
-                  </button>
+                  <Tooltip content="Add task">
+                    <button type="button" className="task-icon-button" aria-label={`Add task to ${column.label}`} onClick={() => setComposerFor(column.key)}>
+                      <Plus size={14} />
+                    </button>
+                  </Tooltip>
                 )}
-                <button type="button" className="task-icon-button" aria-label={`Collapse ${column.label}`} title="Collapse column" onClick={toggle}>
-                  <ChevronsLeftRight size={13} />
-                </button>
+                <Tooltip content="Collapse column">
+                  <button type="button" className="task-icon-button" aria-label={`Collapse ${column.label}`} onClick={toggle}>
+                    <ChevronsLeftRight size={13} />
+                  </button>
+                </Tooltip>
               </span>
             </header>
             <div className="kanban__body task-board__body">
@@ -163,15 +168,16 @@ function TaskCard({
       </div>
       <div className="task-card__hover-actions">
         {!closed && actions.canManage && (
-          <button
-            type="button"
-            className="task-icon-button"
-            aria-label={`Mark ${task.title} complete`}
-            title="Mark complete"
-            onClick={(event) => { event.stopPropagation(); void actions.setStatus(task, "Done"); }}
-          >
-            <Check size={14} />
-          </button>
+          <Tooltip content="Mark complete">
+            <button
+              type="button"
+              className="task-icon-button"
+              aria-label={`Mark ${task.title} complete`}
+              onClick={(event) => { event.stopPropagation(); void actions.setStatus(task, "Done"); }}
+            >
+              <Check size={14} />
+            </button>
+          </Tooltip>
         )}
         <TaskMoreMenu task={task} actions={actions} />
       </div>

@@ -111,6 +111,7 @@ import { RESOLVED_NAV_TREE, navParentForPath, navRouteForPath } from "../lib/nav
 import { useUIStore, type PinnedView } from "../lib/store";
 import { getDesktopBridge } from "../lib/desktopBridge";
 import { useToast } from "./Toast";
+import { Tooltip } from "./Tooltip";
 
 
 function NotificationBellSafe() {
@@ -143,27 +144,26 @@ const THEME_OPTIONS: Array<{
 
 
 function SidebarThemeToggle() {
-  const { preference, resolvedTheme, setPreference } = useThemePreference();
+  const { preference, setPreference } = useThemePreference();
 
   return (
     <div
       className="sidebar-theme-toggle"
       role="group"
       aria-label="Theme preference"
-      title={`Theme: ${preference}${preference === "system" ? ` (${resolvedTheme})` : ""}`}
     >
       {THEME_OPTIONS.map(({ value, label, Icon }) => (
-        <button
-          key={value}
-          type="button"
-          className={`sidebar-theme-toggle__btn${preference === value ? " is-active" : ""}`}
-          onClick={() => setPreference(value)}
-          aria-label={label}
-          aria-pressed={preference === value}
-          title={label}
-        >
-          <Icon size={12} />
-        </button>
+        <Tooltip key={value} content={label}>
+          <button
+            type="button"
+            className={`sidebar-theme-toggle__btn${preference === value ? " is-active" : ""}`}
+            onClick={() => setPreference(value)}
+            aria-label={label}
+            aria-pressed={preference === value}
+          >
+            <Icon size={12} />
+          </button>
+        </Tooltip>
       ))}
     </div>
   );

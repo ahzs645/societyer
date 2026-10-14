@@ -11,6 +11,7 @@ import { TaskQuickAdd } from "./TaskQuickAdd";
 import { TaskAvatar, TaskChecklistBadge, TaskLinkChip, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { TaskDueMenu, TaskMoreMenu, TaskPriorityMenu, TaskStatusMenu, type TaskViewActions } from "./TaskMenus";
 import { groupTasks, isClosedStatus, taskOwnerName, taskPrimaryLink, type TaskGroup, type TaskGroupBy, type TaskRecord } from "./taskModel";
+import { Tooltip } from "../../components/Tooltip";
 
 export function TaskListView({
   groupBy,
@@ -69,18 +70,19 @@ export function TaskListView({
                   <span className="task-group__count">{group.tasks.length}</span>
                 </button>
                 {canAdd && (
-                  <button
-                    type="button"
-                    className="task-icon-button task-group__add"
-                    aria-label={`Add task to ${group.label}`}
-                    title={`Add task to ${group.label}`}
-                    onClick={() => {
-                      if (collapsed) toggle(group);
-                      setComposerFor(group.key);
-                    }}
-                  >
-                    <Plus size={14} />
-                  </button>
+                  <Tooltip content={`Add task to ${group.label}`}>
+                    <button
+                      type="button"
+                      className="task-icon-button task-group__add"
+                      aria-label={`Add task to ${group.label}`}
+                      onClick={() => {
+                        if (collapsed) toggle(group);
+                        setComposerFor(group.key);
+                      }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             )}

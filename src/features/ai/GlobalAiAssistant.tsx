@@ -50,6 +50,7 @@ import { Skeleton } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 
 import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT } from "./aiAssistantEvents";
+import { Tooltip } from "../../components/Tooltip";
 export { openGlobalAiAssistant } from "./aiAssistantEvents";
 
 type SuggestedPrompt = {
@@ -490,12 +491,16 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                     <Wrench size={11} /> {draftCount}
                   </span>
                 )}
-                <button type="button" className="icon-btn" onClick={openSettings} disabled={!canReadSettings} aria-label="AI settings" title="AI settings">
-                  <Settings size={14} />
-                </button>
-                <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close AI assistant" title="Close">
-                  <PanelRightClose size={14} />
-                </button>
+                <Tooltip content="AI settings">
+                  <button type="button" className="icon-btn" onClick={openSettings} disabled={!canReadSettings} aria-label="AI settings">
+                    <Settings size={14} />
+                  </button>
+                </Tooltip>
+                <Tooltip content="Close">
+                  <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close AI assistant">
+                    <PanelRightClose size={14} />
+                  </button>
+                </Tooltip>
               </div>
             </header>
 
@@ -639,16 +644,17 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                     />
                     <div className="global-ai-composer__bar">
                       <div className="global-ai-composer__left">
-                        <button
-                          type="button"
-                          className="global-ai-icon-btn"
-                          aria-label="Attach text files"
-                          title="Attach text files"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={!canWrite || busy || filesLoading}
-                        >
-                          <Paperclip size={13} />
-                        </button>
+                        <Tooltip content="Attach text files">
+                          <button
+                            type="button"
+                            className="global-ai-icon-btn"
+                            aria-label="Attach text files"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!canWrite || busy || filesLoading}
+                          >
+                            <Paperclip size={13} />
+                          </button>
+                        </Tooltip>
                         <input
                           ref={fileInputRef}
                           type="file"

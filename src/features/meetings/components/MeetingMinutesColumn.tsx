@@ -58,6 +58,7 @@ import { MeetingAttendanceGrid } from "./MeetingAttendanceGrid";
 import { meetingNotYetHeld } from "../lib/noticeWindow";
 import { MeetingActionItemsCard } from "./MeetingActionItemsCard";
 import { AgendaItemDetailsModal, requestedActionLabel } from "./AgendaItemDetailsModal";
+import { Tooltip } from "../../../components/Tooltip";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -176,9 +177,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       <span className="agenda-item-meta">
         {parts.map((part) => <span key={part}>{part}</span>)}
         {canEditAgenda && (
-          <button type="button" className="btn-action btn-action--icon agenda-item-meta__edit" onClick={() => setAgendaDetailsItem(record)} title="Agenda item details (number, requested action, time, consent, presenter)" aria-label={`Details for ${entry.title}`}>
-            <Pencil size={10} />
-          </button>
+          <Tooltip content="Agenda item details (number, requested action, time, consent, presenter)">
+            <button type="button" className="btn-action btn-action--icon agenda-item-meta__edit" onClick={() => setAgendaDetailsItem(record)} aria-label={`Details for ${entry.title}`}>
+              <Pencil size={10} />
+            </button>
+          </Tooltip>
         )}
       </span>
     );
@@ -259,23 +262,25 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 </button>
               ) : (
                 <>
-                  <button
-                    className="btn-action btn-action--icon"
-                    onClick={() => setAgendaEdit(null)}
-                    title="Cancel"
-                    aria-label="Cancel"
-                  >
-                    <X size={12} />
-                  </button>
-                  <button
-                    className="btn-action btn-action--icon btn-action--primary"
-                    disabled={!canEditAgenda}
-                    onClick={() => { void saveAgenda(); }}
-                    title="Save agenda"
-                    aria-label="Save agenda"
-                  >
-                    <Save size={12} />
-                  </button>
+                  <Tooltip content="Cancel">
+                    <button
+                      className="btn-action btn-action--icon"
+                      onClick={() => setAgendaEdit(null)}
+                      aria-label="Cancel"
+                    >
+                      <X size={12} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Save agenda">
+                    <button
+                      className="btn-action btn-action--icon btn-action--primary"
+                      disabled={!canEditAgenda}
+                      onClick={() => { void saveAgenda(); }}
+                      aria-label="Save agenda"
+                    >
+                      <Save size={12} />
+                    </button>
+                  </Tooltip>
                 </>
               )}
             </div>
@@ -395,47 +400,51 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                         // surface the same agenda-row actions inline as direct
                         // icon buttons. Desktop keeps the compact "…" menu.
                         <div className="meeting-minutes-agenda-editor__actions">
-                          <button
-                            type="button"
-                            className="btn-action btn-action--icon"
-                            onClick={() => moveAgendaItem(index, -1)}
-                            disabled={!canMoveAgendaUp(index)}
-                            title="Move up"
-                            aria-label="Move up"
-                          >
-                            <ArrowUp size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-action btn-action--icon"
-                            onClick={() => moveAgendaItem(index, 1)}
-                            disabled={!canMoveAgendaDown(index)}
-                            title="Move down"
-                            aria-label="Move down"
-                          >
-                            <ArrowDown size={12} />
-                          </button>
+                          <Tooltip content="Move up">
+                            <button
+                              type="button"
+                              className="btn-action btn-action--icon"
+                              onClick={() => moveAgendaItem(index, -1)}
+                              disabled={!canMoveAgendaUp(index)}
+                              aria-label="Move up"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="Move down">
+                            <button
+                              type="button"
+                              className="btn-action btn-action--icon"
+                              onClick={() => moveAgendaItem(index, 1)}
+                              disabled={!canMoveAgendaDown(index)}
+                              aria-label="Move down"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          </Tooltip>
                           {isRoot ? (
-                            <button
-                              type="button"
-                              className="btn-action btn-action--icon"
-                              onClick={() => indentAgendaItem(index)}
-                              disabled={!agendaItems.slice(0, index).some((entry) => entry.depth === 0)}
-                              title="Make sub-item"
-                              aria-label="Make sub-item"
-                            >
-                              <IndentIncrease size={12} />
-                            </button>
+                            <Tooltip content="Make sub-item">
+                              <button
+                                type="button"
+                                className="btn-action btn-action--icon"
+                                onClick={() => indentAgendaItem(index)}
+                                disabled={!agendaItems.slice(0, index).some((entry) => entry.depth === 0)}
+                                aria-label="Make sub-item"
+                              >
+                                <IndentIncrease size={12} />
+                              </button>
+                            </Tooltip>
                           ) : (
-                            <button
-                              type="button"
-                              className="btn-action btn-action--icon"
-                              onClick={() => outdentAgendaItem(index)}
-                              title="Promote item"
-                              aria-label="Promote item"
-                            >
-                              <IndentDecrease size={12} />
-                            </button>
+                            <Tooltip content="Promote item">
+                              <button
+                                type="button"
+                                className="btn-action btn-action--icon"
+                                onClick={() => outdentAgendaItem(index)}
+                                aria-label="Promote item"
+                              >
+                                <IndentDecrease size={12} />
+                              </button>
+                            </Tooltip>
                           )}
                           <button
                             type="button"
@@ -449,18 +458,19 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          className="btn-action btn-action--icon meeting-minutes-agenda-editor__more"
-                          type="button"
-                          tabIndex={-1}
-                          title="More actions"
-                          aria-label="More actions for this item"
-                          aria-haspopup="menu"
-                          aria-expanded={agendaItemMenu?.index === index}
-                          onClick={(event) => openAgendaItemMenu(index, event.currentTarget)}
-                        >
-                          <MoreHorizontal size={12} />
-                        </button>
+                        <Tooltip content="More actions">
+                          <button
+                            className="btn-action btn-action--icon meeting-minutes-agenda-editor__more"
+                            type="button"
+                            tabIndex={-1}
+                            aria-label="More actions for this item"
+                            aria-haspopup="menu"
+                            aria-expanded={agendaItemMenu?.index === index}
+                            onClick={(event) => openAgendaItemMenu(index, event.currentTarget)}
+                          >
+                            <MoreHorizontal size={12} />
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   );

@@ -45,6 +45,7 @@ import { pluralizeCounts } from "../lib/pluralizeCounts";
 import { DashboardFinanceSnapshotLazy } from "../features/financials/insights/lazy";
 import { StatTile } from "../components/StatTile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
+import { Tooltip } from "../components/Tooltip";
 
 export function Dashboard() {
   const society = useSociety();
@@ -216,15 +217,16 @@ export function Dashboard() {
                 >
                   Hide steps <ChevronUp size={12} />
                 </button>
-                <button
-                  type="button"
-                  className="onboarding-flow__dismiss"
-                  onClick={hideOnboardingFlow}
-                  title="Hide setup guide"
-                  aria-label="Hide setup guide"
-                >
-                  <X size={14} />
-                </button>
+                <Tooltip content="Hide setup guide">
+                  <button
+                    type="button"
+                    className="onboarding-flow__dismiss"
+                    onClick={hideOnboardingFlow}
+                    aria-label="Hide setup guide"
+                  >
+                    <X size={14} />
+                  </button>
+                </Tooltip>
               </div>
             </div>
 
@@ -289,25 +291,27 @@ export function Dashboard() {
               </Link>
             </div>
             <div className="onboarding-compact__actions">
-              <button
-                type="button"
-                className="onboarding-compact__icon"
-                onClick={() => setOnboardingExpandedOverride(true)}
-                aria-expanded={false}
-                aria-label="Show steps"
-                title="Show all setup steps"
-              >
-                <ChevronDown size={16} />
-              </button>
-              <button
-                type="button"
-                className="onboarding-compact__icon"
-                onClick={hideOnboardingFlow}
-                title="Hide setup guide"
-                aria-label="Hide setup guide"
-              >
-                <X size={14} />
-              </button>
+              <Tooltip content="Show all setup steps">
+                <button
+                  type="button"
+                  className="onboarding-compact__icon"
+                  onClick={() => setOnboardingExpandedOverride(true)}
+                  aria-expanded={false}
+                  aria-label="Show steps"
+                >
+                  <ChevronDown size={16} />
+                </button>
+              </Tooltip>
+              <Tooltip content="Hide setup guide">
+                <button
+                  type="button"
+                  className="onboarding-compact__icon"
+                  onClick={hideOnboardingFlow}
+                  aria-label="Hide setup guide"
+                >
+                  <X size={14} />
+                </button>
+              </Tooltip>
             </div>
           </section>
         )}
@@ -743,7 +747,7 @@ export function Dashboard() {
       </Spotlight>
       <Spotlight
         spotlightKey="command-palette"
-        anchor='.sidebar__icon-btn[title*="⌘K"]'
+        anchor="[data-command-palette-trigger]"
         placement="bottom"
         title="Jump anywhere with ⌘K"
       >

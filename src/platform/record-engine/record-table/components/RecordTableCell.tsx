@@ -11,6 +11,7 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableRowContextOrThrow } from "../contexts/RecordTableRowContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { RecordTableCellRenderer } from "./RecordTable";
+import { Tooltip } from "../../../../components/Tooltip";
 
 /**
  * One body cell. Double-click enters edit mode (for editable fields).
@@ -220,19 +221,20 @@ export function RecordTableCell({
               (title) column — the "open record" affordance lives once per row in
               the trailing actions column (RecordTableRow). */}
           {canEdit ? (
-            <button
-              type="button"
-              className="record-table__cell-action"
-              aria-label={`Edit ${recordField.field.label}`}
-              title={`Edit ${recordField.field.label}`}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation();
-                startEdit();
-              }}
-            >
-              <Pencil size={12} />
-            </button>
+            <Tooltip content={`Edit ${recordField.field.label}`}>
+              <button
+                type="button"
+                className="record-table__cell-action"
+                aria-label={`Edit ${recordField.field.label}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startEdit();
+                }}
+              >
+                <Pencil size={12} />
+              </button>
+            </Tooltip>
           ) : null}
         </div>
       )}

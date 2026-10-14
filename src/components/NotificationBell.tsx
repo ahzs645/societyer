@@ -11,6 +11,7 @@ import { formatDateTime } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
 import { useSociety } from "../hooks/useSociety";
+import { Tooltip } from "./Tooltip";
 
 export function NotificationBell() {
   const society = useSociety();
@@ -92,22 +93,23 @@ export function NotificationBell() {
 
   return (
     <>
-      <button
-        ref={btnRef}
-        className="sidebar__icon-btn notif-bell"
-        onClick={() => setOpen((v) => !v)}
-        title="Notifications"
-        aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        <Bell key={`ring-${ringKey}`} size={14} className={ringKey > 0 ? "notif-bell__icon is-ringing" : "notif-bell__icon"} />
-        {unreadCount > 0 ? (
-          <span key={`badge-${unreadCount}`} className="notif-bell__badge">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        ) : null}
-      </button>
+      <Tooltip content="Notifications" placement="bottom" disabled={open}>
+        <button
+          ref={btnRef}
+          className="sidebar__icon-btn notif-bell"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          <Bell key={`ring-${ringKey}`} size={14} className={ringKey > 0 ? "notif-bell__icon is-ringing" : "notif-bell__icon"} />
+          {unreadCount > 0 ? (
+            <span key={`badge-${unreadCount}`} className="notif-bell__badge">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          ) : null}
+        </button>
+      </Tooltip>
 
       {open && (isSheet || anchor) &&
         createPortal(
@@ -209,39 +211,41 @@ export function NotificationBell() {
                 </div>
               );
               const clearButton = (
-                <button
-                  className="notif-clear"
-                  disabled={!canWrite}
-                  aria-label="Clear notification"
-                  title="Clear notification"
-                  onClick={(event) => {
-                    // Sibling of the row body, but guard anyway so a click never
-                    // navigates the link or marks-read underneath.
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (!canWrite) return;
-                    void dismiss({ id: n._id });
-                  }}
-                >
-                  <X size={13} />
-                </button>
+                <Tooltip content="Clear notification">
+                  <button
+                    className="notif-clear"
+                    disabled={!canWrite}
+                    aria-label="Clear notification"
+                    onClick={(event) => {
+                      // Sibling of the row body, but guard anyway so a click never
+                      // navigates the link or marks-read underneath.
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (!canWrite) return;
+                      void dismiss({ id: n._id });
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                </Tooltip>
               );
               const snoozeButton = (
-                <button
-                  className="notif-clear notif-clear--secondary"
-                  disabled={!canWrite}
-                  aria-label="Snooze for 1 day"
-                  title="Snooze for 1 day"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (!canWrite) return;
-                    const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-                    void snooze({ id: n._id, untilISO: until });
-                  }}
-                >
-                  <Clock size={13} />
-                </button>
+                <Tooltip content="Snooze for 1 day">
+                  <button
+                    className="notif-clear notif-clear--secondary"
+                    disabled={!canWrite}
+                    aria-label="Snooze for 1 day"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (!canWrite) return;
+                      const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                      void snooze({ id: n._id, untilISO: until });
+                    }}
+                  >
+                    <Clock size={13} />
+                  </button>
+                </Tooltip>
               );
               return (
                 <div key={n._id} style={{ position: "relative" }}>

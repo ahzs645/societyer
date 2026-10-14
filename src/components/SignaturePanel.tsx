@@ -14,6 +14,7 @@ import { Pen, Trash2, Upload, UserX } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { SignaturePad } from "./SignaturePad";
+import { Tooltip } from "./Tooltip";
 
 type SignMode = "typed" | "drawn" | "uploaded";
 
@@ -296,48 +297,50 @@ export function SignaturePanel({
             </span>
             <div className="signature-list-row__actions">
               {savedProfile && (
+                <Tooltip content="Remove saved signature from this person's account (keeps their sign-off on this document)">
+                  <button disabled={!canWrite}
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`Remove ${s.signerName}'s saved signature from their account`}
+                    onClick={async () => {
+                      try {
+                        await deleteProfile({
+                          id: savedProfile._id as Id<"signatureProfiles">,
+                        });
+                        toast.success("Saved signature removed", `Removed ${s.signerName}'s saved signature from their account`);
+                      } catch (error) {
+                        console.error("[signatures.deleteProfile]", error);
+                        toast.error(
+                          "Couldn't remove saved signature",
+                          error instanceof Error ? error.message : String(error),
+                        );
+                      }
+                    }}
+                  >
+                    <UserX size={12} />
+                  </button>
+                </Tooltip>
+              )}
+              <Tooltip content="Remove sign-off from this document">
                 <button disabled={!canWrite}
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Remove ${s.signerName}'s saved signature from their account`}
-                  title="Remove saved signature from this person's account (keeps their sign-off on this document)"
+                  className="signature-list-row__trash btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Remove ${s.signerName}'s sign-off from this document`}
                   onClick={async () => {
+                    if (s.localOnly) {
+                      setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
+                      return;
+                    }
                     try {
-                      await deleteProfile({
-                        id: savedProfile._id as Id<"signatureProfiles">,
-                      });
-                      toast.success("Saved signature removed", `Removed ${s.signerName}'s saved signature from their account`);
+                      await revoke({ id: s._id });
+                      setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
                     } catch (error) {
-                      console.error("[signatures.deleteProfile]", error);
-                      toast.error(
-                        "Couldn't remove saved signature",
-                        error instanceof Error ? error.message : String(error),
-                      );
+                      console.error("[signatures.revoke]", error);
+                      toast.error("Couldn't remove sign-off", error instanceof Error ? error.message : String(error));
                     }
                   }}
                 >
-                  <UserX size={12} />
+                  <Trash2 size={12} />
                 </button>
-              )}
-              <button disabled={!canWrite}
-                className="signature-list-row__trash btn btn--ghost btn--sm btn--icon"
-                aria-label={`Remove ${s.signerName}'s sign-off from this document`}
-                onClick={async () => {
-                  if (s.localOnly) {
-                    setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
-                    return;
-                  }
-                  try {
-                    await revoke({ id: s._id });
-                    setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
-                  } catch (error) {
-                    console.error("[signatures.revoke]", error);
-                    toast.error("Couldn't remove sign-off", error instanceof Error ? error.message : String(error));
-                  }
-                }}
-                title="Remove sign-off from this document"
-              >
-                <Trash2 size={12} />
-              </button>
+              </Tooltip>
             </div>
           </div>
           );
@@ -428,29 +431,30 @@ export function SignaturePanel({
             </div>
             {profilePreview(selectedProfile, typedName.trim())}
             <div className="signature-profile-preview__actions">
-              <button disabled={!canWrite}
-                type="button"
-                className="btn btn--ghost btn--sm btn--icon"
-                aria-label={`Delete ${selectedProfile.signerName}'s saved signature`}
-                title="Delete saved signature (removes it from this person, not this document)"
-                onClick={async () => {
-                  try {
-                    await deleteProfile({
-                      id: selectedProfile._id as Id<"signatureProfiles">,
-                    });
-                    setCustomizeSignature(true);
-                    toast.success("Saved signature removed", selectedProfile.signerName);
-                  } catch (error) {
-                    console.error("[signatures.deleteProfile]", error);
-                    toast.error(
-                      "Couldn't remove saved signature",
-                      error instanceof Error ? error.message : String(error),
-                    );
-                  }
-                }}
-              >
-                <Trash2 size={12} />
-              </button>
+              <Tooltip content="Delete saved signature (removes it from this person, not this document)">
+                <button disabled={!canWrite}
+                  type="button"
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete ${selectedProfile.signerName}'s saved signature`}
+                  onClick={async () => {
+                    try {
+                      await deleteProfile({
+                        id: selectedProfile._id as Id<"signatureProfiles">,
+                      });
+                      setCustomizeSignature(true);
+                      toast.success("Saved signature removed", selectedProfile.signerName);
+                    } catch (error) {
+                      console.error("[signatures.deleteProfile]", error);
+                      toast.error(
+                        "Couldn't remove saved signature",
+                        error instanceof Error ? error.message : String(error),
+                      );
+                    }
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         )}
