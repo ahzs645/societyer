@@ -521,6 +521,34 @@ function plainEditorRequested() {
   }
 }
 
+/**
+ * Replace the document with text the person typed into the stand-in field while the editor loaded.
+ * Markdown parsing drops a paragraph's trailing spaces, which would glue the next typed word onto
+ * the last one ("Early words" + "then" → "Early wordsthen"), so put them back at the end.
+ */
+function replaceWithTypedText(editor: Crepe["editor"], markdown: string) {
+  editor.action(replaceAll(markdown));
+  restoreTrailingSpace(editor, markdown);
+  // Typing continues from the end, wherever replaceAll left the caret.
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    if (!view || !view.hasFocus()) return;
+    view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+  });
+}
+
+function restoreTrailingSpace(editor: Crepe["editor"], markdown: string) {
+  const trailing = /[ \t]+$/.exec(markdown)?.[0];
+  if (!trailing) return;
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    if (!view) return;
+    const end = TextSelection.atEnd(view.state.doc);
+    const tr = view.state.tr.insertText(trailing, end.from);
+    view.dispatch(tr.setSelection(TextSelection.atEnd(tr.doc)));
+  });
+}
+
 const TRACKED_MARK_NAMES = ["strong", "emphasis", "strike_through", "inlineCode", "link"];
 const TRACKED_BLOCK_NAMES = ["bullet_list", "ordered_list", "blockquote", "code_block"];
 
@@ -538,6 +566,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       "aria-invalid": ariaInvalid,
       "aria-label": ariaLabel,
       className,
+      onReady,
     },
     ref,
   ) {
@@ -548,6 +577,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const readOnlyRef = useRef(readOnly);
     readOnlyRef.current = readOnly;
     const onChangeRef = useRef(onChange);
+    // Text we pushed in ourselves (typed into the stand-in field during load). Milkdown reports
+    // changes on a delay, so its echo can arrive after newer typing; never re-emit it as an edit.
+    const externalMarkdownRef = useRef<string | undefined>(undefined);
+    const onReadyRef = useRef(onReady);
+    onReadyRef.current = onReady;
     const lastEmittedRef = useRef(value);
     const initialValueRef = useRef(value);
     const placeholderRef = useRef(placeholder);
@@ -703,6 +737,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         instance.on((listener) => {
           listener.markdownUpdated((_ctx, markdown) => {
             if (disposed) return;
+            const external = externalMarkdownRef.current;
+            if (external !== undefined && markdown.trimEnd() === external.trimEnd()) {
+              lastEmittedRef.current = external;
+              return;
+            }
+            externalMarkdownRef.current = undefined;
             lastEmittedRef.current = markdown;
             onChangeRef.current(markdown);
           });
@@ -720,7 +760,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         // The instance already starts from the initial value; only replay
         // content that changed while it was loading (avoids a spurious onChange).
         if (pending !== undefined && pending !== (initialValueRef.current ?? "")) {
-          instance.editor.action(replaceAll(pending));
+          externalMarkdownRef.current = pending;
+          replaceWithTypedText(instance.editor, pending);
+        } else {
+          restoreTrailingSpace(instance.editor, initialValueRef.current ?? "");
         }
 
         // Wrap the editor view's dispatch so we recompute toolbar state on
@@ -770,6 +813,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
         recomputeActive();
         setReadyState(true);
+        // The wrapper swaps its stand-in plain field for this editor now.
+        onReadyRef.current?.();
         if (pendingFocusRef.current) {
           pendingFocusRef.current = false;
           container.querySelector<HTMLElement>(".ProseMirror")?.focus();
@@ -806,7 +851,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       const next = value ?? "";
       if (!crepe) { pendingMarkdownRef.current = next; lastEmittedRef.current = next; return; }
       if (next === lastEmittedRef.current) return;
-      crepe.editor.action(replaceAll(next));
+      externalMarkdownRef.current = next;
+      replaceWithTypedText(crepe.editor, next);
       lastEmittedRef.current = next;
     }, [value]);
 
@@ -832,6 +878,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           const crepe = crepeRef.current;
           if (!crepe) return lastEmittedRef.current;
           return crepe.getMarkdown();
+        },
+        focusEnd: () => {
+          const crepe = crepeRef.current;
+          if (!crepe) { pendingFocusRef.current = true; return; }
+          crepe.editor.action((ctx) => {
+            const view = ctx.get(editorViewCtx);
+            if (!view) return;
+            const endPos = view.state.doc.content.size;
+            view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(endPos), -1)));
+            view.focus();
+          });
         },
       }),
       [],
