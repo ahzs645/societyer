@@ -70,14 +70,13 @@ export type DemoDeadlineSeed = {
   recurrence?: "Monthly" | "Quarterly" | "Annual" | "None";
 };
 
+// Payroll remittance, slip and WorkSafeBC deadlines come from the payroll
+// register (shared/demoData/businessRegisters.ts), not from this list.
 export const DEMO_DEADLINES: DemoDeadlineSeed[] = [
-  { key: "remit-source-deductions", title: "Remit payroll source deductions", description: "Due the 15th of the month after pay day.", category: "Payroll", dueInDays: 1, done: false, recurrence: "Monthly" },
-  { key: "remit-prior", title: "Remit payroll source deductions (last month)", category: "Payroll", dueInDays: -29, done: true, recurrence: "Monthly" },
   { key: "gst-rebate", title: "File public service bodies' rebate claim", category: "Tax", dueInDays: 38, done: false, recurrence: "Annual" },
   { key: "grant-interim", title: "Harbour Foundation interim report", category: "Other", dueInDays: -2, done: false, recurrence: "None" },
   { key: "eastside-report", title: "Eastside Community Fund program report", category: "Other", dueInDays: 52, done: false, recurrence: "Annual" },
   { key: "insurance-renewal", title: "Insurance renewal decision", category: "Other", dueInDays: 47, done: false, recurrence: "Annual" },
-  { key: "worksafe", title: "Report payroll to WorkSafeBC", category: "Payroll", dueInDays: 98, done: false, recurrence: "Annual" },
   { key: "month-end-close", title: "Close the books for last month", category: "Other", dueInDays: 4, done: false, recurrence: "Monthly" },
   { key: "card-statement", title: "Reconcile the organization Visa statement", category: "Other", dueInDays: 8, done: false, recurrence: "Monthly" },
   { key: "renewal-season-close", title: "Close membership renewal season", category: "Governance", dueInDays: -130, done: true, recurrence: "Annual" },

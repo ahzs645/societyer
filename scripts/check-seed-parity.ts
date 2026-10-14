@@ -17,6 +17,7 @@ import * as recon from "../shared/functions/reconciliation";
 import * as rules from "../shared/functions/transactionRules";
 import * as exp from "../shared/functions/expenseReports";
 import * as inv from "../shared/functions/invoices";
+import * as registers from "../shared/functions/businessRegisters";
 import { demoExpenseReports } from "../shared/demoData/financeWorkflows";
 import { DEMO_RECONCILIATION_KEYS } from "../shared/demoData/financeWorkflows";
 import { tables as staticTables } from "../src/lib/staticConvexFixtures";
@@ -105,6 +106,14 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   memberSubscriptions: { static: (row) => String(row._id).startsWith("static_member_subscription_renewal_"), server: isRenewal },
   "financialTransactions (invoice deposits)": { static: (row) => String(row.externalId).startsWith("csv-invoice-"), server: (row) => String(row.externalId).startsWith("csv-invoice-") },
   "financialTransactions (rule provenance)": { static: (row) => row.categorizedBy === "rule", server: (row) => row.categorizedBy === "rule" },
+  // Business registers (shared/demoData/businessRegisters.ts).
+  payrollSettings: { static: () => true, server: () => true },
+  payRuns: { static: () => true, server: () => true },
+  payrollRemittances: { static: () => true, server: () => true },
+  corporateCards: { static: () => true, server: () => true },
+  cardStatements: { static: () => true, server: () => true },
+  investmentHoldings: { static: () => true, server: () => true },
+  "deadlines (from the registers)": { static: (row) => /^(payroll|investments):/.test(String(row.sourceKey ?? "")), server: (row) => /^(payroll|investments):/.test(String(row.sourceKey ?? "")) },
 };
 const tableOf = (label: string) => label.split(" ")[0];
 const countRows: Array<{ table: string; static: number; server: number }> = [];
@@ -130,6 +139,12 @@ const refFields: Record<string, Array<[string, string]>> = {
   invoiceSeries: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["lines[].catalogItemId", "invoiceCatalogItems"]],
   memberSubscriptions: [["planId", "subscriptionPlans"], ["memberId", "members"]],
   fundRestrictions: [["linkedFinancialAccountId", "financialAccounts"]],
+  payRuns: [["transactionId", "financialTransactions"], ["lines[].employeeId", "employees"]],
+  payrollRemittances: [["transactionId", "financialTransactions"]],
+  payrollSlips: [["employeeId", "employees"]],
+  corporateCards: [["employeeId", "employees"], ["financialAccountId", "financialAccounts"], ["agreementDocumentId", "documents"]],
+  cardStatements: [["cardId", "corporateCards"]],
+  investmentHoldings: [["fundRestrictionId", "fundRestrictions"]],
 };
 function valuesAt(row: any, path: string): unknown[] {
   let values: unknown[] = [row];
@@ -235,6 +250,24 @@ for (const invoice of server.invoices) {
     assert.equal(txn.amountCents, payment.amountCents, `${invoice.number}: the linked deposit is the payment amount`);
   }
 }
+
+/* ------------------------------------------------- business registers */
+
+const [payA, payB] = await Promise.all([registers.payrollWorkspacePortable(A.ctx, { societyId: A.societyId }), registers.payrollWorkspacePortable(B.ctx, { societyId: B.societyId })]);
+const payrollSummary = (ws: any) => ({
+  runs: ws.runs.map((row: any) => `${row.payDate}:${row.grossCents}:${row.netCents}:${row.remittableCents}:${row.differenceCents}`),
+  remittances: ws.remittances.map((row: any) => `${row.periodStart}:${row.dueDate}:${row.amountDueCents}:${row.paidCents ?? 0}:${row.status}`),
+  slipTotals: ws.slips.reduce((sum: number, row: any) => sum + row.employmentIncomeCents, 0),
+  deadlineChanges: ws.deadlineChanges,
+});
+assert.deepEqual(payrollSummary(payB), payrollSummary(payA), "pay runs, remittances, T4 totals and deadline state match");
+assert.equal(payB.deadlineChanges, 0, "the seeded register deadlines are in step with the registers");
+const [cardsA, cardsB] = await Promise.all([registers.cardsWorkspacePortable(A.ctx, { societyId: A.societyId }), registers.cardsWorkspacePortable(B.ctx, { societyId: B.societyId })]);
+const cardSummary = (ws: any) => ws.statements.map((row: any) => `${row.periodStart}:${row.statementBalanceCents}:${row.differenceCents}:${row.receiptsMissing}:${row.status}`);
+assert.deepEqual(cardSummary(cardsB), cardSummary(cardsA), "card statements reconcile the same way against the same feed");
+assert.deepEqual(cardsB.summary, cardsA.summary, "card summary matches");
+const [holdingsA, holdingsB] = await Promise.all([registers.investmentsWorkspacePortable(A.ctx, { societyId: A.societyId }), registers.investmentsWorkspacePortable(B.ctx, { societyId: B.societyId })]);
+assert.deepEqual(holdingsB.reserves, holdingsA.reserves, "invested reserves match");
 
 /* ------------------------------------------------- report */
 
