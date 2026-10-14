@@ -25,6 +25,11 @@ import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
+import { todayDateOnly } from "../../shared/dateOnly";
+import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
+import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../../shared/demoData/members";
+import { addDays, demoAsOfDate } from "../../shared/demoData/prng";
+import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel, type DemoOwnerRole } from "../../shared/demoData/work";
 
 const SOCIETY_ID = STATIC_DEMO_SOCIETY_ID;
 const USER_OWNER_ID = STATIC_DEMO_USER_ID;
@@ -51,6 +56,13 @@ export function demoUpcoming(iso: string): string {
   const shifted = new Date(Date.parse(dateOnly ? `${iso}T00:00:00.000Z` : iso) + DEMO_UPCOMING_SHIFT_DAYS * DAY_MS).toISOString();
   return dateOnly ? shifted.slice(0, 10) : shifted;
 }
+/**
+ * The demo's "today" for generated activity (bank feed, dues, recent tasks):
+ * the story date, or the real local date once the clock has passed it. History
+ * before it is identical on every load; see shared/demoData.
+ */
+const DEMO_AS_OF = demoAsOfDate("2026-04-21", todayDateOnly());
+const daysFromDemoToday = (days: number) => addDays(DEMO_AS_OF, days);
 const DOCUMENT_BYLAWS_ID = "static_document_bylaws";
 const DOCUMENT_POLICY_ID = "static_document_privacy";
 const DOCUMENT_TENANCY_ID = "static_document_tenancy";
@@ -63,6 +75,7 @@ const FINANCIAL_CONNECTION_ID = "static_financial_connection";
 const PAPERLESS_CONNECTION_ID = "static_paperless_connection";
 const CASH_ACCOUNT_ID = "static_financial_cash";
 const GRANT_ACCOUNT_ID = "static_financial_grant";
+const CARD_ACCOUNT_ID = "static_financial_card";
 const ACCOUNT_RECEIVABLE_ID = "static_financial_ar";
 const ACCOUNT_PAYABLE_ID = "static_financial_ap";
 const ACCOUNT_NET_ASSETS_ID = "static_financial_net_assets";
@@ -375,7 +388,7 @@ const evidenceRegistersOverview = {
   archiveAccessions: [],
 };
 
-const members = [
+const namedMembers = [
   member("static_member_mina", "Mina", "Patel", "Regular", true, "2021-04-13"),
   member("static_member_jordan", "Jordan", "Lee", "Regular", true, "2020-08-01"),
   member("static_member_devon", "Devon", "Clarke", "Regular", true, "2019-11-15"),
@@ -392,6 +405,33 @@ const members = [
   { ...member("static_member_dario", "Dario", "Rossi", "Regular", false, "2022-07-19"), status: "Inactive", leftAt: "2026-02-01" },
   member("static_member_noor", "Noor", "Ahmadi", "Regular", true, "2021-01-27"),
 ];
+
+// The rest of the register is generated (deterministic, fictional names) so
+// renewals, classes and a members-over-time view have realistic volume.
+const generatedMemberSeeds = buildDemoMembers({
+  count: 75,
+  asOf: DEMO_AS_OF,
+  excludeNames: namedMembers.map((row) => `${row.firstName} ${row.lastName}`),
+});
+const generatedMemberId = (key: string) => `static_member_gen_${key.replace(/-/g, "_")}`;
+const generatedMemberEmail = (firstName: string, lastName: string) =>
+  `${firstName}.${lastName}`.toLowerCase().replace(/[^a-z.]+/g, "") + "@example.org";
+
+const generatedMembers = generatedMemberSeeds.map((seed) => ({
+  _id: generatedMemberId(seed.key),
+  societyId: SOCIETY_ID,
+  firstName: seed.firstName,
+  lastName: seed.lastName,
+  email: generatedMemberEmail(seed.firstName, seed.lastName),
+  membershipClass: seed.membershipClass,
+  status: seed.status,
+  joinedAt: seed.joinedAt,
+  ...(seed.leftAt ? { leftAt: seed.leftAt } : {}),
+  votingRights: seed.votingRights,
+  ...(seed.notes ? { notes: seed.notes } : {}),
+}));
+
+const members = [...namedMembers, ...generatedMembers];
 
 const subscriptionPlans = [
   {
@@ -460,6 +500,34 @@ const memberSubscriptions = [
     lastPaymentCents: 1500,
     demo: true,
   },
+  // Generated members' fee tiers and renewal states for the current
+  // membership year (April 1 to March 31).
+  ...generatedMemberSeeds.flatMap((seed) => {
+    if (!seed.plan) return [];
+    const state = demoRenewalState(seed, DEMO_AS_OF);
+    const yearStart = Number(DEMO_AS_OF.slice(0, 4)) - (DEMO_AS_OF.slice(5) >= "04-01" ? 0 : 1);
+    const planId = seed.plan === "student" ? "static_plan_student" : seed.plan === "sustainer" ? "static_plan_sustainer" : "static_plan_regular";
+    const priceCents = seed.plan === "student" ? 500 : seed.plan === "sustainer" ? 1500 : 2500;
+    const status = state === "left" ? "canceled" : state === "past_due" ? "past_due" : state === "pending" ? "pending" : "active";
+    const monthStart = `${DEMO_AS_OF.slice(0, 7)}-01`;
+    const renewedOn = seed.joinedAt >= `${yearStart}-04-01` ? seed.joinedAt : `${yearStart}-04-${String(3 + (seed.key.length % 20)).padStart(2, "0")}`;
+    const lastPaymentDate = status === "past_due" ? `${yearStart - 1}-04-15` : seed.plan === "sustainer" ? monthStart : renewedOn;
+    return [{
+      _id: `static_member_subscription_gen_${seed.key.replace(/-/g, "_")}`,
+      societyId: SOCIETY_ID,
+      planId,
+      memberId: generatedMemberId(seed.key),
+      email: generatedMemberEmail(seed.firstName, seed.lastName),
+      fullName: `${seed.firstName} ${seed.lastName}`,
+      status,
+      startedAtISO: `${seed.joinedAt}T17:00:00.000Z`,
+      currentPeriodEndISO: seed.plan === "sustainer"
+        ? `${addDays(monthStart, 31).slice(0, 7)}-01T00:00:00.000Z`
+        : `${status === "active" ? yearStart + 1 : yearStart}-03-31T23:59:59.000Z`,
+      ...(status === "active" || status === "past_due" ? { lastPaymentAtISO: `${lastPaymentDate}T17:05:00.000Z`, lastPaymentCents: priceCents } : {}),
+      demo: true,
+    }];
+  }),
 ];
 
 const operatingSubscriptions = [
@@ -1157,6 +1225,18 @@ const deadlines = [
     agreementId: "static_agreement_lease",
     sourceKey: `term-end:${demoUpcoming("2026-07-01")}`,
   },
+  // Recurring finance, payroll and reporting deadlines around the demo's today.
+  ...DEMO_DEADLINES.map((seed) => ({
+    _id: `static_deadline_gen_${seed.key.replace(/-/g, "_")}`,
+    societyId: SOCIETY_ID,
+    title: seed.title,
+    ...(seed.description ? { description: seed.description } : {}),
+    dueDate: daysFromDemoToday(seed.dueInDays),
+    category: seed.category,
+    status: seed.done ? "complete" : "open",
+    done: seed.done,
+    recurrence: seed.recurrence ?? "None",
+  })),
 ];
 
 const commitments = [
@@ -1457,6 +1537,22 @@ const documents = [
     flaggedForDeletion: false,
     tags: ["org-history", "org-history-item", "budget"],
   },
+  // Metadata-only records filling every library section (finance, policy,
+  // meeting material, governance, other) and review state.
+  ...DEMO_DOCUMENTS.map((seed) => ({
+    _id: `static_document_gen_${seed.key.replace(/-/g, "_")}`,
+    societyId: SOCIETY_ID,
+    title: seed.title,
+    category: seed.category,
+    librarySection: seed.librarySection,
+    fileName: seed.fileName,
+    mimeType: seed.fileName.endsWith(".csv") ? "text/csv" : seed.fileName.endsWith(".xlsx") ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/pdf",
+    retentionYears: seed.retentionYears,
+    ...(seed.reviewStatus ? { reviewStatus: seed.reviewStatus } : {}),
+    createdAtISO: `${daysFromDemoToday(-seed.createdDaysAgo)}T17:00:00.000Z`,
+    flaggedForDeletion: false,
+    tags: seed.tags,
+  })),
 ];
 
 // A minimal, hand-built one-page PDF (valid xref table, no external deps) so
@@ -1753,6 +1849,30 @@ const tasks = [
     documentId: DOCUMENT_POLICY_ID,
     tags: [],
   },
+  // Generated workload: every status, priority, due bucket and owner scope.
+  ...DEMO_TASKS.map((seed) => {
+    const owner: Record<DemoOwnerRole, { id: string; name: string }> = {
+      owner: { id: USER_OWNER_ID, name: "Mina Patel" },
+      treasurer: { id: USER_TREASURER_ID, name: "Jordan Lee" },
+      secretary: { id: USER_SECRETARY_ID, name: "Avery Santos" },
+    };
+    const committeeId = seed.committee === "finance" ? "static_committee_finance" : seed.committee === "governance" ? "static_committee_governance" : undefined;
+    return {
+      _id: `static_task_gen_${seed.key.replace(/-/g, "_")}`,
+      societyId: SOCIETY_ID,
+      title: seed.title,
+      ...(seed.description ? { description: seed.description } : {}),
+      status: seed.status,
+      priority: seed.priority,
+      ...(seed.owner ? { responsibleUserIds: [owner[seed.owner].id], assignee: owner[seed.owner].name } : seed.assignee ? { assignee: seed.assignee } : {}),
+      ...(seed.dueInDays === undefined ? {} : { dueDate: daysFromDemoToday(seed.dueInDays) }),
+      ...(committeeId ? { committeeId } : {}),
+      tags: seed.tags,
+      ...(seed.checklist ? { checklist: seed.checklist.map((step, index) => ({ id: `${seed.key}-${index}`, ...step })) } : {}),
+      createdAtISO: `${daysFromDemoToday(-seed.createdDaysAgo)}T16:00:00.000Z`,
+      ...(seed.completedDaysAgo === undefined ? {} : { completedAt: `${daysFromDemoToday(-seed.completedDaysAgo)}T18:00:00.000Z` }),
+    };
+  }),
 ];
 
 const conflicts = [
@@ -2169,6 +2289,43 @@ const paperlessDocumentSyncs = [
   },
 ];
 
+/**
+ * Bank feed: about eighteen months of generated activity across operating
+ * chequing, the restricted grant fund and the organization Visa (see
+ * shared/demoData/bankFeed.ts). Three hand-written rows below are part of the
+ * same ledger (the April grant deposit and hall booking already posted to the
+ * journal, and the projector linked to an asset). Balances are calibrated so
+ * each bank account matches the 2026-01-01 opening-balance journal entry at
+ * 2025-12-31, and FY 2025-2026 revenue and expenses (transfers excluded) add
+ * up to the board-approved statements in `financials`.
+ */
+const STATIC_FIXED_FEED_ROWS: Array<{ account: DemoFeedAccountKey; date: string; amountCents: number; category?: string }> = [
+  { account: "restricted", date: "2026-04-01", amountCents: 1500000, category: "Grant revenue" },
+  { account: "operating", date: "2026-04-05", amountCents: -42000, category: "Facilities" },
+  { account: "operating", date: "2025-09-12", amountCents: -92000, category: "Program equipment" },
+];
+const staticBankFeed = buildDemoBankFeed({
+  start: "2025-04-01",
+  asOf: DEMO_AS_OF,
+  duesPayments: buildDemoDuesPayments(
+    [...namedMembers, ...generatedMembers] as Array<{ firstName: string; lastName: string; membershipClass: string; status: string; joinedAt: string; leftAt?: string }>,
+    { start: "2025-04-01", asOf: DEMO_AS_OF },
+  ),
+  donorNames: members.filter((row) => row.status === "Active").map((row) => `${row.firstName} ${row.lastName}`),
+  auditorName: "North Shore CPA LLP",
+  cardLast4: "4417",
+  // The April 2026 Harbour Foundation disbursement is the hand-written static_tx_grant.
+  skipKeys: ["grant-harbour-2026-04"],
+  fixedRows: STATIC_FIXED_FEED_ROWS,
+  balanceAt: { date: "2025-12-31", operating: 3490000, restricted: 2750000 },
+  fiscalTarget: { start: "2025-04-01", end: "2026-03-31", revenueCents: 18640000, expenseCents: 17125000 },
+});
+const FEED_ACCOUNT_IDS: Record<DemoFeedAccountKey, string> = {
+  operating: CASH_ACCOUNT_ID,
+  restricted: GRANT_ACCOUNT_ID,
+  card: CARD_ACCOUNT_ID,
+};
+
 const financialAccounts = [
   {
     _id: CASH_ACCOUNT_ID,
@@ -2180,7 +2337,7 @@ const financialAccounts = [
     currency: "CAD",
     accountType: "Bank",
     subtype: "cash",
-    balanceCents: 3490000,
+    balanceCents: staticBankFeed.balances.operating,
     isRestricted: false,
     sourceSystem: "societyer",
     normalBalance: "debit",
@@ -2195,11 +2352,27 @@ const financialAccounts = [
     currency: "CAD",
     accountType: "Bank",
     subtype: "restricted_cash",
-    balanceCents: 2750000,
+    balanceCents: staticBankFeed.balances.restricted,
     isRestricted: true,
     restrictedPurpose: "Youth resilience program",
     sourceSystem: "societyer",
     normalBalance: "debit",
+  },
+  {
+    _id: CARD_ACCOUNT_ID,
+    societyId: SOCIETY_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    externalId: "card",
+    code: "2100",
+    name: "Organization Visa",
+    currency: "CAD",
+    accountType: "Credit",
+    subtype: "credit_card",
+    // Negative: what the society owes on the card right now.
+    balanceCents: staticBankFeed.balances.card,
+    isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "credit",
   },
   { _id: ACCOUNT_RECEIVABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ar", code: "1100", name: "Accounts receivable", currency: "CAD", accountType: "Asset", subtype: "receivable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
   { _id: ACCOUNT_PAYABLE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "ap", code: "2000", name: "Accounts payable", currency: "CAD", accountType: "Liability", subtype: "payable", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "credit" },
@@ -2226,6 +2399,9 @@ const financialTransactions: Array<Record<string, any>> = [
     counterparty: "Harbour Foundation",
     counterpartyExternalId: "vendor_harbour",
     counterpartyResourceType: "vendor",
+    method: "Wire",
+    status: "posted",
+    memo: "Quarterly disbursement, April 2026",
   },
   {
     _id: "static_tx_space",
@@ -2241,6 +2417,10 @@ const financialTransactions: Array<Record<string, any>> = [
     counterparty: "Riverside Hall",
     counterpartyExternalId: "vendor_city",
     counterpartyResourceType: "vendor",
+    method: "Online banking",
+    status: "posted",
+    receiptStatus: "attached",
+    memo: "Extra Saturday booking for the spring showcase",
   },
   {
     _id: "static_tx_projector",
@@ -2256,35 +2436,27 @@ const financialTransactions: Array<Record<string, any>> = [
     counterparty: "Harbour Office Supply",
     counterpartyExternalId: "vendor_harbour_office",
     counterpartyResourceType: "vendor",
+    method: "Online banking",
+    status: "posted",
+    receiptStatus: "attached",
+    memo: "Projector for the community room",
   },
-  // FY2024-2025 operating ledger — categorized so the year-end Organization
-  // Revenue & Expense statement (General Fund vs Restricted Funds) derives from
-  // real finance data. General Fund lines post to the operating account;
-  // restricted lines post to the restricted "Neighbourhood grant fund" account.
-  ...[
-    ["org_member", "Membership dues", 180000, "Membership fees", CASH_ACCOUNT_ID, "2025-06-30"],
-    ["org_registration", "Program registration fees", 1500000, "Registration fees", CASH_ACCOUNT_ID, "2025-09-15"],
-    ["org_donations", "Year-end donations", 250000, "Donations", CASH_ACCOUNT_ID, "2025-12-20"],
-    ["org_fundraising", "Fall fundraiser", 320000, "Fundraising", CASH_ACCOUNT_ID, "2025-11-01"],
-    ["org_interest", "Bank interest", 12500, "Interest & other", CASH_ACCOUNT_ID, "2026-03-31"],
-    ["org_wages", "Staff wages", -1300000, "Wages & benefits", CASH_ACCOUNT_ID, "2025-07-15"],
-    ["org_rent", "Hall rent", -400000, "Rent", CASH_ACCOUNT_ID, "2025-05-01"],
-    ["org_insurance", "Liability insurance", -150000, "Insurance", CASH_ACCOUNT_ID, "2025-04-15"],
-    ["org_office", "Office supplies", -120000, "Office supplies", CASH_ACCOUNT_ID, "2025-10-10"],
-    ["org_advertising", "Program advertising", -75000, "Advertising", CASH_ACCOUNT_ID, "2025-08-20"],
-    ["org_utilities", "Utilities", -90000, "Utilities", CASH_ACCOUNT_ID, "2026-01-31"],
-    ["org_restricted_grant", "Restricted program grant received", 500000, "Program grant", GRANT_ACCOUNT_ID, "2025-05-15"],
-    ["org_restricted_delivery", "Restricted program delivery", -380000, "Program delivery", GRANT_ACCOUNT_ID, "2026-02-28"],
-  ].map(([key, description, amountCents, category, accountId, date]) => ({
-    _id: `static_tx_${key}`,
+  // The generated bank feed (see staticBankFeed above).
+  ...staticBankFeed.rows.map((row) => ({
+    _id: `static_tx_feed_${row.key.replace(/[^a-zA-Z0-9]+/g, "_")}`,
     societyId: SOCIETY_ID,
     connectionId: FINANCIAL_CONNECTION_ID,
-    accountId,
-    externalId: String(key),
-    date,
-    description,
-    amountCents,
-    category,
+    accountId: FEED_ACCOUNT_IDS[row.account],
+    externalId: `feed-${row.key}`,
+    date: row.date,
+    description: row.description,
+    amountCents: row.amountCents,
+    ...(row.category ? { category: row.category } : {}),
+    counterparty: row.counterparty,
+    method: row.method,
+    status: row.status,
+    ...(row.memo ? { memo: row.memo } : {}),
+    ...(row.receiptStatus ? { receiptStatus: row.receiptStatus } : {}),
   })),
 ];
 
@@ -2348,22 +2520,26 @@ const journalLines = [
 const reconciliationRuns: any[] = [];
 const reconciliationRunLines: any[] = [];
 
+// Budget lines for the approved prior year (labelled like the statements) and
+// the current fiscal year (labelled like the Treasurer page, by its end year).
+// Categories match the bank feed, so budget vs actuals has real actuals.
 const budgets = [
-  {
-    _id: "static_budget_programs",
+  ...DEMO_BUDGET_PLAN.map(([category, plannedCents, , notes]) => ({
+    _id: `static_budget_2025_2026_${category.toLowerCase().replace(/[^a-z]+/g, "_")}`,
     societyId: SOCIETY_ID,
     fiscalYear: "2025-2026",
-    category: "Programs",
-    plannedCents: 9600000,
-    notes: "Includes youth resilience and community dinners.",
-  },
-  {
-    _id: "static_budget_facilities",
+    category,
+    plannedCents,
+    ...(notes ? { notes } : {}),
+  })),
+  ...DEMO_BUDGET_PLAN.map(([category, , plannedCents, notes]) => ({
+    _id: `static_budget_current_${category.toLowerCase().replace(/[^a-z]+/g, "_")}`,
     societyId: SOCIETY_ID,
-    fiscalYear: "2025-2026",
-    category: "Facilities",
-    plannedCents: 3600000,
-  },
+    fiscalYear: fiscalYearEndLabel(DEMO_AS_OF),
+    category,
+    plannedCents,
+    ...(notes ? { notes } : {}),
+  })),
 ];
 
 const notifications = [
@@ -4130,6 +4306,7 @@ export {
   PAPERLESS_CONNECTION_ID,
   CASH_ACCOUNT_ID,
   GRANT_ACCOUNT_ID,
+  CARD_ACCOUNT_ID,
   ACCOUNT_RECEIVABLE_ID,
   ACCOUNT_PAYABLE_ID,
   ACCOUNT_NET_ASSETS_ID,
