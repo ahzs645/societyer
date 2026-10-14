@@ -216,6 +216,7 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
     children: [
       { to: "/app/financials", label: "Overview", end: true },
       "/app/treasurer",
+      "/app/invoices",
       "/app/financials/accounting",
       "/app/reconciliation",
       "/app/approvals",

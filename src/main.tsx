@@ -86,6 +86,7 @@ const MotionsPage = React.lazy(() => import("./pages/Motions").then((m) => ({ de
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
 const ApprovalsPage = React.lazy(() => import("./pages/Approvals").then((m) => ({ default: m.ApprovalsPage })));
 const TransactionRulesPage = React.lazy(() => import("./pages/TransactionRules").then((m) => ({ default: m.TransactionRulesPage })));
+const InvoicesPage = React.lazy(() => import("./pages/Invoices").then((m) => ({ default: m.InvoicesPage })));
 const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
 const InventoryPage = React.lazy(() => import("./pages/Inventory").then((m) => ({ default: m.InventoryPage })));
 const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
@@ -508,6 +509,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="treasurer" element={<TreasurerPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="transaction-rules" element={<TransactionRulesPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
             <Route
               path="assets"
               element={withModule("assets", <AssetsPage />)}
