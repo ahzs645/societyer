@@ -32,7 +32,7 @@ import { isInternalTransfer } from "../transferCategories";
 
 export type DemoFinancePerson = { id: string; name: string; role: string };
 
-export type DemoFinanceIdKind = "rule" | "period" | "approvalRule" | "expense";
+export type DemoFinanceIdKind = "rule" | "period" | "approvalRule" | "expense" | "claimPolicy";
 
 export type DemoFinanceRefs = {
   societyId: string;
@@ -384,6 +384,27 @@ export function demoExpenseApprovalRules(refs: DemoFinanceRefs) {
   ];
 }
 
+/**
+ * The claim policy: receipts over $75, a note over $500, submitted within 60
+ * days. It warns approvers rather than blocking, so the demo shows one claim
+ * with a requested exception and one flagged without.
+ */
+export function demoExpenseClaimPolicy(refs: DemoFinanceRefs) {
+  const at = "2026-01-05T18:10:00.000Z";
+  return {
+    _id: refs.idFor("claimPolicy", "default"),
+    societyId: refs.societyId,
+    receiptOverCents: 7_500,
+    noteOverCents: 50_000,
+    maxAgeDays: 60,
+    enforcement: "warn",
+    updatedByUserId: refs.owner.id,
+    updatedByName: refs.owner.name,
+    createdAtISO: at,
+    updatedAtISO: at,
+  };
+}
+
 export function demoExpenseReports(refs: DemoFinanceRefs) {
   const people = { owner: refs.owner, treasurer: refs.treasurer, secretary: refs.secretary };
   type Person = DemoFinancePerson;
@@ -420,6 +441,7 @@ export function demoExpenseReports(refs: DemoFinanceRefs) {
     // read-only finance access), so under the default approver access the two
     // finance writers (owner and secretary/admin) can complete them without
     // approving their own claim.
+    // Misses the claim policy (no receipt, no note) and carries an exception.
     claim("appreciation_dinner", people.treasurer, {
       title: "Volunteer appreciation dinner",
       category: "Meals",
@@ -429,7 +451,26 @@ export function demoExpenseReports(refs: DemoFinanceRefs) {
       status: "Submitted",
       requiredApprovals: 2,
       approvals: [],
-      approvalTrail: [step(people.treasurer, "submitted", "2026-04-13T18:00:00.000Z")],
+      policyException: {
+        reason: "The restaurant is re-sending the itemized receipt; the card slip was lost on the night.",
+        at: "2026-04-13T18:00:00.000Z",
+        by: people.treasurer.name,
+        byUserId: people.treasurer.id,
+      },
+      approvalTrail: [step(people.treasurer, "submitted", "2026-04-13T18:00:00.000Z", "Policy exception: The restaurant is re-sending the itemized receipt; the card slip was lost on the night.")],
+    }),
+    // Same requester, amount and date as the approved bus rental: a likely duplicate.
+    claim("bus_rental_repeat", people.treasurer, {
+      title: "Bus rental for the youth workshop",
+      category: "Travel",
+      amountCents: 62000,
+      incurredAtISO: "2026-03-28",
+      submittedAtISO: "2026-04-16",
+      status: "Submitted",
+      requiredApprovals: 1,
+      approvals: [],
+      notes: "Second bus for the overflow group.",
+      approvalTrail: [step(people.treasurer, "submitted", "2026-04-16T16:00:00.000Z")],
     }),
     claim("printer_toner", people.owner, {
       title: "Printer toner",

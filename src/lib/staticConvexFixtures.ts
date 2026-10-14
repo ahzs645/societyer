@@ -28,6 +28,7 @@ import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 import {
   applyFinanceWorkflowsToFeed,
   financeWorkflowApprovalRules,
+  financeWorkflowClaimPolicy,
   financeWorkflowExpenseReports,
   financeWorkflowRules,
 } from "./staticFinanceWorkflowFixtures";
@@ -2493,6 +2494,7 @@ const reconciliationPeriods = applyFinanceWorkflowsToFeed(FINANCE_WORKFLOW_IDS, 
   [CARD_ACCOUNT_ID]: staticBankFeed.balances.card,
 });
 const expenseApprovalRules = financeWorkflowApprovalRules(FINANCE_WORKFLOW_IDS);
+const expenseClaimPolicy = financeWorkflowClaimPolicy(FINANCE_WORKFLOW_IDS);
 expenseReports.push(...(financeWorkflowExpenseReports(FINANCE_WORKFLOW_IDS) as any[]));
 
 const accountingFiscalPeriods = [
@@ -2957,6 +2959,7 @@ const tables: Record<string, any[]> = {
   reconciliationPeriods,
   transactionRules,
   expenseApprovalRules,
+  expenseClaimPolicy,
   reconciliationRunLines,
   motions,
   pendingEmails: [

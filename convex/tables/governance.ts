@@ -62,11 +62,20 @@ export const governanceTables = {
     declinedAtISO: v.optional(v.string()),
     approvalTrail: v.optional(v.array(v.object({
       atISO: v.string(),
-      action: v.string(), // submitted | approved | declined | paid | recalled | reset | edited
+      action: v.string(), // submitted | approved | declined | paid | recalled | reset | edited | reminded | receipt
       actorName: v.string(),
       actorUserId: v.optional(v.id("users")),
       note: v.optional(v.string()),
     }))),
+    // Requested when the claim misses the expense-claim policy (convex/tables/expensePolicies.ts).
+    policyException: v.optional(v.object({
+      reason: v.string(),
+      at: v.string(),
+      by: v.string(),
+      byUserId: v.optional(v.id("users")),
+    })),
+    // Approvers can be reminded once per 24 hours.
+    lastReminderAtISO: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

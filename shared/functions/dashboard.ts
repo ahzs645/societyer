@@ -27,6 +27,7 @@ import {
 } from "../dashboardComplianceRules";
 import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
+import { financeControlFindingsFor } from "./expenseReports";
 
 
 /* ------------------ bylaw-rule resolution (inlined, pure) ---------------- */
@@ -213,7 +214,7 @@ const OPEN_GOAL_STATUSES = ["AtRisk", "OffTrack", "OnTrack", "NotStarted"];
 const OPEN_TASK_STATUSES = ["Todo", "InProgress", "Blocked"];
 const PREVIEW_SCAN_LIMIT = 100;
 
-const DASHBOARD_READ_PERMISSIONS: readonly Permission[] = ["members:read", "directors:read", "meetings:read", "filings:read", "deadlines:read", "conflicts:read", "committees:read", "commitments:read", "tasks:read", "documents:read", "users:read", "audit:read", "settings:read"];
+const DASHBOARD_READ_PERMISSIONS: readonly Permission[] = ["members:read", "directors:read", "meetings:read", "filings:read", "deadlines:read", "conflicts:read", "committees:read", "commitments:read", "tasks:read", "documents:read", "users:read", "audit:read", "settings:read", "financials:read"];
 
 async function dashboardReadAccess(ctx: PortableQueryCtx, societyId: string) {
   await requirePermissionPortable(ctx, societyId, "society:read");
@@ -372,7 +373,7 @@ export async function summaryPortable(
     if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
     return readAccess.has("documents:read");
   });
-  const complianceFlags = evaluateDashboardComplianceRules({
+  const evidenceFlags = evaluateDashboardComplianceRules({
     society: society
       ? {
           ...society,
@@ -391,7 +392,20 @@ export async function summaryPortable(
       residentCanadianStatus: director.residentCanadianStatus,
     })),
     rulesConfigured: Boolean(rules?._id),
-  }, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length).map((flag) => {
+  }, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
+  // Finance controls (expense approval rules) for people who can read the
+  // books. They are internal-control findings, not statutory checks, so they
+  // carry no citation; any finding replaces the "no gaps" line.
+  const financeFlags: DashboardComplianceFlag[] = readAccess.has("financials:read")
+    ? (await financeControlFindingsFor(ctx, societyId)).map((finding) => ({
+        ruleId: finding.id,
+        level: finding.level,
+        text: finding.text,
+        evidenceRequired: ["Expense approval rules", "Signing-authority register"],
+        remediationActions: [{ id: "fix-approval-rules", label: finding.fixLabel, intent: "navigate", to: finding.fixTo }],
+      }))
+    : [];
+  const complianceFlags = (financeFlags.length ? [...evidenceFlags.filter((flag) => flag.ruleId !== "DASHBOARD-COMPLIANCE-OK"), ...financeFlags] : evidenceFlags).map((flag) => {
     const remediation = remediationByRuleId.get(flag.ruleId);
     return remediation
       ? {

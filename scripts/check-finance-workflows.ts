@@ -10,7 +10,10 @@ import * as recon from "../shared/functions/reconciliation";
 import * as rules from "../shared/functions/transactionRules";
 import * as exp from "../shared/functions/expenseReports";
 import { requireFunctionAction } from "../shared/functions/actionPolicy";
-import { FINANCE_EDIT_REQUIRED_REASON } from "../shared/expenseApprovals";
+import { DEFAULT_APPROVAL_RULES, FINANCE_EDIT_REQUIRED_REASON, approvalRuleWarnings, diffApprovalRules, financeControlFindings } from "../shared/expenseApprovals";
+import { EMPTY_CLAIM_POLICY, claimSubmissionDecision, evaluateClaimPolicy, findLikelyDuplicate, nextReminderAt, validateClaimPolicy } from "../shared/expensePolicy";
+import * as dashboard from "../shared/functions/dashboard";
+import { todayDateOnly } from "../shared/dateOnly";
 
 const seed: Record<string, any[]> = {};
 for (const [k, v] of Object.entries(tables as Record<string, any[]>)) seed[k] = JSON.parse(JSON.stringify(v));
@@ -144,7 +147,7 @@ await assert.rejects(() => rules.upsertPortable(mina, { societyId: S, name: "", 
 // Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with
 // read-only finance access; a Viewer is added below.
 let q = await exp.approvalQueuePortable(mina, { societyId: S });
-assert.deepEqual(q.counts, { awaiting: 4, awaitingMe: 3, approved: 1, paid: 1, closed: 2, drafts: 2 });
+assert.deepEqual(q.counts, { awaiting: 5, awaitingMe: 4, approved: 1, paid: 1, closed: 2, drafts: 2 });
 assert.equal(q.policy.source, "configured");
 assert.deepEqual(
   { value: q.approverAccess.value, isDefault: q.approverAccess.isDefault, canChange: q.approverAccess.canChange },
@@ -255,4 +258,181 @@ await assert.rejects(() => exp.saveApprovalRulesPortable(mina, { societyId: S, r
 await exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [] });
 q = await exp.approvalQueuePortable(mina, { societyId: S });
 assert.equal(q.policy.source, "signing_authority");
-console.log("Finance workflow checks passed: periods, rules, approvals and approver access.");
+
+// ---- expense-claim policy: pure helpers
+const policy75 = { receiptOverCents: 7500, noteOverCents: 50000, maxAgeDays: 60, enforcement: "warn" as const };
+assert.deepEqual(evaluateClaimPolicy(policy75, { amountCents: 7500, incurredAtISO: "2026-04-01" }, "2026-04-02"), [], "the thresholds are 'over', so exactly $75 needs no receipt");
+assert.deepEqual(evaluateClaimPolicy(policy75, { amountCents: 60000, incurredAtISO: "2026-01-01" }, "2026-04-01").map((i) => i.code), ["receipt", "note", "age"]);
+assert.deepEqual(evaluateClaimPolicy(policy75, { amountCents: 60000, receiptDocumentId: "d", notes: "  Bus  ", incurredAtISO: "2026-03-01" }, "2026-04-30").map((i) => i.code), [], "60 days is still on time");
+assert.deepEqual(evaluateClaimPolicy(EMPTY_CLAIM_POLICY, { amountCents: 9_999_999 }, "2026-04-01"), [], "no stored policy checks nothing");
+const late = evaluateClaimPolicy(policy75, { amountCents: 100, incurredAtISO: "2026-01-01" }, "2026-03-03");
+assert.equal(claimSubmissionDecision(policy75, late).allowed, true, "warn mode never blocks");
+assert.equal(claimSubmissionDecision({ ...policy75, enforcement: "block" }, late).allowed, false, "block mode needs an exception");
+assert.equal(claimSubmissionDecision({ ...policy75, enforcement: "block" }, late, "ok").allowed, false, "a token reason is not an exception");
+assert.equal(claimSubmissionDecision({ ...policy75, enforcement: "block" }, late, "Receipt lost in transit").allowed, true);
+assert.deepEqual(validateClaimPolicy({ ...policy75, maxAgeDays: 0 }), ["Enter a submission window between 1 and 730 days."]);
+// duplicates: same party and amount within ±14 days; soft hint, closest wins
+const dupes = [
+  { _id: "a", partyKey: "user:1", amountCents: 5000, date: "2026-04-01", title: "Taxi" },
+  { _id: "b", partyKey: "user:1", amountCents: 5000, date: "2026-04-10", title: "Taxi again" },
+  { _id: "c", partyKey: "user:2", amountCents: 5000, date: "2026-04-12", title: "Someone else" },
+];
+assert.equal(findLikelyDuplicate({ partyKey: "user:1", amountCents: 5000, date: "2026-04-12" }, dupes)?._id, "b");
+assert.equal(findLikelyDuplicate({ partyKey: "user:1", amountCents: 5000, date: "2026-04-30" }, dupes), null, "outside the 14-day window");
+assert.equal(findLikelyDuplicate({ partyKey: "user:1", amountCents: 5001, date: "2026-04-10" }, dupes), null, "a different amount is not a duplicate");
+assert.equal(findLikelyDuplicate({ _id: "b", partyKey: "user:1", amountCents: 5000, date: "2026-04-10" }, dupes)?._id, "a", "a record is never its own duplicate");
+assert.equal(nextReminderAt(new Date(Date.now() - 23 * 3600_000).toISOString()) !== null, true, "reminded 23h ago: wait");
+assert.equal(nextReminderAt(new Date(Date.now() - 25 * 3600_000).toISOString()), null, "reminded 25h ago: allowed");
+
+// ---- the demo tells the policy story
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.deepEqual([q.claimPolicy.receiptOverCents, q.claimPolicy.noteOverCents, q.claimPolicy.maxAgeDays, q.claimPolicy.enforcement], [7500, 50000, 60, "warn"]);
+const dinner = q.rows.find((row: any) => row._id === "static_expense_appreciation_dinner");
+assert.match(dinner.policyException.reason, /re-sending the itemized receipt/);
+assert.deepEqual(evaluateClaimPolicy(policy75, dinner, "2026-04-13").map((issue) => issue.code), ["receipt", "note"], "the exception covers a missing receipt and note");
+const repeat = q.rows.find((row: any) => row._id === "static_expense_bus_rental_repeat");
+assert.equal(repeat.possibleDuplicate._id, "static_expense_bus_rental", "the repeated bus rental points at the approved one");
+
+// ---- saving the policy needs finance edit access and is audited
+const policyAudit = async () => (await db.query("activity").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).filter((a: any) => a.action === "claim-policy-changed").length;
+await assert.rejects(() => exp.saveClaimPolicyPortable(jordan, { societyId: S, receiptOverCents: 7500, enforcement: "block" }), /financials:write/);
+await assert.rejects(() => requireFunctionAction(viewer, "expenseReports:saveClaimPolicy", "mutation", { societyId: S, enforcement: "block" }), /financials:write/);
+await assert.rejects(() => exp.saveClaimPolicyPortable(mina, { societyId: S, maxAgeDays: 0, enforcement: "block" }), /submission window/);
+assert.equal(await policyAudit(), 0);
+await exp.saveClaimPolicyPortable(mina, { societyId: S, receiptOverCents: 7500, noteOverCents: 50000, maxAgeDays: 60, enforcement: "block" });
+assert.equal(await policyAudit(), 1, "the policy change is in the activity log");
+await exp.saveClaimPolicyPortable(mina, { societyId: S, receiptOverCents: 7500, noteOverCents: 50000, maxAgeDays: 60, enforcement: "block" });
+assert.equal(await policyAudit(), 1, "saving the same policy records nothing new");
+
+// ---- block: submitting without a receipt fails until an exception is requested (upsert and setStatus)
+const today = todayDateOnly();
+const taxi = (extra: Record<string, unknown> = {}) => exp.upsertPortable(avery, { societyId: S, claimantName: "Avery Santos", claimantUserId: "static_user_secretary", title: "Airport taxi", category: "Travel", amountCents: 9600, currency: "CAD", incurredAtISO: today, status: "Submitted", ...extra });
+await assert.rejects(() => taxi(), /need a receipt/);
+await assert.rejects(() => taxi({ policyExceptionReason: "Lost" }), /request an exception/);
+const taxiId = await taxi({ policyExceptionReason: "Driver had no card reader; paid cash" });
+const taxiRow = await db.get(taxiId);
+assert.equal(taxiRow.status, "Submitted");
+assert.equal(taxiRow.policyException.reason, "Driver had no card reader; paid cash");
+assert.equal(taxiRow.policyException.by, "Avery Santos");
+assert.match(taxiRow.approvalTrail.at(-1).note, /Policy exception/);
+await assert.rejects(() => exp.setStatusPortable(mina, { id: "static_expense_office_chair", status: "Submitted" }), /need a receipt/);
+await exp.setStatusPortable(mina, { id: "static_expense_office_chair", status: "Submitted", policyExceptionReason: "Bought at a market stall, no receipt" });
+assert.equal((await db.get("static_expense_office_chair")).policyException.reason, "Bought at a market stall, no receipt");
+// A drafted claim within the policy saves without any exception.
+const drafted = await exp.upsertPortable(avery, { societyId: S, claimantName: "Avery Santos", claimantUserId: "static_user_secretary", title: "Stamps", category: "Supplies", amountCents: 1200, currency: "CAD", incurredAtISO: today, status: "Submitted" });
+assert.equal((await db.get(drafted)).policyException, undefined);
+// warn: submission goes ahead, approvers see the flag
+await exp.saveClaimPolicyPortable(mina, { societyId: S, receiptOverCents: 7500, enforcement: "warn" });
+const flaggedId = await exp.upsertPortable(avery, { societyId: S, claimantName: "Avery Santos", claimantUserId: "static_user_secretary", title: "Courier", category: "Supplies", amountCents: 8800, currency: "CAD", incurredAtISO: today, status: "Submitted" });
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.deepEqual(q.rows.find((row: any) => row._id === flaggedId).policyIssues.map((issue: any) => issue.code), ["receipt"]);
+
+// ---- receipts attach without resetting approvals
+const receiptDoc = await db.insert("documents", { societyId: S, title: "Courier receipt.pdf", category: "Receipt", tags: ["receipt"] });
+await exp.attachReceiptPortable(avery, { id: flaggedId, receiptDocumentId: receiptDoc });
+assert.equal((await db.get(flaggedId)).receiptDocumentId, receiptDoc);
+assert.equal((await db.get(flaggedId)).status, "Submitted");
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.deepEqual(q.rows.find((row: any) => row._id === flaggedId).policyIssues, [], "the receipt clears the flag");
+const foreignDoc = await db.insert("documents", { societyId: otherSociety, title: "Elsewhere", category: "Receipt", tags: [] });
+await assert.rejects(() => exp.attachReceiptPortable(avery, { id: flaggedId, receiptDocumentId: foreignDoc }));
+
+// ---- duplicate hints on new claims
+const dupId = await exp.upsertPortable(avery, { societyId: S, claimantName: "Avery Santos", claimantUserId: "static_user_secretary", title: "Courier (again)", category: "Supplies", amountCents: 8800, currency: "CAD", incurredAtISO: today, status: "Draft" });
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.rows.find((row: any) => row._id === dupId).possibleDuplicate._id, flaggedId);
+
+// ---- reminders: requester or finance writer, notification + Outbox draft, once per 24h
+const notificationsFor = async (userId: string) => (await db.query("notifications").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).filter((n: any) => n.userId === userId && n.kind === "approval");
+const outboxBefore = (await db.query("pendingEmails").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).length;
+await assert.rejects(() => exp.remindApproversPortable(viewer, { id: "static_expense_bus_rental_repeat" }), /requester or someone with finance edit access/);
+await requireFunctionAction(jordan, "expenseReports:remindApprovers", "mutation", { id: "static_expense_bus_rental_repeat" });
+const reminded = await exp.remindApproversPortable(jordan, { id: "static_expense_bus_rental_repeat" });
+assert.equal(reminded.notified, 2, "the requester reminds both finance writers who can approve");
+assert.equal((await notificationsFor("static_user_secretary")).length, 1);
+assert.match((await notificationsFor("static_user_secretary"))[0].linkHref, /\/app\/approvals\?claim=static_expense_bus_rental_repeat$/);
+assert.equal((await notificationsFor("static_user_treasurer")).length, 0, "the requester is never reminded about their own claim");
+const outboxAfter = await db.query("pendingEmails").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect();
+assert.equal(outboxAfter.length, outboxBefore + (reminded.emailDrafted ? 1 : 0));
+await assert.rejects(() => exp.remindApproversPortable(mina, { id: "static_expense_bus_rental_repeat" }), /last 24 hours/, "rate-limited per claim, whoever asks");
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.rows.find((row: any) => row._id === "static_expense_bus_rental_repeat").canRemind, false);
+await db.patch("static_expense_bus_rental_repeat", { lastReminderAtISO: new Date(Date.now() - 25 * 3600_000).toISOString() });
+assert.equal((await exp.remindApproversPortable(mina, { id: "static_expense_bus_rental_repeat" })).notified, 1, "after 24h; the sender is not reminded");
+await assert.rejects(() => exp.remindApproversPortable(mina, { id: "static_expense_zoom_plan" }), /awaiting approval/);
+await assert.rejects(() => exp.remindApproversPortable(mina, { id: foreignClaim }));
+
+// ---- approval-rule change control: a second approver, never the proposer
+const pendingRules = [{ minAmountCents: 0, requiredApprovals: 1 }, { minAmountCents: 200000, requiredApprovals: 2 }];
+await assert.rejects(() => exp.setRulesChangeControlPortable(jordan, { societyId: S, enabled: true }), /financials:write/);
+await exp.setRulesChangeControlPortable(mina, { societyId: S, enabled: true });
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.changeControl.enabled, true);
+const proposal = await exp.saveApprovalRulesPortable(mina, { societyId: S, rules: pendingRules });
+assert.equal(proposal.pending, true);
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.policy.source, "signing_authority", "nothing changes until a second approver accepts");
+assert.equal(q.changeControl.pending.isMine, true);
+assert.equal(q.changeControl.pending.canDecide, false);
+assert.ok(q.changeControl.pending.diff.some((line: any) => line.kind === "added" && line.thresholdCents === 200000), "the diff shows the new threshold");
+await assert.rejects(() => exp.saveApprovalRulesPortable(avery, { societyId: S, rules: [] }), /pending change/, "rules can't be edited while a change is pending");
+await assert.rejects(() => exp.setRulesChangeControlPortable(mina, { societyId: S, enabled: false }), /pending change/);
+await assert.rejects(() => exp.decidePolicyChangePortable(mina, { id: proposal.changeId, decision: "approve" }), /You proposed this change/);
+await assert.rejects(() => exp.decidePolicyChangePortable(viewer, { id: proposal.changeId, decision: "approve" }), /owners, admins and directors/);
+await assert.rejects(() => exp.decidePolicyChangePortable(avery, { id: proposal.changeId, decision: "withdraw" }), /proposed this change can withdraw/);
+await requireFunctionAction(jordan, "expenseReports:decidePolicyChange", "mutation", { id: proposal.changeId, decision: "approve" });
+assert.equal((await exp.decidePolicyChangePortable(jordan, { id: proposal.changeId, decision: "approve" })).status, "approved", "a read-only director may be the second approver");
+q = await exp.approvalQueuePortable(mina, { societyId: S });
+assert.equal(q.policy.source, "configured");
+assert.deepEqual(q.policy.rules.map((rule: any) => [rule.minAmountCents, rule.requiredApprovals]), [[0, 1], [200000, 2]]);
+assert.equal(q.changeControl.pending, null);
+await assert.rejects(() => exp.decidePolicyChangePortable(avery, { id: proposal.changeId, decision: "decline" }), /already been decided/);
+// Turning change control off is itself a change: declined, withdrawn, then approved.
+const off1 = await exp.setRulesChangeControlPortable(mina, { societyId: S, enabled: false });
+assert.equal(off1.pending, true);
+await exp.decidePolicyChangePortable(avery, { id: off1.changeId, decision: "decline", reason: "Keep dual control for the audit" });
+assert.equal((await exp.approvalQueuePortable(mina, { societyId: S })).changeControl.enabled, true);
+const off2 = await exp.setRulesChangeControlPortable(mina, { societyId: S, enabled: false });
+await exp.decidePolicyChangePortable(mina, { id: off2.changeId, decision: "withdraw" });
+const off3 = await exp.setRulesChangeControlPortable(mina, { societyId: S, enabled: false });
+await exp.decidePolicyChangePortable(avery, { id: off3.changeId, decision: "approve" });
+assert.equal((await exp.approvalQueuePortable(mina, { societyId: S })).changeControl.enabled, false);
+const changeAudit = (await db.query("activity").withIndex("by_society", (x: any) => x.eq("societyId", S)).collect()).filter((a: any) => a.entityType === "approvalPolicyChanges").map((a: any) => a.action);
+assert.deepEqual(changeAudit, ["approval-change-control-on", "approval-change-proposed", "approval-change-approved", "approval-change-proposed", "approval-change-declined", "approval-change-proposed", "approval-change-withdrawn", "approval-change-proposed", "approval-change-approved"]);
+// another workspace's change is never decidable from here
+const foreignChange = await db.insert("approvalPolicyChanges", { societyId: otherSociety, kind: "rules", status: "pending", proposedRules: [], previousRules: [], proposedByName: "Someone Else", createdAtISO: "2026-04-01T00:00:00.000Z", updatedAtISO: "2026-04-01T00:00:00.000Z" });
+await assert.rejects(() => exp.decidePolicyChangePortable(avery, { id: foreignChange, decision: "approve" }));
+assert.equal((await db.get(foreignChange)).status, "pending");
+
+// ---- rule overlap warnings and the diff
+const warn = (rules: any[]) => approvalRuleWarnings(rules.map((rule) => ({ approverRoles: [], approverUserIds: [], blockSelfApproval: true, enabled: true, ...rule })));
+assert.deepEqual(warn([{ minAmountCents: 0, requiredApprovals: 1 }, { minAmountCents: 100000, requiredApprovals: 2 }]), []);
+assert.match(warn([{ minAmountCents: 0, requiredApprovals: 2 }, { minAmountCents: 100000, requiredApprovals: 1 }])[0].message, /overlaps/);
+assert.match(warn([{ minAmountCents: 0, requiredApprovals: 1 }, { minAmountCents: 0, requiredApprovals: 2 }])[0].message, /already starts at \$0/);
+assert.match(warn([{ minAmountCents: 0, requiredApprovals: 1 }, { minAmountCents: 50000, requiredApprovals: 1 }])[0].message, /changes nothing/);
+assert.match(warn([{ minAmountCents: 0, requiredApprovals: 1 }, { minAmountCents: 50000, requiredApprovals: 1, blockSelfApproval: false }])[0].message, /approve their own/);
+assert.deepEqual(
+  diffApprovalRules([{ minAmountCents: 0, requiredApprovals: 1, approverRoles: [], approverUserIds: [], blockSelfApproval: true, enabled: true }], [{ minAmountCents: 0, requiredApprovals: 2, approverRoles: ["Director"], approverUserIds: [], blockSelfApproval: true, enabled: true }]).map((line) => line.kind),
+  ["changed"],
+);
+
+// ---- finance-control findings reach the compliance checks with a Fix link
+const ids = (findings: { id: string }[]) => findings.map((finding) => finding.id).sort();
+const base = { approverRoles: [], approverUserIds: [], enabled: true };
+assert.deepEqual(ids(financeControlFindings([{ ...base, minAmountCents: 0, requiredApprovals: 1, blockSelfApproval: true }], { asOf: today, rulesAreConfigured: true })), ["FINANCE-CONTROL-SINGLE-APPROVAL"]);
+assert.deepEqual(ids(financeControlFindings([{ ...base, minAmountCents: 0, requiredApprovals: 1, blockSelfApproval: true }, { ...base, minAmountCents: 100000, requiredApprovals: 2, blockSelfApproval: false }], { asOf: today, rulesAreConfigured: true })), ["FINANCE-CONTROL-SELF-APPROVAL"]);
+const tiers = [{ status: "Active", authorityType: "signing", tiers: [{ maxCents: 500000, signaturesRequired: 1 }, { minCents: 500001, signaturesRequired: 2 }] }];
+assert.deepEqual(ids(financeControlFindings([{ ...base, minAmountCents: 0, requiredApprovals: 1, blockSelfApproval: true }, { ...base, minAmountCents: 1000000, requiredApprovals: 2, blockSelfApproval: true }], { signingAuthorities: tiers, asOf: today, rulesAreConfigured: true })), ["FINANCE-CONTROL-SIGNING-AUTHORITY"], "a $10,000 dual threshold leaves $5,000.01-$9,999.99 short of the signing authority");
+assert.deepEqual(ids(financeControlFindings(DEFAULT_APPROVAL_RULES, { signingAuthorities: tiers, asOf: today, rulesAreConfigured: false })), [], "derived rules never fall behind");
+let dash = await dashboard.summaryPortable(mina, { societyId: S });
+assert.ok(!dash.complianceFlags.some((flag: any) => flag.ruleId.startsWith("FINANCE-CONTROL")), "the configured $2,000 dual threshold is within the signing authority");
+await exp.saveApprovalRulesPortable(mina, { societyId: S, rules: [{ minAmountCents: 0, requiredApprovals: 1, blockSelfApproval: false }] });
+dash = await dashboard.summaryPortable(mina, { societyId: S });
+const financeFlags = dash.complianceFlags.filter((flag: any) => flag.ruleId.startsWith("FINANCE-CONTROL"));
+assert.deepEqual(financeFlags.map((flag: any) => flag.ruleId).sort(), ["FINANCE-CONTROL-SELF-APPROVAL", "FINANCE-CONTROL-SIGNING-AUTHORITY", "FINANCE-CONTROL-SINGLE-APPROVAL"]);
+assert.ok(financeFlags.every((flag: any) => flag.remediationActions[0].to === "/app/approvals?tab=rules"), "each finding links to the approval rules");
+assert.ok(!dash.complianceFlags.some((flag: any) => flag.ruleId === "DASHBOARD-COMPLIANCE-OK"));
+for (const flag of financeFlags) assert.doesNotMatch(flag.text, /\bsociet(y|ies)\b|\bcorporation\b/i, "entity-neutral copy");
+const viewerDash = await dashboard.summaryPortable(viewer, { societyId: S });
+assert.ok(viewerDash.complianceFlags.some((flag: any) => flag.ruleId === "FINANCE-CONTROL-SELF-APPROVAL"), "finance readers see the findings");
+console.log("Finance workflow checks passed: periods, rules, approvals, approver access, claim policy, exceptions, duplicates, reminders, change control and finance controls.");

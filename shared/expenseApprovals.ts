@@ -178,3 +178,160 @@ export function eligibleApproverCount(
     approverEligibility(rule, user, { ...claim, approvals: [] }, access ? { approverAccess: access.approverAccess, hasFinanceWrite: access.hasFinanceWrite(user) } : undefined).eligible,
   ).length;
 }
+
+/* -------------------------------------------- overlap and duplicate checks */
+
+const money = (cents: number) => {
+  const whole = cents % 100 === 0;
+  return `$${(cents / 100).toLocaleString("en-CA", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })}`;
+};
+
+const approversKey = (rule: ApprovalRule) =>
+  `${[...(rule.approverRoles ?? [])].sort().join(",")}|${[...(rule.approverUserIds ?? [])].map(String).sort().join(",")}`;
+
+export type ApprovalRuleWarning = { index: number; message: string };
+
+/**
+ * Soft warnings for a rule set (indexes follow the input order): two rules at
+ * the same threshold, a higher threshold that asks for less than a lower one,
+ * and a rule that changes nothing from the one below it.
+ */
+export function approvalRuleWarnings(rules: readonly ApprovalRule[]): ApprovalRuleWarning[] {
+  const warnings: ApprovalRuleWarning[] = [];
+  const indexed = rules.map((rule, index) => ({ rule, index })).filter(({ rule }) => Number.isFinite(rule.minAmountCents));
+  const enabled = indexed.filter(({ rule }) => rule.enabled).sort((a, b) => a.rule.minAmountCents - b.rule.minAmountCents);
+  const byThreshold = new Map<number, number[]>();
+  for (const { rule, index } of indexed) byThreshold.set(rule.minAmountCents, [...(byThreshold.get(rule.minAmountCents) ?? []), index]);
+  for (const [threshold, indexes] of byThreshold) {
+    for (const index of indexes.slice(1)) {
+      warnings.push({ index, message: `Another rule already starts at ${money(threshold)}. Only one of them can apply.` });
+    }
+  }
+  for (let i = 1; i < enabled.length; i += 1) {
+    const lower = enabled[i - 1];
+    const higher = enabled[i];
+    if (lower.rule.minAmountCents === higher.rule.minAmountCents) continue;
+    if (higher.rule.requiredApprovals < lower.rule.requiredApprovals) {
+      warnings.push({
+        index: higher.index,
+        message: `This overlaps with the ${money(lower.rule.minAmountCents)} rule: larger claims would need fewer approvals (${higher.rule.requiredApprovals}) than smaller ones (${lower.rule.requiredApprovals}).`,
+      });
+    } else if (lower.rule.blockSelfApproval && !higher.rule.blockSelfApproval) {
+      warnings.push({ index: higher.index, message: `Requesters could approve their own claims of ${money(higher.rule.minAmountCents)} or more, but not smaller ones.` });
+    } else if (
+      higher.rule.requiredApprovals === lower.rule.requiredApprovals &&
+      higher.rule.blockSelfApproval === lower.rule.blockSelfApproval &&
+      approversKey(higher.rule) === approversKey(lower.rule)
+    ) {
+      warnings.push({ index: higher.index, message: `This rule changes nothing: it matches the ${money(lower.rule.minAmountCents)} rule below it.` });
+    }
+  }
+  return warnings.sort((a, b) => a.index - b.index);
+}
+
+/* ------------------------------------------------- describing and diffing */
+
+/** "Claims of $1,000 or more need 2 approvals from owners or directors". */
+export function describeApprovalRule(rule: ApprovalRule, peopleNames: Readonly<Record<string, string>> = {}): string {
+  const who = [
+    ...(rule.approverRoles ?? []).map((role) => `${role.toLowerCase()}s`),
+    ...(rule.approverUserIds ?? []).map((id) => peopleNames[String(id)] ?? "a named person"),
+  ];
+  const from = who.length ? ` from ${who.length > 1 ? `${who.slice(0, -1).join(", ")} or ${who[who.length - 1]}` : who[0]}` : "";
+  const self = rule.blockSelfApproval ? "" : "; requesters may approve their own";
+  const off = rule.enabled ? "" : " (off)";
+  return `Claims of ${money(rule.minAmountCents)} or more need ${rule.requiredApprovals} approval${rule.requiredApprovals === 1 ? "" : "s"}${from}${self}${off}`;
+}
+
+export type ApprovalRuleDiffLine =
+  | { kind: "added"; thresholdCents: number; after: string }
+  | { kind: "removed"; thresholdCents: number; before: string }
+  | { kind: "changed"; thresholdCents: number; before: string; after: string };
+
+/** Line-by-line change between two rule sets, keyed by threshold. */
+export function diffApprovalRules(before: readonly ApprovalRule[], after: readonly ApprovalRule[], peopleNames: Readonly<Record<string, string>> = {}): ApprovalRuleDiffLine[] {
+  const describe = (rule: ApprovalRule) => describeApprovalRule(rule, peopleNames);
+  const beforeBy = new Map(before.map((rule) => [rule.minAmountCents, rule]));
+  const afterBy = new Map(after.map((rule) => [rule.minAmountCents, rule]));
+  const thresholds = [...new Set([...beforeBy.keys(), ...afterBy.keys()])].sort((a, b) => a - b);
+  const lines: ApprovalRuleDiffLine[] = [];
+  for (const thresholdCents of thresholds) {
+    const was = beforeBy.get(thresholdCents);
+    const now = afterBy.get(thresholdCents);
+    if (was && now) {
+      if (describe(was) !== describe(now)) lines.push({ kind: "changed", thresholdCents, before: describe(was), after: describe(now) });
+    } else if (now) lines.push({ kind: "added", thresholdCents, after: describe(now) });
+    else if (was) lines.push({ kind: "removed", thresholdCents, before: describe(was) });
+  }
+  return lines;
+}
+
+/* ------------------------------------------------ finance-control findings */
+
+export type FinanceControlFinding = {
+  id: "FINANCE-CONTROL-SINGLE-APPROVAL" | "FINANCE-CONTROL-SELF-APPROVAL" | "FINANCE-CONTROL-SIGNING-AUTHORITY";
+  level: "warn" | "err";
+  text: string;
+  fixLabel: string;
+  fixTo: string;
+};
+
+const RULES_TAB = "/app/approvals?tab=rules";
+
+/**
+ * Weak spots in the expense approval controls, for the compliance checks:
+ * claims above the top threshold need only one approval, requesters may
+ * approve their own claims, or recorded signing authority asks for more
+ * signatures than the approval rules do. Wording fits any organization.
+ */
+export function financeControlFindings(
+  rules: readonly ApprovalRule[],
+  options: { signingAuthorities?: readonly SigningAuthorityLike[]; asOf: string; rulesAreConfigured: boolean },
+): FinanceControlFinding[] {
+  const findings: FinanceControlFinding[] = [];
+  const enabled = rules.filter((rule) => rule.enabled).sort((a, b) => a.minAmountCents - b.minAmountCents);
+  if (!enabled.length) return findings;
+  const top = enabled[enabled.length - 1];
+  if (top.requiredApprovals < 2) {
+    findings.push({
+      id: "FINANCE-CONTROL-SINGLE-APPROVAL",
+      level: "warn",
+      text: top.minAmountCents === 0
+        ? "Expense claims of any amount need only 1 approval. Add a threshold where larger claims need a second approver."
+        : `Expense claims over ${money(top.minAmountCents)} need only 1 approval. Add a threshold where larger claims need a second approver.`,
+      fixLabel: "Review approval rules",
+      fixTo: RULES_TAB,
+    });
+  }
+  const selfApproving = enabled.filter((rule) => !rule.blockSelfApproval);
+  if (selfApproving.length) {
+    const lowest = selfApproving[0].minAmountCents;
+    findings.push({
+      id: "FINANCE-CONTROL-SELF-APPROVAL",
+      level: "err",
+      text: lowest === 0
+        ? "Requesters can approve their own expense claims."
+        : `Requesters can approve their own expense claims of ${money(lowest)} or more.`,
+      fixLabel: "Block self-approval",
+      fixTo: RULES_TAB,
+    });
+  }
+  // Only configured rules can fall behind the signing authority; without them
+  // the approval rules are derived from it.
+  const signing = options.rulesAreConfigured ? rulesFromSigningAuthorities(options.signingAuthorities ?? [], options.asOf) : null;
+  for (const tier of signing ?? []) {
+    if (tier.requiredApprovals < 2) continue;
+    const required = ruleForAmount(enabled, tier.minAmountCents)?.requiredApprovals ?? 1;
+    if (required < tier.requiredApprovals) {
+      findings.push({
+        id: "FINANCE-CONTROL-SIGNING-AUTHORITY",
+        level: "warn",
+        text: `No approval rule covers the signing authority limit: claims of ${money(tier.minAmountCents)} or more need ${tier.requiredApprovals} signatures, but the approval rules ask for ${required} approval${required === 1 ? "" : "s"}.`,
+        fixLabel: "Add a threshold",
+        fixTo: RULES_TAB,
+      });
+      break;
+    }
+  }
+  return findings;
+}

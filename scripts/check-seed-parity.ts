@@ -94,6 +94,7 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   transactionRules: { static: () => true, server: () => true },
   reconciliationPeriods: { static: () => true, server: () => true },
   expenseApprovalRules: { static: () => true, server: () => true },
+  expenseClaimPolicy: { static: () => true, server: () => true },
   expenseReports: { static: (row) => claimKeys.has(row._id), server: () => true },
   invoices: { static: () => true, server: () => true },
   invoiceCatalogItems: { static: () => true, server: () => true },
@@ -125,7 +126,8 @@ const refFields: Record<string, Array<[string, string]>> = {
   financialTransactions: [["accountId", "financialAccounts"], ["connectionId", "financialConnections"], ["ruleId", "transactionRules"], ["accountingAccountId", "financialAccounts"], ["fundRestrictionId", "fundRestrictions"]],
   reconciliationPeriods: [["accountId", "financialAccounts"], ["createdByUserId", "users"], ["completedByUserId", "users"]],
   expenseApprovalRules: [["approverUserIds[]", "users"]],
-  expenseReports: [["claimantUserId", "users"], ["approverUserId", "users"], ["declinedByUserId", "users"], ["receiptDocumentId", "documents"], ["approvals[].userId", "users"], ["approvalTrail[].actorUserId", "users"]],
+  expenseClaimPolicy: [["updatedByUserId", "users"]],
+  expenseReports: [["claimantUserId", "users"], ["approverUserId", "users"], ["declinedByUserId", "users"], ["receiptDocumentId", "documents"], ["approvals[].userId", "users"], ["approvalTrail[].actorUserId", "users"], ["policyException.byUserId", "users"]],
   invoices: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["seriesId", "invoiceSeries"], ["lines[].catalogItemId", "invoiceCatalogItems"], ["payments[].financialTransactionId", "financialTransactions"]],
   invoiceSeries: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["lines[].catalogItemId", "invoiceCatalogItems"]],
   memberSubscriptions: [["planId", "subscriptionPlans"], ["memberId", "members"]],
@@ -214,6 +216,17 @@ assert.deepEqual(
   server.expenseApprovalRules.map((row: any) => [row.order, row.minAmountCents, row.requiredApprovals]),
   staticDump.expenseApprovalRules.map((row: any) => [row.order, row.minAmountCents, row.requiredApprovals]),
 );
+// The claim policy story: a policy, one claim with an exception, one likely duplicate.
+const queueA = await exp.approvalQueuePortable(A.ctx, { societyId: A.societyId });
+const claimStory = (queue: any) => ({
+  policy: [queue.claimPolicy.receiptOverCents, queue.claimPolicy.noteOverCents, queue.claimPolicy.maxAgeDays, queue.claimPolicy.enforcement],
+  exceptions: queue.rows.filter((row: any) => row.policyException).map((row: any) => row.title).sort(),
+  duplicates: queue.rows.filter((row: any) => row.possibleDuplicate).map((row: any) => `${row.title} ~ ${row.possibleDuplicate.title}`).sort(),
+  flagged: queue.rows.filter((row: any) => row.policyIssues.length).map((row: any) => `${row.title}: ${row.policyIssues.map((issue: any) => issue.code).join("+")}`).sort(),
+});
+assert.deepEqual(claimStory(queueB), claimStory(queueA), "claim policy, exceptions and duplicate hints match");
+assert.equal(claimStory(queueB).exceptions.length, 1, "one claim carries a policy exception");
+assert.deepEqual(claimStory(queueB).duplicates, ["Bus rental for the youth workshop ~ Youth workshop bus rental"], "the repeated bus rental points at the approved one");
 
 /* ------------------------------------------------- invoicing */
 
