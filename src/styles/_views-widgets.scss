@@ -4,14 +4,57 @@
 .tabs {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  // One row at every width: tabs that outgrow the row scroll sideways
+  // (tablet detail pages used to wrap onto a second line). `Tabs` sets
+  // data-overflow so the clipped edge fades.
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: token('s-4');
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
   padding: token('s-1');
   border: 1px solid token('border');
   border-radius: token('r-md');
   background: token('bg-subtle');
   margin-bottom: token('s-4');
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  // Boxed strip (tablet / desktop): sticky shades in the box colour over the
+  // clipped edge, so the box's own border stays crisp.
+  &[data-overflow='start']::before,
+  &[data-overflow='both']::before,
+  &[data-overflow='end']::after,
+  &[data-overflow='both']::after {
+    content: "";
+    position: sticky;
+    z-index: 1;
+    flex: 0 0 32px;
+    align-self: stretch;
+    pointer-events: none;
+  }
+  &[data-overflow='start']::before,
+  &[data-overflow='both']::before {
+    left: 0;
+    margin-right: -38px;
+    background: linear-gradient(to left, transparent, token('bg-subtle'));
+  }
+  &[data-overflow='end']::after,
+  &[data-overflow='both']::after {
+    right: 0;
+    margin-left: -38px; // its width plus the row gap
+    background: linear-gradient(to right, transparent, token('bg-subtle'));
+  }
 }
 .tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  scroll-snap-align: start;
   padding: 7px 12px;
   font-size: token('fs-md');
   font-weight: 500;
@@ -63,9 +106,25 @@
     scroll-padding-inline: token('s-4');
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     /* Lets the last tab scroll clear of the fade. */
     padding-inline-end: 28px;
+  }
+  /* The phone strip is transparent: fade the clipped edge with a mask
+   * instead of the boxed strip's shades. Hand-built tab rows (no `Tabs`
+   * overflow tracking) keep a fixed end fade. */
+  .tabs[data-overflow]::before,
+  .tabs[data-overflow]::after {
+    content: none;
+  }
+  .tabs:not([data-overflow]),
+  .tabs[data-overflow='end'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .tabs[data-overflow='start'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+  }
+  .tabs[data-overflow='both'] {
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
   }
   .tabs::-webkit-scrollbar {
     display: none;
@@ -358,6 +417,17 @@
   border-color: token('border-strong');
   color: token('text-primary');
   box-shadow: token('shadow-sm');
+}
+/* Coarse pointers: the 26px segments grow to the touch floor (compact
+ * segments, used inside dense rows, stop just short of it). */
+@media (pointer: coarse) {
+  .segmented__btn {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  .segmented--compact .segmented__btn {
+    min-height: 36px;
+  }
 }
 
 /* Outcome picker: row of independent .btn-action buttons (matches the

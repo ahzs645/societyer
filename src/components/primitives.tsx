@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { List, Filter, FilterX, ArrowUpDown, MoreHorizontal, ChevronDown, Pin, PinOff, X } from "lucide-react";
 import { MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import type { SavedView } from "../lib/savedViews";
@@ -295,9 +295,30 @@ export function Tabs<T extends string>({
   tabRoles?: boolean;
   ariaLabel?: string;
 }) {
-  // Phones scroll the tab row horizontally; keep the active tab in view
-  // (without touching the page's vertical scroll position).
+  // The tab row never wraps: it scrolls sideways once the tabs outgrow it
+  // (tablet detail pages, phones). Keep the active tab in view without
+  // touching the page's vertical scroll position, and fade whichever edge
+  // has tabs scrolled out of sight.
   const listRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState<"none" | "start" | "end" | "both">("none");
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const measure = () => {
+      const max = list.scrollWidth - list.clientWidth;
+      const atStart = list.scrollLeft <= 1;
+      const atEnd = list.scrollLeft >= max - 1;
+      setOverflow(max <= 1 ? "none" : atStart ? "end" : atEnd ? "start" : "both");
+    };
+    measure();
+    list.addEventListener("scroll", measure, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(list);
+    return () => {
+      list.removeEventListener("scroll", measure);
+      observer?.disconnect();
+    };
+  }, [items.length]);
   useEffect(() => {
     const list = listRef.current;
     const active = list?.querySelector<HTMLElement>(".tab.is-active");
@@ -307,17 +328,41 @@ export function Tabs<T extends string>({
     const left = activeRect.left - listRect.left + list.scrollLeft;
     const right = left + activeRect.width;
     if (left < list.scrollLeft + 24 || right > list.scrollLeft + list.clientWidth - 24) {
-      list.scrollTo({ left: Math.max(0, left - 24), behavior: "smooth" });
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      list.scrollTo({ left: Math.max(0, left - 24), behavior: reduceMotion ? "auto" : "smooth" });
     }
   }, [value]);
+  // Arrow keys / Home / End move between tabs. With tab roles this is the
+  // ARIA tablist pattern: one tab stop (the selected tab) and arrows select.
+  const hasSelected = items.some((it) => it.id === value);
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    const buttons = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>(":scope > .tab") ?? []);
+    const current = buttons.indexOf(event.target as HTMLButtonElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0
+      : event.key === "End" ? buttons.length - 1
+      : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next]?.focus();
+    if (tabRoles && items[next]) onChange(items[next].id);
+  };
   return (
-    <div ref={listRef} className="tabs" role={tabRoles ? "tablist" : undefined} aria-label={ariaLabel}>
-      {items.map((it) => (
+    <div
+      ref={listRef}
+      className="tabs"
+      role={tabRoles ? "tablist" : undefined}
+      aria-label={ariaLabel}
+      data-overflow={overflow}
+      onKeyDown={onKeyDown}
+    >
+      {items.map((it, index) => (
         <button
           key={it.id}
           type="button"
           role={tabRoles ? "tab" : undefined}
           aria-selected={tabRoles ? value === it.id : undefined}
+          tabIndex={tabRoles && (hasSelected ? value !== it.id : index > 0) ? -1 : undefined}
           className={`tab${value === it.id ? " is-active" : ""}`}
           onClick={() => onChange(it.id)}
         >
@@ -355,6 +400,8 @@ export function Segmented<T extends string>({
       {items.map((it) => (
         <button
           key={it.id}
+          type="button"
+          aria-pressed={value === it.id}
           className={`segmented__btn${value === it.id ? " is-active" : ""}`}
           onClick={() => onChange(it.id)}
         >
