@@ -786,9 +786,10 @@ export async function setRulesChangeControlPortable(ctx: PortableMutationCtx, { 
     await logPolicyActivity(ctx, societyId, actor.name, "approval-change-proposed", "Proposed turning off second-approver review of approval-rule changes.");
     return { enabled: true, pending: true, changeId };
   }
-  const stamp = { rulesChangeControl: true, updatedByName: actor.name, updatedAtISO: nowISO, ...(actor.id ? { updatedByUserId: actor.id } : {}) };
-  if (settings) await ctx.db.patch(settings._id, stamp);
-  else await ctx.db.insert("expenseApprovalSettings", { societyId, approverAccess: DEFAULT_APPROVER_ACCESS, ...stamp, createdAtISO: nowISO });
+  // The "last changed by" stamp belongs to the approver-access choice; this
+  // setting is audited in the activity log instead.
+  if (settings) await ctx.db.patch(settings._id, { rulesChangeControl: true });
+  else await ctx.db.insert("expenseApprovalSettings", { societyId, approverAccess: DEFAULT_APPROVER_ACCESS, rulesChangeControl: true, createdAtISO: nowISO, updatedAtISO: nowISO });
   await logPolicyActivity(ctx, societyId, actor.name, "approval-change-control-on", "Changes to approval rules now need a second approver.");
   return { enabled: true, pending: false };
 }
@@ -824,7 +825,7 @@ export async function decidePolicyChangePortable(
     await applyApprovalRules(ctx, societyId, change.proposedRules ?? []);
   } else if (change.kind === "change_control_off") {
     const settings = await loadApprovalSettings(ctx, societyId);
-    if (settings) await ctx.db.patch(settings._id, { rulesChangeControl: false, updatedByName: actor.name, updatedAtISO: nowISO });
+    if (settings) await ctx.db.patch(settings._id, { rulesChangeControl: false });
   } else {
     throw new Error("Unknown change.");
   }

@@ -204,6 +204,7 @@
 }
 
 /* ---------------------------------------------------------- claim editor */
+.claim-editor .receipt-drop { margin: 0 0 token(s-4); }
 .claim-editor__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
