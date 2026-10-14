@@ -27,6 +27,9 @@ export function TaskListView({
   const groups = useMemo(() => groupTasks(records, groupBy), [records, groupBy]);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [composerFor, setComposerFor] = useState<string | null>(null);
+  // Roving tab stop: the rows are one stop in the Tab order (the last row
+  // used, else the first shown); ↑ / ↓ / Home / End move between rows.
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   if (records.length === 0 && !actions.canManage) {
@@ -35,15 +38,19 @@ export function TaskListView({
 
   const isCollapsed = (group: TaskGroup) => toggled[`${groupBy}:${group.key}`] ?? Boolean(group.collapsedByDefault);
   const toggle = (group: TaskGroup) => setToggled((current) => ({ ...current, [`${groupBy}:${group.key}`]: !isCollapsed(group) }));
+  const shownRowIds = groups.flatMap((group) => (isCollapsed(group) ? [] : group.tasks.map((task) => String(task._id))));
+  const tabStopRowId = activeRowId && shownRowIds.includes(activeRowId) ? activeRowId : shownRowIds[0] ?? null;
 
-  // Arrow keys move between rows; Enter opens the focused task.
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
     const rows = [...(listRef.current?.querySelectorAll<HTMLElement>(".task-row") ?? [])];
     const index = rows.indexOf(document.activeElement as HTMLElement);
     if (index === -1) return;
     event.preventDefault();
-    rows[Math.max(0, Math.min(rows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))]?.focus();
+    const next = event.key === "Home" ? 0
+      : event.key === "End" ? rows.length - 1
+      : Math.max(0, Math.min(rows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)));
+    rows[next]?.focus();
   };
 
   return (
@@ -88,7 +95,15 @@ export function TaskListView({
             )}
             {!collapsed && (
               <div className="task-group__rows">
-                {group.tasks.map((task) => <TaskRow key={task._id} task={task} actions={actions} />)}
+                {group.tasks.map((task) => (
+                  <TaskRow
+                    key={task._id}
+                    task={task}
+                    actions={actions}
+                    tabStop={String(task._id) === tabStopRowId}
+                    onActivate={() => setActiveRowId(String(task._id))}
+                  />
+                ))}
                 {canAdd && (
                   <TaskQuickAdd
                     open={composerFor === group.key}
@@ -115,7 +130,26 @@ function GroupIcon({ group }: { group: TaskGroup }) {
   return null;
 }
 
-function TaskRow({ task, actions }: { task: TaskRecord; actions: TaskViewActions }) {
+/** The row's own controls (selection, status, priority, due, actions), in order. */
+function rowControls(row: HTMLElement) {
+  return [...row.querySelectorAll<HTMLElement>("input, button")].filter(
+    (control) => !(control as HTMLButtonElement | HTMLInputElement).disabled,
+  );
+}
+
+function TaskRow({
+  task,
+  actions,
+  tabStop,
+  onActivate,
+}: {
+  task: TaskRecord;
+  actions: TaskViewActions;
+  /** Whether this row holds the list's single Tab stop. */
+  tabStop: boolean;
+  /** Focus landed on the row or one of its controls. */
+  onActivate: () => void;
+}) {
   const selected = useRecordTableState((s) => s.selectedRecordIds.has(String(task._id)));
   const anySelected = useRecordTableState((s) => s.selectedRecordIds.size > 0);
   const setSelected = useRecordTableState((s) => s.setSelectedRecordIds);
@@ -134,9 +168,28 @@ function TaskRow({ task, actions }: { task: TaskRecord; actions: TaskViewActions
     <div
       className={`task-row${selected ? " is-selected" : ""}${closed ? " is-closed" : ""}${anySelected ? " has-selection" : ""}`}
       role="button"
-      tabIndex={0}
+      tabIndex={tabStop ? 0 : -1}
       aria-label={task.title}
+      aria-keyshortcuts="ArrowRight ArrowLeft"
+      onFocus={onActivate}
       onClick={() => actions.open(task)}
+      // Capture: the inline menus stop their keydowns from bubbling.
+      onKeyDownCapture={(event) => {
+        const row = event.currentTarget;
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Escape") return;
+        if (event.target === row && event.key !== "ArrowRight") return;
+        const controls = rowControls(row);
+        const index = controls.indexOf(event.target as HTMLElement);
+        if (event.target !== row && index === -1) return;
+        // An open inline menu keeps focus on its trigger and owns the keys.
+        if ((event.target as HTMLElement).getAttribute("aria-expanded") === "true") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.key === "Escape") { row.focus(); return; }
+        const next = event.target === row ? 0 : index + (event.key === "ArrowRight" ? 1 : -1);
+        if (next < 0) row.focus();
+        else controls[Math.min(next, controls.length - 1)]?.focus();
+      }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
         if (event.key === "Enter") { event.preventDefault(); actions.open(task); }
@@ -145,10 +198,10 @@ function TaskRow({ task, actions }: { task: TaskRecord; actions: TaskViewActions
     >
       {actions.canManage && (
         <span className="task-row__select" onClick={(event) => event.stopPropagation()}>
-          <input type="checkbox" checked={selected} onChange={toggleSelected} aria-label={`Select ${task.title}`} />
+          <input type="checkbox" checked={selected} onChange={toggleSelected} aria-label={`Select ${task.title}`} tabIndex={-1} />
         </span>
       )}
-      <TaskStatusMenu task={task} actions={actions} />
+      <TaskStatusMenu task={task} actions={actions} tabIndex={-1} />
       <span className="task-row__title">
         <span className="task-row__title-text">{task.title}</span>
         <TaskChecklistBadge checklist={task.checklist} />
@@ -156,11 +209,11 @@ function TaskRow({ task, actions }: { task: TaskRecord; actions: TaskViewActions
       {/* One grid cell each on wide screens; a wrapped second line on phones. */}
       <span className="task-row__meta">
         <span className="task-row__link">{link && <TaskLinkChip link={link} />}</span>
-        <span className="task-row__priority"><TaskPriorityMenu task={task} actions={actions} /></span>
-        <span className="task-row__due"><TaskDueMenu task={task} actions={actions} emptyLabel={actions.canManage ? "Set date" : ""} /></span>
+        <span className="task-row__priority"><TaskPriorityMenu task={task} actions={actions} tabIndex={-1} /></span>
+        <span className="task-row__due"><TaskDueMenu task={task} actions={actions} emptyLabel={actions.canManage ? "Set date" : ""} tabIndex={-1} /></span>
       </span>
       <span className="task-row__owner"><TaskAvatar name={owner} /></span>
-      <span className="task-row__more"><TaskMoreMenu task={task} actions={actions} /></span>
+      <span className="task-row__more"><TaskMoreMenu task={task} actions={actions} tabIndex={-1} /></span>
     </div>
   );
 }

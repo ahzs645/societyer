@@ -55,12 +55,18 @@ export function statusMenuSections(task: TaskRecord, actions: TaskViewActions): 
   }];
 }
 
-export function TaskStatusMenu({ task, actions }: { task: TaskRecord; actions: TaskViewActions }) {
+/**
+ * `tabIndex` lets the task list take these triggers out of the Tab order: its
+ * rows are one roving stop and the row's controls are reached with ← / →.
+ */
+type TriggerFocus = { tabIndex?: number };
+
+export function TaskStatusMenu({ task, actions, tabIndex }: { task: TaskRecord; actions: TaskViewActions } & TriggerFocus) {
   return (
     <Isolated>
       <Menu
         trigger={trigger(
-          <button type="button" className="task-icon-button" aria-label={`Status: ${taskStatusLabel(task.status)}. Change status`} title={taskStatusLabel(task.status)} disabled={!actions.canManage}>
+          <button type="button" className="task-icon-button" aria-label={`Status: ${taskStatusLabel(task.status)}. Change status`} title={taskStatusLabel(task.status)} disabled={!actions.canManage} tabIndex={tabIndex}>
             <TaskStatusIcon status={task.status} />
           </button>,
         )}
@@ -70,12 +76,12 @@ export function TaskStatusMenu({ task, actions }: { task: TaskRecord; actions: T
   );
 }
 
-export function TaskPriorityMenu({ task, actions }: { task: TaskRecord; actions: TaskViewActions }) {
+export function TaskPriorityMenu({ task, actions, tabIndex }: { task: TaskRecord; actions: TaskViewActions } & TriggerFocus) {
   return (
     <Isolated>
       <Menu
         trigger={trigger(
-          <button type="button" className="task-icon-button" aria-label={`Priority: ${task.priority || "none"}. Change priority`} title={`${task.priority || "No"} priority`} disabled={!actions.canManage}>
+          <button type="button" className="task-icon-button" aria-label={`Priority: ${task.priority || "none"}. Change priority`} title={`${task.priority || "No"} priority`} disabled={!actions.canManage} tabIndex={tabIndex}>
             <TaskPriorityIcon priority={task.priority} />
           </button>,
         )}
@@ -95,7 +101,7 @@ export function TaskPriorityMenu({ task, actions }: { task: TaskRecord; actions:
   );
 }
 
-export function TaskDueMenu({ task, actions, emptyLabel = "" }: { task: TaskRecord; actions: TaskViewActions; emptyLabel?: string }) {
+export function TaskDueMenu({ task, actions, emptyLabel = "", tabIndex }: { task: TaskRecord; actions: TaskViewActions; emptyLabel?: string } & TriggerFocus) {
   const today = startOfToday();
   const nextMonday = addDays(today, ((8 - today.getDay()) % 7) || 7);
   const presets = [
@@ -109,7 +115,7 @@ export function TaskDueMenu({ task, actions, emptyLabel = "" }: { task: TaskReco
       <Menu
         align="right"
         trigger={trigger(
-          <button type="button" className="task-due-button" aria-label={task.dueDate ? `Due ${formatDueDate(task.dueDate)}. Change due date` : "Set a due date"} disabled={!actions.canManage}>
+          <button type="button" className="task-due-button" aria-label={task.dueDate ? `Due ${formatDueDate(task.dueDate)}. Change due date` : "Set a due date"} disabled={!actions.canManage} tabIndex={tabIndex}>
             <TaskDue dueDate={task.dueDate} status={task.status} emptyLabel={emptyLabel} />
           </button>,
         )}
@@ -137,14 +143,14 @@ export function TaskDueMenu({ task, actions, emptyLabel = "" }: { task: TaskReco
   );
 }
 
-export function TaskMoreMenu({ task, actions }: { task: TaskRecord; actions: TaskViewActions }) {
+export function TaskMoreMenu({ task, actions, tabIndex }: { task: TaskRecord; actions: TaskViewActions } & TriggerFocus) {
   const closed = isClosedStatus(task.status);
   return (
     <Isolated>
       <Menu
         align="right"
         trigger={trigger(
-          <button type="button" className="task-icon-button task-icon-button--more" aria-label={`Actions for task ${task.title}`}>
+          <button type="button" className="task-icon-button task-icon-button--more" aria-label={`Actions for task ${task.title}`} tabIndex={tabIndex}>
             <MoreHorizontal size={14} />
           </button>,
         )}
