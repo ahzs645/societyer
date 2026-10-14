@@ -246,7 +246,19 @@ function usePhoneHeaderActionsFit(
       const width = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       if (!force && width === lastWidth) return;
       lastWidth = width;
-      const fits = () => actions.scrollWidth + 8 + PHONE_HEADER_MIN_TITLE <= width;
+      // A long title needs more than the minimum: keep it to about two
+      // lines beside the actions, or the actions wrap under it instead.
+      const titleText = header.querySelector<HTMLElement>(".page__title-text");
+      let titleRoom = PHONE_HEADER_MIN_TITLE;
+      if (titleText) {
+        const previous = titleText.style.whiteSpace;
+        titleText.style.whiteSpace = "nowrap";
+        const natural = titleText.getBoundingClientRect().width;
+        titleText.style.whiteSpace = previous;
+        const icon = header.querySelector<HTMLElement>(".page__icon")?.getBoundingClientRect().width ?? 0;
+        titleRoom = Math.max(PHONE_HEADER_MIN_TITLE, Math.min(natural, natural / 2 + 24) + icon + 8);
+      }
+      const fits = () => actions.scrollWidth + 8 + titleRoom <= width;
       header.dataset.actionsFit = "inline";
       if (fits()) return;
       const iconActions = actions.querySelectorAll(":is(.btn, .btn-action):has(> svg)").length;
@@ -259,9 +271,9 @@ function usePhoneHeaderActionsFit(
     measure(true);
     const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
     resize?.observe(header);
-    // Buttons appear/disappear or relabel as data loads.
+    // Buttons appear/disappear or relabel, and record titles arrive, as data loads.
     const mutations = new MutationObserver(() => measure(true));
-    mutations.observe(actions, { childList: true, subtree: true, characterData: true });
+    mutations.observe(header, { childList: true, subtree: true, characterData: true });
     const onMedia = () => measure(true);
     media.addEventListener("change", onMedia);
     return () => {

@@ -49,6 +49,25 @@
     height: 18px;
   }
 
+  /* Form controls reach the same 40px floor as buttons (selects were 24-30px,
+   * text fields 32px). min-height wins over the fixed desktop heights. */
+  .select-trigger,
+  .select-trigger--sm,
+  input.input:not([type="checkbox"]):not([type="radio"]),
+  select.input {
+    min-height: 40px;
+  }
+
+  /* Labelled checkboxes (provinces, settings lists): grow the row, not the
+   * box, to the 40px touch floor. Rows with a hint are already two lines. */
+  .check-row:not(:has(.check-row__hint)) {
+    min-height: 40px;
+    align-items: center;
+  }
+  .check-row:not(:has(.check-row__hint)) .check-box {
+    margin-top: 0;
+  }
+
   /* Custom table checkbox: keep the 16px box, grow the button around it. */
   .check-bare {
     min-width: 32px;
