@@ -127,7 +127,7 @@ export function PortfolioPage() {
 
       {allEntities.length > 0 && (
         <div className="portfolio-batch" role="search">
-          <input className="input" type="search" aria-label="Search entities" placeholder="Search by name, former name or registry number"
+          <input className="input portfolio-batch__search" type="search" aria-label="Search entities" placeholder="Search by name, former name or registry number"
             value={search} onChange={(e) => setSearch(e.target.value)} />
           {search.trim() && <span className="muted">{entities.length} of {allEntities.length}</span>}
         </div>
@@ -192,7 +192,7 @@ export function PortfolioPage() {
                     <td><input type="checkbox" aria-label={`Select ${e.name}`} checked={!!selected[e._id]} onChange={() => toggle(e._id)} /></td>
                     <td>
                       <button type="button" className="portfolio-table__name" onClick={() => open(e._id)}>{e.name}</button>
-                      {current && current._id === e._id && <span className="portfolio-current-tag" style={{ color: "var(--accent, green)" }}> · current</span>}
+                      {current && current._id === e._id && <span className="portfolio-current-tag"> · current</span>}
                       <div className="muted">
                         <span className="portfolio-table__narrow">{KIND_LABEL[e.kind] ?? e.kind} · </span>
                         {e.incorporationNumber || (e.status ?? "")}

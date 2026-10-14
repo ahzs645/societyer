@@ -241,8 +241,8 @@ export function DirectorsPage() {
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>
           {minimumMissing && <Flag level="err" citationId={directorProfile.citationIds[0]}>Fewer than {directorProfile.minimumActiveDirectors} active legal directors are recorded.</Flag>}
           {residencyMissing && <Flag level="err" citationId="BC-SOC-DIRECTORS-BC-RESIDENT">Record at least one director ordinarily resident in BC.</Flag>}
-          {canadianMissing && <Flag level={canadianUnknown ? "warn" : "err"} citationId={directorProfile.citationIds[0]}>{canadianResidents} confirmed resident Canadians; at least {canadianRequired} required for this board. {canadianUnknown} assessment(s) outstanding. Check regulated-sector exceptions.</Flag>}
-          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length} director(s) lack linked consent evidence. {directorProfile.consentExplanation}</Flag>}
+          {canadianMissing && <Flag level={canadianUnknown ? "warn" : "err"} citationId={directorProfile.citationIds[0]}>{canadianResidents} confirmed resident Canadians; at least {canadianRequired} required for this board. {canadianUnknown} {canadianUnknown === 1 ? "assessment" : "assessments"} outstanding. Check regulated-sector exceptions.</Flag>}
+          {missingConsent.length > 0 && <Flag level="warn">{missingConsent.length === 1 ? "1 director lacks" : `${missingConsent.length} directors lack`} linked consent evidence. {directorProfile.consentExplanation}</Flag>}
         </div>
       )}
 

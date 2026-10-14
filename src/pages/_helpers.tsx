@@ -213,6 +213,28 @@ export function PageHeader({
 
 /** Room the title keeps beside inline actions (icon tile + a short name). */
 const PHONE_HEADER_MIN_TITLE = 140;
+/**
+ * Width the title row needs so its longest word never breaks mid-word
+ * ("Communica-tions"): icon tile + gap + longest word (+ the ⓘ beside it).
+ */
+function titleWordRoom(header: HTMLElement): number {
+  const text = header.querySelector<HTMLElement>(".page__title-text");
+  if (!text) return 0;
+  const words = (text.textContent ?? "").split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 0;
+  const canvas = (titleWordRoom as { canvas?: HTMLCanvasElement }).canvas ??= document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) return 0;
+  const style = getComputedStyle(text);
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const longest = Math.max(...words.map((word) => context.measureText(word).width));
+  const title = header.querySelector<HTMLElement>(".page__title");
+  const icon = header.querySelector<HTMLElement>(".page__icon");
+  const gap = title ? parseFloat(getComputedStyle(title).columnGap) || 0 : 0;
+  const info = header.querySelector<HTMLElement>(".page__title-row > .info-popover__trigger, .page__title-row > * > .info-popover__trigger");
+  return Math.ceil(longest + (icon ? icon.offsetWidth + gap : 0) + (info ? info.offsetWidth + 6 : 0)) + 2;
+}
+
 /** Past this many, bare icons stop being recognisable — keep labels and wrap. */
 const PHONE_HEADER_MAX_ICON_ACTIONS = 3;
 
@@ -246,7 +268,8 @@ function usePhoneHeaderActionsFit(
       const width = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       if (!force && width === lastWidth) return;
       lastWidth = width;
-      const fits = () => actions.scrollWidth + 8 + PHONE_HEADER_MIN_TITLE <= width;
+      const minTitle = Math.max(PHONE_HEADER_MIN_TITLE, titleWordRoom(header));
+      const fits = () => actions.scrollWidth + 8 + minTitle <= width;
       header.dataset.actionsFit = "inline";
       if (fits()) return;
       const iconActions = actions.querySelectorAll(":is(.btn, .btn-action):has(> svg)").length;

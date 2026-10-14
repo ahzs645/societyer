@@ -15,7 +15,7 @@ import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { ArrowLeft, ListTodo, Plus, Target, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
-import { effectiveGoalStatus, goalTone, labelStatus } from "./Goals";
+import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
 import { taskStatusLabel } from "./Tasks";
 
 export function GoalDetailPage() {

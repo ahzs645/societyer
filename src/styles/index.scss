@@ -115,6 +115,8 @@
 @use "sortable-table";
 // Governance, meetings and records QA fixes.
 @use "governance-qa";
+// People & Work pages: release QA fixes (dashboard, people, tasks, goals).
+@use "people-work";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

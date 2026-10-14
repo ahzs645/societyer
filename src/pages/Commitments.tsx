@@ -601,16 +601,16 @@ function OverdueCommitmentAlert({
   canCreateTask: boolean;
 }) {
   return (
-    <div className="inspector-note inspector-note--danger" style={{ alignItems: "center", marginBottom: 16 }}>
+    <div className="inspector-note inspector-note--danger commitments-overdue">
       <div className="inspector-note__icon"><AlertTriangle size={14} /></div>
-      <div className="inspector-note__content" style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div className="inspector-note__content commitments-overdue__text">
         Most overdue:{" "}
         <button type="button" className="link-button" onClick={onOpen} disabled={!canWrite} style={{ fontWeight: 600 }}>
           {commitment.title}
         </button>
         {commitment.nextDueDate && <span className="muted"> · due {formatDate(commitment.nextDueDate)}</span>}
       </div>
-      <div className="row" style={{ gap: 6, flex: "none" }}>
+      <div className="row commitments-overdue__actions">
         <button className="btn btn--sm" onClick={onRecord} disabled={!canWrite}>
           <CheckCircle2 size={12} /> Record evidence
         </button>

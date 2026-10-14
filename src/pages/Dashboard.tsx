@@ -8,7 +8,8 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState, Flag } from "../components/ui";
-import { formatDate, formatDateTime, isPastDue, relative } from "../lib/format";
+import { formatDate, formatDateTime, formatShortDate, isPastDue, relative } from "../lib/format";
+import { organizationTodayISO } from "../lib/dateRanges";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useToast } from "../components/Toast";
@@ -46,6 +47,7 @@ import { DashboardFinanceSnapshotLazy } from "../features/financials/insights/la
 import { StatTile } from "../components/StatTile";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { Tooltip } from "../components/Tooltip";
+import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
 
 export function Dashboard() {
   const society = useSociety();
@@ -86,6 +88,7 @@ export function Dashboard() {
   if (!data) return <PageLoading variant="cards" />;
 
   const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks } = data;
+  const todayISO = organizationTodayISO(society);
   const canRead = (permission: string) => data.readAccess?.includes(permission) ?? can(permission);
   const actionableComplianceFlags = complianceFlags.filter((flag: any) => flag.level !== "ok");
   const completeComplianceAccess = ["directors:read", "members:read", "documents:read"].every(canRead);
@@ -569,7 +572,7 @@ export function Dashboard() {
                 </td>
               </tr>
             )}
-            {overdueFilings.slice(0, 4).map((f: any) => renderFilingRow(f))}
+            {overdueFilings.slice(0, 4).map((f: any) => renderFilingRow(f, todayISO))}
             {upcomingFilings.length > 0 && (
               <tr className="table__group-row">
                 <td colSpan={4}>
@@ -577,7 +580,7 @@ export function Dashboard() {
                 </td>
               </tr>
             )}
-            {upcomingFilings.slice(0, overdueFilings.length > 0 ? 4 : 6).map((f: any) => renderFilingRow(f))}
+            {upcomingFilings.slice(0, overdueFilings.length > 0 ? 4 : 6).map((f: any) => renderFilingRow(f, todayISO))}
             {counts.overdueFilings + upcomingFilings.length === 0 && (
               <tr>
                 <td colSpan={4} className="table__empty">
@@ -625,15 +628,15 @@ export function Dashboard() {
             <Link key={g._id} to={`/app/goals/${g._id}`} className="col" style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6, gap: 6 }}>
               <div className="row">
                 <strong>{g.title}</strong>
-                <Badge tone={g.status === "OnTrack" ? "success" : g.status === "AtRisk" ? "warn" : g.status === "OffTrack" ? "danger" : "neutral"}>
-                  {g.status}
+                <Badge tone={goalTone(effectiveGoalStatus(g))}>
+                  {labelStatus(effectiveGoalStatus(g))}
                 </Badge>
               </div>
               <div className="row" style={{ gap: 8 }}>
-                <div className="progress" style={{ flex: 1 }}>
-                  <div className="progress__fill" style={{ width: `${g.progressPercent}%`, background: g.status === "AtRisk" || g.status === "OffTrack" ? "var(--warn)" : undefined }} />
+                <div className={`progress${effectiveGoalStatus(g) === "AtRisk" || effectiveGoalStatus(g) === "OffTrack" ? " progress--warn" : ""}`} style={{ flex: 1 }}>
+                  <div className="progress__fill" style={{ width: `${g.progressPercent}%` }} />
                 </div>
-                <span className="mono" style={{ minWidth: 40, textAlign: "right" }}>{g.progressPercent}%</span>
+                <span className="num" style={{ minWidth: 40 }}>{g.progressPercent}%</span>
               </div>
             </Link>
           ))}
@@ -668,8 +671,8 @@ export function Dashboard() {
                 </td>
                 <td>{t.title}</td>
                 <td className="table__cell--muted">{t.assignee ?? "—"}</td>
-                <td className="table__cell--mono table__cell--muted">
-                  {t.dueDate ? formatDate(t.dueDate) : ""}
+                <td className="dashboard-table__date table__cell--muted" title={t.dueDate ? formatDate(t.dueDate, "EEEE, MMMM d, yyyy") : undefined}>
+                  {t.dueDate ? formatShortDate(t.dueDate, todayISO) : ""}
                 </td>
               </tr>
             ))}
@@ -801,13 +804,13 @@ function relativeShort(iso: string) {
   }
 }
 
-function renderFilingRow(f: any) {
+function renderFilingRow(f: any, todayISO: string) {
   // Each row opens that filing (G-24: rows were not clickable).
   return (
     <tr key={f._id}>
       <td><Link to={`/app/filings?filing=${encodeURIComponent(String(f._id))}`}>{kindLabel(f.kind)}</Link></td>
       <td className="table__cell--muted">{f.periodLabel ?? "—"}</td>
-      <td className="table__cell--mono">{formatDate(f.dueDate)}</td>
+      <td className="dashboard-table__date" title={formatDate(f.dueDate, "EEEE, MMMM d, yyyy")}>{formatShortDate(f.dueDate, todayISO)}</td>
       <td>{renderFilingStatus(f)}</td>
     </tr>
   );

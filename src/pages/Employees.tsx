@@ -13,6 +13,7 @@ import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Plus, Users, Trash2 } from "lucide-react";
 import { dollarInputToCents, formatDate, money, initials } from "../lib/format";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
+import { Money } from "../components/Money";
 import { useMemo } from "react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -134,9 +135,14 @@ export function EmployeesPage() {
               if (field.name === "name") {
                 return <RecordChip tone="blue" avatar={initials(record.firstName, record.lastName)} label={record.name} />;
               }
-              if (field.name === "startDate") return <span className="mono">{formatDate(record.startDate)}</span>;
+              if (field.name === "startDate") return <span className="num">{formatDate(record.startDate)}</span>;
               if (field.name === "status") {
-                return record.endDate ? <span className="mono">{formatDate(record.endDate)}</span> : <Badge tone="success">Active</Badge>;
+                return record.endDate ? <span className="num">{formatDate(record.endDate)}</span> : <Badge tone="success">Active</Badge>;
+              }
+              if (field.name === "compensation" && (record.annualSalaryCents || record.hourlyWageCents)) {
+                return record.annualSalaryCents
+                  ? <Money cents={record.annualSalaryCents} trimWholeCents />
+                  : <span><Money cents={record.hourlyWageCents} />/hr</span>;
               }
               if (field.name === "employmentType") {
                 return <Badge>{EMPLOYMENT_TYPE_LABELS[record.employmentType] ?? record.employmentType}</Badge>;

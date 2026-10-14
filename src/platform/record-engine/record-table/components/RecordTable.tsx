@@ -58,6 +58,15 @@ const VirtuosoTableHead = forwardRef<HTMLTableSectionElement, React.HTMLAttribut
   },
 );
 
+// Virtuoso gives its sticky footer an inline `z-index: 1`, below the sticky
+// selection/identifier cells (z-index 3–5) of rows scrolling under it, so row
+// checkboxes peeked through the "N records" footer. Lift it above them.
+const VirtuosoTableFoot = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  function VirtuosoTableFoot(props, ref) {
+    return <tfoot ref={ref} {...props} style={{ ...props.style, zIndex: 6 }} />;
+  },
+);
+
 const VirtuosoTableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   function VirtuosoTableBody(props, ref) {
     return <tbody ref={ref} {...props} className="record-table__tbody" />;
@@ -766,6 +775,7 @@ export function RecordTable({
           TableHead: VirtuosoTableHead,
           TableBody: VirtuosoTableBody,
           TableRow: VirtuosoTableRow,
+          TableFoot: VirtuosoTableFoot,
         }}
         fixedHeaderContent={() => (
           <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />

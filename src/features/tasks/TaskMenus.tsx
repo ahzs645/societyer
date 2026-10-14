@@ -8,6 +8,7 @@ import { ArrowUpRight, Check, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "
 import { Menu, type MenuSection } from "../../components/Menu";
 import { isHistoricalSourceAction, taskStatusLabel } from "../../../shared/taskStatus";
 import { TaskDue, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
+import { formatDueDate } from "../../lib/format";
 import { TASK_PRIORITY_ORDER, addDays, isClosedStatus, isoDay, startOfToday, type TaskRecord } from "./taskModel";
 
 export type TaskViewActions = {
@@ -108,7 +109,7 @@ export function TaskDueMenu({ task, actions, emptyLabel = "" }: { task: TaskReco
       <Menu
         align="right"
         trigger={trigger(
-          <button type="button" className="task-due-button" aria-label={task.dueDate ? `Due ${task.dueDate}. Change due date` : "Set a due date"} disabled={!actions.canManage}>
+          <button type="button" className="task-due-button" aria-label={task.dueDate ? `Due ${formatDueDate(task.dueDate)}. Change due date` : "Set a due date"} disabled={!actions.canManage}>
             <TaskDue dueDate={task.dueDate} status={task.status} emptyLabel={emptyLabel} />
           </button>,
         )}
