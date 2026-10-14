@@ -296,6 +296,35 @@
   --row-h-compact: 36px;
   --row-h-comfortable: 44px;
 
+
+  /* ---------------- Data-viz (charts) — light ----------------
+     Categorical slots validated with the six-checks palette validator
+     against the card surface (slate-1). Assign in order, never cycle.
+     Text never wears a series colour: labels use --dv-label. */
+  --dv-cat-1: #2a78d6;   /* blue */
+  --dv-cat-2: #eb6834;   /* orange */
+  --dv-cat-3: #1baf7a;   /* aqua */
+  --dv-cat-4: #eda100;   /* yellow */
+  --dv-cat-5: #e87ba4;   /* magenta */
+  --dv-cat-6: #008300;   /* green */
+  --dv-cat-7: #6250d6;   /* violet */
+  --dv-cat-8: #e34948;   /* red */
+  --dv-in:  var(--dv-cat-1);
+  --dv-out: var(--dv-cat-2);
+  --dv-net: var(--slate-12);
+  --dv-previous: var(--slate-9);
+  --dv-average: var(--slate-10);
+  --dv-spark: var(--slate-9);
+  --dv-grid: var(--slate-4);
+  --dv-axis: var(--slate-7);
+  --dv-label: var(--slate-11);
+  --dv-crosshair: var(--slate-8);
+  --dv-surface: var(--bg-panel);
+  --dv-hover-band: var(--gray-a-2);
+  --dv-track: #cde2fb;
+  --dv-selection: rgba(42, 120, 214, 0.1);
+  --dv-selection-edge: var(--dv-cat-1);
+  /* ---------------- /Data-viz ---------------- */
 }
 
 .dark {
@@ -422,4 +451,27 @@
   --elevation-2: 0 0 0 1px var(--border-color-strong), 0 8px 16px rgba(0, 0, 0, 0.32), 0 14px 24px rgba(0, 0, 0, 0.2);
   --elevation-3: 0 0 0 1px var(--border-color-strong), 0 12px 24px rgba(0, 0, 0, 0.4), 0 24px 48px rgba(0, 0, 0, 0.32);
   --focus-ring-color: var(--blue-9);
+
+  /* ---------------- Data-viz (charts) — dark ----------------
+     Same hues, stepped for the dark band and validated against slate-1 dark. */
+  --dv-cat-1: #3987e5;
+  --dv-cat-2: #d95926;
+  --dv-cat-3: #199e70;
+  --dv-cat-4: #c98500;
+  --dv-cat-5: #d55181;
+  --dv-cat-6: #008300;
+  --dv-cat-7: #9085e9;
+  --dv-cat-8: #e66767;
+  --dv-net: var(--slate-12);
+  --dv-previous: var(--slate-9);
+  --dv-average: var(--slate-10);
+  --dv-spark: var(--slate-10);
+  --dv-grid: var(--slate-4);
+  --dv-axis: var(--slate-7);
+  --dv-label: var(--slate-11);
+  --dv-crosshair: var(--slate-8);
+  --dv-hover-band: var(--gray-a-3);
+  --dv-track: #0d366b;
+  --dv-selection: rgba(57, 135, 229, 0.18);
+  /* ---------------- /Data-viz ---------------- */
 }

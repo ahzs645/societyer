@@ -116,6 +116,9 @@ $known-tokens: (
   "modal-w-lg" "modal-w-xl" "popover-w-sm" "popover-w-md" "popover-h-md" "bp-mobile-sidebar"
   "bp-mobile" "bp-mobile-card" "bp-bottom-sheet"
   "bg-hover-alpha" "bg-active-alpha" "bg-selected-alpha" "border-alpha" "border-alpha-strong" "bg-frosted" "money-neutral" "money-in" "money-out" "money-pending" "variance-favourable" "variance-unfavourable" "variance-favourable-soft" "variance-unfavourable-soft" "r-card" "elevation-1" "elevation-2" "elevation-3" "focus-ring-color" "focus-ring-width" "focus-ring-offset" "motion-fade-fast" "motion-fade" "motion-fade-slow" "motion-move-fast" "motion-move" "motion-move-slow" "motion-panel" "ease-fade" "ease-move" "ease-appear" "ease-disappear" "ease-panel" "opacity-disabled" "row-h-compact" "row-h-comfortable"
+  // --- Data-viz tokens (charts) ---
+  "dv-cat-1" "dv-cat-2" "dv-cat-3" "dv-cat-4" "dv-cat-5" "dv-cat-6" "dv-cat-7" "dv-cat-8" "dv-in" "dv-out" "dv-net" "dv-previous" "dv-average" "dv-spark" "dv-grid" "dv-axis" "dv-label" "dv-crosshair" "dv-surface" "dv-hover-band" "dv-track" "dv-selection" "dv-selection-edge"
+  // --- /Data-viz tokens ---
 );
 
 @function token($name, $fallback: null) {
