@@ -123,6 +123,7 @@
 
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
+@use "panels-hovercards"; // hover cards, stacked record panels, minimise dock
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

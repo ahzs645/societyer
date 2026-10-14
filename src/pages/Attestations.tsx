@@ -167,6 +167,7 @@ export function AttestationsPage() {
                     tone="blue"
                     avatar={initials(record.director.firstName, record.director.lastName)}
                     label={String(value ?? "")}
+                    preview={record.director?._id ? { kind: "director", id: String(record.director._id), name: String(value ?? "") } : null}
                   />
                 );
               }

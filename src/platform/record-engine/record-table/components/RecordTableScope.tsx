@@ -17,10 +17,17 @@ import {
 } from "../contexts/RecordTableContext";
 import type { HydratedView, ObjectMetadata } from "../../types";
 import { RecordTableSidePanel } from "./RecordTableSidePanel";
+import { useRecordPanelStack } from "./RecordTableSidePanelStack";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
+import { cellPreviewRef, decodeEntityStack, encodeEntityStack } from "@/components/HoverCard/entityRefs";
 
 /** Query parameter that opens a record's side panel, e.g. `/app/tasks?record=<id>`. */
 export const RECORD_DEEP_LINK_PARAM = "record";
+/**
+ * Query parameter for related records stacked on top of the panel, up to
+ * the visible card, e.g. `?record=<id>&stack=m.<memberId>~doc.<documentId>`.
+ */
+export const RECORD_STACK_PARAM = "stack";
 
 /**
  * Sets up both the per-instance zustand store *and* the metadata context
@@ -40,6 +47,7 @@ export function RecordTableScope({
   onCreate,
   onReorder,
   recordPreview = false,
+  cellPreviews = true,
   children,
 }: {
   tableId: string;
@@ -55,6 +63,11 @@ export function RecordTableScope({
    * record page to open (no `onRecordClick`); the sidebar then omits Open.
    */
   recordPreview?: boolean;
+  /**
+   * Hover cards on the cells the object opts into (its name cell, payees…).
+   * Pass false for a table where the preview would repeat the row.
+   */
+  cellPreviews?: boolean;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -89,6 +102,15 @@ export function RecordTableScope({
     record: any;
   } | null>(null);
 
+  const activeSidePanelRecord = sidePanelRecord?.scopeIdentity === scopeIdentity
+    ? sidePanelRecord
+    : null;
+  const panelRecordId = activeSidePanelRecord?.recordId ?? null;
+  // Related records stacked on top of the open record, plus minimise and
+  // full screen. A different table record starts a fresh stack.
+  const panelStack = useRecordPanelStack(panelRecordId);
+  const { restore: restorePanelStack, reset: resetPanelStack, setMinimised: setPanelMinimised } = panelStack;
+
   const handledRequestRef = useRef<string | null>(null);
   useEffect(() => {
     setSidePanelRecord(null);
@@ -97,25 +119,48 @@ export function RecordTableScope({
   }, [scopeIdentity]);
 
   // Deep link: `?record=<id>` (used by global search hits) opens that record's
-  // side panel once it is among this table's records. Closing the panel drops
-  // the parameter so a reload or Back does not reopen it unexpectedly.
+  // side panel once it is among this table's records, and `&stack=` reopens
+  // the related cards stacked on it. While the panel is open the URL follows
+  // the visible card, so it can be copied and shared. Closing the panel drops
+  // both parameters so a reload or Back does not reopen it unexpectedly.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedRecordId = searchParams.get(RECORD_DEEP_LINK_PARAM);
+  const requestedStack = searchParams.get(RECORD_STACK_PARAM);
   useEffect(() => {
     if (!requestedRecordId || handledRequestRef.current === `${scopeIdentity}:${requestedRecordId}`) return;
     const match = records.find((record) => String(record?._id) === requestedRecordId);
     if (!match) return;
     handledRequestRef.current = `${scopeIdentity}:${requestedRecordId}`;
     setSidePanelRecord({ scopeIdentity, recordId: requestedRecordId, record: match });
-  }, [records, requestedRecordId, scopeIdentity]);
+    const stacked = decodeEntityStack(requestedStack);
+    if (stacked.length) restorePanelStack(requestedRecordId, stacked);
+  }, [records, requestedRecordId, requestedStack, scopeIdentity, restorePanelStack]);
+
+  const visibleStackParam = panelRecordId
+    ? encodeEntityStack(panelStack.stack.slice(0, panelStack.active))
+    : "";
+  useEffect(() => {
+    if (!panelRecordId) return;
+    const currentStack = searchParams.get(RECORD_STACK_PARAM) ?? "";
+    if (searchParams.get(RECORD_DEEP_LINK_PARAM) === panelRecordId && currentStack === visibleStackParam) return;
+    const next = new URLSearchParams(searchParams);
+    next.set(RECORD_DEEP_LINK_PARAM, panelRecordId);
+    if (visibleStackParam) next.set(RECORD_STACK_PARAM, visibleStackParam);
+    else next.delete(RECORD_STACK_PARAM);
+    handledRequestRef.current = `${scopeIdentity}:${panelRecordId}`;
+    setSearchParams(next, { replace: true });
+  }, [panelRecordId, visibleStackParam, searchParams, setSearchParams, scopeIdentity]);
+
   const closeSidePanel = useCallback(() => {
     setSidePanelRecord(null);
-    if (searchParams.has(RECORD_DEEP_LINK_PARAM)) {
+    resetPanelStack();
+    if (searchParams.has(RECORD_DEEP_LINK_PARAM) || searchParams.has(RECORD_STACK_PARAM)) {
       const next = new URLSearchParams(searchParams);
       next.delete(RECORD_DEEP_LINK_PARAM);
+      next.delete(RECORD_STACK_PARAM);
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, resetPanelStack]);
 
   // Relative date filters ("Last 30 days", "Fiscal year to date") and export
   // file names use the organisation's calendar, not UTC.
@@ -142,12 +187,22 @@ export function RecordTableScope({
           : options.openRecordIn;
       if (openRecordIn === "drawer") {
         setSidePanelRecord({ scopeIdentity, recordId, record });
+        // Clicking the minimised record's row brings its panel back.
+        if (recordId === panelRecordId) setPanelMinimised(false);
         return;
       }
       setSidePanelRecord(null);
+      resetPanelStack();
       onRecordClick?.(recordId, record, { ...options, openRecordIn });
     },
-    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity],
+    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack],
+  );
+
+  const objectNameSingular = objectMetadata.nameSingular;
+  const cellPreview = useCallback<NonNullable<RecordTableContextValue["cellPreview"]>>(
+    (fieldName, isLabelIdentifier, record) =>
+      cellPreviewRef(objectNameSingular, fieldName, isLabelIdentifier, record),
+    [objectNameSingular],
   );
 
   const contextValue = useMemo<RecordTableContextValue>(
@@ -158,13 +213,11 @@ export function RecordTableScope({
       onUpdate,
       onCreate,
       onReorder,
+      cellPreview: cellPreviews ? cellPreview : undefined,
     }),
-    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder],
+    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder, cellPreviews, cellPreview],
   );
 
-  const activeSidePanelRecord = sidePanelRecord?.scopeIdentity === scopeIdentity
-    ? sidePanelRecord
-    : null;
   const currentSidePanelRecord = activeSidePanelRecord
     ? records.find((record) => String(record._id) === activeSidePanelRecord.recordId) ??
       activeSidePanelRecord.record
@@ -176,15 +229,18 @@ export function RecordTableScope({
         {children}
         <RecordTableSidePanelBridge
           recordId={activeSidePanelRecord && currentSidePanelRecord ? activeSidePanelRecord.recordId : null}
+          // ↑/↓ step through table records only while the table record's own
+          // card is showing; a stacked related card keeps its place.
+          navigable={!panelStack.minimised && panelStack.active === 0}
           onNavigate={(record) => setSidePanelRecord({ scopeIdentity, recordId: String(record._id), record })}
         />
         {activeSidePanelRecord && currentSidePanelRecord && (
           <RecordTableSidePanel
-            open
             record={currentSidePanelRecord}
             objectMetadata={objectMetadata}
             onClose={closeSidePanel}
             onUpdate={onUpdate}
+            stack={panelStack}
             onOpenRecord={onRecordClick ? () =>
               handleRecordClick(activeSidePanelRecord.recordId, currentSidePanelRecord, {
                 source: "action",
@@ -210,9 +266,11 @@ function isTypingElement(target: EventTarget | null) {
  */
 function RecordTableSidePanelBridge({
   recordId,
+  navigable = true,
   onNavigate,
 }: {
   recordId: string | null;
+  navigable?: boolean;
   onNavigate: (record: any) => void;
 }) {
   const handle = useRecordTableStoreHandle();
@@ -227,7 +285,7 @@ function RecordTableSidePanelBridge({
   useEffect(() => () => handle.get().setPanelRecordId(null), [handle]);
 
   useEffect(() => {
-    if (!recordId) return;
+    if (!recordId || !navigable) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
       const key = event.key.toLowerCase();
@@ -253,7 +311,7 @@ function RecordTableSidePanelBridge({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handle, recordId, records]);
+  }, [handle, recordId, records, navigable]);
 
   // Arrowing through the grid while the panel is open shows each record.
   const lastFocusedRow = useRef(focusedRow);
