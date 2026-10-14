@@ -262,7 +262,7 @@
 }
 .action-item__text { flex: 1; }
 .action-item__text.done { text-decoration: line-through; color: token('text-tertiary'); }
-.action-item__due { font-size: token('fs-sm'); color: token('text-tertiary'); font-family: token('font-mono'); }
+.action-item__due { font-size: token('fs-sm'); color: token('text-tertiary'); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Workflow canvas */
 

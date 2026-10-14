@@ -1,13 +1,13 @@
 import { minutesEvidenceOptions } from "../lib/minutesEvidence";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { useRecordQuery } from "../../../hooks/useRecordQuery";
 import { RecordNotFound } from "../../../components/RecordNotFound";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { ArrowLeft, FileDown, FileText, Printer } from "lucide-react";
+import { FileDown, FileText, Printer } from "lucide-react";
 import { Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
@@ -25,6 +25,7 @@ import { motionPersonDisplayName } from "../../../components/MotionEditor";
 import { agendaEntriesFromRecord, formalMinutesExportBlockers, nextMeetingsForExport } from "../lib/meetingDetailHelpers";
 import { useToast } from "../../../components/Toast";
 import { readStoredAgendaNumberingMode } from "../lib/agendaNumbering";
+import { meetingChildCrumbs } from "../lib/meetingCrumbs";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
   MINUTES_EXPORT_PREF_PREFIX,
@@ -268,12 +269,10 @@ export function MeetingMinutesPreviewPage() {
 
   return (
     <div className="page page--wide meeting-preview-page">
-      <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>
-        <ArrowLeft size={12} /> Back to meeting
-      </Link>
       <PageHeader
-        title={meeting.title}
-        subtitle={selectedMinutesExportStyle.label}
+        breadcrumbs={meetingChildCrumbs(meeting, "Minutes preview")}
+        title="Minutes preview"
+        subtitle={`${meeting.title} · ${selectedMinutesExportStyle.label}`}
         actions={
           <>
             <button className="btn-action btn-action--primary" onClick={exportPreviewToPdf} disabled={exportDisabled} aria-label="Download PDF">

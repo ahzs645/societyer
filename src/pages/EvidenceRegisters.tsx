@@ -413,17 +413,21 @@ export function RecordsArchivePage() {
         columns={["Received", "Title", "Container", "Location", "Status"]}
         render={(row) => [row.dateReceived ? formatDate(row.dateReceived) : "-", row.title, row.containerType, row.location, <Status key="s" value={row.status} />]}
       />
-      <div className="documents-facets__row evidence-status-filter" role="group" aria-label="Evidence status">
-        <button type="button" className={`chip${statusFilter === "all" ? " is-active" : ""}`} aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>All <span className="chip__count">{evidence.length}</span></button>
-        {statusCounts.map(([status, count]) => (
-          <button key={status} type="button" className={`chip${statusFilter === status ? " is-active" : ""}`} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)}>
-            {evidenceReviewStatusLabel(status)} <span className="chip__count">{count}</span>
-          </button>
-        ))}
-      </div>
       <RegisterTable
         title="Source evidence and provenance"
         restricted={data?.restrictedResources?.includes("documents")}
+        /* Status chips filter this register only, so they sit inside its
+           card (and only once there is evidence to filter). */
+        toolbar={evidence.length > 0 ? (
+          <div className="documents-facets__row evidence-status-filter" role="group" aria-label="Evidence status">
+            <button type="button" className={`chip${statusFilter === "all" ? " is-active" : ""}`} aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>All <span className="chip__count">{evidence.length}</span></button>
+            {statusCounts.map(([status, count]) => (
+              <button key={status} type="button" className={`chip${statusFilter === status ? " is-active" : ""}`} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)}>
+                {evidenceReviewStatusLabel(status)} <span className="chip__count">{count}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         rows={evidenceShown}
         empty={statusFilter === "all" ? <EmptyNote text="No evidence links yet." info="Approved section imports automatically create source evidence links here." /> : "No evidence links have this status."}
         columns={["Source", "Kind", "Model destination", "Access", "Status"]}
@@ -501,6 +505,7 @@ function RegisterTable({
   empty,
   restricted,
   pageActions,
+  toolbar,
 }: {
   title: string;
   rows: any[];
@@ -510,6 +515,8 @@ function RegisterTable({
   restricted?: boolean;
   /** Actions over the rows currently shown on this page (bulk review). */
   pageActions?: (pageRows: any[]) => ReactNode;
+  /** Filters shown under the title (e.g. status chips). */
+  toolbar?: ReactNode;
 }) {
   const [page,setPage]=useState(0);const [search,setSearch]=useState("");
   const filtered=rows.filter(row=>[row.sourceTitle,row.personName,row.meetingTitle,row.title,row.motionText,row.targetTable,row.summary,row.notes].join(" ").toLocaleLowerCase().includes(search.toLocaleLowerCase()));
@@ -521,6 +528,7 @@ function RegisterTable({
         <h2 className="card__title">{title}</h2>
         {restricted && <span className="card__subtitle">Access limited</span>}
       </div>
+      {toolbar && <div className="card__body register-table__toolbar">{toolbar}</div>}
       {rows.length>25&&<div className="card__body"><input className="input" aria-label={`Search ${title}`} placeholder="Search this evidence register" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></div>}
       {pageActions && pageRows.length > 0 && <div className="card__body" style={{ paddingTop: 0 }}>{pageActions(pageRows)}</div>}
       {rows.length === 0 ? (

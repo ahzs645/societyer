@@ -401,7 +401,7 @@ export function DocumentsPage() {
               if (field.name === "title") return <DocumentTitleCell row={r} />;
               if (field.name === "category") return <Badge tone={documentCategoryTone(r.category)}>{documentCategoryLabel(r.category)}</Badge>;
               if (field.name === "reviewStatus") return <Badge tone={documentReviewStatusTone(r.reviewStatus)}>{documentReviewStatusLabel(r.reviewStatus)}</Badge>;
-              if (field.name === "sourceDate") return r.sourceDate ? <span className="mono">{r.sourceDate}</span> : <span className="muted">—</span>;
+              if (field.name === "sourceDate") return r.sourceDate ? <span>{r.sourceDate}</span> : <span className="muted">—</span>;
               if (field.name === "sourceSystemLabel") return r.sourceSystemLabel ? <span>{r.sourceSystemLabel}</span> : <span className="muted">Added here</span>;
               if (field.name === "sourceVersionStatus") return r.sourceVersionStatus
                 ? <Badge tone={r.sourceVersionStatus === "approved" || r.sourceVersionStatus === "signed" ? "success" : r.sourceVersionStatus === "draft" ? "neutral" : "info"}>{SOURCE_VERSION_STATUS_LABELS[r.sourceVersionStatus as SourceVersionStatus] ?? r.sourceVersionStatus}{r.sourceVersionStatusDetected ? "*" : ""}</Badge>
@@ -409,7 +409,7 @@ export function DocumentsPage() {
               if (field.name === "linkedRecordCount") return r.linkedRecordCount
                 ? <span title={(r.linkedTargets ?? []).join(", ") || undefined}>{r.linkedRecordCount}</span>
                 : <span className="muted">0</span>;
-              if (field.name === "createdAtISO") return <span className="mono">{formatDate(r.createdAtISO)}</span>;
+              if (field.name === "createdAtISO") return <span>{formatDate(r.createdAtISO)}</span>;
               if (field.name === "retentionYears") return <span className="muted">{r.retentionYears ? `${r.retentionYears}y` : "—"}</span>;
               if (field.name === "tags") return (
                 <div className="tag-list">

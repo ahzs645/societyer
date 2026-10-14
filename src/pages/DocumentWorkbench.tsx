@@ -293,41 +293,41 @@ export function DocumentWorkbenchPage() {
               </div>
 
               {(comments ?? []).map((comment: any) => (
-                <div key={comment._id} className="panel" style={{ padding: 12, borderRadius: 8 }}>
-                  <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
-                    <Badge tone={comment.status === "resolved" ? "success" : "warn"}>
-                      {comment.status === "resolved" ? "Resolved" : "Open"}
-                    </Badge>
-                    <div style={{ flex: 1 }}>
-                      <strong>{comment.authorName}</strong>
-                      <span className="muted"> · {formatDateTime(comment.createdAtISO)}</span>
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                        {comment.pageNumber ? `Page ${comment.pageNumber}` : "Document"}
-                        {comment.anchorText ? ` · ${comment.anchorText}` : ""}
-                      </div>
-                      <p style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{comment.body}</p>
+                <div key={comment._id} className="panel document-comment">
+                  <Badge tone={comment.status === "resolved" ? "success" : "warn"}>
+                    {comment.status === "resolved" ? "Resolved" : "Open"}
+                  </Badge>
+                  <div className="document-comment__meta">
+                    <strong>{comment.authorName}</strong>
+                    <span className="muted"> · {formatDateTime(comment.createdAtISO)}</span>
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      {comment.pageNumber ? `Page ${comment.pageNumber}` : "Document"}
+                      {comment.anchorText ? ` · ${comment.anchorText}` : ""}
                     </div>
-                    <div className="row" style={{ gap: 4 }}>
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        disabled={!canEdit}
-                        onClick={() => setCommentStatus({
-                          id: comment._id,
-                          status: comment.status === "resolved" ? "open" : "resolved",
-                        }).catch((error: any) => toast.error("Could not update comment", error?.message ?? String(error)))}
-                      >
-                        <CheckCircle2 size={12} />
-                        {comment.status === "resolved" ? "Reopen" : "Resolve"}
-                      </button>
-                      <button
-                        className="btn btn--ghost btn--sm btn--icon"
-                        aria-label="Delete comment"
-                        disabled={!canEdit}
-                        onClick={() => removeComment({ id: comment._id }).catch((error: any) => toast.error("Could not delete comment", error?.message ?? String(error)))}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+                  </div>
+                  {/* The body spans the full card width so it isn't squeezed
+                      between the status badge and the actions on phones. */}
+                  <p className="document-comment__body">{comment.body}</p>
+                  <div className="row document-comment__actions" style={{ gap: 4 }}>
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      disabled={!canEdit}
+                      onClick={() => setCommentStatus({
+                        id: comment._id,
+                        status: comment.status === "resolved" ? "open" : "resolved",
+                      }).catch((error: any) => toast.error("Could not update comment", error?.message ?? String(error)))}
+                    >
+                      <CheckCircle2 size={12} />
+                      {comment.status === "resolved" ? "Reopen" : "Resolve"}
+                    </button>
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label="Delete comment"
+                      disabled={!canEdit}
+                      onClick={() => removeComment({ id: comment._id }).catch((error: any) => toast.error("Could not delete comment", error?.message ?? String(error)))}
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
               ))}

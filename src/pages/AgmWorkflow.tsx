@@ -12,6 +12,7 @@ import { useSociety } from "../hooks/useSociety";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { meetingChildCrumbs } from "../features/meetings/lib/meetingCrumbs";
 import { Badge, EmptyState } from "../components/ui";
 import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
@@ -146,10 +147,8 @@ export function AgmWorkflowPage() {
   if (meeting.type !== "AGM")
     return (
       <div className="page">
-        <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-          <ArrowLeft size={12} /> Back to meeting
-        </Link>
         <PageHeader
+          breadcrumbs={meetingChildCrumbs(meeting, "AGM workflow")}
           title="AGM workflow not available"
           icon={<ClipboardCheck size={16} />}
           iconColor="orange"
@@ -248,14 +247,12 @@ export function AgmWorkflowPage() {
 
   return (
     <div className="page agm-workflow-page">
-      <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        <ArrowLeft size={12} /> Back to meeting
-      </Link>
       <PageHeader
-        title={`${vocab.annualMeetingTitle} workflow · ${meeting.title}`}
+        breadcrumbs={meetingChildCrumbs(meeting, `${vocab.annualMeetingTitle} workflow`)}
+        title={`${vocab.annualMeetingTitle} workflow`}
         icon={<ClipboardCheck size={16} />}
         iconColor="orange"
-        subtitle={`${formatMeetingDate(meeting)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
+        subtitle={`${meeting.title} · ${formatMeetingDate(meeting)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
       />
 
       {isLocalDataRuntime() && !meetingHeld && <p className="muted" role="status">Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.</p>}
@@ -499,17 +496,18 @@ export function AgmWorkflowPage() {
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Notice delivery log</h2>
-          <span className="card__subtitle">{deliveries?.length ?? 0} delivery record(s)</span>
+          <span className="card__subtitle">{deliveries?.length ?? 0} {(deliveries?.length ?? 0) === 1 ? "delivery record" : "delivery records"}</span>
         </div>
-        <table className="table">
+        <div className="table-wrap">
+        <table className="table table--stack-mobile agm-delivery-log">
           <thead><tr><th>Recipient</th><th>Channel</th><th>Sent</th><th>Status</th></tr></thead>
           <tbody>
             {(deliveries ?? []).map((d: any) => (
               <tr key={d._id}>
                 <td>{d.recipientName}{d.recipientEmail && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{d.recipientEmail}</div>}</td>
-                <td><Badge>{d.channel}</Badge></td>
-                <td className="mono">{formatDate(d.sentAtISO)}</td>
-                <td><Badge tone={d.status === "sent" ? "success" : d.status === "bounced" ? "danger" : "warn"}>{d.status}</Badge></td>
+                <td data-label="Channel"><Badge>{d.channel}</Badge></td>
+                <td data-label="Sent">{formatDate(d.sentAtISO)}</td>
+                <td data-label="Status"><Badge tone={d.status === "sent" ? "success" : d.status === "bounced" ? "danger" : "warn"}>{d.status}</Badge></td>
               </tr>
             ))}
             {(deliveries ?? []).length === 0 && (
@@ -521,6 +519,7 @@ export function AgmWorkflowPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -537,10 +536,10 @@ const POSTURE_TONE_COLOR: Record<"success" | "warn" | "danger" | "info" | "neutr
 /** One posture fact: plain text with a status dot (a long value in a chip wrapped and overlapped the next row). */
 function Item({ label, value, tone, detail }: { label: string; value: string; tone: "success" | "warn" | "danger" | "info" | "neutral"; detail?: string }) {
   return (
-    <div className="row agm-workflow__posture-item" style={{ flexWrap: "wrap", gap: 6 }}>
-      <span className="muted" style={{ minWidth: 160 }}>{label}</span>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-        <span aria-hidden="true" style={{ flex: "none", width: 7, height: 7, borderRadius: "50%", background: POSTURE_TONE_COLOR[tone] }} />
+    <div className="agm-workflow__posture-item">
+      <span className="muted">{label}</span>
+      <span className="agm-workflow__posture-value">
+        <span className="agm-workflow__posture-dot" aria-hidden="true" style={{ background: POSTURE_TONE_COLOR[tone] }} />
         <span>{value}</span>
         {detail && <InfoPopover label={`About ${label.toLowerCase()}`}><p>{detail}.</p></InfoPopover>}
       </span>

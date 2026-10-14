@@ -61,6 +61,8 @@
 }
 
 .signature-form-row .field {
+  flex: 1 1 auto;
+  min-width: 0;
   margin-bottom: 0;
 }
 
@@ -132,6 +134,14 @@
   margin-top: 10px;
   font-size: token('fs-sm');
   color: token('text-secondary');
+}
+
+/* The submit sits after the capture controls (method, pad/upload, save to
+   profile) so the form reads top to bottom: who, how, then sign. */
+.signature-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 /* Canvas signature pad — full width, responsive height set inline. */
@@ -919,7 +929,8 @@ select.editable-cell__input:hover:not(:disabled) {
     flex-direction: column;
   }
 
-  .signature-form-row .btn {
+  .signature-form-row .btn,
+  .signature-submit-row .btn {
     justify-content: center;
     width: 100%;
   }

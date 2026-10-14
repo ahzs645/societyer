@@ -10,6 +10,7 @@ import { useToast } from "../../../components/Toast";
 import { Badge, Field } from "../../../components/ui";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { formatDate } from "../../../lib/format";
+import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
 import { minutesQuorumLabel } from "../../../../shared/minutesQuorum";
@@ -60,14 +61,33 @@ export function AttendanceDetails({
   );
 }
 
+/**
+ * Call-to-order / adjournment stamps are stored as ISO instants (or as text
+ * typed from a source). Show a clock time, not "2025-06-19T18:32:00.000Z";
+ * free text passes through unchanged.
+ */
+function minutesClockLabel(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return text;
+  const date = new Date(text);
+  if (!Number.isFinite(date.getTime())) return text;
+  return new Intl.DateTimeFormat("en-CA", { timeStyle: "short" }).format(date);
+}
+
+function minutesDateTimeLabel(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}/.test(text)) return text;
+  return formatMeetingDate({ scheduledAt: text }) || text;
+}
+
 export function StructuredMinutesSummary({ minutes, hideNextMeetingAt = false }: { minutes: any; hideNextMeetingAt?: boolean }) {
   const chips = [
     minutes.quorumStatus && `Quorum: ${minutesQuorumLabel(minutes)}`,
     minutes.chairName && `Chair: ${minutes.chairName}`,
     minutes.secretaryName && `Secretary: ${minutes.secretaryName}`,
     minutes.recorderName && `Recorder: ${minutes.recorderName}`,
-    minutes.calledToOrderAt && `Called: ${minutes.calledToOrderAt}`,
-    minutes.adjournedAt && `Adjourned: ${minutes.adjournedAt}`,
+    minutes.calledToOrderAt && `Called to order: ${minutesClockLabel(minutes.calledToOrderAt)}`,
+    minutes.adjournedAt && `Adjourned: ${minutesClockLabel(minutes.adjournedAt)}`,
     minutes.remoteParticipation?.url && "Remote link",
     minutes.remoteParticipation?.meetingId && `Meeting ID: ${minutes.remoteParticipation.meetingId}`,
     (minutes.detailedAttendance ?? []).length ? `${minutes.detailedAttendance.length} detailed attendance rows` : "",
@@ -75,7 +95,7 @@ export function StructuredMinutesSummary({ minutes, hideNextMeetingAt = false }:
     (minutes.sessionSegments ?? []).length ? `${minutes.sessionSegments.length} session segments` : "",
     (minutes.appendices ?? []).length ? `${minutes.appendices.length} appendices` : "",
     // The structured next-meeting rows are shown separately when present.
-    !hideNextMeetingAt && minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
+    !hideNextMeetingAt && minutes.nextMeetingAt && `Next: ${minutesDateTimeLabel(minutes.nextMeetingAt)}`,
     minutes.agmDetails?.financialStatementsPresented && "Financials presented",
     (minutes.agmDetails?.directorAppointments ?? []).length ? `${minutes.agmDetails.directorAppointments.length} director appointments` : "",
   ].filter(Boolean);

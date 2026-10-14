@@ -358,69 +358,6 @@ export function SignaturePanel({
               placeholder={signerScope === "directors" ? "Director name…" : "First Last"}
             />
           </Field>
-          <button
-            className="btn btn--accent"
-            disabled={!canWrite || !signatureReady}
-            onClick={async () => {
-              const name = typedName.trim();
-              if (!name) {
-                toast.error("Type a signer name.");
-                return;
-              }
-              if (signedNames.has(name.toLowerCase())) {
-                toast.error(`${name} already signed.`);
-                return;
-              }
-              if (!signatureReady) {
-                toast.error("Choose or capture a signature before saving.");
-                return;
-              }
-              const signerRole = selectedSigner?.role ?? (signerScope === "directors" ? "Director" : undefined);
-              try {
-                const result = await sign({
-                  societyId,
-                  entityType,
-        subjectId: entityId,
-                  userId: selectedSignerUserId,
-                  directorId: selectedSigner?.directorId as Id<"directors"> | undefined,
-                  memberId: selectedSigner?.memberId as Id<"members"> | undefined,
-                  signatureProfileId: selectedProfile?._id,
-                  signerName: name,
-                  signerRole,
-                  method: activeMethod,
-                  typedName: activeTypedName,
-                  imageDataUrl: activeImageDataUrl,
-                  imageMimeType: activeImageMimeType,
-                  saveToProfile: !useSavedProfile && saveToProfile,
-                  demo: true,
-                });
-                const signatureId =
-                  typeof result === "object" && result && "signatureId" in result
-                    ? result.signatureId
-                    : result;
-                setLocalSignatures((current) => [
-                  ...current,
-                  {
-                    _id: signatureId ?? `local-signature-${Date.now()}`,
-                    signerName: name,
-                    signerRole,
-                    imageDataUrl: activeImageDataUrl,
-                    typedName: activeTypedName,
-                    signedAtISO: new Date().toISOString(),
-                    userId: selectedSignerUserId,
-                    localOnly: !signatureId,
-                  },
-                ]);
-                resetCapture();
-                toast.success(saveToProfile && !useSavedProfile ? "Signature captured and saved to profile" : "Signature captured");
-              } catch (error) {
-                console.error("[signatures.sign]", error);
-                toast.error("Couldn't capture signature", error instanceof Error ? error.message : String(error));
-              }
-            }}
-          >
-            <Pen size={12} /> {useSavedProfile ? "Use saved signature" : "Add signature"}
-          </button>
         </div>
 
         {useSavedProfile && (
@@ -531,6 +468,71 @@ export function SignaturePanel({
               />
               <span>Save this signature to the signer profile</span>
             </label>
+            <div className="signature-submit-row">
+            <button
+              className="btn btn--accent"
+              disabled={!canWrite || !signatureReady}
+              onClick={async () => {
+                const name = typedName.trim();
+                if (!name) {
+                  toast.error("Type a signer name.");
+                  return;
+                }
+                if (signedNames.has(name.toLowerCase())) {
+                  toast.error(`${name} already signed.`);
+                  return;
+                }
+                if (!signatureReady) {
+                  toast.error("Choose or capture a signature before saving.");
+                  return;
+                }
+                const signerRole = selectedSigner?.role ?? (signerScope === "directors" ? "Director" : undefined);
+                try {
+                  const result = await sign({
+                    societyId,
+                    entityType,
+          subjectId: entityId,
+                    userId: selectedSignerUserId,
+                    directorId: selectedSigner?.directorId as Id<"directors"> | undefined,
+                    memberId: selectedSigner?.memberId as Id<"members"> | undefined,
+                    signatureProfileId: selectedProfile?._id,
+                    signerName: name,
+                    signerRole,
+                    method: activeMethod,
+                    typedName: activeTypedName,
+                    imageDataUrl: activeImageDataUrl,
+                    imageMimeType: activeImageMimeType,
+                    saveToProfile: !useSavedProfile && saveToProfile,
+                    demo: true,
+                  });
+                  const signatureId =
+                    typeof result === "object" && result && "signatureId" in result
+                      ? result.signatureId
+                      : result;
+                  setLocalSignatures((current) => [
+                    ...current,
+                    {
+                      _id: signatureId ?? `local-signature-${Date.now()}`,
+                      signerName: name,
+                      signerRole,
+                      imageDataUrl: activeImageDataUrl,
+                      typedName: activeTypedName,
+                      signedAtISO: new Date().toISOString(),
+                      userId: selectedSignerUserId,
+                      localOnly: !signatureId,
+                    },
+                  ]);
+                  resetCapture();
+                  toast.success(saveToProfile && !useSavedProfile ? "Signature captured and saved to profile" : "Signature captured");
+                } catch (error) {
+                  console.error("[signatures.sign]", error);
+                  toast.error("Couldn't capture signature", error instanceof Error ? error.message : String(error));
+                }
+              }}
+            >
+              <Pen size={12} /> {useSavedProfile ? "Use saved signature" : "Add signature"}
+            </button>
+            </div>
           </>
 
         </>}

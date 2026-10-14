@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { CloudOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useConvex } from "convex/react";
@@ -10,6 +10,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { authenticatedFetch } from "../lib/authToken";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { PageHeader } from "./_helpers";
+import { EmptyState } from "../components/ui";
+import type { Crumb } from "../components/Breadcrumbs";
 import { openDatabase, type Scope } from "../offline/database";
 import { connectMeetingPilot } from "../offline/meetingConnector";
 import { exportMeetingRecovery, newKeys, prepareFile, saveMeetingCommand, type LocalFile } from "../offline/meetingStore";
@@ -18,6 +20,8 @@ import { meetingPreparationEnabled } from "../offline/config";
 import { permanentMeetingFailure } from "../offline/meetingRecoveryPolicy";
 import type { Snapshot } from "../../shared/offline/meetingProtocol";
 import "./OfflineMeetingPreparation.css";
+
+const OFFLINE_CRUMBS: Crumb[] = [{ label: "Meetings", to: "/app/meetings" }, { label: "Offline preparation" }];
 
 const query = (name: string) => makeFunctionReference<"query">(name);
 const mutation = (name: string) => makeFunctionReference<"mutation">(name);
@@ -29,9 +33,15 @@ type CachedFile = { id: string; meeting_uuid: string; descriptor: string; conten
 export function OfflineMeetingPreparationPage() {
   const auth = useAuth();
   if (!meetingPreparationEnabled() || auth.mode === "none" || isLocalDataRuntime()) return <div className="page">
-    <Link to="/app/meetings" className="row muted" style={{ marginBottom: 12, fontSize: 12 }}><ArrowLeft size={12} /> Meetings</Link>
-    <PageHeader title="Offline meeting preparation" />
-    <p className="muted">Offline meeting preparation needs a connected server.</p></div>;
+    <PageHeader breadcrumbs={OFFLINE_CRUMBS} title="Offline meeting preparation" />
+    <div className="card"><div className="card__body">
+      <EmptyState
+        icon={<CloudOff size={20} />}
+        title="Needs a connected server"
+        description="Offline meeting preparation syncs drafts with your organization's server, so it isn't available in this workspace."
+        action={<Link className="btn" to="/app/meetings">Go to meetings</Link>}
+      />
+    </div></div></div>;
   return <MeetingPreparation />;
 }
 
@@ -201,9 +211,9 @@ function MeetingPreparation() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   if (!loaded) return <div className="page">Checking meeting access…</div>;
-  if (!canRead) return <div className="page"><PageHeader title="Offline meeting preparation" /><p>Your role does not allow access to the resources used for meeting preparation.</p></div>;
+  if (!canRead) return <div className="page"><PageHeader breadcrumbs={OFFLINE_CRUMBS} title="Offline meeting preparation" /><p>Your role does not allow access to the resources used for meeting preparation.</p></div>;
   return <div className="page offline-meeting-preparation">
-    <PageHeader title="Offline meeting preparation" subtitle="Prepare meetings, agenda items and minutes on this device. Changes sync when connected." actions={<Link className="btn" to="/app/meetings">Back to meetings</Link>} />
+    <PageHeader breadcrumbs={OFFLINE_CRUMBS} title="Offline meeting preparation" subtitle="Prepare meetings, agenda items and minutes on this device. Changes sync when connected." />
     <p role="status">{status} {online ? "Online" : "Offline"} · {pending} pending commands · {syncState}</p>
     <p className="muted">Only meetings prepared here are included. Open this page while signed in before disconnecting. Approval and formal adoption use the online meeting workspace.</p>
     {error && <p role="alert" className="offline-meeting-error">{error}</p>}

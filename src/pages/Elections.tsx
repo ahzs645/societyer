@@ -18,7 +18,7 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { AlertTriangle, Info, Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
-import { toDateTimeLocalValue } from "../lib/format";
+import { pluralize, toDateTimeLocalValue } from "../lib/format";
 import { normalizeElectionWindow, validateElectionQuestion } from "../../shared/electionValidation";
 
 type ElectionCreateForm = {
@@ -239,8 +239,8 @@ export function ElectionsPage() {
           <h2 className="card__title">All elections</h2>
           <span className="card__subtitle">{elections?.length ?? 0} total</span>
         </div>
-        <div style={{ overflowX: "auto" }}>
-        <table className="table elections-table" style={{ width: "100%" }}>
+        <div className="table-wrap">
+        <table className="table table--stack-mobile elections-table">
           <thead>
             <tr>
               <th>Election</th>
@@ -261,7 +261,7 @@ export function ElectionsPage() {
                     </div>
                   )}
                 </td>
-                <td>
+                <td data-label="Status">
                   <Badge
                     tone={
                       election.status === "Closed" || election.status === "Tallied"
@@ -274,13 +274,13 @@ export function ElectionsPage() {
                     {election.status}
                   </Badge>
                 </td>
-                <td style={{ whiteSpace: "nowrap" }}>
+                <td data-label="Opens" style={{ whiteSpace: "nowrap" }}>
                   {formatDate(election.opensAtISO)}
                 </td>
-                <td style={{ whiteSpace: "nowrap" }}>
+                <td data-label="Closes" style={{ whiteSpace: "nowrap" }}>
                   {formatDate(election.closesAtISO)}
                 </td>
-                <td>
+                <td className="elections-table__actions">
                   <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                     <Link to={`/app/elections/${election._id}`} className="btn btn--ghost btn--sm">
                       View
@@ -294,7 +294,7 @@ export function ElectionsPage() {
                             onClick={async () => {
                               try {
                                 const result = await snapshotEligibleVoters({ electionId: election._id });
-                                toast.success(`Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`);
+                                toast.success(`Snapshotted ${pluralize(result.eligibleCount, "eligible voter")} and opened voting`);
                               } catch (error) { toast.error(error instanceof Error ? error.message : "Could not open this election."); }
                             }}
                           >

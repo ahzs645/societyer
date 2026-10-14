@@ -252,6 +252,27 @@
 .elections-table td:first-child {
   min-width: 180px;
 }
+// Phones: the list stacks into labelled cards (.table--stack-mobile), so the
+// scrolling minimum no longer applies; status and dates share one line.
+@media (max-width: 760px) {
+  .table.elections-table {
+    min-width: 0;
+  }
+  .elections-table td:first-child {
+    min-width: 0;
+  }
+  .table.elections-table tbody tr:not(:has(td[colspan])) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .table.elections-table tbody td:first-child,
+  .table.elections-table tbody td.elections-table__actions {
+    grid-column: 1 / -1;
+  }
+  .elections-table__actions .row {
+    justify-content: flex-start !important;
+  }
+}
 
 // Obligations: wrap the long citation/source column so the Action column
 // stays on screen at desktop widths.
