@@ -47,7 +47,7 @@ export function useCreateCommands(): CreateCommand[] {
           id: "create-invoice",
           label: "New invoice",
           icon: ReceiptText,
-          keywords: ["bill", "invoice a member", "dues invoice", "create invoice"],
+          keywords: ["bill", "invoice a customer", "dues invoice", "create invoice"],
           run: () => navigate("/app/invoices?builder=new"),
         },
         {
