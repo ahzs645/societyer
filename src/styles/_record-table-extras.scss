@@ -846,11 +846,16 @@
   }
 }
 
-// The narrowest phones: Filter, Sort and Options drop to their icons (the
-// active tint still marks a filtered / sorted view) so the toolbar keeps one
-// row. Their accessible names stay on the buttons.
+// Phones: "Options" drops to its icon so a filtered / sorted toolbar
+// ("Filter · 1", "Sort · 2") keeps one row; on the narrowest phones Filter
+// and Sort follow (the active tint still marks them). Accessible names stay
+// on the buttons.
+@media (max-width: 430px) {
+  .record-table__toolbar-button--options > span {
+    display: none;
+  }
+}
 @media (max-width: 360px) {
-  .record-table__toolbar-button--options > span,
   .record-table__toolbar-button--collapsible > span {
     display: none;
   }
