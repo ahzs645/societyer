@@ -575,8 +575,11 @@ $tap-block: (
   max-width: 132px;
 }
 @media (max-width: 560px) {
-  // Summary tiles above a list (Directors, Invoices) become one swipeable
-  // row instead of a 2×2 block, so the list starts ~50px higher.
+  // Summary tiles above a list (`StatStrip`: Assets, Directors, Invoices)
+  // become one row instead of a 2×2 block, so the list starts ~50px higher.
+  // Tiles size to their label and share any spare width, so a row that fits
+  // shows every tile whole; a row that doesn't scrolls, and the clipped edge
+  // fades (data-overflow) so a cut tile reads as "swipe for more".
   .stat-grid.stat-grid--scroll-phone {
     display: flex;
     overflow-x: auto;
@@ -584,13 +587,33 @@ $tap-block: (
     scroll-snap-type: x proximity;
     scrollbar-width: none;
     &::-webkit-scrollbar { display: none; }
+    &[data-overflow='end'] {
+      mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    }
+    &[data-overflow='start'] {
+      mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+    }
+    &[data-overflow='both'] {
+      mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+    }
     > .stat {
-      flex: 0 0 auto;
-      min-width: 40%;
-      max-width: 72%;
+      flex: 1 0 auto;
+      min-width: 0;
       scroll-snap-align: start;
       border-bottom: 0;
       border-right: 1px solid token('border-color-light');
+    }
+    // Tighter cells than the 2×2 grid so a four-tile row fits a 390px
+    // phone; the first tile still lines up with the page gutter.
+    > .stat {
+      padding-inline: token('s-2');
+    }
+    > .stat:first-child {
+      padding-inline-start: token('s-4');
+    }
+    > .stat .stat__label {
+      white-space: nowrap;
+      letter-spacing: 0.02em;
     }
     > .stat:last-child {
       border-right: 0;

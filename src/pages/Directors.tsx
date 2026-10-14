@@ -34,7 +34,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 
 const CURRENT_DIRECTORS_VIEW = "Current directors";
 
@@ -211,7 +211,7 @@ export function DirectorsPage() {
       />
 
       <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
-      <div className="stat-grid stat-grid--scroll-phone">
+      <StatStrip ariaLabel="Director summary">
         <StatTile
           label="Active directors"
           value={directorsLoaded ? active.length : "—"}
@@ -235,7 +235,7 @@ export function DirectorsPage() {
           value={directorProfile.directorChangeMetric}
           sub={directorProfile.directorChangeSubtext}
         />
-      </div>
+      </StatStrip>
 
       {directorsLoaded && (minimumMissing || residencyMissing || canadianMissing || missingConsent.length > 0) && (
         <div className="col" style={{ marginBottom: 16, gap: 6 }}>

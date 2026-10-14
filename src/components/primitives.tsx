@@ -1,4 +1,5 @@
-import { ReactNode, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { ReactNode, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useScrollOverflow } from "../hooks/useScrollOverflow";
 import { Pill } from "./ui";
 
 export function Tabs<T extends string>({
@@ -22,25 +23,7 @@ export function Tabs<T extends string>({
   // touching the page's vertical scroll position, and fade whichever edge
   // has tabs scrolled out of sight.
   const listRef = useRef<HTMLDivElement>(null);
-  const [overflow, setOverflow] = useState<"none" | "start" | "end" | "both">("none");
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const measure = () => {
-      const max = list.scrollWidth - list.clientWidth;
-      const atStart = list.scrollLeft <= 1;
-      const atEnd = list.scrollLeft >= max - 1;
-      setOverflow(max <= 1 ? "none" : atStart ? "end" : atEnd ? "start" : "both");
-    };
-    measure();
-    list.addEventListener("scroll", measure, { passive: true });
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    observer?.observe(list);
-    return () => {
-      list.removeEventListener("scroll", measure);
-      observer?.disconnect();
-    };
-  }, [items.length]);
+  const overflow = useScrollOverflow(listRef, [items.length]);
   useEffect(() => {
     const list = listRef.current;
     const active = list?.querySelector<HTMLElement>(".tab.is-active");

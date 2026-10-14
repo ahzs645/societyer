@@ -9,7 +9,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { useIsBottomSheet } from "../lib/useSheetDrag";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Checkbox } from "../components/Controls";
@@ -352,7 +352,7 @@ export function InvoicesPage() {
         }
       />
 
-      <div className="stat-grid stat-grid--scroll-phone invoice-stats" role="group" aria-label="Invoice summary">
+      <StatStrip className="invoice-stats" ariaLabel="Invoice summary">
         <StatTile
           label="Outstanding"
           value={<Money cents={summary?.outstandingCents ?? null} variant="hero" />}
@@ -387,7 +387,7 @@ export function InvoicesPage() {
           pressed={tab === "drafts"}
           actionLabel="Show draft invoices"
         />
-      </div>
+      </StatStrip>
 
       {isPhone ? (
         <div className="invoice-tabs-row">

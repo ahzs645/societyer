@@ -80,7 +80,7 @@ import {
   summarizeAssets,
   todayDate,
 } from "../features/assets/assetUtils";
-import { StatTile } from "../components/StatTile";
+import { StatStrip, StatTile } from "../components/StatTile";
 
 /** Seeded asset views this page offers; older workspaces are topped up. */
 const ASSET_SEEDED_VIEWS = ["Needs attention", "Disposed"] as const;
@@ -399,12 +399,12 @@ export function AssetsPage() {
         }
       />
 
-      <div className="stat-grid stat-grid--scroll-phone">
+      <StatStrip ariaLabel="Asset summary">
         <StatTile label="Assets" value={stats.total} sub={`${stats.active} active`} />
         <StatTile label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
         <StatTile label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
         <StatTile label="Register value" value={money(stats.valueCents)} sub={stats.dueMaintenance ? `${stats.dueMaintenance} maintenance due soon` : "Book value where known"} tone={stats.dueMaintenance ? "warn" : undefined} />
-      </div>
+      </StatStrip>
 
       {stats.openRun && (
         <div className="callout callout--info">

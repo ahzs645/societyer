@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { Children, useRef, type ReactNode } from "react";
+import { useScrollOverflow } from "../hooks/useScrollOverflow";
 import { Link } from "react-router-dom";
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { InfoPopover } from "./InfoPopover";
@@ -138,6 +139,28 @@ function StatTileTrendLine({ trend }: { trend: StatTileTrend }) {
       <Icon size={12} aria-hidden="true" />
       <span className="stat-tile__trend-value">{trend.value}</span>
       {trend.label && <span className="stat-tile__trend-label">{trend.label}</span>}
+    </div>
+  );
+}
+
+/**
+ * Summary tiles above a list. Desktop and tablet keep the stat grid; on
+ * phones the tiles form one row that fills the width when they fit and
+ * otherwise scrolls, fading the clipped edge so a cut tile reads as
+ * "swipe for more".
+ */
+export function StatStrip({ children, className, ariaLabel }: { children: ReactNode; className?: string; ariaLabel?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const overflow = useScrollOverflow(ref, [Children.count(children)]);
+  return (
+    <div
+      ref={ref}
+      className={`stat-grid stat-grid--scroll-phone${className ? ` ${className}` : ""}`}
+      role={ariaLabel ? "group" : undefined}
+      aria-label={ariaLabel}
+      data-overflow={overflow}
+    >
+      {children}
     </div>
   );
 }
