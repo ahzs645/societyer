@@ -104,6 +104,8 @@
 @use "finance-workflows";
 // Shell navigation: two-level sidebar, icon rail, activation pill, breadcrumbs, shortcuts.
 @use "shell-nav";
+// EditableGrid: spreadsheet-style bulk entry, changeset island, phone row list.
+@use "editable-grid";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
