@@ -21,9 +21,11 @@ import {
   type LedgerAccount,
   type LedgerLine,
 } from "../lib/ledgerReports";
+import { hasOwnAmounts, rollupAccounts, type RollupNode } from "../lib/accountRollup";
+import type { HierarchyAccount } from "../../../../shared/accountHierarchy";
 
-type Meta = { accountId?: string };
-type Drill = { account: LedgerAccount; columnId: string; fiscalYear: string | null; side?: "debit" | "credit" } | null;
+type Meta = { accountId?: string; /** The account and its sub-accounts, for a rolled-up row. */ accountIds?: string[] };
+type Drill = { account: LedgerAccount; accountIds: string[]; label: string; columnId: string; fiscalYear: string | null; side?: "debit" | "credit" } | null;
 
 const ALL_YEARS = "__all";
 
@@ -49,6 +51,7 @@ export function ledgerLineToDrilldownItem(line: LedgerLine, fundNames: Map<strin
 export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }) {
   const ledger = useQuery(api.accounting.generalLedger, { societyId }) as LedgerLine[] | undefined;
   const restrictions = useQuery(api.accounting.fundRestrictions, { societyId }) as Array<{ _id: string; name: string }> | undefined;
+  const chart = useQuery(api.accounting.chartAccounts, { societyId }) as HierarchyAccount[] | undefined;
   const [yearChoice, setYearChoice] = useState<string | null>(null);
   const [compare, setCompare] = useState(true);
   const [fund, setFund] = useState<FundFilter>("all");
@@ -89,7 +92,7 @@ export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }
         .sort(([, a], [, b]) => sortByAccountCode(a, b));
       if (sectionAccounts.length === 0) continue;
       const sum = { debit: 0, credit: 0, balance: 0, prior: 0 };
-      const children: ReportRow<Meta>[] = sectionAccounts.map(([id, account]) => {
+      const leaves = sectionAccounts.map(([id, account]) => {
         const now = current.get(id);
         const before = prior.get(id);
         sum.debit += now?.debitCents ?? 0;
@@ -97,15 +100,23 @@ export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }
         sum.balance += now?.balanceCents ?? 0;
         sum.prior += before?.balanceCents ?? 0;
         return {
-          id: `account:${id}`,
-          kind: "row",
+          accountId: id,
           code: account.code,
-          label: account.name,
-          currency: account.currency,
+          name: account.name,
           values: { debit: now?.debitCents ?? 0, credit: now?.creditCents ?? 0, balance: now?.balanceCents ?? 0, prior: before?.balanceCents ?? 0 },
-          meta: { accountId: id },
         };
       });
+      // Sub-accounts nest under their parent, whose row carries the rolled-up total.
+      const currencyOf = (id: string) => accounts.get(id)?.currency ?? (chart ?? []).find((row) => String(row._id) === id)?.currency ?? undefined;
+      const toRow = (node: RollupNode): ReportRow<Meta> => {
+        const row: ReportRow<Meta> = { id: `account:${node.accountId}`, kind: "row", code: node.code, label: node.name, currency: currencyOf(node.accountId), values: node.total, meta: { accountId: node.accountId, accountIds: node.accountIds } };
+        if (!node.children.length) return row;
+        const own: ReportRow<Meta>[] = hasOwnAmounts(node)
+          ? [{ id: `account:${node.accountId}:own`, kind: "row", label: `${node.name}, other`, title: `${node.name}, posted to the parent account`, currency: row.currency, values: node.own!, meta: { accountId: node.accountId, accountIds: [node.accountId] } }]
+          : [];
+        return { ...row, title: `${node.name}, including sub-accounts`, children: [...own, ...node.children.map(toRow)] };
+      };
+      const children: ReportRow<Meta>[] = rollupAccounts(leaves, chart).map(toRow);
       out.push({ id: `section:${section.id}`, kind: "section", label: section.label, children });
       out.push({
         id: `subtotal:${section.id}`,
@@ -137,12 +148,12 @@ export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }
       }
     }
     return out;
-  }, [current, prior, fund]);
+  }, [current, prior, fund, chart]);
 
   const drillItems = useMemo(() => {
     if (!drill) return [];
     return fundLines
-      .filter((line) => String(line.accountId) === String(drill.account._id) && inYear(line, drill.fiscalYear) && (!drill.side || line.side === drill.side))
+      .filter((line) => drill.accountIds.includes(String(line.accountId)) && inYear(line, drill.fiscalYear) && (!drill.side || line.side === drill.side))
       .sort((a, b) => a.entry.date.localeCompare(b.entry.date))
       .map((line) => ledgerLineToDrilldownItem(line, fundNames));
   }, [drill, fundLines, fundNames]);
@@ -175,10 +186,12 @@ export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }
         drillColumn="balance"
         onDrilldown={(row, column) => {
           const accountId = row.meta?.accountId;
-          const account = accountId ? current.get(accountId)?.account ?? prior.get(accountId)?.account : null;
-          if (!account) return;
+          const account = accountId ? current.get(accountId)?.account ?? prior.get(accountId)?.account ?? (chart ?? []).find((candidate) => String(candidate._id) === accountId) as LedgerAccount | undefined : null;
+          if (!account || !accountId) return;
           setDrill({
             account,
+            accountIds: row.meta?.accountIds ?? [accountId],
+            label: `${row.code ? `${row.code} · ` : ""}${row.title ?? String(row.label)}`,
             columnId: column.id,
             fiscalYear: column.id === "prior" ? priorYear : fiscalYear,
             side: column.id === "debit" ? "debit" : column.id === "credit" ? "credit" : undefined,
@@ -202,7 +215,7 @@ export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }
       <FinanceDrilldownDrawer
         open={Boolean(drill)}
         onClose={() => setDrill(null)}
-        title={drill ? `${drill.account.code ? `${drill.account.code} · ` : ""}${drill.account.name}` : "Account"}
+        title={drill?.label ?? "Account"}
         subtitle={drill ? `${drill.fiscalYear && drill.fiscalYear !== ALL_YEARS ? `FY ${drill.fiscalYear}` : "All years"}${drill.side ? ` · ${drill.side} lines` : ""}${fund !== "all" ? ` · ${fund === "unrestricted" ? "Unrestricted" : fundNames.get(fund) ?? "Fund"}` : ""}` : undefined}
         totalCents={drill ? drillTotal : null}
         totalLabel={drill?.side ? `Total ${drill.side}s` : "Balance (debit − credit)"}

@@ -33,6 +33,7 @@ import {
 } from "./staticFinanceWorkflowFixtures";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
+import { demoSubAccountRows } from "../../shared/demoData/chartOfAccounts";
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../../shared/demoData/members";
 import { addDays, demoAsOfDate } from "../../shared/demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel, type DemoOwnerRole } from "../../shared/demoData/work";
@@ -2392,6 +2393,8 @@ const financialAccounts = [
   { _id: ACCOUNT_PROGRAM_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "program_expense", code: "5000", name: "Program supplies", currency: "CAD", accountType: "Expense", subtype: "program", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
   { _id: ACCOUNT_FACILITIES_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "facilities", code: "5200", name: "Facilities and utilities", currency: "CAD", accountType: "Expense", subtype: "facilities", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
   { _id: ACCOUNT_EQUIPMENT_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "equipment", code: "5500", name: "Equipment and technology", currency: "CAD", accountType: "Expense", subtype: "equipment", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
+  // Sub-accounts under facilities (shared/demoData/chartOfAccounts.ts).
+  ...demoSubAccountRows({ societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, facilitiesAccountId: ACCOUNT_FACILITIES_EXPENSE_ID }).map(({ key, doc }) => ({ _id: `static_financial_facilities_${key}`, ...doc })),
 ];
 
 const financialTransactions: Array<Record<string, any>> = [
@@ -2549,7 +2552,7 @@ const journalLines = [
   { _id: "static_jline_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: GRANT_ACCOUNT_ID, lineOrder: 0, amountCents: 1500000, side: "debit", description: "Grant deposit", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
   { _id: "static_jline_grant_revenue", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: ACCOUNT_GRANT_REVENUE_ID, lineOrder: 1, amountCents: 1500000, side: "credit", description: "Grant revenue", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
   { _id: "static_jline_space_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 42000, side: "credit", description: "Hall rental payment", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
-  { _id: "static_jline_space_expense", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: ACCOUNT_FACILITIES_EXPENSE_ID, lineOrder: 1, amountCents: 42000, side: "debit", description: "Community hall rental", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+  { _id: "static_jline_space_expense", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: "static_financial_facilities_venue", lineOrder: 1, amountCents: 42000, side: "debit", description: "Community hall rental", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
 ];
 
 const reconciliationRuns: any[] = [];

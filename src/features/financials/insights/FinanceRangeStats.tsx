@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
 import { StatTile, type StatTileTrend } from "../../../components/StatTile";
@@ -24,7 +25,10 @@ export function FinanceRangeStats({
   previous,
   closingBalance,
   previousClosing,
+  children,
 }: {
+  /** Extra tiles after the range tiles (e.g. figures that do not follow the range). */
+  children?: ReactNode;
   totals: FlowTotals;
   previous: FlowTotals | null;
   closingBalance: number | null;
@@ -49,6 +53,7 @@ export function FinanceRangeStats({
             : undefined}
         />
       ))}
+      {children}
     </div>
   );
 }

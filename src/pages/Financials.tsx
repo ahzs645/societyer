@@ -65,6 +65,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
+import { TransactionLinkFilters } from "../features/financials/insights/TransactionLinkFilters";
 import { useIsMobile } from "../lib/useIsMobile";
 import { BudgetGridDrawer } from "../features/financials/components/BudgetGridDrawer";
 
@@ -888,6 +889,7 @@ export function FinancialsPage() {
               />
               <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
               <RecordTableFilterChips />
+              <TransactionLinkFilters />
               <RecordTable
                 loading={tableData.loading || transactions === undefined}
                 renderCell={({ record: t, field }) => {

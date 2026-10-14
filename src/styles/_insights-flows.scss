@@ -1,0 +1,116 @@
+@use "tokens" as *;
+
+// Financials overview: "Top payees / Top categories" ranked bars and the
+// months-of-operating-reserve tile.
+
+.ranked-bars {
+  display: grid;
+  gap: token('s-1');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ranked-bars__item {
+  min-width: 0;
+}
+.ranked-bars__row {
+  display: grid;
+  gap: token('s-1');
+  padding: token('s-2');
+  margin: 0 calc(-1 * #{token('s-2')});
+  border-radius: token('r-md');
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.ranked-bars__row--link {
+  cursor: pointer;
+  transition: background-color token('motion-fade-fast') token('ease-fade');
+
+  &:hover {
+    background: token('bg-hover-alpha');
+    text-decoration: none;
+  }
+  &:hover .ranked-bars__chevron,
+  &:focus-visible .ranked-bars__chevron {
+    color: token('text-secondary');
+  }
+}
+.ranked-bars__head {
+  display: flex;
+  align-items: baseline;
+  gap: token('s-3');
+  min-width: 0;
+  font-size: token('fs-sm');
+}
+.ranked-bars__label {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ranked-bars__name {
+  font-weight: 500;
+  color: token('text-primary');
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ranked-bars__detail {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.ranked-bars__values {
+  display: inline-flex;
+  align-items: baseline;
+  gap: token('s-2');
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: token('text-primary');
+
+  strong {
+    font-weight: 600;
+  }
+}
+.ranked-bars__share {
+  min-width: 4ch;
+  text-align: right;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.ranked-bars__chevron {
+  flex: 0 0 auto;
+  align-self: center;
+  color: token('text-tertiary');
+}
+.ranked-bars__track {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: token('r-pill');
+  background: token('bg-hover-alpha');
+  overflow: hidden;
+}
+.ranked-bars__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: token('r-pill');
+  background: token('dv-cat-1');
+}
+.ranked-bars--out .ranked-bars__fill {
+  background: token('dv-out');
+}
+.ranked-bars--in .ranked-bars__fill {
+  background: token('dv-in');
+}
+
+@media (pointer: coarse) {
+  .ranked-bars__row--link {
+    min-height: 44px;
+  }
+}
+
+.reserve-tile__policy {
+  white-space: nowrap;
+}

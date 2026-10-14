@@ -4,6 +4,7 @@ import type { ReportRow } from "@/components/ReportTable";
 import { budgetVariance } from "@/lib/money";
 import type { buildAccountingStatements, buildProgramSummary } from "../../../../shared/accountingStatements";
 import { statementTables, type StatementPeriods } from "../components/FinancialStatementsReport";
+import type { HierarchyAccount } from "../../../../shared/accountHierarchy";
 
 type Built = ReturnType<typeof buildAccountingStatements>;
 type ProgramRow = ReturnType<typeof buildProgramSummary>[number];
@@ -21,7 +22,10 @@ export function statementsWorkbook({
   programs,
   budgetYear,
   fundNote,
+  accounts,
 }: {
+  /** Chart of accounts, so sub-accounts nest under their parent. */
+  accounts?: HierarchyAccount[];
   report: Built;
   priorReport: Built | null;
   periods: StatementPeriods;
@@ -35,7 +39,7 @@ export function statementsWorkbook({
   const comparison = priorReport ? { current: "current", prior: "prior" } : null;
   const sheets: XlsxSheet[] = [];
   for (const statement of report.statements) {
-    const tables = statementTables(statement, priorReport, periods);
+    const tables = statementTables(statement, priorReport, periods, accounts);
     sheets.push(
       reportTableSheet({
         name: `Balance sheet ${statement.currency}`,

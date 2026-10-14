@@ -167,6 +167,8 @@
     "test:notification-settings": "tsx scripts/check-notification-settings.ts",
     "test:invoices": "tsx scripts/check-invoices.ts",
     "test:seed-parity": "tsx scripts/check-seed-parity.ts",
+    "test:account-hierarchy": "tsx scripts/check-account-hierarchy.ts",
+    "test:finance-insights": "tsx scripts/check-finance-insights.ts",
     "test:motion-governance": "tsx scripts/check-motion-governance.ts",
     "test:motion-tags": "tsx scripts/check-motion-tags.ts",
     "test:motions-resolve-parity": "tsx scripts/check-motions-resolve-parity.ts",

@@ -24,6 +24,9 @@ export const accountingTables = {
     restrictedPurpose: v.optional(v.string()),
     sourceSystem: v.optional(v.string()), // societyer | ledgersmb | wave | csv | browser
     normalBalance: v.optional(v.string()), // debit | credit
+    // Sub-account of another account in the same statement section and
+    // currency (see shared/accountHierarchy.ts); statements roll it up.
+    parentAccountId: v.optional(v.id("financialAccounts")),
   })
     .index("by_society", ["societyId"])
     .index("by_connection", ["connectionId"])

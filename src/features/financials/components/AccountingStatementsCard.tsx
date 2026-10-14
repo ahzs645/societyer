@@ -105,7 +105,7 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
     setExporting(true);
     try {
       const fundNote = fund === "all" ? undefined : `Fund filter: ${fund === "unrestricted" ? "no fund restriction" : fundNames.get(fund) ?? "one fund"}`;
-      const workbook = statementsWorkbook({ report, priorReport, periods: { from, to, priorFrom, priorTo }, programs, budgetYear, fundNote });
+      const workbook = statementsWorkbook({ report, priorReport, periods: { from, to, priorFrom, priorTo }, programs, budgetYear, fundNote, accounts: accounts as any });
       await downloadXlsx(`financial-statements-${from}-${to}`, workbook);
     } catch (e) {
       toast.error("Download failed", e instanceof Error ? e.message : undefined);
@@ -145,6 +145,7 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
         priorTo={priorTo}
         fundNames={fundNames}
         fundFiltered={fund !== "all"}
+        accounts={accounts as any}
       />
     )}
     <div className="accounting-section-heading"><h3>Program / project budget and actual</h3><InfoPopover label="About program budgets"><p>Actuals use the selected report dates and each journal line’s program code. The budget is the full fiscal year shown below; it is not prorated. Untagged income and expense lines appear as Unallocated. Historical review snapshots remain separate from posted actuals.</p></InfoPopover></div>

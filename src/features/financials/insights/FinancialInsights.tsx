@@ -15,6 +15,8 @@ import { budgetVariance, formatMoney } from "../../../lib/money";
 import type { BudgetKind } from "../lib/budgetKind";
 import { FinanceRangeBar } from "./FinanceRangeBar";
 import { FinanceRangeStats } from "./FinanceRangeStats";
+import { OperatingReserveTile } from "./OperatingReserveTile";
+import { TopFlowsCard } from "./TopFlowsCard";
 import {
   balanceLookup,
   balanceRows,
@@ -67,7 +69,11 @@ export function FinancialInsights({ society }: { society: Society }) {
         onClearSelection={() => setSelection(null)}
         compareNote={compare && !data.loading && !view.previousCovered ? "The previous period predates the imported transactions, so totals are not compared." : undefined}
       />
-      {!notEnough && !data.loading && <FinanceRangeStats totals={view.totals} previous={compare && view.previousCovered ? view.previousTotals : null} closingBalance={view.closing} previousClosing={view.previousClosing} />}
+      {!notEnough && !data.loading && (
+        <FinanceRangeStats totals={view.totals} previous={compare && view.previousCovered ? view.previousTotals : null} closingBalance={view.closing} previousClosing={view.previousClosing}>
+          <OperatingReserveTile societyId={society._id} txns={data.txns} unrestrictedCents={data.unrestrictedBalance} today={today} />
+        </FinanceRangeStats>
+      )}
       <div className="insights__grid insights__grid--two">
         <ChartCard
           title="Cash over time"
@@ -96,6 +102,12 @@ export function FinancialInsights({ society }: { society: Society }) {
           <FlowBarChart rows={view.flowRows} showNet ariaLabel={view.flowSummary} />
         </ChartCard>
       </div>
+      {!notEnough && (
+        <div className="insights__grid insights__grid--two">
+          <TopFlowsCard grouping="payee" txns={data.txns} range={focus} loading={data.loading} />
+          <TopFlowsCard grouping="category" txns={data.txns} range={focus} loading={data.loading} />
+        </div>
+      )}
       <BudgetVsActualCard rows={data.budgetRows} loading={data.loading} />
     </section>
   );

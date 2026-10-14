@@ -1,6 +1,7 @@
 import { FinancialVersionCard } from "../../../components/FinancialVersionCard";
 import { AccountingStatementsCard } from "../components/AccountingStatementsCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { useCreateIntent } from "@/hooks/useCreateIntent";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -21,6 +22,7 @@ import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
 import { StatTile } from "../../../components/StatTile";
 import { TrialBalanceReport } from "../components/TrialBalanceReport";
+import { ChartOfAccountsCard } from "../components/ChartOfAccountsCard";
 import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
 import { JournalLinesGrid, useJournalLinesGrid } from "../components/JournalLinesGrid";
 import { useConfirm } from "../../../components/Modal";
@@ -171,6 +173,7 @@ export function AccountingWorkbenchPage() {
     setFormErrors({});
     setDrawerState(next);
   };
+  useCreateIntent("new-journal", "financials:write", () => setDrawer("journal"));
   const [busy, setBusy] = useState(false);
   // Excel unless CSV/TSV was the last format chosen anywhere in the app.
   const [exportFormat, setExportFormat] = useState<AccountingExportFormat>(() => (readLastExportFormat("xlsx") === "xlsx" ? "xlsx" : "csv"));
@@ -615,6 +618,8 @@ export function AccountingWorkbenchPage() {
           </div>
         </section>
       </div>
+
+      <ChartOfAccountsCard accounts={accounts as any} canWrite={canWrite} />
 
       <section className="card">
         <div className="card__head">

@@ -58,6 +58,7 @@ import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
 import { ASK_FILTER_COMMAND_PREFIX, getAskFilterTarget } from "../lib/nlFilter/bridge";
 import { useStaticCommands } from "../lib/useStaticCommands";
+import { CREATE_COMMAND_IDS, useCreateCommands } from "../lib/createCommands";
 import { formatDueDate } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
@@ -512,17 +513,19 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
     open && can("society:read") && searchTerm.length >= 2 ? { query: searchTerm } : "skip",
   ) as Array<{ kind: string; id: string; title: string; subtitle?: string; societyId: string | null; societyName: string | null; to: string }> | undefined;
 
+  const createCommands = useCreateCommands();
   const actions = useMemo<CommandItem[]>(
     () =>
-      staticCommands.map((command) => ({
+      [...createCommands, ...staticCommands.filter((command) => !CREATE_COMMAND_IDS.has(command.id))].map((command: { id: string; label: string; icon: CommandItem["icon"]; module?: ModuleKey; keywords?: string[]; run: () => void | Promise<void> }) => ({
         id: command.id,
         label: command.label,
         icon: command.icon,
         category: "Actions" as const,
         ...(command.module ? { module: command.module } : {}),
+        ...(command.keywords ? { keywords: command.keywords } : {}),
         run: command.run,
       })),
-    [staticCommands],
+    [createCommands, staticCommands],
   );
 
   const pinnedCommandSet = useMemo(() => new Set(pinnedCommandIds), [pinnedCommandIds]);

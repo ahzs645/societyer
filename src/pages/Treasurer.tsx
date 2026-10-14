@@ -1,3 +1,4 @@
+import { useCreateIntent } from "@/hooks/useCreateIntent";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { CreateMenu } from "../components/CreateMenu";
 import { useMemo, useState, type ReactNode } from "react";
@@ -362,6 +363,7 @@ export function TreasurerPage() {
   const [sourceDraft, setSourceDraft] = useState<any>(null);
   const [eventDraft, setEventDraft] = useState<any>(null);
   const [expenseDraft, setExpenseDraft] = useState<any>(null);
+  useCreateIntent("new-claim", "financials:write", () => setExpenseDraft(newExpenseDraft()));
   const [levyImportOpen, setLevyImportOpen] = useState(false);
   const [quickEntryDraft, setQuickEntryDraft] = useState<ReturnType<typeof newQuickEntryDraft> | null>(null);
   const [quickEntryBusy, setQuickEntryBusy] = useState(false);
