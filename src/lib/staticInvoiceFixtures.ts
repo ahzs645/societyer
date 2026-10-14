@@ -63,7 +63,7 @@ const SERIES_YOGA = "static_invoice_series_westside_yoga";
 
 type LineSpec = { item: keyof typeof CATALOG; quantity?: number; description?: string; unitPriceCents?: number };
 
-function catalogItems(ids: Ids, at: string) {
+function catalogItems(ids: Ids, at: string): Array<Record<string, any>> {
   const row = (id: string, name: string, unitPriceCents: number, category: string, extra: Record<string, any> = {}) => ({
     _id: id,
     societyId: ids.societyId,
@@ -165,7 +165,7 @@ export function invoiceDemoData(ids: Ids, nowMs = Date.now()) {
     { key: "dues_liam", party: member("liam", "Liam Tremblay"), issue: d(-2), terms: "net_30", lines: lines([{ item: "regularDues" }]), state: "draft", source: "dues" },
     // Sponsorships
     { key: "sponsor_dental", party: parties.dental, issue: d(-100), terms: "net_30", lines: lines([{ item: "bronze", description: "Spring newsletter and community picnic signage" }]), state: "sent", reference: "Sponsorship 2026", payments: [{ date: d(-82), method: "cheque", reference: "Cheque 4471" }] },
-    { key: "sponsor_cu_gold", party: parties.creditUnion, issue: d(-45), terms: "net_60", lines: lines([{ item: "gold", description: "Youth resilience program, presenting sponsor" }]), state: "sent", reference: "PO 55-1180", memo: "Payable in two instalments; the second is due by the due date below.", payments: [{ date: d(-20), amountCents: 125000, method: "direct_deposit", txnKey: "cu", reference: "First instalment" }] },
+    { key: "sponsor_cu_gold", party: parties.creditUnion, issue: d(-45), terms: "net_60", lines: lines([{ item: "gold", description: "Youth resilience program, presenting sponsor" }]), state: "sent", reference: "PO 55-1180", memo: "Payable in two instalments of $1,250; the second is due by the invoice due date.", payments: [{ date: d(-20), amountCents: 125000, method: "direct_deposit", txnKey: "cu", reference: "First instalment" }] },
     { key: "sponsor_cu_gala", party: parties.creditUnion, issue: d(-1), terms: "net_30", lines: lines([{ item: "bronze", description: "Fall gala table sponsor" }, { item: "bronze", description: "Fall gala program advertisement", unitPriceCents: 25000 }]), state: "draft", reference: "Fall gala" },
     // Space rentals
     { key: "hall_seniors", party: { partyKind: "custom", billToName: "Riverside Seniors Club", billToEmail: "seniors.club@example.org", billToAddress: "c/o Margaret Lin\n12 Elm Court\nVancouver, BC V5L 1A2" }, issue: d(-130), terms: "net_15", lines: lines([{ item: "hall", description: "Winter social" }, { item: "kitchen" }]), state: "sent", payments: [{ date: d(-122), method: "cheque", reference: "Cheque 902" }] },
@@ -188,7 +188,7 @@ export function invoiceDemoData(ids: Ids, nowMs = Date.now()) {
   };
   const txnId = (key: string) => `static_tx_invoice_${key}`;
 
-  const invoices = specs.map((spec, index) => {
+  const invoices: Array<Record<string, any>> = specs.map((spec, index) => {
     const sequence = index + 1;
     const totals = computeInvoiceTotals(spec.lines, spec.discount);
     const dueDate = addDays(spec.issue, termDays[spec.terms]);
