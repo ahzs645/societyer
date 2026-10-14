@@ -4,7 +4,7 @@ import { ReactNode, useState, createElement, useLayoutEffect, useRef } from "rea
 import { Link, useLocation } from "react-router-dom";
 import { EmptyState, TintedIconTile } from "../components/ui";
 import { useToast } from "../components/Toast";
-import { setStoredSocietyId } from "../hooks/useSociety";
+import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
+import { Breadcrumbs, useRouteBreadcrumbs, type Crumb } from "../components/Breadcrumbs";
 
 // The society-loading placeholder shown while `useSociety()` is undefined.
 // Extracted so the ~86 page guards share one element instead of hand-rolling
@@ -108,7 +109,14 @@ export function PageHeader({
   routeKey,
   actions,
   info,
+  breadcrumbs,
 }: {
+  /**
+   * Breadcrumb trail. Omit to derive it from the route (detail pages get
+   * "Section › List › Record"); pass `false` to suppress it, or an explicit
+   * list to override.
+   */
+  breadcrumbs?: Crumb[] | false;
   title: ReactNode;
   subtitle?: ReactNode;
   /** Background that would otherwise be a paragraph under the header; shown from an ⓘ beside the title. */
@@ -149,11 +157,17 @@ export function PageHeader({
   const actionsRef = useRef<HTMLDivElement>(null);
   usePhoneHeaderActionsFit(headerRef, actionsRef, Boolean(actions));
   const resolvedTone: IconTone = identity?.color ?? iconColor ?? "blue";
+  const organization = useSociety();
+  // Detail pages (a path below a registered list route) get a derived trail;
+  // an explicit routeKey marks a page as its own destination.
+  const derivedCrumbs = useRouteBreadcrumbs(location.pathname, displayTitle, organization);
+  const crumbs = breadcrumbs === false ? null : breadcrumbs ?? (routeKey ? null : derivedCrumbs);
 
   return (
-    <div className="page__header" ref={headerRef}>
+    <div className={`page__header${crumbs ? " page__header--with-crumbs" : ""}`} ref={headerRef}>
       <div className="page__header-main">
         <div className="page__intro">
+          {crumbs && crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
           {info ? (
             // The ⓘ sits beside the heading, not inside it, so the heading's
             // accessible name stays the page title.
