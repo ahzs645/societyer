@@ -1,6 +1,6 @@
 // Private sub-components/helpers/consts/nav config for Layout.tsx (sidebar, nav groups, safe wrappers).
 
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   LayoutDashboard,
@@ -106,6 +106,7 @@ import type { ThemePreference } from "../lib/theme";
 import { applyResolvedTheme } from "../lib/theme";
 import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
+import { RESOLVED_NAV_TREE, navParentForPath, navRouteForPath } from "../lib/navTree";
 import { useUIStore, type PinnedView } from "../lib/store";
 import { getDesktopBridge } from "../lib/desktopBridge";
 import { useToast } from "./Toast";
@@ -250,20 +251,29 @@ type NavItem = {
   module?: ModuleKey;
   entityKinds?: ("society" | "corporation")[];
   permission?: string;
+  /** Label inside the tree only (e.g. "Overview" for Financials under Finance). */
+  treeLabel?: string;
 };
 
 
-type NavGroup = {
+/** A visible L1 parent and the L2 items under it. */
+type VisibleNavParent = {
+  kind: "parent";
   id: string;
   label: string;
+  i18nKey?: string;
+  icon: LucideIcon;
+  color: IconTone;
   defaultOpen?: boolean;
-  items: NavItem[];
+  children: NavItem[];
 };
+
+type VisibleNavEntry = { kind: "item"; item: NavItem } | VisibleNavParent;
 
 /**
  * Resolve a route into a NavItem by reading icon/color/label/module from the
- * single-source-of-truth registry. Throws at module load if a route is missing
- * from the registry — catches typos before the sidebar renders.
+ * single-source-of-truth registry. The tree in `navConfig.ts` is validated at
+ * module load (`navTree.ts`), so a typo fails before the sidebar renders.
  */
 
 function navItem(to: string, end?: boolean): NavItem {
@@ -287,180 +297,36 @@ function navItem(to: string, end?: boolean): NavItem {
   };
 }
 
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    id: "workspace",
-    label: "Workspace",
-    defaultOpen: true,
-    items: [
-      navItem("/app", true),
-      navItem("/app/portfolio"),
-      navItem("/app/society"),
-      navItem("/app/corporate-history"),
-      navItem("/app/org-history"),
-      navItem("/app/timeline"),
-    ],
-  },
-  {
-    id: "people",
-    label: "People",
-    defaultOpen: true,
-    items: [
-      navItem("/app/members"),
-      navItem("/app/directors"),
-      navItem("/app/org-chart"),
-      navItem("/app/role-holders"),
-      navItem("/app/point-in-time-register"),
-      navItem("/app/people-directory"),
-      navItem("/app/people-history"),
-      navItem("/app/committees"),
-      navItem("/app/volunteers"),
-      navItem("/app/employees"),
-    ],
-  },
-  {
-    id: "work",
-    label: "Work",
-    defaultOpen: true,
-    items: [
-      navItem("/app/goals"),
-      navItem("/app/tasks"),
-      navItem("/app/deadlines"),
-      navItem("/app/commitments"),
-      navItem("/app/documents"),
-      navItem("/app/document-catalog"),
-      navItem("/app/post-incorporation"),
-      navItem("/app/library"),
-      navItem("/app/communications"),
-      navItem("/app/outbox"),
-    ],
-  },
-  {
-    id: "meetings",
-    label: "Meetings & votes",
-    items: [
-      navItem("/app/meetings"),
-      navItem("/app/meeting-templates"),
-      navItem("/app/agendas"),
-      navItem("/app/motions"),
-      navItem("/app/minutes"),
-      navItem("/app/meeting-evidence"),
-      navItem("/app/proposals"),
-      navItem("/app/elections"),
-      navItem("/app/written-resolutions"),
-      navItem("/app/proxies"),
-    ],
-  },
-  {
-    id: "records",
-    label: "Governance records",
-    items: [
-      navItem("/app/conflicts"),
-      navItem("/app/attestations"),
-      navItem("/app/auditors"),
-      navItem("/app/court-orders"),
-      navItem("/app/governance-registers"),
-      navItem("/app/rights-ledger"),
-      navItem("/app/certificate-register"),
-      navItem("/app/dividends"),
-      navItem("/app/significant-individuals"),
-      navItem("/app/service-providers"),
-      navItem("/app/annual-filings"),
-      navItem("/app/compliance-settings"),
-      navItem("/app/minute-book"),
-      navItem("/app/bylaw-rules"),
-      navItem("/app/bylaw-diff"),
-      navItem("/app/bylaws-history"),
-    ],
-  },
-  {
-    id: "compliance",
-    label: "Compliance",
-    items: [
-      navItem("/app/filings"),
-      navItem("/app/compliance-obligations"),
-      navItem("/app/research-library"),
-      navItem("/app/filings/prefill"),
-      navItem("/app/annual-cycle"),
-      navItem("/app/coverage"),
-      navItem("/app/formation-maintenance"),
-      navItem("/app/policies"),
-      navItem("/app/retention"),
-      navItem("/app/records-archive"),
-      navItem("/app/inspections"),
-      navItem("/app/privacy"),
-      navItem("/app/pipa-training"),
-      navItem("/app/insurance"),
-      navItem("/app/access-custody"),
-      navItem("/app/transparency"),
-    ],
-  },
-  {
-    id: "finance",
-    label: "Finance",
-    items: [
-      navItem("/app/financials"),
-      navItem("/app/financials/accounting"),
-      navItem("/app/financials/year-end"),
-      navItem("/app/finance-imports"),
-      navItem("/app/treasurer"),
-      navItem("/app/assets"),
-      navItem("/app/inventory"),
-      navItem("/app/grants"),
-      navItem("/app/reconciliation"),
-      navItem("/app/receipts"),
-      navItem("/app/membership"),
-    ],
-  },
-  {
-    id: "workflows",
-    label: "Workflows",
-    items: [
-      navItem("/app/workflows"),
-      navItem("/app/workflow-runs"),
-      navItem("/app/calendar-sync"),
-    ],
-  },
-  {
-    id: "advanced",
-    label: "Advanced setup",
-    items: [
-      navItem("/app/integrations"),
-      navItem("/app/browser-connectors"),
-      navItem("/app/ai-agents"),
-      navItem("/app/workflow-packages"),
-      navItem("/app/template-engine"),
-      navItem("/app/paperless"),
-    ],
-  },
-  {
-    id: "administration",
-    label: "Administration",
-    items: [
-      navItem("/app/notifications"),
-      navItem("/app/users"),
-      navItem("/app/custom-fields"),
-      navItem("/app/imports"),
-      navItem("/app/intake"),
-      navItem("/app/settings"),
-      navItem("/app/settings/api-keys"),
-      navItem("/app/webhooks"),
-      navItem("/app/audit"),
-      navItem("/app/exports"),
-    ],
-  },
-];
+/** The sidebar tree with every route resolved to a NavItem (unfiltered). */
+const NAV_TREE_ENTRIES: VisibleNavEntry[] = RESOLVED_NAV_TREE.map((node): VisibleNavEntry => {
+  if (node.kind === "item") return { kind: "item", item: navItem(node.to, node.end) };
+  return {
+    kind: "parent",
+    id: node.id,
+    label: node.label,
+    ...(node.i18nKey ? { i18nKey: node.i18nKey } : {}),
+    icon: node.icon,
+    color: node.tone,
+    ...(node.defaultOpen ? { defaultOpen: true } : {}),
+    children: node.children.map((child) => ({
+      ...navItem(child.to, child.end),
+      ...(child.treeLabel ? { treeLabel: child.treeLabel } : {}),
+    })),
+  };
+});
 
 
-const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
+const ALL_NAV_ITEMS = NAV_TREE_ENTRIES.flatMap((entry) => (entry.kind === "item" ? [entry.item] : entry.children));
 
 const ALL_NAV_ITEM_ROUTES = new Set(ALL_NAV_ITEMS.map((item) => item.to));
 
 
+/**
+ * Exactly one nav route is active for a pathname — the most specific one —
+ * so Accounting lights up on /app/financials/accounting, not Financials too.
+ */
 function isNavItemActive(item: NavItem, pathname: string) {
-  if (item.end) return pathname === item.to;
-  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+  return navRouteForPath(pathname) === item.to;
 }
 
 
@@ -494,24 +360,85 @@ function getPinnedNav(pinnedRoutes: string[]) {
 }
 
 
-function getGroupedNav(pinnedRouteSet: Set<string>) {
-  return NAV_GROUPS
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !pinnedRouteSet.has(item.to)),
-    }))
-    .filter((group) => group.items.length > 0);
+/** Filter the tree by a visibility predicate; a parent with no visible children disappears. */
+function filterNavTree(predicate: (item: NavItem) => boolean): VisibleNavEntry[] {
+  return NAV_TREE_ENTRIES.flatMap<VisibleNavEntry>((entry) => {
+    if (entry.kind === "item") return predicate(entry.item) ? [entry] : [];
+    const children = entry.children.filter(predicate);
+    return children.length > 0 ? [{ ...entry, children }] : [];
+  });
 }
 
 
-function getInitialOpenGroups(pathname: string, pinnedRoutes: string[] = readStoredPinnedRoutes()) {
-  const groupedNav = getGroupedNav(new Set(pinnedRoutes));
-  return Object.fromEntries(
-    groupedNav.map((group) => [
-      group.id,
-      Boolean(group.defaultOpen || group.items.some((item) => isNavItemActive(item, pathname))),
-    ]),
-  ) as Record<string, boolean>;
+type SidebarMode = "expanded" | "rail" | "hidden";
+
+const SIDEBAR_MODE_KEY = "societyer.sidebar.mode";
+
+const OPEN_PARENTS_KEY = "societyer.sidebar.openParents";
+
+/** Desktop sidebar state. Migrates the old boolean collapse flag to the rail. */
+function readStoredSidebarMode(): SidebarMode {
+  if (isStaticDemoRuntime()) return "expanded";
+  try {
+    const stored = localStorage.getItem(SIDEBAR_MODE_KEY);
+    if (stored === "expanded" || stored === "rail" || stored === "hidden") return stored;
+    return localStorage.getItem(COLLAPSE_KEY) === "1" ? "rail" : "expanded";
+  } catch {
+    return "expanded";
+  }
+}
+
+function writeStoredSidebarMode(mode: SidebarMode) {
+  if (isStaticDemoRuntime()) return;
+  try {
+    localStorage.setItem(SIDEBAR_MODE_KEY, mode);
+    localStorage.removeItem(COLLAPSE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function readStoredOpenParents(): Record<string, boolean> | null {
+  if (isStaticDemoRuntime()) return null;
+  try {
+    const stored = localStorage.getItem(OPEN_PARENTS_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredOpenParents(value: Record<string, boolean>) {
+  if (isStaticDemoRuntime()) return;
+  try {
+    localStorage.setItem(OPEN_PARENTS_KEY, JSON.stringify(value));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/**
+ * Which parents start expanded: the user's remembered choice on desktop (or
+ * the defaults the first time), nothing on the phone drawer — and always the
+ * parent of the current page.
+ */
+function getInitialOpenParents(pathname: string, isMobile: boolean): Record<string, boolean> {
+  const stored = isMobile ? {} : readStoredOpenParents();
+  const base: Record<string, boolean> = stored
+    ? { ...stored }
+    : Object.fromEntries(
+        NAV_TREE_ENTRIES.flatMap((entry) =>
+          entry.kind === "parent" && entry.defaultOpen ? [[entry.id, true]] : [],
+        ),
+      );
+  const active = navParentForPath(pathname);
+  if (active) base[active.id] = true;
+  return base;
 }
 
 
@@ -625,49 +552,55 @@ function getSidebarMenuPosition(x: number, y: number) {
 }
 
 
-function renderNavItem(
-  item: NavItem,
-  counts: any,
-  collapsed: boolean,
-  isMobileNav: boolean,
-  getLabel: (item: NavItem) => string,
-  isPinned: boolean,
-  onContextMenu: (event: ReactMouseEvent<HTMLElement>, item: NavItem) => void,
-  onKeyDown: (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => void,
-  onTogglePin: (item: NavItem) => void,
-  pinActionLabel: string,
-) {
+type RenderNavItemOptions = {
+  counts: any;
+  label: string;
+  isPinned: boolean;
+  isActive: boolean;
+  /** Set for L2 rows: the parent they collapse into (keyboard ← goes there). */
+  parentId?: string;
+  onContextMenu: (event: ReactMouseEvent<HTMLElement>, item: NavItem) => void;
+  onKeyDown: (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => void;
+  onTogglePin: (item: NavItem) => void;
+  pinActionLabel: string;
+};
+
+function renderNavItem(item: NavItem, options: RenderNavItemOptions) {
+  const { counts, label, isPinned, isActive, parentId } = options;
   const Icon = item.icon;
   const count = getCount(item.to, counts);
-  const label = getLabel(item);
+  const isChild = Boolean(parentId);
 
   return (
-    <div key={item.to} className="sidebar__item-slot">
-      <NavLink
+    <div key={item.to} className={`sidebar__item-slot${isChild ? " sidebar__item-slot--child" : ""}`}>
+      <Link
         to={item.to}
-        end={item.end}
-        className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
+        className={`sidebar__item${isChild ? " sidebar__item--child" : ""}${isActive ? " is-active" : ""}`}
+        aria-current={isActive ? "page" : undefined}
         data-pinned={isPinned || undefined}
-        title={!isMobileNav && collapsed ? label : undefined}
-        onContextMenu={(event) => onContextMenu(event, item)}
-        onKeyDown={(event) => onKeyDown(event, item)}
+        data-nav-row=""
+        data-nav-child-of={parentId}
+        onContextMenu={(event) => options.onContextMenu(event, item)}
+        onKeyDown={(event) => options.onKeyDown(event, item)}
       >
-        <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
-          <Icon size={14} />
-        </TintedIconTile>
+        {!isChild && (
+          <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
+            <Icon size={14} />
+          </TintedIconTile>
+        )}
         <span className="sidebar__label">{label}</span>
         {count != null ? <NavCountPill to={item.to} count={count} /> : counts === undefined ? <NavCountLoadingPill to={item.to} /> : null}
-      </NavLink>
+      </Link>
       {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
        * without needing right-click (desktop) or the command palette. A real
-       * <button> rendered as a SIBLING of the NavLink — never nested inside the
+       * <button> rendered as a SIBLING of the link — never nested inside the
        * <a> — so it stays a valid, independent, focusable control. */}
       <button
         type="button"
         className="sidebar__pin-toggle"
-        aria-label={pinActionLabel}
-        title={pinActionLabel}
-        onClick={() => onTogglePin(item)}
+        aria-label={options.pinActionLabel}
+        title={options.pinActionLabel}
+        onClick={() => options.onTogglePin(item)}
       >
         {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
       </button>
@@ -754,15 +687,20 @@ export {
   WorkbenchPageLoader,
   OfflineBellFallback,
   navItem,
-  NAV_GROUPS,
+  NAV_TREE_ENTRIES,
   ALL_NAV_ITEMS,
   ALL_NAV_ITEM_ROUTES,
   isNavItemActive,
   normalizePinnedRoutes,
   readStoredPinnedRoutes,
   getPinnedNav,
-  getGroupedNav,
-  getInitialOpenGroups,
+  filterNavTree,
+  getInitialOpenParents,
+  readStoredSidebarMode,
+  writeStoredSidebarMode,
+  writeStoredOpenParents,
+  SIDEBAR_MODE_KEY,
+  OPEN_PARENTS_KEY,
   COLLAPSE_KEY,
   SPOTLIGHT_COLLAPSED_KEY,
   PINNED_ROUTES_KEY,
@@ -782,7 +720,9 @@ export {
 
 export type {
   NavItem,
-  NavGroup,
+  VisibleNavEntry,
+  VisibleNavParent,
+  SidebarMode,
   FavoriteRef,
   SidebarContextMenu,
 };

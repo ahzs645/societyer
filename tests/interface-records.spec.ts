@@ -193,7 +193,7 @@ test("document metadata opens its review workbench and validates page comments",
   await page.getByLabel("New entity name", { exact: true }).fill("Synthetic readonly attempt");
   await expect(page.getByRole("button", { name: "Clone", exact: true })).toBeDisabled();
   await openNavigation(page);
-  const workspaceGroup = page.getByRole("button", { name: /^Workspace(?: \d+)?$/ }).first();
+  const workspaceGroup = page.getByRole("button", { name: /^Organization$/ }).first();
   if (await workspaceGroup.getAttribute("aria-expanded") !== "true") await workspaceGroup.click();
   await page.getByRole("link", { name: "Society", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();

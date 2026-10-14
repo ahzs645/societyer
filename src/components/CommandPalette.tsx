@@ -60,6 +60,9 @@ import { useStaticCommands } from "../lib/useStaticCommands";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
+import { navParentForRoute } from "../lib/navTree";
+import { ROUTE_SHORTCUTS, type Shortcut } from "../lib/shortcutsRegistry";
+import { ShortcutHint } from "./ShortcutHint";
 
 type CommandCategory =
   | "Recent"
@@ -84,6 +87,10 @@ type CommandItem = {
   run?: () => void | Promise<void>;
   /** Optional keyboard hint shown as a <kbd>. */
   shortcut?: string;
+  /** Registry shortcut (platform-aware keys), e.g. "G then D" for the dashboard. */
+  shortcutKeys?: Shortcut;
+  /** Sidebar section a nav result lives under ("Finance" for Reconciliation). */
+  path?: string;
   /** Registry group — drives the per-row icon tint. */
   group?: RouteGroup;
   /** Extra search terms. Lets "logo" surface Settings, etc. */
@@ -174,7 +181,13 @@ const NAV_ITEMS: CommandItem[] = Object.entries(ROUTE_IDENTITY).map(([path, iden
     to: path,
   };
   if (identity.module) item.module = identity.module;
-  if (ROUTE_KEYWORDS[path]) item.keywords = ROUTE_KEYWORDS[path];
+  // Show where the page sits in the sidebar ("Finance › Reconciliation") and
+  // let the section name find its pages.
+  const parent = navParentForRoute(path);
+  const keywords = [...(ROUTE_KEYWORDS[path] ?? []), ...(parent ? [parent.label] : [])];
+  if (keywords.length) item.keywords = keywords;
+  if (parent) item.path = parent.label;
+  if (ROUTE_SHORTCUTS[path]) item.shortcutKeys = ROUTE_SHORTCUTS[path];
   return item;
 });
 
@@ -801,16 +814,24 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
                         id={`${listId}-${idx}`}
                         role="option"
                         aria-selected={idx === active}
+                        aria-label={item.path ? `${item.label}, in ${item.path}` : undefined}
                         className={`kbar__item${idx === active ? " is-active" : ""}`}
                         style={itemStyle}
                         onMouseEnter={() => setActive(idx)}
                         onClick={() => run(item)}
                       >
                         <Icon />
-                        <span>{item.label}</span>
+                        <span className="kbar__label">
+                          {item.path && <span className="kbar__path">{item.path} › </span>}
+                          {item.label}
+                        </span>
                         {item.shortcut ? (
                           <span className="kbar__hint">
                             <span className="kbar__kbd">{item.shortcut}</span>
+                          </span>
+                        ) : item.shortcutKeys ? (
+                          <span className="kbar__hint">
+                            <ShortcutHint keys={item.shortcutKeys.keys} sequence={item.shortcutKeys.sequence} />
                           </span>
                         ) : (
                           <span className="kbar__hint">{item.hint ?? (item.run ? "Action" : "Navigate")}</span>
@@ -843,7 +864,8 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
           <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
           <span><kbd>↵</kbd> to run</span>
           <span><kbd>esc</kbd> to close</span>
-          <span style={{ marginLeft: "auto" }}><kbd>alt</kbd>+<kbd>o</kbd> inspector</span>
+          <span style={{ marginLeft: "auto" }}><ShortcutHint id="inspector" /> inspector</span>
+          <span><ShortcutHint id="help" /> shortcuts</span>
         </div>
       </div>
     </div>
