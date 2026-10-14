@@ -22,6 +22,11 @@ import { cleanCellText, escapeXml } from "../src/lib/xlsx/xml";
 import { sheetFromCsv } from "../src/lib/xlsx/csvSheet";
 import { nodeText, reportTableSheet } from "../src/lib/xlsx/reportSheet";
 import { xlsxFileName } from "../src/lib/xlsx/index";
+import { sheetTextRows } from "../src/lib/xlsx/textRows";
+import { recordCellXlsx, recordFieldXlsxColumn } from "../src/platform/record-engine/record-table/utils/recordCellText";
+import { FIELD_TYPES } from "../src/platform/record-engine/types/FieldType";
+import { invoiceExportSheet, invoiceExportTextRows } from "../src/features/invoicing/invoiceExport";
+import { accountingWorkbook } from "../src/features/financials/lib/accountingXlsx";
 import type { XlsxWorkbook } from "../src/lib/xlsx/types";
 
 let passed = 0;
@@ -36,7 +41,7 @@ type XmlElement = { name: string; attrs: Record<string, string>; children: XmlEl
 
 const NAME = /^[A-Za-z_][\w.\-]*(:[A-Za-z_][\w.\-]*)?$/;
 // eslint-disable-next-line no-control-regex
-const ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/;
+const ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/;
 
 function decodeEntities(text: string, where: string): string {
   return text.replace(/&([^;&\s]*);?/g, (match, body: string) => {
@@ -176,7 +181,7 @@ assert.ok(unique[5].endsWith(" (2)") && unique[5].length === 31);
 ok("sheet names: forbidden characters removed, ≤ 31 characters, no edge apostrophes, History avoided, unique case-insensitively");
 
 assert.equal(escapeXml(`<a href="x">Tom & Jerry's</a>`), "&lt;a href=&quot;x&quot;&gt;Tom &amp; Jerry&apos;s&lt;/a&gt;");
-assert.equal(cleanCellText("a\u0000b\u0007c\u000Bd\tok\nfine￾"), "abcd\tok\nfine");
+assert.equal(cleanCellText("a\u0000b\u0007c\u000Bd\tok\nfine\uFFFE"), "abcd\tok\nfine");
 assert.equal(cleanCellText("lone \uD800 surrogate"), "lone  surrogate");
 assert.equal(cleanCellText("x".repeat(40000)).length, 32767);
 ok("XML escaping, illegal-character stripping and the 32,767-character cell limit");
@@ -476,6 +481,46 @@ assert.equal(nodeText(createElement("span", null, "a", createElement("b", null, 
 const reportParts = buildXlsxParts({ sheets: [report], created });
 parseXml(reportParts["xl/worksheets/sheet1.xml"], "report sheet");
 ok("ReportTable → sheet adapter: hierarchy flattened with indents, codes, comparison change and change %");
+
+const text = sheetTextRows(report);
+assert.deepEqual(text[0], ["Code", "Account", "FY 2026", "FY 2025", "Change", "Change %"]);
+assert.deepEqual(text[2], ["4000", "  Dues", "1200.00", "1000.00", "200.00", "20.0%"], "CSV keeps decimals, indents labels, shows Δ%");
+ok("sheet → CSV text rows (statements keep CSV available)");
+
+// RecordTable fields: currency (isCents), numbers, dates, date-times, booleans, selects, relations.
+const field = (fieldType: string, config: Record<string, unknown> = {}) => ({ name: "f", label: fieldType, fieldType, config }) as any;
+const currencyField = field(FIELD_TYPES.CURRENCY, { isCents: true, currencyCode: "USD" });
+assert.deepEqual(recordFieldXlsxColumn(currencyField), { header: "CURRENCY", type: "currency", currency: "USD" });
+assert.equal(recordCellXlsx(currencyField, 12345), 123.45, "isCents divided");
+assert.equal(recordCellXlsx(field(FIELD_TYPES.CURRENCY), 99.5), 99.5);
+assert.equal(recordFieldXlsxColumn(field(FIELD_TYPES.CURRENCY)).currency, "CAD", "CAD by default");
+assert.equal(recordCellXlsx(currencyField, null), null);
+assert.equal(recordCellXlsx(field(FIELD_TYPES.NUMBER), "42"), 42);
+assert.equal(recordCellXlsx(field(FIELD_TYPES.DATE), "2026-10-14"), "2026-10-14");
+assert.equal(recordCellXlsx(field(FIELD_TYPES.DATE_TIME), "2026-10-14T12:00:00Z"), Date.parse("2026-10-14T12:00:00Z"));
+assert.equal(recordCellXlsx(field(FIELD_TYPES.BOOLEAN), false), false, "false is a value, not empty");
+assert.equal(recordCellXlsx(field(FIELD_TYPES.BOOLEAN), undefined), null);
+const selectField = field(FIELD_TYPES.MULTI_SELECT, { options: [{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }] });
+assert.equal(recordCellXlsx(selectField, ["a", "b"]), "Alpha; Beta", "option labels, not keys");
+assert.equal(recordCellXlsx({ ...field(FIELD_TYPES.RELATION), name: "owner" }, "id_1", { ownerLabel: "Ada" }), "Ada", "relation display label");
+ok("RecordTable cells: currency with isCents, numbers, dates, date-times, booleans, select labels, relation labels");
+
+const invoices = invoiceExportSheet([
+  { number: "INV-1", billToName: "=cmd", issueDate: "2026-10-01", dueDate: "2026-10-31", status: "void", totalCents: 5000, paidCents: 0, balanceCents: 5000, currency: "USD" } as any,
+]);
+assert.deepEqual(invoices.rows[0], ["INV-1", "=cmd", "", "2026-10-01", "2026-10-31", "Void", { value: 5000, currency: "USD" }, { value: 0, currency: "USD" }, { value: 0, currency: "USD" }, "USD", ""]);
+assert.deepEqual(
+  invoiceExportTextRows([{ number: "INV-1", billToName: "A", issueDate: "2026-10-01", dueDate: "2026-10-31", status: "void", totalCents: 5000, paidCents: 0, balanceCents: 5000, currency: "USD" } as any])[1].slice(6, 9),
+  ["50.00", "0.00", "0.00"],
+  "CSV keeps decimals; a void invoice owes nothing",
+);
+const accounting = accountingWorkbook("Reports", [{ kind: "trial_balance", csv: "account_code,account_name,debit_cents,credit_cents,balance_cents\n1000,Cash,100,0,100" }, { kind: "general_ledger", csv: "entry_date,amount_cents\n2026-01-31,2500" }]);
+assert.deepEqual(accounting.sheets.map((sheet) => sheet.name), ["Trial balance", "General ledger"]);
+assert.equal(accounting.sheets[1].columns[0].type, "date");
+assert.equal(accounting.sheets[1].columns[1].type, "currency");
+const accountingParts = buildXlsxParts(accounting);
+for (const [name, xml] of Object.entries(accountingParts)) parseXml(xml, `accounting ${name}`);
+ok("invoice and accounting adapters: typed dates and currency per invoice; one workbook with a sheet per report");
 
 // ----------------------------------------------- external round-trips (opt) --
 

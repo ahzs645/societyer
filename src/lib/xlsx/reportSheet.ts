@@ -57,10 +57,14 @@ export function reportTableSheet({
   ];
 
   const out: XlsxRowObject[] = [];
+  // Size the label column to the account labels; explanatory notes spill
+  // into the empty cells beside them instead of widening it.
+  let labelWidth = labelHeader.length + 2;
   const walk = (list: ReportRow<unknown>[], depth: number) => {
     for (const row of list) {
       const rowCurrency = row.currency ?? currency;
       const label: XlsxCellInput = { value: rowTitle(row), indent: depth };
+      if (row.kind !== "note") labelWidth = Math.max(labelWidth, rowTitle(row).length + depth * 2 + 3);
       if (row.kind === "note") {
         out.push({ cells: [...(hasCode ? [null] : []), label] });
         continue;
@@ -91,6 +95,7 @@ export function reportTableSheet({
     }
   };
   walk(rows, 0);
+  sheetColumns[hasCode ? 1 : 0].width = Math.min(50, Math.max(12, labelWidth));
 
   return { name, columns: sheetColumns, rows: out, title, autoFilter: false };
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, Ban, Bell, Download, FileText, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, Bell, Download, FileSpreadsheet, FileText, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
@@ -15,8 +15,8 @@ import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatDate, pluralize } from "../lib/format";
-import { downloadDelimitedText, exportFileName, readLastExportFormat, toDelimitedText } from "../lib/tableExport";
-import { INVOICE_STATUS_LABEL, addDays, isOpenStatus, partyKey, type CustomerSummary } from "../../shared/invoicing";
+import { downloadTableExport, readLastExportFormat, rememberExportFormat, type TableExportFormat } from "../lib/tableExport";
+import { addDays, isOpenStatus, partyKey, type CustomerSummary } from "../../shared/invoicing";
 import { isSociety } from "../../shared/organizationDomain";
 import { InvoiceStatusPill } from "../features/invoicing/InvoiceStatusPill";
 import { InvoiceBuilder } from "../features/invoicing/InvoiceBuilder";
@@ -28,6 +28,7 @@ import { DuesGeneratorModal } from "../features/invoicing/DuesGeneratorModal";
 import { InvoiceSettingsDrawer } from "../features/invoicing/InvoiceSettingsDrawer";
 import type { BillToValue } from "../features/invoicing/BillToPicker";
 import type { InvoiceRow, InvoiceTab, InvoiceWorkspace } from "../features/invoicing/types";
+import { invoiceExportSheet, invoiceExportTextRows } from "../features/invoicing/invoiceExport";
 
 const TABS: InvoiceTab[] = ["all", "drafts", "outstanding", "overdue", "paid", "recurring", "customers", "catalog"];
 const LIST_TABS = new Set<InvoiceTab>(["all", "drafts", "outstanding", "overdue", "paid"]);
@@ -185,24 +186,18 @@ export function InvoicesPage() {
   });
   const allSelected = rows.length > 0 && selectedRows.length === rows.length;
 
-  const exportRows = (list: InvoiceRow[], label: string) => {
-    const format = readLastExportFormat();
-    const header = ["Number", "Customer", "Email", "Issue date", "Due date", "Status", "Total", "Paid", "Balance due", "Currency", "Reference"];
-    const body = list.map((row) => [
-      row.number,
-      row.billToName,
-      row.billToEmail ?? "",
-      row.issueDate,
-      row.dueDate,
-      INVOICE_STATUS_LABEL[row.status],
-      (row.totalCents / 100).toFixed(2),
-      (row.paidCents / 100).toFixed(2),
-      ((row.status === "void" ? 0 : row.balanceCents) / 100).toFixed(2),
-      row.currency,
-      row.reference ?? "",
-    ]);
-    downloadDelimitedText(exportFileName(`Invoices - ${label} ${workspace?.today ?? ""}`, format), toDelimitedText([header, ...body], format), format);
-    toast.success(`Exported ${pluralize(list.length, "invoice")}`);
+  const exportRows = async (list: InvoiceRow[], label: string, format: TableExportFormat = readLastExportFormat()) => {
+    try {
+      const fileName = await downloadTableExport(`Invoices - ${label} ${workspace?.today ?? ""}`, format, {
+        title: `Invoices - ${label}`,
+        textRows: () => invoiceExportTextRows(list),
+        sheet: () => invoiceExportSheet(list),
+      });
+      rememberExportFormat(format);
+      toast.success(`Exported ${pluralize(list.length, "invoice")}`, fileName);
+    } catch (error) {
+      toast.error("Export failed", error instanceof Error ? error.message : undefined);
+    }
   };
 
   const bulkMarkSent = async () => {
@@ -321,7 +316,8 @@ export function InvoicesPage() {
             <MoreActionsMenu
               items={[
                 ...(societyLike && workspace?.plans.length ? [{ id: "dues", label: "Generate dues invoices", hint: duesCount ? `${duesCount} this month` : undefined, icon: <Users size={14} />, disabled: !canWrite, onSelect: () => setParam({ dues: "1" }) }] : []),
-                { id: "export", label: "Export invoices", icon: <Download size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && exportRows(rows.length ? rows : workspace.invoices, tab) },
+                { id: "export-xlsx", label: "Export to Excel", icon: <FileSpreadsheet size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(rows.length ? rows : workspace.invoices, tab, "xlsx") },
+                { id: "export-csv", label: "Export to CSV", icon: <Download size={14} />, disabled: !canExport || !workspace?.invoices.length, onSelect: () => workspace && void exportRows(rows.length ? rows : workspace.invoices, tab, "csv") },
                 { id: "settings", label: "Invoice settings", icon: <Settings2 size={14} />, onSelect: () => setSettingsOpen(true) },
               ]}
             />
@@ -447,7 +443,7 @@ export function InvoicesPage() {
                 <button type="button" className="btn btn--sm" disabled={busy || !canWrite} onClick={() => void bulkMarkSent()}>
                   <Send size={12} aria-hidden="true" /> Mark sent
                 </button>
-                <button type="button" className="btn btn--sm" disabled={!canExport} onClick={() => exportRows(selectedRows, "selected")}>
+                <button type="button" className="btn btn--sm" disabled={!canExport} onClick={() => void exportRows(selectedRows, "selected")}>
                   <Download size={12} aria-hidden="true" /> Export
                 </button>
                 <button type="button" className="btn btn--sm btn--danger" disabled={busy || !canWrite} onClick={() => void bulkVoid()}>
