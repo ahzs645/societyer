@@ -151,16 +151,24 @@ export function RecordTableScope({
     setSearchParams(next, { replace: true });
   }, [panelRecordId, visibleStackParam, searchParams, setSearchParams, scopeIdentity]);
 
+  // Drops the panel parameters. Called before any navigation the close
+  // leads to (e.g. Open → the record's page), so that navigation wins.
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const clearPanelParams = useCallback(() => {
+    const current = searchParamsRef.current;
+    if (!current.has(RECORD_DEEP_LINK_PARAM) && !current.has(RECORD_STACK_PARAM)) return;
+    const next = new URLSearchParams(current);
+    next.delete(RECORD_DEEP_LINK_PARAM);
+    next.delete(RECORD_STACK_PARAM);
+    setSearchParams(next, { replace: true });
+  }, [setSearchParams]);
+
   const closeSidePanel = useCallback(() => {
     setSidePanelRecord(null);
     resetPanelStack();
-    if (searchParams.has(RECORD_DEEP_LINK_PARAM) || searchParams.has(RECORD_STACK_PARAM)) {
-      const next = new URLSearchParams(searchParams);
-      next.delete(RECORD_DEEP_LINK_PARAM);
-      next.delete(RECORD_STACK_PARAM);
-      setSearchParams(next, { replace: true });
-    }
-  }, [searchParams, setSearchParams, resetPanelStack]);
+    clearPanelParams();
+  }, [resetPanelStack, clearPanelParams]);
 
   // Relative date filters ("Last 30 days", "Fiscal year to date") and export
   // file names use the organisation's calendar, not UTC.
@@ -193,9 +201,11 @@ export function RecordTableScope({
       }
       setSidePanelRecord(null);
       resetPanelStack();
+      // A reload after editing must not reopen the panel this replaced.
+      if (panelRecordId) clearPanelParams();
       onRecordClick?.(recordId, record, { ...options, openRecordIn });
     },
-    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack],
+    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity, panelRecordId, setPanelMinimised, resetPanelStack, clearPanelParams],
   );
 
   const objectNameSingular = objectMetadata.nameSingular;

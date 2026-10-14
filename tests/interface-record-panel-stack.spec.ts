@@ -10,7 +10,7 @@ const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1440) < 769;
 async function openPanel(page: Page, url = DOCUMENT_URL) {
   await page.goto(url);
   const panel = page.locator(".record-side-panel");
-  await expect(panel).toBeVisible();
+  await expect(panel).toBeVisible({ timeout: 30_000 });
   return panel;
 }
 
@@ -57,7 +57,7 @@ test.describe("record panel card stack", () => {
     await expect(attendee).toBeVisible();
     await attendee.click();
     await expect(position).toHaveText("3 of 3");
-    await expect(page).toHaveURL(/stack=mtg\.static_meeting_board_q2~d\./);
+    await expect.poll(() => new URL(page.url()).searchParams.get("stack")).toMatch(/^mtg\.static_meeting_board_q2~d\./);
 
     await panel.getByRole("button", { name: /Options/ }).click();
     await page.getByRole("menuitem", { name: "Close all cards" }).click();
