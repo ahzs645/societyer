@@ -10,7 +10,7 @@ import { PERMISSIONS } from "../../shared/functions/permissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
+import { Drawer, EmptyState, Field, Button, Banner, SettingsShell } from "../components/ui";
 import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
@@ -232,7 +232,19 @@ export function ApiKeysPage() {
             onClose={() => setClientsFilterOpen(false)}
           />
           <RecordTableFilterChips />
-          <RecordTable loading={clientsTableData.loading || clients === undefined} />
+          <RecordTable
+            loading={clientsTableData.loading || clients === undefined}
+            emptyState={
+              <EmptyState
+                icon={<KeyRound size={18} />}
+                title="No API clients yet"
+                description="Add a client for each integration that reads or writes this workspace."
+                action={canManageClients ? (
+                  <button type="button" className="btn btn--accent btn--sm" onClick={() => setClientOpen(true)}>New API client</button>
+                ) : undefined}
+              />
+            }
+          />
         </RecordTableScope>
       ) : (
         <div className="record-table__loading">
@@ -270,6 +282,13 @@ export function ApiKeysPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tokensTableData.loading || tokens === undefined}
+            emptyState={
+              <EmptyState
+                icon={<KeyRound size={18} />}
+                title="No API tokens yet"
+                description="Tokens are issued to an API client from a connected server."
+              />
+            }
             renderRowActions={(r) =>
               canManageClients && r.status === "active" ? (
                 <button

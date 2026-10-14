@@ -7,7 +7,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
-import { Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { Button, Drawer, EmptyState, Field, SettingsShell } from "../components/ui";
 import { InfoPopover } from "../components/InfoPopover";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -149,6 +149,18 @@ export function CustomFieldsPage() {
   };
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const customFieldsEmpty = (
+    <EmptyState
+      icon={<Sliders size={18} />}
+      title="No custom fields yet"
+      description="Add fields for members, directors, volunteers or staff."
+      action={canWrite ? (
+        <button type="button" className="btn btn--accent btn--sm" onClick={openNew}>
+          <Plus size={12} /> New field
+        </button>
+      ) : undefined}
+    />
+  );
 
   return (
     <div className="page custom-fields-page">
@@ -189,12 +201,7 @@ export function CustomFieldsPage() {
             ))}
           </div>
         ) : records.length === 0 ? (
-          <div className="record-table__empty">
-            <div className="record-table__empty-title">No custom fields</div>
-            <div className="record-table__empty-desc">
-              Add fields for members, directors, volunteers, or employees.
-            </div>
-          </div>
+          customFieldsEmpty
         ) : (
           records.map((row: any) => (
             <article
@@ -275,6 +282,7 @@ export function CustomFieldsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || definitions === undefined}
+            emptyState={customFieldsEmpty}
             renderRowActions={(row) => (
               <button
                 className="btn btn--ghost btn--sm btn--icon"
@@ -631,10 +639,7 @@ function LinkAuditPanel({ audit }: { audit: LinkAudit }) {
         </div>
         <div className="link-audit__list">
           {audit.opportunities.length === 0 ? (
-            <div className="record-table__empty">
-              <div className="record-table__empty-title">No link candidates</div>
-              <div className="record-table__empty-desc">Seed metadata and custom fields are already explicit enough.</div>
-            </div>
+            <EmptyState size="sm" variant="caught-up" title="No link candidates" description="Seed metadata and custom fields are already explicit enough." />
           ) : (
             audit.opportunities.map((item) => <LinkAuditRow key={item.id} item={item} />)
           )}
@@ -648,9 +653,7 @@ function LinkAuditPanel({ audit }: { audit: LinkAudit }) {
         </div>
         <div className="link-audit__list">
           {audit.customCandidates.length === 0 ? (
-            <div className="record-table__empty">
-              <div className="record-table__empty-title">No custom link candidates</div>
-            </div>
+            <EmptyState size="sm" variant="caught-up" title="No custom link candidates" description="No custom field looks like it should be a link to another record." />
           ) : (
             audit.customCandidates.map((item) => <LinkAuditRow key={item.id} item={item} />)
           )}

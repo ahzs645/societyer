@@ -6,6 +6,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Archive } from "lucide-react";
+import { EmptyState } from "../components/ui";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -100,7 +101,14 @@ export function RetentionPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || expired === undefined}
-            emptyState="No records past retention."
+            emptyState={
+              <EmptyState
+                variant="caught-up"
+                icon={<Archive size={18} />}
+                title="No records past retention"
+                description="Documents appear here once their retention period ends, ready for review."
+              />
+            }
             renderRowActions={(r) => (
               <>
                 <button
