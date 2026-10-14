@@ -51,6 +51,7 @@ import { useToast } from "../../components/Toast";
 
 import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT } from "./aiAssistantEvents";
 import { Tooltip } from "../../components/Tooltip";
+import { MarkdownTable } from "./MarkdownTable";
 export { openGlobalAiAssistant } from "./aiAssistantEvents";
 
 type SuggestedPrompt = {
@@ -764,6 +765,7 @@ export function MarkdownView({ text }: { text: string }) {
         components={{
           a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
           img: ({ src, alt }) => src ? <a href={src} target="_blank" rel="noopener noreferrer">View image: {alt || "attached image"}</a> : <span>{alt || "Image unavailable"}</span>,
+          table: MarkdownTable,
         }}
       >
         {text}

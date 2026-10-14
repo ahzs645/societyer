@@ -1,0 +1,56 @@
+@use "tokens" as *;
+
+// Tables in assistant answers: a horizontal scroller plus Copy / CSV / Excel.
+
+.global-ai-table {
+  display: grid;
+  gap: token('s-1');
+  margin: token('s-2') 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.global-ai-table__scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: token('r-sm');
+
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+}
+.global-ai-markdown .global-ai-table__scroll table {
+  margin: 0;
+}
+.global-ai-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+}
+.global-ai-table__action {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  padding: 2px token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-pill');
+  background: token('bg-panel');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: token('text-primary');
+    background: token('bg-hover-alpha');
+  }
+  &:disabled {
+    opacity: token('opacity-disabled');
+    cursor: default;
+  }
+}
+@media (pointer: coarse) {
+  .global-ai-table__action {
+    min-height: 40px;
+    padding: 0 token('s-3');
+  }
+}
