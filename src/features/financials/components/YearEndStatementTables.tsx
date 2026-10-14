@@ -85,6 +85,11 @@ export function OrgStatementTable({ statement }: { statement: OrgRevenueStatemen
       <ReportTable<OrgMeta>
         ariaLabel="Statement of revenues and expenses"
         labelHeader="Line"
+        download={{
+          fileName: `Statement of revenues and expenses ${statement.periodLabel ?? `FY ${statement.fiscalYearLabel}`}`,
+          sheetName: "Revenues and expenses",
+          title: ["Statement of revenues and expenses", statement.periodLabel ?? `Fiscal year ${statement.fiscalYearLabel}`],
+        }}
         columns={ORG_COLUMNS}
         rows={rows}
         drillColumn="total"
@@ -159,6 +164,7 @@ export function RestrictedFundsTable({
       <ReportTable<FundMeta>
         ariaLabel="Statement of restricted funds"
         labelHeader="Fund"
+        download={{ fileName: "Statement of restricted funds", sheetName: "Restricted funds", title: ["Statement of restricted funds"] }}
         columns={FUND_COLUMNS}
         rows={rows}
         drillColumn="closing"

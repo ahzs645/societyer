@@ -6,8 +6,7 @@ export const MAX_CELL_TEXT = 32767;
  * surrogates; any of them makes the whole sheet unreadable. Tab, LF and CR
  * are legal and kept.
  */
-// eslint-disable-next-line no-control-regex
-const ILLEGAL_XML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const ILLEGAL_XML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 
 export function stripIllegalXmlChars(text: string): string {
   return text.replace(ILLEGAL_XML, "");

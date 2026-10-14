@@ -22,7 +22,6 @@ export async function buildXlsxFile(workbook: XlsxWorkbook): Promise<Uint8Array>
 export function xlsxFileName(name: string): string {
   const base =
     name
-      // eslint-disable-next-line no-control-regex
       .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ")
       .replace(/\s+/g, " ")
       .trim()

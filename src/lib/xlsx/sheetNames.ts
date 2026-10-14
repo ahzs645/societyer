@@ -4,7 +4,6 @@ export const MAX_SHEET_NAME = 31;
 
 export function sanitizeSheetName(name: string, fallback = "Sheet"): string {
   let clean = String(name ?? "")
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f[\]:*?/\\]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()

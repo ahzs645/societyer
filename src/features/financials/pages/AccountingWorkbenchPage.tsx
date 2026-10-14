@@ -32,6 +32,10 @@ import {
   type FieldErrors,
 } from "../../../../shared/recordValidation";
 import { todayDateOnly } from "../../../../shared/dateOnly";
+import { Segmented } from "../../../components/primitives";
+import { downloadXlsx } from "@/lib/xlsx";
+import { readLastExportFormat, rememberExportFormat } from "@/lib/tableExport";
+import { accountingExportSheet, accountingWorkbook, baseFileName, type AccountingExportKind } from "../lib/accountingXlsx";
 
 type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | "backfill" | null;
 
@@ -40,7 +44,13 @@ const EXPORT_KINDS = [
   ["trial_balance", "Trial balance"],
   ["journal_entries", "Journal entries"],
   ["general_ledger", "General ledger"],
-] as const;
+] as const satisfies ReadonlyArray<readonly [AccountingExportKind, string]>;
+
+type AccountingExportFormat = "xlsx" | "csv";
+const EXPORT_FORMATS: { id: AccountingExportFormat; label: string }[] = [
+  { id: "xlsx", label: "Excel" },
+  { id: "csv", label: "CSV" },
+];
 
 const today = () => todayDateOnly();
 const currentYear = () => new Date().getFullYear().toString();
@@ -162,6 +172,9 @@ export function AccountingWorkbenchPage() {
     setDrawerState(next);
   };
   const [busy, setBusy] = useState(false);
+  // Excel unless CSV/TSV was the last format chosen anywhere in the app.
+  const [exportFormat, setExportFormat] = useState<AccountingExportFormat>(() => (readLastExportFormat("xlsx") === "xlsx" ? "xlsx" : "csv"));
+  const [exporting, setExporting] = useState(false);
   const [periodForm, setPeriodForm] = useState({
     fiscalYear: currentYear(),
     periodLabel: `FY ${currentYear()}`,
@@ -423,14 +436,52 @@ export function AccountingWorkbenchPage() {
     general_ledger: ledgerCsv,
   };
 
-  const doExport = (kind: string) => {
+  const chooseExportFormat = (format: AccountingExportFormat) => {
+    setExportFormat(format);
+    rememberExportFormat(format);
+  };
+
+  const runXlsx = async (fileName: string, build: () => Parameters<typeof downloadXlsx>[1]) => {
+    setExporting(true);
+    try {
+      await downloadXlsx(fileName, build());
+    } catch (error) {
+      toast.error("Export failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const doExport = (kind: AccountingExportKind) => {
     if (!canExport) return;
     const result = exportByKind[kind];
     if (!result?.csv) {
       toast.warn("Export is still loading");
       return;
     }
-    downloadCsv(result.filename, result.csv);
+    if (exportFormat === "csv") {
+      downloadCsv(result.filename, result.csv);
+      return;
+    }
+    const sheet = accountingExportSheet(kind, result.csv);
+    void runXlsx(`${society.name} ${sheet.name} ${today()}`, () => ({ title: `${society.name} ${sheet.name}`, sheets: [sheet] }));
+  };
+
+  /** Every report at once: one workbook with a sheet per report, or a ZIP of the CSVs. */
+  const doExportAll = () => {
+    if (!canExport) return;
+    const reports = EXPORT_KINDS.map(([kind]) => ({ kind, result: exportByKind[kind] }));
+    if (reports.some((report) => !report.result?.csv)) {
+      toast.warn("Exports are still loading");
+      return;
+    }
+    if (exportFormat === "csv") {
+      downloadZip(`accounting-reports-${today()}.zip`, reports.map((report) => ({ path: `${baseFileName(report.result.filename)}.csv`, content: report.result.csv })));
+      return;
+    }
+    void runXlsx(`${society.name} accounting reports ${today()}`, () =>
+      accountingWorkbook(`${society.name} accounting reports`, reports.map((report) => ({ kind: report.kind, csv: report.result.csv }))),
+    );
   };
 
   const doPackageExport = () => {
@@ -537,19 +588,31 @@ export function AccountingWorkbenchPage() {
         <section className="card">
           <div className="card__head">
             <h2 className="card__title">Exports</h2>
-            <span className="card__subtitle">CSV downloads for board and auditor packages.</span>
+            <span className="card__subtitle">Excel workbooks or CSV files for board and auditor packages.</span>
           </div>
-          <div className="accounting-export-grid">
+          <div className="accounting-export-format" role="group" aria-label="Export format">
+            <span className="accounting-export-format__label" aria-hidden="true">Format</span>
+            <Segmented value={exportFormat} onChange={chooseExportFormat} items={EXPORT_FORMATS} />
+          </div>
+          <div className="accounting-export-grid" aria-busy={exporting || undefined}>
             {EXPORT_KINDS.map(([kind, label]) => (
-              <button key={kind} className="btn-action" onClick={() => doExport(kind)} disabled={!canExport || (!exportByKind[kind])}>
-                <Download size={12} /> {label}
+              <button key={kind} className="btn-action" onClick={() => doExport(kind)} disabled={!canExport || exporting || (!exportByKind[kind])}>
+                {exportFormat === "xlsx" ? <FileSpreadsheet size={12} aria-hidden="true" /> : <Download size={12} aria-hidden="true" />} {label}
               </button>
             ))}
+            <button className="btn-action" onClick={doExportAll} disabled={!canExport || exporting || EXPORT_KINDS.some(([kind]) => !exportByKind[kind])}>
+              {exportFormat === "xlsx" ? <FileSpreadsheet size={12} aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}{" "}
+              {exportFormat === "xlsx" ? "All reports workbook" : "All reports ZIP"}
+            </button>
             <button className="btn-action btn-action--primary" onClick={doPackageExport} disabled={!canExport || (!boardAuditorPackage?.files)}>
               <Download size={12} /> Board and auditor ZIP
             </button>
           </div>
-          <div className="muted accounting-note">Exports are generated from the internal journal shape and include attachment references.</div>
+          <div className="muted accounting-note">
+            {exportFormat === "xlsx"
+              ? "Excel files keep amounts as currency and dates as dates. The board and auditor ZIP always contains CSV files and attachment references."
+              : "Exports are generated from the internal journal shape and include attachment references."}
+          </div>
         </section>
       </div>
 

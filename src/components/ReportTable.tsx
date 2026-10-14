@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucid
 import { Money } from "./Money";
 import { InfoPopover } from "./InfoPopover";
 import { Skeleton } from "./ui";
+import { ReportTableDownload, type ReportDownload } from "./ReportTableDownload";
 import type { NegativeStyle } from "../lib/money";
 
 /**
@@ -84,6 +85,8 @@ type ReportTableProps<M> = {
   className?: string;
   /** Cap the height on wide screens so the header stays visible while scrolling. */
   maxHeight?: "none" | "default";
+  /** Adds a Download menu (Excel / CSV of the full statement). */
+  download?: ReportDownload;
 };
 
 const DELTA_ID = "__delta";
@@ -167,6 +170,7 @@ export function ReportTable<M = unknown>({
   zeroAsDash,
   className,
   maxHeight = "default",
+  download,
 }: ReportTableProps<M>) {
   const collapsibleIds = useMemo(() => collectCollapsibleIds(rows), [rows]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
@@ -299,7 +303,7 @@ export function ReportTable<M = unknown>({
   };
 
   const colCount = allColumns.length + 1;
-  const showControls = Boolean(toolbar) || collapsibleIds.length > 0;
+  const showControls = Boolean(toolbar) || collapsibleIds.length > 0 || Boolean(download);
   const allCollapsed = collapsibleIds.length > 0 && collapsibleIds.every((id) => collapsed.has(id));
 
   return (
@@ -307,16 +311,30 @@ export function ReportTable<M = unknown>({
       {showControls && (
         <div className="report-table__controls">
           {toolbar && <div className="report-table__toolbar">{toolbar}</div>}
-          {collapsibleIds.length > 0 && (
+          {(collapsibleIds.length > 0 || download) && (
             <div className="report-table__expand">
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(collapsibleIds))}
-              >
-                {allCollapsed ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
-                {allCollapsed ? "Expand all" : "Collapse all"}
-              </button>
+              {download && (
+                <ReportTableDownload
+                  download={download}
+                  ariaLabel={ariaLabel}
+                  columns={columns}
+                  rows={rows}
+                  comparison={comparison}
+                  currency={currency}
+                  labelHeader={labelHeader}
+                  disabled={loading || rows.length === 0}
+                />
+              )}
+              {collapsibleIds.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(collapsibleIds))}
+                >
+                  {allCollapsed ? <ChevronsUpDown size={14} aria-hidden="true" /> : <ChevronsDownUp size={14} aria-hidden="true" />}
+                  {allCollapsed ? "Expand all" : "Collapse all"}
+                </button>
+              )}
             </div>
           )}
         </div>

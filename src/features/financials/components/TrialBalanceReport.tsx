@@ -167,6 +167,7 @@ export function TrialBalanceReport({ societyId }: { societyId: Id<"societies"> }
     <>
       <ReportTable<Meta>
         ariaLabel="Trial balance"
+        download={{ fileName: `Trial balance ${yearLabel}`, title: ["Trial balance", comparing ? `${yearLabel} compared with FY ${priorYear}` : yearLabel] }}
         loading={ledger === undefined}
         columns={columns}
         rows={rows}
