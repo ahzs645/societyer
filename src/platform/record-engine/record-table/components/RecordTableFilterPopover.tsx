@@ -83,6 +83,10 @@ function conditionValue(condition: DraftCondition, column: RecordField | undefin
     const range = isDateRangeValue(condition.value) ? condition.value : null;
     return range && resolveDateRange(range, dateContext) ? { ok: true, value: range } : { ok: false, value: undefined };
   }
+  if (isMultiValueOperator(condition.operator)) {
+    const values = Array.isArray(condition.value) ? condition.value.map(String).filter(Boolean) : [];
+    return values.length > 0 ? { ok: true, value: values } : { ok: false, value: undefined };
+  }
   if (isNumericFieldType(column.field.fieldType)) {
     const parsed = parseNumericFilterInput(column.field, condition.text);
     return parsed === undefined ? { ok: false, value: undefined } : { ok: true, value: parsed };
@@ -93,6 +97,16 @@ function conditionValue(condition: DraftCondition, column: RecordField | undefin
   }
   const text = condition.text.trim();
   return text ? { ok: true, value: text } : { ok: false, value: undefined };
+}
+
+function isMultiValueOperator(operator: ViewFilterOperator) {
+  return operator === "in" || operator === "notIn";
+}
+
+/** Value kinds an operator switch must not carry across (range / list / single). */
+function valueKind(operator: ViewFilterOperator) {
+  if (operator === "between") return "range";
+  return isMultiValueOperator(operator) ? "list" : "single";
 }
 
 function hasOptions(column: RecordField | undefined) {
@@ -398,7 +412,12 @@ function ConditionRow({
   onRemove: () => void;
 }) {
   const fieldType = column?.field.fieldType;
-  const operators = operatorsForField(fieldType);
+  const baseOperators = operatorsForField(fieldType);
+  // A saved view may use an operator this editor does not offer for the
+  // field; keep it selectable so the condition round-trips unchanged.
+  const operators = condition.fieldMetadataId && !baseOperators.includes(condition.operator)
+    ? [condition.operator, ...baseOperators]
+    : baseOperators;
   const valueless = VALUELESS_OPERATORS.includes(condition.operator);
   const options = hasOptions(column)
     ? (column!.field.config.options as { value: string; label: string; color?: any }[]).map((option) => ({
@@ -421,6 +440,34 @@ function ConditionRow({
           aria-label="Date range"
           clearable={false}
         />
+      );
+    } else if (options.length > 0 && isMultiValueOperator(condition.operator)) {
+      const picked = Array.isArray(condition.value) ? condition.value.map(String) : [];
+      const labelFor = (value: string) => options.find((option) => option.value === value)?.label ?? value;
+      valueControl = (
+        <div className="record-table__filter-multi">
+          {picked.map((value) => (
+            <span key={value} className="record-table__filter-multi-chip">
+              {labelFor(value)}
+              <button
+                type="button"
+                aria-label={`Remove ${labelFor(value)}`}
+                onClick={() => onChange({ value: picked.filter((entry) => entry !== value) })}
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+          <Select
+            size="sm"
+            value=""
+            onChange={(value) => onChange({ value: [...picked, value] })}
+            placeholder={picked.length ? "Add…" : "Choose values…"}
+            searchable={options.length > 8}
+            aria-label="Filter values"
+            options={options.filter((option) => !picked.includes(option.value))}
+          />
+        </div>
       );
     } else if (options.length > 0) {
       valueControl = (
@@ -483,9 +530,13 @@ function ConditionRow({
         aria-label="Filter condition"
         onChange={(value) => {
           const operator = value as ViewFilterOperator;
-          // Ranges and single dates hold different values.
-          const switchesKind = (operator === "between") !== (condition.operator === "between");
-          onChange(switchesKind ? { operator, value: "", text: "" } : { operator });
+          // Ranges, value lists and single values hold different shapes.
+          const kind = valueKind(operator);
+          const previous = valueKind(condition.operator);
+          if (kind === previous) onChange({ operator });
+          else if (kind === "list" && typeof condition.value === "string" && condition.value) onChange({ operator, value: [condition.value] });
+          else if (previous === "list" && kind === "single" && Array.isArray(condition.value) && condition.value.length) onChange({ operator, value: String(condition.value[0]) });
+          else onChange({ operator, value: "", text: "" });
         }}
         options={operators.map((operator) => ({ value: operator, label: operatorLabel(operator, fieldType) }))}
         disabled={!column}

@@ -48,6 +48,12 @@
   background: token('bg-subtle');
 }
 
+// The sticky footer must hide rows scrolling beneath it, selection column too.
+.record-table__footer-cell.record-table__checkbox-cell,
+.record-table__footer-cell.record-table__drag-cell {
+  background: token('bg-subtle');
+}
+
 .record-table__group-row:first-child > .record-table__group-cell {
   border-top-color: transparent;
 }
@@ -346,6 +352,48 @@
 .record-table__filter-add--nested {
   align-self: flex-start;
   border-color: transparent;
+}
+
+.record-table__filter-multi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+
+  > .select-trigger {
+    flex: 1 1 96px;
+    min-width: 96px;
+  }
+}
+
+.record-table__filter-multi-chip {
+  @include inline-flex-center;
+  gap: 2px;
+  height: 24px;
+  max-width: 100%;
+  padding: 0 2px 0 8px;
+  font-size: token('fs-xxs');
+  color: token('accent');
+  background: token('accent-soft');
+  border-radius: token('r-pill');
+
+  button {
+    @include inline-flex-center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: token('r-pill');
+    cursor: pointer;
+
+    &:hover {
+      background: token('bg-hover-alpha');
+    }
+  }
 }
 
 .record-table__filter-submit {

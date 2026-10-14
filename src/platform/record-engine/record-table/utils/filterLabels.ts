@@ -14,9 +14,9 @@ export const OPERATORS_BY_FIELD_TYPE: Partial<Record<FieldType, ViewFilterOperat
   [FIELD_TYPES.BOOLEAN]: ["isTrue", "isFalse"],
   [FIELD_TYPES.DATE]: ["between", "eq", "neq", "gt", "lt", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.DATE_TIME]: ["between", "eq", "gt", "lt", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.SELECT]: ["eq", "neq", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.SELECT]: ["eq", "neq", "in", "notIn", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.MULTI_SELECT]: ["contains", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.RELATION]: ["eq", "neq", "isEmpty", "isNotEmpty"],
+  [FIELD_TYPES.RELATION]: ["eq", "neq", "in", "notIn", "isEmpty", "isNotEmpty"],
   [FIELD_TYPES.UUID]: ["eq", "neq"],
   [FIELD_TYPES.ARRAY]: ["contains", "isEmpty", "isNotEmpty"],
 };
