@@ -28,6 +28,7 @@ const meetingsSource = readFileSync(join(ROOT, "pages/Meetings.tsx"), "utf8");
 
 const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/features/financials/pages/WavePages.tsx": 2,
+  "src/pages/Agreements.tsx": 1,
   "src/pages/ApiKeysPage.tsx": 2,
   "src/pages/Assets.tsx": 1,
   "src/pages/Attestations.tsx": 1,
@@ -65,6 +66,7 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/RecordTableFieldLab.tsx": 1,
   "src/pages/Retention.tsx": 1,
   "src/pages/Secrets.tsx": 1,
+  "src/pages/ServiceProviders.tsx": 1,
   "src/pages/Tasks.tsx": 2,
   "src/pages/Transparency.tsx": 1,
   "src/pages/Volunteers.tsx": 3,

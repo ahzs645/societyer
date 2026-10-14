@@ -23,6 +23,8 @@ for (const route of INTERFACE_ROUTES) {
     if (route.redirectTo) await expect(page).toHaveURL(new URL(route.redirectTo, testInfo.project.use.baseURL as string).toString());
     // Unknown addresses say so rather than silently landing on the dashboard.
     if (route.kind === "fallback") await expect(page.getByTestId("page-not-found")).toBeVisible();
+    // Workspace fallbacks keep the app shell so the sidebar still leads somewhere.
+    if (route.kind === "fallback") await expect(page.locator(".app-shell")).toHaveCount(route.pattern.startsWith("/app/") ? 1 : 0);
     // Two frames allow layout and hydrated local snapshots to settle without
     // networkidle, which can hang on intentional disconnected provider retries.
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { matchPath } from "react-router-dom";
 import { INTERFACE_ROUTES } from "../tests/helpers/interfaceRoutes";
-import { interfaceRouteReadPermission } from "../shared/interfaceRouteAccess";
+import { INTERFACE_FALLBACK_ROUTES, interfaceRouteReadPermission } from "../shared/interfaceRouteAccess";
 
 const source = ts.createSourceFile("main.tsx", readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 type DeclaredRoute = { pattern: string; line: number; index: boolean; module?: string };
@@ -43,12 +43,24 @@ const missing = patterns.filter(pattern => !manifestPatterns.includes(pattern));
 const obsolete = manifestPatterns.filter(pattern => !patterns.includes(pattern));
 assert.deepEqual(missing, [], `Uncovered route patterns: ${missing.join(", ")}`);
 assert.deepEqual(obsolete, [], `Manifest paths removed from routing: ${obsolete.join(", ")}`);
+// Every splat route must be a declared fallback (Not-found), never an
+// unscoped app page; and every declared fallback must still be routed.
+const splats = patterns.filter(pattern => pattern === "*" || pattern.endsWith("/*"));
+assert.deepEqual(splats, Object.keys(INTERFACE_FALLBACK_ROUTES).sort(), "Catch-all routes must match INTERFACE_FALLBACK_ROUTES");
+const concretePatterns = patterns.filter(pattern => !splats.includes(pattern));
 for (const route of INTERFACE_ROUTES) {
-  const expectedKind = route.pattern === "*" ? "fallback" : route.pattern === "/app" || route.pattern.startsWith("/app/") ? "app" : "public";
+  const expectedKind = route.pattern in INTERFACE_FALLBACK_ROUTES ? "fallback" : route.pattern === "/app" || route.pattern.startsWith("/app/") ? "app" : "public";
   assert.equal(route.kind, expectedKind, `Incorrect coverage category for ${route.pattern}`);
   const path = route.path.replace(/^\/demo(?=\/|$)/, "") || "/";
   const pathname = path.split(/[?#]/, 1)[0];
   if (route.kind === "app") assert.ok(interfaceRouteReadPermission(pathname), `App route ${route.pattern} lacks an explicit UI access scope`);
+  if (route.kind === "fallback") {
+    // The fixture must really reach the fallback: no concrete route may claim
+    // it, and no read scope may gate the Not-found page.
+    const claimedBy = concretePatterns.filter(pattern => matchPath({ path: pattern, end: true }, pathname));
+    assert.deepEqual(claimedBy, [], `Fallback fixture ${route.path} is claimed by a concrete route`);
+    assert.equal(interfaceRouteReadPermission(pathname), undefined, `Fallback fixture ${route.path} must not resolve to a read scope`);
+  }
   assert.ok(matchPath({ path: route.pattern, end: true }, pathname), `Fixture ${route.path} does not match declared route ${route.pattern}`);
   assert.equal(/:[a-zA-Z][a-zA-Z0-9_]*/.test(pathname), false, `Fixture still contains unresolved parameters: ${route.path}`);
   if (route.pattern.includes(":")) assert.ok(["seeded", "missing-record", "invalid-token", "route"].includes(route.fixture), `Dynamic route ${route.pattern} lacks an explicit fixture classification`);
