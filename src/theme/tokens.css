@@ -109,14 +109,16 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --font-display: var(--font-sans);
 
-  /* Font scale — matches FONT_COMMON in twenty-ui */
-  --fs-xxs: 0.625rem;  /* 10px */
-  --fs-xs:  0.85rem;   /* ~13.6px */
-  --fs-sm:  0.92rem;   /* ~14.7px */
-  --fs-md:  1rem;      /* 16px */
-  --fs-lg:  1.23rem;   /* ~19.7px */
-  --fs-xl:  1.54rem;   /* ~24.6px */
-  --fs-xxl: 1.85rem;   /* ~29.6px */
+  /* Font scale. Twenty's values assume a 13px root but ours is the browser's
+     16px, which made UI text ~23% larger than intended. These land UI text on
+     a 13/14/15px rhythm (label / secondary / body) with 18/24/28px titles. */
+  --fs-xxs: 0.6875rem; /* 11px — micro labels, eyebrows */
+  --fs-xs:  0.8125rem; /* 13px — labels, table headers, captions */
+  --fs-sm:  0.875rem;  /* 14px — secondary body, table cells */
+  --fs-md:  0.9375rem; /* 15px — body */
+  --fs-lg:  1.125rem;  /* 18px — section titles */
+  --fs-xl:  1.5rem;    /* 24px — page titles */
+  --fs-xxl: 1.75rem;   /* 28px — hero numbers */
   /* Alias kept for legacy consumers */
   --fs-2xl: var(--fs-xl);
   --fs-3xl: var(--fs-xxl);
@@ -239,6 +241,61 @@
   --bp-mobile:         768;
   --bp-mobile-card:    760;
   --bp-bottom-sheet:   560;
+
+  /* ---------------- Foundations v2 (Mercury-informed) ----------------
+     Additive tokens. Prefer these in new work; older tokens stay valid. */
+
+  /* Translucent neutrals: one value works on canvas, sidebar, card or modal. */
+  --bg-hover-alpha:   var(--gray-a-3);
+  --bg-active-alpha:  var(--gray-a-5);
+  --bg-selected-alpha: var(--gray-a-4);
+  --border-alpha:     var(--gray-a-5);
+  --border-alpha-strong: var(--gray-a-7);
+  --bg-frosted:       rgba(255, 255, 255, 0.82);
+
+  /* Money and finance semantics. Neutral amounts stay neutral; colour only
+     carries meaning (direction, favourability, pending). */
+  --money-neutral:      var(--font-color-primary);
+  --money-in:           var(--green-11);
+  --money-out:          var(--red-11);
+  --money-pending:      var(--font-color-light);
+  --variance-favourable:   var(--green-11);
+  --variance-unfavourable: var(--red-11);
+  --variance-favourable-soft:   var(--green-3);
+  --variance-unfavourable-soft: var(--red-3);
+
+  /* Surface radius between md (8) and the 20px sheet radius. */
+  --r-card: 12px;
+
+  /* Elevation levels. Cards (1), floating UI: popovers, toasts, chart
+     tooltips, hovered cards (2), dialogs (3). Dark mode swaps level 1 for a
+     hairline ring because shadows disappear on dark surfaces. */
+  --elevation-1: 0 0 0 1px var(--gray-a-4), 0 1px 3px var(--gray-a-3);
+  --elevation-2: 0 0 0 1px var(--gray-a-4), 0 1px 4px var(--gray-a-3), 0 8px 16px var(--gray-a-4), 0 14px 24px var(--gray-a-2);
+  --elevation-3: 0 0 0 1px var(--gray-a-5), 0 12px 24px var(--gray-a-5), 0 24px 48px var(--gray-a-5);
+
+  /* Focus: one ring everywhere. */
+  --focus-ring-color: var(--blue-8);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 1px;
+
+  /* Motion families. Fade = opacity; transform = movement; appear/disappear
+     = mount/unmount. Each has fast / default / slow. */
+  --motion-fade-fast: 0.1s;   --motion-fade: 0.15s;   --motion-fade-slow: 0.2s;
+  --motion-move-fast: 0.15s;  --motion-move: 0.2s;    --motion-move-slow: 0.25s;
+  --motion-panel: 0.32s;
+  --ease-fade:      cubic-bezier(0.35, 0, 0.5, 1);
+  --ease-move:      cubic-bezier(0.2, 0.4, 0.2, 1);
+  --ease-appear:    cubic-bezier(0, 0, 0.2, 1);
+  --ease-disappear: cubic-bezier(0.35, 0, 1, 1);
+  --ease-panel:     cubic-bezier(0.23, 1, 0.32, 1);
+
+  --opacity-disabled: 0.4;
+
+  /* Table rhythm. */
+  --row-h-compact: 36px;
+  --row-h-comfortable: 44px;
+
 }
 
 .dark {
@@ -352,4 +409,17 @@
   /* Overlay scrims — deeper on dark for sufficient contrast */
   --bg-overlay-scrim:       rgba(0, 0, 0, 0.5);
   --bg-overlay-scrim-dense: rgba(0, 0, 0, 0.6);
+
+  /* Foundations v2 — dark */
+  --bg-frosted: rgba(24, 25, 27, 0.82);
+  --money-in:  var(--green-11);
+  --money-out: var(--red-11);
+  --variance-favourable:   var(--green-11);
+  --variance-unfavourable: var(--red-11);
+  --variance-favourable-soft:   var(--green-3);
+  --variance-unfavourable-soft: var(--red-3);
+  --elevation-1: 0 0 0 1px var(--border-color-medium);
+  --elevation-2: 0 0 0 1px var(--border-color-strong), 0 8px 16px rgba(0, 0, 0, 0.32), 0 14px 24px rgba(0, 0, 0, 0.2);
+  --elevation-3: 0 0 0 1px var(--border-color-strong), 0 12px 24px rgba(0, 0, 0, 0.4), 0 24px 48px rgba(0, 0, 0, 0.32);
+  --focus-ring-color: var(--blue-9);
 }

@@ -1,0 +1,86 @@
+@use "tokens" as *;
+
+// ============================================================
+// Foundations v2: money display, numeric alignment, focus, motion.
+// Loaded last so these conventions win over older per-view rules.
+// ============================================================
+
+// ---------- Money ----------
+.money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: inherit;
+}
+.money--in { color: token('money-in'); }
+.money--out { color: token('money-out'); }
+.money--pending { color: token('money-pending'); }
+.money--neutral { color: token('money-neutral'); }
+.money--favourable { color: token('variance-favourable'); }
+.money--unfavourable { color: token('variance-unfavourable'); }
+.money--struck { text-decoration: line-through; color: token('text-tertiary'); }
+.money--empty { color: token('text-tertiary'); }
+.money--hero {
+  letter-spacing: -0.02em;
+  .money__cents {
+    font-size: 0.62em;
+    vertical-align: 0.42em;
+    margin-left: 1px;
+    color: token('text-tertiary');
+    font-weight: token('fw-medium');
+  }
+}
+
+// Right-aligned numeric cells. Use on <td>/<th> holding amounts or counts.
+.num,
+.cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// Digits line up in every table, not just the opt-in spots.
+table,
+.record-table,
+.stat__value {
+  font-variant-numeric: tabular-nums;
+}
+
+// ---------- Focus ----------
+// One ring everywhere. `outline-color: transparent` (not `none`) elsewhere
+// keeps outlines visible in Windows High Contrast / forced-colors mode.
+:focus-visible {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: token('focus-ring-offset');
+}
+
+// ---------- Disabled ----------
+button:disabled,
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+// ---------- Motion ----------
+// Respect reduced motion globally: keep state changes, drop movement.
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+// New-row flash: add `.row-flash` to a freshly created/restored row.
+@keyframes row-flash {
+  from { background-color: token('accent-soft'); }
+  to { background-color: transparent; }
+}
+.row-flash,
+.row-flash > td {
+  animation: row-flash 2.4s token('ease-fade') 0.2s both;
+}

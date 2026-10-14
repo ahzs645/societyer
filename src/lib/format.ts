@@ -1,5 +1,6 @@
 import { format, formatDistanceToNowStrict, parseISO, isValid } from "date-fns";
 import { isDateOnly, relativeDateOnly } from "../../shared/dateOnly";
+import { DEFAULT_CURRENCY } from "./money";
 
 export { isPastDue, todayDateOnly, daysUntilDate, relativeDateOnly, toDateOnly } from "../../shared/dateOnly";
 
@@ -48,12 +49,16 @@ export function relative(value?: DateInput) {
   return `${formatDistanceToNowStrict(d)} ${suffix}`;
 }
 
+/**
+ * Compact money for prose and headline stats: drops ".00" on whole amounts.
+ * Columns, statements and totals use `formatMoney` / `<Money>` (fixed decimals).
+ */
 export function money(cents?: number) {
   if (cents == null) return "—";
   const hasCents = Math.abs(cents) % 100 !== 0;
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
-    currency: "CAD",
+    currency: DEFAULT_CURRENCY,
     minimumFractionDigits: hasCents ? 2 : 0,
     maximumFractionDigits: 2,
   }).format(cents / 100);
