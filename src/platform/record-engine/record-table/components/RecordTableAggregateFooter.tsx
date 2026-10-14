@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { columnWidthStyle } from "../utils/columnWidth";
 import { ChevronDown } from "lucide-react";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { pluralize } from "../../../../lib/format";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
-import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
+import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
+import { useRecordTableStoreHandle } from "../state/recordTableStore";
+import { FIELD_TYPES } from "../../types";
 import {
   aggregateRecordValues,
   getAvailableAggregateOperationsForFieldType,
@@ -53,8 +56,8 @@ export function RecordTableAggregateFooterRow({
   hasRowActions: boolean;
   showDragHandle?: boolean;
 }) {
-  const columns = useRecordTableState((state) => state.columns);
-  const visibleColumns = useMemo(() => columns.filter((column) => column.isVisible), [columns]);
+  const { objectMetadata } = useRecordTableContextOrThrow();
+  const { columns: visibleColumns, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
   const filteredRecords = useFilteredRecords();
 
   if (filteredRecords.length === 0 || visibleColumns.length === 0) return null;
@@ -70,6 +73,7 @@ export function RecordTableAggregateFooterRow({
             recordCount={filteredRecords.length}
             records={filteredRecords}
             isFirst={index === 0}
+            collapsed={collapsed.has(column.viewFieldId)}
           />
         ))}
         {hasRowActions && <td className="record-table__footer-cell record-table__row-actions-cell" />}
@@ -83,11 +87,13 @@ function RecordTableAggregateFooterCell({
   records,
   recordCount,
   isFirst,
+  collapsed,
 }: {
   column: RecordField;
   records: any[];
   recordCount: number;
   isFirst: boolean;
+  collapsed: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -116,8 +122,15 @@ function RecordTableAggregateFooterCell({
 
   return (
     <td
-      className="record-table__footer-cell"
-      style={columnWidthStyle(column.size)}
+      className={
+        "record-table__footer-cell" +
+        (column.field.fieldType === FIELD_TYPES.CURRENCY || column.field.fieldType === FIELD_TYPES.NUMBER
+          ? " record-table__footer-cell--numeric"
+          : "") +
+        (collapsed ? " record-table__footer-cell--collapsed" : "")
+      }
+      style={columnWidthStyle(collapsed ? 0 : column.size)}
+      aria-hidden={collapsed || undefined}
     >
       <div ref={menuRef} className="record-table__aggregate">
         <button

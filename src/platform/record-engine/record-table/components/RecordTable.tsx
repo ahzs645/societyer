@@ -8,16 +8,19 @@ import { lowerLabel } from "../utils/lowerLabel";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
+import { useRecordTableRowModel, type RecordTableRowItem } from "../hooks/useRecordTableRowModel";
+import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
+import { RecordTableGroupRowCells } from "./RecordTableGroupRow";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
-import { RecordTableRow } from "./RecordTableRow";
+import { RecordTableRow, useRecordRowClassName } from "./RecordTableRow";
 import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./RecordTableAggregateFooter";
 import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableActionRow";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
 import { useCurrentUserId } from "../../../../hooks/useCurrentUser";
 import { useIsMobile } from "../../../../lib/useIsMobile";
-import { getMobileTableLayout, limitColumnsForPhone } from "../../../../lib/mobileTableLayout";
+import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { isFieldEditable } from "../../record-field/components/FieldInput";
 import { CalendarView } from "../../../../components/CalendarView";
@@ -69,27 +72,69 @@ function isVirtualActionRow(item: unknown): item is typeof VIRTUAL_ACTION_ROW {
   return !!item && typeof item === "object" && "__recordTableActionRow" in item;
 }
 
+type VirtualItem = RecordTableRowItem | typeof VIRTUAL_ACTION_ROW;
+
 const VirtuosoTableRow = forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement> & {
-    item?: unknown;
+    item?: VirtualItem;
     context?: { onRowContextMenu?: RowContextMenuHandler };
   }
 >(function VirtuosoTableRow({ item, context, ...props }, ref) {
   const isActionRow = isVirtualActionRow(item);
+  const recordItem = !isActionRow && item?.kind === "record" ? item : null;
+  const rowClassName = useRecordRowClassName(recordItem ? recordItem.key : null);
+  if (isActionRow) return <tr ref={ref} {...props} className="record-table__action-row" />;
+  if (item?.kind === "group") {
+    return (
+      <tr
+        ref={ref}
+        {...props}
+        className={`record-table__group-row${item.collapsed ? " is-collapsed" : ""}`}
+        data-group-key={item.group.key}
+      />
+    );
+  }
   return (
     <tr
       ref={ref}
       {...props}
-      className={isActionRow ? "record-table__action-row" : "record-table__row"}
+      className={rowClassName}
+      data-row-index={recordItem?.rowIndex}
       onContextMenu={
-        context?.onRowContextMenu && item != null && !isActionRow
-          ? (event) => context.onRowContextMenu!(event, item)
+        context?.onRowContextMenu && recordItem
+          ? (event) => context.onRowContextMenu!(event, recordItem.record)
           : undefined
       }
     />
   );
 });
+
+/** A record `<tr>` for the plain (non-virtualized) body. */
+function PlainRecordRow({
+  item,
+  onRowContextMenu,
+  children,
+}: {
+  item: Extract<RecordTableRowItem, { kind: "record" }>;
+  onRowContextMenu?: RowContextMenuHandler;
+  children: ReactNode;
+}) {
+  const className = useRecordRowClassName(item.key);
+  return (
+    <tr
+      className={className}
+      data-row-index={item.rowIndex}
+      onContextMenu={onRowContextMenu ? (event) => onRowContextMenu(event, item.record) : undefined}
+    >
+      {children}
+    </tr>
+  );
+}
+
+/** How many new ids in one records update still count as "just created" (not a data swap). */
+const FLASH_MAX_NEW_ROWS = 10;
+const FLASH_DURATION_MS = 2800;
 
 function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
   let isScrolledX = false;
@@ -142,6 +187,7 @@ export type RecordTableCellRenderer = (ctx: {
  */
 /** Columns grow to share spare width, but not past this multiple of their saved size. */
 const MAX_COLUMN_STRETCH = 1.8;
+const FILL_COLUMN_MIN = 24;
 
 export function RecordTable({
   selectable = false,
@@ -190,7 +236,12 @@ export function RecordTable({
   const calendarFieldMetadataId = useRecordTableState((s) => s.calendarFieldMetadataId);
   const calendarLayout = useRecordTableState((s) => s.calendarLayout);
   const filtered = useFilteredRecords();
+  const rowModel = useRecordTableRowModel();
   const { objectMetadata, onRecordClick, onUpdate, onCreate, onReorder } = useRecordTableContextOrThrow();
+  const { columns: visibleColumns, collapsed: collapsedColumns } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
+  const tableId = useRecordTableState((s) => s.tableId);
+  const viewId = useRecordTableState((s) => s.viewId);
+  const hasFilters = useRecordTableState((s) => s.filters.length > 0 || s.searchTerm.trim().length > 0);
   const handle = useRecordTableStoreHandle();
   const getTableState = handle.get;
   const tableRootRef = useRef<HTMLDivElement | null>(null);
@@ -199,9 +250,6 @@ export function RecordTable({
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
-  // Phones cap how many columns render (name + a couple) instead of panning
-  // sideways through the whole set — the rest of the record lives in the
-  // drawer. Column pickers/sort/filter still see the full column list.
   const isMobile = useIsMobile();
   const actorId = useCurrentUserId();
   const mobileSelectionMode = useRecordTableState((s) => s.mobileSelectionMode);
@@ -236,12 +284,12 @@ export function RecordTable({
       </button>
     </div>
   ) : null;
-  const visibleColumns = useMemo(
-    () => limitColumnsForPhone(columns.filter((c) => c.isVisible), isMobile),
-    [columns, isMobile],
-  );
   // Share spare width among columns on wide screens (see columnWidthStyle).
-  const columnSizeTotal = visibleColumns.reduce((sum, column) => sum + column.size, 0);
+  // Columns folded beside the preview panel take no width.
+  const columnSizeTotal = visibleColumns.reduce(
+    (sum, column) => sum + (collapsedColumns.has(column.viewFieldId) ? 0 : column.size),
+    0,
+  );
   const [stretchRoot, setStretchRoot] = useState<HTMLElement | null>(null);
   const [columnStretch, setColumnStretch] = useState(1);
   useEffect(() => {
@@ -253,7 +301,9 @@ export function RecordTable({
       const fixed = Array.from(
         stretchRoot.querySelectorAll<HTMLElement>(".record-table__header-row > :is(.record-table__checkbox-cell, .record-table__drag-head, .record-table__row-actions-head)"),
       ).reduce((sum, cell) => sum + cell.offsetWidth, 0);
-      const next = Math.min(MAX_COLUMN_STRETCH, Math.max(1, (stretchRoot.clientWidth - fixed - 2) / columnSizeTotal));
+      // The trailing fill column keeps a 24px floor (see _record-table.scss);
+      // leaving it out made a stretched table overflow by exactly that much.
+      const next = Math.min(MAX_COLUMN_STRETCH, Math.max(1, (stretchRoot.clientWidth - fixed - FILL_COLUMN_MIN - 2) / columnSizeTotal));
       setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
     };
     measure();
@@ -287,10 +337,59 @@ export function RecordTable({
     (effectiveSelectable ? 1 : 0) +
     (showDragHandle ? 1 : 0) +
     (hasRowActions ? 1 : 0);
-  const virtualizedRows = useMemo(
-    () => (onCreate ? [...filtered, VIRTUAL_ACTION_ROW] : filtered),
-    [filtered, onCreate],
+  const virtualizedRows = useMemo<VirtualItem[]>(
+    () => (onCreate ? [...rowModel.items, VIRTUAL_ACTION_ROW] : rowModel.items),
+    [rowModel.items, onCreate],
   );
+
+  // New-row flash: ids that appear after the table has loaded (a create, an
+  // import, an undo/restore) get `.row-flash` for a moment. A large batch is
+  // a data swap (another source, a workspace switch), not a creation.
+  const knownIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ids = new Set(records.map((record: any) => String(record?._id)));
+    const known = knownIdsRef.current;
+    knownIdsRef.current = ids;
+    if (!known || known.size === 0) return;
+    const added = [...ids].filter((id) => !known.has(id));
+    if (added.length === 0 || added.length > FLASH_MAX_NEW_ROWS) return;
+    handle.get().setFlashRecordIds(new Set([...handle.get().flashRecordIds, ...added]));
+    const timer = window.setTimeout(() => {
+      const next = new Set(handle.get().flashRecordIds);
+      added.forEach((id) => next.delete(id));
+      handle.get().setFlashRecordIds(next);
+    }, FLASH_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [records, handle]);
+
+  // Folded groups are a per-person convenience: remember them per view in
+  // this browser (never part of the saved view, so folding is not "dirty").
+  const groupFieldId = rowModel.groupBy?.fieldMetadataId ?? null;
+  const collapsedStorageKey = groupFieldId ? `societyer:record-groups:${tableId}:${viewId ?? "default"}:${groupFieldId}` : null;
+  const restoredCollapseKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!collapsedStorageKey || restoredCollapseKeyRef.current === collapsedStorageKey) return;
+    restoredCollapseKeyRef.current = collapsedStorageKey;
+    let keys: string[] = [];
+    try {
+      const raw = window.localStorage.getItem(collapsedStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) keys = parsed.map(String);
+    } catch {
+      keys = [];
+    }
+    handle.get().setCollapsedGroupKeys(new Set(keys));
+  }, [collapsedStorageKey, handle]);
+  const collapsedGroupKeys = useRecordTableState((s) => s.collapsedGroupKeys);
+  useEffect(() => {
+    if (!collapsedStorageKey || restoredCollapseKeyRef.current !== collapsedStorageKey) return;
+    try {
+      if (collapsedGroupKeys.size === 0) window.localStorage.removeItem(collapsedStorageKey);
+      else window.localStorage.setItem(collapsedStorageKey, JSON.stringify([...collapsedGroupKeys]));
+    } catch {
+      // Storage blocked: folding still works for this visit.
+    }
+  }, [collapsedGroupKeys, collapsedStorageKey]);
   const setScrollNode = useCallback(
     (node: HTMLDivElement | null) => {
       scrollCleanupRef.current?.();
@@ -326,10 +425,11 @@ export function RecordTable({
     selectable: effectiveSelectable || inlineSelection,
   });
 
+  const itemIndexByRowIndex = rowModel.itemIndexByRowIndex;
   useEffect(() => {
     if (!focusedCell) return;
     virtuosoRef.current?.scrollToIndex({
-      index: focusedCell.rowIndex,
+      index: itemIndexByRowIndex[focusedCell.rowIndex] ?? focusedCell.rowIndex,
       align: "center",
       behavior: "smooth",
     });
@@ -355,7 +455,7 @@ export function RecordTable({
       focusedElement?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusedCell, getTableState]);
+  }, [focusedCell, getTableState, itemIndexByRowIndex]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -391,11 +491,12 @@ export function RecordTable({
   }
 
   if (filtered.length === 0) {
-    if (records.length > 0) {
+    if (records.length > 0 && hasFilters) {
       return (
         <RecordTableEmpty
-          title="No matching records"
-          description="Change or clear the current search and filters."
+          variant="filtered"
+          title="Nothing matches these filters"
+          description={`None of the ${records.length} ${lowerLabel(records.length === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)} match the current search and filters.`}
           action={
             <button
               type="button"
@@ -406,7 +507,7 @@ export function RecordTable({
                 handle.get().setFilterGroups([]);
               }}
             >
-              Clear search and filters
+              Clear filters
             </button>
           }
         />
@@ -562,7 +663,17 @@ export function RecordTable({
   // Small result sets render without virtuoso — simpler, faster for
   // common <100-row tables. Once we cross the threshold we switch on
   // react-virtuoso.
-  if (filtered.length <= virtualizeAbove) {
+  const frameModifiers =
+    (inlineSelection ? " is-mobile-selecting" : "") +
+    (collapsedColumns.size > 0 ? " is-condensed" : "") +
+    (rowModel.groups ? " is-grouped" : "");
+  const groupRowProps = {
+    selectable: effectiveSelectable,
+    showDragHandle,
+    hasRowActions,
+  };
+
+  if (rowModel.items.length <= virtualizeAbove) {
     return (
       <div
         role="region"
@@ -570,7 +681,7 @@ export function RecordTable({
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
         ref={setStretchRoot}
-        className={`record-table__scroll-frame${inlineSelection ? " is-mobile-selecting" : ""}`}
+        className={`record-table__scroll-frame${frameModifiers}`}
         style={{
           "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
           "--rt-stretch": columnStretch,
@@ -583,26 +694,31 @@ export function RecordTable({
               <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
             </thead>
             <tbody className="record-table__tbody">
-              {filtered.map((record: any, i: number) => (
-                <tr
-                  key={String(record._id)}
-                  className="record-table__row"
-                  data-row-index={i}
-                  onContextMenu={onRowContextMenu ? (event) => onRowContextMenu(event, record) : undefined}
-                >
-                  <RecordTableRow
-                    record={record}
-                    rowIndex={i}
-                    selectable={effectiveSelectable}
-                    mobileSelectionMode={inlineSelection}
-                    showDragHandle={showDragHandle}
-                    renderRowActions={renderRowActions}
-                    rowMenuSections={rowMenuSections}
-                    showOpenRecordAction={hasOpenRecordAction}
-                    renderCell={renderCell}
-                  />
-                </tr>
-              ))}
+              {rowModel.items.map((item) =>
+                item.kind === "group" ? (
+                  <tr
+                    key={item.key}
+                    className={`record-table__group-row${item.collapsed ? " is-collapsed" : ""}`}
+                    data-group-key={item.group.key}
+                  >
+                    <RecordTableGroupRowCells group={item.group} collapsed={item.collapsed} {...groupRowProps} />
+                  </tr>
+                ) : (
+                  <PlainRecordRow key={item.key} item={item} onRowContextMenu={onRowContextMenu}>
+                    <RecordTableRow
+                      record={item.record}
+                      rowIndex={item.rowIndex}
+                      selectable={effectiveSelectable}
+                      mobileSelectionMode={inlineSelection}
+                      showDragHandle={showDragHandle}
+                      renderRowActions={renderRowActions}
+                      rowMenuSections={rowMenuSections}
+                      showOpenRecordAction={hasOpenRecordAction}
+                      renderCell={renderCell}
+                    />
+                  </PlainRecordRow>
+                ),
+              )}
               {onCreate && (
                 <RecordTableActionRow colSpan={tableColumnCount} />
               )}
@@ -627,7 +743,7 @@ export function RecordTable({
         tableRootRef.current = node;
         setStretchRoot(node);
       }}
-      className={`record-table__interaction-root${inlineSelection ? " is-mobile-selecting" : ""}`}
+      className={`record-table__interaction-root${frameModifiers}`}
       role="region"
       aria-label={`${objectMetadata.labelPlural} table`}
       tabIndex={0}
@@ -661,13 +777,18 @@ export function RecordTable({
             showDragHandle={showDragHandle}
           />
         ) : undefined}
-        itemContent={(index, record) =>
-          isVirtualActionRow(record) ? (
+        computeItemKey={(index, item) =>
+          isVirtualActionRow(item) ? "__action-row" : item?.key ?? String(index)
+        }
+        itemContent={(_index, item: VirtualItem | undefined) =>
+          !item || isVirtualActionRow(item) ? (
             <RecordTableActionRowCells colSpan={tableColumnCount} />
+          ) : item.kind === "group" ? (
+            <RecordTableGroupRowCells group={item.group} collapsed={item.collapsed} {...groupRowProps} />
           ) : (
             <RecordTableRow
-              record={record}
-              rowIndex={index}
+              record={item.record}
+              rowIndex={item.rowIndex}
               selectable={effectiveSelectable}
               mobileSelectionMode={inlineSelection}
               showDragHandle={showDragHandle}

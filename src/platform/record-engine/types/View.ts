@@ -54,7 +54,11 @@ export type ViewFilterOperator =
   | "isEmpty"
   | "isNotEmpty"
   | "isTrue"
-  | "isFalse";
+  | "isFalse"
+  /** Date range. The value is a `DateRangeValue` (`{ preset }` or
+   * `{ start, end }`); presets resolve against the organisation's calendar
+   * every time the filter runs, so "Last 30 days" stays relative. */
+  | "between";
 
 export type ViewSortDirection = "asc" | "desc";
 
@@ -86,6 +90,30 @@ export type ViewGroup = {
   fieldValue: string;
   position: number;
   isVisible: boolean;
+  /**
+   * The view's group-by setting rides in `viewGroupsJson` as one entry that
+   * carries this key (see `utils/groupRecords.ts`), so grouping saves, reverts
+   * and dirty-checks with the rest of the view without a schema change.
+   */
+  groupBy?: ViewGroupBy;
+};
+
+export type ViewGroupDateGranularity = "day" | "month" | "quarter" | "year";
+
+/**
+ * Group order. "field" keeps the field's own option order (selects,
+ * booleans); "label" is alphabetical (chronological for dates, numeric for
+ * numbers); "count" orders by group size; "sum" by the group total of
+ * `sumFieldMetadataId` (a currency or number column).
+ */
+export type ViewGroupSortKey = "field" | "label" | "count" | "sum";
+
+export type ViewGroupBy = {
+  fieldMetadataId: string;
+  dateGranularity?: ViewGroupDateGranularity;
+  sort?: ViewGroupSortKey;
+  direction?: ViewSortDirection;
+  sumFieldMetadataId?: string;
 };
 
 export type ViewVisibility = "personal" | "shared" | "system";

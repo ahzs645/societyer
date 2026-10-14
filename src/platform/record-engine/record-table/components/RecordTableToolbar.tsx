@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronDown,
   Columns,
+  Download,
   Filter,
   Kanban,
   RotateCcw,
@@ -17,6 +18,7 @@ import {
   X,
   ListChecks,
   List,
+  Rows3,
 } from "lucide-react";
 import {
   useRecordTableIsDirty,
@@ -33,6 +35,10 @@ import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
+import { useRegisterCommand } from "../../../../lib/commands";
+import { RecordTableGroupByPopover } from "./RecordTableGroupByPopover";
+import { RecordTableExportDialog } from "./RecordTableExportDialog";
+import { getViewGroupBy } from "../utils/groupRecords";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -132,7 +138,15 @@ export function RecordTableToolbar({
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const groupButtonRef = useRef<HTMLButtonElement>(null);
+  const groupByFieldId = useRecordTableState((s) => getViewGroupBy(s.viewGroups)?.fieldMetadataId ?? null);
+  const groupByLabel = groupByFieldId
+    ? columns.find((column) => column.fieldMetadataId === groupByFieldId)?.field.label ?? null
+    : null;
+  const tableId = useRecordTableState((s) => s.tableId);
   const columnMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
@@ -155,6 +169,14 @@ export function RecordTableToolbar({
 
   const activeViewName =
     (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
+  // One "Export …" command per mounted table, alongside page-specific exports.
+  useRegisterCommand({
+    id: `record-table-export:${tableId}`,
+    label: `Export ${lowerLabel(objectMetadata.labelPlural)} table…`,
+    icon: Download,
+    category: "Actions",
+    run: () => setExportOpen(true),
+  });
   const selectableKanbanFields = columns.filter((column) => {
     const type = column.field.fieldType;
     return type === "SELECT" || type === "MULTI_SELECT" || type === "BOOLEAN" || type === "RELATION";
@@ -430,6 +452,28 @@ export function RecordTableToolbar({
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
+        {!listView?.active && viewType === "table" && (
+          <>
+            <button
+              type="button"
+              className={
+                "record-table__toolbar-button record-table__toolbar-button--group" +
+                (groupByLabel ? " record-table__toolbar-button--active" : "")
+              }
+              ref={groupButtonRef}
+              aria-label={groupByLabel ? `Group · ${groupByLabel}` : "Group"}
+              aria-haspopup="dialog"
+              aria-expanded={groupMenuOpen}
+              title={groupByLabel ? `Grouped by ${groupByLabel}` : "Group records"}
+              onClick={() => setGroupMenuOpen((x) => !x)}
+            >
+              <Rows3 size={12} />
+              <span>{groupByLabel ? `Group · ${groupByLabel}` : "Group"}</span>
+            </button>
+            <RecordTableGroupByPopover open={groupMenuOpen} onClose={() => setGroupMenuOpen(false)} anchorRef={groupButtonRef} />
+          </>
+        )}
+
         <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button
             type="button"
@@ -510,6 +554,18 @@ export function RecordTableToolbar({
                 </div>
               </div>
               <div className="record-table__menu-section">
+                <button
+                  type="button"
+                  className="record-table__menu-action"
+                  onClick={() => {
+                    setColumnMenuOpen(false);
+                    setExportOpen(true);
+                  }}
+                >
+                  <Download size={13} aria-hidden="true" /> Export…
+                </button>
+              </div>
+              <div className="record-table__menu-section">
                 <span className="record-table__menu-label record-table__menu-label--icon">
                   <Columns size={12} /> Columns
                 </span>
@@ -531,6 +587,11 @@ export function RecordTableToolbar({
 
         {actions}
       </div>
+      <RecordTableExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        viewName={views && views.length > 0 ? activeViewName : label}
+      />
     </div>
   );
 }

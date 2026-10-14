@@ -1,52 +1,112 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { ListPlus, Plus, Trash2, X } from "lucide-react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
-import { FIELD_TYPES, type ViewFilterOperator } from "../../types";
+import { FIELD_TYPES, type RecordField, type ViewFilter, type ViewFilterGroup, type ViewFilterOperator } from "../../types";
 import { Select } from "@/components/Select";
+import { DatePicker } from "@/components/DatePicker";
+import { DateRangePicker } from "@/components/DateRangePicker";
 import { isOutsidePointerEvent } from "@/lib/floatingLayer";
+import { isDateRangeValue, resolveDateRange, type DateRangeContext, type DateRangeValue } from "@/lib/dateRanges";
+import { operatorLabel, operatorsForField } from "../utils/filterLabels";
+import {
+  VALUELESS_OPERATORS,
+  isDateFieldType,
+  isNumericFieldType,
+  numericFilterInputText,
+  parseNumericFilterInput,
+} from "../utils/filterValues";
+import { childFilterGroups, filterTreeSignature, rootFilterGroup } from "../utils/filterTree";
 
-const DEFAULT_OPERATORS: Record<string, ViewFilterOperator[]> = {
-  [FIELD_TYPES.TEXT]: ["contains", "eq", "neq", "startsWith", "endsWith", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.EMAIL]: ["contains", "eq", "neq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.PHONE]: ["contains", "eq", "neq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.LINK]: ["contains", "eq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.NUMBER]: ["eq", "neq", "gt", "gte", "lt", "lte", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.CURRENCY]: ["eq", "neq", "gt", "gte", "lt", "lte", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.RATING]: ["eq", "gt", "lt", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.BOOLEAN]: ["isTrue", "isFalse"],
-  [FIELD_TYPES.DATE]: ["eq", "neq", "gt", "lt", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.DATE_TIME]: ["eq", "gt", "lt", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.SELECT]: ["eq", "neq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.MULTI_SELECT]: ["contains", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.RELATION]: ["eq", "neq", "isEmpty", "isNotEmpty"],
-  [FIELD_TYPES.UUID]: ["eq", "neq"],
-  [FIELD_TYPES.ARRAY]: ["contains", "isEmpty", "isNotEmpty"],
+type DraftCondition = {
+  id: string;
+  groupId: string;
+  fieldMetadataId: string;
+  operator: ViewFilterOperator;
+  /** Typed text for text / number / amount values. */
+  text: string;
+  /** Picked values: option key, ISO date, or a date range. */
+  value: unknown;
 };
 
-const OPERATOR_LABELS: Record<ViewFilterOperator, string> = {
-  eq: "is",
-  neq: "is not",
-  contains: "contains",
-  notContains: "doesn't contain",
-  startsWith: "starts with",
-  endsWith: "ends with",
-  gt: "greater than",
-  gte: "≥",
-  lt: "less than",
-  lte: "≤",
-  in: "in",
-  notIn: "not in",
-  isEmpty: "is empty",
-  isNotEmpty: "is not empty",
-  isTrue: "is true",
-  isFalse: "is false",
-};
+type DraftGroup = { id: string; parentId: string | null; logicalOperator: "and" | "or" };
 
-const VALUELESS: ViewFilterOperator[] = ["isEmpty", "isNotEmpty", "isTrue", "isFalse"];
+type Draft = { root: DraftGroup; groups: DraftGroup[]; conditions: DraftCondition[] };
+
+let draftSeq = 0;
+const nextId = (prefix: string) => `${prefix}_${Date.now().toString(36)}${(draftSeq += 1).toString(36)}`;
+
+function blankCondition(groupId: string): DraftCondition {
+  return { id: nextId("f"), groupId, fieldMetadataId: "", operator: "contains", text: "", value: "" };
+}
+
+function draftFromStore(filters: ViewFilter[], filterGroups: ViewFilterGroup[], columns: RecordField[]): Draft {
+  const storedRoot = rootFilterGroup(filterGroups);
+  const root: DraftGroup = {
+    id: storedRoot?.id ?? nextId("fg"),
+    parentId: null,
+    logicalOperator: storedRoot?.logicalOperator ?? "and",
+  };
+  const groups: DraftGroup[] = [];
+  const known = new Set([root.id]);
+  // Breadth-first so a nested group always follows its parent.
+  const queue = [root.id];
+  while (queue.length > 0) {
+    const parent = queue.shift()!;
+    for (const group of childFilterGroups(filterGroups, parent)) {
+      groups.push({ id: group.id, parentId: parent, logicalOperator: group.logicalOperator });
+      known.add(group.id);
+      queue.push(group.id);
+    }
+  }
+  const conditions = filters.map((filter): DraftCondition => {
+    const column = columns.find((entry) => entry.fieldMetadataId === filter.fieldMetadataId);
+    const groupId = filter.viewFilterGroupId && known.has(filter.viewFilterGroupId) ? filter.viewFilterGroupId : root.id;
+    const numeric = column && isNumericFieldType(column.field.fieldType);
+    return {
+      id: filter.id ?? nextId("f"),
+      groupId,
+      fieldMetadataId: filter.fieldMetadataId,
+      operator: filter.operator,
+      text: numeric ? numericFilterInputText(column.field, filter.value) : typeof filter.value === "string" ? filter.value : "",
+      value: filter.value,
+    };
+  });
+  if (conditions.length === 0) conditions.push(blankCondition(root.id));
+  return { root, groups, conditions };
+}
+
+/** The stored value for a condition, or undefined while it is incomplete. */
+function conditionValue(condition: DraftCondition, column: RecordField | undefined, dateContext: DateRangeContext): { ok: boolean; value: unknown } {
+  if (!column) return { ok: false, value: undefined };
+  if (VALUELESS_OPERATORS.includes(condition.operator)) return { ok: true, value: null };
+  if (condition.operator === "between") {
+    const range = isDateRangeValue(condition.value) ? condition.value : null;
+    return range && resolveDateRange(range, dateContext) ? { ok: true, value: range } : { ok: false, value: undefined };
+  }
+  if (isNumericFieldType(column.field.fieldType)) {
+    const parsed = parseNumericFilterInput(column.field, condition.text);
+    return parsed === undefined ? { ok: false, value: undefined } : { ok: true, value: parsed };
+  }
+  if (hasOptions(column) || isDateFieldType(column.field.fieldType)) {
+    const picked = typeof condition.value === "string" ? condition.value : "";
+    return picked ? { ok: true, value: picked } : { ok: false, value: undefined };
+  }
+  const text = condition.text.trim();
+  return text ? { ok: true, value: text } : { ok: false, value: undefined };
+}
+
+function hasOptions(column: RecordField | undefined) {
+  return Array.isArray(column?.field.config?.options) && column!.field.config.options.length > 0;
+}
 
 /**
- * Simple add-a-filter popover. Bind the `open` state from the parent
- * (RecordTableToolbar has a button that toggles it). Keep the render
- * conditional so the popover unmounts between opens and resets state.
+ * Filter editor. Flat "match all / match any" conditions by default, with
+ * "Add filter group" for a nested any-of / all-of block. Edits are drafted
+ * and applied together (Apply or Enter), so a half-typed value never blanks
+ * the table.
+ *
+ * Opened by the page's Filter button (`open`) or by a filter chip, which
+ * asks through the table store and focuses that condition.
  */
 export function RecordTableFilterPopover({
   open,
@@ -55,189 +115,385 @@ export function RecordTableFilterPopover({
   open: boolean;
   onClose: () => void;
 }) {
+  const request = useRecordTableState((s) => s.filterEditorRequest);
+  const handle = useRecordTableStoreHandle();
+  if (!open && !request) return null;
+  const close = () => {
+    handle.get().clearFilterEditorRequest();
+    onClose();
+  };
+  return <FilterEditor key={request?.nonce ?? "toolbar"} focusIndex={request?.filterIndex} onClose={close} />;
+}
+
+function FilterEditor({ focusIndex, onClose }: { focusIndex?: number; onClose: () => void }) {
   const columns = useRecordTableState((s) => s.columns);
-  const filters = useRecordTableState((s) => s.filters);
-  const filterGroups = useRecordTableState((s) => s.filterGroups);
+  const dateContext = useRecordTableState((s) => s.dateContext);
   const handle = useRecordTableStoreHandle();
   const popoverRef = useRef<HTMLDivElement>(null);
-
-  const [fieldId, setFieldId] = useState<string>("");
-  const [operator, setOperator] = useState<ViewFilterOperator>("contains");
-  const [value, setValue] = useState<string>("");
-  const rootLogicalOperator = filterGroups.find((group) => !group.parentViewFilterGroupId)?.logicalOperator ?? "and";
+  const [draft, setDraft] = useState<Draft>(() => draftFromStore(handle.get().filters, handle.get().filterGroups, handle.get().columns));
+  const [showErrors, setShowErrors] = useState(false);
+  const focusId = focusIndex !== undefined ? draft.conditions[focusIndex]?.id : undefined;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return;
-
     const onPointerDown = (event: PointerEvent) => {
-      // The field/operator Selects portal their menus to <body>; picking an
-      // option there is not an outside click.
+      // Field/operator Selects and the date pickers portal their menus to
+      // <body>; picking an option there is not an outside click.
       if (!isOutsidePointerEvent(event, popoverRef)) return;
-      onClose();
+      onCloseRef.current();
     };
-
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose, open]);
+  }, []);
 
-  if (!open) return null;
-  const selectedColumn = columns.find((c) => c.fieldMetadataId === fieldId);
-  const availableOps =
-    (selectedColumn && DEFAULT_OPERATORS[selectedColumn.field.fieldType]) ?? ["contains"];
+  useEffect(() => {
+    if (!focusId) return;
+    const row = popoverRef.current?.querySelector<HTMLElement>(`[data-condition-id="${focusId}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+    row?.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
+  }, [focusId]);
 
-  // Fields with a fixed set of choices (selects, and relations a page has
-  // given names to) pick a value from a list instead of typing a raw value.
-  const configOptions = (selectedColumn?.field.config as { options?: { value: string; label: string }[] } | undefined)?.options;
-  const valueOptions = Array.isArray(configOptions)
-    ? configOptions.map((option) => ({ value: String(option.value), label: String(option.label ?? option.value) }))
-    : [];
+  const fieldOptions = useMemo(
+    () => columns.map((column) => ({ value: column.fieldMetadataId, label: column.field.label })),
+    [columns],
+  );
+  const columnFor = (fieldMetadataId: string) => columns.find((column) => column.fieldMetadataId === fieldMetadataId);
 
-  const add = () => {
-    if (!selectedColumn) return;
-    const existingRoot = filterGroups.find((group) => !group.parentViewFilterGroupId);
-    const rootGroup = existingRoot ?? {
-      id: `fg_${Date.now()}`,
-      logicalOperator: rootLogicalOperator,
-      parentViewFilterGroupId: null,
-      positionInViewFilterGroup: 0,
-    };
-    const normalizedGroups = existingRoot
-      ? filterGroups
-      : [rootGroup, ...filterGroups];
-    const filter = {
-      id: `f_${Date.now()}`,
-      fieldMetadataId: selectedColumn.fieldMetadataId,
-      operator,
-      value: VALUELESS.includes(operator)
-        ? null
-        : selectedColumn.field.fieldType === FIELD_TYPES.NUMBER ||
-            selectedColumn.field.fieldType === FIELD_TYPES.CURRENCY ||
-            selectedColumn.field.fieldType === FIELD_TYPES.RATING
-          ? Number(value)
-          : value,
-      viewFilterGroupId: rootGroup.id,
-      positionInViewFilterGroup: filters.length,
-    };
-    handle.set({
-      filterGroups: normalizedGroups,
-      filters: [
-        ...filters.map((entry, index) =>
-          entry.viewFilterGroupId
-            ? entry
-            : {
-                ...entry,
-                viewFilterGroupId: rootGroup.id,
-                positionInViewFilterGroup: index,
-              },
-        ),
-        filter,
-      ],
+  const updateCondition = (id: string, patch: Partial<DraftCondition>) =>
+    setDraft((current) => ({
+      ...current,
+      conditions: current.conditions.map((condition) => (condition.id === id ? { ...condition, ...patch } : condition)),
+    }));
+
+  const removeCondition = (id: string) =>
+    setDraft((current) => {
+      const removed = current.conditions.find((condition) => condition.id === id);
+      let conditions = current.conditions.filter((condition) => condition.id !== id);
+      let groups = current.groups;
+      // An emptied nested group goes with its last condition.
+      if (removed && removed.groupId !== current.root.id && !conditions.some((condition) => condition.groupId === removed.groupId)) {
+        groups = groups.filter((group) => group.id !== removed.groupId);
+      }
+      if (conditions.length === 0) conditions = [blankCondition(current.root.id)];
+      return { ...current, groups, conditions };
     });
-    setFieldId("");
-    setOperator("contains");
-    setValue("");
+
+  const addCondition = (groupId: string) =>
+    setDraft((current) => ({ ...current, conditions: [...current.conditions, blankCondition(groupId)] }));
+
+  const addGroup = () =>
+    setDraft((current) => {
+      const group: DraftGroup = { id: nextId("fg"), parentId: current.root.id, logicalOperator: "or" };
+      return { ...current, groups: [...current.groups, group], conditions: [...current.conditions, blankCondition(group.id)] };
+    });
+
+  const removeGroup = (groupId: string) =>
+    setDraft((current) => {
+      const conditions = current.conditions.filter((condition) => condition.groupId !== groupId);
+      return {
+        ...current,
+        groups: current.groups.filter((group) => group.id !== groupId && group.parentId !== groupId),
+        conditions: conditions.length > 0 ? conditions : [blankCondition(current.root.id)],
+      };
+    });
+
+  const setGroupOperator = (groupId: string, logicalOperator: "and" | "or") =>
+    setDraft((current) =>
+      groupId === current.root.id
+        ? { ...current, root: { ...current.root, logicalOperator } }
+        : { ...current, groups: current.groups.map((group) => (group.id === groupId ? { ...group, logicalOperator } : group)) },
+    );
+
+  const evaluated = draft.conditions.map((condition) => ({
+    condition,
+    column: columnFor(condition.fieldMetadataId),
+    result: conditionValue(condition, columnFor(condition.fieldMetadataId), dateContext),
+  }));
+  const incomplete = evaluated.filter(({ condition, result }) => condition.fieldMetadataId && !result.ok);
+
+  const apply = () => {
+    if (incomplete.length > 0) {
+      setShowErrors(true);
+      return;
+    }
+    const complete = evaluated.filter(({ result }) => result.ok);
+    const usedGroups = new Set(complete.map(({ condition }) => condition.groupId));
+    // Keep parents of used groups.
+    for (const group of [...draft.groups].reverse()) {
+      if (usedGroups.has(group.id) && group.parentId) usedGroups.add(group.parentId);
+    }
+    const positions = new Map<string, number>();
+    const filters: ViewFilter[] = complete.map(({ condition, result }) => {
+      const position = positions.get(condition.groupId) ?? 0;
+      positions.set(condition.groupId, position + 1);
+      return {
+        id: condition.id,
+        fieldMetadataId: condition.fieldMetadataId,
+        operator: condition.operator,
+        value: result.value,
+        viewFilterGroupId: condition.groupId,
+        positionInViewFilterGroup: position,
+      };
+    });
+    const filterGroups: ViewFilterGroup[] = filters.length === 0
+      ? []
+      : [
+          { id: draft.root.id, logicalOperator: draft.root.logicalOperator, parentViewFilterGroupId: null, positionInViewFilterGroup: 0 },
+          ...draft.groups
+            .filter((group) => usedGroups.has(group.id))
+            .map((group, index) => ({
+              id: group.id,
+              logicalOperator: group.logicalOperator,
+              parentViewFilterGroupId: group.parentId,
+              positionInViewFilterGroup: index + 1,
+            })),
+        ];
+    const state = handle.get();
+    // Re-applying the same conditions must not mark the view as changed.
+    if (filterTreeSignature(filters, filterGroups) !== filterTreeSignature(state.filters, state.filterGroups)) {
+      handle.set({ filters, filterGroups });
+    }
     onClose();
   };
 
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape" && !event.defaultPrevented) {
+      event.preventDefault();
+      onClose();
+    } else if (event.key === "Enter" && event.target instanceof HTMLInputElement && !event.defaultPrevented) {
+      event.preventDefault();
+      apply();
+    }
+  };
+
+  const renderConditions = (groupId: string) =>
+    evaluated
+      .filter(({ condition }) => condition.groupId === groupId)
+      .map(({ condition, column, result }) => (
+        <ConditionRow
+          key={condition.id}
+          condition={condition}
+          column={column}
+          fieldOptions={fieldOptions}
+          dateContext={dateContext}
+          invalid={showErrors && !!condition.fieldMetadataId && !result.ok}
+          highlighted={condition.id === focusId}
+          onChange={(patch) => updateCondition(condition.id, patch)}
+          onRemove={() => removeCondition(condition.id)}
+          defaultOperator={(fieldMetadataId) => operatorsForField(columnFor(fieldMetadataId)?.field.fieldType)[0] ?? "contains"}
+        />
+      ));
+
+  const nestedGroups = draft.groups.filter((group) => group.parentId === draft.root.id);
+  const conditionCount = draft.conditions.filter((condition) => condition.fieldMetadataId).length;
+
   return (
-    <div ref={popoverRef} className="record-table__filter-popover">
+    <div ref={popoverRef} className="record-table__filter-popover" role="group" aria-label="Filters" onKeyDown={onKeyDown}>
       <div className="record-table__popover-head">
-        <strong>Advanced filters</strong>
-        <select
-          className="record-table__menu-select"
-          style={{ width: 140 }}
-          value={rootLogicalOperator}
-          onChange={(event) => {
-            const logicalOperator = event.target.value as "and" | "or";
-            const root = filterGroups.find((group) => !group.parentViewFilterGroupId);
-            if (root) {
-              handle.get().setFilterGroups(
-                filterGroups.map((group) =>
-                  group.id === root.id ? { ...group, logicalOperator } : group,
-                ),
-              );
-              return;
-            }
-            if (filters.length > 0) {
-              const rootId = `fg_${Date.now()}`;
-              handle.set({
-                filterGroups: [{ id: rootId, logicalOperator, parentViewFilterGroupId: null }],
-                filters: filters.map((entry, index) => ({
-                  ...entry,
-                  viewFilterGroupId: rootId,
-                  positionInViewFilterGroup: index,
-                })),
-              });
-            }
-          }}
-        >
-          <option value="and">Match all</option>
-          <option value="or">Match any</option>
-        </select>
+        <strong>Filters</strong>
+        <LogicalOperatorSelect
+          value={draft.root.logicalOperator}
+          onChange={(value) => setGroupOperator(draft.root.id, value)}
+          labels={{ and: "Match all", or: "Match any" }}
+          aria-label="How conditions combine"
+          disabled={conditionCount + nestedGroups.length < 2}
+        />
       </div>
-      <div className="record-table__filter-popover-row">
-        <Select
-          size="sm"
-          placeholder="Choose field…"
-          value={fieldId}
-          onChange={(v) => {
-            setFieldId(v);
-            const c = columns.find((x) => x.fieldMetadataId === v);
-            if (c) {
-              const ops = DEFAULT_OPERATORS[c.field.fieldType] ?? [];
-              setOperator(ops[0] ?? "contains");
-            }
-          }}
-          options={columns.map((c) => ({ value: c.fieldMetadataId, label: c.field.label }))}
-          searchable={columns.length > 6}
-        />
-        <Select
-          size="sm"
-          value={operator}
-          onChange={(v) => setOperator(v as ViewFilterOperator)}
-          options={availableOps.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
-          disabled={!selectedColumn}
-        />
-        {!VALUELESS.includes(operator) && valueOptions.length > 0 ? (
-          <Select
-            size="sm"
-            value={value}
-            onChange={(v) => setValue(v)}
-            placeholder="Choose…"
-            searchable={valueOptions.length > 8}
-            aria-label="Filter value"
-            options={valueOptions}
-          />
-        ) : !VALUELESS.includes(operator) && (
-          <input
-            type={
-              selectedColumn?.field.fieldType === FIELD_TYPES.DATE
-                ? "date"
-                : selectedColumn?.field.fieldType === FIELD_TYPES.NUMBER ||
-                    selectedColumn?.field.fieldType === FIELD_TYPES.CURRENCY ||
-                    selectedColumn?.field.fieldType === FIELD_TYPES.RATING
-                  ? "number"
-                  : "text"
-            }
-            placeholder="Value…"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
-        )}
+      <div className="record-table__filter-conditions">
+        {renderConditions(draft.root.id)}
+        {nestedGroups.map((group) => (
+          <div key={group.id} className="record-table__filter-group" role="group" aria-label="Filter group">
+            <div className="record-table__filter-group-head">
+              <LogicalOperatorSelect
+                value={group.logicalOperator}
+                onChange={(value) => setGroupOperator(group.id, value)}
+                labels={{ and: "All of these", or: "Any of these" }}
+                aria-label="How this group's conditions combine"
+              />
+              <button type="button" className="record-table__icon-btn" aria-label="Remove filter group" title="Remove group" onClick={() => removeGroup(group.id)}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+            {renderConditions(group.id)}
+            <button type="button" className="record-table__filter-add record-table__filter-add--nested" onClick={() => addCondition(group.id)}>
+              <Plus size={12} /> Add condition
+            </button>
+          </div>
+        ))}
       </div>
       <div className="record-table__filter-popover-actions">
-        <button type="button" className="record-table__secondary-btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="record-table__primary-btn"
-          disabled={!selectedColumn}
-          onClick={add}
-        >
-          Add filter
-        </button>
+        <div className="record-table__filter-add-row">
+          <button type="button" className="record-table__filter-add" onClick={() => addCondition(draft.root.id)}>
+            <Plus size={12} /> Add filter
+          </button>
+          <button type="button" className="record-table__filter-add" onClick={addGroup}>
+            <ListPlus size={12} /> Add filter group
+          </button>
+        </div>
+        {showErrors && incomplete.length > 0 && (
+          <span className="record-table__filter-error" role="alert">
+            Finish or remove the highlighted {incomplete.length === 1 ? "condition" : "conditions"}.
+          </span>
+        )}
+        <div className="record-table__filter-submit">
+          <button type="button" className="record-table__secondary-btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="record-table__primary-btn" onClick={apply}>
+            Apply
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function LogicalOperatorSelect({
+  value,
+  onChange,
+  labels,
+  disabled,
+  "aria-label": ariaLabel,
+}: {
+  value: "and" | "or";
+  onChange: (value: "and" | "or") => void;
+  labels: { and: string; or: string };
+  disabled?: boolean;
+  "aria-label": string;
+}) {
+  return (
+    <select
+      className="record-table__menu-select record-table__logic-select"
+      value={value}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onChange={(event) => onChange(event.target.value === "or" ? "or" : "and")}
+    >
+      <option value="and">{labels.and}</option>
+      <option value="or">{labels.or}</option>
+    </select>
+  );
+}
+
+function ConditionRow({
+  condition,
+  column,
+  fieldOptions,
+  dateContext,
+  invalid,
+  highlighted,
+  onChange,
+  onRemove,
+  defaultOperator,
+}: {
+  condition: DraftCondition;
+  column: RecordField | undefined;
+  fieldOptions: { value: string; label: string }[];
+  defaultOperator: (fieldMetadataId: string) => ViewFilterOperator;
+  dateContext: DateRangeContext;
+  invalid: boolean;
+  highlighted: boolean;
+  onChange: (patch: Partial<DraftCondition>) => void;
+  onRemove: () => void;
+}) {
+  const fieldType = column?.field.fieldType;
+  const operators = operatorsForField(fieldType);
+  const valueless = VALUELESS_OPERATORS.includes(condition.operator);
+  const options = hasOptions(column)
+    ? (column!.field.config.options as { value: string; label: string; color?: any }[]).map((option) => ({
+        value: String(option.value),
+        label: String(option.label ?? option.value),
+      }))
+    : [];
+  const isCurrency = fieldType === FIELD_TYPES.CURRENCY;
+
+  let valueControl: ReactNode = null;
+  if (column && !valueless) {
+    if (condition.operator === "between") {
+      valueControl = (
+        <DateRangePicker
+          size="sm"
+          value={isDateRangeValue(condition.value) ? (condition.value as DateRangeValue) : null}
+          onChange={(range) => onChange({ value: range ?? "" })}
+          context={dateContext}
+          placeholder="Choose a range…"
+          aria-label="Date range"
+          clearable={false}
+        />
+      );
+    } else if (options.length > 0) {
+      valueControl = (
+        <Select
+          size="sm"
+          value={typeof condition.value === "string" ? condition.value : ""}
+          onChange={(value) => onChange({ value })}
+          placeholder="Choose…"
+          searchable={options.length > 8}
+          aria-label="Filter value"
+          options={options}
+        />
+      );
+    } else if (fieldType && isDateFieldType(fieldType)) {
+      valueControl = (
+        <DatePicker
+          size="sm"
+          value={typeof condition.value === "string" ? condition.value : ""}
+          onChange={(value) => onChange({ value })}
+          placeholder="Pick a date"
+        />
+      );
+    } else {
+      const numeric = fieldType ? isNumericFieldType(fieldType) : false;
+      valueControl = (
+        <input
+          className="record-table__filter-input"
+          type="text"
+          inputMode={numeric ? "decimal" : undefined}
+          placeholder={isCurrency ? "e.g. 1.5k, $2,000, (300)" : numeric ? "Number" : "Value…"}
+          aria-label="Filter value"
+          aria-invalid={invalid || undefined}
+          value={condition.text}
+          onChange={(event) => onChange({ text: event.target.value })}
+        />
+      );
+    }
+  }
+
+  return (
+    <div
+      className={`record-table__filter-popover-row${invalid ? " is-invalid" : ""}${highlighted ? " is-highlighted" : ""}`}
+      data-condition-id={condition.id}
+    >
+      <Select
+        size="sm"
+        placeholder="Choose field…"
+        value={condition.fieldMetadataId}
+        onChange={(fieldMetadataId) => {
+          if (fieldMetadataId === condition.fieldMetadataId) return;
+          onChange({ fieldMetadataId, operator: defaultOperator(fieldMetadataId), text: "", value: "" });
+        }}
+        options={fieldOptions}
+        searchable={fieldOptions.length > 6}
+      />
+      <Select
+        size="sm"
+        value={condition.fieldMetadataId ? condition.operator : ""}
+        placeholder="Condition"
+        aria-label="Filter condition"
+        onChange={(value) => {
+          const operator = value as ViewFilterOperator;
+          // Ranges and single dates hold different values.
+          const switchesKind = (operator === "between") !== (condition.operator === "between");
+          onChange(switchesKind ? { operator, value: "", text: "" } : { operator });
+        }}
+        options={operators.map((operator) => ({ value: operator, label: operatorLabel(operator, fieldType) }))}
+        disabled={!column}
+      />
+      <div className="record-table__filter-value">{valueControl}</div>
+      <button type="button" className="record-table__icon-btn" aria-label="Remove condition" title="Remove" onClick={onRemove}>
+        <X size={13} />
+      </button>
     </div>
   );
 }

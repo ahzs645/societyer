@@ -22,12 +22,15 @@ export function RecordTableCell({
   columnIndex,
   renderCell,
   selectionControl,
+  collapsed = false,
 }: {
   recordField: RecordField;
   isLabelIdentifier: boolean;
   columnIndex: number;
   renderCell?: RecordTableCellRenderer;
   selectionControl?: ReactNode;
+  /** Folded to zero width while the preview panel condenses the table. */
+  collapsed?: boolean;
 }) {
   const tableCtx = useRecordTableContextOrThrow();
   const { record, recordId, rowIndex } = useRecordTableRowContextOrThrow();
@@ -45,6 +48,17 @@ export function RecordTableCell({
       state.hoverPosition?.rowIndex === rowIndex &&
       state.hoverPosition.columnIndex === columnIndex,
   );
+  const isInRange = useRecordTableState((state) => {
+    const anchor = state.rangeAnchor;
+    const focus = state.focusedCell;
+    if (!anchor || !focus) return false;
+    return (
+      rowIndex >= Math.min(anchor.rowIndex, focus.rowIndex) &&
+      rowIndex <= Math.max(anchor.rowIndex, focus.rowIndex) &&
+      columnIndex >= Math.min(anchor.columnIndex, focus.columnIndex) &&
+      columnIndex <= Math.max(anchor.columnIndex, focus.columnIndex)
+    );
+  });
   const isEditingThisCell = useRecordTableState(
     (state) =>
       state.editingCell?.rowIndex === rowIndex &&
@@ -64,6 +78,7 @@ export function RecordTableCell({
 
   const value = record[recordField.field.name];
   const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
+  const isNumeric = isNumericCellType(recordField.field.fieldType);
   const isEditing = canEdit && isEditingThisCell;
   const secondaryActions = useMemo(
     () => getSecondaryActions({ fieldType: recordField.field.fieldType, value }),
@@ -96,11 +111,20 @@ export function RecordTableCell({
         (isLabelIdentifier && tableCtx.onRecordClick ? " record-table__cell--identifier" : "") +
         (canEdit ? " record-table__cell--editable" : "") +
         (isHovered ? " record-table__cell--hovered" : "") +
-        (isFocused ? " record-table__cell--focused" : "")
+        (isFocused ? " record-table__cell--focused" : "") +
+        (isInRange ? " record-table__cell--in-range" : "") +
+        (isNumeric ? " record-table__cell--numeric" : "") +
+        (collapsed ? " record-table__cell--collapsed" : "")
       }
-      tabIndex={isFocused ? 0 : -1}
-      aria-selected={isFocused}
-      style={columnWidthStyle(recordField.size)}
+      tabIndex={isFocused && !collapsed ? 0 : -1}
+      aria-selected={isFocused || isInRange}
+      aria-hidden={collapsed || undefined}
+      style={columnWidthStyle(collapsed ? 0 : recordField.size)}
+      onMouseDown={(event) => {
+        // Shift+click extends a cell range; keep the browser from also
+        // selecting text across the rows.
+        if (event.shiftKey) event.preventDefault();
+      }}
       // The identifier column opens the record on a single click, so double-click
       // must NOT also try to edit it (the first click already navigates away —
       // that mismatch is what made renaming feel janky). Edit it via the hover
@@ -120,6 +144,15 @@ export function RecordTableCell({
         // Treat those as editor interactions so Apply, Cancel, and option
         // selection cannot immediately reopen the field on mobile.
         if (target.closest(".record-table__cell-editor-popover, .menu, .calendar")) return;
+        const state = handle.get();
+        if (event.shiftKey && state.focusedCell && !isMobile) {
+          // Shift+click: the previously focused cell anchors a range.
+          if (!state.rangeAnchor) state.setRangeAnchor(state.focusedCell);
+          state.setFocusedCell({ rowIndex, columnIndex });
+          cellRef.current?.focus({ preventScroll: true });
+          return;
+        }
+        if (state.rangeAnchor) state.setRangeAnchor(null);
         handle.get().setFocusedCell({ rowIndex, columnIndex });
         cellRef.current?.focus({ preventScroll: true });
         // Researcher's phone table opens an editable field from the cell tap
@@ -292,6 +325,10 @@ export function RecordTableFloatingCellEditor({
     </div>,
     document.body,
   );
+}
+
+function isNumericCellType(fieldType: string) {
+  return fieldType === FIELD_TYPES.CURRENCY || fieldType === FIELD_TYPES.NUMBER;
 }
 
 function identifierInitial(value: unknown): string {

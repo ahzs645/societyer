@@ -14,6 +14,8 @@ import type {
   ViewSort,
   ViewVisibility,
 } from "../../types";
+import type { DateRangeContext } from "../../../../lib/dateRanges";
+import { todayDateOnly } from "../../../../../shared/dateOnly";
 
 /**
  * Per-table-instance state. Mirrors Twenty's `createAtomComponentState`
@@ -132,6 +134,32 @@ export type RecordTableState = {
   records: any[];
   setRecords: (records: any[]) => void;
 
+  /* grouping — which groups are folded (interaction state, never dirty) */
+  collapsedGroupKeys: Set<string>;
+  setCollapsedGroupKeys: (keys: Set<string>) => void;
+  toggleGroupCollapsed: (key: string) => void;
+
+  /* cell range: the anchor corner; the focused cell is the other corner */
+  rangeAnchor: CellPosition | null;
+  setRangeAnchor: (pos: CellPosition | null) => void;
+
+  /* filter editor — chips ask the (page-mounted) filter popover to open */
+  filterEditorRequest: { filterIndex?: number; nonce: number } | null;
+  requestFilterEditor: (filterIndex?: number) => void;
+  clearFilterEditorRequest: () => void;
+
+  /* record open in the preview panel (drives row highlight + condensing) */
+  panelRecordId: string | null;
+  setPanelRecordId: (recordId: string | null) => void;
+
+  /* rows that just appeared (created / restored) and should flash */
+  flashRecordIds: Set<string>;
+  setFlashRecordIds: (ids: Set<string>) => void;
+
+  /* organisation calendar for relative date filters and export names */
+  dateContext: DateRangeContext;
+  setDateContext: (context: DateRangeContext) => void;
+
   /* draft / current split */
   savedView: SavedViewSnapshot | null;
   /** Load a view from the server — replaces both live state and savedView. */
@@ -178,6 +206,12 @@ export function createRecordTableStore(opts: {
     editingCell: null,
     editingInitialValue: undefined,
     records: [],
+    collapsedGroupKeys: new Set(),
+    rangeAnchor: null,
+    filterEditorRequest: null,
+    panelRecordId: null,
+    flashRecordIds: new Set(),
+    dateContext: { today: todayDateOnly() },
     savedView: null,
 
     setColumns: (columns) =>
@@ -260,6 +294,27 @@ export function createRecordTableStore(opts: {
     setEditingInitialValue: (value) => set({ editingInitialValue: value }),
 
     setRecords: (records) => set({ records }),
+
+    setCollapsedGroupKeys: (collapsedGroupKeys) => set({ collapsedGroupKeys }),
+    toggleGroupCollapsed: (key) =>
+      set((state) => {
+        const next = new Set(state.collapsedGroupKeys);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return { collapsedGroupKeys: next };
+      }),
+    setRangeAnchor: (rangeAnchor) => set({ rangeAnchor }),
+    requestFilterEditor: (filterIndex) =>
+      set((state) => ({ filterEditorRequest: { filterIndex, nonce: (state.filterEditorRequest?.nonce ?? 0) + 1 } })),
+    clearFilterEditorRequest: () => set({ filterEditorRequest: null }),
+    setPanelRecordId: (panelRecordId) => set({ panelRecordId }),
+    setFlashRecordIds: (flashRecordIds) => set({ flashRecordIds }),
+    setDateContext: (dateContext) =>
+      set((state) =>
+        state.dateContext.today === dateContext.today && state.dateContext.fiscalYearEnd === dateContext.fiscalYearEnd
+          ? state
+          : { dateContext },
+      ),
 
     loadView: (hydrated) => {
       const normalizedColumns = normalizeIdentifierColumn(

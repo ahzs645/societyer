@@ -1,0 +1,631 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// RecordTable: grouping, cell ranges, the condensed (panel-open) layout,
+// the filter editor, date-range picker, export dialog and the bulk-action
+// island's tablet/phone docking. Kept apart from _record-table.scss so the
+// newer table features read as one unit.
+// ============================================================
+
+.record-table {
+  // Group headers stick just under the column header.
+  --rt-header-h: #{token('row-h-compact')};
+}
+
+@media (pointer: coarse) {
+  .record-table {
+    --rt-header-h: 44px;
+  }
+}
+
+// The header stays above sticky group rows and sticky body cells.
+.record-table__thead {
+  z-index: 7;
+}
+
+/* ---------------------------- Group rows ---------------------------- */
+
+.record-table__group-row > .record-table__group-cell {
+  position: sticky;
+  top: var(--rt-header-h);
+  z-index: 6;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 8px;
+  background: token('bg-subtle');
+  border-top: 1px solid token('border');
+  border-bottom: 1px solid token('border');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.record-table__group-row > .record-table__checkbox-cell {
+  // The selection column is sticky-left already; keep it on the group tone.
+  background: token('bg-subtle');
+}
+
+.record-table__group-row:first-child > .record-table__group-cell {
+  border-top-color: transparent;
+}
+
+.record-table__group-cell--label {
+  max-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+// The heading follows a sideways scroll so the label never slides away.
+.record-table__group-heading {
+  position: sticky;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.record-table__group-toggle {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: token('text-tertiary');
+  background: transparent;
+  border: 0;
+  border-radius: token('r-sm');
+  cursor: pointer;
+
+  svg {
+    transform: rotate(90deg);
+    transition: transform token('motion-move-fast') token('ease-move');
+  }
+
+  &:hover {
+    color: token('text-primary');
+    background: token('bg-hover-alpha');
+  }
+}
+
+.record-table__group-row.is-collapsed .record-table__group-toggle svg {
+  transform: rotate(0deg);
+}
+
+.record-table__group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: token('text-primary');
+
+  .record-cell__number,
+  .record-cell__boolean {
+    font-weight: token('fw-medium');
+  }
+}
+
+.record-table__group-label--empty {
+  color: token('text-tertiary');
+  font-style: italic;
+}
+
+.record-table__group-count {
+  flex: none;
+  min-width: 20px;
+  padding: 0 6px;
+  line-height: 18px;
+  text-align: center;
+  font-size: token('fs-xxs');
+  font-variant-numeric: tabular-nums;
+  color: token('text-tertiary');
+  background: token('bg-hover-alpha');
+  border-radius: token('r-pill');
+}
+
+.record-table__group-cell--aggregate {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: token('text-primary');
+}
+
+@media (pointer: coarse) {
+  .record-table__group-row > .record-table__group-cell {
+    height: 44px;
+  }
+  .record-table__group-toggle {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* --------------------------- Numeric cells --------------------------- */
+
+.record-table__cell--numeric,
+.record-table__footer-cell--numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+
+  .record-table__cell-content {
+    text-align: right;
+  }
+}
+
+.record-table__header-cell--numeric {
+  text-align: right;
+  padding-right: 28px;
+}
+
+/* ----------------------- Cell range + active row ----------------------- */
+
+.record-table__cell--in-range:not(.record-table__cell--focused) {
+  background: linear-gradient(token('bg-selected-alpha'), token('bg-selected-alpha')), token('bg-panel');
+  box-shadow: inset 0 0 0 1px token('border-alpha');
+}
+
+// The record shown in the preview panel.
+.record-table__row--active > .record-table__cell {
+  background: linear-gradient(token('bg-selected-alpha'), token('bg-selected-alpha')), token('bg-panel');
+}
+
+.record-table__row--active > td:first-child {
+  box-shadow: inset 2px 0 0 token('accent');
+}
+
+/* --------------------- Condensed beside the panel --------------------- */
+
+.record-table__cell,
+.record-table__header-cell,
+.record-table__footer-cell,
+.record-table__group-cell {
+  transition:
+    width token('motion-panel') token('ease-panel'),
+    min-width token('motion-panel') token('ease-panel'),
+    padding token('motion-panel') token('ease-panel'),
+    opacity token('motion-fade') token('ease-fade');
+}
+
+.record-table__cell--collapsed,
+.record-table__header-cell--collapsed,
+.record-table__footer-cell--collapsed,
+.record-table__group-cell--collapsed {
+  max-width: 0;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-right-width: 0 !important;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.record-table__header-cell--collapsed {
+  .record-table__resize-handle,
+  .record-table__header-menu-wrap {
+    display: none;
+  }
+}
+
+/* ------------------------ Filtered empty state ------------------------ */
+
+.record-table__empty--filtered {
+  @include flex-column;
+  align-items: center;
+  gap: 2px;
+  border-style: solid;
+  background: token('bg-subtle');
+}
+
+.record-table__empty-icon {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  color: token('text-secondary');
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-pill');
+}
+
+/* ---------------------------- Toolbar ---------------------------- */
+
+.record-table__menu-action {
+  @include inline-flex-center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: token('fs-xs');
+  color: token('text-primary');
+  background: transparent;
+  border: 0;
+  border-radius: token('r-sm');
+  cursor: pointer;
+  text-align: left;
+
+  &:hover:not(:disabled) {
+    background: token('bg-hover');
+  }
+
+  &:disabled {
+    opacity: token('opacity-disabled');
+  }
+}
+
+.record-table__menu-actions {
+  display: flex;
+  gap: 4px;
+
+  .record-table__menu-action {
+    flex: 1;
+    justify-content: center;
+    border: 1px solid token('border');
+  }
+}
+
+.record-table__menu-hint {
+  margin: 4px 0 0;
+  font-size: token('fs-xxs');
+  color: token('text-tertiary');
+}
+
+.record-table__group-popover {
+  width: min(300px, calc(100vw - 16px));
+}
+
+@media (max-width: 560px) {
+  // Phones: "Group" collapses to its icon so the toolbar stays on one line.
+  .record-table__toolbar-button--group > span {
+    display: none;
+  }
+}
+
+/* --------------------------- Filter editor --------------------------- */
+
+.record-table__filter-popover {
+  @include flex-column;
+  gap: 0;
+}
+
+.record-table__logic-select {
+  width: auto;
+  min-width: 140px;
+}
+
+.record-table__filter-conditions {
+  @include flex-column;
+  gap: 4px;
+}
+
+.record-table__filter-group {
+  @include flex-column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 8px 8px 6px 10px;
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-left: 2px solid token('accent');
+  border-radius: token('r-sm');
+}
+
+.record-table__filter-group-head {
+  @include flex-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.record-table__filter-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.record-table__filter-add {
+  @include inline-flex-center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+  background: transparent;
+  border: 1px dashed token('border');
+  border-radius: token('r-sm');
+  cursor: pointer;
+
+  &:hover {
+    color: token('text-primary');
+    border-style: solid;
+    background: token('bg-hover');
+  }
+}
+
+.record-table__filter-add--nested {
+  align-self: flex-start;
+  border-color: transparent;
+}
+
+.record-table__filter-submit {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.record-table__filter-error {
+  flex-basis: 100%;
+  order: 3;
+  font-size: token('fs-xxs');
+  color: token('red-11');
+}
+
+@media (max-width: 560px) {
+  // Phones: field + condition on one line, the value full width below.
+  .record-table__filter-popover-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+    grid-template-areas:
+      "field condition remove"
+      "value value value";
+    padding-bottom: 8px;
+    border-bottom: 1px solid token('border-color-light');
+
+    > :nth-child(1) { grid-area: field; }
+    > :nth-child(2) { grid-area: condition; }
+    > .record-table__filter-value { grid-area: value; }
+    > .record-table__icon-btn { grid-area: remove; width: 36px; height: 36px; }
+  }
+  .record-table__filter-submit {
+    width: 100%;
+    > button { flex: 1; min-height: 40px; }
+  }
+}
+
+/* -------------------------- Date range picker -------------------------- */
+
+.date-range-picker {
+  min-width: 0;
+}
+
+.date-range-picker__panel {
+  position: fixed;
+  z-index: token('z-dropdown');
+  box-sizing: border-box;
+  width: min(600px, calc(100vw - 16px));
+  padding: 10px;
+  background: token('bg-panel');
+  color: token('text-primary');
+  border: 1px solid token('border');
+  border-radius: token('r-card');
+  box-shadow: token('elevation-2');
+  animation: menuIn token('motion-fade-fast') token('ease-appear');
+  outline: none;
+}
+
+.date-range-picker__head {
+  padding: 0 4px 8px;
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  color: token('text-secondary');
+}
+
+.date-range-picker__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.date-range-picker__presets {
+  @include flex-column;
+  gap: 1px;
+}
+
+.date-range-picker__preset {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 26px 4px 8px;
+  text-align: left;
+  font-size: token('fs-xs');
+  color: token('text-primary');
+  background: transparent;
+  border: 0;
+  border-radius: token('r-sm');
+  cursor: pointer;
+
+  &:hover {
+    background: token('bg-hover');
+  }
+
+  &.is-selected {
+    background: token('accent-soft');
+    color: token('accent');
+  }
+}
+
+.date-range-picker__preset-label {
+  white-space: nowrap;
+}
+
+.date-range-picker__preset-hint {
+  font-size: token('fs-xxs');
+  color: token('text-tertiary');
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.date-range-picker__preset-check {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.date-range-picker__note {
+  margin: 6px 8px 0;
+  font-size: token('fs-xxs');
+  color: token('text-tertiary');
+}
+
+.date-range-picker__custom {
+  @include flex-column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+
+  &.is-selected {
+    border-color: token('accent');
+  }
+}
+
+.date-range-picker__custom-title {
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+}
+
+.date-range-picker__field {
+  @include flex-column;
+  gap: 3px;
+  font-size: token('fs-xxs');
+  color: token('text-secondary');
+
+  .date-trigger-wrap {
+    display: flex;
+    width: 100%;
+  }
+
+  .select-trigger {
+    width: 100%;
+  }
+}
+
+.date-range-picker__apply {
+  align-self: flex-end;
+  margin-top: auto;
+}
+
+// Phones: a bottom sheet, presets stacked above the custom range.
+.date-range-picker__panel--sheet {
+  inset: auto 0 0;
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 0 max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  border-width: 1px 0 0;
+  border-radius: token('r-lg') token('r-lg') 0 0;
+  box-shadow: token('elevation-3');
+  overscroll-behavior-y: contain;
+  animation: sheetIn token('motion-panel') token('ease-panel');
+
+  .date-range-picker__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .date-range-picker__preset {
+    min-height: 44px;
+  }
+
+  .date-range-picker__apply {
+    align-self: stretch;
+    min-height: 44px;
+  }
+}
+
+/* ----------------------------- Export dialog ----------------------------- */
+
+.record-table__export {
+  @include flex-column;
+  gap: 14px;
+}
+
+.record-table__export-group {
+  @include flex-column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.record-table__export-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  cursor: pointer;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), background-color token('motion-fade-fast') token('ease-fade');
+
+  input {
+    margin-top: 3px;
+    accent-color: token('accent');
+  }
+
+  > span {
+    @include flex-column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  strong {
+    font-size: token('fs-sm');
+    font-weight: token('fw-medium');
+  }
+
+  small {
+    font-size: token('fs-xxs');
+    color: token('text-tertiary');
+  }
+
+  &:hover {
+    background: token('bg-hover');
+  }
+
+  &.is-selected {
+    border-color: token('accent');
+    background: token('accent-soft');
+  }
+}
+
+/* ------------------ Bulk-action island: tablet & phone ------------------ */
+
+.record-table__bulk-bar-spacer {
+  display: none;
+}
+
+// With the bottom navigation showing, the island floats just above it.
+@media (max-width: 980px) {
+  .record-table__bulk-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 12px);
+    margin: 0 auto;
+    z-index: token('z-dropdown');
+  }
+
+  .record-table__bulk-bar-spacer {
+    display: block;
+    height: 72px;
+  }
+}
+
+@media (max-width: 760px) {
+  .record-table__bulk-bar {
+    left: 8px;
+    right: 8px;
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 8px);
+    margin: 0;
+  }
+
+  .record-table__bulk-bar-spacer {
+    height: 132px;
+  }
+}

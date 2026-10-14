@@ -6,7 +6,23 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { RecordTableCell } from "./RecordTableCell";
 import type { RecordTableCellRenderer } from "./RecordTable";
-import { useFilteredRecords } from "../hooks/useFilteredRecords";
+import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
+import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
+
+/**
+ * Class list for a record's `<tr>`: the base row class plus the new-row flash
+ * and the "open in the preview panel" highlight. Shared by the plain and the
+ * virtualized body so both mark rows the same way.
+ */
+export function useRecordRowClassName(recordId: string | null) {
+  const isFlashing = useRecordTableState((state) => recordId !== null && state.flashRecordIds.has(recordId));
+  const isActive = useRecordTableState((state) => recordId !== null && state.panelRecordId === recordId);
+  return (
+    "record-table__row" +
+    (isFlashing ? " row-flash" : "") +
+    (isActive ? " record-table__row--active" : "")
+  );
+}
 
 export function RecordTableRow({
   record,
@@ -32,14 +48,12 @@ export function RecordTableRow({
   renderCell?: RecordTableCellRenderer;
 }) {
   const { objectMetadata, onRecordClick, onReorder } = useRecordTableContextOrThrow();
-  const columns = useRecordTableState((s) => s.columns);
   const isSelected = useRecordTableState((s) =>
     s.selectedRecordIds.has(String(record._id)),
   );
   const handle = useRecordTableStoreHandle();
-  const filteredRecords = useFilteredRecords();
-
-  const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
+  const { records: rowRecords } = useRecordTableRowModel();
+  const { columns: visibleColumns, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
   const recordId = String(record._id);
 
   const toggleRow = (extendRange = false) => {
@@ -49,7 +63,7 @@ export function RecordTableRow({
       const start = Math.min(anchor, rowIndex);
       const end = Math.max(anchor, rowIndex);
       for (let index = start; index <= end; index += 1) {
-        const rangeRecord = filteredRecords[index];
+        const rangeRecord = rowRecords[index];
         if (rangeRecord?._id) next.add(String(rangeRecord._id));
       }
       handle.get().setSelectedRecordIds(next);
@@ -81,7 +95,7 @@ export function RecordTableRow({
             event.preventDefault();
             const draggedRecordId = event.dataTransfer.getData("text/plain");
             if (!draggedRecordId || draggedRecordId === recordId) return;
-            const orderedIds = filteredRecords.map((item) => String(item._id));
+            const orderedIds = rowRecords.map((item) => String(item._id));
             const fromIndex = orderedIds.indexOf(draggedRecordId);
             if (fromIndex < 0) return;
             orderedIds.splice(fromIndex, 1);
@@ -122,6 +136,7 @@ export function RecordTableRow({
           key={column.viewFieldId}
           recordField={column}
           columnIndex={idx}
+          collapsed={collapsed.has(column.viewFieldId)}
           isLabelIdentifier={
             column.field.name === objectMetadata.labelIdentifierFieldName
           }

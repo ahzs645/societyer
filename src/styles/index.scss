@@ -87,5 +87,8 @@
 @use "review-governance";
 @use "review-people";
 
+// RecordTable grouping, ranges, condensed layout, filter editor, export.
+@use "record-table-extras";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
