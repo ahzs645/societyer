@@ -1398,6 +1398,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     ],
     defaultView: {
       name: "All transactions",
+      // Newest first: a bank feed runs to hundreds of rows.
+      sorts: [{ fieldName: "date", direction: "desc" }],
       columns: [
         { fieldName: "date", size: 130 },
         { fieldName: "description", size: 300 },

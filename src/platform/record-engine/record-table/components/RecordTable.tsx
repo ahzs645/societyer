@@ -81,6 +81,8 @@ const VirtuosoTableRow = forwardRef<
     <tr
       ref={ref}
       {...props}
+      // Same row hook as the non-virtualized body (virtuoso supplies data-index).
+      data-row-index={isActionRow ? undefined : (props as Record<string, unknown>)["data-index"] as number | undefined}
       className={isActionRow ? "record-table__action-row" : "record-table__row"}
       onContextMenu={
         context?.onRowContextMenu && item != null && !isActionRow
