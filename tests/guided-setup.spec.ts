@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
+import { chooseGuidedSetupAct, completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 
 /** Matches playwright.guided-setup.config.ts (GUIDED_SETUP_PORT, default 43951). */
 const GUIDED_SETUP_ORIGIN = `http://127.0.0.1:${process.env.GUIDED_SETUP_PORT ?? 43951}`;
@@ -44,11 +44,8 @@ async function exportedBackup(page: Page) {
 test("existing company collects its Act, addresses and share planning without fabricated certificates or securities", async ({ page }, info) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await start(page);
-  await page.getByRole("button", { name: "Yes, set up an existing organization", exact: true }).click();
-  await page.getByLabel("Act the organization was formed under", { exact: true }).click();
-  await page.getByRole("option", { name: /BC business corporation \(provincial\)/ }).click();
+  await chooseGuidedSetupAct(page, true, { jurisdiction: "British Columbia", act: "Business Corporations Act" });
   await fits(page);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("textbox", { name: "Recorded legal name", exact: true }).fill(`Guided Existing Company ${info.project.name}`);
   await page.getByRole("textbox", { name: "Incorporation #", exact: true }).fill("BC1234567");
   await page.getByLabel("Incorporation date", { exact: true }).fill("2023-05-10");
@@ -164,4 +161,121 @@ test("malformed backup never reaches destructive confirmation or changes local r
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const after = await snapshot(page);
   expect(after.tables).toEqual(before.tables); await fits(page);
+});
+
+test("federal CBCA: jurisdiction first, then the Act, with full guidance shown in review", async ({ page }, info) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await start(page);
+  await page.getByRole("button", { name: "No, prepare a new incorporation", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Where will the organization be incorporated?", exact: true })).toBeVisible();
+  // Continue without an answer explains what is missing.
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("federal or provincial");
+  await page.getByRole("button", { name: /^Federally \(Canada-wide\)/ }).click();
+  await expect(page.getByLabel("Province or territory", { exact: true })).toHaveCount(0);
+  await fits(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Which Act will it be incorporated under?", exact: true })).toBeVisible();
+  await expect(page.getByRole("radio")).toHaveCount(4); // CBCA, CNCA, Canada Cooperatives Act, Another Act
+  const cbca = page.getByRole("radio", { name: /^Canada Business Corporations Act \(CBCA\)/ });
+  const cnca = page.getByRole("radio", { name: /^Canada Not-for-profit Corporations Act/ });
+  await expect(page.locator("label", { has: cbca })).toContainText("Full guidance");
+  await expect(page.locator("label", { has: cnca })).toContainText("Records only");
+  // Keyboard: arrow keys move through the Act choices.
+  await cbca.focus(); await page.keyboard.press("Space");
+  await expect(cbca).toBeChecked();
+  await page.keyboard.press("ArrowDown");
+  await expect(cnca).toBeChecked();
+  await page.keyboard.press("ArrowUp");
+  await expect(cbca).toBeChecked();
+  await expect(page.locator(".notice--info")).toContainText("Federal CBCA");
+  await fits(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("textbox", { name: "Proposed name / working name", exact: true }).fill(`Guided Federal ${info.project.name}`);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const actRow = page.locator(".society-create__summary > div", { hasText: "Governing Act" });
+  await expect(actRow).toContainText("Federal · CBCA");
+  await expect(actRow).toContainText("Business corporation · Full guidance");
+  // Edit goes back to the Act question with the answer kept; Change goes to the jurisdiction.
+  await actRow.getByRole("button", { name: "Edit governing Act", exact: true }).click();
+  await expect(cbca).toBeChecked();
+  await page.getByRole("button", { name: "Change jurisdiction", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Federally \(Canada-wide\)/ })).toHaveAttribute("aria-pressed", "true");
+  for (let index = 0; index < 3; index++) await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Review and create", exact: true })).toBeVisible();
+  await fits(page);
+  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+  await page.waitForURL(/\/app\?welcome=/);
+  const organization = (await snapshot(page)).tables.societies[0];
+  expect([organization.jurisdictionCode, organization.entityType, organization.actFormedUnder, organization.legalSubtype])
+    .toEqual(["CA-FED-CBCA", "corporation__business_", "canada_business_corporations_act", "federal_private_corporation"]);
+  const answers = JSON.parse(organization.onboardingAnswersJson);
+  expect([answers.pathwayKey, answers.incorporationActId]).toEqual(["federal_cbca", "ca-cbca"]);
+  expect(errors).toEqual([]);
+});
+
+test("Alberta records only: province picker, plain-language note and a records-only workspace", async ({ page }, info) => {
+  await start(page);
+  await page.getByRole("button", { name: "Yes, set up an existing organization", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: /^Provincially or territorially/ }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("province or territory");
+  await page.getByLabel("Province or territory", { exact: true }).click();
+  await page.getByRole("option", { name: /^Alberta/ }).first().click();
+  await fits(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.locator(".society-create__context")).toContainText("Alberta");
+  await page.getByRole("radio", { name: /^Business Corporations Act/ }).check();
+  await expect(page.locator(".notice--warn")).toContainText("doesn't have reviewed guidance for this Act yet");
+  await fits(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("textbox", { name: "Recorded legal name", exact: true }).fill(`Guided Alberta ${info.project.name}`);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const actRow = page.locator(".society-create__summary > div", { hasText: "Governing Act" });
+  await expect(actRow).toContainText("Alberta · Business Corporations Act");
+  await expect(actRow).toContainText("Records only — no reviewed guidance yet");
+  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+  await page.waitForURL(/\/app\?welcome=/);
+  const organization = (await snapshot(page)).tables.societies[0];
+  expect([organization.jurisdictionCode, organization.entityType, organization.actFormedUnder, organization.legalSubtype])
+    .toEqual(["CA-AB", "corporation__business_", "business_corporations_act__alberta_", "other"]);
+  expect(JSON.parse(organization.onboardingAnswersJson).pathwayKey).toBe("records_only");
+  // Settings show the catalogued Act and keep the stored jurisdiction.
+  await page.goto("/app/society");
+  await page.locator("#more-organization-details > summary").click();
+  await expect(page.getByLabel("Act formed under", { exact: true })).toContainText("Business Corporations Act");
+  await expect(page.getByLabel("Legal jurisdiction", { exact: true })).toContainText("Alberta");
+  await fits(page);
+});
+
+test("another Act asks for its name and the kind of organization", async ({ page }, info) => {
+  await start(page);
+  await page.getByRole("button", { name: "No, prepare a new incorporation", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: /^Provincially or territorially/ }).click();
+  await page.getByLabel("Province or territory", { exact: true }).click();
+  await page.getByRole("option", { name: /^Manitoba/ }).first().click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  // An Act that incorporates more than one kind of organization asks which.
+  await page.getByRole("radio", { name: /^The Corporations Act/ }).check();
+  await expect(page.getByRole("group", { name: "What kind of organization is it?", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("what kind of organization");
+  await page.getByRole("radio", { name: /^Another Act/ }).check();
+  await expect(page.locator(".notice--warn")).toContainText("can't guide this incorporation yet");
+  await page.getByRole("radio", { name: /^Co-operative/ }).check();
+  await page.getByRole("textbox", { name: "Name of the Act", exact: true }).fill("The Example Special Act");
+  await fits(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("textbox", { name: "Proposed name / working name", exact: true }).fill(`Guided Manitoba ${info.project.name}`);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.locator(".society-create__summary > div", { hasText: "Governing Act" })).toContainText("Manitoba · The Example Special Act");
+  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+  await page.waitForURL(/\/app\?welcome=/);
+  const saved = await snapshot(page); const organization = saved.tables.societies[0];
+  expect([organization.jurisdictionCode, organization.entityType, organization.actFormedUnder]).toEqual(["CA-MB", "cooperative", "another_act"]);
+  expect(JSON.parse(organization.onboardingAnswersJson).otherActName).toBe("The Example Special Act");
+  expect(saved.tables.tasks.some((task: any) => task.description.includes("Governing Act named at setup: The Example Special Act"))).toBe(true);
 });

@@ -54,6 +54,7 @@ npx tsc -p convex/tsconfig.json --noEmit    # convex — expect 0 errors
 # Domain / jurisdiction
 npm run test:organization-domain            # org kind, director rules, jurisdiction helpers
 npm run test:jurisdiction-modules           # jurisdiction modules reference valid packs & cover both paths
+npm run test:incorporation-acts             # setup Act catalogue: reviewed Acts keep their pathway values, others are records only
 
 # Compliance
 npm run test:compliance-rules               # validates rule packs + recomputes obligation fixtures
@@ -155,11 +156,15 @@ To add a jurisdiction (worked example: a new province "XX"):
    Directors workspace reads; there are no jurisdiction `if`-branches in the UI.
 5. **Map any jurisdiction aliases** — if the registry uses alternate codes, add them to the
    canonicaliser in `shared/organizationDomain.ts`.
-6. **Run the gates**:
+6. **Update the setup catalogue** — the Acts offered during setup live in
+   `shared/incorporationActs.ts`. Once an Act has a reviewed profile and pathway, set its
+   `support` to `"full"` with the pathway key and the pathway's setup values.
+7. **Run the gates**:
    ```bash
    npm run test:compliance-rules
    npm run test:jurisdiction-modules
    npm run test:organization-domain
+   npm run test:incorporation-acts
    ```
 
 A PR that is *just* a well-cited JSON pack plus a director-rules row is genuinely welcome —
