@@ -1,5 +1,5 @@
 import { listPermissionsForRole, type Permission } from "../../shared/functions/permissions";
-import { MODULE_DEFINITIONS, normalizeModuleSettings, type ModuleKey } from "./modules";
+import { MODULE_DEFINITIONS, moduleAppliesToEntityKind, normalizeModuleSettings, type ModuleEntityKind, type ModuleKey } from "./modules";
 
 /** A read-only projection of the fixed role policy, never an authorization check. */
 export const ACCESS_ACTIONS = ["view", "write", "approve", "submit", "manage"] as const;
@@ -11,6 +11,8 @@ export type ModuleAccessDefinition = {
   label: string;
   category: string;
   moduleKey?: ModuleKey;
+  /** Entity kinds the area applies to; omitted means every kind. */
+  entityKinds?: readonly ModuleEntityKind[];
   permissions: Partial<Record<AccessAction, readonly Permission[]>>;
   notes: readonly string[];
 };
@@ -151,25 +153,33 @@ export const MODULE_ACCESS_DEFINITIONS: readonly ModuleAccessDefinition[] = [
     view: ["settings:read"], write: ["settings:write"], manage: ["settings:manage"],
   }, ["The fixed policy reserves settings:manage for Owner. Module configuration changes allow Admin or Owner."]),
   core("audit", "Audit history", "Administration", { view: ["audit:read"] }),
-  core("corporationRegisters", "Corporate registers & equity", "Governance", {}, [UNMAPPED_NOTE]),
+  { ...core("corporationRegisters", "Corporate registers & equity", "Governance", {}, [UNMAPPED_NOTE]), entityKinds: ["corporation"] },
   ...MODULE_DEFINITIONS.map((module): ModuleAccessDefinition => ({
     key: module.key,
     label: module.label,
     category: module.category,
     moduleKey: module.key,
+    entityKinds: module.entityKinds,
     ...OPTIONAL_POLICY[module.key],
   })),
 ];
 
-/** Feature availability and membership state never rewrite the role policy. */
+/**
+ * Feature availability and membership state never rewrite the role policy.
+ * Pass the organisation's kind to leave out areas that do not apply to it
+ * (donation receipts and membership billing in a corporation, corporate
+ * registers in a society).
+ */
 export function getModuleAccess(
   role: string | null | undefined,
   source?: Parameters<typeof normalizeModuleSettings>[0],
   status?: string | null,
+  entityKind?: string | null,
 ): ModuleAccessRow[] {
   const grants = new Set<Permission>(listPermissionsForRole(role ?? ""));
   const settings = normalizeModuleSettings(source);
-  return MODULE_ACCESS_DEFINITIONS.map(({ permissions, notes, ...definition }) => {
+  const applicable = MODULE_ACCESS_DEFINITIONS.filter((definition) => moduleAppliesToEntityKind(definition, entityKind));
+  return applicable.map(({ permissions, notes, entityKinds: _entityKinds, ...definition }) => {
     const actions = {} as ModuleAccessRow["actions"];
     const actionCoverage = {} as ModuleAccessRow["actionCoverage"];
     const actionPermissions = {} as ModuleAccessRow["actionPermissions"];

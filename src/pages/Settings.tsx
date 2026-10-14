@@ -32,10 +32,12 @@ import {
   MODULE_CATEGORIES,
   MODULE_DEFINITIONS,
   MODULES_BY_KEY,
+  moduleAppliesToEntityKind,
   normalizeModuleSettings,
   settingsToDisabledModules,
   type ModuleKey,
 } from "../lib/modules";
+import { organizationKind } from "../../shared/organizationDomain";
 
 type SettingsTab = "workspace" | "modules" | "runtime";
 
@@ -94,13 +96,15 @@ export function SettingsPage() {
     setRetentionDays(String(society.notificationRetentionDays ?? 30));
   }, [society]);
 
+  // Donation receipts and membership billing only apply to societies.
+  const entityKind = society ? organizationKind(society as any) : null;
   const modulesByCategory = useMemo(
     () =>
       MODULE_CATEGORIES.map((category) => ({
         category,
-        items: MODULE_DEFINITIONS.filter((module) => module.category === category),
-      })),
-    [],
+        items: MODULE_DEFINITIONS.filter((module) => module.category === category && moduleAppliesToEntityKind(module, entityKind)),
+      })).filter((group) => group.items.length > 0),
+    [entityKind],
   );
 
   const themeOptions = useMemo(

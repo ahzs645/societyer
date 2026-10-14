@@ -17,6 +17,7 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
 import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
+import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
@@ -250,6 +251,7 @@ export function UsersPage() {
           selectedUserId={selectedUserId ?? actingUserId ?? users[0]._id}
           onSelectUser={setSelectedUserId}
           moduleSource={society}
+          entityKind={organizationKind(society as any)}
         />
       )}
 
