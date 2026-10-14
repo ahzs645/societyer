@@ -71,6 +71,7 @@ export function RecordTableScope({
    * panel's drawer the `record-side-panel` class so its arrow keys count.
    */
   renderSidePanel?: (panel: { record: any; onClose: () => void; onNavigate: (record: any) => void }) => ReactNode;
+  /**
    * Hover cards on the cells the object opts into (its name cell, payees…).
    * Pass false for a table where the preview would repeat the row.
    */
