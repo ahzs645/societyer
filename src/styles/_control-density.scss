@@ -1,0 +1,628 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Control density on touch (coarse pointers).
+//
+// One phone height scale, two visual sizes:
+//   --control-h-touch-icon  32px  icon-only buttons, row actions
+//   --control-h-touch       36px  text buttons, tabs, segments, selects
+// and one tap size, --tap-target (44px), reached with an invisible ::after
+// hit area (`tap-area` mixin) instead of a taller box. Desktop (fine
+// pointer) is untouched: everything here sits inside `pointer: coarse`.
+//
+// Neighbouring controls keep >= 8px between their visual boxes (or use a
+// one-axis hit area) so a hit area never reaches into the next control.
+// Loaded late (just before foundations) so it settles sizes set anywhere
+// above; the old per-area 40/44/48px touch floors were removed in favour
+// of this file.
+// ============================================================
+
+// Controls that take the 44px hit area. Kept as one list so the positioned
+// host (zero specificity) and the hit area stay in step.
+$tap-both: (
+  ".btn",
+  ".btn-action",
+  ".record-table__toolbar-button",
+  ".record-table__view-button",
+  ".record-table__icon-button",
+  ".record-table__header-menu-trigger",
+  ".record-table__group-toggle",
+  ".record-table__chip-more",
+  ".record-table__chip-clear",
+  ".record-table__icon-btn",
+  ".select-trigger",
+  ".notif-bell",
+  ".setup-pill--topbar",
+  ".mobile-topbar__search",
+  ".sidebar__icon-btn",
+  ".task-scope-chip",
+  ".task-group__toggle",
+  ".task-quick-add",
+  ".task-summary-button",
+  "a.chip",
+  "button.chip",
+  ".finance-chip",
+  ".insights__chip",
+  ".chart-legend__item",
+  ".nl-filter__example",
+  ".nl-filter__clear",
+  ".invoice-chip__clear",
+  ".date-trigger__clear",
+  ".report-table__toggle",
+  ".rule-row__handle",
+  ".provenance-icon",
+  ".notif-clear",
+  ".name-autocomplete__remove",
+  ".onboarding-compact__icon",
+  ".copyable",
+  ".link-button",
+  ".switch-bare",
+  ".settings-shell__tab"
+);
+// Packed side by side with no gap: grow the hit area vertically only.
+$tap-block: (
+  ".segmented__btn",
+  ".record-table__segmented button",
+  ".record-table__aggregate-trigger",
+  ".sortable-th__btn",
+  ".record-table__identifier-button",
+  ".invoice-table__link",
+  ".approvals-table__title",
+  ".check-bare"
+);
+
+@media (pointer: coarse) {
+  // ---------------------------------------------------------- hit areas
+  :where(#{$tap-both}, #{$tap-block}) {
+    position: relative;
+  }
+  #{$tap-both} {
+    @include tap-area;
+  }
+  #{$tap-block} {
+    @include tap-area(block);
+  }
+
+  // ------------------------------------------------------------ buttons
+  // Text buttons: 36px (was a 40px min-height on .btn, .btn-action and
+  // .btn--sm). Icon buttons: 32px square.
+  .btn,
+  .btn--sm,
+  .btn-action {
+    min-height: token('control-h-touch');
+  }
+  .btn--sm,
+  .btn-action {
+    height: token('control-h-touch');
+  }
+  .btn.btn--icon:not(.btn--lg),
+  .btn-action.btn-action--icon {
+    width: token('control-h-touch-icon');
+    min-width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+    min-height: token('control-h-touch-icon');
+  }
+
+  // Row actions (RecordTable, finance tables): 32px icons inside a 44px row,
+  // 8px apart so neighbouring hit areas stay out of each other's box.
+  .record-table__row-actions {
+    gap: token('s-2');
+    .btn,
+    .btn-action {
+      min-height: token('control-h-touch-icon');
+      height: token('control-h-touch-icon');
+    }
+  }
+  // Touch rows are the comfortable 44px in either density, so each row's
+  // 32px actions keep a full 44px hit area without reaching the next row.
+  .record-table__cell,
+  .record-table--compact .record-table__cell {
+    height: token('row-h-comfortable');
+  }
+  .record-table__row-actions .btn--icon,
+  .table__actions-inner .btn--icon {
+    min-width: token('control-h-touch-icon');
+  }
+  .table__actions-inner {
+    gap: token('s-2');
+  }
+
+  // ------------------------------------------------------ form controls
+  // 36px visual; phones keep the 16px text (see _mobile-input-zoom).
+  .select-trigger,
+  .select-trigger--sm,
+  input.input:not([type="checkbox"]):not([type="radio"]),
+  select.input {
+    min-height: token('control-h-touch');
+  }
+
+  // ------------------------------------------------ segments and tabs
+  // Segmented controls scroll sideways on phones, and a scroll box clips
+  // anything outside it. The pill is drawn inside 4px of transparent
+  // padding (background clipped to the content box, outline as its border)
+  // so each 30px segment's 44px hit area fits inside the box; the negative
+  // margin keeps the layout at the 36px pill.
+  .segmented {
+    padding: 5px;
+    margin-block: -4px;
+    gap: 3px;
+    border: 0;
+    background: linear-gradient(token('bg-muted'), token('bg-muted')) content-box;
+    outline: 1px solid token('border');
+    outline-offset: -5px;
+    align-items: center;
+  }
+  .segmented > * {
+    margin-block: 2px;
+  }
+  .segmented > :first-child { margin-inline-start: 2px; }
+  .segmented > :last-child { margin-inline-end: 2px; }
+  .segmented__btn,
+  .segmented--compact .segmented__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(#{token('control-h-touch')} - 6px);
+    min-width: token('control-h-touch-icon');
+    padding-block: 0;
+  }
+
+  // Tab strips: 36px tabs; the strip keeps 4px above and below for the hit
+  // area (the strip scrolls sideways, which clips its box).
+  .tab,
+  .tabs .tab {
+    height: token('control-h-touch');
+    padding-block: 0;
+    @include tap-area(block);
+  }
+  :where(.tab) {
+    position: relative;
+  }
+  .settings-shell__tab {
+    height: token('control-h-touch');
+  }
+  // Scrolling chip rows (task scopes) keep room for the hit areas too.
+  .task-scope-bar__chips {
+    padding-block: 4px;
+    margin-block: -4px;
+  }
+
+  // ----------------------------------------------------- RecordTable
+  .record-table__toolbar .record-table__toolbar-button,
+  .record-table__toolbar .record-table__view-button {
+    min-height: token('control-h-touch');
+    height: token('control-h-touch');
+  }
+  .record-table__toolbar .record-table__toolbar-button {
+    min-width: token('control-h-touch');
+    justify-content: center;
+  }
+  .record-table__icon-button,
+  .record-table__icon-btn {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+    min-height: 0;
+  }
+  .record-table__segmented {
+    height: auto;
+    button {
+      min-width: token('control-h-touch-icon');
+      width: auto;
+      min-height: calc(#{token('control-h-touch')} - 6px);
+      height: auto;
+      padding: 0 8px;
+    }
+  }
+  // The header label has no box of its own (and clips its overflow for the
+  // ellipsis), so it simply fills the 44px header cell.
+  .record-table__header-cell-button {
+    min-height: token('tap-target');
+  }
+  .record-table__header-menu-trigger {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+  .record-table__aggregate-trigger {
+    min-height: token('control-h-touch');
+  }
+  .record-table__group-toggle {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+  .record-table__chip {
+    min-height: token('control-h-touch-icon');
+  }
+  .record-table__filter-input,
+  .record-table__filter-popover-row select,
+  .record-table__filter-add,
+  .record-table__primary-btn,
+  .record-table__secondary-btn {
+    min-height: token('control-h-touch');
+  }
+
+  // ------------------------------------------- shell: top bar, banner
+  .mobile-topbar__search {
+    height: token('control-h-touch');
+  }
+  .mobile-topbar .notif-bell,
+  .setup-pill--topbar,
+  .app-shell.is-mobile .sidebar__brand-actions .sidebar__icon-btn {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+  .demo-banner .btn {
+    min-height: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+  // The fixed top bar covers anything above the banner, so the switch's
+  // hit area reaches down into the page instead of up.
+  .demo-banner .btn::after {
+    top: 0;
+    bottom: -12px;
+    height: auto;
+    transform: translateX(-50%);
+  }
+
+  // ---------------------------------------------------- page controls
+  .task-scope-chip { height: token('control-h-touch'); }
+  .task-group__toggle { height: token('control-h-touch'); }
+  .task-scope-bar__group .select-trigger { min-height: token('control-h-touch'); }
+  .finance-chip,
+  .insights__chip,
+  .chart-legend__item,
+  .nl-filter__example,
+  .sortable-th__btn {
+    min-height: token('control-h-touch');
+  }
+  .nl-filter__clear,
+  .invoice-chip__clear,
+  .date-trigger__clear,
+  .report-table__toggle,
+  .provenance-icon,
+  .notif-clear,
+  .name-autocomplete__remove {
+    width: token('control-h-touch-icon');
+    min-height: 0;
+    height: token('control-h-touch-icon');
+  }
+  .rule-row__handle {
+    min-height: token('control-h-touch-icon');
+    min-width: token('control-h-touch-icon');
+  }
+  a.chip--sm,
+  button.chip--sm {
+    min-height: token('control-h-touch-icon');
+  }
+}
+
+// Phone tab strips are an underlined row with no padding, and they scroll
+// sideways (which clips their box): keep 8px of transparent room above the
+// 36px tabs and grow each tab's hit area upward into it, so the active
+// tab's underline still sits on the strip's hairline.
+@media (pointer: coarse) and (max-width: 760px) {
+  .tabs {
+    padding-top: 8px;
+    margin-top: -8px;
+  }
+  .tabs .tab::after {
+    top: -8px;
+    bottom: 0;
+    height: auto;
+    transform: translateX(-50%);
+  }
+}
+
+// ============================================================
+// Phone page chrome (<= 560px): less air above the first record.
+// The top bar is 48px (a 36px search field + 6px padding), the demo strip
+// is its 32px switch, the page starts 12px below, and the header drops its
+// divider (the table toolbar under it has one) — together with the folded
+// toolbars below, lists start within about a quarter of the screen.
+// ============================================================
+@media (max-width: 560px) {
+  .app-shell.is-mobile .page {
+    padding-top: token('s-2');
+  }
+  .app-shell.is-mobile .page > a.row.muted:first-child {
+    top: calc(#{token('s-2')} + 2px);
+  }
+  .page__header {
+    margin-bottom: token('s-2');
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  // Column headers: the compact 36px row (their menus keep 44px hit areas).
+  .record-table {
+    --rt-header-h: #{token('row-h-compact')};
+  }
+  .record-table__header-cell {
+    height: token('row-h-compact');
+  }
+  .record-table__header-cell-button {
+    min-height: token('row-h-compact');
+  }
+  // Task list group heads are 36px toggles.
+  .task-group__head {
+    height: token('control-h-touch');
+  }
+  // Tighter rhythm between the blocks above a list.
+  .page > .tabs,
+  .invoices-page > .tabs,
+  .invoice-stats,
+  .stat-grid.stat-grid--scroll-phone {
+    margin-bottom: token('s-2');
+  }
+}
+
+// ============================================================
+// Phone toolbars (<= 560px; tablet and desktop unchanged).
+//
+// RecordTable: one row — the view picker (name truncates, count in a chip),
+// then 32px icon buttons for view type (a menu), Filter, Sort, Group and
+// Options (a menu that also holds Search and "Select records"). The search
+// field and unsaved-view controls get their own line only while in use.
+// ============================================================
+.record-table__toolbar-dirty {
+  display: contents;
+}
+
+@media (max-width: 560px) {
+  .record-table__toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: token('s-2');
+    padding: 0 0 token('s-2');
+    // The table's own top edge separates it from the toolbar.
+    border-bottom: 0;
+  }
+  .record-table__toolbar-left {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+  // The right-hand group's buttons join the picker's row.
+  .record-table__toolbar-right {
+    display: contents;
+  }
+  .record-table__toolbar-center {
+    order: 2;
+    flex: 1 1 100%;
+  }
+  .record-table__toolbar-dirty {
+    order: 3;
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: token('s-2');
+    &:empty {
+      display: none;
+    }
+  }
+
+  // View picker: the pill is the button itself (no padded wrapper), 36px.
+  .record-table__toolbar-left > .record-table__view-switcher {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .record-table__toolbar .record-table__view-button {
+    max-width: 100%;
+    min-width: 0;
+    height: token('control-h-touch');
+    padding: 0 10px 0 12px;
+    gap: 6px;
+    border: 1px solid token('border-color-medium');
+    background: token('bg-secondary');
+    // The page header already shows the section icon.
+    > svg:first-child:not(:last-child) {
+      display: none;
+    }
+    > svg {
+      flex: none;
+    }
+  }
+  .record-table__view-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .record-table__toolbar .record-table__view-count {
+    flex: none;
+    padding: 0 6px;
+    border-radius: token('r-pill');
+    background: token('bg-transparent-light');
+    font-size: token('fs-xs');
+    line-height: 18px;
+  }
+  .record-table__title {
+    min-width: 0;
+    > span:not(.record-table__view-count) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  // Icon buttons: view type, Filter, Sort, Group, Options (+ Exit selection).
+  .record-table__toolbar-right > .record-table__toolbar-button,
+  .record-table__toolbar-right > .record-table__view-switcher > .record-table__toolbar-button {
+    position: relative;
+    flex: none;
+    width: token('control-h-touch-icon');
+    min-width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+    min-height: token('control-h-touch-icon');
+    padding: 0;
+    gap: 0;
+    border-color: token('border-color-light');
+    > span {
+      display: none;
+    }
+    > svg {
+      width: 15px;
+      height: 15px;
+    }
+  }
+  .record-table__toolbar-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: token('r-pill');
+    background: token('accent');
+    color: token('accent-on');
+    font-size: token('fs-xxs');
+    font-weight: token('fw-semibold');
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
+  }
+  .record-table__view-type-menu .record-table__menu-item,
+  .record-table__menu-section--tools .record-table__menu-action {
+    min-height: token('tap-target');
+    font-size: token('fs-sm');
+  }
+}
+
+// ============================================================
+// Desktop page headers: the page's actions use the default 32px button
+// height (the primary "New …" action was a 28px compact button). Every
+// action in the row matches it so header rows are one height on every
+// page. Phones and touch tablets size them above.
+// ============================================================
+@media (min-width: 761px) and (pointer: fine) {
+  .page__header .page__actions :is(.btn, .btn-action):not(.btn--lg),
+  .settings-shell__actions :is(.btn, .btn-action):not(.btn--lg) {
+    height: token('control-h-md');
+  }
+  .page__header .page__actions :is(.btn--icon, .btn-action--icon):not(.btn--lg),
+  .settings-shell__actions :is(.btn--icon, .btn-action--icon):not(.btn--lg) {
+    width: token('control-h-md');
+  }
+  .page__header .page__actions .select-trigger--sm {
+    height: token('control-h-md');
+  }
+}
+
+// ============================================================
+// Other list pages (phones)
+// ============================================================
+.related-views {
+  flex-wrap: wrap;
+}
+// A filter picker that moves onto the page title's row (Deadlines' status).
+.page__actions .page-header-filter {
+  width: auto;
+  min-width: 0;
+  max-width: 132px;
+}
+@media (max-width: 560px) {
+  // Summary tiles above a list (Directors, Invoices) become one swipeable
+  // row instead of a 2×2 block, so the list starts ~50px higher.
+  .stat-grid.stat-grid--scroll-phone {
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    > .stat {
+      flex: 0 0 auto;
+      min-width: 40%;
+      max-width: 72%;
+      scroll-snap-align: start;
+      border-bottom: 0;
+      border-right: 1px solid token('border-color-light');
+    }
+    > .stat:last-child {
+      border-right: 0;
+    }
+  }
+  // "Related: Library · Minute book …" scrolls on one line.
+  .related-views {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-block: 6px;
+    margin-block: -6px 6px !important;
+    white-space: nowrap;
+    &::-webkit-scrollbar { display: none; }
+    > * { flex: none; }
+  }
+  // Invoices: the tab strip shares its row with a search icon.
+  .invoice-tabs-row {
+    display: flex;
+    align-items: center;
+    gap: token('s-2');
+    margin-bottom: token('s-2');
+    > .tabs {
+      flex: 1 1 auto;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    > .btn {
+      flex: none;
+    }
+  }
+}
+
+// Tasks (phones): "Current · All · Status" summary in the header row opens
+// a sheet with the register switch, scopes and grouping.
+// Sized so "Current · All · Status" fits beside the title at 390px; on
+// narrower phones the header's compact mode shows just the sliders icon.
+.task-summary-button {
+  min-width: 0;
+  max-width: 172px;
+  gap: 4px;
+  padding-inline: 10px 8px;
+  font-size: token('fs-xs');
+  > svg {
+    flex: none;
+  }
+}
+.page__header:not([data-actions-fit="compact"]) .task-summary-button > svg:first-child,
+.page__header[data-actions-fit="compact"] .task-summary-button__caret {
+  display: none;
+}
+.task-summary-button__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-view-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-4');
+  padding-block: token('s-1') token('s-2');
+
+  > .segmented {
+    align-self: stretch;
+    margin-block: 0;
+    > .segmented__btn {
+      flex: 1 1 0;
+      justify-content: center;
+    }
+  }
+  .task-scope-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: token('s-4');
+  }
+  .task-scope-bar__chips {
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: token('s-2');
+  }
+  .task-scope-bar__group {
+    justify-content: space-between;
+    margin-left: 0;
+  }
+}

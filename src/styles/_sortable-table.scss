@@ -56,8 +56,3 @@ th.num .sortable-th__btn {
   color: token('text-primary');
 }
 
-@media (pointer: coarse) {
-  .sortable-th__btn {
-    min-height: 40px;
-  }
-}

@@ -13,9 +13,16 @@ body,
   background: token('bg-app');
   color: token('text-primary');
   font-family: token('font-sans');
-  font-size: token('fs-md');
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* The root keeps the browser's default size (16px) so every rem token
+ * resolves as written (fs-xs 13px, fs-sm 14px, fs-md 15px, and the 16px
+ * iOS no-zoom input size). Body text is set here, not on html: sizing the
+ * root to fs-md made it 15px and shrank every rem token by ~6%. */
+body {
+  font-size: token('fs-md');
 }
 
 a {

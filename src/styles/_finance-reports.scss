@@ -40,11 +40,6 @@
     opacity: token('opacity-disabled');
   }
 }
-@media (pointer: coarse) {
-  .finance-chip {
-    min-height: 40px;
-  }
-}
 
 .finance-report-control {
   @include inline-flex-center;

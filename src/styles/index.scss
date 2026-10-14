@@ -124,5 +124,8 @@
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 
+// Touch control density: 32/36px controls with 44px hit areas (coarse pointers).
+@use "control-density";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

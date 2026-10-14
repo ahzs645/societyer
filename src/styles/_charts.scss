@@ -305,11 +305,6 @@
     color: token('text-secondary');
   }
 }
-@media (pointer: coarse) {
-  .chart-legend__item {
-    min-height: 40px;
-  }
-}
 
 // Swatches mirror the mark: block for bars/areas, stroke for lines.
 .chart-swatch {
@@ -546,12 +541,6 @@
 @media (min-width: 1200px) {
   .insights__grid--two {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-@media (pointer: coarse) {
-  .insights__chip,
-  .insights .segmented__btn {
-    min-height: 40px;
   }
 }
 

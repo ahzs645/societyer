@@ -362,8 +362,8 @@
   position: relative;
   flex: none;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: token('control-h-touch-icon');
+  height: token('control-h-touch-icon');
   padding: 0;
   border: 0;
   border-radius: token('r-md');
@@ -789,8 +789,8 @@
 }
 @media (pointer: coarse) {
   .app-shell.is-mobile .sidebar__brand-actions .sidebar__icon-btn {
-    width: 40px;
-    height: 40px;
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
   }
   .app-shell.is-mobile .sidebar__brand-actions .sidebar__icon-btn svg {
     width: 18px;
@@ -798,11 +798,12 @@
   }
 }
 
-/* Phones: the role switch is a full 40px target, so the banner trims its own
- * padding to stay one slim 44px strip. */
+/* Phones: the role switch is a 32px button with a 44px hit area (reaching
+ * down into the page), so the banner is one slim strip of that height. */
 @media (pointer: coarse) and (max-width: 760px) {
   .demo-banner {
-    padding-block: 2px;
+    min-height: 0;
+    padding-block: 0;
   }
 }
 

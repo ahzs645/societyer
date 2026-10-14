@@ -363,16 +363,6 @@
   }
 }
 
-@media (pointer: coarse) {
-  .nl-filter__example,
-  .nl-filter__clear {
-    min-height: 40px;
-  }
-
-  .nl-filter__clear {
-    width: 40px;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .nl-filter__preview {
