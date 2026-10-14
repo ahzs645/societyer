@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X, Clock } from "lucide-react";
+import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X, Clock, Settings2 } from "lucide-react";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
@@ -12,6 +12,7 @@ import { useDialogFocus } from "../lib/useDialogFocus";
 import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
 import { useSociety } from "../hooks/useSociety";
 import { Tooltip } from "./Tooltip";
+import { useLocalAlertScan } from "../hooks/useLocalAlertScan";
 
 export function NotificationBell() {
   const society = useSociety();
@@ -32,6 +33,7 @@ export function NotificationBell() {
   const dismiss = usePermissionedMutation(api.notifications.dismiss, canWrite);
   const dismissAll = usePermissionedMutation(api.notifications.dismissAll, canWrite);
   const snooze = usePermissionedMutation(api.notifications.snooze, canWrite);
+  useLocalAlertScan(society?._id, canWrite);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -263,6 +265,13 @@ export function NotificationBell() {
             })}
 
             <div className="notif-panel__foot">
+              <Link
+                to="/app/notifications?tab=settings"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setOpen(false)}
+              >
+                <Settings2 size={12} aria-hidden="true" /> Settings
+              </Link>
               <Link
                 to="/app/notifications"
                 className="btn btn--ghost btn--sm"
