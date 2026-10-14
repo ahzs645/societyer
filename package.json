@@ -106,6 +106,7 @@
     "test:ai-agent-contract": "tsx scripts/check-ai-agent-contract.ts",
     "test:webmcp": "npx playwright test tests/webmcp.spec.ts --config playwright.webmcp.config.ts",
     "test:csv-import-utils": "tsx scripts/check-csv-and-import-utils.ts",
+    "test:xlsx": "tsx scripts/check-xlsx.ts",
     "test:integration-staging": "tsx scripts/check-integration-staging-bundles.ts",
     "test:nlg-grammar": "tsx scripts/check-nlg-grammar.ts",
     "test:ycn-date-codec": "tsx scripts/check-ycn-date-codec.ts",
