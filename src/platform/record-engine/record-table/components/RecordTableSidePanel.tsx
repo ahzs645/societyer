@@ -36,7 +36,8 @@ export function RecordTableSidePanel({
   record: any;
   objectMetadata: ObjectMetadata;
   onClose: () => void;
-  onOpenRecord: () => void;
+  /** Omitted when the record has no fuller surface to open. */
+  onOpenRecord?: () => void;
   onUpdate?: RecordTableContextValue["onUpdate"];
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>("home");
@@ -63,7 +64,7 @@ export function RecordTableSidePanel({
   }, [open, recordId]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !onOpenRecord) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key !== "Enter") return;
       const target = event.target as HTMLElement | null;
@@ -122,15 +123,17 @@ export function RecordTableSidePanel({
               </button>
             }
           />
-          <button
-            type="button"
-            className="btn btn--accent record-side-panel__open"
-            onClick={onOpenRecord}
-          >
-            <ExternalLink size={14} />
-            <span>Open</span>
-            <kbd>⌘↵</kbd>
-          </button>
+          {onOpenRecord && (
+            <button
+              type="button"
+              className="btn btn--accent record-side-panel__open"
+              onClick={onOpenRecord}
+            >
+              <ExternalLink size={14} />
+              <span>Open</span>
+              <kbd>⌘↵</kbd>
+            </button>
+          )}
         </>
       }
     >

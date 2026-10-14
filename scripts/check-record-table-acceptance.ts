@@ -30,13 +30,12 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/features/financials/pages/WavePages.tsx": 2,
   "src/pages/Agreements.tsx": 1,
   "src/pages/ApiKeysPage.tsx": 2,
-  "src/pages/Assets.tsx": 1,
   "src/pages/Attestations.tsx": 1,
   "src/pages/AuditLog.tsx": 1,
   "src/pages/Auditors.tsx": 1,
   "src/pages/Commitments.tsx": 1,
   "src/pages/Committees.tsx": 1,
-  "src/pages/Communications.tsx": 4,
+  "src/pages/Communications.tsx": 3,
   "src/pages/Conflicts.tsx": 1,
   "src/pages/CourtOrders.tsx": 1,
   "src/pages/CustomFields.tsx": 1,
@@ -73,13 +72,16 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/WorkflowRuns.tsx": 1,
   "src/pages/Workflows.tsx": 1,
   "src/pages/WrittenResolutions.tsx": 1,
+  "src/platform/record-engine/record-table/components/ObjectRecordTable.tsx": 1,
 };
 
-const REVIEWED_LEGACY_DATA_TABLE_FILES: Record<string, number> = {
+// Metadata-driven registers rendered through the shared ObjectRecordTable
+// (toolbar, saved views, filters, preview sidebar around one RecordTable).
+const REVIEWED_OBJECT_RECORD_TABLE_FILES: Record<string, number> = {
   "src/features/financials/pages/WavePages.tsx": 1,
   "src/features/grants/components/GrantSourceLibrary.tsx": 1,
-  "src/pages/Assets.tsx": 3,
-  "src/pages/Communications.tsx": 1,
+  "src/pages/Assets.tsx": 4,
+  "src/pages/Communications.tsx": 2,
   "src/pages/OrganizationHistory.tsx": 1,
   "src/pages/inventory/tabs.tsx": 6,
 };
@@ -113,9 +115,15 @@ assert.deepEqual(
   "RecordTable inventory changed; review the new/removed instance and update the acceptance manifest",
 );
 assert.deepEqual(
-  collectOccurrences(/<DataTable(?:<|\s)/g),
-  REVIEWED_LEGACY_DATA_TABLE_FILES,
-  "Legacy DataTable inventory changed; review its migration status and update the manifest",
+  collectOccurrences(/<ObjectRecordTable\b/g),
+  REVIEWED_OBJECT_RECORD_TABLE_FILES,
+  "ObjectRecordTable inventory changed; review the new/removed register and update the acceptance manifest",
+);
+// The legacy DataTable was retired: every register is metadata-driven now.
+assert.deepEqual(
+  collectOccurrences(/<DataTable(?:<|\s)|from ["'][^"']*components\/DataTable["']/g),
+  {},
+  "The legacy DataTable was removed; render registers through RecordTable / ObjectRecordTable",
 );
 
 assert.match(
@@ -186,7 +194,7 @@ for (const field of LAB_FIELDS) {
 assert.equal(editedRecord.relationLabel, "Morgan Patel", "relation edit refreshes its display label");
 
 const recordTableCount = Object.values(REVIEWED_RECORD_TABLE_FILES).reduce((sum, count) => sum + count, 0);
-const legacyCount = Object.values(REVIEWED_LEGACY_DATA_TABLE_FILES).reduce((sum, count) => sum + count, 0);
+const objectTableCount = Object.values(REVIEWED_OBJECT_RECORD_TABLE_FILES).reduce((sum, count) => sum + count, 0);
 console.log(
-  `record table acceptance checks passed: ${recordTableCount} RecordTable instances, ${legacyCount} legacy DataTable instances, ${LAB_FIELDS.length} field types`,
+  `record table acceptance checks passed: ${recordTableCount} RecordTable instances, ${objectTableCount} ObjectRecordTable registers, no legacy DataTable, ${LAB_FIELDS.length} field types`,
 );

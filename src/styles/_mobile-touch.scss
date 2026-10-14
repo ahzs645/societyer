@@ -11,7 +11,6 @@
   .menu__item,
   .mobile-topbar__search,
   .notif-bell,
-  .view-bar__btn,
   .chip {
     transition-property: background, color, border-color, box-shadow, transform;
     transition-duration: token('motion-fade');
@@ -20,8 +19,7 @@
   .btn:active:not(:disabled),
   .bottom-nav__item:active,
   .mobile-topbar__search:active,
-  .notif-bell:active,
-  .view-bar__btn:active {
+  .notif-bell:active {
     transform: scale(0.96);
   }
 
@@ -31,10 +29,6 @@
     height: auto;
     min-height: 28px;
     padding-inline: 10px;
-  }
-
-  .view-bar__btn {
-    min-height: 32px;
   }
 
   /* Anchored menus / dropdowns (short lists stay popovers on phones). */
@@ -80,21 +74,10 @@
   .btn:active:not(:disabled),
   .bottom-nav__item:active,
   .mobile-topbar__search:active,
-  .notif-bell:active,
-  .view-bar__btn:active {
+  .notif-bell:active {
     transform: none;
   }
 }
 
 // Filter chip remove buttons outside RecordTable keep their small glyph but
-// get a 40px hit area on touch, like the RecordTable chips.
-@media (pointer: coarse) {
-  .filter-chip__remove {
-    position: relative;
-  }
-  .filter-chip__remove::after {
-    content: "";
-    position: absolute;
-    inset: -12px;
-  }
-}
+

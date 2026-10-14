@@ -50,7 +50,6 @@ assert.equal((await member.query(api.fieldMetadata.get, { id: fixture.fieldId })
 assert.equal((await member.query(api.fieldMetadata.listForObject, { objectMetadataId: fixture.objects.member })).length, 1);
 assert.equal((await member.query(api.fieldMetadata.getByName, { objectMetadataId: fixture.objects.member, name: "email" }))._id, fixture.fieldId);
 assert.deepEqual((await member.query(api.views.listForObject, { objectMetadataId: fixture.objects.member })).map((v: any) => v._id), [fixture.sharedView]);
-assert.deepEqual((await member.query(api.views.listSharedForDataTable, { societyId: fixture.societyId, nameSingular: "member" })).map((v: any) => v._id), [fixture.sharedView]);
 assert.equal((await member.query(api.views.getHydrated, { id: fixture.sharedView })).view._id, fixture.sharedView);
 assert.deepEqual(await member.query(api.views.listFieldsForView, { viewId: fixture.sharedView }), []);
 for (const action of [
@@ -78,10 +77,13 @@ const readableBuiltIns = new Set([
   "volunteerApplications", "volunteers", "volunteerScreenings", "documents",
   "communicationTemplates", "communicationSegments", "communicationCampaigns", "communicationDeliveries",
   "grantApplications", "grants", "grantTransactions", "grantReports", "motions", "tasks",
+  "memberCommunicationPrefs", "organizationHistoryMotions", "grantSources",
 ]);
 const financialBuiltIns = new Set([
   "reconciliationTransactions", "counterpartyTransactions", "accountTransactions", "donationReceipts",
   "insurancePolicies", "assets", "financialTransactions",
+  "assetMaintenance", "assetEvents", "assetVerificationItems",
+  "inventoryItems", "inventoryBalances", "stockMovements", "inventoryLocations", "inventoryLots", "inventoryCounts",
 ]);
 for (const definition of RECORD_TABLE_OBJECTS) {
   const read = () => member.query(api.objectMetadata.getFullTableSetup, { societyId: fixture.societyId, nameSingular: definition.nameSingular });

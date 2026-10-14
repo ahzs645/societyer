@@ -7,9 +7,6 @@ import {
   getHydratedPortable,
   createPortable,
   updatePortable,
-  listSharedForDataTablePortable,
-  createSharedDataTableViewPortable,
-  deleteSharedDataTableViewPortable,
   seedGovernanceDataTableViewsPortable,
   removePortable,
   listFieldsForViewPortable,
@@ -108,47 +105,6 @@ export const update = authorizedMutation("views:update", mutation)({
   },
   returns: v.any(),
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
-});
-
-export const listSharedForDataTable = authorizedQuery("views:listSharedForDataTable", query)({
-  args: {
-    societyId: v.id("societies"),
-    objectMetadataId: v.optional(v.id("objectMetadata")),
-    nameSingular: v.optional(v.string()),
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => listSharedForDataTablePortable(await toPortableQueryCtx(ctx), args),
-});
-
-export const createSharedDataTableView = authorizedMutation("views:createSharedDataTableView", mutation)({
-  args: {
-    societyId: v.id("societies"),
-    objectMetadataId: v.optional(v.id("objectMetadata")),
-    nameSingular: v.optional(v.string()),
-    name: v.string(),
-    filtersJson: v.optional(v.string()),
-    viewFilterGroupsJson: v.optional(v.string()),
-    sortsJson: v.optional(v.string()),
-    viewGroupsJson: v.optional(v.string()),
-    viewFieldGroupsJson: v.optional(v.string()),
-    searchTerm: v.optional(v.string()),
-    anyFieldFilterValue: v.optional(v.string()),
-    columnStateJson: v.optional(v.string()),
-    density: v.optional(v.string()),
-    openRecordIn: v.optional(v.string()),
-    createdByUserId: v.optional(v.id("users")),
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => createSharedDataTableViewPortable(await toPortableMutationCtx(ctx), args),
-});
-
-export const deleteSharedDataTableView = authorizedMutation("views:deleteSharedDataTableView", mutation)({
-  args: {
-    societyId: v.id("societies"),
-    id: v.id("views"),
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => deleteSharedDataTableViewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedGovernanceDataTableViews = authorizedMutation("views:seedGovernanceDataTableViews", mutation)({

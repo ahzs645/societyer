@@ -45,21 +45,6 @@
   padding: 6px 8px 4px;
   @include text-eyebrow;
 }
-.popover__input {
-  width: 100%;
-  height: 28px;
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  padding: 0 8px;
-  background: token('bg-base');
-  margin: 4px 0 8px;
-}
-.popover__footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-  margin-top: 6px;
-}
 
 /* Buttons */
 .btn {
