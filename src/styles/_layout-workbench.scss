@@ -801,7 +801,9 @@
 
   /* Pages that put "← Section" among their header actions get the same
    * treatment: a bare arrow left of the page icon, not a text button. */
-  .page__header:has(> .page__actions > a:has(> svg.lucide-arrow-left:first-child)) {
+  /* (One :has() with a complex relative selector: browsers reject :has()
+   * nested inside :has(), which silently dropped this rule.) */
+  .page__header:has(> .page__actions > a > svg.lucide-arrow-left:first-child) {
     position: relative;
     padding-left: 30px;
   }

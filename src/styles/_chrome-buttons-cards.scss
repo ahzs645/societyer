@@ -264,8 +264,8 @@
 .badge--pink      { background: token('pink-3');      color: token('pink-11');      border-color: token('pink-6'); }
 .badge--yellow    { background: token('yellow-3');    color: token('yellow-11');    border-color: token('yellow-6'); }
 
-/* Chip — Twenty's general-purpose tag with slots for left/right components.
- * Shares the base look of .badge but supports richer compositions. */
+/* .chip — a raw pill class for tags, topic lists and code values (the
+ * Chip component is gone; markup uses the class directly). */
 .chip {
   @include inline-flex-center;
   gap: 6px;
@@ -286,21 +286,14 @@
   padding: 1px 6px;
   font-size: token('fs-xs');
 }
-.chip--rounded { border-radius: token('r-pill'); }
 /* Code-ish values (webhook event types, permission keys) read better as
  * crisp squares than pills — keep any <code class="chip"> square. */
-code.chip,
-.chip--square {
+code.chip {
   border-radius: token('r-sm');
   font-family: token('font-mono');
 }
 .chip--transparent {
   background: transparent;
-  border-color: transparent;
-}
-.chip--highlighted,
-.chip--static {
-  background: token('bg-transparent-light');
   border-color: transparent;
 }
 .chip--interactive {
@@ -310,38 +303,6 @@ code.chip,
   background: token('bg-transparent-medium');
   border-color: transparent;
 }
-.chip__left,
-.chip__right {
-  display: inline-grid;
-  place-items: center;
-  flex-shrink: 0;
-  color: token('text-tertiary');
-}
-.chip__left svg,
-.chip__right svg {
-  width: 12px;
-  height: 12px;
-}
-.chip__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chip--tone-blue      { background: token('blue-3');      color: token('blue-11');      border-color: token('blue-6'); }
-.chip--tone-red       { background: token('red-3');       color: token('red-11');       border-color: token('red-6'); }
-.chip--tone-turquoise { background: token('turquoise-3'); color: token('turquoise-11'); border-color: token('turquoise-6'); }
-.chip--tone-gray      { background: token('gray-3');      color: token('gray-11');      border-color: token('gray-6'); }
-.chip--tone-orange    { background: token('orange-3');    color: token('orange-11');    border-color: token('orange-6'); }
-.chip--tone-purple    { background: token('purple-3');    color: token('purple-11');    border-color: token('purple-6'); }
-.chip--tone-green     { background: token('green-3');     color: token('green-11');     border-color: token('green-6'); }
-.chip--tone-pink      { background: token('pink-3');      color: token('pink-11');      border-color: token('pink-6'); }
-.chip--tone-yellow    { background: token('yellow-3');    color: token('yellow-11');    border-color: token('yellow-6'); }
-.chip--tone-success { background: token('success-soft'); color: token('success'); border-color: token('green-6'); }
-.chip--tone-warn    { background: token('warn-soft');    color: token('warn');    border-color: token('orange-6'); }
-.chip--tone-danger  { background: token('danger-soft');  color: token('danger');  border-color: token('red-6'); }
-.chip--tone-info    { background: token('info-soft');    color: token('info');    border-color: transparent; }
-.chip--tone-accent  { background: token('accent-soft');  color: token('accent');  border-color: transparent; }
 
 /* Dot */
 .dot {
