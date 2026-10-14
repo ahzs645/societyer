@@ -39,6 +39,7 @@ export function RecordTableScope({
   onUpdate,
   onCreate,
   onReorder,
+  recordPreview = false,
   children,
 }: {
   tableId: string;
@@ -49,6 +50,11 @@ export function RecordTableScope({
   onUpdate?: RecordTableContextValue["onUpdate"];
   onCreate?: RecordTableContextValue["onCreate"];
   onReorder?: RecordTableContextValue["onReorder"];
+  /**
+   * Row clicks open the preview sidebar even when the object has no full
+   * record page to open (no `onRecordClick`); the sidebar then omits Open.
+   */
+  recordPreview?: boolean;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -148,12 +154,12 @@ export function RecordTableScope({
     () => ({
       tableId,
       objectMetadata,
-      onRecordClick: onRecordClick ? handleRecordClick : undefined,
+      onRecordClick: onRecordClick || recordPreview ? handleRecordClick : undefined,
       onUpdate,
       onCreate,
       onReorder,
     }),
-    [tableId, objectMetadata, onRecordClick, handleRecordClick, onUpdate, onCreate, onReorder],
+    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder],
   );
 
   const activeSidePanelRecord = sidePanelRecord?.scopeIdentity === scopeIdentity
@@ -179,12 +185,11 @@ export function RecordTableScope({
             objectMetadata={objectMetadata}
             onClose={closeSidePanel}
             onUpdate={onUpdate}
-            onOpenRecord={() =>
+            onOpenRecord={onRecordClick ? () =>
               handleRecordClick(activeSidePanelRecord.recordId, currentSidePanelRecord, {
                 source: "action",
                 openRecordIn: "page",
-              })
-            }
+              }) : undefined}
           />
         )}
       </RecordTableContext.Provider>

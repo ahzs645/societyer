@@ -12,6 +12,7 @@ export { RecordTableSortPopover } from "./components/RecordTableSortPopover";
 export { RecordTableBulkBar } from "./components/RecordTableBulkBar";
 export type { BulkAction } from "./components/RecordTableBulkBar";
 export { RecordTableEmpty } from "./components/RecordTableEmpty";
+export { ObjectRecordTable } from "./components/ObjectRecordTable";
 
 export { useObjectRecordTableData } from "./hooks/useHydratedView";
 export { useFilteredRecords } from "./hooks/useFilteredRecords";
