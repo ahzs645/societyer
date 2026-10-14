@@ -210,49 +210,6 @@ export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
   return <span ref={ref} className={classes.join(" ")} title={title}>{children}</span>;
 });
 
-/** Twenty-style chip with leftComponent / rightComponent slots.
- * Uses the .badge CSS for its base look and extends it via tone/size/variant. */
-export function Chip({
-  tone = "neutral",
-  size = "md",
-  variant = "regular",
-  clickable,
-  leftComponent,
-  rightComponent,
-  onClick,
-  children,
-  className,
-}: {
-  tone?: ToneVariant;
-  size?: "sm" | "md";
-  variant?: "regular" | "rounded" | "transparent" | "highlighted" | "static";
-  clickable?: boolean;
-  leftComponent?: ReactNode;
-  rightComponent?: ReactNode | (() => ReactNode);
-  onClick?: (event: ReactMouseEvent<HTMLElement>) => void;
-  children: ReactNode;
-  className?: string;
-}) {
-  const classes = ["chip", `chip--${variant}`, `chip--${size}`];
-  if (tone !== "neutral") classes.push(`chip--tone-${tone}`);
-  if (onClick || clickable) classes.push("chip--interactive");
-  if (className) classes.push(className);
-  const Tag: "button" | "span" = onClick ? "button" : "span";
-  const renderedRightComponent =
-    typeof rightComponent === "function" ? rightComponent() : rightComponent;
-  return (
-    <Tag
-      type={onClick ? "button" : undefined}
-      className={classes.join(" ")}
-      onClick={onClick as any}
-    >
-      {leftComponent != null && <span className="chip__left">{leftComponent}</span>}
-      <span className="chip__label">{children}</span>
-      {renderedRightComponent != null && <span className="chip__right">{renderedRightComponent}</span>}
-    </Tag>
-  );
-}
-
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "ghost" | "danger" | "accent";
 export type ButtonSize = "sm" | "md";
 
@@ -274,7 +231,7 @@ export function Button({
   icon?: ReactNode;
   iconOnly?: boolean;
   children?: ReactNode;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
   const classes = ["btn"];
   if (variant === "primary") classes.push("btn--primary");
   if (variant === "accent") classes.push("btn--accent");
@@ -287,68 +244,6 @@ export function Button({
     <button type={type} className={classes.join(" ")} {...rest}>
       {icon && <span className="btn__icon">{icon}</span>}
       {!iconOnly && children}
-    </button>
-  );
-}
-
-export type LightButtonAccent = "secondary" | "tertiary";
-export type LightButtonSize = "sm" | "md";
-
-export function LightButton({
-  accent = "secondary",
-  active = false,
-  focus = false,
-  size = "sm",
-  icon,
-  type = "button",
-  className,
-  children,
-  ...rest
-}: {
-  accent?: LightButtonAccent;
-  active?: boolean;
-  focus?: boolean;
-  size?: LightButtonSize;
-  icon?: ReactNode;
-  children?: ReactNode;
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
-  const classes = ["light-button", `light-button--${accent}`, `light-button--${size}`];
-  if (active) classes.push("is-active");
-  if (focus) classes.push("is-focused");
-  if (className) classes.push(className);
-  return (
-    <button type={type} className={classes.join(" ")} {...rest}>
-      {icon && <span className="light-button__icon">{icon}</span>}
-      {children && <span className="light-button__label">{children}</span>}
-    </button>
-  );
-}
-
-export function LightIconButton({
-  accent = "secondary",
-  active = false,
-  focus = false,
-  size = "sm",
-  icon,
-  type = "button",
-  className,
-  children,
-  ...rest
-}: {
-  accent?: LightButtonAccent;
-  active?: boolean;
-  focus?: boolean;
-  size?: LightButtonSize;
-  icon?: ReactNode;
-  children?: ReactNode;
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
-  const classes = ["light-icon-button", `light-icon-button--${accent}`, `light-icon-button--${size}`];
-  if (active) classes.push("is-active");
-  if (focus) classes.push("is-focused");
-  if (className) classes.push(className);
-  return (
-    <button type={type} className={classes.join(" ")} {...rest}>
-      {icon ?? children}
     </button>
   );
 }
