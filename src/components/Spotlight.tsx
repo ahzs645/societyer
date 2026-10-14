@@ -129,6 +129,15 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
+/** Rendered, inside the viewport, and not in a closed off-canvas drawer. */
+function isOnScreen(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+  if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= window.innerWidth || rect.top >= window.innerHeight) return false;
+  const style = window.getComputedStyle(element);
+  return style.visibility !== "hidden" && style.display !== "none";
+}
+
 /** Finds the anchor, waiting briefly for it to mount (sidebars and toolbars load late). */
 function useAnchor(selector: string | undefined) {
   const [element, setElement] = useState<HTMLElement | null>(null);
@@ -137,10 +146,7 @@ function useAnchor(selector: string | undefined) {
     let tries = 0;
     let timer: number | undefined;
     const find = () => {
-      const found = Array.from(document.querySelectorAll<HTMLElement>(selector)).find((candidate) => {
-        const rect = candidate.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      });
+      const found = Array.from(document.querySelectorAll<HTMLElement>(selector)).find(isOnScreen);
       if (found) {
         setElement(found);
         return;
@@ -224,10 +230,13 @@ export function Spotlight({
     if (!open || inline || !anchorEl) return;
     const place = () => {
       const card = cardRef.current;
-      if (!card || !anchorEl.isConnected) return;
-      const rect = anchorEl.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) return;
-      setPosition(placeNear(rect, { width: card.offsetWidth, height: card.offsetHeight }, placement));
+      if (!card) return;
+      // The anchor scrolled away or its drawer closed: hide rather than point at nothing.
+      if (!anchorEl.isConnected || !isOnScreen(anchorEl)) {
+        setPosition(null);
+        return;
+      }
+      setPosition(placeNear(anchorEl.getBoundingClientRect(), { width: card.offsetWidth, height: card.offsetHeight }, placement));
     };
     place();
     window.addEventListener("resize", place);
