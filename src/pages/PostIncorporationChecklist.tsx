@@ -60,6 +60,11 @@ export function PostIncorporationChecklistPage() {
   const evidence = new Map((data?.evidence ?? []).map((entry) => [entry.stepKey, entry]));
   const preparation = data?.preparation ?? entityPreparationDecision(society);
   const categories = ["organize", "registration", "good_standing"] as const;
+  // Steps are shown grouped by section, so number them in the order they
+  // appear (1, 2, 3…) rather than by their global order, which read 1, 2, 3, 5, 4.
+  const displayNumber = new Map(
+    categories.flatMap((cat) => steps.filter((s) => s.category === cat)).map((step, index) => [step.key, index + 1]),
+  );
 
   const onGenerate = async (packetKey: string) => {
     if (!canWrite) return;
@@ -133,7 +138,7 @@ export function PostIncorporationChecklistPage() {
                     <div key={step.key} className="card" style={{ padding: 14 }}>
                       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                         <div>
-                          <strong>{step.order}. {step.title}</strong>
+                          <strong>{displayNumber.get(step.key) ?? step.order}. {step.title}</strong>
                           <div className="row" style={{ gap: 6, marginTop: 4 }}>
                             <Badge tone="neutral">{CADENCE_LABEL[step.cadence] ?? step.cadence}</Badge>
                             {started && <Badge tone="info">Preparation started</Badge>}

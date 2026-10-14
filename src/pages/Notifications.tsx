@@ -41,7 +41,8 @@ export function NotificationsPage() {
   const [scope, setScope] = useState<"all" | "unread" | "dismissed">("all");
 
   const filtered = useMemo(() => {
-    const list = notifications ?? [];
+    // Newest first, whichever runtime answered the query.
+    const list = [...(notifications ?? [])].sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
     if (scope === "unread") return list.filter((n) => !n.readAt && !n.dismissedAt);
     if (scope === "dismissed") return list.filter((n) => n.dismissedAt);
     return list;

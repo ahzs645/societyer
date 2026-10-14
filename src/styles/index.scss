@@ -113,6 +113,8 @@
 @use "editable-grid";
 // Client-sorted finance tables: sortable header buttons.
 @use "sortable-table";
+// People & Work pages: release QA fixes (dashboard, people, tasks, goals).
+@use "people-work";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

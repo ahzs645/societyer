@@ -76,8 +76,9 @@ export function DeadlinesPage() {
 
   const allRecords = (items ?? []) as any[];
   const records = useMemo(() => {
-    if (statusFilter === "all") return allRecords;
-    return allRecords.filter((r) => statusOf(r) === statusFilter);
+    const visible = statusFilter === "all" ? allRecords : allRecords.filter((r) => statusOf(r) === statusFilter);
+    // Soonest first by default (a sort chosen in the table still wins); undated last.
+    return [...visible].sort((a, b) => String(a.dueDate || "\uffff").localeCompare(String(b.dueDate || "\uffff")));
   }, [allRecords, statusFilter]);
 
   if (society === undefined) return <PageLoading />;

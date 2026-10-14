@@ -66,9 +66,11 @@ function RoleColumn({
   }) as HolderRow[] | undefined;
   const rows = useMemo(() => {
     if (fetched === undefined) return undefined;
-    if (!extraRows?.length) return fetched;
     const seen = new Set(fetched.map((r) => (r.fullName ?? "").toLowerCase()));
-    return [...fetched, ...extraRows.filter((r) => !seen.has((r.fullName ?? "").toLowerCase()))];
+    const merged = [...fetched, ...(extraRows ?? []).filter((r) => !seen.has((r.fullName ?? "").toLowerCase()))];
+    // Registers merge several sources (role holders, directors, members);
+    // one alphabetical list is easier to scan than concatenated batches.
+    return merged.sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? ""));
   }, [fetched, extraRows]);
 
   return (
@@ -149,16 +151,17 @@ export function PointInTimeRegisterPage() {
         iconColor="blue"
         subtitle="Who held each role on a chosen date."
         info={<p>Rebuilt from role-holder and director term dates — the statutory &ldquo;who were the directors on date X?&rdquo; view. Officers include directors whose position is an officer title such as President or Treasurer.</p>}
-        actions={
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>As of</span>
-            <DatePicker
-              value={asOf}
-              onChange={(value) => setAsOf(value)}
-            />
-          </label>
-        }
       />
+
+      {/* The date is the page's one filter: it sits under the header rather than
+          in the header actions, where it squeezed the title on phones. */}
+      <label className="pit-register__asof">
+        <span className="pit-register__asof-label">As of</span>
+        <DatePicker
+          value={asOf}
+          onChange={(value) => setAsOf(value)}
+        />
+      </label>
 
       {visibleRoles.length < ROLES.length && <p className="muted">This snapshot excludes role registers outside your current read permissions. Historical role-holder snapshots require workspace settings read access.</p>}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>

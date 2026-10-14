@@ -1,0 +1,88 @@
+@use "tokens" as *;
+
+/* People & Work pages — release QA fixes. */
+
+/* Point-in-time register: the "As of" date filter row under the header. */
+.pit-register__asof {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  margin: 0 0 token('s-4');
+}
+.pit-register__asof-label {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  white-space: nowrap;
+}
+
+/* Commitments: "Most overdue" callout. One line on wide screens; on phones
+ * the title wraps in full and the actions drop under it, instead of the
+ * buttons squeezing the title to "Most overdue:…". */
+.commitments-overdue {
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: token('s-4');
+}
+.commitments-overdue__text {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commitments-overdue__actions {
+  flex: none;
+  gap: 6px;
+}
+@media (max-width: 760px) {
+  .commitments-overdue { align-items: flex-start; }
+  .commitments-overdue__text { white-space: normal; overflow-wrap: anywhere; }
+  .commitments-overdue__actions {
+    flex-basis: 100%;
+    padding-left: 30px; // icon (20px) + gap (10px): actions line up with the text
+  }
+}
+
+/* Portfolio: the entity search was a fixed narrow input that cut its own
+ * placeholder ("…former nam"); give it room, full width on phones. */
+.portfolio-batch__search {
+  flex: 1 1 320px;
+  max-width: 460px;
+}
+@media (max-width: 560px) {
+  .portfolio-batch__search { max-width: none; }
+}
+.portfolio-current-tag {
+  color: token('accent');
+}
+
+/* Timeline / point-in-time board changes: the event name leads, its detail
+ * line recedes (both rendered at the same weight and colour before). */
+.timeline-vertical__title {
+  color: token('text-primary');
+  font-weight: token('fw-medium');
+}
+.timeline-vertical__desc {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+
+/* Dashboard finance snapshot: when one label wraps ("Out this / month" in a
+ * narrow side column) both amounts still sit on the same baseline. */
+.finance-snapshot__flow {
+  align-content: space-between;
+}
+
+/* Dashboard summary tables: compact dates in the body face (not mono),
+ * kept on one line so "Sep 30" never clips at the card edge. */
+.dashboard-table__date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: token('text-secondary');
+}
+// Secondary cells recede by colour, not size: the phone table scale shrinks
+// the row to fs-tiny, and a fixed fs-xs "muted" cell then outgrew the
+// primary column (Period larger than Kind).
+.dashboard-page .table .table__cell--muted {
+  font-size: inherit;
+}
