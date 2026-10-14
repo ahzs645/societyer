@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { ObjectMetadata, ViewOpenRecordIn } from "../../types";
+import type { EntityRef } from "../../../../components/HoverCard/entityRefs";
 
 export type RecordTableOpenOptions =
   | {
@@ -31,6 +32,11 @@ export type RecordTableContextValue = {
   onCreate?: () => void | Promise<void>;
   /** Persists a user-driven row order when the object supports ordering. */
   onReorder?: (orderedRecordIds: string[]) => void | Promise<void>;
+  /**
+   * Record a cell previews in a hover card, if any. Objects opt in through
+   * `RECORD_TABLE_CELL_PREVIEWS` (components/HoverCard/entityRefs.ts).
+   */
+  cellPreview?: (fieldName: string, isLabelIdentifier: boolean, record: any) => EntityRef | null;
 };
 
 export const RecordTableContext = createContext<RecordTableContextValue | null>(null);

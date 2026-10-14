@@ -12,6 +12,7 @@ import { useRecordTableRowContextOrThrow } from "../contexts/RecordTableRowConte
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { RecordTableCellRenderer } from "./RecordTable";
 import { Tooltip } from "../../../../components/Tooltip";
+import { EntityHoverCard } from "../../../../components/HoverCard/EntityHoverCard";
 
 /**
  * One body cell. Double-click enters edit mode (for editable fields).
@@ -85,6 +86,17 @@ export function RecordTableCell({
     () => getSecondaryActions({ fieldType: recordField.field.fieldType, value }),
     [recordField.field.fieldType, value],
   );
+  const { cellPreview } = tableCtx;
+  const previewRef = useMemo(
+    () => cellPreview?.(recordField.field.name, isLabelIdentifier, record) ?? null,
+    [cellPreview, recordField.field.name, isLabelIdentifier, record],
+  );
+  const cellContent = renderCell?.({ record, field: recordField.field, value }) ?? (
+    <FieldDisplay value={value} record={record} field={recordField.field} />
+  );
+  const previewedContent = previewRef ? (
+    <EntityHoverCard entity={previewRef}>{cellContent}</EntityHoverCard>
+  ) : cellContent;
 
   const startEdit = () => {
     if (!canEdit) return;
@@ -186,18 +198,10 @@ export function RecordTableCell({
           <span className="record-table__identifier-avatar" aria-hidden="true">
             {identifierInitial(value)}
           </span>
-          <span className="record-table__cell-content">
-            {renderCell?.({ record, field: recordField.field, value }) ?? (
-              <FieldDisplay value={value} record={record} field={recordField.field} />
-            )}
-          </span>
+          <span className="record-table__cell-content">{previewedContent}</span>
         </button>
       ) : (
-        <div className="record-table__cell-content">
-          {renderCell?.({ record, field: recordField.field, value }) ?? (
-            <FieldDisplay value={value} record={record} field={recordField.field} />
-          )}
-        </div>
+        <div className="record-table__cell-content">{previewedContent}</div>
       )}
       {/* Only render the overlay when it has at least one action — an empty
           container shows up as a tiny floating box over the cell. */}

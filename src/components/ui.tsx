@@ -28,6 +28,8 @@ import { useDocumentTitle } from "../lib/documentTitle";
 // EmptyState variant icons (kept apart from the shared icon import above).
 import { CheckCheck, SearchX } from "lucide-react";
 import { Tooltip } from "./Tooltip";
+import { EntityHoverCard } from "./HoverCard/EntityHoverCard";
+import type { EntityRef } from "./HoverCard/entityRefs";
 
 export function EmptyState({
   icon,
@@ -388,6 +390,7 @@ export function RecordChip({
   to,
   onClick,
   className,
+  preview,
 }: {
   avatar?: ReactNode;
   label: ReactNode;
@@ -396,6 +399,8 @@ export function RecordChip({
   to?: string;
   onClick?: (event: ReactMouseEvent<HTMLElement>) => void;
   className?: string;
+  /** Record previewed in a hover card (mouse rest or keyboard focus). */
+  preview?: EntityRef | null;
 }) {
   const classes = ["record-chip"];
   if (to || onClick) classes.push("record-chip--interactive");
@@ -415,23 +420,19 @@ export function RecordChip({
     </>
   );
 
-  if (to) {
-    return (
-      <Link to={to} className={classes.join(" ")} onClick={onClick}>
-        {content}
-      </Link>
-    );
-  }
+  const chip = to ? (
+    <Link to={to} className={classes.join(" ")} onClick={onClick}>
+      {content}
+    </Link>
+  ) : onClick ? (
+    <button type="button" className={classes.join(" ")} onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    <span className={classes.join(" ")}>{content}</span>
+  );
 
-  if (onClick) {
-    return (
-      <button type="button" className={classes.join(" ")} onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-
-  return <span className={classes.join(" ")}>{content}</span>;
+  return preview ? <EntityHoverCard entity={preview}>{chip}</EntityHoverCard> : chip;
 }
 
 export function InspectorNote({

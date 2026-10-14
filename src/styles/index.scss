@@ -141,6 +141,8 @@
 // Transactions surface: detail panel, receipt drop zone, payee names.
 @use "transaction-panel";
 
+@use "panels-hovercards"; // hover cards, stacked record panels, minimise dock
+
 // Touch control density: 32/36px controls with 44px hit areas (coarse pointers).
 @use "control-density";
 

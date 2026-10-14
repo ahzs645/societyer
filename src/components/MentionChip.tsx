@@ -5,6 +5,8 @@ import { UserCog, Users } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { initials } from "../lib/format";
+import { EntityHoverCard } from "./HoverCard/EntityHoverCard";
+import { entityHref } from "./HoverCard/entityRefs";
 
 /** Renders a parsed @mention with avatar + type icon + link to the detail
  * page. Resolves the id against members and directors; falls back to plain
@@ -28,8 +30,7 @@ export function MentionChip({ id, label }: { id: string; label: string }) {
   const displayLabel = resolved
     ? `${resolved.firstName} ${resolved.lastName}`.trim()
     : label;
-  const to =
-    kind === "member" ? `/app/members` : kind === "director" ? `/app/directors` : null;
+  const to = kind === "unknown" ? null : entityHref({ kind, id });
   const Icon = kind === "director" ? UserCog : Users;
 
   const inner = (
@@ -45,10 +46,13 @@ export function MentionChip({ id, label }: { id: string; label: string }) {
   );
 
   if (to) {
+    // Hovering (or keyboard focus) previews the person; the link opens them.
     return (
-      <Link className="mention-chip mention-chip--linked" to={to} title={`Open ${kind}`}>
-        {inner}
-      </Link>
+      <EntityHoverCard entity={kind === "unknown" ? null : { kind, id, name: displayLabel }}>
+        <Link className="mention-chip mention-chip--linked" to={to} aria-label={`Open ${kind} ${displayLabel}`}>
+          {inner}
+        </Link>
+      </EntityHoverCard>
     );
   }
   return <span className="mention-chip" title={kind === "unknown" ? "No matching record" : undefined}>{inner}</span>;

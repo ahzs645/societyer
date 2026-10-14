@@ -1,0 +1,680 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Hover cards (components/HoverCard) and the record panel's card
+// stack, action bar, full screen and minimised dock
+// (record-table/components/RecordTableSidePanel*.tsx).
+// ============================================================
+
+/* ---------- Hover card ---------- */
+
+// The trigger wrapper must not change layout around chips, links or cells.
+.hover-card-trigger {
+  display: contents;
+}
+
+.hover-card {
+  @include surface-floating;
+  position: fixed;
+  z-index: token('z-popover');
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(420px, calc(100vh - 16px));
+  overflow: auto;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  text-align: left;
+  white-space: normal;
+  @include appear-pop(top left);
+
+  &[data-ready="false"] {
+    visibility: hidden;
+  }
+}
+.hover-card--above {
+  transform-origin: bottom left;
+}
+
+/* ---------- Entity preview (hover card and stacked card bodies) ---------- */
+
+.entity-preview {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  min-width: 0;
+}
+.entity-preview--hover {
+  padding: token('s-3') token('s-4') token('s-4');
+}
+.entity-preview--panel {
+  padding: token('s-4');
+}
+.entity-preview--empty {
+  flex-direction: row;
+  align-items: center;
+  gap: token('s-2');
+  color: token('text-secondary');
+}
+
+.entity-preview__head {
+  display: flex;
+  align-items: center;
+  gap: token('s-3');
+  min-width: 0;
+}
+.entity-preview__avatar,
+.entity-preview__thumb {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: token('r-md');
+}
+.entity-preview__avatar {
+  @include inline-flex-center;
+  justify-content: center;
+  background: token('accent-soft');
+  color: token('accent');
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  letter-spacing: 0.02em;
+}
+.entity-preview__thumb {
+  object-fit: cover;
+  background: token('bg-subtle');
+  box-shadow: inset 0 0 0 1px token('border-alpha');
+}
+.entity-preview__thumb--large {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  border-radius: token('r-card');
+}
+.entity-preview__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.entity-preview__kind {
+  @include text-eyebrow;
+  color: token('text-tertiary');
+}
+.entity-preview__title {
+  overflow: hidden;
+  color: token('text-primary');
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.entity-preview__subtitle {
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  line-height: 1.35;
+}
+
+.entity-preview__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+}
+.entity-preview__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 token('s-2');
+  border-radius: token('r-pill');
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+}
+.entity-preview__badge--success { background: token('success-soft'); color: token('success'); }
+.entity-preview__badge--warn { background: token('warn-soft'); color: token('warn'); }
+.entity-preview__badge--danger { background: token('danger-soft'); color: token('danger'); }
+.entity-preview__badge--info { background: token('info-soft'); color: token('info'); }
+
+.entity-preview__facts {
+  display: grid;
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  gap: token('s-1') token('s-3');
+  margin: 0;
+}
+.entity-preview__fact {
+  display: contents;
+
+  dt {
+    color: token('text-tertiary');
+    font-size: token('fs-xs');
+    line-height: 1.6;
+  }
+  dd {
+    min-width: 0;
+    margin: 0;
+    color: token('text-primary');
+    font-size: token('fs-sm');
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+}
+.entity-preview--panel .entity-preview__facts {
+  grid-template-columns: minmax(120px, 34%) minmax(0, 1fr);
+  gap: token('s-2') token('s-3');
+}
+
+.entity-preview__section-title {
+  @include text-eyebrow;
+  margin-bottom: token('s-1');
+  color: token('text-tertiary');
+}
+.entity-preview__activity ul,
+.entity-preview__related ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.entity-preview__activity li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-3');
+  padding: token('s-1') 0;
+  border-top: 1px solid token('border-alpha');
+}
+.entity-preview__activity-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  small {
+    color: token('text-tertiary');
+    font-size: token('fs-xs');
+  }
+}
+.entity-preview__related li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-3');
+  min-height: 36px;
+  border-top: 1px solid token('border-alpha');
+}
+.entity-preview__related-label {
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}
+.entity-preview__open {
+  @include inline-flex-center;
+  align-self: flex-start;
+  gap: 4px;
+  color: token('accent');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+.entity-preview__shimmer {
+  display: block;
+  border-radius: token('r-sm');
+  background: linear-gradient(90deg, token('bg-subtle') 0%, token('bg-hover') 50%, token('bg-subtle') 100%);
+  background-size: 200% 100%;
+  animation: entity-preview-shimmer token('motion-breathe') linear infinite;
+}
+.entity-preview__shimmer--line { width: 160px; height: 12px; }
+.entity-preview__shimmer--short { width: 96px; height: 10px; }
+@keyframes entity-preview-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* ---------- Entity chip (linked records inside panels) ---------- */
+
+.entity-chip {
+  @include inline-flex-center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 2px token('s-2') 2px 3px;
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-pill');
+  background: token('bg-panel');
+  color: token('text-primary');
+  font: inherit;
+  font-size: token('fs-xs');
+  text-decoration: none;
+  cursor: pointer;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
+
+  &:hover {
+    background: token('bg-hover-alpha');
+    border-color: token('border-alpha-strong');
+  }
+}
+.entity-chip__avatar {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: token('r-pill');
+  background: token('accent-soft');
+  color: token('accent');
+  font-size: token('fs-xxs');
+  font-weight: token('fw-semibold');
+}
+.entity-chip--document .entity-chip__avatar,
+.entity-chip--meeting .entity-chip__avatar {
+  border-radius: token('r-xs');
+}
+.entity-chip--counterparty .entity-chip__avatar,
+.entity-chip--invoice .entity-chip__avatar,
+.entity-chip--claim .entity-chip__avatar {
+  background: token('success-soft');
+  color: token('success');
+}
+.entity-chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Record panel: linked records list ---------- */
+
+.record-side-panel__linked {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(88px, 118px) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 5px 12px;
+    border-top: 1px solid token('border-color-light');
+
+    &:first-child { border-top: 0; }
+  }
+}
+.record-side-panel__linked-label {
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}
+.record-side-panel__widget--entity {
+  overflow: visible;
+}
+
+/* ---------- Record panel: head and action bar ---------- */
+
+.record-side-panel__head {
+  gap: token('s-2');
+}
+.record-side-panel__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.record-side-panel__avatar--entity {
+  background: token('accent-soft');
+  color: token('accent');
+}
+.record-panel-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ---------- Record panel: stacked cards ---------- */
+
+.record-panel-stack {
+  position: relative;
+}
+// The visible card. With nothing stacked behind it, it fills the panel as before.
+.record-panel-stack__card {
+  @include flex-column;
+  flex: 1;
+  min-height: 0;
+  background: token('bg-panel');
+  animation: record-panel-card-in token('motion-move') token('ease-move');
+}
+@keyframes record-panel-card-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+// Earlier cards peek out above the visible one, each further back drawn
+// narrower and dimmer, like a fanned stack.
+.record-panel-stack__peeks {
+  position: relative;
+  flex: 0 0 auto;
+  height: 12px;
+  background: token('bg-subtle');
+}
+.record-panel-stack__peek {
+  position: absolute;
+  bottom: 0;
+  height: 10px;
+  border: 1px solid token('border');
+  border-bottom: 0;
+  border-radius: token('r-md') token('r-md') 0 0;
+  background: token('bg-panel');
+}
+.record-panel-stack__peek--1 {
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+}
+.record-panel-stack__peek--2 {
+  left: 18px;
+  right: 18px;
+  bottom: 4px;
+  height: 8px;
+  background: token('bg-subtle');
+}
+.record-panel-stack--peek-1 .record-panel-stack__peeks,
+.record-panel-stack--peek-2 .record-panel-stack__peeks {
+  border-bottom: 1px solid token('border');
+}
+.record-panel-stack--peek-1 .record-panel-stack__card,
+.record-panel-stack--peek-2 .record-panel-stack__card {
+  box-shadow: token('elevation-1');
+}
+
+.record-panel-stack__bar {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: 40px;
+  padding: token('s-1') token('s-2') token('s-1') token('s-3');
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-subtle');
+  font-size: token('fs-xs');
+}
+.record-panel-stack__back {
+  @include inline-flex-center;
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+  max-width: 45%;
+  min-height: 28px;
+  padding: 0 token('s-2');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  color: token('text-secondary');
+  font: inherit;
+  cursor: pointer;
+  @include hover-wash;
+}
+.record-panel-stack__back-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+// The back button already names the previous card; with the breadcrumb
+// alongside it only the label is redundant, so desktop keeps just the arrow.
+.record-panel-stack__crumbs + .record-panel-stack__carousel { margin-left: auto; }
+.record-panel-stack__back + .record-panel-stack__crumbs { margin-left: 0; }
+.record-panel-stack__crumbs {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  white-space: nowrap;
+
+  li {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    color: token('text-tertiary');
+
+    &:not(:last-child)::after {
+      content: "/";
+      padding: 0 6px;
+      color: token('text-placeholder');
+    }
+  }
+  li.is-current {
+    flex: 0 1 auto;
+    color: token('text-primary');
+    font-weight: token('fw-medium');
+  }
+  li > span,
+  li > button {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  button {
+    max-width: 14ch;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: token('r-xs');
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    @include hover-wash;
+  }
+}
+.record-panel-stack__carousel {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: token('text-tertiary');
+
+  .btn--icon {
+    width: 28px;
+    height: 28px;
+  }
+  .btn--icon:disabled {
+    opacity: token('opacity-disabled');
+  }
+}
+.record-panel-stack__position {
+  padding: 0 token('s-1');
+  font-variant-numeric: tabular-nums;
+}
+// Desktop shows the breadcrumb, so the back button is an arrow only.
+.record-panel-stack__bar .record-panel-stack__back {
+  max-width: none;
+
+  .record-panel-stack__back-label { display: none; }
+}
+
+/* ---------- Full screen: the panel covers the page beside it ---------- */
+
+.workbench__body:has(.record-side-panel--fullscreen) {
+  position: relative;
+}
+.inspector-host.is-open:has(.record-side-panel--fullscreen) {
+  position: absolute;
+  inset: 0;
+  z-index: token('z-sticky');
+  width: auto;
+  flex-basis: auto;
+
+  .inspector {
+    border-left: 0;
+  }
+  .inspector__resizer {
+    display: none;
+  }
+}
+.record-side-panel--fullscreen {
+  .record-side-panel__body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .record-side-panel__body > * {
+    width: min(880px, 100%);
+  }
+  .record-side-panel__widget {
+    width: min(856px, calc(100% - 24px));
+  }
+}
+// Outside the app layout the panel is an overlay drawer.
+.drawer.record-side-panel--fullscreen {
+  width: 100vw;
+}
+
+/* ---------- Minimised dock ---------- */
+
+.record-panel-dock {
+  @include surface-floating;
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: token('z-dropdown');
+  display: flex;
+  align-items: center;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 4px;
+  gap: 2px;
+  @include appear-pop(bottom right);
+}
+.record-panel-dock__restore {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: token('s-2');
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px token('s-2') 4px 4px;
+  border: 0;
+  border-radius: token('r-md');
+  background: none;
+  color: token('text-secondary');
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  @include hover-wash;
+}
+.record-panel-dock__avatar {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: token('r-md');
+  background: token('accent-soft');
+  color: token('accent');
+  font-weight: token('fw-semibold');
+}
+.record-panel-dock__copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+
+  strong {
+    overflow: hidden;
+    color: token('text-primary');
+    font-size: token('fs-sm');
+    font-weight: token('fw-semibold');
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  small {
+    color: token('text-tertiary');
+    font-size: token('fs-xs');
+  }
+}
+.record-panel-dock__close {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: token('r-md');
+  background: none;
+  color: token('text-tertiary');
+  cursor: pointer;
+  @include hover-wash;
+}
+
+/* ---------- Tablet and phone ---------- */
+
+@media (max-width: 980px) {
+  // The dock clears the bottom navigation bar.
+  .app-shell.is-mobile ~ .record-panel-dock,
+  body:has(.bottom-nav) .record-panel-dock {
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 12px);
+  }
+
+  // Full screen on a phone or tablet: the sheet rises to the top edge.
+  .app-shell.is-mobile .inspector-host.is-open:has(.record-side-panel--fullscreen) {
+    position: fixed;
+
+    .inspector {
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      border-radius: 0;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  // Phones: stacked cards read as a sheet stack. The back button names the
+  // previous card; the breadcrumb gives way to the position counter.
+  .record-panel-stack__crumbs {
+    display: none;
+  }
+  .record-panel-stack__bar {
+    justify-content: space-between;
+  }
+  .record-panel-stack__bar .record-panel-stack__back {
+    max-width: 60%;
+    min-height: 40px;
+
+    .record-panel-stack__back-label { display: inline; }
+  }
+  .record-panel-stack__carousel .btn--icon {
+    width: 40px;
+    height: 40px;
+  }
+  .record-panel-actions .btn--icon {
+    width: 40px;
+    height: 40px;
+  }
+  .record-panel-stack__peeks {
+    height: 10px;
+  }
+  .entity-preview--panel .entity-preview__facts {
+    grid-template-columns: minmax(96px, 38%) minmax(0, 1fr);
+  }
+  .record-side-panel__linked li {
+    grid-template-columns: minmax(80px, 34%) minmax(0, 1fr);
+  }
+}
+
+// Hover cards never open on touch, but a coarse pointer with a mouse
+// attached (tablets) still gets them; keep their links tappable.
+@media (pointer: coarse) {
+  .entity-chip {
+    min-height: 40px;
+    padding-right: token('s-3');
+  }
+}

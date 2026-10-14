@@ -76,6 +76,7 @@ export function PendingAdoptionsCard({
               <div className="meeting-conflict-row__main">
                 <RecordChip
                   to={`/app/meetings/${entry.meetingId}`}
+                  preview={{ kind: "meeting", id: String(entry.meetingId), name: entry.meetingTitle }}
                   tone={entry.meetingType === "AGM" ? "purple" : "gray"}
                   avatar={(entry.meetingType || "MT").slice(0, 2).toUpperCase()}
                   label={<strong>{entry.meetingTitle}</strong>}
