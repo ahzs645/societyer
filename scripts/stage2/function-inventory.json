@@ -474,6 +474,34 @@
     ]
   },
   {
+    "key": "convex:accounting:setAccountParent",
+    "surface": "convex",
+    "name": "accounting:setAccountParent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/accounting.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "parentAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:accounting:setReconciliationRunStatus",
     "surface": "convex",
     "name": "accounting:setReconciliationRunStatus",
@@ -23608,6 +23636,34 @@
         "table": "societies",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:accounting:setAccountParent",
+    "surface": "portable",
+    "name": "accounting:setAccountParent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "parentAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",

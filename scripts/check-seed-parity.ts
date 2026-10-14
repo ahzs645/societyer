@@ -130,6 +130,7 @@ const refFields: Record<string, Array<[string, string]>> = {
   invoiceSeries: [["memberId", "members"], ["counterpartyId", "accountingCounterparties"], ["lines[].catalogItemId", "invoiceCatalogItems"]],
   memberSubscriptions: [["planId", "subscriptionPlans"], ["memberId", "members"]],
   fundRestrictions: [["linkedFinancialAccountId", "financialAccounts"]],
+  financialAccounts: [["parentAccountId", "financialAccounts"]],
 };
 function valuesAt(row: any, path: string): unknown[] {
   let values: unknown[] = [row];
@@ -162,7 +163,7 @@ assert.ok(checkedRefs > 200, "references were actually checked");
 
 /* ------------------------------------------------- account balances */
 
-const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0 };
+const SEED_OPENING: Record<string, number> = { "operating-chequing": 3490000, "restricted-fund": 1200000, "organization-visa": 0, facilities: 0, "facilities-venue": 0, "facilities-utilities": 0 };
 for (const account of server.financialAccounts) {
   const sum = server.financialTransactions.filter((row: any) => row.accountId === account._id).reduce((total: number, row: any) => total + row.amountCents, 0);
   assert.ok(account.externalId in SEED_OPENING, `known seed account ${account.externalId}`);

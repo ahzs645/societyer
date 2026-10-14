@@ -898,6 +898,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "accounting:closeFiscalPeriod", handler: accountingFns.closeFiscalPeriodPortable }),
   definePortableMutation({ name: "accounting:reopenFiscalPeriod", handler: accountingFns.reopenFiscalPeriodPortable }),
   definePortableMutation({ name: "accounting:upsertCounterparty", handler: accountingFns.upsertCounterpartyPortable }),
+  definePortableMutation({ name: "accounting:setAccountParent", handler: accountingFns.setAccountParentPortable }),
   definePortableMutation({ name: "accounting:upsertFundRestriction", handler: accountingFns.upsertFundRestrictionPortable }),
   definePortableMutation({ name: "accounting:upsertAccountMapping", handler: accountingFns.upsertAccountMappingPortable }),
   definePortableMutation({ name: "accounting:upsertJournalEntry", handler: accountingFns.upsertJournalEntryPortable }),

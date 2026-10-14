@@ -17,6 +17,7 @@ import { syncAgreementDeadlines } from "./agreements";
 import { addDaysIso } from "../agreements";
 import { todayDateOnly } from "../dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../demoData/bankFeed";
+import { demoSubAccountRows } from "../demoData/chartOfAccounts";
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../demoData/members";
 import { addDays, createRng, demoAsOfDate } from "../demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel } from "../demoData/work";
@@ -846,6 +847,10 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     sourceSystem: "societyer",
     normalBalance: "debit",
   });
+  // Sub-accounts under facilities, so the chart of accounts shows a hierarchy.
+  for (const { doc } of demoSubAccountRows({ societyId, connectionId: financialConnectionId, facilitiesAccountId: facilitiesExpenseAccountId })) {
+    await ctx.db.insert("financialAccounts", doc);
+  }
   const fundRestrictionId = await ctx.db.insert("fundRestrictions", {
     societyId,
     name: "Youth resilience grant",

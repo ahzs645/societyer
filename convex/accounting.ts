@@ -20,6 +20,7 @@ import {
   closeFiscalPeriodPortable,
   reopenFiscalPeriodPortable,
   upsertCounterpartyPortable,
+  setAccountParentPortable,
   upsertFundRestrictionPortable,
   upsertAccountMappingPortable,
   upsertJournalEntryPortable,
@@ -151,6 +152,16 @@ export const reopenFiscalPeriod = authorizedMutation("accounting:reopenFiscalPer
   args: { id: v.id("accountingFiscalPeriods"), notes: v.optional(v.string()), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => reopenFiscalPeriodPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const setAccountParent = authorizedMutation("accounting:setAccountParent", mutation)({
+  args: {
+    id: v.id("financialAccounts"),
+    parentAccountId: v.optional(v.id("financialAccounts")),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => setAccountParentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertCounterparty = authorizedMutation("accounting:upsertCounterparty", mutation)({

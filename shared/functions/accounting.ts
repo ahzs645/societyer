@@ -25,6 +25,7 @@ import { getPortable as getAccessibleDocument } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { transactionBackfillSides, validateBalancedJournalLines } from "../accountingCore";
+import { accountParentError } from "../accountHierarchy";
 import { requirePermissionPortable } from "./permissions";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
@@ -341,9 +342,10 @@ export async function exportCsvPortable(
   await requirePermissionPortable(ctx, societyId, "financials:read");
   if (kind === "chart_of_accounts") {
     const accounts = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id"]];
+    const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id", "parent_code"]];
+    const parentCode = new Map(accounts.map((account) => [String(account._id), account.code ?? account.name]));
     for (const account of accounts.sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")))) {
-      rows.push([account.code ?? "", account.name, account.accountType, account.subtype ?? "", account.currency, account.normalBalance ?? "", account.externalId]);
+      rows.push([account.code ?? "", account.name, account.accountType, account.subtype ?? "", account.currency, account.normalBalance ?? "", account.externalId, account.parentAccountId ? parentCode.get(String(account.parentAccountId)) ?? "" : ""]);
     }
     return { filename: "chart-of-accounts.csv", contentType: "text/csv", csv: csvRows(rows) };
   }
@@ -579,6 +581,32 @@ export async function reopenFiscalPeriodPortable(
     updatedAtISO: new Date().toISOString(),
   });
   return id;
+}
+
+/**
+ * Move an account under another one (a sub-account), or back to the top
+ * level when `parentAccountId` is omitted. Rejects cycles, a parent in a
+ * different statement section or currency, and nesting deeper than
+ * MAX_ACCOUNT_DEPTH (shared/accountHierarchy.ts).
+ */
+export async function setAccountParentPortable(
+  ctx: PortableMutationCtx,
+  args: { id: string; parentAccountId?: string; actingUserId?: string },
+) {
+  const account: any = await ctx.db.get(args.id, "financialAccounts");
+  if (!account) throw new Error("Account not found.");
+  const societyId = String(account.societyId);
+  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId, required: "Director" });
+  await getOwned(ctx, "financialAccounts", args.id, societyId);
+  if (args.parentAccountId) await getOwned(ctx, "financialAccounts", args.parentAccountId, societyId);
+  const accounts = await ctx.db
+    .query("financialAccounts")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const error = accountParentError(accounts.map((row: any) => ({ ...row, _id: String(row._id), parentAccountId: row.parentAccountId ? String(row.parentAccountId) : null })), String(args.id), args.parentAccountId ? String(args.parentAccountId) : null);
+  if (error) throw new Error(error);
+  await ctx.db.patch(args.id, { parentAccountId: args.parentAccountId || undefined });
+  return args.id;
 }
 
 export async function upsertCounterpartyPortable(
