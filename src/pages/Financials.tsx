@@ -20,6 +20,9 @@ import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
+import { RuleDrawerProvider } from "../features/financials/transactions/RuleDrawerHost";
+import { TransactionsBulkBar } from "../features/financials/transactions/TransactionsBulkBar";
+import { useTransactionsSurface } from "../features/financials/transactions/useTransactionsSurface";
 import { Database, FileUp, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -118,7 +121,6 @@ export function FinancialsPage() {
   const removeBudget = useMutation(api.financialHub.removeBudget);
   const upsertOperatingSubscription = useMutation(api.financialHub.upsertOperatingSubscription);
   const removeOperatingSubscription = useMutation(api.financialHub.removeOperatingSubscription);
-  const updateTransaction = useMutation(api.financialHub.updateTransaction);
   const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
   const assets = useQuery(api.assets.list, society ? { societyId: society._id } : "skip");
@@ -223,17 +225,22 @@ export function FinancialsPage() {
   }, [isMobile, tableData.hydratedView]);
   const focusedTransactionId = searchParams.get("transaction");
   const focusedTransaction = (transactions ?? []).find((row: any) => String(row._id) === focusedTransactionId);
+  // Detail panel, bulk island, in-place rule editor, rule prompt and payee names.
+  const txnSurface = useTransactionsSurface({ societyId: society?._id, canWrite, transactions });
+  const { decorate: decorateTransactions } = txnSurface;
   const records = useMemo(
-    () => (transactions ?? []).filter((t: any) => !focusedTransactionId || String(t._id) === focusedTransactionId).map((t: any) => ({
+    () => decorateTransactions((transactions ?? []).filter((t: any) => !focusedTransactionId || String(t._id) === focusedTransactionId).map((t: any) => ({
       ...t,
       account: (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "",
       items: new Set([
         ...(linksByTransactionId.get(t._id) ?? []).map((link: any) => String(link.assetId ?? link.inventoryItemId ?? link._id)),
         ...(assetsByTransactionId.get(t._id) ?? []).map((asset: any) => String(asset._id)),
       ]).size,
-    })),
-    [transactions, accounts, linksByTransactionId, assetsByTransactionId, focusedTransactionId],
+    }))),
+    [transactions, accounts, linksByTransactionId, assetsByTransactionId, focusedTransactionId, decorateTransactions],
   );
+  const { renderSidePanel: renderTransactionSidePanel } = txnSurface;
+  const renderTransactionPanel = useMemo(() => renderTransactionSidePanel(records as any[]), [renderTransactionSidePanel, records]);
   const closePurchaseLink = () => {
     setLinkTxn(null);
     setLinkAssetId("");
@@ -864,17 +871,15 @@ export function FinancialsPage() {
           </div>
         ) : tableData.objectMetadata ? (
           <div style={{ marginBottom: 16 }}>
+            <RuleDrawerProvider value={txnSurface.ruleDrawer.api}>
             <RecordTableScope
               tableId="financialTransactions"
               objectMetadata={tableData.objectMetadata}
               hydratedView={financialHydratedView}
               records={records}
-              onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
-                await updateTransaction({
-                  id: recordId as Id<"financialTransactions">,
-                  patch: { [fieldName]: value } as any,
-                });
-              } : undefined}
+              recordPreview
+              renderSidePanel={renderTransactionPanel}
+              onUpdate={canWrite ? txnSurface.handleUpdate : undefined}
             >
               <RecordTableViewToolbar
                 societyId={society._id}
@@ -889,8 +894,11 @@ export function FinancialsPage() {
               <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
               <RecordTableFilterChips />
               <RecordTable
+                selectable={canWrite}
                 loading={tableData.loading || transactions === undefined}
                 renderCell={({ record: t, field }) => {
+                  if (field.name === "description" && t.payeeRenamed && t.description === (t.counterparty || t.description)) return <span title={t.description}>{t.payeeName}</span>;
+                  if (field.name === "counterparty") return t.payeeRenamed ? <span title={t.counterparty || t.description}>{t.payeeName}</span> : undefined;
                   if (field.name === "date") return <span title={formatDate(t.date, "EEEE, MMMM d, yyyy")}>{formatShortDate(t.date, todayISO)}</span>;
                   if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
                   if (field.name === "category") return <span className="category-cell"><CategorizationProvenance txn={t} /><Badge>{t.category ?? "uncategorized"}</Badge></span>;
@@ -925,7 +933,10 @@ export function FinancialsPage() {
                   return undefined;
                 }}
               />
+              <TransactionsBulkBar societyId={society._id} canWrite={canWrite} exportName="Transactions" />
             </RecordTableScope>
+            {txnSurface.ruleDrawer.element}
+            </RuleDrawerProvider>
           </div>
         ) : null}
         </>

@@ -40,6 +40,7 @@ export function RecordTableScope({
   onCreate,
   onReorder,
   recordPreview = false,
+  renderSidePanel,
   children,
 }: {
   tableId: string;
@@ -55,6 +56,13 @@ export function RecordTableScope({
    * record page to open (no `onRecordClick`); the sidebar then omits Open.
    */
   recordPreview?: boolean;
+  /**
+   * A record-specific preview panel in place of the generic field list. It
+   * keeps the shared behaviour: ↑/↓ from the panel steps through the table,
+   * the open row is marked, and `?record=<id>` deep links open it. Give the
+   * panel's drawer the `record-side-panel` class so its arrow keys count.
+   */
+  renderSidePanel?: (panel: { record: any; onClose: () => void; onNavigate: (record: any) => void }) => ReactNode;
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -178,7 +186,14 @@ export function RecordTableScope({
           recordId={activeSidePanelRecord && currentSidePanelRecord ? activeSidePanelRecord.recordId : null}
           onNavigate={(record) => setSidePanelRecord({ scopeIdentity, recordId: String(record._id), record })}
         />
-        {activeSidePanelRecord && currentSidePanelRecord && (
+        {activeSidePanelRecord && currentSidePanelRecord && renderSidePanel
+          ? renderSidePanel({
+              record: currentSidePanelRecord,
+              onClose: closeSidePanel,
+              onNavigate: (record) => setSidePanelRecord({ scopeIdentity, recordId: String(record._id), record }),
+            })
+          : null}
+        {activeSidePanelRecord && currentSidePanelRecord && !renderSidePanel && (
           <RecordTableSidePanel
             open
             record={currentSidePanelRecord}

@@ -124,5 +124,8 @@
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 
+// Transactions surface: detail panel, receipt drop zone, payee names.
+@use "transaction-panel";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

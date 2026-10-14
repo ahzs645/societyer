@@ -1,0 +1,211 @@
+import { useState } from "react";
+import { CheckCheck, Download, Landmark, Tag, Zap } from "lucide-react";
+import { RecordTableBulkBar, useRecordTableStoreHandle } from "@/platform/record-engine";
+import { Modal } from "../../../components/Modal";
+import { Field } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { useToast } from "../../../components/Toast";
+import { pluralize } from "../../../lib/format";
+import { downloadDelimitedText, exportFileName, toDelimitedText } from "../../../lib/tableExport";
+import { draftFromSelection, selectionPayees, SELECTION_RULE_MAX_PAYEES } from "./selectionRuleDraft";
+import { useRuleDrawer } from "./RuleDrawerHost";
+import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
+
+type BulkRow = {
+  _id: string;
+  date: string;
+  description: string;
+  counterparty?: string;
+  rawCounterparty?: string;
+  amountCents: number;
+  account?: string;
+  category?: string;
+  memo?: string;
+  receiptStatus?: string;
+};
+
+type Pending = { kind: "category" | "fund"; ids: string[] } | null;
+
+/**
+ * The floating bulk island for the transactions table: set a category, mark
+ * reviewed, assign a fund, create a rule from the selection, or export it.
+ * Every change shows Undo.
+ */
+export function TransactionsBulkBar({ societyId, canWrite, exportName }: { societyId: string; canWrite: boolean; exportName: string }) {
+  const drawer = useRuleDrawer();
+  const handle = useRecordTableStoreHandle();
+  const runBulk = useTransactionBulkEdit(societyId);
+  const toast = useToast();
+  const [pending, setPending] = useState<Pending>(null);
+  const [category, setCategory] = useState("");
+  const [fundId, setFundId] = useState("");
+  const funds = drawer?.workspace?.fundRestrictions ?? [];
+  const categories = drawer?.workspace?.categories ?? [];
+
+  const close = () => {
+    setPending(null);
+    setCategory("");
+    setFundId("");
+  };
+  const finish = () => {
+    close();
+    handle.get().clearSelection();
+  };
+
+  const exportRows = (rows: BulkRow[]) => {
+    const header = ["Date", "Description", "To / from", "Amount", "Account", "Category", "Notes", "Receipt"];
+    const body = rows.map((row) => [
+      row.date,
+      row.description,
+      row.counterparty ?? "",
+      (row.amountCents / 100).toFixed(2),
+      row.account ?? "",
+      row.category ?? "",
+      row.memo ?? "",
+      row.receiptStatus ?? "",
+    ]);
+    const fileName = exportFileName(`${exportName} selection`, "csv");
+    downloadDelimitedText(fileName, toDelimitedText([header, ...body], "csv"), "csv");
+    toast.success(`Exported ${pluralize(rows.length, "transaction")}`, fileName);
+  };
+
+  const actions = [
+    ...(canWrite
+      ? [
+          {
+            id: "bulk-category",
+            label: "Set category…",
+            icon: <Tag size={12} aria-hidden="true" />,
+            keepSelection: true,
+            onRun: (ids: string[]) => setPending({ kind: "category", ids }),
+          },
+          {
+            id: "bulk-reviewed",
+            label: "Mark reviewed",
+            icon: <CheckCheck size={12} aria-hidden="true" />,
+            onRun: (ids: string[]) => runBulk(ids, { reviewed: true }, (count) => `Marked ${pluralize(count, "transaction")} as reviewed`),
+          },
+          ...(funds.length > 0
+            ? [
+                {
+                  id: "bulk-fund",
+                  label: "Assign fund…",
+                  icon: <Landmark size={12} aria-hidden="true" />,
+                  keepSelection: true,
+                  onRun: (ids: string[]) => setPending({ kind: "fund", ids }),
+                },
+              ]
+            : []),
+          ...(drawer
+            ? [
+                {
+                  id: "bulk-rule",
+                  label: "Create rule",
+                  icon: <Zap size={12} aria-hidden="true" />,
+                  onRun: (_ids: string[], rows: BulkRow[]) => {
+                    const draft = draftFromSelection(rows);
+                    if (!draft) return;
+                    if (selectionPayees(rows).length > SELECTION_RULE_MAX_PAYEES) {
+                      toast.info(`The rule lists the first ${SELECTION_RULE_MAX_PAYEES} payees`, "Select fewer payees, or split them into separate rules.");
+                    }
+                    drawer.openDraft(draft);
+                  },
+                },
+              ]
+            : []),
+        ]
+      : []),
+    {
+      id: "bulk-export",
+      label: "Export",
+      icon: <Download size={12} aria-hidden="true" />,
+      keepSelection: true,
+      onRun: (_ids: string[], rows: BulkRow[]) => exportRows(rows),
+    },
+  ];
+
+  const count = pending?.ids.length ?? 0;
+
+  return (
+    <>
+      <RecordTableBulkBar actions={actions} />
+      <Modal
+        open={pending?.kind === "category"}
+        onClose={close}
+        size="sm"
+        title={`Set the category for ${pluralize(count, "transaction")}`}
+        footer={
+          <>
+            <button type="button" className="btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn--accent"
+              disabled={!category.trim()}
+              onClick={() => {
+                const ids = pending?.ids ?? [];
+                const value = category.trim();
+                finish();
+                void runBulk(ids, { category: value }, (n) => `Set ${pluralize(n, "transaction")} to ${value}`);
+              }}
+            >
+              Set category
+            </button>
+          </>
+        }
+      >
+        <Field label="Category" hint="Replaces any category a rule set. Undo puts the previous ones back.">
+          <input
+            className="input"
+            list="txn-bulk-category-options"
+            value={category}
+            autoFocus
+            placeholder="e.g. Office & technology"
+            onChange={(event) => setCategory(event.target.value)}
+          />
+        </Field>
+        <datalist id="txn-bulk-category-options">
+          {categories.map((option) => <option key={option} value={option} />)}
+        </datalist>
+      </Modal>
+      <Modal
+        open={pending?.kind === "fund"}
+        onClose={close}
+        size="sm"
+        title={`Assign a fund to ${pluralize(count, "transaction")}`}
+        footer={
+          <>
+            <button type="button" className="btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn--accent"
+              disabled={!fundId}
+              onClick={() => {
+                const ids = pending?.ids ?? [];
+                const fund = funds.find((row) => row._id === fundId);
+                const value = fundId === "none" ? null : fundId;
+                finish();
+                void runBulk(ids, { fundRestrictionId: value }, (n) =>
+                  value ? `Assigned ${pluralize(n, "transaction")} to ${fund?.name ?? "the fund"}` : `Removed the fund from ${pluralize(n, "transaction")}`,
+                );
+              }}
+            >
+              Assign fund
+            </button>
+          </>
+        }
+      >
+        <Field label="Fund or restriction">
+          <Select
+            value={fundId}
+            onChange={setFundId}
+            placeholder="Choose a fund"
+            options={[
+              ...funds.map((fund) => ({ value: fund._id, label: fund.name, hint: fund.purpose })),
+              { value: "none", label: "No fund (unrestricted)" },
+            ]}
+          />
+        </Field>
+      </Modal>
+    </>
+  );
+}
