@@ -71,6 +71,21 @@ function writeDismissed(userId: string | null | undefined, keys: string[]) {
   }
 }
 
+/**
+ * Coachmarks are for people. Automated browsers (end-to-end tests, screenshot
+ * scripts, crawlers) get the page without them, so a tip never covers the
+ * control a script is about to use. Set localStorage
+ * `societyer.spotlights.force` to "1" to see tips under automation.
+ */
+function suppressedForAutomation() {
+  if (typeof navigator === "undefined" || !navigator.webdriver) return false;
+  try {
+    return window.localStorage.getItem("societyer.spotlights.force") !== "1";
+  } catch {
+    return true;
+  }
+}
+
 /** Forget every dismissed tip for this user so they show again. */
 export function resetSpotlights(userId: string | null | undefined) {
   try {
@@ -91,7 +106,7 @@ export function useSpotlight(key: string, { enabled = true }: { enabled?: boolea
   // Dismissals are re-read when the user or `version` changes.
   const dismissed = readDismissed(userId).includes(key);
   void snapshot.version;
-  const wants = enabled && !dismissed;
+  const wants = enabled && !dismissed && !suppressedForAutomation();
 
   useEffect(() => {
     if (!wants) return;
@@ -243,6 +258,8 @@ export function Spotlight({
     window.addEventListener("scroll", place, true);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
     observer?.observe(anchorEl);
+    // Content loading above the anchor moves it without resizing it.
+    observer?.observe(document.body);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);

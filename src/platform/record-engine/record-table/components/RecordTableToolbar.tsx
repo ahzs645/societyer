@@ -463,6 +463,7 @@ export function RecordTableToolbar({
                 (groupByLabel ? " record-table__toolbar-button--active" : "")
               }
               ref={groupButtonRef}
+              data-record-table-action="group"
               aria-label={groupByLabel ? `Group · ${groupByLabel}` : "Group"}
               aria-haspopup="dialog"
               aria-expanded={groupMenuOpen}

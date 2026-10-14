@@ -891,6 +891,12 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/*",
+    "path": "/demo/app/interface-audit-unknown-route",
+    "kind": "fallback",
+    "fixture": "route"
+  },
+  {
     "pattern": "*",
     "path": "/demo/interface-audit-unknown-route",
     "kind": "fallback",

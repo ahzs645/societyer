@@ -120,6 +120,16 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/webhooks": "settings:read"
 };
 
+/** Catch-all routes. An unknown address renders the Not-found page (inside the
+ * app shell under /app, standalone elsewhere) without a read scope: it mounts
+ * no organisation data, so there is nothing to gate. Route coverage requires
+ * every splat route to be listed here, so a catch-all is a deliberate
+ * fallback rather than an app page that forgot its scope. */
+export const INTERFACE_FALLBACK_ROUTES: Readonly<Record<string, "not-found-in-shell" | "not-found-standalone">> = {
+  "/app/*": "not-found-in-shell",
+  "*": "not-found-standalone",
+};
+
 export function interfaceRouteReadPermission(pathname: string): Permission | undefined {
   let decoded = pathname;
   try { decoded = decodeURIComponent(pathname); } catch { /* Match malformed paths without throwing in the shell. */ }

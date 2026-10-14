@@ -10,6 +10,7 @@ import { useToast } from "../../../components/Toast";
 import { formatDate } from "../../../lib/format";
 import { ShieldAlert, Trash2, Check, RotateCcw } from "lucide-react";
 import { resolveConflictMotion } from "../lib/conflictMotions";
+import { Tooltip } from "../../../components/Tooltip";
 
 type MotionOption = { index: number; label: string; text: string };
 
@@ -168,30 +169,33 @@ export function MeetingConflictsCard({
               </div>
               <div className="meeting-conflict-row__actions">
                 {conflict.resolvedAt ? (
-                  <button disabled={!canWrite}
-                    className="btn-action"
-                    title="Reopen"
-                    onClick={() => resolveConflict({ id: conflict._id, resolvedAt: "" })}
-                  >
-                    <RotateCcw size={12} />
-                  </button>
+                  <Tooltip content="Reopen">
+                    <button aria-label="Reopen" disabled={!canWrite}
+                      className="btn-action"
+                      onClick={() => resolveConflict({ id: conflict._id, resolvedAt: "" })}
+                    >
+                      <RotateCcw size={12} />
+                    </button>
+                  </Tooltip>
                 ) : (
-                  <button disabled={!canWrite}
-                    className="btn-action"
-                    title="Mark resolved"
-                    onClick={() => resolveConflict({ id: conflict._id, resolvedAt: new Date().toISOString() })}
-                  >
-                    <Check size={12} />
-                  </button>
+                  <Tooltip content="Mark resolved">
+                    <button aria-label="Mark resolved" disabled={!canWrite}
+                      className="btn-action"
+                      onClick={() => resolveConflict({ id: conflict._id, resolvedAt: new Date().toISOString() })}
+                    >
+                      <Check size={12} />
+                    </button>
+                  </Tooltip>
                 )}
-                <button
-                  className="btn-action"
-                  title="Remove"
-                  aria-label="Remove conflict" disabled={!canWrite}
-                  onClick={() => removeConflict({ id: conflict._id })}
-                >
-                  <Trash2 size={12} />
-                </button>
+                <Tooltip content="Remove">
+                  <button
+                    className="btn-action"
+                    aria-label="Remove conflict" disabled={!canWrite}
+                    onClick={() => removeConflict({ id: conflict._id })}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </Tooltip>
               </div>
             </div>
           );

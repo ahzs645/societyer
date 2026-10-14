@@ -530,11 +530,6 @@
   grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
   gap: token('s-3');
 }
-.insights__stat-delta {
-  font-size: token('fs-xs');
-  color: token('text-tertiary');
-  font-variant-numeric: tabular-nums;
-}
 .insights__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

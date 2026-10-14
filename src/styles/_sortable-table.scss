@@ -1,0 +1,63 @@
+@use "tokens" as *;
+
+// Sortable header cells for small client-sorted tables (finance summaries).
+// The label is a borderless button; the arrow is faint until hovered or the
+// column is sorted. Number columns keep their right alignment.
+.sortable-th__inner {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  max-width: 100%;
+}
+
+th.num .sortable-th__inner {
+  justify-content: flex-end;
+}
+
+.sortable-th__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-xs');
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: token('text-primary');
+  }
+}
+
+th.num .sortable-th__btn {
+  flex-direction: row-reverse;
+}
+
+.sortable-th__icon {
+  flex: none;
+  opacity: 0.35;
+  transition: opacity token('motion-fade-fast') token('ease-fade');
+}
+
+.sortable-th__btn:hover .sortable-th__icon,
+.sortable-th__btn:focus-visible .sortable-th__icon,
+.sortable-th.is-sorted .sortable-th__icon {
+  opacity: 1;
+}
+
+.sortable-th.is-sorted {
+  color: token('text-primary');
+}
+
+@media (pointer: coarse) {
+  .sortable-th__btn {
+    min-height: 40px;
+  }
+}

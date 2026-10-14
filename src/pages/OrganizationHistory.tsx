@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { StatTile } from "../components/StatTile";
+import { Tooltip } from "../components/Tooltip";
 
 type Confidence = "High" | "Medium" | "Review";
 type Status = "Draft" | "Verified" | "NeedsReview" | "Archived";
@@ -778,14 +779,15 @@ export function OrganizationHistoryPage() {
                     <td><SourceBadges ids={budget.sourceIds} sourceById={sourceById} /></td>
                     <td>
                       <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                        <Link
-                          className="btn btn--ghost btn--sm btn--icon"
-                          aria-label={`Open ${budget.title}`}
-                          title={`Open ${budget.title}`}
-                          to={`/app/org-history/budgets/${budget._id}`}
-                        >
-                          <Eye size={12} />
-                        </Link>
+                        <Tooltip content={`Open ${budget.title}`}>
+                          <Link
+                            className="btn btn--ghost btn--sm btn--icon"
+                            aria-label={`Open ${budget.title}`}
+                            to={`/app/org-history/budgets/${budget._id}`}
+                          >
+                            <Eye size={12} />
+                          </Link>
+                        </Tooltip>
                         <IconButton label={`Edit ${budget.title}`} onClick={() => setBudgetForm({ ...budget, sourceIds: budget.sourceIds ?? [] })}>
                           <Pencil size={12} />
                         </IconButton>

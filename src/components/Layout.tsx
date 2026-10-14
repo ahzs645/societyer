@@ -170,8 +170,9 @@ import {
   type RailFavorite,
 } from "./SidebarNav";
 import { SetupPill } from "./SetupPill";
+import { GroupBySpotlight } from "./GroupBySpotlight";
 import { Tooltip } from "./Tooltip";
-import { ShortcutHint, shortcutText } from "./ShortcutHint";
+import { ShortcutHint } from "./ShortcutHint";
 import { openShortcutHelp } from "./ShortcutHelp";
 import { navParentForPath, navRouteForPath } from "../lib/navTree";
 import { useGoToShortcuts } from "../hooks/useGoToShortcuts";
@@ -930,35 +931,38 @@ export function Layout() {
     const canMoveDown = pos >= 0 && pos < visibleIndices.length - 1;
     return (
       <span className="sidebar__fav-controls">
-        <button
-          type="button"
-          className="sidebar__fav-btn"
-          aria-label={t("sidebar.moveUp", "Move up")}
-          title={t("sidebar.moveUp", "Move up")}
-          disabled={!canMoveUp}
-          onClick={() => moveFavoriteToIndex(index, visibleIndices[pos - 1])}
-        >
-          <ChevronUp size={14} />
-        </button>
-        <button
-          type="button"
-          className="sidebar__fav-btn"
-          aria-label={t("sidebar.moveDown", "Move down")}
-          title={t("sidebar.moveDown", "Move down")}
-          disabled={!canMoveDown}
-          onClick={() => moveFavoriteToIndex(index, visibleIndices[pos + 1])}
-        >
-          <ChevronDown size={14} />
-        </button>
-        <button
-          type="button"
-          className="sidebar__fav-btn"
-          aria-label={t("sidebar.unpinFromFavorites")}
-          title={t("sidebar.unpinFromFavorites")}
-          onClick={() => togglePinnedFavorite(ref)}
-        >
-          <PinOff size={14} />
-        </button>
+        <Tooltip content={t("sidebar.moveUp", "Move up")}>
+          <button
+            type="button"
+            className="sidebar__fav-btn"
+            aria-label={t("sidebar.moveUp", "Move up")}
+            disabled={!canMoveUp}
+            onClick={() => moveFavoriteToIndex(index, visibleIndices[pos - 1])}
+          >
+            <ChevronUp size={14} />
+          </button>
+        </Tooltip>
+        <Tooltip content={t("sidebar.moveDown", "Move down")}>
+          <button
+            type="button"
+            className="sidebar__fav-btn"
+            aria-label={t("sidebar.moveDown", "Move down")}
+            disabled={!canMoveDown}
+            onClick={() => moveFavoriteToIndex(index, visibleIndices[pos + 1])}
+          >
+            <ChevronDown size={14} />
+          </button>
+        </Tooltip>
+        <Tooltip content={t("sidebar.unpinFromFavorites")}>
+          <button
+            type="button"
+            className="sidebar__fav-btn"
+            aria-label={t("sidebar.unpinFromFavorites")}
+            onClick={() => togglePinnedFavorite(ref)}
+          >
+            <PinOff size={14} />
+          </button>
+        </Tooltip>
       </span>
     );
   };
@@ -1101,15 +1105,16 @@ export function Layout() {
           />
         )}
         {!isMobileNav && (
-          <button
-            className="sidebar-peek"
-            onClick={openSidebar}
-            title={`${t("sidebar.openSidebar")} (${shortcutText("hideSidebar")})`}
-            aria-label={t("sidebar.openSidebar")}
-            tabIndex={sidebarMode === "hidden" ? undefined : -1}
-          >
-            <PanelLeftOpen size={14} />
-          </button>
+          <Tooltip content={<>{t("sidebar.openSidebar")} <ShortcutHint id="hideSidebar" tone="inverse" /></>} placement="right">
+            <button
+              className="sidebar-peek"
+              onClick={openSidebar}
+              aria-label={t("sidebar.openSidebar")}
+              tabIndex={sidebarMode === "hidden" ? undefined : -1}
+            >
+              <PanelLeftOpen size={14} />
+            </button>
+          </Tooltip>
         )}
         <aside
           className="sidebar"
@@ -1179,37 +1184,41 @@ export function Layout() {
                * them out of the drawer to avoid duplicate controls. */}
               {!isMobileNav && <NotificationBellSafe />}
               {!aiChatHidden && (
-                <button
-                  className="sidebar__icon-btn"
-                  onClick={openGlobalAiAssistant}
-                  title="AI assistant"
-                  aria-label="AI assistant"
-                >
-                  <Bot size={14} />
-                </button>
+                <Tooltip content="AI assistant">
+                  <button
+                    className="sidebar__icon-btn"
+                    onClick={openGlobalAiAssistant}
+                    aria-label="AI assistant"
+                  >
+                    <Bot size={14} />
+                  </button>
+                </Tooltip>
               )}
               {!isMobileNav && (
-                <button
-                  className="sidebar__icon-btn"
-                  onClick={() => window.dispatchEvent(new Event("kbar:open"))}
-                  title={`${t("common.search")} (/ or ${shortcutText("commandPalette")})`}
-                  aria-label={t("common.search")}
-                >
-                  <Search size={14} />
-                </button>
+                <Tooltip content={<>{t("common.search")} <ShortcutHint id="commandPalette" tone="inverse" /></>} placement="bottom">
+                  <button
+                    className="sidebar__icon-btn"
+                    data-command-palette-trigger=""
+                    onClick={() => window.dispatchEvent(new Event("kbar:open"))}
+                    aria-label={t("common.search")}
+                  >
+                    <Search size={14} />
+                  </button>
+                </Tooltip>
               )}
               {/* On mobile the drawer closes via the scrim, a left-swipe, or
                 * Escape, so this collapse toggle is redundant — dropping it also
                 * unclutters the cramped top bar. */}
               {!isMobileNav && (
-                <button
-                  className="sidebar__icon-btn sidebar__toggle"
-                  onClick={toggleSidebar}
-                  title={`${t("sidebar.collapse")} ${t("sidebar.sidebar")} (${shortcutText("toggleSidebar")})`}
-                  aria-label={`${t("sidebar.collapse")} ${t("sidebar.sidebar")}`}
-                >
-                  <PanelLeftClose size={14} />
-                </button>
+                <Tooltip content={<>{t("sidebar.collapse")} {t("sidebar.sidebar")} <ShortcutHint id="toggleSidebar" tone="inverse" /></>} placement="bottom">
+                  <button
+                    className="sidebar__icon-btn sidebar__toggle"
+                    onClick={toggleSidebar}
+                    aria-label={`${t("sidebar.collapse")} ${t("sidebar.sidebar")}`}
+                  >
+                    <PanelLeftClose size={14} />
+                  </button>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -1280,6 +1289,7 @@ export function Layout() {
                     <button
                       type="button"
                       className="sidebar-rail__tool"
+                      data-command-palette-trigger=""
                       onClick={() => window.dispatchEvent(new Event("kbar:open"))}
                       aria-label={t("common.search")}
                       data-nav-row=""
@@ -1869,6 +1879,7 @@ export function Layout() {
                   <Suspense fallback={<WorkbenchPageLoader />}>
                     <RouteAccessGate><Outlet /></RouteAccessGate>
                   </Suspense>
+                  <GroupBySpotlight />
                 </div>
                 <InspectorHost onOpenChange={setMobileInspectorOpen} />
               </div>

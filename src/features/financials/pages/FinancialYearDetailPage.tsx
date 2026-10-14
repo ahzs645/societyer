@@ -9,6 +9,9 @@ import { RecordShowPage } from "../../../components/RecordShowPage";
 import { formatDate } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
+import { StatTile } from "../../../components/StatTile";
+import { SortableTh } from "../../../components/SortableTh";
+import { useSortableRows } from "../../../hooks/useSortableRows";
 import { DetailCell } from "../components/WaveCacheExplorer";
 import { FinancialPresentationCard } from "../components/FinancialPresentationCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
@@ -180,33 +183,14 @@ function StatementImportTables({
             </div>
           </div>
           <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
-            <Stat label="Revenue" value={moneyDetailed(row.revenueCents)} />
-            <Stat label="Expenses" value={moneyDetailed(row.expensesCents)} />
-            <Stat label="Net assets" value={moneyDetailed(row.netAssetsCents)} />
-            <Stat label="Restricted" value={moneyDetailed(row.restrictedFundsCents)} />
+            <StatTile label="Revenue" value={<Money variant="hero" negativeStyle="parentheses" cents={row.revenueCents} />} />
+            <StatTile label="Expenses" value={<Money variant="hero" negativeStyle="parentheses" cents={row.expensesCents} />} />
+            <StatTile label="Net assets" value={<Money variant="hero" negativeStyle="parentheses" cents={row.netAssetsCents} />} />
+            <StatTile label="Restricted" value={<Money variant="hero" negativeStyle="parentheses" cents={row.restrictedFundsCents} />} />
           </div>
           {row.lines?.length > 0 ? (
             <div className="finance-table-wrap">
-            <table className="table finance-table">
-              <thead>
-                <tr>
-                  <th>Section</th>
-                  <th>Line</th>
-                  <th className="num">Amount</th>
-                  <th>Confidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {row.lines.map((line: any) => (
-                  <tr key={line._id}>
-                    <td>{line.section}</td>
-                    <td>{line.label}</td>
-                    <td className="num"><Money cents={line.amountCents} negativeStyle="parentheses" /></td>
-                    <td><Badge tone={line.confidence === "High" ? "success" : line.confidence === "Medium" ? "info" : "warn"}>{line.confidence}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <StatementLinesTable lines={row.lines} />
             </div>
           ) : (
             <div className="card__body muted">No line items were extracted for this import.</div>
@@ -217,7 +201,45 @@ function StatementImportTables({
   );
 }
 
+const confidenceRank = (value: string | undefined) => (value === "High" ? 3 : value === "Medium" ? 2 : value ? 1 : null);
+
+function StatementLinesTable({ lines }: { lines: any[] }) {
+  const { rows, sort, toggle } = useSortableRows(lines, {
+    section: (line: any) => line.section,
+    label: (line: any) => line.label,
+    amount: (line: any) => line.amountCents,
+    confidence: (line: any) => confidenceRank(line.confidence),
+  });
+  return (
+    <table className="table finance-table">
+      <thead>
+        <tr>
+          <SortableTh column="section" sort={sort} onSort={toggle}>Section</SortableTh>
+          <SortableTh column="label" sort={sort} onSort={toggle}>Line</SortableTh>
+          <SortableTh column="amount" sort={sort} onSort={toggle} className="num">Amount</SortableTh>
+          <SortableTh column="confidence" sort={sort} onSort={toggle}>Confidence</SortableTh>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((line: any) => (
+          <tr key={line._id}>
+            <td>{line.section}</td>
+            <td>{line.label}</td>
+            <td className="num"><Money cents={line.amountCents} negativeStyle="parentheses" /></td>
+            <td><Badge tone={line.confidence === "High" ? "success" : line.confidence === "Medium" ? "info" : "warn"}>{line.confidence}</Badge></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function SourceDocumentsTable({ documents }: { documents: any[] }) {
+  const { rows, sort, toggle } = useSortableRows(documents, {
+    title: (doc: any) => doc.title,
+    category: (doc: any) => doc.category ?? "Document",
+    created: (doc: any) => doc.createdAtISO,
+  });
   if (documents.length === 0) {
     return <div className="card"><div className="card__body muted">No source documents are linked to this fiscal year.</div></div>;
   }
@@ -231,15 +253,15 @@ function SourceDocumentsTable({ documents }: { documents: any[] }) {
       <table className="table">
         <thead>
           <tr>
-            <th>Title</th>
+            <SortableTh column="title" sort={sort} onSort={toggle}>Title</SortableTh>
             <th>Source</th>
-            <th>Category</th>
-            <th>Created</th>
+            <SortableTh column="category" sort={sort} onSort={toggle}>Category</SortableTh>
+            <SortableTh column="created" sort={sort} onSort={toggle} firstDirection="desc">Created</SortableTh>
             <th>Access</th>
           </tr>
         </thead>
         <tbody>
-          {documents.map((doc) => (
+          {rows.map((doc) => (
             <tr key={doc._id}>
               <td>
                 <strong>{doc.title}</strong>
@@ -266,6 +288,15 @@ function SourceDocumentsTable({ documents }: { documents: any[] }) {
 }
 
 function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exactImportIds: Set<string> }) {
+  const { rows, sort, toggle } = useSortableRows(imports, {
+    title: (row: any) => row.title,
+    periodEnd: (row: any) => row.periodEnd,
+    status: (row: any) => row.status,
+    revenue: (row: any) => row.revenueCents,
+    expenses: (row: any) => row.expensesCents,
+    netAssets: (row: any) => row.netAssetsCents,
+    lines: (row: any) => row.lines?.length ?? 0,
+  });
   if (imports.length === 0) {
     return <div className="card"><div className="card__body muted">No import records are linked to this fiscal year.</div></div>;
   }
@@ -279,18 +310,18 @@ function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exact
       <table className="table">
         <thead>
           <tr>
-            <th>Import</th>
-            <th>Period end</th>
-            <th>Status</th>
-            <th className="num">Revenue</th>
-            <th className="num">Expenses</th>
-            <th className="num">Net assets</th>
-            <th className="num">Lines</th>
+            <SortableTh column="title" sort={sort} onSort={toggle}>Import</SortableTh>
+            <SortableTh column="periodEnd" sort={sort} onSort={toggle} firstDirection="desc">Period end</SortableTh>
+            <SortableTh column="status" sort={sort} onSort={toggle}>Status</SortableTh>
+            <SortableTh column="revenue" sort={sort} onSort={toggle} className="num">Revenue</SortableTh>
+            <SortableTh column="expenses" sort={sort} onSort={toggle} className="num">Expenses</SortableTh>
+            <SortableTh column="netAssets" sort={sort} onSort={toggle} className="num">Net assets</SortableTh>
+            <SortableTh column="lines" sort={sort} onSort={toggle} className="num">Lines</SortableTh>
             <th>Sources</th>
           </tr>
         </thead>
         <tbody>
-          {imports.map((row) => (
+          {rows.map((row) => (
             <tr key={row._id}>
               <td>
                 <strong>{row.title}</strong>
@@ -351,13 +382,4 @@ function documentCategoryTone(category: string): "success" | "warn" | "info" | "
   if (category === "Restricted Paperless Source") return "warn";
   if (category === "Org History Source") return "info";
   return "neutral";
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "ok" | "danger" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ color: tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
-    </div>
-  );
 }

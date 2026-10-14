@@ -27,6 +27,7 @@ import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
 // EmptyState variant icons (kept apart from the shared icon import above).
 import { CheckCheck, SearchX } from "lucide-react";
+import { Tooltip } from "./Tooltip";
 
 export function EmptyState({
   icon,
@@ -734,15 +735,16 @@ export function LockedField({
       <div className="field__label-row">
         <label className="field__label" htmlFor={fieldId}>{label}</label>
         {locked ? (
-          <button
-            className="field__lock field__lock--icon"
-            onClick={onUnlock}
-            type="button"
-            title={reason}
-            aria-label={`Unlock ${label}`}
-          >
-            <Lock aria-hidden="true" />
-          </button>
+          <Tooltip content={reason}>
+            <button
+              className="field__lock field__lock--icon"
+              onClick={onUnlock}
+              type="button"
+              aria-label={`Unlock ${label}`}
+            >
+              <Lock aria-hidden="true" />
+            </button>
+          </Tooltip>
         ) : (
           <button
             className="field__lock field__lock--unlocked"

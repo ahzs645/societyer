@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { Link2, Unlink } from "lucide-react";
 import { NameAutocomplete } from "@/components/NameAutocomplete";
 import { matchDirectoryPerson, normalizePersonKey } from "../../shared/meetingAttendanceGrid";
+import { Tooltip } from "./Tooltip";
 
 export type DirectoryPerson = { _id: string; fullName: string; aliases?: string[] | null };
 
@@ -55,9 +56,11 @@ export function PersonNameLinkField({
         <span className="person-picker__link" title={linked ? `Linked to ${linked.fullName} in the people directory` : "Linked to a people-directory record"}>
           <Link2 size={11} aria-hidden="true" />
           <span className="person-picker__link-name">{linked?.fullName ?? "Linked"}</span>
-          <button type="button" className="person-picker__unlink" onClick={() => onChange({ name: value.name })} aria-label={`Unlink ${value.name || "person"} from the people directory`} title="Unlink">
-            <Unlink size={11} />
-          </button>
+          <Tooltip content="Unlink">
+            <button type="button" className="person-picker__unlink" onClick={() => onChange({ name: value.name })} aria-label={`Unlink ${value.name || "person"} from the people directory`}>
+              <Unlink size={11} />
+            </button>
+          </Tooltip>
         </span>
       ) : value.name.trim() && !compact ? (
         <span className="person-picker__hint muted">Not linked</span>

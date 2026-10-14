@@ -1233,18 +1233,21 @@ function MotionRow({
               </button>
             )}
             {selectedAgendaIndex != null && (
-              <button
-                className="btn-action"
-                onClick={() => onPatch({ sectionIndex: undefined, sectionTitle: undefined })}
-                title="Unlink from agenda item"
-                aria-label="Unlink motion from agenda item"
-              >
-                <Unlink size={12} />
-              </button>
+              <Tooltip content="Unlink from agenda item">
+                <button
+                  className="btn-action"
+                  onClick={() => onPatch({ sectionIndex: undefined, sectionTitle: undefined })}
+                  aria-label="Unlink motion from agenda item"
+                >
+                  <Unlink size={12} />
+                </button>
+              </Tooltip>
             )}
-            <button className="btn-action" onClick={handleRemoveClick} title="Remove motion" aria-label="Remove motion">
-              <Trash2 size={12} />
-            </button>
+            <Tooltip content="Remove motion">
+              <button className="btn-action" onClick={handleRemoveClick} aria-label="Remove motion">
+                <Trash2 size={12} />
+              </button>
+            </Tooltip>
           </div>
           {!expanded && (
             <div className="motion__meta motion__meta--actions">

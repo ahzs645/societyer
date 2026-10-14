@@ -100,6 +100,7 @@ import type {
   PersonCategory,
   FieldMapping,
 } from "./WorkflowDetail.internal";
+import { Tooltip } from "../components/Tooltip";
 
 const WORKFLOW_STATUS_LABELS: Record<string, string> = {
   active: "Active",
@@ -226,9 +227,11 @@ export function WorkflowDetailPage() {
     <div className="workflow-detail">
       <div className="workflow-topbar">
         <div className="workflow-topbar__title">
-          <Link to="/app/workflows" className="workflow-topbar__back" aria-label="Back to workflows" title="Back to workflows">
-            <ArrowLeft size={14} />
-          </Link>
+          <Tooltip content="Back to workflows">
+            <Link to="/app/workflows" className="workflow-topbar__back" aria-label="Back to workflows">
+              <ArrowLeft size={14} />
+            </Link>
+          </Tooltip>
           <div className="workflow-topbar__icon">
             <Settings size={16} />
           </div>

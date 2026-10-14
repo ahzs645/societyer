@@ -99,6 +99,7 @@ import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { NAV_ITEM_LABEL_KEYS } from "../i18n/navLabels";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { PageSkeleton } from "./PageSkeleton";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
@@ -110,6 +111,7 @@ import { RESOLVED_NAV_TREE, navParentForPath, navRouteForPath } from "../lib/nav
 import { useUIStore, type PinnedView } from "../lib/store";
 import { getDesktopBridge } from "../lib/desktopBridge";
 import { useToast } from "./Toast";
+import { Tooltip } from "./Tooltip";
 
 
 function NotificationBellSafe() {
@@ -142,27 +144,26 @@ const THEME_OPTIONS: Array<{
 
 
 function SidebarThemeToggle() {
-  const { preference, resolvedTheme, setPreference } = useThemePreference();
+  const { preference, setPreference } = useThemePreference();
 
   return (
     <div
       className="sidebar-theme-toggle"
       role="group"
       aria-label="Theme preference"
-      title={`Theme: ${preference}${preference === "system" ? ` (${resolvedTheme})` : ""}`}
     >
       {THEME_OPTIONS.map(({ value, label, Icon }) => (
-        <button
-          key={value}
-          type="button"
-          className={`sidebar-theme-toggle__btn${preference === value ? " is-active" : ""}`}
-          onClick={() => setPreference(value)}
-          aria-label={label}
-          aria-pressed={preference === value}
-          title={label}
-        >
-          <Icon size={12} />
-        </button>
+        <Tooltip key={value} content={label}>
+          <button
+            type="button"
+            className={`sidebar-theme-toggle__btn${preference === value ? " is-active" : ""}`}
+            onClick={() => setPreference(value)}
+            aria-label={label}
+            aria-pressed={preference === value}
+          >
+            <Icon size={12} />
+          </button>
+        </Tooltip>
       ))}
     </div>
   );
@@ -187,31 +188,11 @@ function GlobalAiAssistantSafe() {
 }
 
 
+/** Route-loading fallback: the shared page skeleton (header, stat row, table). */
 function WorkbenchPageLoader() {
   return (
-    <div className="page" aria-busy="true">
-      <div className="page-header">
-        <div>
-          <div className="skeleton skeleton--line" style={{ width: 180, height: 20, marginBottom: 10 }} />
-          <div className="skeleton skeleton--line" style={{ width: 360, maxWidth: "70vw" }} />
-        </div>
-      </div>
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        {[0, 1, 2, 3].map((index) => (
-          <div className="stat" key={index}>
-            <div className="skeleton skeleton--line" style={{ width: 88, marginBottom: 12 }} />
-            <div className="skeleton skeleton--line" style={{ width: 56, height: 18 }} />
-          </div>
-        ))}
-      </div>
-      <div className="card">
-        <div className="card__body">
-          <div className="skeleton skeleton--line" style={{ width: 160, height: 18, marginBottom: 16 }} />
-          <div className="skeleton skeleton--line" style={{ width: "100%", marginBottom: 10 }} />
-          <div className="skeleton skeleton--line" style={{ width: "94%", marginBottom: 10 }} />
-          <div className="skeleton skeleton--line" style={{ width: "88%" }} />
-        </div>
-      </div>
+    <div className="page">
+      <PageSkeleton variant="table" />
     </div>
   );
 }

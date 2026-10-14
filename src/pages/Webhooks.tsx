@@ -12,6 +12,7 @@ import { TooltipCopyable } from "../components/TooltipCopyable";
 import { useToast } from "../components/Toast";
 import { Webhook, Plus, Power } from "lucide-react";
 import { formatDateTime } from "../lib/format";
+import { Tooltip } from "../components/Tooltip";
 
 type Draft = {
   id?: string;
@@ -140,9 +141,11 @@ export function WebhooksPage() {
                   {canConfigure && (
                     <>
                       <button className="btn btn--ghost btn--sm" aria-label={`Edit ${sub.name}`} onClick={() => setDraft({ id: sub._id, name: sub.name, targetUrl: sub.targetUrl, eventTypesText: (sub.eventTypes ?? []).join(", "), status: sub.status })}>Edit</button>
-                      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`${sub.status === "active" ? "Disable" : "Enable"} ${sub.name}`} title={sub.status === "active" ? "Disable deliveries" : "Enable deliveries"} onClick={() => toggle(sub)}>
-                        <Power size={12} />
-                      </button>
+                      <Tooltip content={sub.status === "active" ? "Disable deliveries" : "Enable deliveries"}>
+                        <button className="btn btn--ghost btn--sm btn--icon" aria-label={`${sub.status === "active" ? "Disable" : "Enable"} ${sub.name}`} onClick={() => toggle(sub)}>
+                          <Power size={12} />
+                        </button>
+                      </Tooltip>
                     </>
                   )}
                 </td>

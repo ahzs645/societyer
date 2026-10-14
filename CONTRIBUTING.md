@@ -64,6 +64,17 @@ npm run test:static-parity                  # every frontend write is handled or
 # Broader smoke (if you touched UI/flows)
 npm run test:smoke                          # Playwright
 
+# Styles and interface (if you touched src/styles, components, pages or routes)
+npx sass --no-source-map src/styles/index.scss > /dev/null   # compiles; token() names are validated
+npm run test:css-vars                       # no undefined CSS custom properties; the allowlist stays empty
+npm run test:interface-route-coverage       # every route has a fixture and a read scope (catch-alls are declared fallbacks)
+npm run test:record-table-acceptance        # RecordTable inventory and the shared record-open behaviour
+
+# Finance workflows (if you touched transaction rules, approvals, reconciliation or invoices)
+npm run test:transaction-rules              # categorisation rules, approvals and statement reconciliation helpers
+npm run test:nl-filter                      # natural-language table filter parser (if present)
+npm run test:invoices                       # invoices (if present)
+
 # Legal rules, evidence and corporate records (if you touched shared/ legal, packet or register code)
 npm run test:legal                          # every legal and evidence check (scripts/run-legal-checks.mjs)
 npm run test:legal:after-utc-midnight       # the same checks with the clock just after 00:00 UTC
@@ -84,8 +95,10 @@ ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep   # no society-only copy in corp
 The legal-governance and portable-conformance workflows in `.github/workflows/` run these on
 every pull request. Feature guides: [corporate records](./docs/corporate-records.md),
 [tasks](./docs/tasks.md), [legal research and profiles](./docs/legal-research/README.md),
-[entity copy audit](./docs/entity-copy-audit.md) and
-[portable functions](./docs/portable-functions-architecture.md).
+[entity copy audit](./docs/entity-copy-audit.md),
+[portable functions](./docs/portable-functions-architecture.md) and the
+[design system](./docs/design-system.md) (tokens, `<Money>`, StatTile, tables, charts,
+feedback primitives and UI conventions).
 
 > **Static-mirror parity:** the offline/desktop runtime is served by the static mirror
 > (`src/lib/staticConvex.ts`). Any mutation/action the frontend calls must be handled there

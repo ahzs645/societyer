@@ -21,6 +21,7 @@ import {
 } from "../components/GrantPanels";
 import { buildCsjOrientationEmailBody } from "../lib/csjOrientationEmail";
 import { LinkedAgreementsCard } from "../../agreements/LinkedAgreementsCard";
+import { Tooltip } from "../../../components/Tooltip";
 
 export function GrantDetailPage() {
   return <GrantWorkspacePage />;
@@ -207,16 +208,17 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              className="btn-action btn-action--icon grant-workspace__edit"
-              onClick={startEditing}
-              disabled={!canWrite}
-              aria-label="Edit workspace"
-              title="Edit workspace"
-            >
-              <Pencil size={14} aria-hidden="true" />
-            </button>
+            <Tooltip content="Edit workspace">
+              <button
+                type="button"
+                className="btn-action btn-action--icon grant-workspace__edit"
+                onClick={startEditing}
+                disabled={!canWrite}
+                aria-label="Edit workspace"
+              >
+                <Pencil size={14} aria-hidden="true" />
+              </button>
+            </Tooltip>
           )
         }
       />

@@ -65,17 +65,23 @@ test("invalid dividend input stays editable, reports the problem, and a correcte
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "dividends");
   await page.getByRole("button", { name: "New declaration", exact: true }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Enter the share class, per-share amount and shares outstanding.")).toBeVisible();
+  // A new declaration is a draft until the directors' solvency confirmation is
+  // recorded, so the primary action reads "Save draft".
+  const save = page.getByRole("button", { name: "Save draft", exact: true });
+  await save.click();
+  await expect(page.getByText("Choose the share class the dividend is declared on.")).toBeVisible();
   await expect(page.getByRole("dialog")).toBeVisible();
   await input(page, "Share class").fill("Operations audit common");
-  await input(page, "Per-share amount (cents)").fill("25");
-  await input(page, "Shares outstanding").fill("40");
+  await save.click();
+  await expect(page.getByText("Enter the per-share amount as a decimal number, such as 0.25.")).toBeVisible();
+  // The per-share amount is entered in currency units, exactly as declared.
+  await input(page, "Per-share amount").fill("0.25");
+  await input(page, "Shares outstanding (only when the ledger has no holdings)").fill("40");
   await input(page, "Currency").fill("Canadian dollars");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await save.click();
   await expect(page.getByText("Enter a three-letter currency code, such as CAD or USD.")).toBeVisible();
   await input(page, "Currency").fill("cad");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await save.click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator("tr", { hasText: "Operations audit common" })).toContainText("$10.00");
   await page.reload();

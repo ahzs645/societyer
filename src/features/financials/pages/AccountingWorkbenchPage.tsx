@@ -16,9 +16,10 @@ import { Badge, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
-import { formatDate, money } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
+import { StatTile } from "../../../components/StatTile";
 import { TrialBalanceReport } from "../components/TrialBalanceReport";
 import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
 import { JournalLinesGrid, useJournalLinesGrid } from "../components/JournalLinesGrid";
@@ -485,10 +486,10 @@ export function AccountingWorkbenchPage() {
       />
 
       <div className="stat-grid">
-        <div className="stat"><div className="stat__label">Chart accounts</div><div className="stat__value">{accounts?.length ?? 0}</div></div>
-        <div className="stat"><div className="stat__label">Posted entries</div><div className="stat__value">{journalEntries?.filter((e: any) => e.status === "posted").length ?? 0}</div></div>
-        <div className="stat"><div className="stat__label">Debit total</div><div className="stat__value">{money(totalDebit)}</div></div>
-        <div className="stat"><div className="stat__label">Credit total</div><div className="stat__value">{money(totalCredit)}</div></div>
+        <StatTile label="Chart accounts" value={accounts?.length ?? 0} />
+        <StatTile label="Posted entries" value={journalEntries?.filter((e: any) => e.status === "posted").length ?? 0} />
+        <StatTile label="Debit total" value={<Money variant="hero" trimWholeCents cents={totalDebit} />} />
+        <StatTile label="Credit total" value={<Money variant="hero" trimWholeCents cents={totalCredit} />} />
       </div>
 
       {/* Reports follow the tools and totals: the posting actions used to sit

@@ -33,6 +33,7 @@ import {
 import { isAuthenticatedAuthMode } from "../lib/authMode";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { InstallAppPrompt } from "../components/InstallAppPrompt";
+import { Tooltip } from "../components/Tooltip";
 
 const FEATURE_GROUPS = [
   {
@@ -195,16 +196,17 @@ export function LandingPage() {
             <a href="#faq" onClick={scrollTo("faq")}>FAQ</a>
           </nav>
           <div className="landing__nav-actions">
-            <a
-              href={sourceHref}
-              className="landing__nav-icon-link"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="View source on GitHub"
-              title="View source on GitHub"
-            >
-              <Github size={14} />
-            </a>
+            <Tooltip content="View source on GitHub">
+              <a
+                href={sourceHref}
+                className="landing__nav-icon-link"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="View source on GitHub"
+              >
+                <Github size={14} />
+              </a>
+            </Tooltip>
             <button
               type="button"
               className="landing__btn landing__btn--ghost landing__theme-toggle"

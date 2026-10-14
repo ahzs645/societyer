@@ -111,6 +111,8 @@
 @use "nl-filter";
 // EditableGrid: spreadsheet-style bulk entry, changeset island, phone row list.
 @use "editable-grid";
+// Client-sorted finance tables: sortable header buttons.
+@use "sortable-table";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

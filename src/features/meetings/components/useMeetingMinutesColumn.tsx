@@ -64,6 +64,7 @@ import type {
 } from "./MeetingMinutesColumn.internal";
 
 import { minutesPresentCount } from "../../../../shared/meetingAttendanceGrid";
+import { Tooltip } from "../../../components/Tooltip";
 
 export type MeetingMinutesColumnProps = {
   minutes: any;
@@ -1507,15 +1508,16 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                             {task.priority}
                           </Badge>
                         )}
-                        <button
-                          className="btn-action btn-action--icon"
-                          type="button"
-                          title="Unlink from this section"
-                          aria-label={`Unlink ${task.title}`}
-                          onClick={() => detachLinkedTask(task._id)}
-                        >
-                          <Unlink size={12} />
-                        </button>
+                        <Tooltip content="Unlink from this section">
+                          <button
+                            className="btn-action btn-action--icon"
+                            type="button"
+                            aria-label={`Unlink ${task.title}`}
+                            onClick={() => detachLinkedTask(task._id)}
+                          >
+                            <Unlink size={12} />
+                          </button>
+                        </Tooltip>
                       </div>
                       <details className="meeting-minutes-section-task__note" open={hasNote}>
                         <summary className="meeting-minutes-section-task__note-toggle">

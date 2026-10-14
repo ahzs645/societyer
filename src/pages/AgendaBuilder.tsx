@@ -15,6 +15,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { formatDate } from "../lib/format";
 import { Select } from "../components/Select";
 import { Badge } from "../components/ui";
+import { Tooltip } from "../components/Tooltip";
 
 const ITEM_TYPES = ["discussion", "motion", "report", "break", "executive_session"] as const;
 const STATUS_OPTIONS = ["Draft", "Published", "Finalized"] as const;
@@ -447,12 +448,16 @@ export function AgendaBuilderPage() {
   value: type,
   label: type.replace("_", " ")
 }))]} className="input" disabled={editingLocked} />
-                        <button className="btn" onClick={() => patchDraftItem(i, { depth: 0 })} disabled={editingLocked || item.depth === 0} title="Outdent item">
-                          <IndentDecrease size={12} />
-                        </button>
-                        <button className="btn" onClick={() => patchDraftItem(i, { depth: 1 })} disabled={editingLocked || item.depth === 1 || i === 0} title="Indent item">
-                          <IndentIncrease size={12} />
-                        </button>
+                        <Tooltip content="Outdent item">
+                          <button aria-label="Outdent item" className="btn" onClick={() => patchDraftItem(i, { depth: 0 })} disabled={editingLocked || item.depth === 0}>
+                            <IndentDecrease size={12} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip content="Indent item">
+                          <button aria-label="Indent item" className="btn" onClick={() => patchDraftItem(i, { depth: 1 })} disabled={editingLocked || item.depth === 1 || i === 0}>
+                            <IndentIncrease size={12} />
+                          </button>
+                        </Tooltip>
                         {item.timeAllottedMinutes && (
                           <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                             · {item.timeAllottedMinutes} min

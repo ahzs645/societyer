@@ -36,6 +36,7 @@ import {
 } from "../../shared/jurisdictionWorkspace";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { calendarDateKey } from "../lib/calendarDates";
+import { Tooltip } from "../components/Tooltip";
 
 const TAX_FILING_KINDS = ["T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
@@ -365,25 +366,26 @@ export function FilingsPage() {
                  >
                     <Check size={12} /> Mark filed
                   </button>
-                  <button
-                    className="btn btn--ghost btn--sm btn--icon"
-                    aria-label="Delete filing"
-                    title="Delete this filing"
-                    onClick={async () => {
-                      const ok = await confirm({
-                        title: "Delete filing?",
-                        message: `Permanently remove "${[kindLabel(r.kind), r.periodLabel || r.dueDate].filter(Boolean).join(": ")}". This can't be undone. Use it only for filings created in error — already-filed records can't be deleted.`,
-                        confirmLabel: "Delete",
-                        tone: "danger",
-                      });
-                      if (!ok) return;
-                      await removeFiling({ id: r._id });
-                      toast.success("Filing deleted");
-                    }}
-                  disabled={!canWrite}
-                 >
-                    <Trash2 size={12} />
-                  </button>
+                  <Tooltip content="Delete this filing">
+                    <button
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label="Delete filing"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: "Delete filing?",
+                          message: `Permanently remove "${[kindLabel(r.kind), r.periodLabel || r.dueDate].filter(Boolean).join(": ")}". This can't be undone. Use it only for filings created in error — already-filed records can't be deleted.`,
+                          confirmLabel: "Delete",
+                          tone: "danger",
+                        });
+                        if (!ok) return;
+                        await removeFiling({ id: r._id });
+                        toast.success("Filing deleted");
+                      }}
+                    disabled={!canWrite}
+                   >
+                      <Trash2 size={12} />
+                    </button>
+                  </Tooltip>
                 </>
               ) : null
             }

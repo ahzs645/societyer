@@ -4,6 +4,8 @@ import {
   datePrecisionOf, emptyValueFor, formatFieldValue, isPromotedDecision, thresholdFor, validateEditedValue,
   type FieldKind, type ReviewField, type ReviewGroup, type ReviewRow,
 } from "../../../shared/intake/review";
+import { ShortcutHint } from "../../components/ShortcutHint";
+import { Tooltip } from "../../components/Tooltip";
 
 export type FieldDecisionHandler = (field: ReviewField, decision: "accept" | "edit" | "reject" | "cant_represent", editedValue?: unknown) => void;
 
@@ -62,7 +64,7 @@ export function FieldList({ docClass, fields, decisions, selectedPath, onSelect,
                   {itemIndex !== "none" && ITEM_LABELS[group] && (
                     <div className="intake-item__title">
                       {ITEM_LABELS[group]} {Number(itemIndex) + 1}
-                      {!readOnly && <button type="button" className="btn btn--sm btn--ghost" onClick={() => onBulkItem(group, Number(itemIndex))} title="Bulk accept this item's verified fields"><CheckCheck size={11} /></button>}
+                      {!readOnly && <Tooltip content="Bulk accept this item's verified fields"><button aria-label="Bulk accept this item's verified fields" type="button" className="btn btn--sm btn--ghost" onClick={() => onBulkItem(group, Number(itemIndex))}><CheckCheck size={11} /></button></Tooltip>}
                     </div>
                   )}
                   {itemFields.map((field) => (
@@ -123,10 +125,18 @@ function FieldRow({ docClass, field, review, selected, onSelect, onDecide, readO
       </div>
       {!readOnly && (
         <div className="intake-field__actions" role="group" aria-label={`${field.label} decision`}>
-          <button type="button" className="btn btn--sm btn--ghost" aria-label={`Accept ${field.label}`} title="Accept (A)" aria-pressed={decision === "accept"} onClick={() => onDecide(field, "accept")} disabled={value === undefined}><Check size={13} /></button>
-          <button type="button" className="btn btn--sm btn--ghost" aria-label={`Edit ${field.label}`} title="Edit (E) — the original value and locator are kept" onClick={() => { onSelect(field); setEditing((open) => !open); }}><Pencil size={12} /></button>
-          <button type="button" className="btn btn--sm btn--ghost" aria-label={`Reject ${field.label}`} title="Reject (R)" aria-pressed={decision === "reject"} onClick={() => onDecide(field, "reject")}><X size={13} /></button>
-          <button type="button" className="btn btn--sm btn--ghost" aria-label={`${field.label}: can't represent`} title="Can't represent (C) — records a system gap" aria-pressed={decision === "cant_represent"} onClick={() => onDecide(field, "cant_represent")}><Ban size={12} /></button>
+          <Tooltip content={<>Accept <ShortcutHint keys={["A"]} tone="inverse" /></>}>
+            <button type="button" className="btn btn--sm btn--ghost" aria-label={`Accept ${field.label}`} aria-pressed={decision === "accept"} onClick={() => onDecide(field, "accept")} disabled={value === undefined}><Check size={13} /></button>
+          </Tooltip>
+          <Tooltip content={<>Edit <ShortcutHint keys={["E"]} tone="inverse" /> — the original value and locator are kept</>}>
+            <button type="button" className="btn btn--sm btn--ghost" aria-label={`Edit ${field.label}`} onClick={() => { onSelect(field); setEditing((open) => !open); }}><Pencil size={12} /></button>
+          </Tooltip>
+          <Tooltip content={<>Reject <ShortcutHint keys={["R"]} tone="inverse" /></>}>
+            <button type="button" className="btn btn--sm btn--ghost" aria-label={`Reject ${field.label}`} aria-pressed={decision === "reject"} onClick={() => onDecide(field, "reject")}><X size={13} /></button>
+          </Tooltip>
+          <Tooltip content={<>Can't represent <ShortcutHint keys={["C"]} tone="inverse" /> — records a system gap</>}>
+            <button type="button" className="btn btn--sm btn--ghost" aria-label={`${field.label}: can't represent`} aria-pressed={decision === "cant_represent"} onClick={() => onDecide(field, "cant_represent")}><Ban size={12} /></button>
+          </Tooltip>
         </div>
       )}
       <div className="intake-field__meta">

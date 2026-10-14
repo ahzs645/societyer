@@ -61,6 +61,7 @@ import { useSociety } from "../hooks/useSociety";
 import { formatDate, isPastDue } from "../lib/format";
 import { useIsMobile } from "../lib/useIsMobile";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { Tooltip } from "../components/Tooltip";
 
 type EditableTaskForm = TaskFormValue & {
   _id?: Id<"tasks">;
@@ -893,25 +894,27 @@ export function TasksPage() {
                       <Check size={12} /> Complete
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={`${canManage ? "Edit" : "View"} task ${record.title}`}
-                    title={canManage ? "Edit task" : "View task"}
-                    onClick={() => openEdit(record)}
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm btn--icon"
-                    aria-label={`Delete task ${record.title}`}
-                    title="Delete task"
-                    disabled={!canManage}
-                    onClick={() => confirmDelete(record._id, record.title)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  <Tooltip content={canManage ? "Edit task" : "View task"}>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label={`${canManage ? "Edit" : "View"} task ${record.title}`}
+                      onClick={() => openEdit(record)}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Delete task">
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm btn--icon"
+                      aria-label={`Delete task ${record.title}`}
+                      disabled={!canManage}
+                      onClick={() => confirmDelete(record._id, record.title)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </Tooltip>
                 </>
               )}
             />

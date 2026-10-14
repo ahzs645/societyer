@@ -20,6 +20,7 @@ import type { FieldMetadata, ObjectMetadata } from "../../types";
 import type { RecordTableContextValue } from "../contexts/RecordTableContext";
 import { useRecordTableState } from "../state/recordTableStore";
 import { RecordTableFloatingCellEditor } from "./RecordTableCell";
+import { Tooltip } from "../../../../components/Tooltip";
 
 type PanelTab = "home" | "timeline" | "notes";
 
@@ -270,15 +271,16 @@ function SidePanelField({
         <FieldDisplay value={value} record={record} field={field} />
       </span>
       {canEdit ? (
-        <button
-          type="button"
-          className="record-side-panel__field-edit"
-          aria-label={`Edit ${field.label}`}
-          title={`Edit ${field.label}`}
-          onClick={startEdit}
-        >
-          <Pencil size={12} />
-        </button>
+        <Tooltip content={`Edit ${field.label}`}>
+          <button
+            type="button"
+            className="record-side-panel__field-edit"
+            aria-label={`Edit ${field.label}`}
+            onClick={startEdit}
+          >
+            <Pencil size={12} />
+          </button>
+        </Tooltip>
       ) : (
         <span aria-hidden="true" />
       )}
