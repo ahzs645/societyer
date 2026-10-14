@@ -77,7 +77,9 @@ export function applyRecordFilter(
   }
 
   if (TEXT_OPERATORS.has(filter.operator)) {
-    const actual = getSearchableValue(value, fieldType).toLowerCase();
+    // A relation stores ids; text conditions match its display label.
+    const label = fieldType === FIELD_TYPES.RELATION ? record[`${column.field.name}Label`] : undefined;
+    const actual = getSearchableValue(label ?? value, fieldType).toLowerCase();
     const expected = String(target ?? "").toLowerCase();
     if (filter.operator === "contains") return actual.includes(expected);
     if (filter.operator === "notContains") return !actual.includes(expected);

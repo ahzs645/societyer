@@ -107,6 +107,8 @@
 @use "record-table-virtual";
 // Invoicing: list, builder + printable preview, invoice panel, series, dues.
 @use "invoicing";
+// RecordTable "Ask" filter (plain-language request → filter chips).
+@use "nl-filter";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

@@ -16,6 +16,7 @@ import {
   parseNumericFilterInput,
 } from "../utils/filterValues";
 import { childFilterGroups, filterTreeSignature, rootFilterGroup } from "../utils/filterTree";
+import { RecordTableAskFilter } from "./RecordTableAskFilter";
 
 type DraftCondition = {
   id: string;
@@ -304,6 +305,7 @@ function FilterEditor({ focusIndex, onClose }: { focusIndex?: number; onClose: (
 
   return (
     <div ref={popoverRef} className="record-table__filter-popover" role="group" aria-label="Filters" onKeyDown={onKeyDown}>
+      <RecordTableAskFilter onApplied={onClose} onEditAsFilters={(tree) => setDraft(draftFromStore(tree.filters, tree.filterGroups, handle.get().columns))} />
       <div className="record-table__popover-head">
         <strong>Filters</strong>
         <LogicalOperatorSelect
