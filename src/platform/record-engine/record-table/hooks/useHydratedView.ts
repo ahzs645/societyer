@@ -5,6 +5,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { hydrateObjectMetadata, hydrateHydratedView } from "../../types";
 import type { HydratedView, ObjectMetadata } from "../../types";
 import { purgeLegacyMetadataCache } from "./legacyMetadataCache";
+import { adaptLegacyDataTableView } from "../utils/legacyDataTableView";
 import { useCurrentUserId } from "@/hooks/useCurrentUser";
 import { useSociety } from "@/hooks/useSociety";
 import { applyEntityObjectLabels, applyEntityViewLabels } from "@/lib/entityRecordLabels";
@@ -77,8 +78,12 @@ export function useObjectRecordTableData({
     [setup, organization],
   );
   const hydratedView = useMemo<HydratedView | null>(
-    () => applyEntityViewLabels(nameSingular, setup?.activeView ? hydrateHydratedView(setup.activeView) : null, organization),
-    [setup, nameSingular, organization],
+    () => adaptLegacyDataTableView(
+      applyEntityViewLabels(nameSingular, setup?.activeView ? hydrateHydratedView(setup.activeView) : null, organization),
+      objectMetadata?.fields,
+      setup?.activeView?.view?.columnStateJson,
+    ),
+    [setup, nameSingular, organization, objectMetadata],
   );
   const views = useMemo(() => setup?.views ?? [], [setup]);
 

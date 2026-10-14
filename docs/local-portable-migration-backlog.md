@@ -370,7 +370,7 @@ Every unique function found in the 978 call expressions is listed below. `†` m
 | transparency | `listPublications`, `publicCenter`, `removePublication`, `upsertPublication` |
 | treasury | `budgetVariance`, `profitAndLoss`, `restrictedFunds` |
 | users | `get`, `list`, `remove`†, `resolveAuthSession`, `setRole`, `upsert`† |
-| views | `addField`, `create`, `createSharedDataTableView`, `deleteSharedDataTableView`, `listSharedForDataTable`, `reorderFields`, `seedGovernanceDataTableViews`, `update`, `updateField` |
+| views | `addField`, `create`, `reorderFields`, `seedGovernanceDataTableViews`, `update`, `updateField` |
 | volunteers | `applications`, `convertApplication`, `list`, `removeScreening`, `removeVolunteer`, `reviewApplication`, `screenings`, `submitApplication`, `summary`, `upsertScreening`, `upsertVolunteer` |
 | waveCache | `healthCheck`†, `resource`, `resourceByExternalId`, `resources`, `structures`, `summary`, `sync`† |
 | workflowPackages | `createBoardPack`, `createFollowUpTask`, `list`, `markFiled`, `remove`, `upsert` |

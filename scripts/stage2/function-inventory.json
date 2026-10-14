@@ -21354,56 +21354,6 @@
     ]
   },
   {
-    "key": "convex:views:createSharedDataTableView",
-    "surface": "convex",
-    "name": "views:createSharedDataTableView",
-    "kind": "mutation",
-    "access": "authenticated",
-    "source": "convex/views.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
-      },
-      {
-        "path": "objectMetadataId",
-        "table": "objectMetadata",
-        "array": false,
-        "optional": true
-      },
-      {
-        "path": "createdByUserId",
-        "table": "users",
-        "array": false,
-        "optional": true
-      }
-    ]
-  },
-  {
-    "key": "convex:views:deleteSharedDataTableView",
-    "surface": "convex",
-    "name": "views:deleteSharedDataTableView",
-    "kind": "mutation",
-    "access": "authenticated",
-    "source": "convex/views.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
-      },
-      {
-        "path": "id",
-        "table": "views",
-        "array": false,
-        "optional": false
-      }
-    ]
-  },
-  {
     "key": "convex:views:get",
     "surface": "convex",
     "name": "views:get",
@@ -21464,28 +21414,6 @@
         "table": "objectMetadata",
         "array": false,
         "optional": false
-      }
-    ]
-  },
-  {
-    "key": "convex:views:listSharedForDataTable",
-    "surface": "convex",
-    "name": "views:listSharedForDataTable",
-    "kind": "query",
-    "access": "authenticated",
-    "source": "convex/views.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
-      },
-      {
-        "path": "objectMetadataId",
-        "table": "objectMetadata",
-        "array": false,
-        "optional": true
       }
     ]
   },
@@ -42012,56 +41940,6 @@
     ]
   },
   {
-    "key": "portable:views:createSharedDataTableView",
-    "surface": "portable",
-    "name": "views:createSharedDataTableView",
-    "kind": "mutation",
-    "access": "authenticated",
-    "source": "shared/functions/registry.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
-      },
-      {
-        "path": "objectMetadataId",
-        "table": "objectMetadata",
-        "array": false,
-        "optional": true
-      },
-      {
-        "path": "createdByUserId",
-        "table": "users",
-        "array": false,
-        "optional": true
-      }
-    ]
-  },
-  {
-    "key": "portable:views:deleteSharedDataTableView",
-    "surface": "portable",
-    "name": "views:deleteSharedDataTableView",
-    "kind": "mutation",
-    "access": "authenticated",
-    "source": "shared/functions/registry.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
-      },
-      {
-        "path": "id",
-        "table": "views",
-        "array": false,
-        "optional": false
-      }
-    ]
-  },
-  {
     "key": "portable:views:get",
     "surface": "portable",
     "name": "views:get",
@@ -42122,28 +42000,6 @@
         "table": "objectMetadata",
         "array": false,
         "optional": false
-      }
-    ]
-  },
-  {
-    "key": "portable:views:listSharedForDataTable",
-    "surface": "portable",
-    "name": "views:listSharedForDataTable",
-    "kind": "query",
-    "access": "authenticated",
-    "source": "shared/functions/registry.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
-      },
-      {
-        "path": "objectMetadataId",
-        "table": "objectMetadata",
-        "array": false,
-        "optional": true
       }
     ]
   },

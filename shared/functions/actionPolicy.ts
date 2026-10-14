@@ -230,9 +230,7 @@ export async function requireFunctionAction(ctx: PortableQueryCtx, name: string,
  * persisted object, never a client-supplied resource or route label. */
 async function scopedMetadataPermission(ctx: PortableQueryCtx, name: string, args: Record<string, any>, societyId: string): Promise<Permission | null> {
   let object: any;
-  if (name === "views:listSharedForDataTable" && args.objectMetadataId) {
-    object = await ctx.db.get(args.objectMetadataId, "objectMetadata");
-  } else if (["objectMetadata:getByNameSingular", "objectMetadata:getFullTableSetup"].includes(name) || (name === "views:listSharedForDataTable" && typeof args.nameSingular === "string")) {
+  if (["objectMetadata:getByNameSingular", "objectMetadata:getFullTableSetup"].includes(name)) {
     const rows = await ctx.db.query("objectMetadata").withIndex("by_society_name", q => q.eq("societyId", societyId).eq("nameSingular", args.nameSingular)).collect();
     object = rows.sort((a, b) => String(a._id).localeCompare(String(b._id)))[0];
   } else if (name === "objectMetadata:getByNamePlural") {
