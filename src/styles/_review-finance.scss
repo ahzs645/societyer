@@ -6,6 +6,22 @@
 // Reconciliation, Grants, Grant sources).
 // ---------------------------------------------------------------------------
 
+// Membership & billing subscribers: the email sits under the name.
+.membership-subscribers-table__email {
+  margin-top: 2px;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  overflow-wrap: anywhere;
+}
+// Bill dues + Cancel stay on one line, so a narrow table scrolls sideways
+// instead of stacking the buttons into extra-tall rows.
+.membership-subscribers-table__actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: token('s-1');
+  white-space: nowrap;
+}
+
 // FY detail inspector: sections sit flat inside the inspector panel rather
 // than as bordered cards nested in it.
 .finance-inspector__section {
@@ -127,6 +143,30 @@
     min-width: 0;
   }
 }
+@media (max-width: 560px) {
+  // Phone cards run full-bleed, but three tiles in one row each bled into
+  // their neighbours (overlapping hairlines). The row is one band instead:
+  // the outer tiles reach the screen edges, hairline dividers between them.
+  .app-shell.is-mobile .page .treasurer-overview-grid {
+    column-gap: 0;
+    row-gap: 0;
+  }
+  .app-shell.is-mobile .page .treasurer-overview-grid > .card.treasurer-summary-card:not(.card--boxed) {
+    margin-inline: 0;
+    box-shadow: 0 1px 0 token('border-alpha');
+    & + .treasurer-summary-card {
+      box-shadow: inset 1px 0 0 token('border-alpha'), 0 1px 0 token('border-alpha');
+    }
+    &:nth-child(2) {
+      margin-left: calc(-1 * var(--page-gutter));
+      padding-left: var(--page-gutter);
+    }
+    &:last-child {
+      margin-right: calc(-1 * var(--page-gutter));
+      padding-right: var(--page-gutter);
+    }
+  }
+}
 
 // ---- Financials --------------------------------------------------------------
 .financials-tabs {
@@ -204,9 +244,24 @@
   align-items: start;
   padding: token('s-3');
 }
+.year-end-checklist {
+  gap: token('s-2');
+}
 .year-end-check__icon {
   margin-top: 2px;
   line-height: 0;
+  &.is-ok { color: token('success'); }
+  &.is-upcoming { color: token('text-tertiary'); }
+  &.is-attention { color: token('danger'); }
+}
+@media (max-width: 560px) {
+  // Full-bleed phone sections: one hairline between items, not two with a gap.
+  .year-end-checklist {
+    gap: 0;
+  }
+  .app-shell.is-mobile .page .year-end-checklist > .card.year-end-check:not(.card--boxed) + .year-end-check {
+    box-shadow: 0 1px 0 token('border-alpha');
+  }
 }
 .year-end-check__body {
   gap: 2px;

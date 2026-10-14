@@ -12,6 +12,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../lib/format";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -124,6 +125,7 @@ export function MembershipPage() {
   const canInvoice = loaded && can("financials:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
   const [planDraft, setPlanDraft] = useState<any>(null);
   const [feeDraft, setFeeDraft] = useState<any>(null);
   const [signup, setSignup] = useState<{
@@ -389,7 +391,7 @@ export function MembershipPage() {
           <h2 className="card__title">Subscribers</h2>
           <span className="card__subtitle">{(subs ?? []).length} total</span>
         </div>
-        <table className="table">
+        <table className="table table--comfortable membership-subscribers-table">
           <thead>
             <tr>
               <th>Member</th>
@@ -397,7 +399,7 @@ export function MembershipPage() {
               <th>Status</th>
               <th>Started</th>
               <th>Renews</th>
-              <th>Last payment</th>
+              <th className="num">Last payment</th>
               <th />
             </tr>
           </thead>
@@ -408,7 +410,7 @@ export function MembershipPage() {
                 <tr key={s._id}>
                   <td>
                     <strong>{s.fullName}</strong>
-                    <div className="muted" style={{ fontSize: 11 }}>{s.email}</div>
+                    <div className="membership-subscribers-table__email">{s.email}</div>
                   </td>
                   <td>{plan?.name ?? "—"}</td>
                   <td>
@@ -429,9 +431,9 @@ export function MembershipPage() {
                   </td>
                   <td>{formatDate(s.startedAtISO)}</td>
                   <td>{s.currentPeriodEndISO ? formatDate(s.currentPeriodEndISO) : "—"}</td>
-                  <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.lastPaymentCents != null ? money(s.lastPaymentCents) : "—"}</td>
+                  <td className="num">{s.lastPaymentCents != null ? <Money cents={s.lastPaymentCents} trimWholeCents /> : "—"}</td>
                   <td>
-                    <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
+                    <div className="row membership-subscribers-table__actions">
                     {s.memberId && s.status !== "canceled" && (
                       <button
                         className="btn btn--ghost btn--sm"
@@ -454,6 +456,14 @@ export function MembershipPage() {
                         className="btn btn--ghost btn--sm"
                         disabled={!canManage}
                         onClick={async () => {
+                          const approved = await confirm({
+                            title: "Cancel subscription?",
+                            message: `${s.fullName}'s ${plan?.name ?? "membership"} subscription will be marked canceled. This can't be undone here; they would need to sign up again.`,
+                            confirmLabel: "Cancel subscription",
+                            cancelLabel: "Keep subscription",
+                            tone: "danger",
+                          });
+                          if (!approved) return;
                           try { await cancelSub({ id: s._id }); toast.success("Subscription record canceled"); }
                           catch (error) { toast.error("Could not cancel subscription", error instanceof Error ? error.message : "Please try again."); }
                         }}

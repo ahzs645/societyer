@@ -35,6 +35,13 @@ import { todayDateOnly } from "../../../../shared/dateOnly";
 
 type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | "backfill" | null;
 
+const EXPORT_KINDS = [
+  ["chart_of_accounts", "Chart of accounts"],
+  ["trial_balance", "Trial balance"],
+  ["journal_entries", "Journal entries"],
+  ["general_ledger", "General ledger"],
+] as const;
+
 const today = () => todayDateOnly();
 const currentYear = () => new Date().getFullYear().toString();
 
@@ -511,7 +518,7 @@ export function AccountingWorkbenchPage() {
                   <div className="muted">{formatDate(period.startDate)} to {formatDate(period.endDate)}</div>
                 </div>
                 <div className="accounting-row__actions">
-                  <Badge tone={period.status === "open" ? "success" : "warn"}>{period.status}</Badge>
+                  <Badge tone={period.status === "open" ? "success" : "warn"}>{period.status === "open" ? "Open" : period.status === "closed" ? "Closed" : period.status}</Badge>
                   {period.status === "open" ? (
                     <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id }); }, "Period closed")} disabled={!canWrite}><Lock size={12} /> Close</button>
                   ) : (
@@ -530,13 +537,13 @@ export function AccountingWorkbenchPage() {
             <span className="card__subtitle">CSV downloads for board and auditor packages.</span>
           </div>
           <div className="accounting-export-grid">
-            {["chart_of_accounts", "trial_balance", "journal_entries", "general_ledger"].map((kind) => (
+            {EXPORT_KINDS.map(([kind, label]) => (
               <button key={kind} className="btn-action" onClick={() => doExport(kind)} disabled={!canExport || (!exportByKind[kind])}>
-                <Download size={12} /> {kind.replace(/_/g, " ")}
+                <Download size={12} /> {label}
               </button>
             ))}
             <button className="btn-action btn-action--primary" onClick={doPackageExport} disabled={!canExport || (!boardAuditorPackage?.files)}>
-              <Download size={12} /> board/auditor ZIP
+              <Download size={12} /> Board and auditor ZIP
             </button>
           </div>
           <div className="muted accounting-note">Exports are generated from the internal journal shape and include attachment references.</div>

@@ -39,6 +39,12 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+// `.table thead th` sets text-align: left at higher specificity, which left
+// numeric column headers sitting over the far edge of right-aligned amounts.
+.table thead th.num,
+.table thead th.cell-num {
+  text-align: right;
+}
 
 // Digits line up in every table, not just the opt-in spots.
 table,

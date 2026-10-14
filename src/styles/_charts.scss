@@ -73,7 +73,15 @@
 }
 .chart-table {
   margin: 0;
-  th[scope="row"] {
+  // Row headers are body cells: same height, padding and hairlines as the
+  // `td`s beside them (they had none, so the rules stopped short of them).
+  tbody th[scope="row"] {
+    height: 32px;
+    padding: 0 8px;
+    border-right: 1px solid token('border-color-light');
+    border-bottom: 1px solid token('border-color-light');
+    background: token('bg-panel');
+    color: token('text-primary');
     font-weight: 500;
     text-align: left;
     white-space: nowrap;

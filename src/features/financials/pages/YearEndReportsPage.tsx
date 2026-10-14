@@ -338,16 +338,16 @@ export function YearEndReportsPage() {
                   bodyHtml={renderReadinessHtml(readiness, society, fiscalYear)}
                 />
               </div>
-              <div className="col" style={{ gap: 8 }}>
+              <div className="col year-end-checklist">
                 {readiness.items.map((item: any) => (
                   <div key={item.key} className="card year-end-check">
-                    <span className="year-end-check__icon">
+                    <span className={`year-end-check__icon is-${item.ok ? "ok" : item.status === "upcoming" ? "upcoming" : "attention"}`}>
                       {item.ok ? (
-                        <CheckCircle2 size={16} color="#0a8f4e" role="img" aria-label="Complete" />
+                        <CheckCircle2 size={16} role="img" aria-label="Complete" />
                       ) : item.status === "upcoming" ? (
-                        <Circle size={16} color="#888" role="img" aria-label="Upcoming" />
+                        <Circle size={16} role="img" aria-label="Upcoming" />
                       ) : (
-                        <AlertTriangle size={16} color="#c9264a" role="img" aria-label="Needs attention" />
+                        <AlertTriangle size={16} role="img" aria-label="Needs attention" />
                       )}
                     </span>
                     <div className="col year-end-check__body">
