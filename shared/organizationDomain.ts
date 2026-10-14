@@ -1,3 +1,4 @@
+import { ANOTHER_ACT_VALUE, entityKindForType, incorporationActForValue, incorporationJurisdictionForCode } from "./incorporationActs";
 export type OrganizationKind = "society" | "corporation" | "organization";
 
 export type LegalEntityLike = {
@@ -193,6 +194,16 @@ export function validateWorkspaceLegalIdentity(organization: LegalEntityLike & {
   };
   if (code !== "unknown" && actJurisdictions[act] && code !== actJurisdictions[act]) {
     throw new Error("The governing act must match the home legal jurisdiction.");
+  }
+  // Every other catalogued Act belongs to one place and incorporates listed entity kinds.
+  const catalogued = act && act !== ANOTHER_ACT_VALUE ? incorporationActForValue(act) : undefined;
+  if (catalogued && code !== "unknown") {
+    const place = incorporationJurisdictionForCode(code);
+    if (place && place.id !== catalogued.jurisdiction) throw new Error("The governing act must match the home legal jurisdiction.");
+  }
+  const kind = entityKindForType(entityType);
+  if (catalogued && kind && !catalogued.entityKinds.includes(kind)) {
+    throw new Error("Entity type and governing act must describe the same legal setup.");
   }
   if (entityType === "society" && ["CA-FED-CBCA", "CA-ON-OBCA"].includes(code)) {
     throw new Error("This business corporation jurisdiction does not use the BC society setup.");

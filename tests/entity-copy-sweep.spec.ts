@@ -5,7 +5,7 @@
  *   bc-corp   BC business corporation (existing)
  *   cbca-corp Federal CBCA corporation (preparing a new incorporation)
  *   obca-corp Ontario OBCA corporation (existing)
- *   custom    "Another organization or Act": a Quebec business corporation
+ *   custom    a records-only Act: a Quebec Business Corporations Act corporation
  *   bc-society BC society (control)
  * then visits every in-app route in each, collects the rendered text (main
  * content, app chrome, the fully expanded sidebar, page info popovers and
@@ -31,6 +31,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { INTERFACE_ROUTES } from "./helpers/interfaceRoutes";
+import { chooseGuidedSetupAct, type GuidedSetupAct } from "./helpers/guidedSetup";
 
 test.skip(!process.env.SOCIETYER_ENTITY_SWEEP, "Runs only under playwright.entity-sweep.config.ts");
 
@@ -43,27 +44,19 @@ type Workspace = {
   key: WorkspaceKey;
   name: string;
   stage: "existing" | "preparing";
-  act: RegExp;
-  custom?: { jurisdiction: string; entityType: string; act: string };
+  act: GuidedSetupAct;
   society: boolean;
   /** BC workspaces may legitimately mention BC PIPA. */
   bc: boolean;
 };
 
 export const WORKSPACES: Workspace[] = [
-  { key: "bc-corp", name: "Sweep Cedar Holdings Ltd.", stage: "existing", act: /^BC business corporation \(provincial\)/, society: false, bc: true },
-  { key: "cbca-corp", name: "Sweep Maple Federal Inc.", stage: "preparing", act: /^Federal business corporation \(CBCA\)/, society: false, bc: false },
-  { key: "obca-corp", name: "Sweep Lakeshore Ontario Inc.", stage: "existing", act: /^Ontario business corporation \(OBCA\)/, society: false, bc: false },
-  {
-    key: "custom",
-    name: "Sweep Fleuve Quebec Inc.",
-    stage: "existing",
-    act: /^Another organization or Act/,
-    custom: { jurisdiction: "Quebec", entityType: "Business Corporation", act: "Business Corporations Act (Quebec)" },
-    society: false,
-    bc: false,
-  },
-  { key: "bc-society", name: "Sweep Harbour Community Society", stage: "existing", act: /^BC society \(nonprofit\)/, society: true, bc: true },
+  { key: "bc-corp", name: "Sweep Cedar Holdings Ltd.", stage: "existing", act: { jurisdiction: "British Columbia", act: "Business Corporations Act" }, society: false, bc: true },
+  { key: "cbca-corp", name: "Sweep Maple Federal Inc.", stage: "preparing", act: { jurisdiction: "federal", act: "Canada Business Corporations Act" }, society: false, bc: false },
+  { key: "obca-corp", name: "Sweep Lakeshore Ontario Inc.", stage: "existing", act: { jurisdiction: "Ontario", act: "Business Corporations Act (OBCA)" }, society: false, bc: false },
+  // Records only: no reviewed legal profile for this Act.
+  { key: "custom", name: "Sweep Fleuve Quebec Inc.", stage: "existing", act: { jurisdiction: "Quebec", act: "Business Corporations Act" }, society: false, bc: false },
+  { key: "bc-society", name: "Sweep Harbour Community Society", stage: "existing", act: { jurisdiction: "British Columbia", act: "Societies Act" }, society: true, bc: true },
 ];
 
 const OUT_DIR = path.resolve(process.env.ENTITY_SWEEP_DATA ?? "tmp/entity-sweep");
@@ -224,24 +217,12 @@ const leakKey = (finding: Pick<Finding, "workspace" | "route" | "pattern">) => `
 // Browser helpers
 // ---------------------------------------------------------------------------
 
-async function pickOption(page: Page, label: string, option: string | RegExp) {
-  await page.getByLabel(label, { exact: true }).click();
-  await page.getByRole("option", { name: option, exact: typeof option === "string" ? true : undefined }).first().click();
-}
-
 async function guidedSetup(page: Page, workspace: Workspace) {
   await page.goto("/setup");
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await page.waitForURL(/\/app\/society\/new/);
   const existing = workspace.stage === "existing";
-  await page.getByRole("button", { name: existing ? "Yes, set up an existing organization" : "No, prepare a new incorporation", exact: true }).click();
-  await pickOption(page, existing ? "Act the organization was formed under" : "Act you plan to incorporate under", workspace.act);
-  if (workspace.custom) {
-    await pickOption(page, "Legal jurisdiction", workspace.custom.jurisdiction);
-    await pickOption(page, "Entity type", workspace.custom.entityType);
-    await pickOption(page, "Act formed under", workspace.custom.act);
-  }
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await chooseGuidedSetupAct(page, existing, workspace.act);
   await page.getByRole("textbox", { name: existing ? "Recorded legal name" : "Proposed name / working name", exact: true }).fill(workspace.name);
   if (existing) {
     await page.getByRole("textbox", { name: "Incorporation #", exact: true }).fill("SWEEP-0001");

@@ -162,8 +162,12 @@ try {
   assert.equal((await capture(local, { video: true, audio: true })).allowed, false);
   await local.evaluate(() => { location.hash = "#/app/society/new"; });
   await local.getByRole("button", { name: "No, prepare a new incorporation", exact: true }).click();
-  await local.getByLabel("Act you plan to incorporate under", { exact: true }).click();
-  await local.getByRole("option", { name: /^BC society \(nonprofit\)/ }).click();
+  await local.getByRole("button", { name: "Continue", exact: true }).click();
+  await local.getByRole("button", { name: /^Provincially or territorially/ }).click();
+  await local.getByLabel("Province or territory", { exact: true }).click();
+  await local.getByRole("option", { name: /^British Columbia/ }).first().click();
+  await local.getByRole("button", { name: "Continue", exact: true }).click();
+  await local.getByRole("radio", { name: /^Societies Act/ }).check();
   await local.getByRole("button", { name: "Continue", exact: true }).click();
   await local.getByRole("textbox", { name: "Proposed name / working name", exact: true }).fill("Disposable camera qualification society");
   await local.getByRole("button", { name: "Continue", exact: true }).click();

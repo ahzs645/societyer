@@ -1,5 +1,6 @@
 import { getPathway } from "./pathways/registry";
 import { isCorporation, type LegalEntityLike } from "./organizationDomain";
+import { ANOTHER_ACT_VALUE, ENTITY_KIND_ENTITY_TYPES, OTHER_ACT_NAME_MAX, RECORDS_ONLY_PATHWAY_KEY, incorporationActById, incorporationActTitle } from "./incorporationActs";
 
 /** Setup answers describe plans or supplied records; they never establish legal evidence or access. */
 export type OrganizationOnboardingAnswers = {
@@ -12,6 +13,10 @@ export type OrganizationOnboardingAnswers = {
   governanceDocuments: "available" | "need_to_prepare" | "needs_review";
   peopleReadiness: "ready_to_add" | "add_later";
   operatingRegions: string;
+  /** Catalogue id of the chosen Act (shared/incorporationActs.ts). Absent on older answers. */
+  incorporationActId?: string;
+  /** The Act's name when "Another Act" was chosen. */
+  otherActName?: string;
 };
 
 export function readOnboardingAnswersJson(value: unknown, organization?: LegalEntityLike & Record<string, any>): OrganizationOnboardingAnswers | undefined {
@@ -19,7 +24,7 @@ export function readOnboardingAnswersJson(value: unknown, organization?: LegalEn
   if (typeof value !== "string" || value.length > 6000) throw new Error("Initial setup answers must be bounded JSON.");
   let answers: any;
   try { answers = JSON.parse(value); } catch { throw new Error("Initial setup answers could not be read."); }
-  const fields = ["version", "previousUse", "organizationStage", "pathwayKey", "governanceStructure", "classDetails", "governanceDocuments", "peopleReadiness", "operatingRegions"];
+  const fields = ["version", "previousUse", "organizationStage", "pathwayKey", "governanceStructure", "classDetails", "governanceDocuments", "peopleReadiness", "operatingRegions", "incorporationActId", "otherActName"];
   if (!answers || Array.isArray(answers) || typeof answers !== "object" || Object.keys(answers).some((key) => !fields.includes(key))) throw new Error("Unknown initial setup answers.");
   const choices: Record<string, string[]> = {
     previousUse: ["new", "returning"], organizationStage: ["preparing", "existing"],
@@ -30,9 +35,19 @@ export function readOnboardingAnswersJson(value: unknown, organization?: LegalEn
   for (const [key, options] of Object.entries(choices)) if (!options.includes(answers[key])) throw new Error(`Invalid setup answer: ${key}.`);
   for (const key of ["classDetails", "operatingRegions"]) if (typeof answers[key] !== "string" || answers[key].length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(answers[key])) throw new Error(`Invalid setup answer: ${key}.`);
   const pathway = typeof answers.pathwayKey === "string" ? getPathway(answers.pathwayKey) : undefined;
-  if (!pathway && !(answers.pathwayKey === "custom_existing" && answers.organizationStage === "existing")) throw new Error("Choose a registered setup pathway or an existing manual organization.");
+  const recordsOnly = answers.pathwayKey === RECORDS_ONLY_PATHWAY_KEY;
+  if (!pathway && !recordsOnly && !(answers.pathwayKey === "custom_existing" && answers.organizationStage === "existing")) throw new Error("Choose a registered setup pathway, a listed Act, or an existing manual organization.");
+  // The chosen Act, when recorded, must be the catalogue entry the pathway key stands for.
+  const act = answers.incorporationActId === undefined ? undefined : incorporationActById(typeof answers.incorporationActId === "string" ? answers.incorporationActId : "");
+  if (answers.incorporationActId !== undefined && !act) throw new Error("Unknown governing Act in the setup answers.");
+  if (recordsOnly && !act) throw new Error("Records-only setup must name the governing Act.");
+  if (act && (act.support === "full" ? act.pathwayKey !== answers.pathwayKey : !recordsOnly)) throw new Error("Initial setup pathway and governing Act disagree.");
+  const another = act?.actFormedUnder === ANOTHER_ACT_VALUE;
+  if (answers.otherActName !== undefined && (!another || typeof answers.otherActName !== "string" || answers.otherActName.length > OTHER_ACT_NAME_MAX || /[\u0000-\u001f]/.test(answers.otherActName))) throw new Error("Invalid setup answer: otherActName.");
+  if (another && !answers.otherActName?.trim()) throw new Error("Enter the name of the governing Act.");
   if (organization) {
     if (pathway && (organization.jurisdictionCode !== pathway.setup.jurisdictionCode || organization.entityType !== pathway.setup.entityType || organization.actFormedUnder !== pathway.setup.actFormedUnder)) throw new Error("Initial setup pathway and organization legal identity disagree.");
+    if (act && (organization.jurisdictionCode !== act.jurisdictionCode || organization.actFormedUnder !== act.actFormedUnder || !act.entityKinds.some((kind) => ENTITY_KIND_ENTITY_TYPES[kind] === organization.entityType))) throw new Error("Initial setup Act and organization legal identity disagree.");
     if (answers.organizationStage === "preparing" && (organization.formationStatus !== "preparing" || organization.organizationStatus !== "pre_incorporation")) throw new Error("Preparing incorporation must remain a pre-incorporation workspace.");
     if (answers.organizationStage === "existing" && organization.formationStatus !== "unverified_existing") throw new Error("Initial existing organization setup requires later certificate verification.");
   }
@@ -42,7 +57,9 @@ export function readOnboardingAnswersJson(value: unknown, organization?: LegalEn
 export function onboardingGovernanceSummary(answers: OrganizationOnboardingAnswers, organization: LegalEntityLike): string {
   const noun = isCorporation(organization) ? "share" : "membership";
   const structure = answers.governanceStructure === "needs_review" ? "classification needs review" : answers.governanceStructure === "multiple_classes" ? `multiple ${noun} classes` : `one ${noun} class`;
-  return `Initial setup: ${structure}${answers.classDetails.trim() ? `; supplied class notes: ${answers.classDetails.trim()}` : ""}. Documents: ${answers.governanceDocuments.replaceAll("_", " ")}. People: ${answers.peopleReadiness.replaceAll("_", " ")}.${answers.operatingRegions.trim() ? ` Operating regions: ${answers.operatingRegions.trim()}.` : ""} Review these answers against the governing documents before creating actual register entries or granting access.`;
+  const act = incorporationActById(answers.incorporationActId);
+  const actNote = act?.actFormedUnder === ANOTHER_ACT_VALUE ? ` Governing Act named at setup: ${incorporationActTitle(act, answers.otherActName)}.` : "";
+  return `Initial setup: ${structure}${answers.classDetails.trim() ? `; supplied class notes: ${answers.classDetails.trim()}` : ""}.${actNote} Documents: ${answers.governanceDocuments.replaceAll("_", " ")}. People: ${answers.peopleReadiness.replaceAll("_", " ")}.${answers.operatingRegions.trim() ? ` Operating regions: ${answers.operatingRegions.trim()}.` : ""} Review these answers against the governing documents before creating actual register entries or granting access.`;
 }
 
 export function validateInitialOrganizationProfile(form: Record<string, any>): void {
