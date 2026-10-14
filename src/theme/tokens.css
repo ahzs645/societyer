@@ -338,6 +338,18 @@
   --dv-selection: rgba(42, 120, 214, 0.1);
   --dv-selection-edge: var(--dv-cat-1);
   /* ---------------- /Data-viz ---------------- */
+
+  /* ---------------- Invoice paper — light ----------------
+     A document preview reads like the page it prints on, so the
+     paper stays light in both themes (slightly dimmed in dark). */
+  --invoice-paper: #ffffff;
+  --invoice-paper-edge: var(--slate-6);
+  --invoice-ink: #1c2024;
+  --invoice-ink-muted: #60646c;
+  --invoice-rule: #e0e1e6;
+  --invoice-band: #f4f5f7;
+  --invoice-stamp-paid: #1b7f4e;
+  --invoice-stamp-void: #c03a2b;
 }
 
 .dark {
@@ -487,4 +499,14 @@
   --dv-track: #0d366b;
   --dv-selection: rgba(57, 135, 229, 0.18);
   /* ---------------- /Data-viz ---------------- */
+
+  /* Invoice paper — dark: still paper, dimmed to sit calmly on a dark canvas. */
+  --invoice-paper: #ecedf0;
+  --invoice-paper-edge: var(--slate-7);
+  --invoice-ink: #1c2024;
+  --invoice-ink-muted: #565a62;
+  --invoice-rule: #d3d5db;
+  --invoice-band: #e2e3e7;
+  --invoice-stamp-paid: #1b7f4e;
+  --invoice-stamp-void: #b33526;
 }

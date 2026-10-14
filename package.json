@@ -162,6 +162,7 @@
     "backup:runtime:k8s": "./scripts/backup-runtime-data-from-k8s.sh",
     "test:bank-csv": "tsx scripts/check-bank-csv.ts",
     "test:transaction-rules": "tsx scripts/check-transaction-rules.ts && tsx scripts/check-finance-workflows.ts",
+    "test:invoices": "tsx scripts/check-invoices.ts",
     "test:motion-governance": "tsx scripts/check-motion-governance.ts",
     "test:motion-tags": "tsx scripts/check-motion-tags.ts",
     "test:motions-resolve-parity": "tsx scripts/check-motions-resolve-parity.ts",

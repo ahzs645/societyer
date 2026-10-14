@@ -57,6 +57,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/treasurer": "financials:read",
   "/app/approvals": "financials:read",
   "/app/transaction-rules": "financials:read",
+  "/app/invoices": "financials:read",
   "/app/reconciliation": "financials:read",
   "/app/receipts": "financials:read",
   "/app/assets": "financials:read",

@@ -36,6 +36,7 @@ import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoDat
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../../shared/demoData/members";
 import { addDays, demoAsOfDate } from "../../shared/demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel, type DemoOwnerRole } from "../../shared/demoData/work";
+import { mergeInvoiceDemo } from "./staticInvoiceFixtures";
 
 const SOCIETY_ID = STATIC_DEMO_SOCIETY_ID;
 const USER_OWNER_ID = STATIC_DEMO_USER_ID;
@@ -4249,6 +4250,8 @@ const tables: Record<string, any[]> = {
   volunteerScreenings: [],
   writtenResolutions,
 };
+// Invoicing demo: catalog, customers, invoices in every state, a recurring series and linked bank lines.
+mergeInvoiceDemo(tables, { societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, cashAccountId: CASH_ACCOUNT_ID, ownerName: "Mina Patel", treasurerName: "Jordan Lee" });
 
 function director(id: string, firstName: string, lastName: string, position: string, isBCResident: boolean, consentOnFile: boolean, termStart: string) {
   return {

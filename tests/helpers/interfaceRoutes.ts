@@ -620,6 +620,12 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/invoices",
+    "path": "/demo/app/invoices",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
     "pattern": "/app/assets",
     "path": "/demo/app/assets",
     "kind": "app",

@@ -11816,6 +11816,414 @@
     ]
   },
   {
+    "key": "convex:invoices:billMemberDues",
+    "surface": "convex",
+    "name": "invoices:billMemberDues",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:duplicate",
+    "surface": "convex",
+    "name": "invoices:duplicate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:generateDuesInvoices",
+    "surface": "convex",
+    "name": "invoices:generateDuesInvoices",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "subscriptionIds",
+        "table": "memberSubscriptions",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:issueFromSeries",
+    "surface": "convex",
+    "name": "invoices:issueFromSeries",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceSeries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:markSent",
+    "surface": "convex",
+    "name": "invoices:markSent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:recordPayment",
+    "surface": "convex",
+    "name": "invoices:recordPayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:remove",
+    "surface": "convex",
+    "name": "invoices:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:removeCatalogItem",
+    "surface": "convex",
+    "name": "invoices:removeCatalogItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceCatalogItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:removePayment",
+    "surface": "convex",
+    "name": "invoices:removePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:restoreVoided",
+    "surface": "convex",
+    "name": "invoices:restoreVoided",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:revertToUnpaid",
+    "surface": "convex",
+    "name": "invoices:revertToUnpaid",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:saveSettings",
+    "surface": "convex",
+    "name": "invoices:saveSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:sendReminders",
+    "surface": "convex",
+    "name": "invoices:sendReminders",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:setCatalogItemActive",
+    "surface": "convex",
+    "name": "invoices:setCatalogItemActive",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceCatalogItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:setSeriesStatus",
+    "surface": "convex",
+    "name": "invoices:setSeriesStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceSeries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:undoDuesBatch",
+    "surface": "convex",
+    "name": "invoices:undoDuesBatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:upsert",
+    "surface": "convex",
+    "name": "invoices:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:upsertCatalogItem",
+    "surface": "convex",
+    "name": "invoices:upsertCatalogItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceCatalogItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountingAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:upsertSeries",
+    "surface": "convex",
+    "name": "invoices:upsertSeries",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceSeries",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "fromInvoiceId",
+        "table": "invoices",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:voidInvoices",
+    "surface": "convex",
+    "name": "invoices:voidInvoices",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:invoices:workspace",
+    "surface": "convex",
+    "name": "invoices:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/invoices.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:legalOperations:formationMaintenance",
     "surface": "convex",
     "name": "legalOperations:formationMaintenance",
@@ -33090,6 +33498,414 @@
       {
         "path": "id",
         "table": "invitations",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:billMemberDues",
+    "surface": "portable",
+    "name": "invoices:billMemberDues",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:duplicate",
+    "surface": "portable",
+    "name": "invoices:duplicate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:generateDuesInvoices",
+    "surface": "portable",
+    "name": "invoices:generateDuesInvoices",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "subscriptionIds",
+        "table": "memberSubscriptions",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:issueFromSeries",
+    "surface": "portable",
+    "name": "invoices:issueFromSeries",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceSeries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:markSent",
+    "surface": "portable",
+    "name": "invoices:markSent",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:recordPayment",
+    "surface": "portable",
+    "name": "invoices:recordPayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "financialTransactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:remove",
+    "surface": "portable",
+    "name": "invoices:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:removeCatalogItem",
+    "surface": "portable",
+    "name": "invoices:removeCatalogItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceCatalogItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:removePayment",
+    "surface": "portable",
+    "name": "invoices:removePayment",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:restoreVoided",
+    "surface": "portable",
+    "name": "invoices:restoreVoided",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:revertToUnpaid",
+    "surface": "portable",
+    "name": "invoices:revertToUnpaid",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:saveSettings",
+    "surface": "portable",
+    "name": "invoices:saveSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:sendReminders",
+    "surface": "portable",
+    "name": "invoices:sendReminders",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:setCatalogItemActive",
+    "surface": "portable",
+    "name": "invoices:setCatalogItemActive",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceCatalogItems",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:setSeriesStatus",
+    "surface": "portable",
+    "name": "invoices:setSeriesStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceSeries",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:undoDuesBatch",
+    "surface": "portable",
+    "name": "invoices:undoDuesBatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:upsert",
+    "surface": "portable",
+    "name": "invoices:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoices",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:upsertCatalogItem",
+    "surface": "portable",
+    "name": "invoices:upsertCatalogItem",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceCatalogItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountingAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:upsertSeries",
+    "surface": "portable",
+    "name": "invoices:upsertSeries",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "invoiceSeries",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "fromInvoiceId",
+        "table": "invoices",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:voidInvoices",
+    "surface": "portable",
+    "name": "invoices:voidInvoices",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "invoices",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:invoices:workspace",
+    "surface": "portable",
+    "name": "invoices:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }

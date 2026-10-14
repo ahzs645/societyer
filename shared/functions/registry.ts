@@ -83,6 +83,7 @@ import * as customFieldsFns from "./customFields";
 import * as motionTemplatesFns from "./motionTemplates";
 const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconciliation");
 const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
+const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
@@ -608,6 +609,28 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "transactionRules:applyToUncategorized", handler: transactionRulesFns.applyToUncategorizedPortable }),
   definePortableMutation({ name: "transactionRules:undoBatch", handler: transactionRulesFns.undoBatchPortable }),
   definePortableMutation({ name: "transactionRules:removeApplication", handler: transactionRulesFns.removeApplicationPortable }),
+  // invoices
+  definePortableQuery({ name: "invoices:workspace", handler: invoicesFns.workspacePortable }),
+  definePortableMutation({ name: "invoices:upsert", handler: invoicesFns.upsertPortable }),
+  definePortableMutation({ name: "invoices:markSent", handler: invoicesFns.markSentPortable }),
+  definePortableMutation({ name: "invoices:voidInvoices", handler: invoicesFns.voidInvoicesPortable }),
+  definePortableMutation({ name: "invoices:restoreVoided", handler: invoicesFns.restoreVoidedPortable }),
+  definePortableMutation({ name: "invoices:duplicate", handler: invoicesFns.duplicatePortable }),
+  definePortableMutation({ name: "invoices:remove", handler: invoicesFns.removePortable }),
+  definePortableMutation({ name: "invoices:recordPayment", handler: invoicesFns.recordPaymentPortable }),
+  definePortableMutation({ name: "invoices:removePayment", handler: invoicesFns.removePaymentPortable }),
+  definePortableMutation({ name: "invoices:revertToUnpaid", handler: invoicesFns.revertToUnpaidPortable }),
+  definePortableMutation({ name: "invoices:sendReminders", handler: invoicesFns.sendRemindersPortable }),
+  definePortableMutation({ name: "invoices:billMemberDues", handler: invoicesFns.billMemberDuesPortable }),
+  definePortableMutation({ name: "invoices:generateDuesInvoices", handler: invoicesFns.generateDuesInvoicesPortable }),
+  definePortableMutation({ name: "invoices:undoDuesBatch", handler: invoicesFns.undoDuesBatchPortable }),
+  definePortableMutation({ name: "invoices:upsertCatalogItem", handler: invoicesFns.upsertCatalogItemPortable }),
+  definePortableMutation({ name: "invoices:setCatalogItemActive", handler: invoicesFns.setCatalogItemActivePortable }),
+  definePortableMutation({ name: "invoices:removeCatalogItem", handler: invoicesFns.removeCatalogItemPortable }),
+  definePortableMutation({ name: "invoices:upsertSeries", handler: invoicesFns.upsertSeriesPortable }),
+  definePortableMutation({ name: "invoices:setSeriesStatus", handler: invoicesFns.setSeriesStatusPortable }),
+  definePortableMutation({ name: "invoices:issueFromSeries", handler: invoicesFns.issueFromSeriesPortable }),
+  definePortableMutation({ name: "invoices:saveSettings", handler: invoicesFns.saveSettingsPortable }),
 
   // signatures
   definePortableQuery({ name: "signatures:listForEntity", handler: signaturesFns.listForEntityPortable }),

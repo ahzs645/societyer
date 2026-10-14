@@ -24,8 +24,10 @@ import {
   CheckCircle2,
   CalendarClock,
   Upload,
+  ReceiptText,
 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { MembersTrendCardLazy } from "../features/people/insights/lazy";
@@ -115,6 +117,9 @@ export function MembershipPage() {
   const cancelSub = useMutation(api.subscriptions.cancelSubscription);
   const beginCheckout = useAction(api.subscriptions.beginCheckout);
   const simulateActivation = useMutation(api.subscriptions.simulateActivation);
+  const billMemberDues = useMutation(api.invoices.billMemberDues);
+  const navigate = useNavigate();
+  const canInvoice = loaded && can("financials:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [planDraft, setPlanDraft] = useState<any>(null);
@@ -153,9 +158,11 @@ export function MembershipPage() {
         actions={
           <>
             <MoreActionsMenu
-              items={canManage ? [
+              items={(canManage ? [
                 { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
-              ] : []}
+              ] : []).concat(canInvoice ? [
+                { id: "dues-invoices", label: "Generate dues invoices", icon: <ReceiptText size={14} />, onSelect: () => navigate("/app/invoices?dues=1") },
+              ] : [])}
             />
             <CreateMenu
               disabled={!canManage}
@@ -423,6 +430,22 @@ export function MembershipPage() {
                   <td>{s.currentPeriodEndISO ? formatDate(s.currentPeriodEndISO) : "—"}</td>
                   <td style={{ fontVariantNumeric: "tabular-nums" }}>{s.lastPaymentCents != null ? money(s.lastPaymentCents) : "—"}</td>
                   <td>
+                    <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
+                    {s.memberId && s.status !== "canceled" && (
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        disabled={!canInvoice}
+                        onClick={async () => {
+                          try {
+                            const id = await billMemberDues({ societyId: society._id, memberId: s.memberId });
+                            toast.success("Dues invoice drafted", "Review it, then mark it as sent.");
+                            navigate(`/app/invoices?builder=${id}`);
+                          } catch (error) { toast.error("Could not bill dues", error instanceof Error ? error.message : "Please try again."); }
+                        }}
+                      >
+                        <ReceiptText size={12} /> Bill dues
+                      </button>
+                    )}
                     {s.status !== "canceled" && !s.demo && s.stripeSubscriptionId ? (
                       <a className="btn btn--ghost btn--sm" href="https://dashboard.stripe.com/subscriptions" target="_blank" rel="noopener noreferrer">Manage in Stripe</a>
                     ) : s.status !== "canceled" && (
@@ -437,6 +460,7 @@ export function MembershipPage() {
                         Cancel
                       </button>
                     )}
+                    </div>
                   </td>
                 </tr>
               );
