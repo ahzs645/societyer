@@ -168,6 +168,8 @@
   }
   .treasurer-summary-card__label {
     font-size: token('fs-xs');
+    // Never split a one-word label ("Expen / ses") at narrow widths.
+    overflow-wrap: normal;
   }
   .treasurer-summary-card__value {
     font-size: token('fs-sm');
@@ -193,6 +195,10 @@
     width: 100%;
     min-width: 0;
   }
+}
+@media (max-width: 360px) {
+  // Smallest phones: the label alone fits; the tone is on the figure.
+  .treasurer-summary-card__icon { display: none; }
 }
 @media (max-width: 560px) {
   // Phone cards run full-bleed, but three tiles in one row each bled into
