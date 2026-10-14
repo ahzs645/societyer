@@ -7,9 +7,9 @@
   width: 30px;
   height: 18px;
   background: token('border-strong');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   flex-shrink: 0;
-  transition: background 0.12s ease;
+  transition: background token('motion-fade') token('ease-fade');
   margin-top: 1px;
 }
 .switch__thumb {
@@ -21,7 +21,7 @@
   border-radius: 50%;
   background: token('bg-panel');
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: transform 0.12s ease;
+  transition: transform token('motion-move-fast') token('ease-move');
 }
 .switch.is-on { background: token('accent'); }
 .switch.is-on .switch__thumb { transform: translateX(12px); }
@@ -64,7 +64,7 @@
   flex-shrink: 0;
   position: relative;
   margin-top: 2px;
-  transition: border-color 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade');
 }
 .radio-row:hover:not(.is-disabled) .radio-dot { border-color: token('accent'); }
 .radio-row__input:focus-visible + .radio-dot { box-shadow: 0 0 0 3px token('accent-soft'); }
@@ -95,7 +95,7 @@
   background: token('bg-base');
   font-size: token('fs-md');
   color: token('text-primary');
-  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
 }
 .color-swatch-trigger:hover:not(:disabled) { border-color: token('border-strong'); }
 .color-swatch-trigger.is-open,
@@ -108,7 +108,7 @@
 .color-swatch-trigger__chip {
   width: 14px;
   height: 14px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   border: 1px solid token('border');
   flex-shrink: 0;
 }
@@ -126,7 +126,7 @@
   border-radius: token('r-md');
   box-shadow: token('shadow-lg');
   padding: 8px;
-  animation: menuIn 0.08s ease-out;
+  animation: menuIn token('motion-move-fast') token('ease-appear');
 }
 .color-pop__grid {
   display: grid;
@@ -143,7 +143,7 @@
   place-items: center;
   color: token('accent-on');
   cursor: pointer;
-  transition: transform 0.08s ease;
+  transition: transform token('motion-move-fast') token('ease-move');
   padding: 0;
 }
 .color-pop__cell:hover { transform: scale(1.08); }
@@ -240,7 +240,7 @@
   border-left: 2px solid transparent;
   border-bottom: 1px solid token('border');
   cursor: pointer;
-  transition: background 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade');
   color: inherit;
 }
 .bylaw-history__item:hover { background: token('bg-hover'); }

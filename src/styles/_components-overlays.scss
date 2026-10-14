@@ -66,7 +66,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color: token('text-primary');
   font-size: token('fs-md');
   text-align: left;
-  transition: border-color 0.08s ease, box-shadow 0.08s ease, background 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade'), background token('motion-fade-fast') token('ease-fade');
 }
 .select-trigger:hover:not(:disabled) { border-color: token('border-strong'); }
 .select-trigger.is-open,
@@ -105,7 +105,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 .select-trigger__chev {
   color: token('text-tertiary');
   flex-shrink: 0;
-  transition: transform 0.12s ease;
+  transition: transform token('motion-move-fast') token('ease-move');
 }
 .select-trigger.is-open .select-trigger__chev { transform: rotate(180deg); }
 
@@ -124,7 +124,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   max-width: calc(100vw - 16px);
   @include flex-column;
   overflow: hidden auto;
-  animation: menuIn 0.08s ease-out;
+  animation: menuIn token('motion-move-fast') token('ease-appear');
 }
 @keyframes menuIn {
   from { opacity: 0; transform: translateY(-2px); }
@@ -135,7 +135,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   inset: 0;
   z-index: calc(token('z-dropdown') - 1);
   background: token('bg-overlay-scrim');
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn token('motion-fade') token('ease-appear');
 }
 .menu.menu--sheet {
   box-sizing: border-box;
@@ -152,7 +152,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   box-shadow: token('shadow-strong');
   overscroll-behavior-y: contain;
   overflow: hidden auto;
-  animation: sheetIn 0.3s $sheet-ease;
+  animation: sheetIn token('motion-panel') $sheet-ease;
 }
 /* Sheet rows are thumb-sized: 44px min, body-size type. */
 .menu.menu--sheet .menu__item {
@@ -165,7 +165,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   padding: 8px 10px;
 }
 .menu.menu--sheet .menu__search-input {
-  font-size: 16px;
+  font-size: token('fs-input-touch');
 }
 .menu__search {
   @include flex-center;
@@ -290,12 +290,12 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   place-items: center;
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   color: token('text-tertiary');
   opacity: 0.7;
   border: 0;
   background: transparent;
-  transition: background 0.08s ease, opacity 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), opacity token('motion-fade-fast') token('ease-fade');
 }
 .select-trigger--sm + .date-trigger__clear {
   right: 4px;
@@ -319,7 +319,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   box-shadow: token('shadow-lg');
   padding: 10px;
   width: 248px;
-  animation: menuIn 0.08s ease-out;
+  animation: menuIn token('motion-move-fast') token('ease-appear');
 }
 /* Phone: the calendar becomes a viewport-pinned bottom sheet (same pattern as
  * .menu--sheet) instead of an anchor-positioned popover, with day cells bumped
@@ -337,7 +337,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   border-radius: token('r-lg') token('r-lg') 0 0;
   box-shadow: token('shadow-strong');
   overscroll-behavior-y: contain;
-  animation: sheetIn 0.3s $sheet-ease;
+  animation: sheetIn token('motion-panel') $sheet-ease;
 }
 .calendar.calendar--sheet .calendar__cell,
 .calendar.calendar--sheet .calendar__quick-cell {
@@ -376,7 +376,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   place-items: center;
   border-radius: token('r-sm');
   color: token('text-secondary');
-  transition: background 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade');
 }
 .calendar__nav:hover { background: token('bg-hover'); color: token('text-primary'); }
 .calendar__title {
@@ -396,7 +396,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .calendar__title-btn:hover { background: token('bg-hover'); }
 .calendar__title-btn.is-open {
@@ -419,7 +419,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   border: 1px solid transparent;
   color: token('text-primary');
   font-size: token('fs-sm');
-  transition: background 0.08s ease, color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade');
 }
 .calendar__quick-cell:hover { background: token('bg-hover'); }
 .calendar__quick-cell.is-current {
@@ -453,7 +453,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color: token('text-primary');
   background: transparent;
   border: 1px solid transparent;
-  transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .calendar__cell:hover:not(:disabled):not(.is-selected) { background: token('bg-hover'); }
 .calendar__cell.is-active:not(.is-selected) {
@@ -486,7 +486,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   inset: 0;
   background: token('bg-overlay-scrim');
   z-index: token('z-modal-backdrop');
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn token('motion-fade') token('ease-appear');
 }
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -506,7 +506,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   @include flex-column;
   max-height: calc(100vh - 48px);
   max-height: calc(100dvh - 48px);
-  animation: modalIn 0.14s ease-out;
+  animation: modalIn token('motion-move-fast') token('ease-appear');
 }
 @keyframes modalIn {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
@@ -516,7 +516,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 // Drag-to-resize dialogs are positioned with explicit top/left/width/height
 // (set inline), so they can't use the translate-based open animation.
 .modal--resizable {
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn token('motion-fade') token('ease-appear');
 
   // Explicit height is applied inline; let the body take the remaining space
   // and scroll so the header/footer stay pinned.
@@ -641,7 +641,7 @@ body.modal-resizing {
   text-align: left;
   font: inherit;
   width: 100%;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .quick-action-picker__item:hover,
 .quick-action-picker__item:focus-visible {
@@ -687,7 +687,7 @@ body.modal-resizing {
 @media (max-width: 560px) {
   .modal-backdrop {
     background: rgba(0, 0, 0, 0.32);
-    animation-duration: 0.24s;
+    animation-duration: token('motion-move-slow');
   }
 
   .modal {
@@ -704,7 +704,7 @@ body.modal-resizing {
     box-shadow: token('shadow-strong');
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    animation: sheetIn 0.34s $sheet-ease;
+    animation: sheetIn token('motion-panel') $sheet-ease;
   }
 
   .modal__head {
@@ -766,7 +766,7 @@ body.modal-resizing {
   .menu.menu--sheet,
   .calendar.calendar--sheet,
   .notif-panel--sheet {
-    animation: fadeIn 0.12s ease-out !important;
+    animation: fadeIn token('motion-fade') token('ease-appear') !important;
   }
 }
 .confirm-body {

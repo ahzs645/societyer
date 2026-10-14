@@ -202,7 +202,7 @@
     border-right: 1.5px solid currentColor;
     border-bottom: 1.5px solid currentColor;
     transform: translateY(-2px) rotate(45deg);
-    transition: transform 160ms ease;
+    transition: transform token('motion-move') token('ease-move');
   }
 }
 .access-summary[open] .access-summary__more::after { transform: translateY(1px) rotate(-135deg); }

@@ -225,7 +225,7 @@
 }
 .activity-timeline__day:hover { color: token('text-secondary'); }
 .activity-timeline__chevron {
-  transition: transform 0.12s ease;
+  transition: transform token('motion-move-fast') token('ease-move');
 }
 .activity-timeline__day.is-collapsed .activity-timeline__chevron {
   transform: rotate(-90deg);
@@ -235,7 +235,7 @@
   border-radius: token('r-pill');
   background: token('bg-hover');
   color: token('text-tertiary');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   font-weight: 500;
 }
 .activity-timeline__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
@@ -289,7 +289,7 @@
   width: 2px;
   height: 60%;
   background: token('accent');
-  border-radius: 1px;
+  border-radius: token('r-xs');
 }
 
 /* Keyboard-nav focus ring on DataTable cells */
@@ -308,7 +308,7 @@
   text-align: inherit;
   color: inherit;
   background: transparent;
-  transition: background 0.08s ease, box-shadow 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
 }
 .editable-cell:hover {
   background: token('bg-hover');
@@ -405,7 +405,7 @@ select.editable-cell__input {
     width: max-content;
     min-width: 100%;
     max-width: none;
-    font-size: 12px;
+    font-size: token('fs-tiny');
   }
   .table-scroll > .table th,
   .table-scroll > .table td {
@@ -440,7 +440,7 @@ select.editable-cell__input {
     width: max-content;
     min-width: 100%;
     max-width: none;
-    font-size: 12px;
+    font-size: token('fs-tiny');
   }
   .table-wrap > .table th,
   .table-wrap > .table td {

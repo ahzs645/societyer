@@ -43,7 +43,7 @@
   border-left: 3px solid token('border-strong');
   border-radius: 0;
   box-shadow: token('shadow-md');
-  animation: toastIn 0.18s ease-out;
+  animation: toastIn token('motion-move') token('ease-appear');
 }
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(8px); }
@@ -68,7 +68,7 @@
   height: 20px;
   display: grid;
   place-items: center;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   color: token('text-tertiary');
   flex-shrink: 0;
 }
@@ -84,7 +84,7 @@
   font-size: token('fs-sm');
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade');
 }
 .toast__action:hover { background: token('bg-hover'); }
 
@@ -102,7 +102,7 @@
   background: token('bg-base');
   color: token('text-primary');
   font-size: token('fs-md');
-  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
   position: relative;
 }
 .text-input:hover:not(.is-disabled) { border-color: token('border-strong'); }
@@ -144,7 +144,7 @@
   place-items: center;
   width: 18px;
   height: 18px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   color: token('text-tertiary');
 }
 .text-input__clear:hover { background: token('bg-hover'); color: token('text-primary'); }
@@ -169,7 +169,7 @@
   font-size: token('fs-md');
   line-height: 1.5;
   resize: vertical;
-  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
 }
 .text-area textarea:focus {
   outline: none;
@@ -203,7 +203,7 @@
   max-width: 360px;
   pointer-events: none;
   box-shadow: token('shadow-md');
-  animation: tooltipIn 0.1s ease-out;
+  animation: tooltipIn token('motion-fade') token('ease-appear');
 }
 @keyframes tooltipIn { from { opacity: 0; } to { opacity: 1; } }
 .tooltip--top { transform: translate(-50%, -100%); }

@@ -60,7 +60,7 @@
   border: 1px solid token('border');
   background: token('bg-base');
   color: token('text-primary');
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
   white-space: nowrap;
 
   &:hover {
@@ -237,7 +237,7 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: default;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .chip--sm {
   height: 20px;

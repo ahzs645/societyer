@@ -129,7 +129,7 @@
   .stat:last-child:nth-child(odd) { border-right: 0; }
 
   .stat__label {
-    font-size: 10px;
+    font-size: token('fs-xxs');
     letter-spacing: 0.06em;
   }
   .stat__label svg {

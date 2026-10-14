@@ -7,7 +7,7 @@
   inset: 0;
   background: token('bg-overlay-scrim-dense');
   z-index: token('z-drawer-backdrop');
-  animation: fade 0.12s ease;
+  animation: fade token('motion-fade') token('ease-fade');
 }
 .drawer {
   position: fixed;
@@ -21,7 +21,7 @@
   box-shadow: token('shadow-lg');
   z-index: token('z-drawer');
   @include flex-column;
-  animation: slide 0.18s ease;
+  animation: slide token('motion-move') token('ease-move');
 }
 .drawer--wide {
   width: min(980px, calc(100vw - 32px));
@@ -284,7 +284,7 @@
   background: token('bg-base');
   color: token('text-primary');
   font-size: token('fs-sm');
-  transition: border-color 0.08s ease, box-shadow 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
 }
 select.input,
 select.select,
@@ -349,12 +349,12 @@ select.editable-cell__input:hover:not(:disabled) {
   color: token('text-tertiary');
   font-weight: 500;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   border: 1px solid token('border');
   background: token('bg-subtle');
   flex-shrink: 0;
   cursor: pointer;
-  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+  transition: opacity token('motion-fade') token('ease-fade'), color token('motion-fade') token('ease-fade'), background token('motion-fade') token('ease-fade');
 }
 .field__lock svg { width: 10px; height: 10px; }
 
@@ -395,7 +395,7 @@ select.editable-cell__input:hover:not(:disabled) {
   font-size: token('fs-xs');
   color: token('text-tertiary');
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   border: 1px solid transparent;
 }
 .field__unlock-btn:hover {
@@ -528,7 +528,7 @@ select.editable-cell__input:hover:not(:disabled) {
   color: token('text-tertiary');
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.1s ease, color 0.1s ease, background 0.1s ease;
+  transition: opacity token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade'), background token('motion-fade-fast') token('ease-fade');
 }
 .kbar__pin svg { width: 14px; height: 14px; }
 /* Reveal on row hover or when the row is keyboard-active; pinned rows always
@@ -634,7 +634,7 @@ select.editable-cell__input:hover:not(:disabled) {
 /* Dense inline control (tag adders, mono paste areas). Phones bump it back
  * to 16px in _mobile-input-zoom so iOS doesn't zoom on focus. */
 .input--compact {
-  font-size: 12px;
+  font-size: token('fs-tiny');
 }
 .textarea--mono {
   font-family: token('font-mono');
@@ -735,7 +735,7 @@ select.editable-cell__input:hover:not(:disabled) {
   line-height: 14px;
   text-align: center;
   box-shadow: 0 0 0 2px token('bg-primary');
-  animation: notifBadgePop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: notifBadgePop token('motion-panel') cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes notifBadgePop {
   from { transform: scale(0.4); opacity: 0; }
@@ -756,7 +756,7 @@ select.editable-cell__input:hover:not(:disabled) {
   border-radius: token('r-md');
   box-shadow: token('shadow-lg');
   color: token('text-primary');
-  animation: menuIn 0.08s ease-out;
+  animation: menuIn token('motion-move-fast') token('ease-appear');
 }
 .notif-panel--sheet {
   inset: auto 0 0;
@@ -766,7 +766,7 @@ select.editable-cell__input:hover:not(:disabled) {
   border-radius: token('r-lg') token('r-lg') 0 0;
   box-shadow: token('shadow-strong');
   overscroll-behavior-y: contain;
-  animation: sheetIn 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: sheetIn token('motion-panel') cubic-bezier(0.32, 0.72, 0, 1);
 }
 .notif-panel__head {
   display: flex;

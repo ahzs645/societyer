@@ -74,19 +74,19 @@
   border-radius: token('r-sm');
   background: token('bg-inverse');
   color: token('text-inverse');
-  font-size: 11px;
+  font-size: token('fs-xxs');
   font-weight: 700;
 }
 .landing__brand-mark--xs {
   width: 18px;
   height: 18px;
-  font-size: 10px;
+  font-size: token('fs-xxs');
   border-radius: token('r-xs');
 }
 .landing__brand-name { font-size: token('fs-lg'); }
 .landing__brand-tag {
   font-family: token('font-mono');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: token('text-tertiary');
@@ -242,7 +242,7 @@
   gap: token('s-2');
   height: 24px;
   padding: 0 token('s-3');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('accent-soft');
   color: token('accent');
   font-size: token('fs-xs');
@@ -448,7 +448,7 @@ p.landing__lede {
     height: 3px;
     background: linear-gradient(90deg, token('danger'), token('warn'));
     opacity: 0.5;
-    border-radius: 2px;
+    border-radius: token('r-xs');
   }
 
   h3 {
@@ -531,7 +531,7 @@ p.landing__pain-closer {
 }
 .landing__feature-evidence {
   font-family: token('font-mono');
-  font-size: 9px;
+  font-size: token('fs-xxs');
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: token('text-tertiary');
@@ -588,7 +588,7 @@ p.landing__pain-closer {
   gap: token('s-2');
   height: 36px;
   padding: 0 token('s-4');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-subtle');
   border: 1px solid token('border');
   font-size: token('fs-sm');
@@ -680,7 +680,7 @@ ul.landing__bullets {
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-base');
   border: 1px solid token('border');
   font-size: token('fs-xs');
@@ -800,11 +800,11 @@ ul.landing__bullets {
   @include inline-flex-center;
   height: 26px;
   padding: 0 token('s-3');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   border: 1px solid token('border');
   background: token('bg-base');
   font-family: token('font-mono');
-  font-size: 11px;
+  font-size: token('fs-xxs');
   color: token('text-secondary');
 }
 
@@ -857,7 +857,7 @@ ul.landing__bullets {
   border-radius: token('r-xs');
   background: token('bg-subtle');
   color: token('text-secondary');
-  font-size: 16px;
+  font-size: token('fs-md');
   line-height: 1;
   transition: transform token('anim-fast') token('anim-ease');
 
@@ -909,7 +909,7 @@ p.landing__fineprint {
   gap: token('s-2');
   height: 24px;
   padding: 0 token('s-3');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-panel');
   border: 1px solid token('border');
   color: token('text-secondary');

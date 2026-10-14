@@ -357,7 +357,7 @@
   top: 2px;
   right: 0;
   opacity: 0;
-  transition: opacity 0.1s ease;
+  transition: opacity token('motion-fade-fast') token('ease-fade');
 }
 .meeting-minutes-agenda-list li:hover > .agenda-item-meta > .agenda-item-meta__edit,
 .agenda-item-meta__edit:focus-visible {
@@ -403,7 +403,7 @@
   gap: 4px;
   padding: 3px 10px;
   border: 1px solid token('border');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-panel');
   color: token('text-secondary');
   font-size: token('fs-sm');
@@ -456,7 +456,7 @@
   /* MA-9: labels wrap onto a second line instead of truncating to
      "AGENDA T…"; the tiles keep equal height and the numbers align. */
   .meeting-detail-page .meeting-detail-summary span {
-    font-size: 10px;
+    font-size: token('fs-xxs');
     margin-bottom: 2px;
     letter-spacing: 0;
     line-height: 1.2;

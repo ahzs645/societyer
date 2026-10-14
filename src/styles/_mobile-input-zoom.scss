@@ -1,3 +1,5 @@
+@use "tokens" as *;
+
 /* iOS Safari auto-zooms editable controls whose computed text size is below
  * 16px. Keep the compact desktop controls, but use 16px on mobile focusable
  * text fields so typing does not change the page zoom. */
@@ -18,7 +20,7 @@
   .input--compact,
   .textarea--mono,
   .milkdown .ProseMirror {
-    font-size: 16px;
+    font-size: token('fs-input-touch');
   }
   /* Compact inline controls (tag adders) set a 24-28px height inline; give
    * the 16px text room to breathe on phones. */

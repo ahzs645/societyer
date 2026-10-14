@@ -420,7 +420,7 @@
 
 .onboarding-flow__bar {
   background: token('bg-subtle');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   height: 6px;
   overflow: hidden;
 }

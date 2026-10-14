@@ -21,7 +21,7 @@
   border-radius: token('r-sm');
   @include inline-flex-center;
   gap: 6px;
-  transition: color 0.08s ease, border-color 0.08s ease, background 0.08s ease;
+  transition: color token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade'), background token('motion-fade-fast') token('ease-fade');
 }
 .tab > svg {
   width: 15px;
@@ -89,14 +89,14 @@
 .progress {
   height: 6px;
   background: token('bg-subtle');
-  border-radius: 3px;
+  border-radius: token('r-sm');
   overflow: hidden;
   position: relative;
 }
 .progress__fill {
   height: 100%;
   background: token('accent');
-  border-radius: 3px;
+  border-radius: token('r-sm');
   transition: width token('anim-normal') token('anim-ease');
 }
 .progress--success .progress__fill { background: token('success'); }
@@ -144,7 +144,7 @@
   padding: 10px;
   font-size: token('fs-md');
   box-shadow: token('shadow-xs');
-  transition: box-shadow 0.1s ease, transform 0.1s ease;
+  transition: box-shadow token('motion-fade-fast') token('ease-fade'), transform token('motion-move-fast') token('ease-move');
   position: relative;
 }
 .kanban__card.is-movable { cursor: grab; }
@@ -289,7 +289,7 @@
   background: token('bg-muted');
   border: 1px solid token('border');
   color: token('text-secondary');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   font-weight: 600;
   display: grid;
   place-items: center;
@@ -300,7 +300,7 @@
 
 /* Color chip */
 .color-chip {
-  width: 10px; height: 10px; border-radius: 3px;
+  width: 10px; height: 10px; border-radius: token('r-sm');
   display: inline-block;
   flex-shrink: 0;
 }

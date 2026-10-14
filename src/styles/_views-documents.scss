@@ -357,7 +357,7 @@
   padding: 0 0 11px;
   border-bottom: 2px solid transparent;
   color: token('text-secondary');
-  font-size: 16px;
+  font-size: token('fs-md');
   font-weight: 500;
   letter-spacing: 0;
   white-space: nowrap;
@@ -563,7 +563,7 @@
     content: "";
     width: 8px;
     height: 8px;
-    border-radius: 999px;
+    border-radius: token('r-pill');
     background: var(--org-tone);
   }
 }
@@ -699,7 +699,7 @@ button.org-outline__row {
   align-self: center;
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: var(--org-tone);
 }
 .org-outline__row--director { --org-tone: var(--accent); }

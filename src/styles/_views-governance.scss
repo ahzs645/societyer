@@ -344,7 +344,7 @@
 }
 
 .policies-table__counts {
-  font-size: 12px;
+  font-size: token('fs-tiny');
   white-space: nowrap;
 }
 
@@ -373,6 +373,6 @@
 .directors-history__chevron {
   flex: none;
   color: token(text-tertiary);
-  transition: transform 180ms ease;
+  transition: transform token('motion-move') token('ease-move');
 }
 .directors-history[open] .directors-history__chevron { transform: rotate(90deg); }

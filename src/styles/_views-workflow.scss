@@ -149,7 +149,7 @@
 
 .workflow-sidepanel__head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: token('fs-lg');
   line-height: 1.2;
 }
 
@@ -230,7 +230,7 @@
   background: token('bg-panel');
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background token('motion-fade') token('ease-fade'), border-color token('motion-fade') token('ease-fade');
 
   &:hover:not(:disabled) {
     background: token('bg-hover-alpha');

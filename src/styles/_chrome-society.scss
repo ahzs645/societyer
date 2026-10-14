@@ -109,11 +109,11 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-panel');
   border: 1px solid token('border');
   color: token('text-primary');
-  font-size: 11px;
+  font-size: token('fs-xxs');
   font-weight: 700;
 }
 .society-create__step[aria-current="step"] .society-create__step-index {
@@ -172,7 +172,7 @@
 }
 .society-create__progress-bar {
   height: 4px;
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-subtle');
   overflow: hidden;
 }
@@ -227,7 +227,7 @@
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition: border-color token('motion-fade') token('ease-fade'), background token('motion-fade') token('ease-fade');
 }
 .society-create__choice:hover {
   border-color: token('border-strong');
@@ -388,7 +388,7 @@
 .society-split__eyebrow {
   display: block;
   margin-bottom: token('s-3');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;

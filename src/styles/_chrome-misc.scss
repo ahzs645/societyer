@@ -108,7 +108,7 @@
   background: token('bg-muted');
   border: 1px solid token('border');
   color: token('text-secondary');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   font-weight: 600;
   display: inline-grid;
   place-items: center;
@@ -151,7 +151,7 @@
 .page-header__crumb {
   color: token('text-tertiary');
   text-decoration: none;
-  transition: color 0.08s ease;
+  transition: color token('motion-fade-fast') token('ease-fade');
 }
 .page-header__crumb:hover {
   color: token('text-secondary');
