@@ -1,32 +1,37 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DatePicker } from "@/components/DatePicker";
-import { Field } from "@/components/ui";
+import { Field, EmptyState, SkeletonRows } from "@/components/ui";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/Modal";
 import { Select } from "@/components/Select";
 import { InfoPopover } from "@/components/InfoPopover";
-import { formatDate } from "@/lib/format";
+import { Money } from "@/components/Money";
+import { budgetVariance, formatMoney } from "@/lib/money";
 import { escapeCsvCell } from "@/lib/csv";
-import { buildAccountingStatements, buildProgramSummary, type StatementRow } from "../../../../shared/accountingStatements";
+import { buildAccountingStatements, buildProgramSummary } from "../../../../shared/accountingStatements";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../../../shared/dateOnly";
-
-/** Locale currency formatting in the statement's own currency (matches the trial balance's "$34,480"). */
-function formatCurrency(cents: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-CA", { style: "currency", currency: currency || "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100);
-  } catch {
-    return `${currency} ${(cents / 100).toFixed(2)}`;
-  }
-}
+import { FinancialStatementsReport } from "./FinancialStatementsReport";
+import { CompareToggle, FundFilterChips } from "./FinanceReportControls";
+import { VarianceCell, VARIANCE_HELP } from "./VarianceCell";
+import {
+  fundsWithActivity,
+  hasUnrestrictedLines,
+  matchesFund,
+  shiftIsoYears,
+  type FundFilter,
+  type LedgerLine,
+} from "../lib/ledgerReports";
 
 export function AccountingStatementsCard({ societyId }: { societyId: Id<"societies"> }) {
   const today = todayDateOnly();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
+  const [compare, setCompare] = useState(true);
+  const [fund, setFund] = useState<FundFilter>("all");
   const { canExport, canWrite } = useFinancePermissions();
   const toast = useToast();
   const confirm = useConfirm();
@@ -35,13 +40,24 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
   const [saving, setSaving] = useState(false);
   const accounts = useQuery(api.accounting.chartAccounts, { societyId });
   const budgets = useQuery(api.financialHub.budgets, { societyId, fiscalYear: budgetYear });
+  const restrictions = useQuery(api.accounting.fundRestrictions, { societyId }) as Array<{ _id: string; name: string }> | undefined;
   const upsertBudget = useMutation(api.financialHub.upsertBudget);
   const removeBudget = useMutation(api.financialHub.removeBudget);
-  const ledger = useQuery(api.accounting.generalLedger, { societyId });
+  const ledger = useQuery(api.accounting.generalLedger, { societyId }) as LedgerLine[] | undefined;
+  const funds = useMemo(() => fundsWithActivity(ledger ?? [], restrictions ?? []), [ledger, restrictions]);
+  const fundNames = useMemo(() => new Map((restrictions ?? []).map((row) => [String(row._id), row.name])), [restrictions]);
+  const fundLines = useMemo(() => (ledger ?? []).filter((line) => matchesFund(line, fund)), [ledger, fund]);
+  const priorFrom = shiftIsoYears(from, -1);
+  const priorTo = shiftIsoYears(to, -1);
   let report: ReturnType<typeof buildAccountingStatements> | undefined;
+  let priorReport: ReturnType<typeof buildAccountingStatements> | null = null;
   let error = "";
-  try { if (ledger) report = buildAccountingStatements(ledger as any, from, to); }
-  catch (e) { error = e instanceof Error ? e.message : "Choose a valid report date range."; }
+  try {
+    if (ledger) {
+      report = buildAccountingStatements(fundLines as any, from, to);
+      if (compare) priorReport = buildAccountingStatements(fundLines as any, priorFrom, priorTo);
+    }
+  } catch (e) { error = e instanceof Error ? e.message : "Choose a valid report date range."; }
   let programs: ReturnType<typeof buildProgramSummary> = [];
   if (report && ledger && budgets && accounts) programs = buildProgramSummary(ledger as any, budgets, from, to, budgetYear, accounts as any);
   const saveBudget = async () => {
@@ -80,27 +96,43 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
     const link = document.createElement("a"); link.href = url; link.download = `financial-statements-${from}-${to}.csv`; link.click(); URL.revokeObjectURL(url);
   };
   return <section className="card" aria-label="Financial statements">
-    <div className="card__head"><h2 className="card__title">Financial statements</h2><InfoPopover label="About financial statements"><p>Balance sheet as at the end date and income statement for the selected period, from posted journals. Import and reconcile source records before comparing with historical statements. Currencies are reported separately.</p></InfoPopover><button style={{ marginLeft: "auto" }} className="btn-action" onClick={download} disabled={!canExport || !report || !accounts || !budgets || (!report.statements.length && !programs.length)}>Download statements CSV</button></div>
-    <div className="card__body col" style={{ gap: 12 }}>
+    <div className="card__head"><h2 className="card__title">Financial statements</h2><InfoPopover label="About financial statements"><p>Balance sheet as at the end date and income statement for the selected period, from posted journals. The prior-year columns repeat the same dates one year earlier (statutory comparatives). Select any amount to see the journal lines behind it. Import and reconcile source records before comparing with historical statements. Currencies are reported separately.</p></InfoPopover><button className="btn-action accounting-statements__download" onClick={download} disabled={!canExport || !report || !accounts || !budgets || (!report.statements.length && !programs.length)}>Download statements CSV</button></div>
+    <div className="card__body col accounting-statements__body">
     <div className="financials-control-row"><Field label="Report from"><DatePicker value={from} onChange={setFrom} /></Field><Field label="Report to"><DatePicker value={to} onChange={setTo} /></Field></div>
+    <div className="finance-report-toolbar">
+      <CompareToggle checked={compare} onChange={setCompare} />
+      <FundFilterChips funds={funds} value={fund} onChange={setFund} showUnrestricted={hasUnrestrictedLines(ledger ?? [])} />
+    </div>
+    {fund !== "all" && <p className="finance-report-note">Showing only journal lines tagged {fund === "unrestricted" ? "with no fund restriction" : `to ${fundNames.get(fund) ?? "this fund"}`}. A single fund's lines need not balance on their own.</p>}
     {error && <p role="alert">{error}</p>}
-    {ledger === undefined && <p className="muted">Loading posted journals…</p>}
+    {ledger === undefined && <SkeletonRows rows={6} columns={3} />}
     {report?.warnings.map(warning => <p role="alert" key={warning}>{warning}</p>)}
-    {report?.statements.length === 0 && <p className="muted">No posted journal lines through this date. Historical statement snapshots do not post a ledger automatically.</p>}
-    {report?.statements.map(statement => {
-      const money = (cents: number) => formatCurrency(cents, statement.currency);
-      const section = (label: string, rows: StatementRow[], total: number) => <><tr><th colSpan={2}>{label}</th></tr>{rows.map(row => <tr key={row.accountId}><td>{row.code} {row.name}</td><td className="mono" style={{ textAlign: "right" }}>{money(row.amountCents)}</td></tr>)}<tr><th>Total {label.toLowerCase()}</th><td className="mono" style={{ textAlign: "right" }}>{money(total)}</td></tr></>;
-      return <div key={statement.currency}><h3>{statement.currency} · Balance sheet as at {formatDate(to)}</h3>
-        <div className="accounting-table-wrap"><table className="table accounting-statement-table"><tbody>{section("Assets", statement.assets, statement.totalAssetsCents)}{section("Liabilities", statement.liabilities, statement.totalLiabilitiesCents)}{section("Equity", statement.equity, statement.totalEquityCents)}<tr><td>Unclosed earnings through {formatDate(to)}</td><td className="mono" style={{ textAlign: "right" }}>{money(statement.unclosedEarningsCents)}</td></tr><tr><th>Liabilities and equity including unclosed earnings</th><td className="mono" style={{ textAlign: "right" }}>{money(statement.totalLiabilitiesCents + statement.totalEquityCents + statement.unclosedEarningsCents)}</td></tr></tbody></table></div>
-        {statement.balanceDifferenceCents !== 0 && <p role="alert">Balance difference: {money(statement.balanceDifferenceCents)}. Review account classifications, opening balances, and journal completeness.</p>}
-        <h3>{statement.currency} · Income statement {formatDate(from)} to {formatDate(to)}</h3><div className="accounting-table-wrap"><table className="table accounting-statement-table"><tbody>{section("Income", statement.income, statement.totalIncomeCents)}{section("Expenses", statement.expenses, statement.totalExpenseCents)}<tr><th>Net income / (deficit)</th><td className="mono" style={{ textAlign: "right" }}>{money(statement.netIncomeCents)}</td></tr></tbody></table></div>
-      </div>;
-    })}
+    {report?.statements.length === 0 && (
+      <EmptyState
+        size="sm"
+        align="start"
+        title="No posted journal lines through this date"
+        description="Historical statement snapshots do not post a ledger automatically. Set up the chart of accounts and post opening balances or bank transactions to build statements."
+      />
+    )}
+    {report && report.statements.length > 0 && (
+      <FinancialStatementsReport
+        lines={fundLines}
+        report={report}
+        priorReport={priorReport}
+        from={from}
+        to={to}
+        priorFrom={priorFrom}
+        priorTo={priorTo}
+        fundNames={fundNames}
+        fundFiltered={fund !== "all"}
+      />
+    )}
     <div className="accounting-section-heading"><h3>Program / project budget and actual</h3><InfoPopover label="About program budgets"><p>Actuals use the selected report dates and each journal line’s program code. The budget is the full fiscal year shown below; it is not prorated. Untagged income and expense lines appear as Unallocated. Historical review snapshots remain separate from posted actuals.</p></InfoPopover></div>
     <Field label="Budget fiscal year"><input className="input accounting-budget-year" inputMode="numeric" value={budgetYear} onChange={e => setBudgetYear(e.target.value)} /></Field>
-    <div className="accounting-table-wrap"><table className="table"><thead><tr><th>Program / project</th><th>Account</th><th>Currency</th><th>Actual</th><th>Budget FY {budgetYear}</th><th>Actual − budget</th></tr></thead><tbody>{programs.map(row => <tr key={JSON.stringify([row.currency, row.programCode, row.accountId])}><td>{row.programCode}</td><td>{row.code} {row.name}</td><td>{row.currency}</td><td className="mono">{formatCurrency(row.actualCents, row.currency)}</td><td className="mono">{formatCurrency(row.budgetCents, row.currency)}</td><td className="mono">{formatCurrency(row.varianceCents, row.currency)}</td></tr>)}{programs.length === 0 && <tr><td colSpan={6} className="muted">No posted program actuals or account-mapped program budgets.</td></tr>}</tbody></table></div>
-    {canWrite && <div className="col"><h4>Add or update program budget</h4><Field label="Program / project code"><input className="input" value={budgetForm.programCode} placeholder="100 - OPERATIONS" onChange={e => setBudgetForm({ ...budgetForm, programCode: e.target.value })} /></Field><Field label="Budget account"><Select value={budgetForm.accountId} onChange={accountId => setBudgetForm({ ...budgetForm, accountId })} options={[{ value: "", label: "Choose income or expense account" }, ...(accounts ?? []).filter((account: any) => ["Income", "Expense"].includes(account.accountType)).map((account: any) => ({ value: account._id, label: `${account.code ?? ""} ${account.name} (${account.currency})` }))]} /></Field><Field label="Annual program budget amount"><input className="input" type="number" step="0.01" value={budgetForm.amount} onChange={e => setBudgetForm({ ...budgetForm, amount: e.target.value })} /></Field><button className="btn-action btn-action--primary" style={{ alignSelf: "flex-start" }} disabled={saving} onClick={saveBudget}>Save program budget</button>
-      {(budgets ?? []).filter((row: any) => row.programCode && row.accountId).map((row: any) => <div key={row._id}>{row.programCode} · {row.category} · {formatCurrency(row.plannedCents, row.currency)} <button className="btn btn--ghost btn--sm" disabled={saving} onClick={async () => { if (!(await confirm({ title: "Remove program budget?", message: `The FY ${budgetYear} budget of ${formatCurrency(row.plannedCents, row.currency)} for ${row.programCode} · ${row.category} will be removed. Posted actuals are not affected.`, confirmLabel: "Remove budget", tone: "danger" }))) return; setSaving(true); try { await removeBudget({ id: row._id }); } catch (e) { toast.error(e instanceof Error ? e.message : "Budget removal failed"); } finally { setSaving(false); } }}>Remove program budget</button></div>)}
+    <div className="finance-table-wrap"><table className="table finance-table"><thead><tr><th>Program / project</th><th>Account</th><th>Currency</th><th className="num">Actual</th><th className="num">Budget FY {budgetYear}</th><th className="num"><span className="report-table__col-label">Variance<InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover></span></th></tr></thead><tbody>{programs.map(row => <tr key={JSON.stringify([row.currency, row.programCode, row.accountId])}><td>{row.programCode}</td><td>{row.code} {row.name}</td><td>{row.currency}</td><td className="num"><Money cents={row.actualCents} currency={row.currency} /></td><td className="num"><Money cents={row.budgetCents} currency={row.currency} /></td><td className="num"><VarianceCell variance={budgetVariance(row.budgetCents, row.actualCents, row.accountType === "Income" ? "revenue" : "expense")} currency={row.currency} /></td></tr>)}{programs.length === 0 && <tr className="finance-empty-row"><td colSpan={6} className="muted">No posted program actuals or account-mapped program budgets.</td></tr>}</tbody></table></div>
+    {canWrite && <div className="col"><h4>Add or update program budget</h4><Field label="Program / project code"><input className="input" value={budgetForm.programCode} placeholder="100 - OPERATIONS" onChange={e => setBudgetForm({ ...budgetForm, programCode: e.target.value })} /></Field><Field label="Budget account"><Select value={budgetForm.accountId} onChange={accountId => setBudgetForm({ ...budgetForm, accountId })} options={[{ value: "", label: "Choose income or expense account" }, ...(accounts ?? []).filter((account: any) => ["Income", "Expense"].includes(account.accountType)).map((account: any) => ({ value: account._id, label: `${account.code ?? ""} ${account.name} (${account.currency})` }))]} /></Field><Field label="Annual program budget amount"><input className="input" type="number" step="0.01" value={budgetForm.amount} onChange={e => setBudgetForm({ ...budgetForm, amount: e.target.value })} /></Field><button className="btn-action btn-action--primary accounting-statements__save" disabled={saving} onClick={saveBudget}>Save program budget</button>
+      {(budgets ?? []).filter((row: any) => row.programCode && row.accountId).map((row: any) => <div key={row._id}>{row.programCode} · {row.category} · <Money cents={row.plannedCents} currency={row.currency} /> <button className="btn btn--ghost btn--sm" disabled={saving} onClick={async () => { if (!(await confirm({ title: "Remove program budget?", message: `The FY ${budgetYear} budget of ${formatMoney(row.plannedCents, { currency: row.currency })} for ${row.programCode} · ${row.category} will be removed. Posted actuals are not affected.`, confirmLabel: "Remove budget", tone: "danger" }))) return; setSaving(true); try { await removeBudget({ id: row._id }); } catch (e) { toast.error(e instanceof Error ? e.message : "Budget removal failed"); } finally { setSaving(false); } }}>Remove program budget</button></div>)}
     </div>}
     </div>
   </section>;

@@ -5,12 +5,17 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
-import { Badge, Drawer, Field, Flag } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field, Flag } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
+import { budgetVariance, formatMoney } from "../lib/money";
+import { Money } from "../components/Money";
+import { useUrlTab } from "../hooks/useUrlTab";
+import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
+import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
@@ -55,6 +60,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
+
+const FINANCIALS_TABS = ["overview", "transactions", "wave", "subscriptions"] as const;
 
 export function FinancialsPage() {
   const { canWrite, canEditSettings, canManageIntegration } = useFinancePermissions();
@@ -132,10 +139,7 @@ export function FinancialsPage() {
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [tab, setTab] = useState<"overview" | "transactions" | "wave" | "subscriptions">(() => {
-    const requested = searchParams.get("tab");
-    return requested === "transactions" || requested === "wave" || requested === "subscriptions" ? requested : "overview";
-  });
+  const [tab, setTab] = useUrlTab(FINANCIALS_TABS, "overview");
   const waveResources = useQuery(
     api.waveCache.resources,
     society
@@ -265,6 +269,7 @@ export function FinancialsPage() {
     }
     return types;
   }, [waveSummary]);
+  const budgetRows = (hub?.budgetRows ?? []) as any[];
   const ledgerRevenueCents = (trialBalance ?? [])
     .filter((row: any) => row.account?.accountType === "Income")
     .reduce((sum: number, row: any) => sum + row.creditCents - row.debitCents, 0);
@@ -556,10 +561,13 @@ export function FinancialsPage() {
       )}
 
       {tab === "wave" && !activeConnection && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__body muted" style={{ padding: 24, textAlign: "center" }}>
-            Connect a bookkeeping source from the <button className="btn btn--ghost btn--sm" onClick={() => setTab("overview")}>Overview</button> tab to browse synced Wave accounts, vendors, and transactions here.
-          </div>
+        <div className="card financials-empty-card">
+          <EmptyState
+            icon={<Database size={18} />}
+            title="No bookkeeping source connected"
+            description="Connect Wave to browse synced accounts, vendors and transactions here."
+            action={<button className="btn-action" onClick={() => setTab("overview")}>Connect from Overview</button>}
+          />
         </div>
       )}
 
@@ -590,20 +598,30 @@ export function FinancialsPage() {
               </p>
             </InfoPopover>
           </div>
-          <table className="table">
-            <thead>
-              <tr><th>Fund</th><th>Purpose</th><th style={{ textAlign: "right" }}>Balance</th></tr>
-            </thead>
-            <tbody>
-              {hub.restrictedAccounts.map((a, i) => (
-                <tr key={i}>
-                  <td>{a.name}</td>
-                  <td className="muted" style={{ fontSize: 13 }}>{a.purpose ?? "—"}</td>
-                  <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(a.balanceCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="finance-table-wrap">
+            <table className="table finance-table">
+              <thead>
+                <tr><th>Fund</th><th>Purpose</th><th className="num">Balance</th></tr>
+              </thead>
+              <tbody>
+                {hub.restrictedAccounts.map((a, i) => (
+                  <tr key={i}>
+                    <td>{a.name}</td>
+                    <td className="muted">{a.purpose ?? "—"}</td>
+                    <td className="num"><Money cents={a.balanceCents} /></td>
+                  </tr>
+                ))}
+              </tbody>
+              {hub.restrictedAccounts.length > 1 && (
+                <tfoot>
+                  <tr>
+                    <th scope="row" colSpan={2}>Total restricted</th>
+                    <td className="num"><Money cents={hub.restrictedAccounts.reduce((sum, a) => sum + (a.balanceCents ?? 0), 0)} /></td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
         </div>
       )}
 
@@ -621,31 +639,37 @@ export function FinancialsPage() {
               </button>
             </div>
           </div>
-          <table className="table">
+          <div className="finance-table-wrap">
+          <table className="table finance-table">
             <thead>
               <tr>
                 <th>Category</th>
-                <th style={{ textAlign: "right" }}>Planned</th>
-                <th style={{ textAlign: "right" }}>Actual</th>
-                <th style={{ textAlign: "right" }}>Variance</th>
-                <th />
+                <th className="num">Planned</th>
+                <th className="num">Actual</th>
+                <th className="num">
+                  <span className="report-table__col-label">
+                    Variance
+                    <InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>
+                  </span>
+                </th>
+                <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {(hub?.budgetRows ?? []).map((b: any) => {
-                const variance = b.plannedCents - b.actualCents;
+              {budgetRows.map((b: any) => {
+                const kind = inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] });
                 return (
                   <tr key={b._id}>
-                    <td>{b.category}</td>
-                    <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(b.plannedCents)}</td>
-                    <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(b.actualCents)}</td>
-                    <td
-                      className="table__cell--mono"
-                      style={{ textAlign: "right", color: variance < 0 ? "var(--danger)" : "var(--success)" }}
-                    >
-                      {money(variance)}
+                    <td>
+                      {b.category}
+                      {kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
                     </td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <td className="num"><Money cents={b.plannedCents} /></td>
+                    <td className="num"><Money cents={b.actualCents} /></td>
+                    <td className="num">
+                      <VarianceCell variance={budgetVariance(b.plannedCents, b.actualCents, kind)} />
+                    </td>
+                    <td className="num">
                       <Menu
                         align="right"
                         trigger={
@@ -677,7 +701,7 @@ export function FinancialsPage() {
                                 onSelect: async () => {
                                   const approved = await confirm({
                                     title: "Delete budget line?",
-                                    message: `The FY ${fiscalYear} "${b.category}" budget of ${money(b.plannedCents)} will be removed. Actual transactions are not affected.`,
+                                    message: `The FY ${fiscalYear} "${b.category}" budget of ${formatMoney(b.plannedCents)} will be removed. Actual transactions are not affected.`,
                                     confirmLabel: "Delete budget line",
                                     tone: "danger",
                                   });
@@ -698,15 +722,27 @@ export function FinancialsPage() {
                   </tr>
                 );
               })}
-              {(hub?.budgetRows ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 16 }}>
+              {budgetRows.length === 0 && (
+                <tr className="finance-empty-row">
+                  <td colSpan={5} className="muted">
                     No budget lines yet. Add a category to start tracking variance.
                   </td>
                 </tr>
               )}
             </tbody>
+            {budgetRows.length > 1 && (
+              <tfoot>
+                <tr>
+                  <th scope="row">Total</th>
+                  <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.plannedCents ?? 0), 0)} /></td>
+                  <td className="num"><Money cents={budgetRows.reduce((sum: number, b: any) => sum + (b.actualCents ?? 0), 0)} /></td>
+                  <td />
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
+          </div>
 
           {budgetForm && (
             <div className="card__body" style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -764,7 +800,7 @@ export function FinancialsPage() {
             <Link2 size={16} />
             <div className="callout__body">
               <strong className="callout__title">Linked accounting purchase</strong>
-              <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {money(Math.abs(focusedTransaction.amountCents))}</div>
+              <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {formatMoney(Math.abs(focusedTransaction.amountCents))}</div>
             </div>
             <button className="btn btn--sm" onClick={() => navigate("/app/financials?tab=transactions")}>Show all transactions</button>
           </div>
@@ -805,7 +841,7 @@ export function FinancialsPage() {
                   if (field.name === "date") return <span className="mono">{t.date}</span>;
                   if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
                   if (field.name === "category") return <Badge>{t.category ?? "uncategorized"}</Badge>;
-                  if (field.name === "amountCents") return <span className="mono" style={{ color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>{money(t.amountCents)}</span>;
+                  if (field.name === "amountCents") return <Money cents={t.amountCents} tone={t.amountCents > 0 ? "in" : "auto"} />;
                   if (field.name === "items") {
                     const links = linksByTransactionId.get(t._id) ?? [];
                     const linkedAssetIds = new Set(links.map((link: any) => String(link.assetId ?? "")).filter(Boolean));
@@ -843,10 +879,20 @@ export function FinancialsPage() {
       )}
 
       {tab === "transactions" && !activeConnection && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card__body muted" style={{ padding: 24, textAlign: "center" }}>
-            Connect a bookkeeping source from the <button className="btn btn--ghost btn--sm" onClick={() => setTab("overview")}>Overview</button> tab to sync transactions, or import a bank CSV once an account exists.
-          </div>
+        <div className="card financials-empty-card">
+          <EmptyState
+            icon={<PiggyBank size={18} />}
+            title="No transactions yet"
+            description={(accounts ?? []).length > 0
+              ? "Import a bank CSV above, or connect a bookkeeping source to sync transactions."
+              : "Connect a bookkeeping source, or set up the chart of accounts so you can import a bank CSV."}
+            action={
+              <>
+                <button className="btn-action btn-action--primary" onClick={() => setTab("overview")}>Connect a source</button>
+                <Link className="btn-action" to="/app/financials/accounting">Set up chart of accounts</Link>
+              </>
+            }
+          />
         </div>
       )}
 
@@ -860,7 +906,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}
+      {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} loading={items === undefined} onOpenFinancialYear={openFinancialYear} />}
 
       {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && appliesBcSocietyRules(society) && (
         <>
@@ -870,15 +916,15 @@ export function FinancialsPage() {
               <h2 className="card__title">Remuneration disclosure — FY {latest.fiscalYear}</h2>
               <span className="card__subtitle">Top employees/contractors paid ≥ $75,000 (s.36 Societies Act).</span>
             </div>
-            <table className="table">
+            <table className="table finance-table">
               <thead>
-                <tr><th>Position</th><th style={{ textAlign: "right" }}>Total compensation</th></tr>
+                <tr><th>Position</th><th className="num">Total compensation</th></tr>
               </thead>
               <tbody>
                 {latest.remunerationDisclosures.map((r, i) => (
                   <tr key={i}>
                     <td>{r.role}</td>
-                    <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(r.amountCents)}</td>
+                    <td className="num"><Money cents={r.amountCents} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -991,7 +1037,7 @@ export function FinancialsPage() {
               />
             </Field>
             <div className="muted" style={{ fontSize: 13 }}>
-              Monthly estimate: {money(monthlyEstimateCents({
+              Monthly estimate: {formatMoney(monthlyEstimateCents({
                 amountCents: Math.round(Number(subscriptionForm.amountCad || 0) * 100),
                 interval: subscriptionForm.interval,
               }))}
@@ -1014,7 +1060,7 @@ export function FinancialsPage() {
         {linkTxn && (
           <div className="form-grid">
             <Field label="Transaction">
-              <input className="input" readOnly value={`${linkTxn.date} · ${linkTxn.description} · ${money(Math.abs(linkTxn.amountCents))}`} />
+              <input className="input" readOnly value={`${linkTxn.date} · ${linkTxn.description} · ${formatMoney(Math.abs(linkTxn.amountCents))}`} />
             </Field>
             <Field label="Connect to">
               <Select

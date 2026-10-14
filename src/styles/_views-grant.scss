@@ -685,3 +685,15 @@
   .budget-line-row > input[placeholder="Amount"] { grid-area: amount; }
   .budget-line-row > button { grid-area: remove; }
 }
+
+// Grants page: summary stats, then one register per tab.
+.grants-tabs {
+  margin: token('s-4') 0 token('s-3');
+}
+.grants-archived-toggle {
+  display: inline-flex;
+  gap: token('s-2');
+  align-items: center;
+  margin: token('s-1') 0 token('s-2');
+  font-size: token('fs-sm');
+}

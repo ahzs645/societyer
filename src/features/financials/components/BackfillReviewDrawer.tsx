@@ -5,7 +5,9 @@ import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
-import { formatDate, money } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
+import { Money } from "../../../components/Money";
 
 const SUSPENSE_CHOICE = "";
 
@@ -129,7 +131,7 @@ export function BackfillReviewDrawer({
             )}
             {summary.alreadyPosted > 0 && <Badge tone="neutral">{summary.alreadyPosted} already posted</Badge>}
             {summary.noCashAccount + summary.needsMapping > 0 && <Badge tone="danger">{summary.noCashAccount + summary.needsMapping} cannot post</Badge>}
-            <Badge tone="info">Net {money(summary.netCents)}</Badge>
+            <Badge tone="info">Net {formatMoney(summary.netCents)}</Badge>
           </div>
 
           {summary.toSuspense > 0 && (
@@ -144,7 +146,7 @@ export function BackfillReviewDrawer({
           <div className="backfill-review__categories">
             <table className="table">
               <thead>
-                <tr><th>Category</th><th style={{ textAlign: "right" }}>Total</th><th>Post to</th></tr>
+                <tr><th>Category</th><th className="num">Total</th><th>Post to</th></tr>
               </thead>
               <tbody>
                 {preview.categories.map((category: any) => {
@@ -158,7 +160,7 @@ export function BackfillReviewDrawer({
                           {category.direction === "income" ? "Money in" : "Money out"} · {plural(category.count, "row")}
                         </div>
                       </td>
-                      <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(category.totalCents)}</td>
+                      <td className="num"><Money cents={category.totalCents} /></td>
                       <td className="backfill-review__account">
                         <Select
                           aria-label={`Account for ${category.category}`}
@@ -208,7 +210,7 @@ export function BackfillReviewDrawer({
             <summary>Transactions ({preview.rows.length})</summary>
             <div className="backfill-review__table">
               <table className="table">
-                <thead><tr><th>Date</th><th>Description</th><th>Category</th><th style={{ textAlign: "right" }}>Amount</th><th>Post to</th><th>Status</th></tr></thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Category</th><th className="num">Amount</th><th>Post to</th><th>Status</th></tr></thead>
                 <tbody>
                   {preview.rows.map((row: any) => {
                     const status = STATUS_LABEL[row.status] ?? { label: row.status, tone: "neutral" as const };
@@ -217,7 +219,7 @@ export function BackfillReviewDrawer({
                         <td className="table__cell--mono">{formatDate(row.date)}</td>
                         <td>{row.description}</td>
                         <td>{row.category || "—"}</td>
-                        <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.amountCents)}</td>
+                        <td className="num"><Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} /></td>
                         <td>{row.status === "post" ? row.offsetAccountLabel ?? "—" : "—"}</td>
                         <td>
                           <Badge tone={status.tone}>{status.label}</Badge>

@@ -1,9 +1,9 @@
 import { FinancialVersionCard } from "../../../components/FinancialVersionCard";
 import { AccountingStatementsCard } from "../components/AccountingStatementsCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CreateMenu } from "../../../components/CreateMenu";
 import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
 import { useMutation, useQuery } from "convex/react";
@@ -17,6 +17,9 @@ import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { formatDate, money } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
+import { Money } from "../../../components/Money";
+import { TrialBalanceReport } from "../components/TrialBalanceReport";
 import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
 import {
   hasErrors,
@@ -138,6 +141,8 @@ export function AccountingWorkbenchPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusedEntryId = searchParams.get("entry");
   const [drawer, setDrawerState] = useState<DrawerKind>(null);
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const setDrawer = (next: DrawerKind) => {
@@ -214,6 +219,17 @@ export function AccountingWorkbenchPage() {
   const cashAccounts = (accounts ?? []).filter((account: any) => ["Asset", "Bank", "Credit"].includes(account.accountType));
   const totalDebit = (trialBalance ?? []).reduce((sum: number, row: any) => sum + row.debitCents, 0);
   const totalCredit = (trialBalance ?? []).reduce((sum: number, row: any) => sum + row.creditCents, 0);
+
+  // "Open in ledger" from a report drilldown lands on ?entry=<id>: open and reveal that entry.
+  useEffect(() => {
+    if (!focusedEntryId || !journalEntries) return;
+    const node = document.getElementById(`journal-entry-${focusedEntryId}`);
+    if (node instanceof HTMLDetailsElement) {
+      node.open = true;
+      node.scrollIntoView({ block: "center" });
+      node.querySelector("summary")?.focus();
+    }
+  }, [focusedEntryId, journalEntries]);
 
   if (society === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -324,7 +340,7 @@ export function AccountingWorkbenchPage() {
         await setReconStatus({ id: result.runId, status: "reconciled" });
       }
       setDrawer(null);
-      toast.info(`Book balance ${money(result.bookBalanceCents)} · difference ${money(result.differenceCents)}`);
+      toast.info(`Book balance ${formatMoney(result.bookBalanceCents)} · difference ${formatMoney(result.differenceCents)}`);
     }, "Reconciliation run created");
   };
 
@@ -500,23 +516,11 @@ export function AccountingWorkbenchPage() {
       <section className="card">
         <div className="card__head">
           <h2 className="card__title">Trial balance</h2>
-          <span className="card__subtitle">Posted journal-line totals by chart account.</span>
+          <span className="card__subtitle">Posted journal-line totals by chart account. Select an amount to see the entries behind it.</span>
         </div>
-        <ResponsiveTable>
-          <thead><tr><th>Account</th><th>Type</th><th style={{ textAlign: "right" }}>Debit</th><th style={{ textAlign: "right" }}>Credit</th><th style={{ textAlign: "right" }}>Balance</th></tr></thead>
-          <tbody>
-            {(trialBalance ?? []).map((row: any) => (
-              <tr key={row.account?._id ?? row.account?.code}>
-                <td><strong>{row.account?.code}</strong> {row.account?.name}</td>
-                <td>{row.account?.accountType}</td>
-                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.debitCents)}</td>
-                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.creditCents)}</td>
-                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.balanceCents)}</td>
-              </tr>
-            ))}
-            {(trialBalance ?? []).length === 0 && <tr><td colSpan={5} className="muted accounting-empty">No posted journal lines yet.</td></tr>}
-          </tbody>
-        </ResponsiveTable>
+        <div className="card__body">
+          <TrialBalanceReport societyId={society._id} />
+        </div>
       </section>
 
       <section className="card">
@@ -526,7 +530,12 @@ export function AccountingWorkbenchPage() {
         </div>
         <div className="accounting-journal-list">
           {(journalEntries ?? []).map((entry: any) => (
-            <details className="accounting-entry" key={entry._id}>
+            <details
+              className={`accounting-entry${focusedEntryId === String(entry._id) ? " is-focused" : ""}`}
+              key={entry._id}
+              id={`journal-entry-${entry._id}`}
+              open={focusedEntryId === String(entry._id) ? true : undefined}
+            >
               <summary>
                 <span><strong>{formatDate(entry.date)}</strong> {entry.memo}</span>
                 <span className="row" style={{ gap: 4 }}>
@@ -536,7 +545,7 @@ export function AccountingWorkbenchPage() {
                 </span>
               </summary>
               <ResponsiveTable>
-                <thead><tr><th>Account</th><th>Side</th><th>Description</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
+                <thead><tr><th>Account</th><th>Side</th><th>Description</th><th className="num">Amount</th></tr></thead>
                 <tbody>
                   {(entry.lines ?? []).map((line: any) => {
                     const account = (accounts ?? []).find((candidate: any) => candidate._id === line.accountId);
@@ -545,7 +554,7 @@ export function AccountingWorkbenchPage() {
                         <td>{account?.code} {account?.name}</td>
                         <td>{line.side}</td>
                         <td>{line.description ?? "—"}</td>
-                        <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(line.amountCents)}</td>
+                        <td className="num"><Money cents={line.amountCents} currency={account?.currency} /></td>
                       </tr>
                     );
                   })}
@@ -567,7 +576,7 @@ export function AccountingWorkbenchPage() {
             {(restrictedBalances ?? []).map((row: any) => (
               <div className="accounting-row" key={row._id}>
                 <div><strong>{row.name}</strong><div className="muted">{row.purpose}</div></div>
-                <div className="mono">{money(row.balanceCents)}</div>
+                <Money cents={row.balanceCents} negativeStyle="parentheses" />
               </div>
             ))}
           </div>

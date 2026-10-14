@@ -7,9 +7,9 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { PiggyBank, TrendingUp, TrendingDown, AlertTriangle, DollarSign, Trash2, Upload, Receipt, MoreHorizontal, Pencil, CalendarPlus } from "lucide-react";
+import { PiggyBank, TrendingUp, TrendingDown, DollarSign, Trash2, Upload, Receipt, MoreHorizontal, Pencil, CalendarPlus } from "lucide-react";
 import { Menu } from "../components/Menu";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field, Skeleton, SkeletonRows } from "../components/ui";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
@@ -19,12 +19,13 @@ import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { Money } from "../components/Money";
+import { InfoPopover } from "../components/InfoPopover";
+import { budgetVariance, formatMoney } from "../lib/money";
+import { TreasurerPnlReport } from "../features/financials/components/TreasurerPnlReport";
+import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
+import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 
-function cents(value: number): string {
-  const abs = Math.abs(value);
-  const str = (abs / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return value < 0 ? `($${str})` : `$${str}`;
-}
 
 function getFiscalYearBounds(fyEnd: string | undefined) {
   const now = new Date();
@@ -483,34 +484,19 @@ export function TreasurerPage() {
           </div>
         </div>
 
-        <SummaryCard label="Income" value={pnl?.totalIncomeCents ?? 0} icon={<TrendingUp size={14} />} color="green" />
-        <SummaryCard label="Expenses" value={-(pnl?.totalExpenseCents ?? 0)} icon={<TrendingDown size={14} />} color="red" />
-        <SummaryCard label="Net" value={pnl?.netCents ?? 0} icon={<DollarSign size={14} />} color={pnl && pnl.netCents < 0 ? "red" : "green"} />
+        <SummaryCard label="Income" value={pnl?.totalIncomeCents} icon={<TrendingUp size={14} />} tone="in" />
+        <SummaryCard label="Expenses" value={pnl?.totalExpenseCents} icon={<TrendingDown size={14} />} tone="out" />
+        <SummaryCard label="Net" value={pnl?.netCents} icon={<DollarSign size={14} />} tone={pnl && pnl.netCents < 0 ? "unfavourable" : "favourable"} />
       </div>
-      <div className="treasurer-category-grid">
-        <div className="card treasurer-category-card">
-          <div className="card__head"><h2 className="card__title">Income by category</h2></div>
-          <div className="card__body treasurer-category-list">
-            {incomeEntries.length === 0 && <div className="muted">No income transactions in this period.</div>}
-            {incomeEntries.map(([cat, amt]) => (
-              <div key={cat} className="treasurer-category-row">
-                <span>{cat}</span>
-                <span className="mono">{cents(amt)}</span>
-              </div>
-            ))}
+      <div className="card treasurer-pnl-card">
+        <div className="card__head">
+          <div>
+            <h2 className="card__title">Profit and loss</h2>
+            <span className="card__subtitle">Income and expenses by category for the selected dates. Select an amount to see its transactions.</span>
           </div>
         </div>
-        <div className="card treasurer-category-card">
-          <div className="card__head"><h2 className="card__title">Expenses by category</h2></div>
-          <div className="card__body treasurer-category-list">
-            {expenseEntries.length === 0 && <div className="muted">No expense transactions in this period.</div>}
-            {expenseEntries.map(([cat, amt]) => (
-              <div key={cat} className="treasurer-category-row">
-                <span>{cat}</span>
-                <span className="mono">{cents(amt)}</span>
-              </div>
-            ))}
-          </div>
+        <div className="card__body">
+          <TreasurerPnlReport societyId={society._id} from={from} to={to} pnl={pnl as any} accounts={financialAccounts as any} />
         </div>
       </div>
 
@@ -530,22 +516,22 @@ export function TreasurerPage() {
           <div className="stat-grid treasurer-claim-stats">
             <div className="stat">
               <div className="stat__label">Total claims</div>
-              <div className="stat__value">{cents(expenseTotals.total)}</div>
+              <div className="stat__value"><Money cents={expenseTotals.total} /></div>
               <div className="stat__sub">{expenseReports?.length ?? 0} report{(expenseReports?.length ?? 0) === 1 ? "" : "s"}</div>
             </div>
             <div className="stat">
               <div className="stat__label">Submitted</div>
-              <div className="stat__value">{cents(expenseTotals.submitted)}</div>
+              <div className="stat__value"><Money cents={expenseTotals.submitted} /></div>
               <div className="stat__sub">awaiting approval</div>
             </div>
             <div className="stat">
               <div className="stat__label">Approved</div>
-              <div className="stat__value">{cents(expenseTotals.approved)}</div>
+              <div className="stat__value"><Money cents={expenseTotals.approved} /></div>
               <div className="stat__sub">ready for payment</div>
             </div>
             <div className="stat">
               <div className="stat__label">Paid</div>
-              <div className="stat__value">{cents(expenseTotals.paid)}</div>
+              <div className="stat__value"><Money cents={expenseTotals.paid} /></div>
               <div className="stat__sub">closed reimbursements</div>
             </div>
           </div>
@@ -556,7 +542,7 @@ export function TreasurerPage() {
                 <th>Claim</th>
                 <th>Claimant</th>
                 <th>Status</th>
-                <th style={{ textAlign: "right" }}>Amount</th>
+                <th className="num">Amount</th>
                 <th>Receipt</th>
                 <th />
               </tr>
@@ -572,7 +558,7 @@ export function TreasurerPage() {
                   </td>
                   <td>{report.claimantName}</td>
                   <td><Badge tone={expenseStatusTone(report.status)}>{report.status}</Badge></td>
-                  <td className="mono" style={{ textAlign: "right" }}>{cents(report.amountCents)}</td>
+                  <td className="num"><Money cents={report.amountCents} currency={report.currency} /></td>
                   <td>
                     {report.receiptDocument ? (
                       <Link to={`/app/documents/${report.receiptDocument._id}`}>{report.receiptDocument.title}</Link>
@@ -639,19 +625,19 @@ export function TreasurerPage() {
             <div>
               <h2 className="card__title">Funding mix</h2>
               <span className="card__subtitle">
-                {cents(fundingRollup?.totalReceivedCents ?? 0)} received in selected period
+                {formatMoney(fundingRollup?.totalReceivedCents ?? 0)} received in selected period
               </span>
             </div>
           </div>
           <div className="card__body">
             <div className="table-wrap">
-            <table className="table treasurer-funding-table">
+            <table className="table finance-table treasurer-funding-table">
               <thead>
                 <tr>
                   <th>Source</th>
                   <th>Type</th>
-                  <th style={{ textAlign: "right" }}>Received</th>
-                  <th style={{ textAlign: "right" }}>Expected</th>
+                  <th className="num">Received</th>
+                  <th className="num">Expected</th>
                 </tr>
               </thead>
               <tbody>
@@ -659,7 +645,7 @@ export function TreasurerPage() {
                   <tr key={row.key}>
                     <td>
                       <strong>{row.name}</strong>
-                      <div className="muted" style={{ fontSize: 11 }}>
+                      <div className="finance-table__sub">
                         {row.observedFrom?.join(", ") || "register"}
                         {row.collectionAgents?.length ? ` · via ${row.collectionAgents.join(", ")}` : ""}
                         {row.collectionFrequencies?.length ? ` · ${row.collectionFrequencies.join(", ")}` : ""}
@@ -668,18 +654,27 @@ export function TreasurerPage() {
                       </div>
                     </td>
                     <td><Badge tone={row.sourceType === "Member dues" ? "info" : "neutral"}>{row.sourceType}</Badge></td>
-                    <td className="mono" style={{ textAlign: "right" }}>{cents(row.receivedCents)}</td>
-                    <td className="mono" style={{ textAlign: "right" }}>{row.plannedCents ? cents(row.plannedCents) : "—"}</td>
+                    <td className="num"><Money cents={row.receivedCents} /></td>
+                    <td className="num"><Money cents={row.plannedCents || null} /></td>
                   </tr>
                 ))}
                 {(!fundingRollup || fundingRollup.rows.length === 0) && (
-                  <tr>
-                    <td colSpan={4} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                      No funding sources recorded for this period.
+                  <tr className="finance-empty-row">
+                    <td colSpan={4} className="muted">
+                      {fundingRollup === undefined ? "Loading funding sources…" : "No funding sources recorded for this period. Add one from New → Funding source."}
                     </td>
                   </tr>
                 )}
               </tbody>
+              {(fundingRollup?.rows ?? []).length > 1 && (
+                <tfoot>
+                  <tr>
+                    <th scope="row" colSpan={2}>Total{(fundingRollup?.rows ?? []).length > 8 ? " (all sources)" : ""}</th>
+                    <td className="num"><Money cents={(fundingRollup?.rows ?? []).reduce((sum: number, row: any) => sum + (row.receivedCents ?? 0), 0)} /></td>
+                    <td className="num"><Money cents={(fundingRollup?.rows ?? []).reduce((sum: number, row: any) => sum + (row.plannedCents ?? 0), 0)} /></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
             </div>
           </div>
@@ -694,13 +689,13 @@ export function TreasurerPage() {
           </div>
           <div className="card__body">
             <div className="table-wrap">
-            <table className="table treasurer-source-table">
+            <table className="table finance-table treasurer-source-table">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Status</th>
-                  <th style={{ textAlign: "right" }}>Committed</th>
-                  <th style={{ textAlign: "right" }}>Received</th>
+                  <th className="num">Committed</th>
+                  <th className="num">Received</th>
                   <th />
                 </tr>
               </thead>
@@ -709,7 +704,7 @@ export function TreasurerPage() {
                   <tr key={source._id}>
                     <td>
                       <strong>{source.name}</strong>
-                      <div className="muted" style={{ fontSize: 11 }}>
+                      <div className="finance-table__sub">
                         {source.sourceType}
                         {source.collectionAgentName ? ` · collected by ${source.collectionAgentName}` : ""}
                         {source.collectionFrequency ? ` · ${source.collectionFrequency}` : ""}
@@ -718,8 +713,8 @@ export function TreasurerPage() {
                       </div>
                     </td>
                     <td><Badge tone={source.status === "Active" ? "success" : source.status === "Prospect" ? "warn" : "neutral"}>{source.status}</Badge></td>
-                    <td className="mono" style={{ textAlign: "right" }}>{source.committedTotalCents ? cents(source.committedTotalCents) : "—"}</td>
-                    <td className="mono" style={{ textAlign: "right" }}>{source.receivedTotalCents ? cents(source.receivedTotalCents) : "—"}</td>
+                    <td className="num"><Money cents={source.committedTotalCents || null} currency={source.currency} /></td>
+                    <td className="num"><Money cents={source.receivedTotalCents || null} currency={source.currency} /></td>
                     <td>
                       <div className="row treasurer-row-actions">
                         <RowActionsMenu
@@ -750,9 +745,9 @@ export function TreasurerPage() {
                   </tr>
                 ))}
                 {(fundingSources ?? []).length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                      No funding sources yet.
+                  <tr className="finance-empty-row">
+                    <td colSpan={5} className="muted">
+                      {fundingSources === undefined ? "Loading sources…" : "No funding sources yet. Add donors, funders and dues collectors from New → Funding source."}
                     </td>
                   </tr>
                 )}
@@ -769,13 +764,13 @@ export function TreasurerPage() {
           <span className="card__subtitle">Manual funding events, including aggregate third-party remittances.</span>
         </div>
         <div className="table-wrap">
-        <table className="table treasurer-timeline-table">
+        <table className="table finance-table treasurer-timeline-table">
           <thead>
             <tr>
               <th>Date</th>
               <th>Source</th>
               <th>Event</th>
-              <th style={{ textAlign: "right" }}>Amount</th>
+              <th className="num">Amount</th>
               <th>Attribution</th>
               <th />
             </tr>
@@ -783,20 +778,20 @@ export function TreasurerPage() {
           <tbody>
             {fundingEvents.map((event: any) => (
               <tr key={event._id}>
-                <td className="mono">{formatDate(event.eventDate)}</td>
+                <td>{formatDate(event.eventDate)}</td>
                 <td>
                   <strong>{event.sourceName}</strong>
-                  <div className="muted" style={{ fontSize: 11 }}>{event.sourceType}</div>
+                  <div className="finance-table__sub">{event.sourceType}</div>
                 </td>
                 <td>
                   {event.label}
-                  <div className="muted" style={{ fontSize: 11 }}>
+                  <div className="finance-table__sub">
                     {event.kind}
                     {event.periodStart || event.periodEnd ? ` · ${event.periodStart || "?"} to ${event.periodEnd || "?"}` : ""}
                     {event.memberCount ? ` · ${event.memberCount} members` : ""}
                   </div>
                 </td>
-                <td className="mono" style={{ textAlign: "right" }}>{event.amountCents != null ? cents(event.amountCents) : "—"}</td>
+                <td className="num"><Money cents={event.amountCents} currency={event.source?.currency} /></td>
                 <td>{event.attributionStatus ? <Badge tone="info">{event.attributionStatus}</Badge> : <span className="muted">—</span>}</td>
                 <td>
                   <div className="row treasurer-row-actions">
@@ -808,7 +803,7 @@ export function TreasurerPage() {
                       onDelete={async () => {
                         const approved = await confirm({
                           title: "Delete funding event?",
-                          message: `"${event.label}"${event.amountCents != null ? ` (${cents(event.amountCents)})` : ""} will be permanently removed from this funding source's history.`,
+                          message: `"${event.label}"${event.amountCents != null ? ` (${formatMoney(event.amountCents)})` : ""} will be permanently removed from this funding source's history.`,
                           confirmLabel: "Delete event",
                           tone: "danger",
                         });
@@ -826,9 +821,9 @@ export function TreasurerPage() {
               </tr>
             ))}
             {fundingEvents.length === 0 && (
-              <tr>
-                <td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>
-                  No funding events yet.
+              <tr className="finance-empty-row">
+                <td colSpan={6} className="muted">
+                  {fundingSources === undefined ? "Loading funding events…" : "No funding events yet. Record receipts, pledges and remittances from a source's ⋯ menu."}
                 </td>
               </tr>
             )}
@@ -841,65 +836,77 @@ export function TreasurerPage() {
       <div className="card treasurer-budget-card">
         <div className="card__head">
           <h2 className="card__title">Budget variance — FY {fy}</h2>
-          <span className="card__subtitle">Budget line vs. actual spend</span>
+          <span className="card__subtitle">Budget line vs. actual; positive variance is favourable</span>
         </div>
         <div className="card__body">
-          {(!variance || variance.length === 0) && (
-            <div className="muted">No budgets defined for this fiscal year. Add budgets in Financials.</div>
+          {variance === undefined && <SkeletonRows rows={3} columns={4} />}
+          {variance && variance.length === 0 && (
+            <EmptyState
+              size="sm"
+              align="start"
+              title={`No budgets for FY ${fy}`}
+              description="Add budget lines on Financials, or change the FY above to a year that has a budget."
+              action={<Link className="btn-action" to="/app/financials">Add budgets in Financials</Link>}
+            />
           )}
           {variance && variance.length > 0 && (
-            <div className="table-wrap">
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-md)" }}>
+            <div className="finance-table-wrap">
+            <table className="table finance-table treasurer-variance-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Category</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Budget</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Actual</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Variance</th>
-                  <th style={{ textAlign: "center", padding: "6px 8px" }}>Status</th>
+                <tr>
+                  <th>Category</th>
+                  <th className="num">Budget</th>
+                  <th className="num">Actual</th>
+                  <th className="num">
+                    <span className="report-table__col-label">
+                      Variance
+                      <InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>
+                    </span>
+                  </th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {variance.map((row) => {
-                  const overBudget = row.varianceCents > 0;
+                  const kind = inferBudgetKind(row, {
+                    accounts: (financialAccounts ?? []) as any[],
+                    incomeCategories: incomeEntries.map(([category]) => category),
+                    expenseCategories: expenseEntries.map(([category]) => category),
+                  });
+                  const result = budgetVariance(row.plannedCents, row.actualCents, kind);
                   return (
-                    <tr
-                      key={row.category}
-                      style={{
-                        borderBottom: "1px solid var(--border)",
-                        background: overBudget ? "var(--red-bg, rgba(255,0,0,0.03))" : undefined,
-                      }}
-                    >
-                      <td style={{ padding: "6px 8px" }}>{row.category}</td>
-                      <td className="mono" style={{ textAlign: "right", padding: "6px 8px" }}>
-                        {cents(row.plannedCents)}
+                    <tr key={row.category}>
+                      <td>
+                        {row.category}
+                        {kind === "revenue" && <span className="finance-table__sub"> · revenue</span>}
                       </td>
-                      <td className="mono" style={{ textAlign: "right", padding: "6px 8px" }}>
-                        {cents(row.actualCents)}
-                      </td>
-                      <td
-                        className="mono"
-                        style={{
-                          textAlign: "right",
-                          padding: "6px 8px",
-                          color: overBudget ? "var(--red)" : undefined,
-                        }}
-                      >
-                        {row.varianceCents === 0 ? "—" : cents(row.varianceCents)}
-                      </td>
-                      <td style={{ textAlign: "center", padding: "6px 8px" }}>
-                        {overBudget ? (
-                          <Badge>
-                            <AlertTriangle size={10} /> Over
-                          </Badge>
+                      <td className="num"><Money cents={row.plannedCents} /></td>
+                      <td className="num"><Money cents={row.actualCents} /></td>
+                      <td className="num"><VarianceCell variance={result} /></td>
+                      <td>
+                        {result.cents === 0 ? (
+                          <Badge tone="neutral">On budget</Badge>
+                        ) : result.favourable ? (
+                          <Badge tone="success">{kind === "revenue" ? "Above target" : "Under budget"}</Badge>
                         ) : (
-                          <span className="muted">On track</span>
+                          <Badge tone="danger">{kind === "revenue" ? "Below target" : "Over budget"}</Badge>
                         )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
+              {variance.length > 1 && (
+                <tfoot>
+                  <tr>
+                    <th scope="row">Total</th>
+                    <td className="num"><Money cents={variance.reduce((sum, row) => sum + row.plannedCents, 0)} /></td>
+                    <td className="num"><Money cents={variance.reduce((sum, row) => sum + row.actualCents, 0)} /></td>
+                    <td />
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
             </div>
           )}
@@ -912,30 +919,54 @@ export function TreasurerPage() {
           <h2 className="card__title">Restricted funds</h2>
           <span className="card__subtitle">Active grants with earmarked funds</span>
         </div>
-        <div className="card__body col" style={{ gap: 12 }}>
-          {(!restricted || restricted.length === 0) && (
-            <div className="muted">No active grants with restricted purposes.</div>
+        <div className="card__body">
+          {restricted === undefined && <SkeletonRows rows={2} columns={4} />}
+          {restricted && restricted.length === 0 && (
+            <EmptyState
+              size="sm"
+              align="start"
+              title="No restricted funds"
+              description="Awarded or active grants with a restricted purpose appear here with their inflows, outflows and balance."
+              action={<Link className="btn-action" to="/app/grants">Open grants</Link>}
+            />
           )}
-          {(restricted ?? []).map((r) => (
-            <div key={r.grantId} className="card" style={{ padding: 12, border: "1px solid var(--border)" }}>
-              <div className="row" style={{ justifyContent: "space-between" }}>
-                <div>
-                  <strong>{r.title}</strong>
-                  <span className="muted"> — {r.funder}</span>
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{r.purpose}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div>
-                    <span className="muted">Balance</span>{" "}
-                    <span className="mono" style={{ fontWeight: 600 }}>{cents(r.balanceCents)}</span>
-                  </div>
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                    In: {cents(r.inflowCents)} / Out: {cents(r.outflowCents)}
-                  </div>
-                </div>
-              </div>
+          {restricted && restricted.length > 0 && (
+            <div className="finance-table-wrap">
+              <table className="table finance-table">
+                <thead>
+                  <tr>
+                    <th>Fund</th>
+                    <th className="num">In</th>
+                    <th className="num">Out</th>
+                    <th className="num">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {restricted.map((r) => (
+                    <tr key={r.grantId}>
+                      <td>
+                        <strong>{r.title}</strong>
+                        <div className="finance-table__sub">{[r.funder, r.purpose].filter(Boolean).join(" · ")}</div>
+                      </td>
+                      <td className="num"><Money cents={r.inflowCents} /></td>
+                      <td className="num"><Money cents={r.outflowCents} /></td>
+                      <td className="num"><Money cents={r.balanceCents} negativeStyle="parentheses" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+                {restricted.length > 1 && (
+                  <tfoot>
+                    <tr>
+                      <th scope="row">Total</th>
+                      <td className="num"><Money cents={restricted.reduce((sum, r) => sum + r.inflowCents, 0)} /></td>
+                      <td className="num"><Money cents={restricted.reduce((sum, r) => sum + r.outflowCents, 0)} /></td>
+                      <td className="num"><Money cents={restricted.reduce((sum, r) => sum + r.balanceCents, 0)} negativeStyle="parentheses" /></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -1420,21 +1451,23 @@ function SummaryCard({
   label,
   value,
   icon,
-  color,
+  tone,
 }: {
   label: string;
-  value: number;
+  value: number | undefined;
   icon: React.ReactNode;
-  color: string;
+  tone: "in" | "out" | "favourable" | "unfavourable";
 }) {
   return (
     <div className="card treasurer-summary-card">
       <div className="treasurer-summary-card__label">
-        <span style={{ color: `var(--${color}, inherit)` }}>{icon}</span>
+        <span className={`treasurer-summary-card__icon money--${tone}`}>{icon}</span>
         <span className="muted">{label}</span>
       </div>
-      <div className="mono treasurer-summary-card__value">
-        {cents(value)}
+      <div className="treasurer-summary-card__value">
+        {value === undefined
+          ? <Skeleton variant="line" width="60%" height={18} />
+          : <Money cents={value} variant="hero" tone={tone === "favourable" || tone === "unfavourable" ? tone : "auto"} />}
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { Badge } from "../../../components/ui";
-import { formatDate, money } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
+import { Money } from "../../../components/Money";
 
 export type WaveAccountView = "working" | "transaction" | "category" | "ledger" | "all";
 
@@ -130,12 +132,7 @@ export function counterpartyTransactionColumns() {
       align: "right" as const,
       accessor: (row: any) => row.amountCents,
       render: (row: any) => (
-        <span
-          className="table__cell--mono"
-          style={{ color: row.amountCents < 0 ? "var(--danger)" : "var(--success)" }}
-        >
-          {money(row.amountCents)}
-        </span>
+        <Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} />
       ),
     },
   ];
@@ -184,12 +181,7 @@ export function categoryAccountTransactionColumns() {
       align: "right" as const,
       accessor: (row: any) => row.amountCents,
       render: (row: any) => (
-        <span
-          className="table__cell--mono"
-          style={{ color: row.amountCents < 0 ? "var(--danger)" : "var(--success)" }}
-        >
-          {money(row.amountCents)}
-        </span>
+        <Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} />
       ),
     },
   ];
@@ -236,12 +228,7 @@ export function financialTransactionColumns(account: any) {
       align: "right" as const,
       accessor: (row: any) => row.amountCents,
       render: (row: any) => (
-        <span
-          className="table__cell--mono"
-          style={{ color: row.amountCents < 0 ? "var(--danger)" : "var(--success)" }}
-        >
-          {money(row.amountCents)}
-        </span>
+        <Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} />
       ),
     },
   ];
@@ -253,7 +240,7 @@ export function WaveResourceValue({ row }: { row: any }) {
     if (count > 0) {
       return (
         <>
-          {money(Number(row.linkedTransactionTotalCents ?? 0))}
+          <Money cents={Number(row.linkedTransactionTotalCents ?? 0)} />
           <div className="muted" style={{ fontSize: 11 }}>
             {count} txn{count === 1 ? "" : "s"}
           </div>
@@ -446,13 +433,13 @@ export function waveResourceDetailFields(resource: any, raw: any) {
     { label: "Currency", value: detailPair(raw?.currency?.name, currencyCode) },
     { label: "Balance", value: balanceText },
     isWaveCounterpartyResource(resource) && Number(resource.linkedTransactionCount ?? 0) > 0
-      ? { label: "Linked activity", value: `${money(Number(resource.linkedTransactionTotalCents ?? 0))} · ${resource.linkedTransactionCount} txn${resource.linkedTransactionCount === 1 ? "" : "s"}` }
+      ? { label: "Linked activity", value: `${formatMoney(Number(resource.linkedTransactionTotalCents ?? 0))} · ${resource.linkedTransactionCount} txn${resource.linkedTransactionCount === 1 ? "" : "s"}` }
       : undefined,
     isWaveCategoryAccount(resource) && Number(resource.linkedCategoryTransactionCount ?? 0) > 0
-      ? { label: "Categorized activity", value: `${money(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
+      ? { label: "Categorized activity", value: `${formatMoney(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
       : undefined,
     isWaveLedgerArtifactAccount(resource) && Number(resource.linkedCategoryTransactionCount ?? 0) > 0
-      ? { label: "Ledger activity", value: `${money(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
+      ? { label: "Ledger activity", value: `${formatMoney(Number(resource.linkedCategoryTransactionTotalCents ?? 0))} · ${resource.linkedCategoryTransactionCount} txn${resource.linkedCategoryTransactionCount === 1 ? "" : "s"}` }
       : undefined,
     // Only worth a row when it differs (a foreign-currency account).
     { label: "Business balance", value: businessBalanceText === balanceText ? undefined : businessBalanceText },
@@ -498,5 +485,9 @@ export function formatWaveValue(value?: string, currencyCode?: string) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return value;
   if (!currencyCode) return amount.toLocaleString("en-CA");
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode }).format(amount);
+  try {
+    return formatMoney(Math.round(amount * 100), { currency: currencyCode.toUpperCase() });
+  } catch {
+    return `${currencyCode} ${amount.toFixed(2)}`;
+  }
 }

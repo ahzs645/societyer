@@ -22,7 +22,11 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox, Upload } from "lucide-react";
 import { useToast } from "../components/Toast";
-import { centsToDollarInput, formatDate, money } from "../lib/format";
+import { centsToDollarInput, formatDate } from "../lib/format";
+import { formatMoney } from "../lib/money";
+import { Money } from "../components/Money";
+import { Tabs } from "../components/primitives";
+import { useUrlTab } from "../hooks/useUrlTab";
 import {
   buildGrantPayload,
   buildReportPayload,
@@ -51,6 +55,9 @@ import {
 } from "../../shared/recordValidation";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { GrantFundingCardLazy } from "../features/grants/insights/lazy";
+
+const GRANT_TABS = ["applications", "pipeline", "ledger", "reports"] as const;
+type GrantTab = (typeof GRANT_TABS)[number];
 
 export function GrantsPage() {
   const { loaded, can } = usePermissions();
@@ -81,6 +88,7 @@ export function GrantsPage() {
   const [ledgerFilterOpen, setLedgerFilterOpen] = useState(false);
   const [reportsViewId, setReportsViewId] = useState<Id<"views"> | undefined>(undefined);
   const [reportsFilterOpen, setReportsFilterOpen] = useState(false);
+  const [tab, setTab] = useUrlTab<GrantTab>(GRANT_TABS, "pipeline");
   const societyId = society?._id;
   const supportDataNeeded = loadSupportData || !!selectedGrant || !!grantDraft || !!txnDraft || !!reportDraft;
   const grantDetailDataNeeded = !!selectedGrant;
@@ -113,11 +121,11 @@ export function GrantsPage() {
   );
   const ledger = useQuery(
     api.grants.transactions,
-    society && (loadLowerSections || !!txnDraft) ? { societyId: society._id } : "skip",
+    society && (loadLowerSections || tab === "ledger" || !!txnDraft) ? { societyId: society._id } : "skip",
   );
   const reports = useQuery(
     api.grants.reports,
-    society && (loadLowerSections || !!selectedGrant || !!grantDraft || !!reportDraft) ? { societyId: society._id } : "skip",
+    society && (loadLowerSections || tab === "reports" || !!selectedGrant || !!grantDraft || !!reportDraft) ? { societyId: society._id } : "skip",
   );
   const committees = useQuery(
     api.committees.list,
@@ -322,7 +330,22 @@ export function GrantsPage() {
       <GrantSummaryStats summary={summary} />
       <GrantFundingCardLazy societyId={society._id} />
 
-      {!applicationsTable.loading && !applicationsTable.objectMetadata ? (
+      <div className="grants-tabs">
+        <Tabs<GrantTab>
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Grant sections"
+          tabRoles
+          items={[
+            { id: "applications", label: "Applications", count: applications ? applicationRows.length : null },
+            { id: "pipeline", label: "Pipeline", count: grants ? pipelineRows.length : null },
+            { id: "ledger", label: "Restricted ledger", count: ledger ? ledgerRows.length : null },
+            { id: "reports", label: "Reports", count: reports ? reportRows.length : null },
+          ]}
+        />
+      </div>
+
+      {tab === "applications" && (!applicationsTable.loading && !applicationsTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant application" />
       ) : applicationsTable.objectMetadata ? (
         <RecordTableScope
@@ -353,9 +376,9 @@ export function GrantsPage() {
                 </div>
               );
               if (field.name === "program") return <span>{record.program}</span>;
-              if (field.name === "amountRequestedCents") return <span className="mono">{money(record.amountRequestedCents)}</span>;
+              if (field.name === "amountRequestedCents") return <Money cents={record.amountRequestedCents} />;
               if (field.name === "status") return <Badge tone={record.status === "Converted" ? "success" : record.status === "Declined" ? "danger" : "warn"}>{record.status}</Badge>;
-              if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
+              if (field.name === "submittedAtISO") return <span>{formatDate(record.submittedAtISO)}</span>;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -414,11 +437,9 @@ export function GrantsPage() {
             )}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      {!pipelineTable.loading && !pipelineTable.objectMetadata ? (
+      {tab === "pipeline" && (!pipelineTable.loading && !pipelineTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant" />
       ) : pipelineTable.objectMetadata ? (
         <RecordTableScope
@@ -439,7 +460,7 @@ export function GrantsPage() {
             onOpenFilter={() => setPipelineFilterOpen((v) => !v)}
           />
           {archivedGrantCount > 0 && (
-            <label className="checkbox muted" style={{ display: "inline-flex", gap: 6, alignItems: "center", margin: "4px 0 8px", fontSize: 13 }}>
+            <label className="checkbox muted grants-archived-toggle">
               <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
               Show {archivedGrantCount} archived grant{archivedGrantCount === 1 ? "" : "s"}
             </label>
@@ -471,9 +492,9 @@ export function GrantsPage() {
                   <Badge tone="info">Not set</Badge>
                 );
               }
-              if (field.name === "amountAwardedCents") return <span className="mono">{money(row.amountAwardedCents)}</span>;
+              if (field.name === "amountAwardedCents") return <Money cents={row.amountAwardedCents} />;
               if (field.name === "nextAction") return row.nextAction ? <span>{row.nextAction}</span> : <span className="muted">—</span>;
-              if (field.name === "applicationDueDate") return <span className="mono">{row.applicationDueDate ? formatDate(row.applicationDueDate) : "—"}</span>;
+              if (field.name === "applicationDueDate") return <span>{row.applicationDueDate ? formatDate(row.applicationDueDate) : "—"}</span>;
               if (field.name === "sources") return row.sourceExternalIds?.length ? (
                 <Link to="/app/grants/sources" onClick={(e) => e.stopPropagation()}>
                   <Badge tone="info">{row.sourceExternalIds.length}</Badge>
@@ -518,11 +539,9 @@ export function GrantsPage() {
             )}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      {!ledgerTable.loading && !ledgerTable.objectMetadata ? (
+      {tab === "ledger" && (!ledgerTable.loading && !ledgerTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="ledger entry" />
       ) : ledgerTable.objectMetadata ? (
         <RecordTableScope
@@ -547,9 +566,9 @@ export function GrantsPage() {
             loading={ledgerTable.loading || ledger === undefined}
             renderCell={({ record: row, field }) => {
               if (field.name === "grantTitle") return <strong>{row.grantTitle}</strong>;
-              if (field.name === "date") return <span className="mono">{formatDate(row.date)}</span>;
+              if (field.name === "date") return <span>{formatDate(row.date)}</span>;
               if (field.name === "direction") return <span className="cell-tag">{row.direction === "inflow" ? "Inflow" : row.direction === "outflow" ? "Outflow" : row.direction}</span>;
-              if (field.name === "amountCents") return <span className="mono">{money(row.amountCents)}</span>;
+              if (field.name === "amountCents") return <Money cents={row.amountCents} tone={row.direction === "inflow" ? "in" : "auto"} />;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -563,7 +582,7 @@ export function GrantsPage() {
                   onClick={async () => {
                     const approved = await confirm({
                       title: "Delete ledger entry?",
-                      message: `"${row.description || "Untitled entry"}" (${money(row.amountCents)} ${row.direction}, ${formatDate(row.date)}) will be permanently removed from the ${row.grantTitle} restricted-fund ledger.`,
+                      message: `"${row.description || "Untitled entry"}" (${formatMoney(row.amountCents)} ${row.direction}, ${formatDate(row.date)}) will be permanently removed from the ${row.grantTitle} restricted-fund ledger.`,
                       confirmLabel: "Delete entry",
                       tone: "danger",
                     });
@@ -582,11 +601,9 @@ export function GrantsPage() {
             )}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
-      <div className="spacer-6" />
-
-      {!reportsTable.loading && !reportsTable.objectMetadata ? (
+      {tab === "reports" && (!reportsTable.loading && !reportsTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant report" />
       ) : reportsTable.objectMetadata ? (
         <RecordTableScope
@@ -612,9 +629,9 @@ export function GrantsPage() {
             renderCell={({ record: row, field }) => {
               if (field.name === "grantTitle") return <strong>{row.grantTitle}</strong>;
               if (field.name === "status") return <Badge tone={row.status === "Submitted" ? "success" : row.status === "Overdue" ? "danger" : "warn"}>{row.status}</Badge>;
-              if (field.name === "dueAtISO") return <span className="mono">{formatDate(row.dueAtISO)}</span>;
-              if (field.name === "submittedAtISO") return <span className="mono">{row.submittedAtISO ? formatDate(row.submittedAtISO) : "—"}</span>;
-              if (field.name === "spendingToDateCents") return <span className="mono">{money(row.spendingToDateCents)}</span>;
+              if (field.name === "dueAtISO") return <span>{formatDate(row.dueAtISO)}</span>;
+              if (field.name === "submittedAtISO") return <span>{row.submittedAtISO ? formatDate(row.submittedAtISO) : "—"}</span>;
+              if (field.name === "spendingToDateCents") return <Money cents={row.spendingToDateCents} />;
               return undefined;
             }}
             renderRowActions={(row) => (
@@ -647,7 +664,7 @@ export function GrantsPage() {
             )}
           />
         </RecordTableScope>
-      ) : null}
+      ) : null)}
 
       <GrantRemoveDialog
         grant={removingGrant}

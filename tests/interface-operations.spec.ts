@@ -425,7 +425,8 @@ test("financial overview contains every year-end column and opens the selected f
   await expect.poll(() => page.locator(".page").evaluate(element => element.scrollWidth <= element.clientWidth + 2)).toBe(true);
   await statements.scrollIntoViewIfNeeded();
   await statements.evaluate(element => { element.scrollLeft = element.scrollWidth; });
-  await expect(statements.getByRole("columnheader", { name: "Board approval", exact: true })).toBeInViewport();
+  // Years are columns now; the sticky line-label column keeps "Board approval" in view while scrolled.
+  await expect(statements.getByRole("rowheader", { name: "Board approval", exact: true })).toBeInViewport();
   await statements.evaluate(element => { element.scrollLeft = 0; });
   await statements.getByRole("button", { name: "Open FY 2025-2026 financial detail", exact: true }).click();
   await expect(page.getByRole("heading", { name: "FY 2025-2026 financials", exact: true })).toBeVisible();

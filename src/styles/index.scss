@@ -92,6 +92,9 @@
 // Foundations v2: shared StatTile, and surface/elevation/motion overrides.
 @use "stat-tile";
 @use "surfaces";
+// Financial report tables (statements, trial balance, P&L).
+@use "report-table";
+@use "finance-reports"; // finance chips, drilldown drawer, operational finance tables
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

@@ -1,0 +1,294 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Finance reports: filter chips, report toolbars, drilldown drawer,
+// operational finance tables (sticky header, totals row, right-aligned money).
+// ============================================================
+
+// ---------- Filter chips / toggles ----------
+.finance-chips {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-1');
+  min-width: 0;
+}
+.finance-chip {
+  @include inline-flex-center;
+  gap: token('s-1');
+  min-height: 28px;
+  padding: 0 token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-pill');
+  background: token('bg-panel');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
+  &:hover:not(:disabled) {
+    background: token('bg-hover-alpha');
+    color: token('text-primary');
+  }
+  &.is-active {
+    background: token('accent-soft');
+    border-color: token('accent');
+    color: token('text-primary');
+  }
+  &:disabled {
+    opacity: token('opacity-disabled');
+  }
+}
+@media (pointer: coarse) {
+  .finance-chip {
+    min-height: 40px;
+  }
+}
+
+.finance-report-control {
+  @include inline-flex-center;
+  gap: token('s-2');
+  min-width: 0;
+  .input,
+  select {
+    width: auto;
+    min-width: 0;
+  }
+}
+.finance-report-control__label {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: nowrap;
+}
+.finance-report-note {
+  margin: 0;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.finance-report-heading {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  margin: token('s-2') 0 0;
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+}
+
+// ---------- Drilldown drawer ----------
+.finance-drilldown {
+  @include flex-column;
+  gap: token('s-4');
+  min-width: 0;
+}
+.finance-drilldown__summary {
+  @include flex-column;
+  gap: token('s-2');
+}
+.finance-drilldown__total {
+  @include flex-column;
+  gap: 2px;
+  .money {
+    font-size: token('fs-xl');
+    font-weight: token('fw-semibold');
+  }
+}
+.finance-drilldown__composition {
+  padding: token('s-3');
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+  font-size: token('fs-sm');
+  p { margin: 0 0 token('s-2'); }
+  p:last-child { margin-bottom: 0; }
+}
+.finance-drilldown__list {
+  @include flex-column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-md');
+  overflow: hidden;
+}
+.finance-drilldown__item {
+  display: flex;
+  gap: token('s-3');
+  justify-content: space-between;
+  padding: token('s-3');
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-panel');
+  &:last-child { border-bottom: 0; }
+}
+.finance-drilldown__item-main {
+  @include flex-column;
+  gap: 2px;
+  min-width: 0;
+}
+.finance-drilldown__item-title {
+  font-weight: token('fw-medium');
+  overflow-wrap: anywhere;
+}
+.finance-drilldown__item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+  font-size: token('fs-xs');
+}
+.finance-drilldown__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+  margin-top: 2px;
+}
+.finance-drilldown__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1');
+  margin-top: token('s-1');
+  margin-left: calc(-1 * #{token('s-2')});
+}
+.finance-drilldown__amounts {
+  @include flex-column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+  text-align: right;
+}
+.finance-drilldown__side {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.finance-drilldown__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: token('s-4');
+  font-weight: token('fw-medium');
+  .muted { margin-right: auto; font-weight: token('fw-regular'); }
+}
+
+// ---------- Operational finance tables ----------
+// Simple tables (budget lines, funding mix, registers): sticky header (from
+// .table), money right-aligned, a totals row with a hairline above it.
+.finance-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.finance-table {
+  width: 100%;
+  min-width: max-content;
+}
+.finance-table td.num,
+.finance-table th.num {
+  text-align: right;
+}
+.finance-table tfoot td,
+.finance-table tfoot th {
+  height: token('row-h-compact');
+  padding: 0 8px;
+  border-top: 1px solid token('border-strong');
+  background: token('bg-panel');
+  font-weight: token('fw-semibold');
+  text-align: left;
+  &.num { text-align: right; }
+}
+.finance-table__sub {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.finance-table__variance {
+  @include flex-column;
+  align-items: flex-end;
+  gap: 0;
+  line-height: 1.2;
+  padding: 2px 0;
+}
+.finance-empty-row td {
+  padding: token('s-4') token('s-3') !important;
+  height: auto !important;
+  white-space: normal;
+}
+
+.finance-statement-stack {
+  @include flex-column;
+  gap: token('s-3');
+  min-width: 0;
+}
+.finance-report-toolbar {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2') token('s-3');
+  min-width: 0;
+}
+
+// Accounting statements card.
+.accounting-statements__download {
+  margin-left: auto;
+}
+.accounting-statements__body {
+  gap: token('s-3');
+}
+.accounting-statements__save {
+  align-self: flex-start;
+}
+.accounting-entry.is-focused {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: 2px;
+  border-radius: token('r-sm');
+}
+
+// ---------- Financials overview ----------
+.financials-empty-card {
+  margin-bottom: token('s-4');
+}
+.yoy-year-link {
+  @include inline-flex-center;
+  gap: 2px;
+  margin: 0 calc(-1 * #{token('s-1')});
+  padding: 2px token('s-1');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-secondary');
+  font: inherit;
+  font-weight: token('fw-medium');
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover {
+    background: token('bg-hover-alpha');
+    color: token('text-primary');
+  }
+}
+.yoy-audit {
+  @include inline-flex-center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: token('s-1');
+}
+.yoy-audit__by {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+
+// Year-end reports: the exported document sits collapsed under the table.
+.year-end-preview {
+  > summary {
+    width: fit-content;
+    padding: token('s-1') 0;
+    color: token('text-secondary');
+    font-size: token('fs-sm');
+    font-weight: token('fw-medium');
+    cursor: pointer;
+  }
+  &[open] > summary {
+    margin-bottom: token('s-2');
+  }
+}
+
+// ---------- Card skeletons ----------
+.finance-card-skeleton {
+  padding: token('s-3');
+}

@@ -4,7 +4,8 @@ import { useQuery } from "convex/react";
 import { Braces, Database, ExternalLink, RefreshCw } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Flag } from "../../../components/ui";
-import { formatDateTime, money } from "../../../lib/format";
+import { formatDateTime } from "../../../lib/format";
+import { Money } from "../../../components/Money";
 import {
   type WaveAccountView,
   WaveResourceValue,
@@ -143,7 +144,7 @@ export function WaveCacheExplorer({
                   <tr
                     key={row._id}
                     onClick={() => onSelectResource(row._id)}
-                    style={{ cursor: "pointer", background: selected ? "var(--surface-muted)" : undefined }}
+                    style={{ cursor: "pointer", background: selected ? "var(--bg-selected-alpha)" : undefined }}
                   >
                     <td>
                       <strong>{row.label}</strong>
@@ -633,7 +634,7 @@ function AccountTransactionsPreview({
             <tr>
               <th>Date</th>
               <th>Description</th>
-              <th style={{ textAlign: "right" }}>Amount</th>
+              <th className="num">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -646,7 +647,7 @@ function AccountTransactionsPreview({
                     ? row.account?.name && <div className="muted" style={{ fontSize: 12 }}>{row.account.name}</div>
                     : row.category && <div className="muted" style={{ fontSize: 12 }}>{row.category}</div>}
                 </td>
-                <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.amountCents)}</td>
+                <td className="num"><Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} /></td>
               </tr>
             ))}
           </tbody>
@@ -697,7 +698,7 @@ function CounterpartyTransactionsPreview({
               <th>Description</th>
               <th>Account</th>
               <th>Category</th>
-              <th style={{ textAlign: "right" }}>Amount</th>
+              <th className="num">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -718,7 +719,7 @@ function CounterpartyTransactionsPreview({
                     )}
                   </td>
                   <td>{row.category ? <Badge>{row.category}</Badge> : <span className="muted">uncategorized</span>}</td>
-                  <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(row.amountCents)}</td>
+                  <td className="num"><Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} /></td>
                 </tr>
               );
             })}
@@ -777,7 +778,7 @@ export function TransactionDrawer({
             <Badge tone={transaction.amountCents < 0 ? "warn" : "success"}>
               {transaction.amountCents < 0 ? "expense" : "income"}
             </Badge>
-            <strong>{money(transaction.amountCents)}</strong>
+            <strong><Money cents={transaction.amountCents} tone={transaction.amountCents > 0 ? "in" : "auto"} /></strong>
           </div>
           <div
             style={{

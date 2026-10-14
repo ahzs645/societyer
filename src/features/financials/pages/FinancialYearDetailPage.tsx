@@ -7,6 +7,8 @@ import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { Badge } from "../../../components/ui";
 import { RecordShowPage } from "../../../components/RecordShowPage";
 import { formatDate } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
+import { Money } from "../../../components/Money";
 import { DetailCell } from "../components/WaveCacheExplorer";
 import { FinancialPresentationCard } from "../components/FinancialPresentationCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
@@ -184,12 +186,13 @@ function StatementImportTables({
             <Stat label="Restricted" value={moneyDetailed(row.restrictedFundsCents)} />
           </div>
           {row.lines?.length > 0 ? (
-            <table className="table">
+            <div className="finance-table-wrap">
+            <table className="table finance-table">
               <thead>
                 <tr>
                   <th>Section</th>
                   <th>Line</th>
-                  <th style={{ textAlign: "right" }}>Amount</th>
+                  <th className="num">Amount</th>
                   <th>Confidence</th>
                 </tr>
               </thead>
@@ -198,12 +201,13 @@ function StatementImportTables({
                   <tr key={line._id}>
                     <td>{line.section}</td>
                     <td>{line.label}</td>
-                    <td className="table__cell--mono" style={{ textAlign: "right" }}>{moneyDetailed(line.amountCents)}</td>
+                    <td className="num"><Money cents={line.amountCents} negativeStyle="parentheses" /></td>
                     <td><Badge tone={line.confidence === "High" ? "success" : line.confidence === "Medium" ? "info" : "warn"}>{line.confidence}</Badge></td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           ) : (
             <div className="card__body muted">No line items were extracted for this import.</div>
           )}
@@ -278,10 +282,10 @@ function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exact
             <th>Import</th>
             <th>Period end</th>
             <th>Status</th>
-            <th>Revenue</th>
-            <th>Expenses</th>
-            <th>Net assets</th>
-            <th>Lines</th>
+            <th className="num">Revenue</th>
+            <th className="num">Expenses</th>
+            <th className="num">Net assets</th>
+            <th className="num">Lines</th>
             <th>Sources</th>
           </tr>
         </thead>
@@ -294,10 +298,10 @@ function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exact
               </td>
               <td className="table__cell--mono">{formatDate(row.periodEnd)}</td>
               <td><Badge tone={row.status === "Verified" ? "success" : row.status === "Rejected" ? "danger" : "warn"}>{row.status}</Badge></td>
-              <td className="table__cell--mono">{moneyDetailed(row.revenueCents)}</td>
-              <td className="table__cell--mono">{moneyDetailed(row.expensesCents)}</td>
-              <td className="table__cell--mono">{moneyDetailed(row.netAssetsCents)}</td>
-              <td className="table__cell--mono">{row.lines?.length ?? 0}</td>
+              <td className="num"><Money cents={row.revenueCents} negativeStyle="parentheses" /></td>
+              <td className="num"><Money cents={row.expensesCents} negativeStyle="parentheses" /></td>
+              <td className="num"><Money cents={row.netAssetsCents} negativeStyle="parentheses" /></td>
+              <td className="num">{row.lines?.length ?? 0}</td>
               <td>
                 <div className="tag-list">
                   {(row.sourceExternalIds ?? []).map((id: string) => <Badge key={id}>{id}</Badge>)}
@@ -324,14 +328,9 @@ function optionalCentsMatch(importValue: number | undefined, financialValue: num
   return importValue == null || importValue === financialValue;
 }
 
+/** Statement figures: fixed decimals, accounting parentheses for negatives. */
 function moneyDetailed(cents?: number) {
-  if (cents == null) return "—";
-  return new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency: "CAD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
+  return formatMoney(cents, { negativeStyle: "parentheses" });
 }
 
 function documentExternalId(doc: any) {

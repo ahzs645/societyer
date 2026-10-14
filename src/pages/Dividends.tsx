@@ -4,7 +4,9 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field, InspectorNote, SkeletonRows } from "../components/ui";
+import { Money } from "../components/Money";
+import { DEFAULT_CURRENCY, formatMoney } from "../lib/money";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Checkbox } from "../components/Controls";
@@ -110,8 +112,8 @@ export function DividendsPage() {
   const scope = options?.scope;
   const classes = options?.classes ?? [];
   const className = (id?: string) => classes.find((c) => c._id === id)?.className ?? "";
-  const money = (cents: number, currency = "CAD") => {
-    try { return (cents / 100).toLocaleString(undefined, { style: "currency", currency }); } catch { return `${currency} ${(cents / 100).toFixed(2)}`; }
+  const money = (cents: number, currency = DEFAULT_CURRENCY) => {
+    try { return formatMoney(cents, { currency }); } catch { return `${currency} ${(cents / 100).toFixed(2)}`; }
   };
 
   const openNew = () => {
@@ -233,7 +235,7 @@ export function DividendsPage() {
       )}
 
       {Object.keys(byClass).length > 0 && (
-        <p style={{ color: "var(--text-secondary)" }}>
+        <p className="muted">
           Declared totals by class:{" "}
           {Object.entries(byClass)
             .map(([cls, cents]) => `${cls} ${money(cents)}`)
@@ -243,9 +245,9 @@ export function DividendsPage() {
 
       <div className="card">
         {rows === undefined ? (
-          <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
+          <SkeletonRows rows={3} columns={6} />
         ) : rows.length === 0 ? (
-          <p style={{ color: "var(--text-tertiary)" }}>No dividend declarations yet.</p>
+          <EmptyState size="sm" title="No dividend declarations yet" description="Record a declaration with its record date, per-share amount and the board's solvency confirmation." />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -255,9 +257,9 @@ export function DividendsPage() {
                   <th>Share class</th>
                   <th>Record date</th>
                   <th>Payment date</th>
-                  <th>Per share</th>
-                  <th>Shares</th>
-                  <th>Total</th>
+                  <th className="num">Per share</th>
+                  <th className="num">Shares</th>
+                  <th className="num">Total</th>
                   <th>Status</th>
                   <th></th>
                 </tr>
@@ -277,12 +279,12 @@ export function DividendsPage() {
                       </td>
                       <td>{r.recordDate ? formatDate(r.recordDate) : "—"}</td>
                       <td>{r.paymentDate ? formatDate(r.paymentDate) : "—"}</td>
-                      <td>{r.currency} {r.perShareAmount}</td>
-                      <td>
+                      <td className="num">{r.currency} {r.perShareAmount}</td>
+                      <td className="num">
                         {r.sharesOutstanding.toLocaleString()}
                         <div className="muted">{r.sharesSource === "ledger" ? "From the ledger" : r.sharesSource === "manual" ? "Entered by hand" : ""}</div>
                       </td>
-                      <td>{money(r.totalCents, r.currency)}</td>
+                      <td className="num"><Money cents={r.totalCents} currency={r.currency} /></td>
                       <td>
                         <Badge tone={STATUS_TONE[status] ?? "neutral"}>{STATUS_LABEL[status] ?? status}</Badge>
                         {!r.solvencyConfirmedAt && r.status !== "draft" && r.status !== "cancelled" && <div className="muted">No solvency confirmation recorded</div>}
@@ -324,10 +326,10 @@ export function DividendsPage() {
                         </div>
                         {expanded === r._id && (
                           <table className="table" style={{ marginTop: 8 }}>
-                            <thead><tr><th>Holder at record date</th><th>Shares</th><th>Amount</th></tr></thead>
+                            <thead><tr><th>Holder at record date</th><th className="num">Shares</th><th className="num">Amount</th></tr></thead>
                             <tbody>
                               {(r.entitlements ?? []).map((e) => (
-                                <tr key={e.holderKey}><td>{e.holderName}</td><td>{e.shares.toLocaleString()}</td><td>{r.currency} {e.amount}</td></tr>
+                                <tr key={e.holderKey}><td>{e.holderName}</td><td className="num">{e.shares.toLocaleString()}</td><td className="num">{r.currency} {e.amount}</td></tr>
                               ))}
                             </tbody>
                           </table>
@@ -451,10 +453,10 @@ export function DividendsPage() {
                 </strong>
                 {preview.snapshot && preview.snapshot.entitlements.length > 0 && (
                   <table className="table" style={{ marginTop: 8 }}>
-                    <thead><tr><th>Holder</th><th>Shares</th><th>Amount</th></tr></thead>
+                    <thead><tr><th>Holder</th><th className="num">Shares</th><th className="num">Amount</th></tr></thead>
                     <tbody>
                       {preview.snapshot.entitlements.map((e) => (
-                        <tr key={e.holderKey}><td>{e.holderName}</td><td>{e.shares.toLocaleString()}</td><td>{e.amount}</td></tr>
+                        <tr key={e.holderKey}><td>{e.holderName}</td><td className="num">{e.shares.toLocaleString()}</td><td className="num">{e.amount}</td></tr>
                       ))}
                     </tbody>
                   </table>

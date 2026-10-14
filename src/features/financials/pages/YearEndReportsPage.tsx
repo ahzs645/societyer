@@ -19,7 +19,9 @@ import { useSociety } from "../../../hooks/useSociety";
 import { organizationVocabulary } from "../../../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "../../../pages/_helpers";
 import { Badge, Field } from "../../../components/ui";
-import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../../../lib/format";
+import { centsToDollarInput, dollarInputToCents, formatDate } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
+import { OrgStatementTable, RestrictedFundsTable } from "../components/YearEndStatementTables";
 import { Tabs } from "../../../components/primitives";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { exportWordDocx } from "../../../lib/docx";
@@ -126,6 +128,16 @@ function ReportActions({ title, filenameBase, bodyHtml }: { title: string; filen
         <Printer size={12} /> Print
       </button>
     </div>
+  );
+}
+
+/** The exported document, collapsed under the in-app statement table. */
+function DocumentPreview({ bodyHtml }: { bodyHtml: string }) {
+  return (
+    <details className="year-end-preview">
+      <summary>Preview the exported document</summary>
+      <PreviewBox bodyHtml={bodyHtml} />
+    </details>
   );
 }
 
@@ -397,7 +409,8 @@ export function YearEndReportsPage() {
                 filenameBase={`restricted-funds-${fiscalYear}`}
                 bodyHtml={renderRestrictedFundsHtml(restricted, society)}
               />
-              <PreviewBox bodyHtml={renderRestrictedFundsHtml(restricted, society)} />
+              <RestrictedFundsTable data={restricted as any} grantTransactions={grantTxns as any[] | undefined} />
+              <DocumentPreview bodyHtml={renderRestrictedFundsHtml(restricted, society)} />
             </>
           )}
         </div>
@@ -428,7 +441,8 @@ export function YearEndReportsPage() {
                 filenameBase={`organization-revenue-expenses-${fiscalYear}`}
                 bodyHtml={renderOrgStatementHtml(orgStatement, society)}
               />
-              <PreviewBox bodyHtml={renderOrgStatementHtml(orgStatement, society)} />
+              <OrgStatementTable statement={orgStatement} />
+              <DocumentPreview bodyHtml={renderOrgStatementHtml(orgStatement, society)} />
             </>
           )}
         </div>
@@ -481,8 +495,8 @@ export function YearEndReportsPage() {
                               {s.funderName ? `${s.funderName} · ` : ""}Actuals {s.priorFiscalYearLabel} · Budget {s.currentFiscalYearLabel}
                             </span>
                             <span className="meta">
-                              Revenues {money(totals.revenueActualCents)} · Expenses {money(totals.expenseActualCents)} · Surplus/Deficit{" "}
-                              {money(totals.surplusActualCents)}
+                              Revenues {formatMoney(totals.revenueActualCents)} · Expenses {formatMoney(totals.expenseActualCents)} · Surplus/Deficit{" "}
+                              {formatMoney(totals.surplusActualCents)}
                             </span>
                           </div>
                           <div className="row" style={{ gap: 6 }}>
@@ -693,13 +707,13 @@ function ProgramStatementEditor({
       <div className="card" style={{ padding: 12 }}>
         <div className="row" style={{ gap: 16, flexWrap: "wrap" }}>
           <span>
-            Total Revenues: <strong>{money(totals.revenueActualCents)}</strong> / {money(totals.revenueBudgetCents)}
+            Total Revenues: <strong>{formatMoney(totals.revenueActualCents)}</strong> / {formatMoney(totals.revenueBudgetCents)}
           </span>
           <span>
-            Total Expenses: <strong>{money(totals.expenseActualCents)}</strong> / {money(totals.expenseBudgetCents)}
+            Total Expenses: <strong>{formatMoney(totals.expenseActualCents)}</strong> / {formatMoney(totals.expenseBudgetCents)}
           </span>
           <span>
-            Surplus / Deficit: <strong>{money(totals.surplusActualCents)}</strong> / {money(totals.surplusBudgetCents)}
+            Surplus / Deficit: <strong>{formatMoney(totals.surplusActualCents)}</strong> / {formatMoney(totals.surplusBudgetCents)}
           </span>
         </div>
       </div>

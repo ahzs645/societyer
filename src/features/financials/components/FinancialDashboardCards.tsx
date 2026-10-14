@@ -1,7 +1,8 @@
 import { Link2, PlusCircle, Settings, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Badge } from "../../../components/ui";
+import { Badge, Skeleton } from "../../../components/ui";
 import { formatDate, money } from "../../../lib/format";
+import { Money } from "../../../components/Money";
 import {
   monthlyEstimateCents,
   operatingSubscriptionIntervalLabel,
@@ -55,7 +56,7 @@ export function OperatingSubscriptionsCard({
             <th>Category</th>
             <th>Status</th>
             <th>Billing</th>
-            <th style={{ textAlign: "right" }}>Monthly est.</th>
+            <th className="num">Monthly est.</th>
             <th>Renewal</th>
             <th />
           </tr>
@@ -70,14 +71,14 @@ export function OperatingSubscriptionsCard({
               <td><span className="cell-tag">{row.category}</span></td>
               <td><Badge tone={operatingSubscriptionStatusTone(row.status)}>{row.status}</Badge></td>
               <td>
-                <span className="table__cell--mono">{money(row.amountCents)}</span>
+                <Money cents={row.amountCents} currency={row.currency} />
                 <span className="muted"> / {operatingSubscriptionIntervalLabel(row.interval)}</span>
               </td>
-              <td className="table__cell--mono" style={{ textAlign: "right" }}>
-                {money(row.monthlyEstimateCents ?? monthlyEstimateCents(row))}
+              <td className="num">
+                <Money cents={row.monthlyEstimateCents ?? monthlyEstimateCents(row)} currency={row.currency} />
               </td>
-              <td className="table__cell--mono">{row.nextRenewalDate ? formatDate(row.nextRenewalDate) : "—"}</td>
-              <td style={{ textAlign: "right" }}>
+              <td>{row.nextRenewalDate ? formatDate(row.nextRenewalDate) : "—"}</td>
+              <td className="num">
                 <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}>
                   Edit
                 </button>
@@ -92,19 +93,17 @@ export function OperatingSubscriptionsCard({
             </tr>
           ))}
           {!loading && rows.length === 0 && (
-            <tr>
-              <td colSpan={7} className="muted" style={{ textAlign: "center", padding: 16 }}>
+            <tr className="finance-empty-row">
+              <td colSpan={7} className="muted">
                 No subscription costs yet. Add software, services, or other recurring expenses to estimate monthly spend.
               </td>
             </tr>
           )}
-          {loading && (
-            <tr>
-              <td colSpan={7} className="muted" style={{ textAlign: "center", padding: 16 }}>
-                Loading subscription costs...
-              </td>
+          {loading && [0, 1, 2].map((index) => (
+            <tr key={`loading-${index}`} aria-hidden="true">
+              <td colSpan={7}><Skeleton variant="line" width={index === 1 ? "45%" : "60%"} /></td>
             </tr>
-          )}
+          ))}
         </tbody>
       </table>
     </div>
