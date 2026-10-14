@@ -49,7 +49,7 @@ export function waveResourceColumns() {
         <>
           <Badge>{waveResourceBadgeLabel(row)}</Badge>
           {(row.typeValue || row.subtypeValue) && (
-            <div className="muted" style={{ fontSize: 12 }}>
+            <div className="wave-cache-table__subtype">
               {[humanizeWaveEnum(row.typeValue), humanizeWaveEnum(row.subtypeValue)].filter(Boolean).join(" · ")}
             </div>
           )}
@@ -70,7 +70,7 @@ export function waveResourceColumns() {
       align: "right" as const,
       accessor: (row: any) => waveResourceValueSort(row),
       render: (row: any) => (
-        <span className="table__cell--mono"><WaveResourceValue row={row} /></span>
+        <WaveResourceValue row={row} />
       ),
     },
     {
@@ -78,7 +78,7 @@ export function waveResourceColumns() {
       header: "Date",
       sortable: true,
       accessor: (row: any) => row.dateValue ?? "",
-      render: (row: any) => <span className="table__cell--mono">{row.dateValue ? formatDate(row.dateValue) : "—"}</span>,
+      render: (row: any) => (row.dateValue ? formatDate(row.dateValue) : "—"),
     },
   ];
 }

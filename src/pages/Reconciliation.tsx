@@ -16,6 +16,7 @@ import { StatTile } from "../components/StatTile";
 import { Boxes, GitCompareArrows, Scale, Link2, Undo2, Plus, Wand2 } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { useIsMobile } from "../lib/useIsMobile";
 import {
   RecordTable,
   RecordTableScope,
@@ -108,11 +109,15 @@ export function ReconciliationPage() {
 
   // Amount and match status are what a reconciler scans for, so they sit
   // right after the description/date (and stay visible) instead of off to
-  // the right past a wide counterparty column.
+  // the right past a wide counterparty column. On phones only the frozen
+  // description and the next column or two fit, so the amount comes first.
+  const isMobile = useIsMobile();
   const reconciliationView = useMemo(() => {
     const view = tableData.hydratedView;
     if (!view) return view;
-    const order = ["description", "date", "amountCents", "status", "counterparty"];
+    const order = isMobile
+      ? ["description", "amountCents", "status", "date", "counterparty"]
+      : ["description", "date", "amountCents", "status", "counterparty"];
     const sizes: Record<string, number> = { description: 210, date: 130, amountCents: 145, status: 140, counterparty: 160 };
     const rank = (name: string) => {
       const index = order.indexOf(name);
@@ -134,7 +139,7 @@ export function ReconciliationPage() {
         .sort((a, b) => rank(a.field.name) - rank(b.field.name))
         .map((column, position) => ({ ...column, position })),
     };
-  }, [tableData.hydratedView]);
+  }, [isMobile, tableData.hydratedView]);
 
   const rows = overview?.rows ?? [];
   const summary = overview?.summary ?? { total: 0, reconciled: 0, withSuggestions: 0, unmatched: 0 };
@@ -390,7 +395,7 @@ export function ReconciliationPage() {
 
         <div className="col" style={{ gap: 16 }} id="reconciliation-match-panel">
           {!selectedRow && (
-            <div className="card">
+            <div className="card reconciliation-match-placeholder">
               <div className="card__body muted" style={{ textAlign: "center", padding: 32 }}>
                 Click a transaction (or its Match button) to see match suggestions.
               </div>

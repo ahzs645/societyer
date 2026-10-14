@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { bankTransactions, type FinanceAccount, type FinanceTxn } from "./series";
+import { inferBudgetKind, type BudgetKind } from "../lib/budgetKind";
+
+type BudgetRow = { _id: string; category: string; accountId?: string; fiscalYear: string; plannedCents: number; actualCents: number; currency?: string };
 
 /** Enough history for multi-year trends without paging. */
 const HISTORY_LIMIT = 5000;
@@ -25,7 +28,12 @@ export function useFinanceInsightsData(societyId: string | undefined, enabled = 
       txns,
       currentBalance: Number(summary?.totalBalance ?? 0),
       bankAccountCount,
-      budgetRows: (summary?.budgetRows ?? []) as Array<{ _id: string; category: string; fiscalYear: string; plannedCents: number; actualCents: number; currency?: string }>,
+      // Revenue lines are favourable above plan, so the bars need each line's
+      // kind (the same inference the budget table on this page uses).
+      budgetRows: ((summary?.budgetRows ?? []) as BudgetRow[]).map((row): BudgetRow & { kind: BudgetKind } => ({
+        ...row,
+        kind: inferBudgetKind(row, { accounts: (accounts ?? []) as any[], transactions: (transactions ?? []) as any[] }),
+      })),
       earliest: txns[0]?.date ?? null,
       hasAnyFinance: bankAccountCount > 0 || txns.length > 0,
       truncated: (transactions?.length ?? 0) >= HISTORY_LIMIT,

@@ -10,6 +10,7 @@ import {
   type WaveAccountView,
   WaveResourceValue,
   filterWaveResourcesForView,
+  humanizeWaveEnum,
   isWaveCategoryAccount,
   isWaveCounterpartyResource,
   isWaveLedgerArtifactAccount,
@@ -126,13 +127,13 @@ export function WaveCacheExplorer({
 
       {mode === "resources" ? (
         <>
-          <table className="table">
+          <table className="table table--comfortable wave-cache-table">
             <thead>
               <tr>
                 <th>Resource</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Value</th>
+                <th className="num">Value</th>
                 <th>Date</th>
                 <th />
               </tr>
@@ -152,14 +153,14 @@ export function WaveCacheExplorer({
                     <td>
                       <Badge>{waveTypeLabel(row.resourceType)}</Badge>
                       {(row.typeValue || row.subtypeValue) && (
-                        <div className="muted" style={{ fontSize: 12 }}>
-                          {[row.typeValue, row.subtypeValue].filter(Boolean).join(" / ")}
+                        <div className="wave-cache-table__subtype">
+                          {[humanizeWaveEnum(row.typeValue), humanizeWaveEnum(row.subtypeValue)].filter(Boolean).join(" · ")}
                         </div>
                       )}
                     </td>
-                    <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{row.status}</Badge> : "—"}</td>
-                    <td className="table__cell--mono"><WaveResourceValue row={row} /></td>
-                    <td className="table__cell--mono">{row.dateValue ?? "—"}</td>
+                    <td>{row.status ? <Badge tone={row.status === "archived" ? "neutral" : "info"}>{humanizeWaveEnum(row.status)}</Badge> : "—"}</td>
+                    <td className="num"><WaveResourceValue row={row} /></td>
+                    <td>{row.dateValue ?? "—"}</td>
                     <td style={{ textAlign: "right" }}>
                       <Link
                         className="btn btn--ghost btn--sm"

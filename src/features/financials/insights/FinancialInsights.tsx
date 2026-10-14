@@ -11,7 +11,8 @@ import {
   type TimeRow,
 } from "../../../components/charts";
 import { todayDateOnly } from "../../../lib/format";
-import { formatMoney } from "../../../lib/money";
+import { budgetVariance, formatMoney } from "../../../lib/money";
+import type { BudgetKind } from "../lib/budgetKind";
 import { FinanceRangeBar } from "./FinanceRangeBar";
 import { FinanceRangeStats } from "./FinanceRangeStats";
 import {
@@ -155,14 +156,14 @@ function useInsightSeries(txns: ReturnType<typeof useFinanceInsightsData>["txns"
   }, [compare, currentBalance, focus, range, selection, txns]);
 }
 
-function BudgetVsActualCard({ rows, loading }: { rows: Array<{ _id: string; category: string; fiscalYear: string; plannedCents: number; actualCents: number }>; loading: boolean }) {
+function BudgetVsActualCard({ rows, loading }: { rows: Array<{ _id: string; category: string; fiscalYear: string; plannedCents: number; actualCents: number; kind: BudgetKind }>; loading: boolean }) {
   const latestYear = rows.reduce<string | null>((max, r) => (max == null || r.fiscalYear > max ? r.fiscalYear : max), null);
   const yearRows = rows.filter((r) => r.fiscalYear === latestYear);
   if (!loading && yearRows.length === 0) return null;
   return (
     <ChartCard
       title="Budget vs actuals"
-      subtitle={latestYear ? `FY ${latestYear} · spending against plan by category` : undefined}
+      subtitle={latestYear ? `FY ${latestYear} · actuals against plan by category` : undefined}
       loading={loading}
       height={120}
       table={{
@@ -173,10 +174,10 @@ function BudgetVsActualCard({ rows, loading }: { rows: Array<{ _id: string; cate
           { key: "actual", label: "Actual", numeric: true },
           { key: "variance", label: "Variance", numeric: true },
         ],
-        rows: yearRows.map((r) => ({ category: r.category, planned: formatMoney(r.plannedCents), actual: formatMoney(r.actualCents), variance: formatMoney(r.plannedCents - r.actualCents, { signDisplay: "exceptZero" }) })),
+        rows: yearRows.map((r) => ({ category: r.category, planned: formatMoney(r.plannedCents), actual: formatMoney(r.actualCents), variance: formatMoney(budgetVariance(r.plannedCents, r.actualCents, r.kind).cents, { signDisplay: "exceptZero" }) })),
       }}
     >
-      <BudgetBars rows={yearRows.map((r) => ({ key: String(r._id), label: r.category, planned: r.plannedCents, actual: r.actualCents }))} ariaLabel={`Budget vs actual by category${latestYear ? ` for FY ${latestYear}` : ""}`} />
+      <BudgetBars rows={yearRows.map((r) => ({ key: String(r._id), label: r.category, planned: r.plannedCents, actual: r.actualCents, kind: r.kind }))} ariaLabel={`Budget vs actual by category${latestYear ? ` for FY ${latestYear}` : ""}`} />
     </ChartCard>
   );
 }

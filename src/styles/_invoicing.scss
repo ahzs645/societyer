@@ -443,6 +443,7 @@ th.num .invoice-sort { flex-direction: row-reverse; }
 
 /* Bill-to picker */
 .billto { position: relative; }
+.billto--search > .input { width: 100%; }
 .billto__chosen {
   display: flex;
   align-items: center;

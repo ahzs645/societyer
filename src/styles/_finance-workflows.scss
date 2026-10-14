@@ -371,6 +371,13 @@
   .approvals-table td[data-label="Status"],
   .approvals-table td[data-label="Reference"] { grid-column: 2; }
   .approvals-table__actions { grid-column: 3; grid-row: 2 / span 3; align-self: end; width: auto; }
+  // Rows are grid cards here: tint the whole card, not each cell (the
+  // per-cell tint left white seams between the stacked cells).
+  .approvals-table tbody tr.is-selected { background: token(accent-soft); }
+  .table.approvals-table tbody tr > td,
+  .table.approvals-table tbody tr:hover > td,
+  .table.approvals-table tbody tr.is-selected > td,
+  .table.approvals-table tbody tr.is-selected:hover > td { background: transparent; }
 }
 
 .approval-progress {
@@ -554,7 +561,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: token(s-2);
-  padding: 0 token(s-4) token(s-3);
+  padding: token(s-3) token(s-4);
 }
 .recon-account {
   display: flex;
@@ -722,4 +729,10 @@
   font-weight: token(fw-medium);
   white-space: nowrap;
   &:hover { text-decoration: underline; }
+}
+
+/* Phones: the "select a transaction" hint is a desktop side-panel cue; on a
+ * phone it is just an empty card under a long table. */
+@media (max-width: 760px) {
+  .reconciliation-match-placeholder { display: none; }
 }

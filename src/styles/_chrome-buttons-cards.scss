@@ -363,6 +363,9 @@ details.card[open] > summary {
   font-size: token('fs-md');
   font-weight: 600;
   margin: 0;
+  // Pages inherit `overflow-wrap: anywhere`, which let a narrow card head
+  // squeeze a one-word title into "Expor / ts". Break only overlong words.
+  overflow-wrap: break-word;
 }
 .card__subtitle {
   font-size: token('fs-sm');

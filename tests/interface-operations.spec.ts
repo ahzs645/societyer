@@ -403,7 +403,7 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
     await navigate("financials/accounting");
     await expect(page.getByRole("button", { name: "New", exact: true })).toBeDisabled();
-    const accountingExports = page.getByRole("button", { name: /^(chart of accounts|trial balance|journal entries|general ledger|board\/auditor ZIP)$/ });
+    const accountingExports = page.getByRole("button", { name: /^(Chart of accounts|Trial balance|Journal entries|General ledger|Board and auditor ZIP)$/ });
     await expect(accountingExports).toHaveCount(5);
     for (const button of await accountingExports.all()) {
       if (role === "Viewer") await expect(button).toBeDisabled();
