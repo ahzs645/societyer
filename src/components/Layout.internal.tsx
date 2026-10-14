@@ -99,6 +99,7 @@ import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
 import { NAV_ITEM_LABEL_KEYS } from "../i18n/navLabels";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { PageSkeleton } from "./PageSkeleton";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
@@ -187,31 +188,11 @@ function GlobalAiAssistantSafe() {
 }
 
 
+/** Route-loading fallback: the shared page skeleton (header, stat row, table). */
 function WorkbenchPageLoader() {
   return (
-    <div className="page" aria-busy="true">
-      <div className="page-header">
-        <div>
-          <div className="skeleton skeleton--line" style={{ width: 180, height: 20, marginBottom: 10 }} />
-          <div className="skeleton skeleton--line" style={{ width: 360, maxWidth: "70vw" }} />
-        </div>
-      </div>
-      <div className="stat-grid" style={{ marginBottom: 16 }}>
-        {[0, 1, 2, 3].map((index) => (
-          <div className="stat" key={index}>
-            <div className="skeleton skeleton--line" style={{ width: 88, marginBottom: 12 }} />
-            <div className="skeleton skeleton--line" style={{ width: 56, height: 18 }} />
-          </div>
-        ))}
-      </div>
-      <div className="card">
-        <div className="card__body">
-          <div className="skeleton skeleton--line" style={{ width: 160, height: 18, marginBottom: 16 }} />
-          <div className="skeleton skeleton--line" style={{ width: "100%", marginBottom: 10 }} />
-          <div className="skeleton skeleton--line" style={{ width: "94%", marginBottom: 10 }} />
-          <div className="skeleton skeleton--line" style={{ width: "88%" }} />
-        </div>
-      </div>
+    <div className="page">
+      <PageSkeleton variant="table" />
     </div>
   );
 }

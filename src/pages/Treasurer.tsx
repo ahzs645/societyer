@@ -19,6 +19,7 @@ import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
 import { InfoPopover } from "../components/InfoPopover";
 import { budgetVariance, formatMoney } from "../lib/money";
@@ -515,26 +516,10 @@ export function TreasurerPage() {
         </div>
         <div className="card__body">
           <div className="stat-grid treasurer-claim-stats">
-            <div className="stat">
-              <div className="stat__label">Total claims</div>
-              <div className="stat__value"><Money cents={expenseTotals.total} /></div>
-              <div className="stat__sub">{expenseReports?.length ?? 0} report{(expenseReports?.length ?? 0) === 1 ? "" : "s"}</div>
-            </div>
-            <div className="stat">
-              <div className="stat__label">Submitted</div>
-              <div className="stat__value"><Money cents={expenseTotals.submitted} /></div>
-              <div className="stat__sub">awaiting approval</div>
-            </div>
-            <div className="stat">
-              <div className="stat__label">Approved</div>
-              <div className="stat__value"><Money cents={expenseTotals.approved} /></div>
-              <div className="stat__sub">ready for payment</div>
-            </div>
-            <div className="stat">
-              <div className="stat__label">Paid</div>
-              <div className="stat__value"><Money cents={expenseTotals.paid} /></div>
-              <div className="stat__sub">closed reimbursements</div>
-            </div>
+            <StatTile label="Total claims" value={<Money variant="hero" cents={expenseTotals.total} />} sub={<>{expenseReports?.length ?? 0} report{(expenseReports?.length ?? 0) === 1 ? "" : "s"}</>} />
+            <StatTile label="Submitted" value={<Money variant="hero" cents={expenseTotals.submitted} />} sub="awaiting approval" />
+            <StatTile label="Approved" value={<Money variant="hero" cents={expenseTotals.approved} />} sub="ready for payment" />
+            <StatTile label="Paid" value={<Money variant="hero" cents={expenseTotals.paid} />} sub="closed reimbursements" />
           </div>
           <div className="table-wrap">
           <table className="table treasurer-claims-table">

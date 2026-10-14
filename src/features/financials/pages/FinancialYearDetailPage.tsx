@@ -9,6 +9,7 @@ import { RecordShowPage } from "../../../components/RecordShowPage";
 import { formatDate } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
+import { StatTile } from "../../../components/StatTile";
 import { DetailCell } from "../components/WaveCacheExplorer";
 import { FinancialPresentationCard } from "../components/FinancialPresentationCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
@@ -180,10 +181,10 @@ function StatementImportTables({
             </div>
           </div>
           <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
-            <Stat label="Revenue" value={moneyDetailed(row.revenueCents)} />
-            <Stat label="Expenses" value={moneyDetailed(row.expensesCents)} />
-            <Stat label="Net assets" value={moneyDetailed(row.netAssetsCents)} />
-            <Stat label="Restricted" value={moneyDetailed(row.restrictedFundsCents)} />
+            <StatTile label="Revenue" value={<Money variant="hero" negativeStyle="parentheses" cents={row.revenueCents} />} />
+            <StatTile label="Expenses" value={<Money variant="hero" negativeStyle="parentheses" cents={row.expensesCents} />} />
+            <StatTile label="Net assets" value={<Money variant="hero" negativeStyle="parentheses" cents={row.netAssetsCents} />} />
+            <StatTile label="Restricted" value={<Money variant="hero" negativeStyle="parentheses" cents={row.restrictedFundsCents} />} />
           </div>
           {row.lines?.length > 0 ? (
             <div className="finance-table-wrap">
@@ -351,13 +352,4 @@ function documentCategoryTone(category: string): "success" | "warn" | "info" | "
   if (category === "Restricted Paperless Source") return "warn";
   if (category === "Org History Source") return "info";
   return "neutral";
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "ok" | "danger" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ color: tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
-    </div>
-  );
 }

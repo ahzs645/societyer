@@ -34,7 +34,8 @@ import {
   redactWaveHealthResult,
 } from "../features/financials/components/WaveHealthPanel";
 import { WaveCacheExplorer } from "../features/financials/components/WaveCacheExplorer";
-import { OperatingSubscriptionsCard, ProviderCard, Stat } from "../features/financials/components/FinancialDashboardCards";
+import { OperatingSubscriptionsCard, ProviderCard } from "../features/financials/components/FinancialDashboardCards";
+import { StatTile } from "../components/StatTile";
 import { YearOverYearFinancialsCard } from "../features/financials/components/YearOverYearFinancialsCard";
 import {
   OPERATING_SUBSCRIPTION_INTERVALS,
@@ -511,20 +512,20 @@ export function FinancialsPage() {
           <div className="stat-grid financials-summary-card__stats">
             {(trialBalance ?? []).length > 0 && (
               <>
-                <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
-                <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
-                <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
+                <StatTile label="Ledger revenue" value={<Money variant="hero" trimWholeCents cents={ledgerRevenueCents} />} />
+                <StatTile label="Ledger expenses" value={<Money variant="hero" trimWholeCents cents={ledgerExpenseCents} />} />
+                <StatTile label="Ledger net" value={<Money variant="hero" trimWholeCents cents={ledgerRevenueCents - ledgerExpenseCents} />} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "neutral"} />
                 {/* Ledger assets only earn a tile when they differ from the bank balance beside them. */}
                 {!(activeConnection && hub && hub.totalBalance === ledgerAssetCents) && (
-                  <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
+                  <StatTile label="Ledger assets" value={<Money variant="hero" trimWholeCents cents={ledgerAssetCents} />} />
                 )}
               </>
             )}
             {activeConnection && hub && (
               <>
-                <Stat label="Bank balance" value={money(hub.totalBalance)} />
-                <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
-                <Stat label="Restricted funds" value={money(hub.totalBalance - hub.unrestricted)} />
+                <StatTile label="Bank balance" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance} />} />
+                <StatTile label="Unrestricted" value={<Money variant="hero" trimWholeCents cents={hub.unrestricted} />} tone={hub.unrestricted < 0 ? "danger" : "neutral"} />
+                <StatTile label="Restricted funds" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance - hub.unrestricted} />} />
               </>
             )}
           </div>

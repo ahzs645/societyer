@@ -1,8 +1,9 @@
 import { Link2, PlusCircle, Settings, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Skeleton } from "../../../components/ui";
-import { formatDate, money } from "../../../lib/format";
+import { formatDate } from "../../../lib/format";
 import { Money } from "../../../components/Money";
+import { StatTile } from "../../../components/StatTile";
 import {
   monthlyEstimateCents,
   operatingSubscriptionIntervalLabel,
@@ -43,10 +44,10 @@ export function OperatingSubscriptionsCard({
       </div>
 
       <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
-        <Stat label="Active monthly" value={money(activeMonthlyCents)} />
-        <Stat label="Planned monthly" value={money(plannedMonthlyCents)} />
-        <Stat label="Projected monthly" value={money(projectedMonthlyCents)} />
-        <Stat label="Annual run-rate" value={money(projectedMonthlyCents * 12)} />
+        <StatTile label="Active monthly" value={<Money variant="hero" trimWholeCents cents={activeMonthlyCents} />} />
+        <StatTile label="Planned monthly" value={<Money variant="hero" trimWholeCents cents={plannedMonthlyCents} />} />
+        <StatTile label="Projected monthly" value={<Money variant="hero" trimWholeCents cents={projectedMonthlyCents} />} />
+        <StatTile label="Annual run-rate" value={<Money variant="hero" trimWholeCents cents={projectedMonthlyCents * 12} />} />
       </div>
 
       <table className="table">
@@ -106,16 +107,6 @@ export function OperatingSubscriptionsCard({
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-export function Stat({ label, value, tone, sub }: { label: string; value: string; tone?: "ok" | "danger"; sub?: string }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ color: tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
-      {sub && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }

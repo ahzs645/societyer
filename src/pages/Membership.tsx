@@ -15,6 +15,8 @@ import { useToast } from "../components/Toast";
 import { centsToDollarInput, dollarInputToCents, money, formatDate } from "../lib/format";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
+import { StatTile } from "../components/StatTile";
+import { Money } from "../components/Money";
 import {
   CreditCard,
   MoreHorizontal,
@@ -184,20 +186,19 @@ export function MembershipPage() {
 
       {isLocalDataRuntime() && <p className="muted" role="status" style={{ margin: "0 0 12px", fontSize: "var(--fs-sm)" }}>Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Active plans" value={String(activePlans.length)} />
-        <Stat label="Active subscribers" value={String(activeSubs.length)} />
-        <Stat label="Active fee periods" value={String(activeFeePeriods.length)} />
-        <Stat
+        <StatTile label="Active plans" value={activePlans.length} />
+        <StatTile label="Active subscribers" value={activeSubs.length} />
+        <StatTile label="Active fee periods" value={activeFeePeriods.length} />
+        <StatTile
           label="Monthly dues revenue"
-          value={money(
+          value={<Money variant="hero" trimWholeCents cents={
             activeSubs.reduce((sum, s) => {
               const plan = (plans ?? []).find((p) => p._id === s.planId);
               if (!plan) return sum;
               if (plan.interval === "month") return sum + plan.priceCents;
               if (plan.interval === "year") return sum + Math.round(plan.priceCents / 12);
               return sum;
-            }, 0),
-          )}
+            }, 0)} />}
         />
       </div>
 
@@ -798,15 +799,6 @@ export function MembershipPage() {
         societyId={society._id}
         societyName={society.name}
       />
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">{value}</div>
     </div>
   );
 }
