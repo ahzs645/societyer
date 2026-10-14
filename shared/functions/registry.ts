@@ -82,6 +82,7 @@ const treasuryFns = lazyHandlers(() => import("./treasury"), "treasury");
 import * as customFieldsFns from "./customFields";
 import * as motionTemplatesFns from "./motionTemplates";
 const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconciliation");
+const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
@@ -525,6 +526,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "expenseReports:upsert", handler: expenseReportsFns.upsertPortable }),
   definePortableMutation({ name: "expenseReports:setStatus", handler: expenseReportsFns.setStatusPortable }),
   definePortableMutation({ name: "expenseReports:remove", handler: expenseReportsFns.removePortable }),
+  definePortableQuery({ name: "expenseReports:approvalQueue", handler: expenseReportsFns.approvalQueuePortable }),
+  definePortableMutation({ name: "expenseReports:decide", handler: expenseReportsFns.decidePortable }),
+  definePortableMutation({ name: "expenseReports:bulkApprove", handler: expenseReportsFns.bulkApprovePortable }),
+  definePortableMutation({ name: "expenseReports:saveApprovalRules", handler: expenseReportsFns.saveApprovalRulesPortable }),
 
   // insurance
   definePortableQuery({ name: "insurance:list", handler: insuranceFns.listPortable }),
@@ -588,6 +593,21 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "reconciliation:markManual", handler: reconciliationFns.markManualPortable }),
   definePortableMutation({ name: "reconciliation:addManualTransaction", handler: reconciliationFns.addManualTransactionPortable }),
   definePortableMutation({ name: "reconciliation:unmatch", handler: reconciliationFns.unmatchPortable }),
+  definePortableQuery({ name: "reconciliation:periods", handler: reconciliationFns.periodsPortable }),
+  definePortableMutation({ name: "reconciliation:startPeriod", handler: reconciliationFns.startPeriodPortable }),
+  definePortableMutation({ name: "reconciliation:updatePeriod", handler: reconciliationFns.updatePeriodPortable }),
+  definePortableMutation({ name: "reconciliation:completePeriod", handler: reconciliationFns.completePeriodPortable }),
+  definePortableMutation({ name: "reconciliation:reopenPeriod", handler: reconciliationFns.reopenPeriodPortable }),
+  definePortableMutation({ name: "reconciliation:removePeriod", handler: reconciliationFns.removePeriodPortable }),
+  // transactionRules
+  definePortableQuery({ name: "transactionRules:workspace", handler: transactionRulesFns.workspacePortable }),
+  definePortableMutation({ name: "transactionRules:upsert", handler: transactionRulesFns.upsertPortable }),
+  definePortableMutation({ name: "transactionRules:remove", handler: transactionRulesFns.removePortable }),
+  definePortableMutation({ name: "transactionRules:reorder", handler: transactionRulesFns.reorderPortable }),
+  definePortableMutation({ name: "transactionRules:setEnabled", handler: transactionRulesFns.setEnabledPortable }),
+  definePortableMutation({ name: "transactionRules:applyToUncategorized", handler: transactionRulesFns.applyToUncategorizedPortable }),
+  definePortableMutation({ name: "transactionRules:undoBatch", handler: transactionRulesFns.undoBatchPortable }),
+  definePortableMutation({ name: "transactionRules:removeApplication", handler: transactionRulesFns.removeApplicationPortable }),
 
   // signatures
   definePortableQuery({ name: "signatures:listForEntity", handler: signaturesFns.listForEntityPortable }),

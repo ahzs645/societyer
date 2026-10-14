@@ -7334,6 +7334,60 @@
     "idArguments": []
   },
   {
+    "key": "convex:expenseReports:approvalQueue",
+    "surface": "convex",
+    "name": "expenseReports:approvalQueue",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:expenseReports:bulkApprove",
+    "surface": "convex",
+    "name": "expenseReports:bulkApprove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "expenseReports",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:expenseReports:decide",
+    "surface": "convex",
+    "name": "expenseReports:decide",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "expenseReports",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:expenseReports:list",
     "surface": "convex",
     "name": "expenseReports:list",
@@ -7360,6 +7414,22 @@
       {
         "path": "id",
         "table": "expenseReports",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:expenseReports:saveApprovalRules",
+    "surface": "convex",
+    "name": "expenseReports:saveApprovalRules",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -17838,6 +17908,22 @@
     ]
   },
   {
+    "key": "convex:reconciliation:completePeriod",
+    "surface": "convex",
+    "name": "reconciliation:completePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:reconciliation:markManual",
     "surface": "convex",
     "name": "reconciliation:markManual",
@@ -17886,6 +17972,82 @@
     ]
   },
   {
+    "key": "convex:reconciliation:periods",
+    "surface": "convex",
+    "name": "reconciliation:periods",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:reconciliation:removePeriod",
+    "surface": "convex",
+    "name": "reconciliation:removePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:reconciliation:reopenPeriod",
+    "surface": "convex",
+    "name": "reconciliation:reopenPeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:reconciliation:startPeriod",
+    "surface": "convex",
+    "name": "reconciliation:startPeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "statementDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:reconciliation:unmatch",
     "surface": "convex",
     "name": "reconciliation:unmatch",
@@ -17898,6 +18060,28 @@
         "table": "financialTransactions",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:reconciliation:updatePeriod",
+    "surface": "convex",
+    "name": "reconciliation:updatePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/reconciliation.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "statementDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -19995,6 +20179,158 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:applyToUncategorized",
+    "surface": "convex",
+    "name": "transactionRules:applyToUncategorized",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ruleId",
+        "table": "transactionRules",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:remove",
+    "surface": "convex",
+    "name": "transactionRules:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "transactionRules",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:removeApplication",
+    "surface": "convex",
+    "name": "transactionRules:removeApplication",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "txnId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:reorder",
+    "surface": "convex",
+    "name": "transactionRules:reorder",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "orderedIds",
+        "table": "transactionRules",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:setEnabled",
+    "surface": "convex",
+    "name": "transactionRules:setEnabled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "transactionRules",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:undoBatch",
+    "surface": "convex",
+    "name": "transactionRules:undoBatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:upsert",
+    "surface": "convex",
+    "name": "transactionRules:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "transactionRules",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transactionRules:workspace",
+    "surface": "convex",
+    "name": "transactionRules:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/transactionRules.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -28681,6 +29017,60 @@
     "idArguments": []
   },
   {
+    "key": "portable:expenseReports:approvalQueue",
+    "surface": "portable",
+    "name": "expenseReports:approvalQueue",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:bulkApprove",
+    "surface": "portable",
+    "name": "expenseReports:bulkApprove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ids",
+        "table": "expenseReports",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:decide",
+    "surface": "portable",
+    "name": "expenseReports:decide",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "expenseReports",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:expenseReports:list",
     "surface": "portable",
     "name": "expenseReports:list",
@@ -28707,6 +29097,22 @@
       {
         "path": "id",
         "table": "expenseReports",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:saveApprovalRules",
+    "surface": "portable",
+    "name": "expenseReports:saveApprovalRules",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -38089,6 +38495,22 @@
     ]
   },
   {
+    "key": "portable:reconciliation:completePeriod",
+    "surface": "portable",
+    "name": "reconciliation:completePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:reconciliation:markManual",
     "surface": "portable",
     "name": "reconciliation:markManual",
@@ -38137,6 +38559,82 @@
     ]
   },
   {
+    "key": "portable:reconciliation:periods",
+    "surface": "portable",
+    "name": "reconciliation:periods",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:reconciliation:removePeriod",
+    "surface": "portable",
+    "name": "reconciliation:removePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:reconciliation:reopenPeriod",
+    "surface": "portable",
+    "name": "reconciliation:reopenPeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:reconciliation:startPeriod",
+    "surface": "portable",
+    "name": "reconciliation:startPeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "statementDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:reconciliation:unmatch",
     "surface": "portable",
     "name": "reconciliation:unmatch",
@@ -38149,6 +38647,28 @@
         "table": "financialTransactions",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:reconciliation:updatePeriod",
+    "surface": "portable",
+    "name": "reconciliation:updatePeriod",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "reconciliationPeriods",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "statementDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -39931,6 +40451,158 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:applyToUncategorized",
+    "surface": "portable",
+    "name": "transactionRules:applyToUncategorized",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "ruleId",
+        "table": "transactionRules",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:remove",
+    "surface": "portable",
+    "name": "transactionRules:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "transactionRules",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:removeApplication",
+    "surface": "portable",
+    "name": "transactionRules:removeApplication",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "txnId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:reorder",
+    "surface": "portable",
+    "name": "transactionRules:reorder",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "orderedIds",
+        "table": "transactionRules",
+        "array": true,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:setEnabled",
+    "surface": "portable",
+    "name": "transactionRules:setEnabled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "transactionRules",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:undoBatch",
+    "surface": "portable",
+    "name": "transactionRules:undoBatch",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:upsert",
+    "surface": "portable",
+    "name": "transactionRules:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "transactionRules",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:transactionRules:workspace",
+    "surface": "portable",
+    "name": "transactionRules:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },

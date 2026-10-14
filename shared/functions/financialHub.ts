@@ -458,7 +458,11 @@ export async function updateTransactionPortable(
   await requireSocietyMembership(ctx, String(row.societyId));
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
   await getOwned(ctx, "financialTransactions", id, String(row.societyId));
-  await ctx.db.patch(id, patch);
+  // A hand-edited category replaces any rule provenance.
+  const provenance = patch.category !== undefined && patch.category !== row.category
+    ? { categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined }
+    : {};
+  await ctx.db.patch(id, { ...patch, ...provenance });
   return id;
 }
 

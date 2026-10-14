@@ -11,6 +11,7 @@ import {
 } from "./providers/accounting";
 import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
+import { rulePatchForTransaction } from "../shared/transactionRules";
 import {
   connectionsPortable,
   disconnectPortable,
@@ -702,6 +703,14 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
     const seen = new Set(
       existing.filter((t) => t.accountId === args.accountId).map((t) => t.externalId),
     );
+    // Categorisation rules run on every new uncategorised line.
+    const rules = (await ctx.db
+      .query("transactionRules")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect()) as any[];
+    const appliedAtISO = new Date().toISOString();
+    const ruleBatch = `import-${appliedAtISO}`;
+    let categorized = 0;
 
     let inserted = 0;
     let skipped = 0;
@@ -714,6 +723,8 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
         skipped += 1;
         continue;
       }
+      const ruled = rulePatchForTransaction(rules, { ...row, accountId: args.accountId }, appliedAtISO, ruleBatch);
+      if (ruled) categorized += 1;
       await ctx.db.insert("financialTransactions", {
         societyId: args.societyId,
         connectionId: account.connectionId,
@@ -724,11 +735,12 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
         amountCents: row.amountCents,
         category: row.category,
         counterparty: row.counterparty,
+        ...(ruled?.patch ?? {}),
       });
       seen.add(externalId);
       inserted += 1;
     }
-    return { inserted, skipped, total: args.rows.length };
+    return { inserted, skipped, total: args.rows.length, categorized };
   },
 });
 

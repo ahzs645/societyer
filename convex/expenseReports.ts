@@ -1,7 +1,16 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { listPortable, upsertPortable, setStatusPortable, removePortable } from "../shared/functions/expenseReports";
+import {
+  listPortable,
+  upsertPortable,
+  setStatusPortable,
+  removePortable,
+  approvalQueuePortable,
+  decidePortable,
+  bulkApprovePortable,
+  saveApprovalRulesPortable,
+} from "../shared/functions/expenseReports";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("expenseReports:list", query)({
@@ -52,4 +61,48 @@ export const remove = authorizedMutation("expenseReports:remove", mutation)({
   args: { id: v.id("expenseReports") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Approvals queue: every claim with its applicable approval rule, progress and
+// whether the current person may approve it.
+export const approvalQueue = authorizedQuery("expenseReports:approvalQueue", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => approvalQueuePortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Approve (a vote under the approval rules) or decline (reason required).
+export const decide = authorizedMutation("expenseReports:decide", mutation)({
+  args: {
+    id: v.id("expenseReports"),
+    decision: v.union(v.literal("approve"), v.literal("decline")),
+    reason: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => decidePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const bulkApprove = authorizedMutation("expenseReports:bulkApprove", mutation)({
+  args: { societyId: v.id("societies"), ids: v.array(v.id("expenseReports")) },
+  returns: v.any(),
+  handler: async (ctx, args) => bulkApprovePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const saveApprovalRules = authorizedMutation("expenseReports:saveApprovalRules", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    rules: v.array(
+      v.object({
+        minAmountCents: v.number(),
+        requiredApprovals: v.number(),
+        approverRoles: v.optional(v.array(v.string())),
+        approverUserIds: v.optional(v.array(v.id("users"))),
+        blockSelfApproval: v.optional(v.boolean()),
+        enabled: v.optional(v.boolean()),
+        label: v.optional(v.string()),
+      }),
+    ),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveApprovalRulesPortable(await toPortableMutationCtx(ctx), args),
 });

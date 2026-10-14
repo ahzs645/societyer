@@ -8,7 +8,19 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
+import { addDaysToDateOnly, isDateOnly } from "../dateOnly";
+import {
+  beginningBalanceFor,
+  effectivePeriodStatus,
+  isClosedStatus,
+  orderPeriods,
+  periodFingerprint,
+  summarizePeriod,
+  transactionsInPeriod,
+  type PeriodLike,
+  type PeriodTransaction,
+} from "../reconciliationPeriods";
 
 /**
  * Returns every bank transaction with reconciliation status, plus a candidate
@@ -139,6 +151,7 @@ export async function matchPortable(
     matchedId: args.matchedId,
     reconciliationNote: args.note,
   });
+  await flagChangedPeriods(ctx, candidate.accountId as string | undefined, candidate.date as string | undefined);
 }
 
 export async function markManualPortable(
@@ -158,6 +171,7 @@ export async function markManualPortable(
     matchedId: "manual",
     reconciliationNote: note,
   });
+  await flagChangedPeriods(ctx, candidate.accountId as string | undefined, candidate.date as string | undefined);
 }
 
 // Manually add a bank transaction so reconciliation is usable without a Wave/
@@ -218,7 +232,7 @@ export async function addManualTransactionPortable(
         });
   }
 
-  return ctx.db.insert("financialTransactions", {
+  const id = await ctx.db.insert("financialTransactions", {
     societyId: args.societyId,
     connectionId: connection!._id,
     accountId,
@@ -228,7 +242,10 @@ export async function addManualTransactionPortable(
     amountCents: args.amountCents,
     counterparty: args.counterparty,
     category: args.category,
+    ...(args.category ? { categorizedBy: "manual" } : {}),
   });
+  await flagChangedPeriods(ctx, String(accountId), args.date);
+  return id;
 }
 
 export async function unmatchPortable(ctx: PortableMutationCtx, { txnId }: { txnId: string }) {
@@ -243,4 +260,284 @@ export async function unmatchPortable(ctx: PortableMutationCtx, { txnId }: { txn
     matchedId: undefined,
     reconciliationNote: undefined,
   });
+  await flagChangedPeriods(ctx, candidate.accountId as string | undefined, candidate.date as string | undefined);
+}
+
+/* ---------------------- statement reconciliation periods ---------------------- */
+
+type PeriodRow = PeriodLike & {
+  societyId: string;
+  statementDocumentId?: string;
+  completedAtISO?: string;
+  completedByName?: string;
+  outOfBalanceAtISO?: string;
+  notes?: string;
+  [key: string]: any;
+};
+
+const RECONCILABLE_ACCOUNT_TYPES = new Set(["bank", "credit", "cash"]);
+
+async function accountPeriods(ctx: PortableQueryCtx, accountId: string): Promise<PeriodRow[]> {
+  const rows = await ctx.db
+    .query<PeriodRow>("reconciliationPeriods")
+    .withIndex("by_account", (q) => q.eq("accountId", accountId))
+    .collect();
+  return orderPeriods(rows);
+}
+
+async function accountTransactions(ctx: PortableQueryCtx, accountId: string): Promise<PeriodTransaction[]> {
+  const rows = await ctx.db
+    .query("financialTransactions")
+    .withIndex("by_account", (q) => q.eq("accountId", accountId))
+    .collect();
+  return rows.map((row: any) => ({ ...row, _id: String(row._id), accountId: String(row.accountId) }));
+}
+
+function describePeriod(ordered: PeriodRow[], index: number, txns: PeriodTransaction[]) {
+  const period = ordered[index];
+  const lines = transactionsInPeriod(txns, period);
+  const beginning = beginningBalanceFor(ordered, index);
+  const summary = summarizePeriod(beginning, period.endingBalanceCents, lines);
+  const fingerprint = periodFingerprint(beginning, period.endingBalanceCents, lines);
+  const status = effectivePeriodStatus(period, fingerprint);
+  return { period, lines, summary, fingerprint, status };
+}
+
+/**
+ * Bank accounts with their statement periods, each with live balances, the
+ * effective status (closed periods whose lines changed read out of balance)
+ * and the defaults for starting the next period.
+ */
+export async function periodsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const [accounts, periods, txns] = await Promise.all([
+    ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query<PeriodRow>("reconciliationPeriods").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+  ]);
+  const txnRows: PeriodTransaction[] = txns.map((row: any) => ({ ...row, _id: String(row._id), accountId: String(row.accountId) }));
+  const accountsWithActivity = new Set([...txnRows.map((t) => String(t.accountId)), ...periods.map((p) => String(p.accountId))]);
+  const reconcilable = accounts.filter((account: any) =>
+    RECONCILABLE_ACCOUNT_TYPES.has(String(account.accountType ?? "").toLowerCase()) || periods.some((p) => String(p.accountId) === String(account._id)));
+  const outPeriods: any[] = [];
+  const outAccounts = reconcilable.map((account: any) => {
+    const accountId = String(account._id);
+    const ordered = orderPeriods(periods.filter((p) => String(p.accountId) === accountId));
+    const described = ordered.map((_, index) => describePeriod(ordered, index, txnRows));
+    for (const entry of described) {
+      outPeriods.push({
+        ...entry.period,
+        accountName: account.name,
+        effectiveStatus: entry.status,
+        ...entry.summary,
+        transactionIds: entry.lines.map((line) => String(line._id)),
+      });
+    }
+    const last = ordered[ordered.length - 1];
+    const accountTxns = txnRows.filter((t) => String(t.accountId) === accountId);
+    const earliest = accountTxns.reduce<string | undefined>((min, t) => (!min || t.date < min ? t.date : min), undefined);
+    const latestDescribed = described[described.length - 1];
+    return {
+      _id: accountId,
+      name: account.name,
+      code: account.code,
+      accountType: account.accountType,
+      currency: account.currency ?? "CAD",
+      balanceCents: account.balanceCents ?? 0,
+      hasActivity: accountsWithActivity.has(accountId),
+      transactionCount: accountTxns.length,
+      periodCount: ordered.length,
+      latestStatus: latestDescribed?.status,
+      latestEndDate: last?.endDate,
+      lastReconciledThrough: [...described].reverse().find((d) => d.status === "completed" || d.status === "auto_reconciled")?.period.endDate,
+      openPeriodId: ordered.find((p) => p.status === "in_progress")?._id,
+      outOfBalanceCount: described.filter((d) => d.status === "out_of_balance").length,
+      // Defaults for "Start reconciliation".
+      nextStartDate: last ? addDaysToDateOnly(last.endDate, 1) : earliest,
+      nextBeginningBalanceCents: last ? last.endingBalanceCents : undefined,
+      needsOpeningBalance: !last,
+    };
+  });
+  outAccounts.sort((a, b) => Number(b.hasActivity) - Number(a.hasActivity) || String(a.code ?? a.name).localeCompare(String(b.code ?? b.name)));
+  outPeriods.sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
+  return { accounts: outAccounts, periods: outPeriods };
+}
+
+async function principalName(ctx: PortableQueryCtx, societyId: string) {
+  const id = await principalUserId(ctx, societyId);
+  const user: any = await ctx.db.get(id, "users").catch(() => null);
+  return { id: user ? id : undefined, name: String(user?.displayName ?? user?.name ?? "You") };
+}
+
+export async function startPeriodPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    accountId: string;
+    startDate?: string;
+    endDate: string;
+    endingBalanceCents: number;
+    openingBalanceCents?: number;
+    statementDocumentId?: string;
+    notes?: string;
+  },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);
+  if (args.statementDocumentId) await getOwned(ctx, "documents", args.statementDocumentId, args.societyId);
+  if (!isDateOnly(args.endDate)) throw new Error("Enter the statement end date.");
+  if (!Number.isSafeInteger(args.endingBalanceCents)) throw new Error("Enter the statement ending balance.");
+  const ordered = await accountPeriods(ctx, args.accountId);
+  if (ordered.some((p) => p.status === "in_progress")) {
+    throw new Error("Finish or discard the open reconciliation for this account first.");
+  }
+  const last = ordered[ordered.length - 1];
+  const startDate = last ? addDaysToDateOnly(last.endDate, 1) : args.startDate;
+  if (!startDate || !isDateOnly(startDate)) throw new Error("Enter the statement start date.");
+  if (args.endDate < startDate) {
+    throw new Error(last ? `The statement must end after ${last.endDate}, where the previous reconciliation ends.` : "The end date must be on or after the start date.");
+  }
+  if (!last && args.openingBalanceCents !== undefined && !Number.isSafeInteger(args.openingBalanceCents)) {
+    throw new Error("Enter the opening balance.");
+  }
+  const nowISO = new Date().toISOString();
+  const actor = await principalName(ctx, args.societyId);
+  const draft: PeriodRow = {
+    _id: "draft",
+    societyId: args.societyId,
+    accountId: args.accountId,
+    startDate,
+    endDate: args.endDate,
+    openingBalanceCents: last ? undefined : Math.round(args.openingBalanceCents ?? 0),
+    endingBalanceCents: args.endingBalanceCents,
+    status: "in_progress",
+  };
+  // A statement whose every line is already cleared and balances is closed
+  // straight away as auto-reconciled.
+  const txns = await accountTransactions(ctx, args.accountId);
+  const withDraft = [...ordered, draft];
+  const { summary, fingerprint } = describePeriod(withDraft, withDraft.length - 1, txns);
+  const auto = summary.transactionCount > 0 && summary.unclearedCount === 0 && summary.differenceCents === 0;
+  return ctx.db.insert("reconciliationPeriods", {
+    societyId: args.societyId,
+    accountId: args.accountId,
+    startDate,
+    endDate: args.endDate,
+    ...(last ? {} : { openingBalanceCents: Math.round(args.openingBalanceCents ?? 0) }),
+    endingBalanceCents: args.endingBalanceCents,
+    statementDocumentId: args.statementDocumentId,
+    notes: args.notes?.trim() || undefined,
+    status: auto ? "auto_reconciled" : "in_progress",
+    ...(auto
+      ? {
+          completedAtISO: nowISO,
+          completedByUserId: actor.id,
+          completedByName: actor.name,
+          clearedFingerprint: fingerprint,
+          clearedCount: summary.clearedCount,
+          clearedBalanceCents: summary.clearedBalanceCents,
+        }
+      : {}),
+    createdByUserId: actor.id,
+    createdAtISO: nowISO,
+    updatedAtISO: nowISO,
+  });
+}
+
+export async function updatePeriodPortable(
+  ctx: PortableMutationCtx,
+  args: { id: string; endingBalanceCents?: number; openingBalanceCents?: number; statementDocumentId?: string; clearStatementDocument?: boolean; notes?: string },
+) {
+  const period = await requireOwnedRow<PeriodRow>(ctx, "reconciliationPeriods", args.id);
+  if (period.status !== "in_progress") throw new Error("Reopen the reconciliation before changing it.");
+  if (args.statementDocumentId) await getOwned(ctx, "documents", args.statementDocumentId, period.societyId);
+  const patch: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
+  if (args.endingBalanceCents !== undefined) {
+    if (!Number.isSafeInteger(args.endingBalanceCents)) throw new Error("Enter the statement ending balance.");
+    patch.endingBalanceCents = args.endingBalanceCents;
+  }
+  if (args.openingBalanceCents !== undefined) {
+    const ordered = await accountPeriods(ctx, period.accountId);
+    if (ordered[0]?._id !== period._id) throw new Error("Only the first reconciliation for an account has an opening balance.");
+    if (!Number.isSafeInteger(args.openingBalanceCents)) throw new Error("Enter the opening balance.");
+    patch.openingBalanceCents = args.openingBalanceCents;
+  }
+  if (args.statementDocumentId) patch.statementDocumentId = args.statementDocumentId;
+  if (args.clearStatementDocument) patch.statementDocumentId = undefined;
+  if (args.notes !== undefined) patch.notes = args.notes.trim() || undefined;
+  await ctx.db.patch(args.id, patch);
+  return args.id;
+}
+
+export async function completePeriodPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const period = await requireOwnedRow<PeriodRow>(ctx, "reconciliationPeriods", id);
+  if (period.status !== "in_progress") throw new Error("This reconciliation is already closed.");
+  const ordered = await accountPeriods(ctx, period.accountId);
+  const index = ordered.findIndex((p) => p._id === id);
+  const txns = await accountTransactions(ctx, period.accountId);
+  const { summary, fingerprint } = describePeriod(ordered, index, txns);
+  if (summary.differenceCents !== 0) {
+    throw new Error("The difference must be $0.00 before you can complete this reconciliation.");
+  }
+  const nowISO = new Date().toISOString();
+  const actor = await principalName(ctx, period.societyId);
+  await ctx.db.patch(id, {
+    status: "completed",
+    completedAtISO: nowISO,
+    completedByUserId: actor.id,
+    completedByName: actor.name,
+    clearedFingerprint: fingerprint,
+    clearedCount: summary.clearedCount,
+    clearedBalanceCents: summary.clearedBalanceCents,
+    outOfBalanceAtISO: undefined,
+    updatedAtISO: nowISO,
+  });
+  return id;
+}
+
+export async function reopenPeriodPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const period = await requireOwnedRow<PeriodRow>(ctx, "reconciliationPeriods", id);
+  if (period.status === "in_progress") return id;
+  const ordered = await accountPeriods(ctx, period.accountId);
+  if (ordered.some((p) => p._id !== id && p.status === "in_progress")) {
+    throw new Error("Finish or discard the open reconciliation for this account first.");
+  }
+  await ctx.db.patch(id, {
+    status: "in_progress",
+    completedAtISO: undefined,
+    completedByUserId: undefined,
+    completedByName: undefined,
+    clearedFingerprint: undefined,
+    clearedCount: undefined,
+    clearedBalanceCents: undefined,
+    updatedAtISO: new Date().toISOString(),
+  });
+  return id;
+}
+
+export async function removePeriodPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const period = await requireOwnedRow<PeriodRow>(ctx, "reconciliationPeriods", id);
+  if (period.status !== "in_progress") throw new Error("Reopen the reconciliation before discarding it.");
+  const ordered = await accountPeriods(ctx, period.accountId);
+  if (ordered[ordered.length - 1]?._id !== id) throw new Error("Only the latest reconciliation for an account can be discarded.");
+  await ctx.db.delete(id);
+}
+
+/**
+ * Record that closed periods covering a changed transaction no longer match.
+ * The periods query derives the same state for changes made elsewhere (CSV
+ * import, sync, edits); this stamps when it was first detected.
+ */
+async function flagChangedPeriods(ctx: PortableMutationCtx, accountId: string | undefined, date: string | undefined) {
+  if (!accountId || !date) return;
+  const ordered = await accountPeriods(ctx, accountId);
+  const covering = ordered.filter((p) => isClosedStatus(p.status) && p.startDate <= date && p.endDate >= date);
+  if (!covering.length) return;
+  const txns = await accountTransactions(ctx, accountId);
+  for (const period of covering) {
+    const { status } = describePeriod(ordered, ordered.indexOf(period), txns);
+    if (status === "out_of_balance" && period.status !== "out_of_balance") {
+      await ctx.db.patch(period._id, { status: "out_of_balance", outOfBalanceAtISO: new Date().toISOString() });
+    }
+  }
 }

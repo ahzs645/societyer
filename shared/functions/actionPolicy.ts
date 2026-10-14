@@ -17,7 +17,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", "continuity"],
   commitments: ["commitments", "goals"],
   agreements: ["agreements"],
-  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
+  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],
@@ -125,6 +125,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (name === "workflows:generatedDocumentPreflight") return "tasks:write";
   if (["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"].includes(name)) return "documents:read";
   if (name === "minutes:approve") return "minutes:approve";
+  // Approval votes are governed by the expense approval rules in the handler (directors may approve; viewers never can).
+  if (name === "expenseReports:decide" || name === "expenseReports:bulkApprove") return "financials:read";
   if (resource === "exports") return kind === "query" && action === "list" ? "exports:read" : "exports:download";
   return `${resource}:${kind === "query" ? "read" : "write"}` as Permission;
 }
