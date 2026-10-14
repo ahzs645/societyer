@@ -25,6 +25,14 @@ import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
+import {
+  DEMO_RECONCILED_TRANSACTION_IDS,
+  financeWorkflowApprovalRules,
+  financeWorkflowExpenseReports,
+  financeWorkflowReconciliationPeriods,
+  financeWorkflowRules,
+  financeWorkflowTransactions,
+} from "./staticFinanceWorkflowFixtures";
 
 const SOCIETY_ID = STATIC_DEMO_SOCIETY_ID;
 const USER_OWNER_ID = STATIC_DEMO_USER_ID;
@@ -1576,6 +1584,9 @@ const expenseReports = [
     status: "Submitted",
     receiptDocumentId: DOCUMENT_PRESENTATION_ID,
     notes: "Supplies for the youth resilience workshop.",
+    requiredApprovals: 1,
+    approvals: [],
+    approvalTrail: [{ atISO: "2026-04-13T16:00:00.000Z", action: "submitted", actorName: "Avery Santos", actorUserId: USER_SECRETARY_ID }],
     createdAtISO: "2026-04-13T16:00:00.000Z",
     updatedAtISO: "2026-04-13T16:00:00.000Z",
   },
@@ -2288,6 +2299,26 @@ const financialTransactions: Array<Record<string, any>> = [
   })),
 ];
 
+// Finance workflows demo: rules, statement periods and claims in every approval state.
+const FINANCE_WORKFLOW_IDS = {
+  societyId: SOCIETY_ID,
+  connectionId: FINANCIAL_CONNECTION_ID,
+  cashAccountId: CASH_ACCOUNT_ID,
+  grantAccountId: GRANT_ACCOUNT_ID,
+  facilitiesExpenseAccountId: ACCOUNT_FACILITIES_EXPENSE_ID,
+  fundRestrictionId: "static_fund_restriction_youth",
+  ownerId: USER_OWNER_ID,
+  treasurerId: USER_TREASURER_ID,
+  secretaryId: USER_SECRETARY_ID,
+  receiptDocumentId: DOCUMENT_PRESENTATION_ID,
+};
+for (const txn of financialTransactions) Object.assign(txn, DEMO_RECONCILED_TRANSACTION_IDS[String(txn._id)] ?? {});
+financialTransactions.push(...financeWorkflowTransactions(FINANCE_WORKFLOW_IDS));
+const transactionRules = financeWorkflowRules(FINANCE_WORKFLOW_IDS);
+const reconciliationPeriods = financeWorkflowReconciliationPeriods(FINANCE_WORKFLOW_IDS, financialTransactions);
+const expenseApprovalRules = financeWorkflowApprovalRules(FINANCE_WORKFLOW_IDS);
+expenseReports.push(...(financeWorkflowExpenseReports(FINANCE_WORKFLOW_IDS) as any[]));
+
 const accountingFiscalPeriods = [
   {
     _id: "static_accounting_period_2026",
@@ -2743,6 +2774,9 @@ const tables: Record<string, any[]> = {
   journalEntries,
   journalLines,
   reconciliationRuns,
+  reconciliationPeriods,
+  transactionRules,
+  expenseApprovalRules,
   reconciliationRunLines,
   motions,
   pendingEmails: [
