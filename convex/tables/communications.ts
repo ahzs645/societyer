@@ -28,12 +28,27 @@ export const communicationsTables = {
     .index("by_user", ["userId"])
     .index("by_dismissed_at", ["dismissedAt"]),
 
+  // Per-person channel × kind switches. Kinds are listed in
+  // shared/notificationCatalog.ts; "all" is a per-channel wildcard and
+  // "digest:daily" / "digest:weekly" (email) are the digest subscriptions.
   notificationPrefs: defineTable({
     userId: v.id("users"),
-    channel: v.string(), // email | sms | inApp | slack
-    kind: v.string(), // deadline | filing | minutes | billing | bot | general | all
+    channel: v.string(), // inApp | email | sms
+    kind: v.string(), // a catalogue kind | all | digest:daily | digest:weekly
     enabled: v.boolean(),
   }).index("by_user", ["userId"]),
+
+  // Workspace alert thresholds evaluated by the scheduled scan
+  // (budget line %, low balance, deadline lead days, claim waiting days).
+  notificationRules: defineTable({
+    societyId: v.id("societies"),
+    rule: v.string(), // budget_line | low_balance | deadline_lead | claim_waiting
+    enabled: v.boolean(),
+    value: v.number(), // percent | cents | days, per rule
+    accountId: v.optional(v.id("financialAccounts")), // low_balance: the account watched
+    updatedAtISO: v.string(),
+    updatedByUserId: v.optional(v.id("users")),
+  }).index("by_society", ["societyId"]),
 
   memberCommunicationPrefs: defineTable({
     societyId: v.id("societies"),

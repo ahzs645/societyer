@@ -124,6 +124,7 @@
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 @use "transaction-rules"; // rule sentence, overlap flags, "is any of" chips
+@use "notification-settings"; // Notifications → Settings: kinds × channels, thresholds, digests
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

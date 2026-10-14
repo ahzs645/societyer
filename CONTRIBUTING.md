@@ -75,6 +75,7 @@ npm run test:transaction-rules              # categorisation rules, approvals an
 npm run test:nl-filter                      # natural-language table filter parser (if present)
 npm run test:ai-filter-action               # "Ask AI" filter action: schema-only payload, reply validation, permissions, rate limit
 npm run test:invoices                       # invoices (if present)
+npm run test:notification-settings          # notification switches, role-gated kinds, alert thresholds and digests
 npm run test:seed-parity                    # the Convex seed tells the same finance story as the in-browser demo (also after editing shared/demoData or seed.ts)
 npm run test:xlsx                           # Excel export writer (src/lib/xlsx): package structure, typed cells, dates, formats
 

@@ -2603,6 +2603,23 @@ const notifications = [
   },
 ];
 
+// Notification settings: a few personal switches and the workspace alert
+// thresholds, so the settings page and the alert scan have something to show.
+const notificationPrefs = [
+  { _id: "static_notification_pref_owner_weekly", userId: USER_OWNER_ID, channel: "email", kind: "digest:weekly", enabled: true },
+  { _id: "static_notification_pref_owner_bot_email", userId: USER_OWNER_ID, channel: "email", kind: "bot", enabled: false },
+  { _id: "static_notification_pref_owner_deadline_sms", userId: USER_OWNER_ID, channel: "sms", kind: "deadline", enabled: true },
+  { _id: "static_notification_pref_treasurer_budget_sms", userId: USER_TREASURER_ID, channel: "sms", kind: "budget", enabled: true },
+  { _id: "static_notification_pref_treasurer_weekly", userId: USER_TREASURER_ID, channel: "email", kind: "digest:weekly", enabled: true },
+];
+
+const notificationRules = [
+  { _id: "static_notification_rule_budget", societyId: SOCIETY_ID, rule: "budget_line", enabled: true, value: 90, updatedAtISO: "2026-04-10T17:00:00.000Z", updatedByUserId: USER_OWNER_ID },
+  { _id: "static_notification_rule_balance", societyId: SOCIETY_ID, rule: "low_balance", enabled: true, value: 500000, accountId: CASH_ACCOUNT_ID, updatedAtISO: "2026-04-10T17:00:00.000Z", updatedByUserId: USER_OWNER_ID },
+  { _id: "static_notification_rule_deadline", societyId: SOCIETY_ID, rule: "deadline_lead", enabled: true, value: 21, updatedAtISO: "2026-04-10T17:00:00.000Z", updatedByUserId: USER_OWNER_ID },
+  { _id: "static_notification_rule_claims", societyId: SOCIETY_ID, rule: "claim_waiting", enabled: true, value: 3, updatedAtISO: "2026-04-10T17:00:00.000Z", updatedByUserId: USER_OWNER_ID },
+];
+
 const bylawRules = {
   _id: "static_bylaw_rules",
   societyId: SOCIETY_ID,
@@ -4154,6 +4171,8 @@ const tables: Record<string, any[]> = {
   members,
   minutes,
   notifications,
+  notificationPrefs,
+  notificationRules,
   pipaTraining: [
     {
       _id: "static_pipa_training",

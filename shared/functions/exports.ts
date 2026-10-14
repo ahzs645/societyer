@@ -57,6 +57,7 @@ export const EXPORTABLE_TABLES = [
   "paperlessDocumentSyncs",
   "notifications",
   "notificationPrefs",
+  "notificationRules",
   "memberCommunicationPrefs",
   "communicationSegments",
   "communicationTemplates",

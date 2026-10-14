@@ -6,7 +6,9 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
-import { Segmented } from "../components/primitives";
+import { Segmented, Tabs } from "../components/primitives";
+import { useUrlTab } from "../hooks/useUrlTab";
+import { NotificationSettings } from "../features/notifications/NotificationSettings";
 import { Bell, CheckCheck, Send, Trash2 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { useToast } from "../components/Toast";
@@ -39,6 +41,7 @@ export function NotificationsPage() {
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [scope, setScope] = useState<"all" | "unread" | "dismissed">("all");
+  const [tab, setTab] = useUrlTab(["inbox", "settings"] as const, "inbox");
 
   const filtered = useMemo(() => {
     // Newest first, whichever runtime answered the query.
@@ -59,14 +62,14 @@ export function NotificationsPage() {
         title="Notifications"
         icon={<Bell size={16} />}
         iconColor="orange"
-        subtitle="Alerts about deadlines, filings, drafts and billing."
+        subtitle="Alerts about deadlines, filings, meetings, finance and approvals."
         info={<>
-          <p>In-app alerts for compliance deadlines, filings, AI-drafted minutes, filing-bot progress and billing events.</p>
+          <p>In-app alerts for compliance deadlines, filings, budget and balance thresholds, claims waiting for approval, AI-drafted minutes and workflow progress.</p>
           {isLocalDataRuntime()
             ? <p>Email and SMS digests require a connected server. In-app notifications and reminders remain available here.</p>
-            : <p>Digest emails go out on the server schedule: daily at 07:00 UTC.</p>}
+            : <p>The daily digest email goes out at 13:00 UTC and the opt-in weekly summary on Mondays. Choose what you receive on the Settings tab.</p>}
         </>}
-        actions={
+        actions={tab === "inbox" ? (
           <>
             <button
               className="btn-action"
@@ -109,9 +112,21 @@ export function NotificationsPage() {
               <CheckCheck size={12} /> Mark all read
             </button>
           </>
-        }
+        ) : undefined}
       />
 
+      <Tabs<"inbox" | "settings">
+        value={tab}
+        onChange={setTab}
+        tabRoles
+        ariaLabel="Notifications views"
+        items={[
+          { id: "inbox", label: "Inbox", count: unreadCount || null },
+          { id: "settings", label: "Settings" },
+        ]}
+      />
+
+      {tab === "settings" ? <NotificationSettings society={society} /> : (
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Recent</h2>
@@ -226,6 +241,7 @@ export function NotificationsPage() {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }

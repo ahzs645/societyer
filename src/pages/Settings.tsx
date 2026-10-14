@@ -38,6 +38,7 @@ import {
   type ModuleKey,
 } from "../lib/modules";
 import { organizationKind } from "../../shared/organizationDomain";
+import { NotificationSettingsRow } from "../features/notifications/NotificationSettingsRow";
 
 type SettingsTab = "workspace" | "modules" | "runtime";
 
@@ -730,6 +731,7 @@ export function SettingsPage() {
           <span className="card__subtitle">{t("settings.notificationsSubtitle")}</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
+          <NotificationSettingsRow />
           <div className="settings-row" style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 500 }}>{t("settings.keepClearedFor")}</div>
