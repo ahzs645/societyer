@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Pencil, Plus, Trash2, Wand2, Zap } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpToLine, GripVertical, Layers, ListPlus, MoreHorizontal, Pencil, Plus, Trash2, Wand2, Zap } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { EmptyState } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { Toggle } from "../components/Controls";
 import { Menu } from "../components/Menu";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { formatMoney } from "../lib/money";
 import { pluralize, relative } from "../lib/format";
-import { describeCondition, type StarterRuleSuggestion } from "../../shared/transactionRules";
+import {
+  addPayeesToConditions,
+  coverageMessage,
+  describeActions,
+  describeCondition,
+  ruleToExtendForSuggestion,
+  type StarterRuleSuggestion,
+} from "../../shared/transactionRules";
 import { RuleEditorDrawer } from "../features/financials/rules/RuleEditorDrawer";
-import { conditionToDraft, draftFromRule, emptyRuleDraft, type RuleDraft } from "../features/financials/rules/ruleDraft";
-import type { RuleRow, RulesWorkspace } from "../features/financials/rules/types";
+import { conditionToDraft, draftFromRule, emptyRuleDraft, type RuleEditorDraft } from "../features/financials/rules/ruleDraft";
+import type { ApplyRulesResult, RuleRow, RulesWorkspace } from "../features/financials/rules/types";
 import { useUndoRuleBatch } from "../features/financials/rules/useUndoRuleBatch";
 
 /**
@@ -35,7 +42,7 @@ export function TransactionRulesPage() {
   const toast = useToast();
   const undoToast = useUndoRuleBatch(society?._id);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [editing, setEditing] = useState<RuleDraft | null>(null);
+  const [editing, setEditing] = useState<RuleEditorDraft | null>(null);
   const [order, setOrder] = useState<string[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -59,11 +66,24 @@ export function TransactionRulesPage() {
     setSearchParams(next, { replace: true });
   }, [ruleParam, workspace, searchParams, setSearchParams]);
 
+  // "New transaction rule" from the command palette: ?intent=new opens a blank editor.
+  const intentParam = searchParams.get("intent");
+  useEffect(() => {
+    if (intentParam !== "new" || !workspace) return;
+    if (canWrite) setEditing(emptyRuleDraft());
+    const next = new URLSearchParams(searchParams);
+    next.delete("intent");
+    setSearchParams(next, { replace: true });
+  }, [intentParam, workspace, canWrite, searchParams, setSearchParams]);
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const accountName = (id: string) => workspace?.accounts.find((account) => account._id === id)?.name;
-  const fundName = (id: string) => workspace?.fundRestrictions.find((fund) => fund._id === id)?.name;
+  const fundName = (id: string) => {
+    const archived = workspace?.archivedFunds?.find((fund) => fund._id === id);
+    return workspace?.fundRestrictions.find((fund) => fund._id === id)?.name ?? (archived ? `${archived.name} (archived)` : undefined);
+  };
 
   const commitOrder = async (ids: string[], movedName: string) => {
     setOrder(ids);
@@ -108,34 +128,46 @@ export function TransactionRulesPage() {
 
   const applyAll = async () => {
     if (!workspace) return;
+    const invalid = workspace.invalidRuleCount ?? 0;
     const ok = await confirm({
       title: `Apply rules to ${pluralize(workspace.pendingMatches, "transaction")}?`,
-      message: "Uncategorised transactions that match a rule get that rule's category and actions. You can undo this right after.",
+      message: `Uncategorised transactions that match a rule get that rule's category and actions.${invalid ? ` ${pluralize(invalid, "rule")} that ${invalid === 1 ? "needs" : "need"} attention will be skipped.` : ""} You can undo this right after.`,
       confirmLabel: "Apply rules",
     });
     if (!ok) return;
     try {
-      undoToast(await applyRules({ societyId: society._id }));
+      undoToast((await applyRules({ societyId: society._id })) as ApplyRulesResult);
     } catch (error: any) {
       toast.error("Could not apply rules", error?.message);
     }
   };
 
+  // The name is left blank so it's generated ("Fieldhouse Registrations → Program fees").
   const fromSuggestion = (suggestion: StarterRuleSuggestion) => {
     const draft = emptyRuleDraft();
-    draft.name = `${suggestion.label}${suggestion.suggestedCategory ? ` to ${suggestion.suggestedCategory.toLowerCase()}` : ""}`;
     draft.conditions = [conditionToDraft(suggestion.condition)];
     draft.category = suggestion.suggestedCategory ?? "";
     setEditing(draft);
   };
 
-  const summary = (rule: RuleRow) => {
-    const parts: string[] = [];
-    if (rule.actions.category) parts.push(`category ${rule.actions.category}`);
-    if (rule.actions.accountingAccountId) parts.push(`account ${accountName(rule.actions.accountingAccountId) ?? "(removed)"}`);
-    if (rule.actions.fundRestrictionId) parts.push(`fund ${fundName(rule.actions.fundRestrictionId) ?? "(removed)"}`);
-    if (rule.actions.markReviewed) parts.push("mark reviewed");
-    return parts.join(", ");
+  // Fold a suggestion's payees into a rule that already sets the same category.
+  const addToRule = (suggestion: StarterRuleSuggestion, rule: RuleRow) => {
+    const draft = draftFromRule(rule);
+    draft.conditions = addPayeesToConditions(rule.conditions, suggestion.payees).map(conditionToDraft);
+    setEditing(draft);
+  };
+
+  const summary = (rule: RuleRow) => describeActions(rule.actions, { accountName, fundName });
+  const positionOf = (ruleId: string) => rules.findIndex((rule) => rule._id === ruleId) + 1;
+
+  // "Move above": place a rule just above the higher rule that takes most of its matches.
+  const moveAbove = (index: number, targetId: string) => {
+    const target = rules.findIndex((rule) => rule._id === targetId);
+    if (target < 0 || target >= index) return;
+    const ids = rules.map((rule) => rule._id);
+    const [moved] = ids.splice(index, 1);
+    ids.splice(target, 0, moved);
+    void commitOrder(ids, rules[index].name);
   };
 
   const suggestions = workspace?.suggestions ?? [];
@@ -199,7 +231,10 @@ export function TransactionRulesPage() {
           </div>
           <p className="sr-only" aria-live="polite">{announcement}</p>
           <ol className="rule-list" aria-label="Rules in priority order">
-            {rules.map((rule, index) => (
+            {rules.map((rule, index) => {
+              const problems = rule.problems ?? [];
+              const overlap = coverageMessage(rule.coverage, positionOf);
+              return (
               <li
                 key={rule._id}
                 className={`rule-row${rule.enabled ? "" : " is-disabled"}${dragId === rule._id ? " is-dragging" : ""}`}
@@ -224,6 +259,7 @@ export function TransactionRulesPage() {
                   <GripVertical size={14} aria-hidden="true" />
                   <span className="rule-row__priority">{index + 1}</span>
                 </button>
+                <div className="rule-row__main">
                 <button type="button" className="rule-row__body" onClick={() => setEditing(draftFromRule(rule))}>
                   <span className="rule-row__name">{rule.name}</span>
                   <span className="rule-row__sentence">
@@ -242,6 +278,29 @@ export function TransactionRulesPage() {
                     {rule.lastAppliedAtISO && <> · last applied {relative(rule.lastAppliedAtISO)}</>}
                   </span>
                 </button>
+                {(problems.length > 0 || overlap) && (
+                  <div className="rule-row__flags">
+                    {problems.length > 0 && (
+                      <Badge tone="danger">
+                        <AlertTriangle size={12} aria-hidden="true" /> Needs attention: {problems[0]}
+                      </Badge>
+                    )}
+                    {overlap && (
+                      <Badge tone={overlap.neverApplies ? "warn" : "info"}>
+                        <Layers size={12} aria-hidden="true" /> {overlap.text}
+                      </Badge>
+                    )}
+                    {overlap && canWrite && (
+                      <button type="button" className="btn btn--ghost btn--sm rule-row__flag-action" onClick={() => moveAbove(index, overlap.topRuleId)}>
+                        <ArrowUpToLine size={12} aria-hidden="true" /> Move above rule {positionOf(overlap.topRuleId)}
+                      </button>
+                    )}
+                    <button type="button" className="btn btn--ghost btn--sm rule-row__flag-action" onClick={() => setEditing(draftFromRule(rule))}>
+                      <Pencil size={12} aria-hidden="true" /> Edit
+                    </button>
+                  </div>
+                )}
+                </div>
                 <div className="rule-row__controls">
                   <Toggle
                     size="sm"
@@ -271,10 +330,10 @@ export function TransactionRulesPage() {
                         id: "apply",
                         label: rule.pendingCount ? `Apply to ${rule.pendingCount} uncategorised` : "Nothing to apply",
                         icon: <Wand2 size={14} />,
-                        disabled: !canWrite || !rule.enabled || rule.pendingCount === 0,
+                        disabled: !canWrite || !rule.enabled || rule.pendingCount === 0 || problems.length > 0,
                         onSelect: async () => {
                           try {
-                            undoToast(await applyRules({ societyId: society._id, ruleId: rule._id as any }));
+                            undoToast((await applyRules({ societyId: society._id, ruleId: rule._id as any })) as ApplyRulesResult);
                           } catch (error: any) {
                             toast.error("Could not apply the rule", error?.message);
                           }
@@ -302,7 +361,8 @@ export function TransactionRulesPage() {
                   />
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ol>
         </div>
       )}
@@ -316,18 +376,28 @@ export function TransactionRulesPage() {
             </div>
           </div>
           <div className="card__body rule-suggestions__grid">
-            {suggestions.map((suggestion) => (
-              <div key={suggestion.key} className="rule-suggestion">
-                <div className="rule-suggestion__title">{suggestion.label}</div>
-                <div className="rule-suggestion__meta">
-                  {pluralize(suggestion.count, "transaction")}
-                  {suggestion.suggestedCategory ? ` · usually ${suggestion.suggestedCategory}` : ""}
+            {suggestions.map((suggestion) => {
+              const extend = ruleToExtendForSuggestion(rules, suggestion);
+              return (
+                <div key={suggestion.key} className="rule-suggestion">
+                  <div className="rule-suggestion__title">{suggestion.label}</div>
+                  <div className="rule-suggestion__meta">
+                    {pluralize(suggestion.count, "transaction")}
+                    {suggestion.suggestedCategory ? ` · usually ${suggestion.suggestedCategory}` : ""}
+                  </div>
+                  <div className="rule-suggestion__actions">
+                    <button type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => fromSuggestion(suggestion)}>
+                      Create rule from these {suggestion.count} transactions
+                    </button>
+                    {extend && (
+                      <button type="button" className="btn btn--sm btn--ghost" disabled={!canWrite} onClick={() => addToRule(suggestion, extend)}>
+                        <ListPlus size={12} aria-hidden="true" /> Add to “{extend.name}”
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <button type="button" className="btn btn--sm" disabled={!canWrite} onClick={() => fromSuggestion(suggestion)}>
-                  Create rule from these {suggestion.count} transactions
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
