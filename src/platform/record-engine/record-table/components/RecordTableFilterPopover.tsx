@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ListPlus, Plus, Trash2, X } from "lucide-react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { FIELD_TYPES, type RecordField, type ViewFilter, type ViewFilterGroup, type ViewFilterOperator } from "../../types";
@@ -122,6 +123,11 @@ function hasOptions(column: RecordField | undefined) {
  *
  * Opened by the page's Filter button (`open`) or by a filter chip, which
  * asks through the table store and focuses that condition.
+ *
+ * Pages render it next to their toolbar; while a toolbar is mounted the
+ * editor portals into it and floats under the Filter button (an in-flow
+ * panel on phones, see `_record-table-extras.scss`) instead of pushing the
+ * table down.
  */
 export function RecordTableFilterPopover({
   open,
@@ -131,16 +137,36 @@ export function RecordTableFilterPopover({
   onClose: () => void;
 }) {
   const request = useRecordTableState((s) => s.filterEditorRequest);
+  const toolbarElement = useRecordTableState((s) => s.toolbarElement);
   const handle = useRecordTableStoreHandle();
   if (!open && !request) return null;
   const close = () => {
     handle.get().clearFilterEditorRequest();
     onClose();
   };
-  return <FilterEditor key={request?.nonce ?? "toolbar"} focusIndex={request?.filterIndex} onClose={close} />;
+  const editor = (
+    <FilterEditor
+      key={request?.nonce ?? "toolbar"}
+      focusIndex={request?.filterIndex}
+      onClose={close}
+      floating={Boolean(toolbarElement)}
+      toolbarElement={toolbarElement}
+    />
+  );
+  return toolbarElement ? createPortal(editor, toolbarElement) : editor;
 }
 
-function FilterEditor({ focusIndex, onClose }: { focusIndex?: number; onClose: () => void }) {
+function FilterEditor({
+  focusIndex,
+  onClose,
+  floating,
+  toolbarElement,
+}: {
+  focusIndex?: number;
+  onClose: () => void;
+  floating: boolean;
+  toolbarElement: HTMLElement | null;
+}) {
   const columns = useRecordTableState((s) => s.columns);
   const dateContext = useRecordTableState((s) => s.dateContext);
   const handle = useRecordTableStoreHandle();
@@ -156,16 +182,42 @@ function FilterEditor({ focusIndex, onClose }: { focusIndex?: number; onClose: (
       // Field/operator Selects and the date pickers portal their menus to
       // <body>; picking an option there is not an outside click.
       if (!isOutsidePointerEvent(event, popoverRef)) return;
+      // The Filter button toggles the editor itself; closing here as well
+      // would let its click reopen a fresh editor.
+      const trigger = toolbarElement?.querySelector("[data-record-table-filter-trigger]");
+      if (trigger && event.target instanceof Node && trigger.contains(event.target)) return;
       onCloseRef.current();
     };
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, []);
+  }, [toolbarElement]);
 
-  // The editor opens in the page flow under the toolbar; on a short phone
-  // screen bring its bottom (Apply) into view instead of leaving it below the fold.
+  // Bring the whole editor (down to Apply) into view: under a toolbar near
+  // the fold, or as the in-flow panel on a short phone screen.
   useEffect(() => {
     popoverRef.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  // Keyboard: opened from the toolbar, focus moves into the editor (the Ask
+  // box focuses itself when asked for), and closing returns it to where it
+  // came from rather than dropping it on <body>.
+  useEffect(() => {
+    const popover = popoverRef.current;
+    if (!popover) return;
+    const opener = document.activeElement instanceof HTMLElement && !popover.contains(document.activeElement)
+      ? document.activeElement
+      : null;
+    if (focusIndex === undefined && floating && opener?.hasAttribute("data-record-table-filter-trigger")) {
+      popover.querySelector<HTMLElement>(".record-table__filter-conditions button, .record-table__filter-conditions input")?.focus({ preventScroll: true });
+    }
+    return () => {
+      const active = document.activeElement;
+      if (opener?.isConnected && (!active || active === document.body || popover.contains(active))) {
+        opener.focus({ preventScroll: true });
+      }
+    };
+    // Mount/unmount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -310,7 +362,13 @@ function FilterEditor({ focusIndex, onClose }: { focusIndex?: number; onClose: (
   const conditionCount = draft.conditions.filter((condition) => condition.fieldMetadataId).length;
 
   return (
-    <div ref={popoverRef} className="record-table__filter-popover" role="group" aria-label="Filters" onKeyDown={onKeyDown}>
+    <div
+      ref={popoverRef}
+      className={`record-table__filter-popover${floating ? " record-table__filter-popover--floating" : ""}`}
+      role={floating ? "dialog" : "group"}
+      aria-label="Filters"
+      onKeyDown={onKeyDown}
+    >
       <RecordTableAskFilter onApplied={onClose} onEditAsFilters={(tree) => setDraft(draftFromStore(tree.filters, tree.filterGroups, handle.get().columns))} />
       <div className="record-table__popover-head">
         <strong>Filters</strong>

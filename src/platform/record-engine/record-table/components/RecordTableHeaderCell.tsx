@@ -221,6 +221,7 @@ export function RecordTableHeaderCell({
         className="record-table__header-cell-button"
         onClick={cycleSort}
         type="button"
+        title={recordField.field.label}
       >
         <FieldIcon size={13} className="record-table__header-cell-icon" aria-hidden="true" />
         <span className="record-table__header-cell-label">{recordField.field.label}</span>

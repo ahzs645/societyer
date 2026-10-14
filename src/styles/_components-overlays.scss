@@ -277,6 +277,8 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   padding-right: 28px;
 }
 .date-trigger .select-trigger__label { gap: 6px; }
+/* Too narrow for icon + date: the date keeps the room (see DatePicker fit). */
+.date-trigger--bare .select-trigger__icon { display: none; }
 .date-trigger__clear {
   position: absolute;
   right: 6px;

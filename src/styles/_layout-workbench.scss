@@ -862,6 +862,21 @@
   vertical-align: middle;
   &:hover, &[aria-expanded="true"] { color: token(text-primary); background: token(bg-hover); }
   &:focus-visible { outline: 2px solid token(accent); outline-offset: 1px; }
+
+  /* Touch: keep the quiet 24px glyph but give it a 40px hit area. */
+  @media (pointer: coarse) {
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      transform: translate(-50%, -50%);
+      border-radius: inherit;
+    }
+  }
 }
 .info-popover {
   z-index: token(z-dropdown);
