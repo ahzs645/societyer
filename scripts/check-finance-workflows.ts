@@ -3,6 +3,7 @@
 // application + undo, and server-side approval-rule enforcement.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
+import { DEMO_RECONCILIATION, feedTransactionId } from "../src/lib/staticFinanceWorkflowFixtures";
 import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import * as recon from "../shared/functions/reconciliation";
@@ -25,49 +26,103 @@ const mina = ctxFor(seed.users[0]._id);
 const jordan = ctxFor("static_user_treasurer");
 const avery = ctxFor("static_user_secretary");
 
-// ---- periods
+// ---- the demo feed still balances: the workflows only add flags to feed rows
+const cashId = "static_financial_cash";
+const grantId = "static_financial_grant";
+const accountsById = Object.fromEntries(seed.financialAccounts.map((a: any) => [a._id, a]));
+const balanceAtEndOf = (accountId: string, date: string) =>
+  accountsById[accountId].balanceCents -
+  seed.financialTransactions.filter((t: any) => t.accountId === accountId && t.date > date).reduce((sum: number, t: any) => sum + t.amountCents, 0);
+// Calibrated to the 2026-01-01 opening-balance journal entry.
+assert.equal(balanceAtEndOf(cashId, "2025-12-31"), 3490000, "operating chequing opens 2026 at the journal's balance");
+assert.equal(balanceAtEndOf(grantId, "2025-12-31"), 2750000, "restricted fund opens 2026 at the journal's balance");
+assert.equal(
+  seed.financialTransactions.filter((t: any) => !String(t._id).startsWith("static_tx_feed_")).length,
+  3,
+  "no hand-written bank lines beyond the three journal-linked ones",
+);
+
+// ---- periods (statement balances are the feed's running balances)
 let p = await recon.periodsPortable(mina, { societyId: S });
 const byId = Object.fromEntries(p.periods.map((x: any) => [x._id, x]));
-assert.equal(byId.static_recon_cash_2026_01.effectiveStatus, "completed");
-assert.equal(byId.static_recon_cash_2026_02.effectiveStatus, "out_of_balance");
-assert.equal(byId.static_recon_cash_2026_03.effectiveStatus, "in_progress");
-assert.equal(byId.static_recon_grant_2026_02.effectiveStatus, "auto_reconciled");
-assert.equal(byId.static_recon_cash_2026_01.differenceCents, 0);
-assert.equal(byId.static_recon_cash_2026_03.differenceCents, 38250 - 8105);
-await assert.rejects(() => recon.completePeriodPortable(mina, { id: "static_recon_cash_2026_03" }), /difference/);
-await assert.rejects(() => recon.startPeriodPortable(mina, { societyId: S, accountId: "static_financial_cash", endDate: "2026-04-30", endingBalanceCents: 1 }), /open reconciliation/);
-await recon.markManualPortable(mina, { txnId: "static_tx_mar_hydro", note: "Hydro" });
-await recon.markManualPortable(mina, { txnId: "static_tx_mar_square", note: "Square" });
+const R = DEMO_RECONCILIATION;
+const jan = byId[R.janPeriodId];
+const feb = byId[R.febPeriodId];
+const mar = byId[R.marPeriodId];
+const q1 = byId[R.restrictedPeriodId];
+assert.equal(jan.effectiveStatus, "completed");
+assert.equal(feb.effectiveStatus, "out_of_balance");
+assert.equal(mar.effectiveStatus, "in_progress");
+assert.equal(q1.effectiveStatus, "auto_reconciled");
+// A completed statement balances to $0.00 with every line cleared.
+assert.equal(jan.differenceCents, 0);
+assert.equal(jan.unclearedCount, 0);
+assert.equal(jan.beginningBalanceCents, 3490000);
+assert.equal(jan.endingBalanceCents, balanceAtEndOf(cashId, "2026-01-31"));
+assert.equal(q1.differenceCents, 0);
+assert.equal(q1.unclearedCount, 0);
+// February: the one line unmatched after completion is the whole difference.
+const febUnmatched = await db.get(feedTransactionId(R.febUnmatchedKey));
+assert.ok(febUnmatched && !febUnmatched.reconciledAtISO);
+assert.equal(feb.unclearedCount, 1);
+assert.equal(feb.differenceCents, febUnmatched.amountCents);
+assert.equal(feb.beginningBalanceCents, jan.endingBalanceCents);
+assert.equal(feb.endingBalanceCents, balanceAtEndOf(cashId, "2026-02-28"));
+// March: two uncleared lines explain the difference.
+const marUncleared = await Promise.all(R.marUnclearedKeys.map((key) => db.get(feedTransactionId(key))));
+assert.equal(mar.unclearedCount, 2);
+assert.notEqual(mar.differenceCents, 0);
+assert.equal(mar.differenceCents, marUncleared.reduce((sum: number, t: any) => sum + t.amountCents, 0));
+assert.equal(mar.endingBalanceCents, balanceAtEndOf(cashId, "2026-03-31"));
+await assert.rejects(() => recon.completePeriodPortable(mina, { id: R.marPeriodId }), /difference/);
+await assert.rejects(() => recon.startPeriodPortable(mina, { societyId: S, accountId: cashId, endDate: "2026-04-30", endingBalanceCents: 1 }), /open reconciliation/);
+// Re-clearing February's line restores the completion snapshot.
+await recon.markManualPortable(mina, { txnId: febUnmatched._id, note: "Corrected invoice attached" });
 p = await recon.periodsPortable(mina, { societyId: S });
-assert.equal(p.periods.find((x: any) => x._id === "static_recon_cash_2026_03").differenceCents, 0);
-await recon.completePeriodPortable(mina, { id: "static_recon_cash_2026_03" });
+assert.equal(p.periods.find((x: any) => x._id === R.febPeriodId).effectiveStatus, "completed", "February balances again");
+for (const txn of marUncleared) await recon.markManualPortable(mina, { txnId: txn._id, note: "On statement" });
+p = await recon.periodsPortable(mina, { societyId: S });
+assert.equal(p.periods.find((x: any) => x._id === R.marPeriodId).differenceCents, 0);
+await recon.completePeriodPortable(mina, { id: R.marPeriodId });
 // unmatching a line inside a completed period flags it
-await recon.unmatchPortable(mina, { txnId: "static_tx_mar_square" });
+await recon.unmatchPortable(mina, { txnId: marUncleared[0]._id });
 p = await recon.periodsPortable(mina, { societyId: S });
-assert.equal(p.periods.find((x: any) => x._id === "static_recon_cash_2026_03").effectiveStatus, "out_of_balance");
-assert.equal((await db.get("static_recon_cash_2026_03")).status, "out_of_balance", "persisted flag");
-await recon.markManualPortable(mina, { txnId: "static_tx_mar_square", note: "Square again" });
+assert.equal(p.periods.find((x: any) => x._id === R.marPeriodId).effectiveStatus, "out_of_balance");
+assert.equal((await db.get(R.marPeriodId)).status, "out_of_balance", "persisted flag");
+await recon.markManualPortable(mina, { txnId: marUncleared[0]._id, note: "On statement again" });
 p = await recon.periodsPortable(mina, { societyId: S });
-assert.equal(p.periods.find((x: any) => x._id === "static_recon_cash_2026_03").effectiveStatus, "completed", "restored lines match again");
+assert.equal(p.periods.find((x: any) => x._id === R.marPeriodId).effectiveStatus, "completed", "restored lines match again");
 // start April
-const aprilId = await recon.startPeriodPortable(mina, { societyId: S, accountId: "static_financial_cash", endDate: "2026-04-30", endingBalanceCents: 123 });
+const aprilId = await recon.startPeriodPortable(mina, { societyId: S, accountId: cashId, endDate: "2026-04-30", endingBalanceCents: 123 });
 p = await recon.periodsPortable(mina, { societyId: S });
 const april = p.periods.find((x: any) => x._id === aprilId);
 assert.equal(april.startDate, "2026-04-01");
-assert.equal(april.beginningBalanceCents, byId.static_recon_cash_2026_03.endingBalanceCents);
+assert.equal(april.beginningBalanceCents, mar.endingBalanceCents);
 await recon.removePeriodPortable(mina, { id: aprilId });
 
-// ---- rules
+// ---- rules (they target real feed payees; the latest recurring lines await a rule run)
 let ws = await rules.workspacePortable(mina, { societyId: S });
+assert.equal(ws.rules.filter((r: any) => !r.enabled).length, 1, "one disabled rule");
+for (const rule of ws.rules) assert.ok(rule.matchCount >= 5, `${rule.name} matches real feed lines`);
+assert.ok(ws.pendingMatches >= 4, "Apply rules to uncategorised has a preview");
+assert.ok(ws.uncategorizedCount > ws.pendingMatches, "some uncategorised lines match no rule");
+const ruledEarlier = seed.financialTransactions.filter((t: any) => t.categorizedBy === "rule");
+assert.ok(ruledEarlier.length >= 20, "earlier feed lines carry rule provenance");
+assert.ok(ruledEarlier.every((t: any) => t.ruleId && t.ruleApplication?.ruleName));
+const latestHydro = seed.financialTransactions
+  .filter((t: any) => t.counterparty === "Coastal Hydro")
+  .sort((a: any, b: any) => a.date.localeCompare(b.date))
+  .at(-1);
+assert.equal(latestHydro.category, undefined);
 const applied = await rules.applyToUncategorizedPortable(mina, { societyId: S });
-assert.ok(applied.applied >= 5);
-const hydro = await db.get("static_tx_apr_hydro");
-assert.equal(hydro.category, "Utilities");
+assert.ok(applied.applied >= 4);
+const hydro = await db.get(latestHydro._id);
+assert.equal(hydro.category, "Facilities");
 assert.equal(hydro.categorizedBy, "rule");
 await rules.undoBatchPortable(mina, { societyId: S, batch: applied.batchId });
-assert.equal((await db.get("static_tx_apr_hydro")).category, undefined);
-assert.equal((await db.get("static_tx_apr_hydro")).categorizedBy, undefined);
-const newRule = await rules.upsertPortable(mina, { societyId: S, name: "Shaw internet", conditions: [{ field: "payee", operator: "contains", value: "shaw" }], actions: { category: "Telephone & internet" } });
+assert.equal((await db.get(latestHydro._id)).category, undefined);
+assert.equal((await db.get(latestHydro._id)).categorizedBy, undefined);
+const newRule = await rules.upsertPortable(mina, { societyId: S, name: "Harbourline telecom", conditions: [{ field: "payee", operator: "contains", value: "harbourline" }], actions: { category: "Office & technology" } });
 ws = await rules.workspacePortable(mina, { societyId: S });
 assert.equal(ws.rules[ws.rules.length - 1]._id, newRule);
 await rules.reorderPortable(mina, { societyId: S, orderedIds: [newRule, ...ws.rules.filter((r: any) => r._id !== newRule).map((r: any) => r._id)] });
