@@ -731,3 +731,98 @@
   opacity: 1;
   pointer-events: auto;
 }
+
+/* ---------- Release QA: shell polish ------------------------- */
+
+/* The nav is a scrolling flex column; without this the filter field was the
+ * one child that shrank (to ~20px) whenever the tree overflowed. */
+.sidebar__nav-filter {
+  flex-shrink: 0;
+}
+
+/* Operations desk: same inset and label style as the Favorites / All records
+ * section labels below it, so the sidebar reads as one column. */
+.app-shell:not(.is-mobile) .sidebar__spotlight {
+  padding-inline: calc(#{token('s-2')} + #{token('s-3')});
+}
+.sidebar__spotlight-label {
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Unread badge sits on the bell's corner instead of covering the glyph. */
+.sidebar__brand-actions .notif-bell__badge {
+  top: -5px;
+  right: -7px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: token('fs-xxs');
+  line-height: 14px;
+  box-shadow: 0 0 0 2px token('bg-app');
+}
+
+/* Focus mode: the floating "open sidebar" button sits over the top-left
+ * corner, so the demo banner leaves room for it. */
+.app-shell.is-collapsed:not(.is-mobile):not(.is-rail) .demo-banner {
+  padding-left: calc(10px + 30px + #{token('s-3')});
+}
+
+/* The main region is a programmatic focus target (skip link, route change),
+ * not a control; a ring around the whole page is noise. */
+.app-shell .main:focus,
+.app-shell .main:focus-visible {
+  outline: none;
+}
+
+/* Phone/tablet drawer: workspace switcher and its one action share a row
+ * (the stacked layout left the AI button orphaned on a line of its own). */
+.app-shell.is-mobile .sidebar__brand {
+  flex-direction: row;
+  align-items: center;
+}
+.app-shell.is-mobile .sidebar__workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (pointer: coarse) {
+  .app-shell.is-mobile .sidebar__brand-actions .sidebar__icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .app-shell.is-mobile .sidebar__brand-actions .sidebar__icon-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Phones: the role switch is a full 40px target, so the banner trims its own
+ * padding to stay one slim 44px strip. */
+@media (pointer: coarse) and (max-width: 760px) {
+  .demo-banner {
+    padding-block: 2px;
+  }
+}
+
+/* 320px phones: five bottom-nav labels fit without ellipsis. */
+@media (max-width: 360px) {
+  .bottom-nav {
+    padding-inline: max(#{token('s-1')}, env(safe-area-inset-left, 0px));
+  }
+  .bottom-nav__item {
+    margin-inline: 0;
+    padding-inline: 0;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Command palette: the hint column never wraps into a ragged second line. */
+.kbar__hint {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
