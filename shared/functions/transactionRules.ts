@@ -21,6 +21,7 @@ import {
   ruleDisplayName,
   ruleMatches,
   rulePatchForTransaction,
+  ruleReferenceIndex,
   ruleProblems,
   sortRules,
   suggestStarterRules,
@@ -90,11 +91,7 @@ async function loadReferences(ctx: PortableQueryCtx, societyId: string) {
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
-  const refs: RuleReferenceIndex = {
-    accountIds: new Set(accounts.map((a: any) => String(a._id))),
-    activeFundIds: new Set(restrictions.filter((r: any) => r.status !== "archived").map((r: any) => String(r._id))),
-    archivedFundIds: new Set(restrictions.filter((r: any) => r.status === "archived").map((r: any) => String(r._id))),
-  };
+  const refs: RuleReferenceIndex = ruleReferenceIndex(accounts as any[], restrictions as any[]);
   const nameOf = (rows: any[]) => (id: string) => {
     const row = rows.find((r: any) => String(r._id) === String(id));
     return row ? String(row.name) : undefined;

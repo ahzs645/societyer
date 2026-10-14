@@ -11,7 +11,7 @@ import {
 } from "./providers/accounting";
 import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
-import { rulePatchForTransaction } from "../shared/transactionRules";
+import { invalidRuleIds, rulePatchForTransaction, ruleReferenceIndex } from "../shared/transactionRules";
 import { aliasedCounterparty } from "../shared/payeeAliases";
 import {
   connectionsPortable,
@@ -763,6 +763,12 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
       .query("transactionRules")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
       .collect()) as any[];
+    // Rules pointing at a removed account or an archived fund are skipped, as in "Apply rules".
+    const [ruleAccounts, ruleFunds] = await Promise.all([
+      ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
+      ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
+    ]);
+    const skipRules = invalidRuleIds(rules, ruleReferenceIndex(ruleAccounts, ruleFunds));
     // Payee rename rules store the display name as the counterparty.
     const payeeAliases = (await ctx.db
       .query("payeeAliases")
@@ -783,7 +789,7 @@ export const importBankCsvTransactions = authorizedMutation("financialHub:import
         skipped += 1;
         continue;
       }
-      const ruled = rulePatchForTransaction(rules, { ...row, accountId: args.accountId }, appliedAtISO, ruleBatch);
+      const ruled = rulePatchForTransaction(rules, { ...row, accountId: args.accountId }, appliedAtISO, ruleBatch, skipRules);
       if (ruled) categorized += 1;
       await ctx.db.insert("financialTransactions", {
         societyId: args.societyId,

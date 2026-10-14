@@ -42,7 +42,7 @@ import {
 } from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
-import { rulePatchForTransaction } from "../../shared/transactionRules";
+import { invalidRuleIds, rulePatchForTransaction, ruleReferenceIndex } from "../../shared/transactionRules";
 import { aliasedCounterparty } from "../../shared/payeeAliases";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
 import {
@@ -1055,6 +1055,11 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
     const rows = (args?.rows ?? []) as any[];
     const rules = scopedRows(store?.listRows("transactionRules", args) ?? [], args);
     const payeeAliases = scopedRows(store?.listRows("payeeAliases", args) ?? [], args);
+    // Rules pointing at a removed account or an archived fund are skipped, as in "Apply rules".
+    const skipRules = invalidRuleIds(
+      rules as any[],
+      ruleReferenceIndex(scopedRows(store?.listRows("financialAccounts", args) ?? [], args), scopedRows(store?.listRows("fundRestrictions", args) ?? [], args)),
+    );
     const appliedAtISO = new Date().toISOString();
     let categorized = 0;
     let inserted = 0;
@@ -1068,7 +1073,7 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         skipped += 1;
         continue;
       }
-      const ruled = rulePatchForTransaction(rules as any[], { ...row, accountId }, appliedAtISO, `import-${appliedAtISO}`);
+      const ruled = rulePatchForTransaction(rules as any[], { ...row, accountId }, appliedAtISO, `import-${appliedAtISO}`, skipRules);
       if (ruled) categorized += 1;
       store?.upsertRow("financialTransactions", {
         _id: `static_tx_${externalId.replace(/[^a-zA-Z0-9]+/g, "_")}`,

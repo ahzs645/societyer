@@ -532,6 +532,23 @@ export function ruleProblems(rule: Pick<TransactionRuleLike, "conditions" | "act
   return problems;
 }
 
+/** The reference index for a workspace's accounts and fund restrictions. */
+export function ruleReferenceIndex(
+  accounts: readonly { _id: unknown }[],
+  restrictions: readonly { _id: unknown; status?: unknown }[],
+): RuleReferenceIndex {
+  return {
+    accountIds: new Set(accounts.map((a) => String(a._id))),
+    activeFundIds: new Set(restrictions.filter((r) => r.status !== "archived").map((r) => String(r._id))),
+    archivedFundIds: new Set(restrictions.filter((r) => r.status === "archived").map((r) => String(r._id))),
+  };
+}
+
+/** Rules that can no longer run (see `ruleProblems`), for the `skip` set of `rulePatchForTransaction`. */
+export function invalidRuleIds(rules: readonly (Pick<TransactionRuleLike, "conditions" | "actions"> & { _id: unknown })[], refs: RuleReferenceIndex): Set<string> {
+  return new Set(rules.filter((rule) => ruleProblems(rule, refs).length > 0).map((rule) => String(rule._id)));
+}
+
 // --------------------------------------------------- coverage and overlap
 
 export type RuleCoverage = {

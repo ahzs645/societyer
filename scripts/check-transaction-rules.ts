@@ -14,6 +14,8 @@ import {
   ruleCoverage,
   ruleDisplayName,
   ruleProblems,
+  invalidRuleIds,
+  ruleReferenceIndex,
   ruleToExtendForSuggestion,
   shadowingFor,
   isUncategorized,
@@ -260,6 +262,22 @@ assert.deepEqual(ruleProblems({ conditions: [], actions: { fundRestrictionId: "f
 assert.deepEqual(ruleProblems({ conditions: [], actions: { fundRestrictionId: "fund_gone" } }, refs), ["the fund was removed"]);
 assert.deepEqual(ruleProblems({ conditions: [{ field: "account", accountId: "card_gone" }], actions: { accountingAccountId: "acct_5200" } }, refs), ["the bank account was removed"]);
 assert.deepEqual(ruleProblems({ conditions: [{ field: "account", accountId: "bank" }], actions: { fundRestrictionId: "fund_a" } }, refs), []);
+assert.deepEqual(
+  ruleReferenceIndex([{ _id: "bank" }, { _id: "acct_5200" }], [{ _id: "fund_a", status: "active" }, { _id: "fund_old", status: "archived" }]),
+  refs,
+);
+{
+  // Imports skip an invalid rule and fall through to the next one that matches.
+  const importRules = [
+    { _id: "r_dead", priority: 0, enabled: true, conditions: [{ field: "payee", operator: "contains", value: "hydro" }] as RuleCondition[], actions: { category: "Utilities", fundRestrictionId: "fund_old" } },
+    { _id: "r_live", priority: 1, enabled: true, conditions: [{ field: "payee", operator: "contains", value: "hydro" }] as RuleCondition[], actions: { category: "Facilities" } },
+  ];
+  const skip = invalidRuleIds(importRules, refs);
+  assert.deepEqual([...skip], ["r_dead"]);
+  const line = { description: "BC HYDRO", amountCents: -4200, accountId: "bank" };
+  assert.equal(rulePatchForTransaction(importRules, line, "2026-01-01T00:00:00Z", "b")!.rule._id, "r_dead", "without the skip set the invalid rule wins");
+  assert.equal(rulePatchForTransaction(importRules, line, "2026-01-01T00:00:00Z", "b", skip)!.rule._id, "r_live");
+}
 
 // --- suggestions carry their exact payees and can extend a matching rule ---
 assert.deepEqual(suggestions[1].payees, ["Square"]);
