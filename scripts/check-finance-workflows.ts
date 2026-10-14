@@ -36,10 +36,19 @@ const balanceAtEndOf = (accountId: string, date: string) =>
 // Calibrated to the 2026-01-01 opening-balance journal entry.
 assert.equal(balanceAtEndOf(cashId, "2025-12-31"), 3490000, "operating chequing opens 2026 at the journal's balance");
 assert.equal(balanceAtEndOf(grantId, "2025-12-31"), 2750000, "restricted fund opens 2026 at the journal's balance");
+// Besides the generated feed, the only bank lines are the three journal-linked
+// ones and the invoicing demo's payment deposits, which must post after every
+// statement period so they never disturb a reconciliation.
+const isInvoiceDeposit = (t: any) => String(t.externalId ?? "").startsWith("csv-invoice-");
 assert.equal(
-  seed.financialTransactions.filter((t: any) => !String(t._id).startsWith("static_tx_feed_")).length,
+  seed.financialTransactions.filter((t: any) => !String(t._id).startsWith("static_tx_feed_") && !isInvoiceDeposit(t)).length,
   3,
-  "no hand-written bank lines beyond the three journal-linked ones",
+  "no hand-written bank lines beyond the three journal-linked ones and invoice deposits",
+);
+const lastStatementEnd = seed.reconciliationPeriods.map((period: any) => period.endDate).sort().at(-1);
+assert.ok(
+  seed.financialTransactions.filter(isInvoiceDeposit).every((t: any) => t.date > lastStatementEnd),
+  "invoice deposits post after the last statement period",
 );
 
 // ---- periods (statement balances are the feed's running balances)

@@ -371,4 +371,10 @@ export function mergeInvoiceDemo(tables: Record<string, any[]>, ids: Ids) {
     if (Array.isArray(tables[key])) tables[key].push(...rows);
     else tables[key] = rows;
   }
+  // Invoice payment deposits are real bank lines, so the account balance must
+  // include them (balance = opening + sum of transactions, like the feed).
+  const cash = (tables.financialAccounts ?? []).find((account: any) => account._id === ids.cashAccountId);
+  if (cash) {
+    cash.balanceCents = (cash.balanceCents ?? 0) + (data.financialTransactions as any[]).reduce((sum, row) => sum + row.amountCents, 0);
+  }
 }
