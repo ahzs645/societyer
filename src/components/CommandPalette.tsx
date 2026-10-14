@@ -56,6 +56,7 @@ import { organizationKind, organizationLabel } from "../../shared/organizationDo
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
+import { ASK_FILTER_COMMAND_PREFIX, getAskFilterTarget } from "../lib/nlFilter/bridge";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
@@ -73,7 +74,8 @@ type CommandCategory =
   | "Finance"
   | "Compliance"
   | "System"
-  | "Actions";
+  | "Actions"
+  | "This table";
 
 type CommandItem = {
   id: string;
@@ -202,6 +204,7 @@ const CATEGORY_ORDER: CommandCategory[] = [
   "System",
 ];
 
+const ASK_QUERY_SUFFIX = ":query";
 const ENABLE_METADATA_COMMANDS = import.meta.env.VITE_ENABLE_METADATA_COMMANDS === "true";
 const RECENTS_KEY = "societyer.kbar.recents";
 const RECENTS_MAX = 5;
@@ -504,7 +507,7 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
   // Anything the user can run from the palette can be pinned: navigation
   // entries (have `to`), action entries (have `run`). Recent rows preserve
   // both fields when they're spread, so they fall in here too.
-  const canPinItem = (item: CommandItem): boolean => Boolean(item.to || item.run);
+  const canPinItem = (item: CommandItem): boolean => Boolean(item.to || item.run) && !item.id.endsWith(ASK_QUERY_SUFFIX);
 
   const isItemPinned = (item: CommandItem): boolean => {
     if (item.to) return pinnedRouteSet.has(item.to);
@@ -712,6 +715,39 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
       if (items.length === 0) continue;
       groups.push({ category: cat, items });
       flat.push(...items);
+    }
+    // "Filter <table> by: <typed text>" for each mounted RecordTable. It leads
+    // the list when the text reads as a filter, and trails it otherwise.
+    if (ql) {
+      const askItems = registeredCommands
+        .filter((command) => command.id.startsWith(ASK_FILTER_COMMAND_PREFIX))
+        .flatMap((command) => {
+          const target = getAskFilterTarget(command.id);
+          if (!target) return [];
+          const text = q.trim();
+          const status = target.preview(text);
+          return [{
+            item: {
+              id: `${command.id}${ASK_QUERY_SUFFIX}`,
+              label: `Filter ${target.label} by: ${text}`,
+              icon: command.icon,
+              category: "This table" as const,
+              hint: status === "ok" ? "Apply filter" : "Preview filter",
+              run: () => target.run(text),
+            },
+            understood: status === "ok" || status === "partial",
+          }];
+        });
+      const lead = askItems.filter((entry) => entry.understood).map((entry) => entry.item);
+      const trail = askItems.filter((entry) => !entry.understood).map((entry) => entry.item);
+      if (lead.length) {
+        groups.unshift({ category: "This table", items: lead });
+        flat.unshift(...lead);
+      }
+      if (trail.length) {
+        groups.push({ category: "This table", items: trail });
+        flat.push(...trail);
+      }
     }
     return { flat, groups };
   }, [q, society, societies, crossEntityResults, actions, recents, recentRecords, registeredCommands, metadataCommands, navigate]);

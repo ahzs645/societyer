@@ -39,6 +39,7 @@ import { useRegisterCommand } from "../../../../lib/commands";
 import { RecordTableGroupByPopover } from "./RecordTableGroupByPopover";
 import { RecordTableExportDialog } from "./RecordTableExportDialog";
 import { getViewGroupBy } from "../utils/groupRecords";
+import { RecordTableAskFilterButton } from "./RecordTableAskFilterButton";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -422,6 +423,7 @@ export function RecordTableToolbar({
           </button>
         </div>
 
+        {onOpenFilter && <RecordTableAskFilterButton />}
         {onOpenFilter && (
           <button
             type="button"

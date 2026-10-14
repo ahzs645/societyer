@@ -104,6 +104,8 @@
 @use "finance-workflows";
 // Shell navigation: two-level sidebar, icon rail, activation pill, breadcrumbs, shortcuts.
 @use "shell-nav";
+// RecordTable "Ask" filter (plain-language request → filter chips).
+@use "nl-filter";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
