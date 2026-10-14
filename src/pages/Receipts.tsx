@@ -24,6 +24,7 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTableEmpty,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -141,6 +142,17 @@ export function ReceiptsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || items === undefined}
+            emptyState={
+              <RecordTableEmpty
+                title="No donation receipts yet"
+                description="Issue an official receipt for each eligible gift. Numbers run in series and voided receipts stay on file."
+                action={canWrite ? (
+                  <button className="btn-action btn-action--primary" onClick={openNew}>
+                    <Plus size={12} /> Issue first receipt
+                  </button>
+                ) : undefined}
+              />
+            }
             renderCell={({ record, field }) => {
               if (field.name === "receiptNumber") return <span className="mono">{record.receiptNumber}</span>;
               if (field.name === "receivedOnISO") return <span className="mono">{formatDate(record.receivedOnISO)}</span>;

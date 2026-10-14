@@ -20,7 +20,7 @@ import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
-import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
+import { Database, FileUp, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { Tabs } from "../components/primitives";
@@ -65,6 +65,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
+import { useIsMobile } from "../lib/useIsMobile";
 import { BudgetGridDrawer } from "../features/financials/components/BudgetGridDrawer";
 
 const FINANCIALS_TABS = ["overview", "transactions", "wave", "subscriptions"] as const;
@@ -201,13 +202,25 @@ export function FinancialsPage() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
-  const financialHydratedView = useMemo(() => tableData.hydratedView ? {
-    ...tableData.hydratedView,
-    columns: tableData.hydratedView.columns.map((column) => column.field.name === "items" ? {
+  // On phones only the frozen description and one more column fit, so the
+  // amount moves up beside the description instead of sitting off-screen.
+  const isMobile = useIsMobile();
+  const financialHydratedView = useMemo(() => {
+    if (!tableData.hydratedView) return null;
+    let columns = tableData.hydratedView.columns.map((column) => column.field.name === "items" ? {
       ...column,
       field: { ...column.field, label: "Purchase links" },
-    } : column),
-  } : null, [tableData.hydratedView]);
+    } : column);
+    if (isMobile) {
+      const ordered = [...columns].sort((a, b) => a.position - b.position);
+      const amount = ordered.find((column) => column.field.name === "amountCents");
+      if (amount && ordered.length > 2) {
+        const rest = ordered.filter((column) => column !== amount);
+        columns = [rest[0], amount, ...rest.slice(1)].map((column, position) => ({ ...column, position }));
+      }
+    }
+    return { ...tableData.hydratedView, columns };
+  }, [isMobile, tableData.hydratedView]);
   const focusedTransactionId = searchParams.get("transaction");
   const focusedTransaction = (transactions ?? []).find((row: any) => String(row._id) === focusedTransactionId);
   const records = useMemo(
@@ -1176,9 +1189,11 @@ function BankCsvImportCard({
   const toast = useToast();
   const [accountId, setAccountId] = useState("");
   const [parsed, setParsed] = useState<ParsedCsvRow[] | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const onFile = async (file: File) => {
+    setFileName(file.name);
     try {
       const rows = parseBankCsv(await file.text());
       setParsed(rows);
@@ -1209,6 +1224,7 @@ function BankCsvImportCard({
         }.`,
       );
       setParsed(null);
+      setFileName(null);
     } catch (err: any) {
       toast.error(err?.message ?? "Import failed");
     } finally {
@@ -1235,15 +1251,26 @@ function BankCsvImportCard({
           className="input"
           style={{ flex: "1 1 200px", minWidth: 0 }}
         />
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void onFile(file);
-          }}
-        />
-        {parsed && <span className="muted">{parsed.length} row{parsed.length === 1 ? "" : "s"} ready</span>}
+        {/* A styled button over the native picker, which ignored the theme. */}
+        <label className="btn btn--sm bank-csv-import__file">
+          <FileUp size={12} aria-hidden="true" /> {fileName ? "Choose another file" : "Choose CSV file"}
+          <input
+            className="bank-csv-import__file-input"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void onFile(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {fileName && (
+          <span className="muted bank-csv-import__file-name" title={fileName}>
+            {fileName}
+            {parsed && ` · ${parsed.length} row${parsed.length === 1 ? "" : "s"} ready`}
+          </span>
+        )}
         <button className="btn btn--accent" disabled={!canWrite || (busy || !accountId || !parsed?.length)} onClick={doImport}>
           Import
         </button>

@@ -28,6 +28,7 @@ import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/V
 import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { useSortableRows } from "../hooks/useSortableRows";
 import { SortableTh } from "../components/SortableTh";
+import { isSociety } from "../../shared/organizationDomain";
 
 
 function getFiscalYearBounds(fyEnd: string | undefined) {
@@ -527,7 +528,7 @@ export function TreasurerPage() {
 
         <SummaryCard label="Income" value={pnl?.totalIncomeCents} icon={<TrendingUp size={14} />} tone="in" />
         <SummaryCard label="Expenses" value={pnl?.totalExpenseCents} icon={<TrendingDown size={14} />} tone="out" />
-        <SummaryCard label="Net" value={pnl?.netCents} icon={<DollarSign size={14} />} tone={pnl && pnl.netCents < 0 ? "unfavourable" : "favourable"} />
+        <SummaryCard label="Net" value={pnl?.netCents} icon={<DollarSign size={14} />} tone={!pnl || pnl.netCents === 0 ? "neutral" : pnl.netCents < 0 ? "unfavourable" : "favourable"} />
       </div>
       <div className="card treasurer-pnl-card">
         <div className="card__head">
@@ -773,7 +774,7 @@ export function TreasurerPage() {
                 {(fundingSources ?? []).length === 0 && (
                   <tr className="finance-empty-row">
                     <td colSpan={5} className="muted">
-                      {fundingSources === undefined ? "Loading sources…" : "No funding sources yet. Add donors, funders and dues collectors from New → Funding source."}
+                      {fundingSources === undefined ? "Loading sources…" : isSociety(society as any) ? "No funding sources yet. Add donors, funders and dues collectors from New → Funding source." : "No funding sources yet. Add funders and other income sources from New → Funding source."}
                     </td>
                   </tr>
                 )}
@@ -1481,7 +1482,7 @@ function SummaryCard({
   label: string;
   value: number | undefined;
   icon: React.ReactNode;
-  tone: "in" | "out" | "favourable" | "unfavourable";
+  tone: "in" | "out" | "favourable" | "unfavourable" | "neutral";
 }) {
   return (
     <div className="card treasurer-summary-card">

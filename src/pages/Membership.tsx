@@ -410,7 +410,7 @@ export function MembershipPage() {
                 <tr key={s._id}>
                   <td>
                     <strong>{s.fullName}</strong>
-                    <div className="membership-subscribers-table__email">{s.email}</div>
+                    <div className="membership-subscribers-table__email" title={s.email}>{s.email}</div>
                   </td>
                   <td>{plan?.name ?? "—"}</td>
                   <td>

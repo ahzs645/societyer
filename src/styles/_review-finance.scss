@@ -22,6 +22,57 @@
   white-space: nowrap;
 }
 
+// Phones: seven columns × 77 rows scrolled sideways with no frozen name, so
+// each subscriber becomes a two-column card: name / last payment, plan /
+// status, renewal / actions. (Columns: member, plan, status, started,
+// renews, last payment, actions.)
+@media (max-width: 760px) {
+  .membership-subscribers-table thead { display: none; }
+  .membership-subscribers-table,
+  .membership-subscribers-table tbody { display: block; width: 100%; }
+  .membership-subscribers-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: token('s-1') token('s-3');
+    align-items: center;
+    padding: token('s-3') token('s-4');
+    border-bottom: 1px solid token('border-color-light');
+  }
+  .table.membership-subscribers-table tbody td {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    min-width: 0;
+  }
+  .membership-subscribers-table tbody td:nth-child(1) { grid-column: 1; grid-row: 1; }
+  // One line per email; the full address is in the cell's title.
+  .membership-subscribers-table__email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .membership-subscribers-table tbody td:nth-child(6) { grid-column: 2; grid-row: 1; }
+  .membership-subscribers-table tbody td:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+    color: token('text-secondary');
+    font-size: token('fs-xs');
+  }
+  .membership-subscribers-table tbody td:nth-child(3) { grid-column: 2; grid-row: 2; justify-self: end; }
+  .membership-subscribers-table tbody td:nth-child(4) { display: none; }
+  .membership-subscribers-table tbody td:nth-child(5) {
+    grid-column: 1;
+    grid-row: 3;
+    color: token('text-secondary');
+    font-size: token('fs-xs');
+    &::before { content: "Renews "; }
+  }
+  .membership-subscribers-table tbody td:nth-child(7) { grid-column: 2; grid-row: 3; }
+  .membership-subscribers-table tbody td[colspan] { grid-column: 1 / -1; grid-row: auto; }
+}
+
 // FY detail inspector: sections sit flat inside the inspector panel rather
 // than as bordered cards nested in it.
 .finance-inspector__section {
@@ -271,7 +322,43 @@
   white-space: nowrap;
 }
 
+// ---- Accounting -----------------------------------------------------------------------
+.financial-version-card {
+  margin-block: token('s-4');
+}
+
+// ---- Bank CSV import ------------------------------------------------------------------
+.bank-csv-import__file {
+  position: relative;
+  cursor: pointer;
+  &:focus-within {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+}
+// Visually hidden but still focusable and clickable through its label.
+.bank-csv-import__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+.bank-csv-import__file-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 // ---- Wave ---------------------------------------------------------------------------
+// Type badge with Wave's own type/subtype underneath.
+.wave-cache-table__subtype {
+  margin-top: 2px;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
 @media (max-width: 760px) {
   // Account views scroll sideways in one row instead of wrapping into three.
   .wave-account-views {
