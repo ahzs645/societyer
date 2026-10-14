@@ -176,6 +176,16 @@ const CHEQUE_DONORS = ["Grandview Neighbours Fund", "Harbourside Dental Group", 
 
 const ETRANSFER_GIFT_MEMOS = ["Monthly gift", "Fall appeal", "In honour of a volunteer", "Community fridge", undefined, undefined];
 
+/** Net pay sent in a month's semi-monthly payroll run (index 0: mid-month, 1: month end). */
+export function demoNetPayCents(monthKey: string, index: number): number {
+  return createRng(`payroll:${monthKey}:${index}`).cents(2380, 2470);
+}
+
+/** The CRA source-deduction remittance paid in `monthKey` (for the previous month's payroll). */
+export function demoRemittanceCents(monthKey: string): number {
+  return createRng(`remittance:${monthKey}`).cents(1250, 1310);
+}
+
 export function buildDemoBankFeed(options: DemoFeedOptions): DemoFeed {
   const { start, asOf } = options;
   const skip = new Set(options.skipKeys ?? []);
@@ -212,13 +222,11 @@ export function buildDemoBankFeed(options: DemoFeedOptions): DemoFeed {
     // Payroll: semi-monthly net pay, the payroll service fee and the CRA
     // source-deduction remittance for the previous month.
     for (const [index, day] of [15, daysInMonth(m)].entries()) {
-      const rng = createRng(`payroll:${m}:${index}`);
       const date = businessDayOnOrBefore(dayOfMonth(m, day));
-      push({ key: `payroll-${m}-${index}`, account: "operating", date, description: "Brightwave Payroll", counterparty: "Brightwave Payroll", amountCents: -rng.cents(2380, 2470), category: "Wages & benefits", method: "Payroll direct deposit", memo: index === 0 && mn % 4 === 0 ? `Net pay, period ending ${date}` : undefined });
+      push({ key: `payroll-${m}-${index}`, account: "operating", date, description: "Brightwave Payroll", counterparty: "Brightwave Payroll", amountCents: -demoNetPayCents(m, index), category: "Wages & benefits", method: "Payroll direct deposit", memo: index === 0 && mn % 4 === 0 ? `Net pay, period ending ${date}` : undefined });
     }
     {
-      const rng = createRng(`remittance:${m}`);
-      push({ key: `remittance-${m}`, account: "operating", date: nextBusinessDay(dayOfMonth(m, 14)), description: "CRA source deductions", counterparty: "Canada Revenue Agency", amountCents: -rng.cents(1250, 1310), category: "Wages & benefits", method: "Online banking", memo: `Remittance for ${monthName(previousMonth(m))}` });
+      push({ key: `remittance-${m}`, account: "operating", date: nextBusinessDay(dayOfMonth(m, 14)), description: "CRA source deductions", counterparty: "Canada Revenue Agency", amountCents: -demoRemittanceCents(m), category: "Wages & benefits", method: "Online banking", memo: `Remittance for ${monthName(previousMonth(m))}` });
     }
 
     // Bank fee and interest on the last business day.

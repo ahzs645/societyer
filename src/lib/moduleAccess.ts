@@ -101,6 +101,18 @@ const OPTIONAL_POLICY: Record<ModuleKey, Pick<ModuleAccessDefinition, "permissio
     permissions: { view: ["employees:read"], write: ["employees:write"] },
     notes: [ACTION_POLICY_NOTE],
   },
+  payroll: {
+    permissions: { view: ["financials:read"], write: ["financials:write"] },
+    notes: [ACTION_POLICY_NOTE, "Employee names on pay runs come from the employee register and need employees:read to list."],
+  },
+  cards: {
+    permissions: { view: ["financials:read"], write: ["financials:write"] },
+    notes: [ACTION_POLICY_NOTE, "Only the last four digits of a card number are ever stored."],
+  },
+  investments: {
+    permissions: { view: ["financials:read"], write: ["financials:write"] },
+    notes: [ACTION_POLICY_NOTE],
+  },
   paperless: {
     permissions: {},
     notes: [UNMAPPED_NOTE, "Connection configuration requires Admin or Owner. Some document synchronization actions require Director or above."],

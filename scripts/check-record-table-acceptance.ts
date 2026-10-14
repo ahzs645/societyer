@@ -82,7 +82,10 @@ const REVIEWED_OBJECT_RECORD_TABLE_FILES: Record<string, number> = {
   "src/features/grants/components/GrantSourceLibrary.tsx": 1,
   "src/pages/Assets.tsx": 4,
   "src/pages/Communications.tsx": 2,
+  "src/pages/CorporateCards.tsx": 2,
+  "src/pages/Investments.tsx": 1,
   "src/pages/OrganizationHistory.tsx": 1,
+  "src/pages/Payroll.tsx": 4,
   "src/pages/inventory/tabs.tsx": 6,
 };
 

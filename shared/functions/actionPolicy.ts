@@ -17,7 +17,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", "continuity"],
   commitments: ["commitments", "goals"],
   agreements: ["agreements"],
-  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "invoices", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
+  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "invoices", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd", "payroll", "corporateCards", "investments"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents", "aiFilterActions"],
@@ -50,6 +50,8 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   inventoryLocations: "inventoryHub", inventoryLots: "inventoryHub", inventoryCounts: "inventoryHub",
   memberCommunicationPrefs: "communications", organizationHistoryMotions: "organizationHistory",
   waveCacheResources: "waveCache",
+  payRuns: "payroll", payrollRemittances: "payroll", payrollSlips: "payroll", recordsOfEmployment: "payroll",
+  cardStatements: "corporateCards", investmentHoldings: "investments",
 };
 const HANDLER_POLICIES = new Set([
   "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",

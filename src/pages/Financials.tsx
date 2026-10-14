@@ -37,6 +37,7 @@ import {
 import { WaveCacheExplorer } from "../features/financials/components/WaveCacheExplorer";
 import { OperatingSubscriptionsCard, ProviderCard } from "../features/financials/components/FinancialDashboardCards";
 import { StatTile } from "../components/StatTile";
+import { InvestedReservesTile } from "../features/businessRegisters/InvestedReserves";
 import { SortableTh } from "../components/SortableTh";
 import { useSortableRows } from "../hooks/useSortableRows";
 import { YearOverYearFinancialsCard } from "../features/financials/components/YearOverYearFinancialsCard";
@@ -561,6 +562,7 @@ export function FinancialsPage() {
                 <StatTile label="Restricted funds" value={<Money variant="hero" trimWholeCents cents={hub.totalBalance - hub.unrestricted} />} />
               </>
             )}
+            <InvestedReservesTile societyId={society._id} />
           </div>
         </div>
       )}

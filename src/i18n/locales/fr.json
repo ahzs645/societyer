@@ -166,6 +166,9 @@
     "articlesHistory": "Historique des statuts",
     "approvals": "Approbations",
     "invoices": "Factures",
+    "payroll": "Paie",
+    "creditCards": "Cartes de crédit",
+    "investments": "Placements",
     "transactionRules": "Règles de transactions",
     "organization": "Organisation",
     "documentsRecords": "Documents et dossiers",
@@ -370,6 +373,18 @@
     "employees": {
       "label": "Registre des employés",
       "description": "Dossiers des employés pour les sociétés qui ont une paie ou du personnel."
+    },
+    "payroll": {
+      "label": "Registre de paie",
+      "description": "Paies, versements des retenues à la source à l'ARC, feuillets de fin d'année et relevés d'emploi. Tenue de registres seulement."
+    },
+    "cards": {
+      "label": "Registre des cartes de crédit",
+      "description": "Cartes de crédit de l'organisation, conventions des titulaires et rapprochement des relevés mensuels avec le flux bancaire."
+    },
+    "investments": {
+      "label": "Registre des placements",
+      "description": "CPG, dépôts à terme et épargne détenus en réserve, avec intérêts et rappels d'échéance."
     },
     "paperless": {
       "label": "Paperless-ngx",

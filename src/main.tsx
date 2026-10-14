@@ -87,6 +87,9 @@ const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => (
 const ApprovalsPage = React.lazy(() => import("./pages/Approvals").then((m) => ({ default: m.ApprovalsPage })));
 const TransactionRulesPage = React.lazy(() => import("./pages/TransactionRules").then((m) => ({ default: m.TransactionRulesPage })));
 const InvoicesPage = React.lazy(() => import("./pages/Invoices").then((m) => ({ default: m.InvoicesPage })));
+const PayrollPage = React.lazy(() => import("./pages/Payroll").then((m) => ({ default: m.PayrollPage })));
+const CorporateCardsPage = React.lazy(() => import("./pages/CorporateCards").then((m) => ({ default: m.CorporateCardsPage })));
+const InvestmentsPage = React.lazy(() => import("./pages/Investments").then((m) => ({ default: m.InvestmentsPage })));
 const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
 const InventoryPage = React.lazy(() => import("./pages/Inventory").then((m) => ({ default: m.InventoryPage })));
 const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
@@ -510,6 +513,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="transaction-rules" element={<TransactionRulesPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="payroll" element={withModule("payroll", <PayrollPage />)} />
+            <Route path="corporate-cards" element={withModule("cards", <CorporateCardsPage />)} />
+            <Route path="investments" element={withModule("investments", <InvestmentsPage />)} />
             <Route
               path="assets"
               element={withModule("assets", <AssetsPage />)}

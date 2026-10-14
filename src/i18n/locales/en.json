@@ -166,6 +166,9 @@
     "articlesHistory": "Articles history",
     "approvals": "Approvals",
     "invoices": "Invoices",
+    "payroll": "Payroll",
+    "creditCards": "Credit cards",
+    "investments": "Investments",
     "transactionRules": "Transaction rules",
     "organization": "Organization",
     "documentsRecords": "Documents & records",
@@ -370,6 +373,18 @@
     "employees": {
       "label": "Employee register",
       "description": "Employee records for societies with payroll or staff."
+    },
+    "payroll": {
+      "label": "Payroll register",
+      "description": "Pay runs, CRA source-deduction remittances, year-end slips and records of employment. Record-keeping only."
+    },
+    "cards": {
+      "label": "Credit card register",
+      "description": "Organization credit cards, cardholder agreements and monthly statement reconciliation against the bank feed."
+    },
+    "investments": {
+      "label": "Investments register",
+      "description": "GICs, term deposits and savings held as reserves, with interest and maturity reminders."
     },
     "paperless": {
       "label": "Paperless-ngx",

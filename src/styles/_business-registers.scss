@@ -1,0 +1,217 @@
+@use "tokens" as *;
+
+/* Business registers: Payroll, Credit cards and Investments pages and their
+ * drawers (field rows, amount grids, per-employee lines, the statement
+ * reconciliation panel and the CSV import picker). */
+
+.business-register-page > .stat-grid { margin-bottom: token(s-4); }
+.business-register-page > .tabs { margin-bottom: token(s-3); }
+
+/* ------------------------------------------------------------ drawer forms */
+
+.register-field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 token(s-3);
+  align-items: start;
+}
+
+.register-money-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 token(s-3);
+}
+
+.input--money,
+.input--last4 { font-variant-numeric: tabular-nums; }
+.input--money { text-align: right; }
+.input--last4 { letter-spacing: 0.08em; }
+
+.register-drawer__spacer { flex: 1 1 auto; }
+
+.btn--danger-text { color: token(font-color-danger); }
+
+.register-section {
+  margin: token(s-4) 0;
+  padding-top: token(s-3);
+  border-top: 1px solid token(border);
+
+  &:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+}
+
+.register-section__title {
+  margin: 0 0 token(s-3);
+  font-size: token(fs-sm);
+  font-weight: token(fw-semibold);
+  color: token(text-primary);
+}
+
+.register-hint {
+  margin: token(s-2) 0 token(s-3);
+  font-size: token(fs-xs);
+  line-height: 1.5;
+  color: token(text-secondary);
+  overflow-wrap: anywhere;
+
+  a { color: token(accent); }
+}
+
+.register-hint--banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token(s-2);
+  margin: 0 0 token(s-3);
+  padding: token(s-2) token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  background: token(bg-subtle);
+
+  svg { flex: none; color: token(text-tertiary); }
+}
+
+.register-employee {
+  margin: 0 0 token(s-3);
+  padding: token(s-2) token(s-3) 0;
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  min-width: 0;
+
+  legend {
+    padding: 0 token(s-1);
+    font-size: token(fs-sm);
+    font-weight: token(fw-medium);
+  }
+}
+
+/* ------------------------------------------------------- summary numbers */
+
+.register-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: token(s-3);
+  margin: 0 0 token(s-4);
+  padding: token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  background: token(bg-subtle);
+
+  div { min-width: 0; }
+  dt { font-size: token(fs-xs); color: token(text-tertiary); margin-bottom: 2px; }
+  dd { margin: 0; font-weight: token(fw-medium); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+}
+
+.register-summary--recon {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.register-summary__total {
+  dt { color: token(text-secondary); font-weight: token(fw-medium); }
+  dd { font-size: token(fs-md); }
+}
+
+/* ---------------------------------------------------------- lines table */
+
+.register-lines {
+  margin: 0 0 token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-md);
+  overflow: hidden;
+}
+
+.register-lines__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+  gap: token(s-2);
+  padding: token(s-2) token(s-3);
+  font-size: token(fs-sm);
+  border-top: 1px solid token(border);
+
+  &:first-child { border-top: 0; }
+  > span { min-width: 0; overflow-wrap: anywhere; }
+}
+
+.register-lines__row--head {
+  background: token(bg-subtle);
+  color: token(text-tertiary);
+  font-size: token(fs-xs);
+  font-weight: token(fw-medium);
+}
+
+/* ------------------------------------------------------ reconciliation */
+
+.register-recon {
+  margin: 0 0 token(s-4);
+  padding: token(s-3) token(s-4);
+  border: 1px solid token(border);
+  border-left-width: 3px;
+  border-radius: token(r-md);
+  background: token(bg-subtle);
+
+  &--reconciled { border-left-color: token(success); }
+  &--balanced { border-left-color: token(info); }
+  &--difference { border-left-color: token(danger); }
+}
+
+.register-recon__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: token(s-2);
+  margin-bottom: token(s-3);
+
+  .register-section__title { margin: 0; }
+}
+
+/* ---------------------------------------------------------- CSV import */
+
+.register-file {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: token(s-2);
+  min-height: token(control-h-lg);
+  margin: 0 0 token(s-4);
+  padding: token(s-3) token(s-4);
+  border: 1px dashed token(border-strong);
+  border-radius: token(r-md);
+  color: token(text-secondary);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+
+  &:hover { background: token(bg-hover-alpha); }
+  &:focus-within { outline: token(focus-ring-width) solid token(focus-ring-color); outline-offset: token(focus-ring-offset); }
+
+  input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+}
+
+.register-errors {
+  margin: 0;
+  padding-left: token(s-4);
+}
+
+/* -------------------------------------------------------------- cells */
+
+.register-card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: token(s-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  svg { color: token(text-tertiary); }
+}
+
+@media (max-width: 760px) {
+  .register-money-grid { grid-template-columns: minmax(0, 1fr); }
+  .register-field-row { grid-template-columns: minmax(0, 1fr); }
+  .register-lines__row { grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)); font-size: token(fs-xs); }
+}

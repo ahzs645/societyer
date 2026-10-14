@@ -29,6 +29,8 @@ import {
   type DemoFinancePerson,
 } from "../demoData/financeWorkflows";
 import { invoiceDemoRows, type DemoInvoiceMember, type DemoInvoiceMemberKey } from "../demoData/invoicing";
+import { businessRegisterDemoRows } from "../demoData/businessRegisters";
+import { syncRegisterDeadlines } from "./businessRegisters";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -454,14 +456,6 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     category: "Privacy",
     done: false,
     recurrence: "Annual",
-  });
-  await ctx.db.insert("deadlines", {
-    societyId,
-    title: "Remit monthly payroll source deductions",
-    dueDate: plusDays(15),
-    category: "Payroll",
-    done: false,
-    recurrence: "Monthly",
   });
   await ctx.db.insert("deadlines", {
     societyId,
@@ -1750,6 +1744,38 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     eiExempt: false,
   });
 
+  // Business registers (shared/demoData/businessRegisters.ts, as in the
+  // in-browser demo): pay runs and remittances that match the payroll lines
+  // in the bank feed, last year's T4 slips, the organization Visa and its
+  // statements, two reserve GICs, and the deadlines they generate.
+  {
+    const staff = (await ctx.db.query("employees").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as Array<Record<string, any>>;
+    const registers = businessRegisterDemoRows({
+      societyId,
+      cardAccountId,
+      restrictedFundId: fundRestrictionId,
+      employees: staff
+        .filter((row) => !row.endDate)
+        .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))
+        .map((row) => ({ id: row._id, name: `${row.firstName} ${row.lastName}`, annualSalaryCents: row.annualSalaryCents })),
+      treasurerName: "Priya Shah",
+      feedTransactions: feedTransactions as any,
+      idFor: seedRef,
+      asOf: demoAsOf,
+    });
+    const writer = seedRowWriter(ctx);
+    await writer.insert("documents", registers.documents);
+    await writer.insert("payrollSettings", registers.payrollSettings);
+    await writer.insert("payRuns", registers.payRuns);
+    await writer.insert("payrollRemittances", registers.payrollRemittances);
+    await writer.insert("payrollSlips", registers.payrollSlips);
+    await writer.insert("corporateCards", registers.corporateCards);
+    await writer.insert("cardStatements", registers.cardStatements);
+    await writer.insert("investmentHoldings", registers.investmentHoldings);
+    // The deadlines come from the register rows as stored (their keys name real ids).
+    await syncRegisterDeadlines(ctx, societyId, demoAsOf);
+  }
+
   // Records location notice
   await ctx.db.insert("recordsLocation", {
     societyId,
@@ -2244,6 +2270,15 @@ async function wipe(ctx: PortableMutationCtx) {
     "waveCacheStructures",
     "waveCacheResources",
     "waveCacheSnapshots",
+    // Business registers
+    "cardStatements",
+    "corporateCards",
+    "payrollRemittances",
+    "payrollSlips",
+    "recordsOfEmployment",
+    "payRuns",
+    "payrollSettings",
+    "investmentHoldings",
     // Finance workflows and invoicing (seedFinanceDemo)
     "invoices",
     "invoiceSeries",

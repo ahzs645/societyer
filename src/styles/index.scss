@@ -133,5 +133,7 @@
 // Sankey chart and the cash-flow card on the Financials overview.
 @use "sankey";
 
+@use "business-registers"; // Payroll, Credit cards and Investments registers
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
