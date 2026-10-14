@@ -24,6 +24,12 @@
   z-index: 7;
 }
 
+// The sticky footer must cover the sticky selection/identifier cells of rows
+// scrolling beneath it (z-index 3–5), or their checkboxes peek through.
+.record-table__tfoot {
+  z-index: 6;
+}
+
 /* ---------------------------- Group rows ---------------------------- */
 
 .record-table__group-row > .record-table__group-cell {
@@ -164,6 +170,23 @@
 .record-table__header-cell--numeric {
   text-align: right;
   padding-right: 28px;
+
+  // The padding already reserves the column-menu chevron; the button's own
+  // `calc(100% - 24px)` reservation would subtract it twice and clip short
+  // labels ("Members" → "Me…") in columns that have room for them.
+  .record-table__header-cell-button {
+    max-width: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  .record-table__header-cell--numeric {
+    padding-right: 40px;
+
+    .record-table__header-cell-button {
+      max-width: 100%;
+    }
+  }
 }
 
 /* ----------------------- Cell range + active row ----------------------- */
