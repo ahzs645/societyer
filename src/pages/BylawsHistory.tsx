@@ -39,6 +39,7 @@ import { escapeHtml } from "../lib/html";
 import { wordCount } from "../lib/wordDiff";
 import { diffBylawSections } from "../lib/bylawSections";
 import { SectionRedline } from "../components/SectionRedline";
+import { StatTile } from "../components/StatTile";
 
 function textChangeSummary(oldText: string, newText: string): string {
   const oldWords = wordCount(oldText);
@@ -263,15 +264,15 @@ export function BylawsHistoryPage() {
 
       <ImportCandidatesNotice noun={docs.bylawAmendmentNoun} targets={["bylawAmendments"]} kinds={["bylawAmendment", "bylawRuleSet"]} documentCategory="Bylaws" emptyRegister={filed.length === 0} />
       <div className="stat-grid">
-        <Stat label="Filed amendments" value={String(filed.length)} />
-        <Stat label="In flight" value={String(inFlight.length)} sub="Drafts + active consultations" />
+        <StatTile compact label="Filed amendments" value={String(filed.length)} />
+        <StatTile compact label="In flight" value={String(inFlight.length)} sub="Drafts + active consultations" />
         {/* With one filing the first and latest dates are the same; show it once. */}
-        {!(firstFiledAt && current && formatDate(firstFiledAt) === formatDate(current.filedAtISO)) && <Stat
+        {!(firstFiledAt && current && formatDate(firstFiledAt) === formatDate(current.filedAtISO)) && <StatTile compact
           label="First filing"
           value={firstFiledAt ? formatDate(firstFiledAt) : "—"}
           sub={firstFiledAt ? relative(firstFiledAt) : undefined}
         />}
-        <Stat
+        <StatTile compact
           label="Last amended"
           value={current ? formatDate(current.filedAtISO) : "—"}
           sub={current ? relative(current.filedAtISO) : undefined}
@@ -505,16 +506,6 @@ export function BylawsHistoryPage() {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ fontSize: 20 }}>{value}</div>
-      {sub && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }

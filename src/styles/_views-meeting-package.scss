@@ -340,7 +340,7 @@ details.meeting-package-drawer > .meeting-package-drawer__summary::after {
   border-right: 1.5px solid token('text-tertiary');
   border-bottom: 1.5px solid token('text-tertiary');
   transform: rotate(45deg);
-  transition: transform 0.15s ease;
+  transition: transform token('motion-move-fast') token('ease-move');
   margin-left: auto;
   margin-right: 4px;
 }
@@ -566,7 +566,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
   overflow: hidden;
   resize: vertical;
   border: 1px solid token('border');
-  border-radius: 8px;
+  border-radius: token('r-md');
   background: token('bg-app');
 }
 .minutes-preview__transform-wrapper {
@@ -717,7 +717,7 @@ details.meeting-package-drawer[open] > .meeting-package-drawer__summary .meeting
 }
 .minutes-export-summary__bar {
   height: 4px;
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-subtle');
   overflow: hidden;
 }

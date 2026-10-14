@@ -36,6 +36,7 @@ import {
   downloadMinuteBookCsv,
   type MinuteBookExportInput,
 } from "../features/meetings/lib/minuteBookExport";
+import { StatTile } from "../components/StatTile";
 
 /**
  * Tracks whether a horizontally-scrollable container is scrolled away from
@@ -246,10 +247,10 @@ export function MinuteBookPage() {
       {detail?.documentCoverageLimited && <p className="muted" role="status">Some supporting documents are unavailable to your role. Document completeness is unknown.</p>}
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Connected records" value={recordBundles.length} />
-        <Stat label="Documents" value={detail?.restrictedResources?.includes("documents") ? "Restricted" : safeCount(detail, "documents")} />
-        <Stat label="Record gaps" value={bundleGapCount} tone={bundleGapCount ? "warn" : undefined} />
-        <Stat label="Open checks" value={openCheckCount} tone={openCheckCount ? "warn" : undefined} />
+        <StatTile label="Connected records" value={recordBundles.length} />
+        <StatTile label="Documents" value={detail?.restrictedResources?.includes("documents") ? "Restricted" : safeCount(detail, "documents")} />
+        <StatTile label="Record gaps" value={bundleGapCount} tone={bundleGapCount ? "warn" : undefined} />
+        <StatTile label="Open checks" value={openCheckCount} tone={openCheckCount ? "warn" : undefined} />
       </div>
 
       <RecordBundlesCard rows={recordBundles} partial={partial} />
@@ -402,15 +403,6 @@ export function MinuteBookPage() {
           </fieldset>
         )}
       </Drawer>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "warn" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ color: tone === "warn" ? "var(--warn)" : undefined }}>{value}</div>
     </div>
   );
 }

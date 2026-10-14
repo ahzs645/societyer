@@ -21,7 +21,7 @@
   border-radius: token('r-sm');
   @include inline-flex-center;
   gap: 6px;
-  transition: color 0.08s ease, border-color 0.08s ease, background 0.08s ease;
+  transition: color token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade'), background token('motion-fade-fast') token('ease-fade');
 }
 .tab > svg {
   width: 15px;
@@ -30,7 +30,7 @@
 }
 .tab:hover {
   color: token('text-primary');
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 .tab.is-active {
   color: token('text-primary');
@@ -89,14 +89,14 @@
 .progress {
   height: 6px;
   background: token('bg-subtle');
-  border-radius: 3px;
+  border-radius: token('r-sm');
   overflow: hidden;
   position: relative;
 }
 .progress__fill {
   height: 100%;
   background: token('accent');
-  border-radius: 3px;
+  border-radius: token('r-sm');
   transition: width token('anim-normal') token('anim-ease');
 }
 .progress--success .progress__fill { background: token('success'); }
@@ -138,17 +138,14 @@
 }
 .kanban__body.is-dragging-over { background: token('accent-soft'); border-radius: token('r-sm'); }
 .kanban__card {
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-sm');
+  @include surface(1, 'r-md');
   padding: 10px;
   font-size: token('fs-md');
-  box-shadow: token('shadow-xs');
-  transition: box-shadow 0.1s ease, transform 0.1s ease;
+  transition: box-shadow token('motion-fade-fast') token('ease-fade'), transform token('motion-move-fast') token('ease-move');
   position: relative;
 }
 .kanban__card.is-movable { cursor: grab; }
-.kanban__card:hover { box-shadow: token('shadow-sm'); }
+.kanban__card:hover { box-shadow: token('elevation-2'); }
 /* Coarse-pointer-only move trigger — desktop keeps drag-and-drop, so the
  * button never renders visually there. */
 .kanban__card-move {
@@ -168,7 +165,7 @@
   cursor: pointer;
 }
 .kanban__card-move:active {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 @media (hover: none), (pointer: coarse) {
@@ -289,7 +286,7 @@
   background: token('bg-muted');
   border: 1px solid token('border');
   color: token('text-secondary');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   font-weight: 600;
   display: grid;
   place-items: center;
@@ -300,7 +297,7 @@
 
 /* Color chip */
 .color-chip {
-  width: 10px; height: 10px; border-radius: 3px;
+  width: 10px; height: 10px; border-radius: token('r-sm');
   display: inline-block;
   flex-shrink: 0;
 }
@@ -342,7 +339,7 @@
   transition: background token('anim-fast') token('anim-ease'), color token('anim-fast') token('anim-ease'), border-color token('anim-fast') token('anim-ease');
 }
 .segmented__btn:hover:not(.is-active) {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .segmented--compact {

@@ -42,6 +42,7 @@ import { todayDateOnly } from "../../shared/dateOnly";
 import { deriveCurrentHoldings } from "../lib/equity";
 import { isRedeemableClass } from "../../shared/equityLedger";
 import { SHARE_CLASS_PRESETS } from "../../shared/shareClassPresets";
+import { StatTile } from "../components/StatTile";
 
 type RoleHolderDraft = {
   _id?: Id<"roleHolders">;
@@ -289,22 +290,10 @@ export function RoleHoldersPage() {
       {corporationWorkspace && (
         <>
           <div className="stat-grid" style={{ marginBottom: 16 }}>
-            <div className="stat">
-              <span className="stat__label">Directors</span>
-              <strong className="stat__value">{roleSummary.directors}</strong>
-            </div>
-            <div className="stat">
-              <span className="stat__label">Officers</span>
-              <strong className="stat__value">{roleSummary.officers}</strong>
-            </div>
-            <div className="stat">
-              <span className="stat__label">Shareholders</span>
-              <strong className="stat__value">{roleSummary.shareholders}</strong>
-            </div>
-            <div className="stat">
-              <span className="stat__label">Controllers</span>
-              <strong className="stat__value">{roleSummary.controllers}</strong>
-            </div>
+            <StatTile label="Directors" value={roleSummary.directors} />
+            <StatTile label="Officers" value={roleSummary.officers} />
+            <StatTile label="Shareholders" value={roleSummary.shareholders} />
+            <StatTile label="Controllers" value={roleSummary.controllers} />
           </div>
 
           <section className="card" style={{ marginBottom: 16 }}>

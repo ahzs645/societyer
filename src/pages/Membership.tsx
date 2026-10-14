@@ -218,7 +218,7 @@ export function MembershipPage() {
               style={{
                 margin: 0,
                 padding: 12,
-                background: p.active ? undefined : "var(--bg-soft)",
+                background: p.active ? undefined : "var(--bg-subtle)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

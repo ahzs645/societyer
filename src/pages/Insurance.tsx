@@ -31,6 +31,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { hasErrors, validateInsurancePolicyInput, type FieldErrors } from "../../shared/recordValidation";
+import { StatTile } from "../components/StatTile";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
@@ -222,10 +223,10 @@ export function InsurancePage() {
       />
 
       <div className="stat-grid">
-        <Stat label="Policies" value={summary.total} sub="records in register" />
-        <Stat label="Active" value={summary.active} sub="currently marked active" />
-        <Stat label="Renewal due" value={summary.renewalDue} sub="within 60 days or late" tone={summary.renewalDue > 0 ? "warn" : undefined} />
-        <Stat label="Restricted" value={summary.restricted} sub="restricted-risk flagged" tone={summary.restricted > 0 ? "danger" : undefined} />
+        <StatTile label="Policies" value={summary.total} sub="records in register" />
+        <StatTile label="Active" value={summary.active} sub="currently marked active" />
+        <StatTile label="Renewal due" value={summary.renewalDue} sub="within 60 days or late" tone={summary.renewalDue > 0 ? "warn" : undefined} />
+        <StatTile label="Restricted" value={summary.restricted} sub="restricted-risk flagged" tone={summary.restricted > 0 ? "danger" : undefined} />
       </div>
 
       {showMetadataWarning ? (
@@ -491,16 +492,6 @@ export function InsurancePolicyDetailPage() {
           )}
         </aside>
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, tone }: { label: string; value: number; sub: string; tone?: "warn" | "danger" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={tone ? { color: tone === "danger" ? "var(--danger)" : "var(--warn)" } : undefined}>{value}</div>
-      <div className="stat__sub">{sub}</div>
     </div>
   );
 }

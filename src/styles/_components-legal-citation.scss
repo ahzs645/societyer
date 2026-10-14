@@ -124,13 +124,13 @@
   padding: 12px 14px;
   background: token('bg-floating');
   color: token('text-floating');
-  border: 1px solid token('border-floating');
-  border-radius: var(--r-md, 10px);
-  box-shadow: token('shadow-md');
+  border: 0;
+  border-radius: token('r-card');
+  box-shadow: token('elevation-2');
   font-size: token('fs-sm');
   line-height: 1.45;
   text-align: left;
-  animation: tooltipIn 0.1s ease-out;
+  animation: tooltipIn token('motion-fade') token('ease-appear');
 }
 
 .citation-popover__bridge {
@@ -200,7 +200,7 @@
   line-height: 1.2;
   cursor: pointer;
   opacity: 0.85;
-  transition: background 0.08s ease, opacity 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), opacity token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .citation-popover__copy:hover,
 .citation-popover__copy:focus-visible {
@@ -247,11 +247,11 @@
   width: 16px;
   height: 16px;
   border: 1px solid token('border-strong');
-  border-radius: 3px;
+  border-radius: token('r-sm');
   background: token('bg-base');
   color: token('accent-on');
   flex-shrink: 0;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
   margin-top: 1px;
 }
 .check-row:not(.is-disabled):hover .check-box { border-color: token('accent'); }

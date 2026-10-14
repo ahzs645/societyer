@@ -1,13 +1,29 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
+// ============================================================
+// Buttons: one system, three entry points.
+//
+// Canonical: `<Button>` from components/ui.tsx (variant + size props),
+// which renders `.btn`. Bare `<button className="btn ...">` is the same
+// thing without the prop guard. `.btn-action` (in _chrome-controls.scss) is
+// the compact tier for dense rows and card heads; it shares the scale below.
+//
+//   height   --control-h-sm 28  .btn--sm, .btn-action, <Button size="sm">
+//            --control-h-md 32  .btn, <Button>            (matches .input)
+//            --control-h-lg 40  .btn--lg, <Button size="lg">
+//   radius   r-md (8px) everywhere
+//   hover    translucent wash (bg-hover-alpha) so it reads on any surface;
+//            filled variants (primary/accent/danger/warn) darken instead
+//   focus    the global ring from _foundations.scss
+//   disabled opacity-disabled, no hover change
+// ============================================================
+
 .popover {
   position: fixed;
   z-index: token('z-popover');
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-md');
+  @include surface-floating;
+  @include appear-pop(top left);
   min-width: token('popover-w-sm');
   width: token('popover-w-md');
   max-height: min(320px, calc(100dvh - 16px));
@@ -18,25 +34,22 @@
   @include flex-center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   font-size: token('fs-md');
   color: token('text-primary');
   cursor: pointer;
 }
-.popover__item:hover { background: token('bg-hover'); }
+.popover__item:hover { background: token('bg-hover-alpha'); }
 .popover__item svg { width: 14px; height: 14px; color: token('text-tertiary'); }
 .popover__section {
   padding: 6px 8px 4px;
-  font-size: token('fs-xs');
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: token('text-tertiary');
+  @include text-eyebrow;
 }
 .popover__input {
   width: 100%;
   height: 28px;
   border: 1px solid token('border');
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   padding: 0 8px;
   background: token('bg-base');
   margin: 4px 0 8px;
@@ -52,29 +65,40 @@
 .btn {
   @include inline-flex-center;
   gap: 6px;
-  height: 28px;
+  height: token('control-h-md');
   padding: 0 12px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   font-size: token('fs-md');
-  font-weight: 500;
+  font-weight: token('fw-medium');
   border: 1px solid token('border');
   background: token('bg-base');
   color: token('text-primary');
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition:
+    background token('motion-fade-fast') token('ease-fade'),
+    border-color token('motion-fade-fast') token('ease-fade'),
+    color token('motion-fade-fast') token('ease-fade');
   white-space: nowrap;
 
+  // Secondary hover: a translucent wash over the button's own fill, so the
+  // same rule works on the canvas, a card or a modal.
   &:hover {
-    background: token('bg-hover');
+    background-image: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha'));
+  }
+  &:active {
+    background-image: linear-gradient(token('bg-active-alpha'), token('bg-active-alpha'));
   }
 }
 .btn:disabled,
+.btn[aria-disabled="true"],
 .btn-action:disabled {
-  opacity: 0.5;
+  opacity: token('opacity-disabled');
   cursor: not-allowed;
 }
 .btn:disabled:hover,
+.btn:disabled:active,
 .btn-action:disabled:hover {
-  background: token('bg-base');
+  background-color: token('bg-base');
+  background-image: none;
 }
 .btn--primary {
   background: token('bg-inverse');
@@ -116,8 +140,14 @@
   color: token('text-secondary');
 }
 .btn--ghost:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
+}
+.btn--ghost:active {
+  background: token('bg-active-alpha');
+}
+.btn--ghost:disabled:hover {
+  background: transparent;
 }
 .btn--danger {
   background: token('red-9');
@@ -160,17 +190,29 @@
   height: 12px;
 }
 .btn--sm {
-  height: 24px;
-  padding: 0 8px;
+  height: token('control-h-sm');
+  padding: 0 10px;
   font-size: token('fs-sm');
+}
+.btn--lg {
+  height: token('control-h-lg');
+  padding: 0 16px;
+  font-size: token('fs-md');
+}
+.btn--lg .btn__icon svg,
+.btn--lg > svg {
+  width: 16px;
+  height: 16px;
 }
 .btn--icon {
   padding: 0;
-  width: 28px;
+  width: token('control-h-md');
   justify-content: center;
 }
+.btn--sm.btn--icon { width: token('control-h-sm'); }
+.btn--lg.btn--icon { width: token('control-h-lg'); }
 
-/* Touch devices: compact desktop buttons (28px / 24px) are below the ~44px
+/* Touch devices: compact desktop buttons (32px / 28px) are below the ~44px
  * comfortable tap target, and row-action clusters pack several together.
  * Raise the minimum hit area without changing the desktop look. */
 @media (hover: none), (pointer: coarse) {
@@ -190,96 +232,6 @@
   height: 14px;
   color: currentColor;
   stroke-width: 2;
-}
-
-.light-button,
-.light-icon-button {
-  align-items: center;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: token('r-sm');
-  color: token('text-secondary');
-  cursor: pointer;
-  display: inline-flex;
-  font-family: token('font-sans');
-  font-size: token('fs-sm');
-  font-weight: token('fw-regular');
-  gap: token('s-1');
-  justify-content: center;
-  min-width: 0;
-  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
-  white-space: nowrap;
-}
-.light-button {
-  height: 24px;
-  padding: 0 token('s-2');
-}
-.light-button--md {
-  height: 28px;
-  padding-inline: token('s-3');
-}
-.light-icon-button {
-  height: 24px;
-  min-width: 24px;
-  padding: token('s-1');
-  width: 24px;
-}
-.light-icon-button--md {
-  height: 28px;
-  min-width: 28px;
-  width: 28px;
-}
-.light-button--tertiary,
-.light-icon-button--tertiary {
-  color: token('text-tertiary');
-}
-.light-button:hover:not(:disabled),
-.light-icon-button:hover:not(:disabled) {
-  background: token('bg-transparent-light');
-  color: token('text-primary');
-}
-.light-button:active:not(:disabled),
-.light-icon-button:active:not(:disabled) {
-  background: token('bg-transparent-medium');
-}
-.light-button.is-active,
-.light-icon-button.is-active,
-.light-button.is-focused,
-.light-icon-button.is-focused {
-  color: token('accent');
-}
-.light-button.is-focused,
-.light-icon-button.is-focused {
-  border-color: token('border-focus');
-  box-shadow: 0 0 0 3px token('accent-tertiary');
-}
-.light-button:disabled,
-.light-icon-button:disabled {
-  color: token('font-color-extra-light');
-  cursor: not-allowed;
-}
-.light-button__icon,
-.light-icon-button > svg {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-}
-.light-button__icon svg,
-.light-button svg,
-.light-icon-button svg {
-  height: 14px;
-  width: 14px;
-}
-.light-button--md .light-button__icon svg,
-.light-button--md svg,
-.light-icon-button--md svg {
-  height: 16px;
-  width: 16px;
-}
-.light-button__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Badges */
@@ -327,7 +279,7 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: default;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .chip--sm {
   height: 20px;
@@ -401,12 +353,10 @@ code.chip,
   display: inline-block;
 }
 
-/* Card */
+/* Card: elevation 1 (hairline ring + soft shadow in light, ring only in
+ * dark) on the 12px card radius. */
 .card {
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-xs');
+  @include surface-card;
   min-width: 0;
 }
 /* Page-level cards use normal block flow, unlike `.col`, `.grid`, and the
@@ -514,9 +464,7 @@ details.card[open] > summary {
 }
 .settings-shell__title {
   color: token('text-primary');
-  font-size: token('fs-lg');
-  font-weight: token('fw-semibold');
-  line-height: 1.2;
+  @include text-title-section;
   margin: 0;
   @include flex-center;
   flex-wrap: wrap;

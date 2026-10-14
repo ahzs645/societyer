@@ -85,7 +85,7 @@
 }
 
 .insurance-version-link:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 .insurance-full-layout__side .card__body .row {
@@ -116,11 +116,7 @@
 
 .insurance-brief__eyebrow,
 .insurance-brief__metric-label {
-  color: token('text-tertiary');
-  font-size: token('fs-xs');
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  @include text-eyebrow;
 }
 
 .insurance-brief__title-row {
@@ -242,7 +238,7 @@
 }
 
 .insurance-brief__item:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 .insurance-brief__item-main {

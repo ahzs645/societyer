@@ -14,7 +14,7 @@
   .view-bar__btn,
   .chip {
     transition-property: background, color, border-color, box-shadow, transform;
-    transition-duration: 0.12s;
+    transition-duration: token('motion-fade');
     -webkit-tap-highlight-color: transparent;
   }
   .btn:active:not(:disabled),

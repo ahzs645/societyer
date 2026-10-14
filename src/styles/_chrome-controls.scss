@@ -13,28 +13,37 @@
   border: 0;
 }
 
-/* Twenty-style compact action button */
+/* Compact action button: the dense tier of the button system documented at
+ * the top of _chrome-buttons-cards.scss. Same radius, border, hover wash,
+ * focus ring and disabled treatment as `.btn--sm`, at the same 28px height. */
 .btn-action {
   @include inline-flex-center;
   gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: token('r-sm');
+  height: token('control-h-sm');
+  padding: 0 10px;
+  border-radius: token('r-md');
   font-size: token('fs-sm');
   line-height: 1;
-  font-weight: 500;
+  font-weight: token('fw-medium');
   color: token('text-secondary');
   border: 1px solid token('border');
-  /* A visible surface + hairline shadow so these read as buttons, not
-   * labels — flat transparent chips kept being missed as clickable. */
+  /* A visible surface + border so these read as buttons, not labels —
+   * flat transparent chips kept being missed as clickable. */
   background: token('bg-base');
-  box-shadow: token('shadow-xs');
   white-space: nowrap;
-  transition: background 0.08s ease, color 0.08s ease;
+  transition:
+    background token('motion-fade-fast') token('ease-fade'),
+    color token('motion-fade-fast') token('ease-fade');
 }
-.btn-action:hover { background: token('bg-hover'); color: token('text-primary'); }
-.btn-action svg { width: 12px; height: 12px; }
-.btn-action--icon { padding: 0; width: 24px; justify-content: center; }
+.btn-action:hover {
+  background-image: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha'));
+  color: token('text-primary');
+}
+.btn-action:active {
+  background-image: linear-gradient(token('bg-active-alpha'), token('bg-active-alpha'));
+}
+.btn-action svg { width: 13px; height: 13px; }
+.btn-action--icon { padding: 0; width: token('control-h-sm'); justify-content: center; }
 .btn-action--primary {
   background: token('bg-base');
   border-color: token('border-strong');
@@ -115,7 +124,7 @@
 .tinted-icon-tile--sm {
   width: 22px;
   height: 22px;
-  font-size: 10px;
+  font-size: token('fs-xxs');
 }
 .tinted-icon-tile--sm svg {
   width: 14px;
@@ -124,7 +133,7 @@
 .tinted-icon-tile--md {
   width: 30px;
   height: 30px;
-  font-size: 12px;
+  font-size: token('fs-tiny');
 }
 .tinted-icon-tile--md svg {
   width: 16px;
@@ -133,7 +142,7 @@
 .tinted-icon-tile--lg {
   width: 36px;
   height: 36px;
-  font-size: 14px;
+  font-size: token('fs-sm');
 }
 .tinted-icon-tile--lg svg {
   width: 18px;
@@ -156,16 +165,16 @@
   gap: 8px;
   height: 30px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: token('r-pill');
   font-size: token('fs-sm');
   font-weight: 500;
   color: token('text-primary');
   background: token('bg-panel');
   border: 1px solid token('border');
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .view-pill:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border-strong');
 }
 .view-pill--static {
@@ -199,9 +208,9 @@
   color: token('text-secondary');
   border-radius: token('r-sm');
   font-weight: 500;
-  transition: background 0.08s ease, color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade');
 }
-.view-bar__btn:hover { background: token('bg-hover'); color: token('text-primary'); }
+.view-bar__btn:hover { background: token('bg-hover-alpha'); color: token('text-primary'); }
 
 /* Phones: tighten the view bar so the view pill + filter/sort buttons don't
  * eat two tall rows above the table. */
@@ -242,7 +251,7 @@
   height: 16px;
   display: inline-grid;
   place-items: center;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   color: token('accent');
   opacity: 0.7;
 }

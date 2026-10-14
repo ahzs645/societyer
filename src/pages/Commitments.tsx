@@ -47,6 +47,7 @@ import {
   reviewStatusLabel,
   type CommitmentFormValue,
 } from "../features/commitments/CommitmentFormFields";
+import { StatTile } from "../components/StatTile";
 
 const EVIDENCE_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
 
@@ -264,26 +265,10 @@ export function CommitmentsPage() {
       />
 
       <div className="stat-grid">
-        <div className="stat">
-          <div className="stat__label">Active</div>
-          <div className="stat__value">{activeRows.length}</div>
-          <div className="stat__sub">open obligations</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Overdue</div>
-          <div className="stat__value">{overdue.length}</div>
-          <div className="stat__sub">need attention</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Due in 30 days</div>
-          <div className="stat__value">{dueSoon.length}</div>
-          <div className="stat__sub">watch list</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Needs review</div>
-          <div className="stat__value">{needsReview.length}</div>
-          <div className="stat__sub">source or cadence uncertainty</div>
-        </div>
+        <StatTile label="Active" value={activeRows.length} sub="open obligations" />
+        <StatTile label="Overdue" value={overdue.length} sub="need attention" />
+        <StatTile label="Due in 30 days" value={dueSoon.length} sub="watch list" />
+        <StatTile label="Needs review" value={needsReview.length} sub="source or cadence uncertainty" />
       </div>
 
       {mostOverdue && (

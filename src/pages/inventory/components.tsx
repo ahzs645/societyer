@@ -28,7 +28,7 @@ export function LocationGlyph({ type }: { type?: string }) {
 export function ItemThumb({ item }: { item: any }) {
   if (!item.imageUrl) {
     return (
-      <span style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, background: "var(--surface-muted, #f3f4f6)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted, #8a8f98)" }}>
+      <span style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: "var(--r-md)", background: "var(--bg-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)" }}>
         <ImageIcon size={14} />
       </span>
     );
@@ -54,16 +54,6 @@ export function ReceiptEvidence({ links, receiptDocumentId }: { links: any[]; re
         </div>
       ))}
       {links.length > 2 && <div className="muted">+{links.length - 2} more</div>}
-    </div>
-  );
-}
-
-export function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: "warn" | "info" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">{value}</div>
-      {sub && <div className={tone ? `stat__sub stat__sub--${tone}` : "stat__sub"}>{sub}</div>}
     </div>
   );
 }

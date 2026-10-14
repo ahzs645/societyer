@@ -89,6 +89,9 @@
 
 // Chart kit + chart placements (Financials, Dashboard, Grants, Membership).
 @use "charts";
+// Foundations v2: shared StatTile, and surface/elevation/motion overrides.
+@use "stat-tile";
+@use "surfaces";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

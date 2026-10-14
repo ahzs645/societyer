@@ -61,12 +61,12 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   height: 30px;
   padding: 0 8px;
   border: 1px solid token('border');
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   background: token('bg-base');
   color: token('text-primary');
   font-size: token('fs-md');
   text-align: left;
-  transition: border-color 0.08s ease, box-shadow 0.08s ease, background 0.08s ease;
+  transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade'), background token('motion-fade-fast') token('ease-fade');
 }
 .select-trigger:hover:not(:disabled) { border-color: token('border-strong'); }
 .select-trigger.is-open,
@@ -105,17 +105,14 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 .select-trigger__chev {
   color: token('text-tertiary');
   flex-shrink: 0;
-  transition: transform 0.12s ease;
+  transition: transform token('motion-move-fast') token('ease-move');
 }
 .select-trigger.is-open .select-trigger__chev { transform: rotate(180deg); }
 
 .menu {
   position: fixed;
   z-index: token('z-dropdown');
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-lg');
+  @include surface-floating;
   padding: 4px;
   /* dvh, not vh — anchored menus must fit the VISIBLE viewport on mobile
    * (vh includes the browser chrome, letting the menu extend under it). */
@@ -124,7 +121,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   max-width: calc(100vw - 16px);
   @include flex-column;
   overflow: hidden auto;
-  animation: menuIn 0.08s ease-out;
+  @include appear-pop(top left);
 }
 @keyframes menuIn {
   from { opacity: 0; transform: translateY(-2px); }
@@ -135,7 +132,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   inset: 0;
   z-index: calc(token('z-dropdown') - 1);
   background: token('bg-overlay-scrim');
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn token('motion-fade') token('ease-fade');
 }
 .menu.menu--sheet {
   box-sizing: border-box;
@@ -147,12 +144,11 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   padding: 0 max(8px, env(safe-area-inset-right))
     calc(8px + env(safe-area-inset-bottom))
     max(8px, env(safe-area-inset-left));
-  border-width: 1px 0 0;
   border-radius: token('r-lg') token('r-lg') 0 0;
-  box-shadow: token('shadow-strong');
+  box-shadow: token('elevation-3');
   overscroll-behavior-y: contain;
   overflow: hidden auto;
-  animation: sheetIn 0.3s $sheet-ease;
+  animation: sheetIn token('motion-panel') $sheet-ease;
 }
 /* Sheet rows are thumb-sized: 44px min, body-size type. */
 .menu.menu--sheet .menu__item {
@@ -165,7 +161,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   padding: 8px 10px;
 }
 .menu.menu--sheet .menu__search-input {
-  font-size: 16px;
+  font-size: token('fs-input-touch');
 }
 .menu__search {
   @include flex-center;
@@ -193,7 +189,7 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   gap: 8px;
   width: 100%;
   padding: 7px 9px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   font-size: token('fs-md');
   color: token('text-secondary');
   cursor: pointer;
@@ -211,10 +207,10 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 .menu__item:hover:not(.is-disabled),
 .menu__item.is-active {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
-.menu__item.is-disabled { opacity: 0.4; cursor: not-allowed; }
+.menu__item.is-disabled { opacity: token('opacity-disabled'); cursor: not-allowed; }
 .menu__item--clear { color: token('text-tertiary'); font-style: italic; }
 .menu__item-icon {
   display: inline-flex;
@@ -290,18 +286,18 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   place-items: center;
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   color: token('text-tertiary');
   opacity: 0.7;
   border: 0;
   background: transparent;
-  transition: background 0.08s ease, opacity 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), opacity token('motion-fade-fast') token('ease-fade');
 }
 .select-trigger--sm + .date-trigger__clear {
   right: 4px;
 }
 .date-trigger__clear:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
   opacity: 1;
 }
@@ -313,13 +309,10 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 .calendar {
   position: fixed;
   z-index: token('z-dropdown');
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-lg');
+  @include surface-floating;
   padding: 10px;
   width: 248px;
-  animation: menuIn 0.08s ease-out;
+  @include appear-pop(top left);
 }
 /* Phone: the calendar becomes a viewport-pinned bottom sheet (same pattern as
  * .menu--sheet) instead of an anchor-positioned popover, with day cells bumped
@@ -333,11 +326,10 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   padding: 0 max(12px, env(safe-area-inset-right))
     calc(12px + env(safe-area-inset-bottom))
     max(12px, env(safe-area-inset-left));
-  border-width: 1px 0 0;
   border-radius: token('r-lg') token('r-lg') 0 0;
-  box-shadow: token('shadow-strong');
+  box-shadow: token('elevation-3');
   overscroll-behavior-y: contain;
-  animation: sheetIn 0.3s $sheet-ease;
+  animation: sheetIn token('motion-panel') $sheet-ease;
 }
 .calendar.calendar--sheet .calendar__cell,
 .calendar.calendar--sheet .calendar__quick-cell {
@@ -376,9 +368,9 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   place-items: center;
   border-radius: token('r-sm');
   color: token('text-secondary');
-  transition: background 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade');
 }
-.calendar__nav:hover { background: token('bg-hover'); color: token('text-primary'); }
+.calendar__nav:hover { background: token('bg-hover-alpha'); color: token('text-primary'); }
 .calendar__title {
   @include inline-flex-center;
   gap: 4px;
@@ -396,11 +388,11 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
-.calendar__title-btn:hover { background: token('bg-hover'); }
+.calendar__title-btn:hover { background: token('bg-hover-alpha'); }
 .calendar__title-btn.is-open {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border');
 }
 .calendar__quick {
@@ -419,9 +411,9 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   border: 1px solid transparent;
   color: token('text-primary');
   font-size: token('fs-sm');
-  transition: background 0.08s ease, color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade');
 }
-.calendar__quick-cell:hover { background: token('bg-hover'); }
+.calendar__quick-cell:hover { background: token('bg-hover-alpha'); }
 .calendar__quick-cell.is-current {
   background: token('accent');
   color: token('accent-on');
@@ -439,12 +431,9 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   gap: 2px;
 }
 .calendar__wd {
-  font-size: token('fs-xs');
-  color: token('text-tertiary');
+  @include text-eyebrow;
   text-align: center;
   padding: 4px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 .calendar__cell {
   height: 28px;
@@ -453,11 +442,11 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   color: token('text-primary');
   background: transparent;
   border: 1px solid transparent;
-  transition: background 0.08s ease, color 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
-.calendar__cell:hover:not(:disabled):not(.is-selected) { background: token('bg-hover'); }
+.calendar__cell:hover:not(:disabled):not(.is-selected) { background: token('bg-hover-alpha'); }
 .calendar__cell.is-active:not(.is-selected) {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border-strong');
 }
 .calendar__cell.is-out { color: token('text-tertiary'); opacity: 0.55; }
@@ -485,8 +474,10 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   position: fixed;
   inset: 0;
   background: token('bg-overlay-scrim');
+  /* A light frost keeps the page legible as context without competing. */
+  backdrop-filter: blur(6px);
   z-index: token('z-modal-backdrop');
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn token('motion-fade') token('ease-fade');
 }
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -499,24 +490,22 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   left: 50%;
   transform: translate(-50%, -50%);
   width: calc(100% - 32px);
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-lg');
-  box-shadow: token('shadow-lg');
+  @include surface-dialog;
   @include flex-column;
   max-height: calc(100vh - 48px);
   max-height: calc(100dvh - 48px);
-  animation: modalIn 0.14s ease-out;
+  /* Rise 8px and fade in. */
+  animation: modalIn token('motion-move') token('ease-appear');
 }
 @keyframes modalIn {
-  from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
   to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 // Drag-to-resize dialogs are positioned with explicit top/left/width/height
 // (set inline), so they can't use the translate-based open animation.
 .modal--resizable {
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn token('motion-fade') token('ease-fade');
 
   // Explicit height is applied inline; let the body take the remaining space
   // and scroll so the header/footer stay pinned.
@@ -615,8 +604,7 @@ body.modal-resizing {
   min-width: 0;
   overflow-wrap: anywhere;
   margin: 0;
-  font-size: token('fs-lg');
-  font-weight: 600;
+  @include text-title-section;
   color: token('text-primary');
 }
 .modal__head > button {
@@ -633,7 +621,7 @@ body.modal-resizing {
   @include flex-center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   border: 1px solid token('border');
   background: token('bg-panel');
   color: token('text-primary');
@@ -641,11 +629,11 @@ body.modal-resizing {
   text-align: left;
   font: inherit;
   width: 100%;
-  transition: background 0.08s ease, border-color 0.08s ease;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .quick-action-picker__item:hover,
 .quick-action-picker__item:focus-visible {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('accent');
   outline: none;
 }
@@ -677,8 +665,8 @@ body.modal-resizing {
   padding: 10px 14px;
   border-top: 1px solid token('border');
   background: token('bg-app');
-  border-bottom-left-radius: token('r-lg');
-  border-bottom-right-radius: token('r-lg');
+  border-bottom-left-radius: token('r-card');
+  border-bottom-right-radius: token('r-card');
 }
 
 /* Phone: dialogs become edge-to-edge bottom sheets — grabber, top-rounded
@@ -686,8 +674,9 @@ body.modal-resizing {
  * to dismiss (useSheetDrag). */
 @media (max-width: 560px) {
   .modal-backdrop {
-    background: rgba(0, 0, 0, 0.32);
-    animation-duration: 0.24s;
+    background: token('bg-overlay-scrim-dense');
+    backdrop-filter: none;
+    animation-duration: token('motion-move-slow');
   }
 
   .modal {
@@ -699,12 +688,11 @@ body.modal-resizing {
     max-width: none !important;
     max-height: calc(100dvh - max(24px, env(safe-area-inset-top) + 12px));
     transform: none;
-    border-width: 1px 0 0;
     border-radius: token('r-lg') token('r-lg') 0 0;
-    box-shadow: token('shadow-strong');
+    box-shadow: token('elevation-3');
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    animation: sheetIn 0.34s $sheet-ease;
+    animation: sheetIn token('motion-panel') $sheet-ease;
   }
 
   .modal__head {
@@ -766,7 +754,7 @@ body.modal-resizing {
   .menu.menu--sheet,
   .calendar.calendar--sheet,
   .notif-panel--sheet {
-    animation: fadeIn 0.12s ease-out !important;
+    animation: fadeIn token('motion-fade') token('ease-appear') !important;
   }
 }
 .confirm-body {

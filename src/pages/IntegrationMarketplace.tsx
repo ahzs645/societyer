@@ -284,7 +284,7 @@ export function IntegrationMarketplacePage() {
                     padding: 12,
                     border: "1px solid var(--border)",
                     borderRadius: 6,
-                    background: "var(--bg-panel-muted)",
+                    background: "var(--bg-subtle)",
                   }}
                 >
                   <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>

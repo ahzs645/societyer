@@ -23,6 +23,7 @@ import {
 import { formatDate, money, relative } from "../lib/format";
 import { AGREEMENT_KIND_LABELS, AGREEMENT_STATUS_LABELS, RENEWAL_DECISION_LABELS, type AgreementKind, type AgreementStatus, type RenewalDecision } from "../../shared/agreements";
 import { AgreementFormDrawer, emptyAgreementForm, formToPayload, type AgreementFormValue } from "../features/agreements/AgreementFormDrawer";
+import { StatTile } from "../components/StatTile";
 
 export function agreementStatusTone(status: string): "success" | "warn" | "danger" | "info" | "neutral" {
   return status === "active" ? "success" : status === "expired" ? "warn" : status === "terminated" ? "danger" : status === "negotiating" ? "info" : "neutral";
@@ -181,18 +182,15 @@ export function AgreementsPage() {
           { id: "review", label: "Needs review", value: needsReview.length, sub: "imported or converted drafts" },
           { id: "warnings", label: "Signing warnings", value: warnings.length, sub: "tier not satisfied" },
         ] as { id: QuickFilter; label: string; value: number; sub: string }[]).map((tile) => (
-          <button
+          <StatTile
             key={tile.id}
-            type="button"
-            className="stat"
-            aria-pressed={quick === tile.id}
+            label={tile.label}
+            value={tile.value}
+            sub={tile.value > 0 ? tile.sub : undefined}
+            pressed={quick === tile.id}
             onClick={() => setQuickFilter(quick === tile.id ? "all" : tile.id)}
-            style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", borderColor: quick === tile.id ? "var(--accent)" : undefined, boxShadow: quick === tile.id ? "0 0 0 1px var(--accent)" : undefined }}
-          >
-            <span className="stat__label">{tile.label}</span>
-            <span className="stat__value">{tile.value}</span>
-            {tile.value > 0 && <span className="stat__sub">{tile.sub}</span>}
-          </button>
+            actionLabel={`${tile.label}: ${tile.value}`}
+          />
         ))}
       </div>
 

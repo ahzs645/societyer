@@ -27,6 +27,7 @@ import { annualReportForAgm, dateOnly, deriveAgmFacts, noAgmAnnualReportForYear 
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { usePermissions } from "../hooks/usePermissions";
+import { StatTile } from "../components/StatTile";
 
 export function ComplianceObligationsPage() {
   const { organization, society, isLoading, missingWorkspace } = useOrganizationWorkspace();
@@ -245,22 +246,10 @@ export function ComplianceObligationsPage() {
       </p>
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <div className="stat">
-          <span className="stat__label">Active packs</span>
-          <strong className="stat__value">{packs.length}</strong>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Computed obligations</span>
-          <strong className="stat__value">{obligations.length}</strong>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Calculated for today</span>
-          <strong className="stat__value">{dueToday}</strong>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Past calculated date</span>
-          <strong className="stat__value">{overdue}</strong>
-        </div>
+        <StatTile label="Active packs" value={packs.length} />
+        <StatTile label="Computed obligations" value={obligations.length} />
+        <StatTile label="Calculated for today" value={dueToday} />
+        <StatTile label="Past calculated date" value={overdue} />
       </div>
 
       <section className="card" style={{ marginBottom: 16 }}>

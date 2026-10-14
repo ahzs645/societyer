@@ -113,12 +113,15 @@
      16px, which made UI text ~23% larger than intended. These land UI text on
      a 13/14/15px rhythm (label / secondary / body) with 18/24/28px titles. */
   --fs-xxs: 0.6875rem; /* 11px — micro labels, eyebrows */
+  --fs-tiny: 0.75rem;  /* 12px — badges, meta lines, tiny captions */
   --fs-xs:  0.8125rem; /* 13px — labels, table headers, captions */
   --fs-sm:  0.875rem;  /* 14px — secondary body, table cells */
   --fs-md:  0.9375rem; /* 15px — body */
   --fs-lg:  1.125rem;  /* 18px — section titles */
   --fs-xl:  1.5rem;    /* 24px — page titles */
   --fs-xxl: 1.75rem;   /* 28px — hero numbers */
+  /* iOS Safari zooms into focused fields below 16px: phone inputs use this. */
+  --fs-input-touch: 1rem;
   /* Alias kept for legacy consumers */
   --fs-2xl: var(--fs-xl);
   --fs-3xl: var(--fs-xxl);
@@ -291,6 +294,11 @@
   --ease-panel:     cubic-bezier(0.23, 1, 0.32, 1);
 
   --opacity-disabled: 0.4;
+
+  /* Control heights: one scale for .btn, .btn-action, <Button>, inputs. */
+  --control-h-sm: 28px;  /* compact: .btn--sm, .btn-action, dense rows */
+  --control-h-md: 32px;  /* default: .btn, <Button>, .input */
+  --control-h-lg: 40px;  /* prominent: .btn--lg, <Button size="lg"> */
 
   /* Table rhythm. */
   --row-h-compact: 36px;

@@ -13,6 +13,7 @@ import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPa
 import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { portfolioEntityMatches } from "../../shared/portfolioSearch";
+import { StatTile } from "../components/StatTile";
 
 type FirmEntity = {
   _id: string;
@@ -106,21 +107,22 @@ export function PortfolioPage() {
 
       {/* Firm summary */}
       <div className="stat-grid portfolio-stats">
-        <div className="stat">
-          <span className="stat__label">Entities</span>
-          <span className="stat__value">{totals.entities ?? 0}</span>
-          <span className="stat__sub">{plural(totals.societies ?? 0, "society", "societies")} · {plural(totals.corporations ?? 0, "corporation", "corporations")}</span>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Overdue</span>
-          <span className="stat__value" style={{ color: (totals.overdueDeadlines ?? 0) > 0 ? "var(--danger)" : undefined }}>{totals.overdueDeadlines ?? 0}</span>
-          <span className="stat__sub portfolio-stats__sub">deadlines, all entities</span>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Upcoming</span>
-          <span className="stat__value">{totals.upcomingDeadlines ?? 0}</span>
-          <span className="stat__sub portfolio-stats__sub">deadlines, all entities</span>
-        </div>
+        <StatTile
+          label="Entities"
+          value={totals.entities ?? 0}
+          sub={`${plural(totals.societies ?? 0, "society", "societies")} · ${plural(totals.corporations ?? 0, "corporation", "corporations")}`}
+        />
+        <StatTile
+          label="Overdue"
+          value={totals.overdueDeadlines ?? 0}
+          tone={(totals.overdueDeadlines ?? 0) > 0 ? "danger" : undefined}
+          sub={<span className="portfolio-stats__sub">deadlines, all entities</span>}
+        />
+        <StatTile
+          label="Upcoming"
+          value={totals.upcomingDeadlines ?? 0}
+          sub={<span className="portfolio-stats__sub">deadlines, all entities</span>}
+        />
       </div>
 
       {allEntities.length > 0 && (

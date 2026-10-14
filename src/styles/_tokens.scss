@@ -119,6 +119,7 @@ $known-tokens: (
   // --- Data-viz tokens (charts) ---
   "dv-cat-1" "dv-cat-2" "dv-cat-3" "dv-cat-4" "dv-cat-5" "dv-cat-6" "dv-cat-7" "dv-cat-8" "dv-in" "dv-out" "dv-net" "dv-previous" "dv-average" "dv-spark" "dv-grid" "dv-axis" "dv-label" "dv-crosshair" "dv-surface" "dv-hover-band" "dv-track" "dv-selection" "dv-selection-edge"
   // --- /Data-viz tokens ---
+  "fs-tiny" "fs-input-touch" "control-h-sm" "control-h-md" "control-h-lg"
 );
 
 @function token($name, $fallback: null) {

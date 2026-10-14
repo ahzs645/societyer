@@ -18,6 +18,7 @@ import { NativeCoveragePanel } from "../features/gaps/NativeCoveragePanel";
 import { ExpectationsPanel } from "../features/gaps/ExpectationsPanel";
 import type { ContinuityPeriod, ContinuityRow } from "../../shared/continuity";
 import "../features/gaps/coverage.css";
+import { StatTile } from "../components/StatTile";
 
 const TABS = [
   { id: "continuity", label: "Record continuity", icon: CalendarRange },
@@ -130,10 +131,10 @@ export function CoverageGapsPage() {
         <>
           {counts && (
             <div className="stat-grid">
-              <div className="stat"><div className="stat__label">Record missing</div><div className="stat__value">{counts.record_missing}</div></div>
-              <div className="stat"><div className="stat__label">Only in source files</div><div className="stat__value">{counts.source_only}</div></div>
-              <div className="stat"><div className="stat__label">Draft or unapproved</div><div className="stat__value">{counts.draft_only}</div></div>
-              <div className="stat"><div className="stat__label">On file</div><div className="stat__value">{counts.satisfied}</div></div>
+              <StatTile label="Record missing" value={counts.record_missing} />
+              <StatTile label="Only in source files" value={counts.source_only} />
+              <StatTile label="Draft or unapproved" value={counts.draft_only} />
+              <StatTile label="On file" value={counts.satisfied} />
             </div>
           )}
           <div className="coverage-toolbar">

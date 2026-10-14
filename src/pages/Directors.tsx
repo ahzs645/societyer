@@ -34,6 +34,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { StatTile } from "../components/StatTile";
 
 const CURRENT_DIRECTORS_VIEW = "Current directors";
 
@@ -211,28 +212,29 @@ export function DirectorsPage() {
 
       <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <div className="stat-grid">
-        <div className="stat">
-          <div className="stat__label">Active directors</div>
-          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors ? "var(--danger)" : undefined }}>{directorsLoaded ? active.length : "—"}</div>
-          <div className="stat__sub">{directorProfile.activeDirectorsSubtext}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">{directorProfile.residencyMetricLabel}</div>
-          <div className="stat__value" style={{ color: directorsLoaded && directorProfile.requiresBcResidentDirector && bcResidents < 1 ? "var(--danger)" : undefined }}>
-            {directorsLoaded ? (directorProfile.showCanadianResidentField ? `${canadianResidents}/${canadianRequired}` : directorProfile.showBcResidentField ? bcResidents : directorProfile.minimumActiveDirectors === undefined ? "Review" : "Not required") : "—"}
-          </div>
-          <div className="stat__sub">{directorProfile.residencyMetricSubtext}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Consent evidence</div>
-          <div className="stat__value" style={{ color: directorsLoaded && missingConsent.length ? "var(--warn)" : undefined }}>{directorsLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}</div>
-          <div className="stat__sub">{directorProfile.consentExplanation}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Change of directors</div>
-          <div className="stat__value">{directorProfile.directorChangeMetric}</div>
-          <div className="stat__sub">{directorProfile.directorChangeSubtext}</div>
-        </div>
+        <StatTile
+          label="Active directors"
+          value={directorsLoaded ? active.length : "—"}
+          tone={directorsLoaded && directorProfile.minimumActiveDirectors != null && active.length < directorProfile.minimumActiveDirectors ? "danger" : undefined}
+          sub={directorProfile.activeDirectorsSubtext}
+        />
+        <StatTile
+          label={directorProfile.residencyMetricLabel}
+          value={directorsLoaded ? (directorProfile.showCanadianResidentField ? `${canadianResidents}/${canadianRequired}` : directorProfile.showBcResidentField ? bcResidents : directorProfile.minimumActiveDirectors === undefined ? "Review" : "Not required") : "—"}
+          tone={directorsLoaded && directorProfile.requiresBcResidentDirector && bcResidents < 1 ? "danger" : undefined}
+          sub={directorProfile.residencyMetricSubtext}
+        />
+        <StatTile
+          label="Consent evidence"
+          value={directorsLoaded ? `${active.length - missingConsent.length}/${active.length}` : "—"}
+          tone={directorsLoaded && missingConsent.length ? "warn" : undefined}
+          sub={directorProfile.consentExplanation}
+        />
+        <StatTile
+          label="Change of directors"
+          value={directorProfile.directorChangeMetric}
+          sub={directorProfile.directorChangeSubtext}
+        />
       </div>
 
       {directorsLoaded && (minimumMissing || residencyMissing || canadianMissing || missingConsent.length > 0) && (

@@ -59,7 +59,7 @@
   padding: 0 9px;
   border: 1px solid token('border');
   border-radius: token('r-md');
-  background: var(--bg);
+  background: token('bg-panel');
   color: token('text-secondary');
 }
 
@@ -77,7 +77,7 @@
   overflow: auto;
   border: 1px solid token('border');
   border-radius: token('r-md');
-  background: var(--bg);
+  background: token('bg-panel');
 }
 
 .record-picker__option {
@@ -87,7 +87,7 @@
   min-height: 42px;
   padding: 7px 10px;
   border: 0;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid token('border-color-light');
   background: transparent;
   color: token('text-primary');
   text-align: left;
@@ -167,10 +167,7 @@
 }
 
 .transparency-builder__panel {
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-xs');
+  @include surface-card;
   padding: token('s-4');
 }
 
@@ -227,7 +224,7 @@
 }
 
 .transparency-builder__preset:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 /* Collapsed setup guide: one compact row — progress ring, title, the next
@@ -239,10 +236,7 @@
   gap: token('s-3');
   margin-bottom: token('s-5');
   padding: token('s-3') token('s-3') token('s-3') token('s-4');
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-xs');
+  @include surface-card;
 }
 .onboarding-compact__ring {
   --progress: 0%;
@@ -284,7 +278,7 @@
   text-decoration: none;
 }
 .onboarding-compact__next:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .onboarding-compact__next > svg {
@@ -330,7 +324,7 @@
   cursor: pointer;
 }
 .onboarding-compact__icon:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 @media (max-width: 760px) {
@@ -340,10 +334,7 @@
 }
 
 .onboarding-flow {
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-xs');
+  @include surface-card;
   display: grid;
   gap: token('s-4');
   margin-bottom: token('s-6');
@@ -407,7 +398,7 @@
 }
 
 .onboarding-flow__dismiss:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border');
   color: token('text-primary');
 }
@@ -420,7 +411,7 @@
 
 .onboarding-flow__bar {
   background: token('bg-subtle');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   height: 6px;
   overflow: hidden;
 }
@@ -462,11 +453,7 @@
 }
 
 .onboarding-flow__eyebrow {
-  color: token('text-tertiary');
-  font-size: token('fs-xs');
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  @include text-eyebrow;
 }
 
 .onboarding-flow__grid {
@@ -489,7 +476,7 @@
 }
 
 .onboarding-step:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 .onboarding-step.is-next {

@@ -74,7 +74,7 @@
   gap: 4px;
   padding: 10px;
   border: 1px solid token('border');
-  border-radius: 6px;
+  border-radius: token('r-md');
   min-width: 0;
 }
 .document-queue-link__title {
@@ -315,7 +315,7 @@
 }
 .import-queue__bar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: token('r-sm');
   background: token('bg-subtle');
   overflow: hidden;
 }
@@ -489,10 +489,10 @@
 .import-queue__decide kbd,
 .import-queue__detail kbd {
   font-family: token('font-mono');
-  font-size: 10px;
+  font-size: token('fs-xxs');
   padding: 0 4px;
   border: 1px solid token('border');
-  border-radius: 3px;
+  border-radius: token('r-sm');
   opacity: 0.75;
 }
 .import-queue__reasons {

@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { IntakeRunCoverage } from "../intake/IntakeRunCoverage";
+import { StatTile } from "../../components/StatTile";
 
 const AREA_LABELS: Record<string, string> = {
   meetings: "Meetings and minutes",
@@ -29,14 +30,11 @@ export function NativeCoveragePanel({ societyId }: { societyId: string }) {
   return (
     <div className="col" style={{ gap: 16 }}>
       <div className="stat-grid">
-        <div className="stat">
-          <div className="stat__label">Native coverage (all areas)</div>
-          <div className="stat__value">{data.overall === null ? "—" : `${data.overall}%`}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">Unresolved system gaps</div>
-          <div className="stat__value">{data.areas.reduce((sum: number, area: any) => sum + area.gaps.open + area.gaps.keptAsText, 0)}</div>
-        </div>
+        <StatTile label="Native coverage (all areas)" value={data.overall === null ? "—" : `${data.overall}%`} />
+        <StatTile
+          label="Unresolved system gaps"
+          value={data.areas.reduce((sum: number, area: any) => sum + area.gaps.open + area.gaps.keptAsText, 0)}
+        />
       </div>
       <p className="muted" style={{ margin: 0 }}>
         Native records are rows a person can see, filter and edit. Unresolved gaps are open, schema-change-requested or kept-as-text details from the sources.

@@ -10,19 +10,6 @@
   margin-bottom: token('s-4');
 }
 
-.import-sessions-page__stats .stat {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: token('s-2');
-  padding: 10px 12px;
-}
-
-.import-sessions-page__stats .stat__icon {
-  color: token('text-tertiary');
-  line-height: 0;
-  padding-top: 2px;
-}
-
 .import-sessions-page__stats .stat__value {
   font-size: token('fs-lg');
 }
@@ -184,7 +171,7 @@
 }
 .import-session-row:hover {
   border-color: token('border-strong');
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 .import-session-row.is-active {
   border-color: token('accent');
@@ -238,11 +225,6 @@
 }
 
 @media (max-width: 760px) {
-  .import-sessions-page__stats .stat {
-    display: flex;
-    padding: token('s-3');
-  }
-
   .import-scan-card__head {
     align-items: stretch;
     flex-direction: column;

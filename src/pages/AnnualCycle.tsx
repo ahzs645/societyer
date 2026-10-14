@@ -1,6 +1,6 @@
 import { CitationBadge } from "../components/CitationTooltip";
 import { calendarDateKey } from "../lib/calendarDates";
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import {
@@ -24,6 +24,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { InfoPopover } from "../components/InfoPopover";
 import { formatDate, relative } from "../lib/format";
 import { organizationVocabulary, type OrganizationVocabulary } from "../lib/organizationVocabulary";
+import { StatTile } from "../components/StatTile";
 
 type CycleItem = {
   id: string;
@@ -165,9 +166,9 @@ export function AnnualCyclePage() {
 
       <div className="stat-grid stat-grid--3 annual-cycle-stats">
         {/* votingMembers counts the society member register. */}
-        {entity.isSociety && <Stat label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
-        <Stat label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
-        <Stat
+        {entity.isSociety && <StatTile label="Voting members" value={counts.votingMembers} icon={<Circle size={14} />} />}
+        <StatTile label="Active directors" value={counts.activeDirectors} icon={<ShieldCheck size={14} />} />
+        <StatTile
           label="Annual report due"
           value={data.annualReportDueDate ? formatDate(data.annualReportDueDate) : "Not computed"}
           icon={<FileCheck2 size={14} />}
@@ -254,7 +255,7 @@ function CycleCard({ item }: { item: CycleItem }) {
         border: "1px solid var(--border)",
         borderRadius: 8,
         padding: 12,
-        background: item.status === "blocked" ? "var(--danger-soft)" : item.status === "attention" ? "var(--warn-soft)" : "var(--bg)",
+        background: item.status === "blocked" ? "var(--danger-soft)" : item.status === "attention" ? "var(--warn-soft)" : "var(--bg-panel)",
       }}
     >
       <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>
@@ -288,27 +289,6 @@ function CycleCard({ item }: { item: CycleItem }) {
             {item.actionLabel} <ArrowRight size={12} />
           </Link>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  icon: ReactNode;
-  tone?: "ok" | "danger";
-}) {
-  return (
-    <div className={`stat${tone === "danger" ? " stat--danger" : tone === "ok" ? " stat--ok" : ""}`}>
-      <div className="stat__label">{icon}{label}</div>
-      <div className="stat__value" style={{ fontSize: typeof value === "string" && value.length > 18 ? "var(--fs-lg)" : undefined }}>
-        {value}
       </div>
     </div>
   );

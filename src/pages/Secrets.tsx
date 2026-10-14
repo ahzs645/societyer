@@ -39,6 +39,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { StatTile } from "../components/StatTile";
 
 const CREDENTIAL_TYPES = ["recovery_key", "registry_key", "api_key", "password", "certificate", "other"];
 const STORAGE_MODES = ["stored_encrypted", "external_reference", "encrypted_elsewhere", "not_stored"];
@@ -255,10 +256,10 @@ export function SecretsPage() {
       />
 
       <div className="stat-grid">
-        <Stat label="Records" value={summary.total} sub="credential references" />
-        <Stat label="Stored values" value={summary.stored} sub="encrypted in Societyer" />
-        <Stat label="Needs review" value={summary.needsReview} sub="pending owner check" tone={summary.needsReview > 0 ? "warn" : undefined} />
-        <Stat label="Rotation due" value={summary.rotationDue} sub="within 30 days or late" tone={summary.rotationDue > 0 ? "warn" : undefined} />
+        <StatTile label="Records" value={summary.total} sub={summary.total > 0 ? "credential references" : undefined} />
+        <StatTile label="Stored values" value={summary.stored} sub={summary.stored > 0 ? "encrypted in Societyer" : undefined} />
+        <StatTile label="Needs review" value={summary.needsReview} sub={summary.needsReview > 0 ? "pending owner check" : undefined} tone={summary.needsReview > 0 ? "warn" : undefined} />
+        <StatTile label="Rotation due" value={summary.rotationDue} sub={summary.rotationDue > 0 ? "within 30 days or late" : undefined} tone={summary.rotationDue > 0 ? "warn" : undefined} />
       </div>
 
       {showMetadataWarning ? (
@@ -484,16 +485,6 @@ export function SecretsPage() {
           </div>
         )}
       </Drawer>
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, tone }: { label: string; value: number; sub: string; tone?: "warn" | "danger" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={tone ? { color: tone === "danger" ? "var(--danger)" : "var(--warn)" } : undefined}>{value}</div>
-      {value > 0 && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }

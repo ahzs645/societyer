@@ -30,7 +30,7 @@
 }
 
 .grant-edit-aside__label {
-  font-size: 11px;
+  font-size: token('fs-xxs');
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -54,7 +54,7 @@
 }
 
 .grant-edit-workbench__heading {
-  font-size: 13px;
+  font-size: token('fs-xs');
   font-weight: 650;
   color: token('text-primary');
 }
@@ -75,11 +75,11 @@
   border-radius: token('r-sm');
   background: token('bg-base');
   color: token('text-secondary');
-  font-size: 12px;
+  font-size: token('fs-tiny');
 }
 
 .grant-edit-workbench__links a:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 
@@ -96,7 +96,7 @@
 .grant-edit-workbench__note span,
 .grant-edit-workbench__metrics span {
   color: token('text-tertiary');
-  font-size: 11px;
+  font-size: token('fs-xxs');
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -126,7 +126,7 @@
 .grant-edit-workbench__item p {
   margin: 3px 0 0;
   color: token('text-tertiary');
-  font-size: 12px;
+  font-size: token('fs-tiny');
   line-height: 1.4;
 }
 
@@ -156,7 +156,7 @@
   margin: 0;
   padding-left: 18px;
   color: token('text-secondary');
-  font-size: 12px;
+  font-size: token('fs-tiny');
   line-height: 1.35;
 }
 
@@ -195,14 +195,14 @@
 
 .grant-edit-section__title {
   margin: 0;
-  font-size: 14px;
+  font-size: token('fs-sm');
   font-weight: 600;
   color: token('text-primary');
 }
 
 .grant-edit-section__desc {
   margin: 0;
-  font-size: 12px;
+  font-size: token('fs-tiny');
   color: token('text-tertiary');
 }
 
@@ -293,7 +293,7 @@
   height: 11px;
   margin-top: 4px;
   border: 2px solid token('border');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   background: token('bg-panel');
 }
 
@@ -309,7 +309,7 @@
 
 .grant-project-timeline__date {
   font-family: token('font-mono');
-  font-size: 12px;
+  font-size: token('fs-tiny');
   color: token('text-tertiary');
   margin-bottom: 3px;
 }
@@ -356,7 +356,7 @@
 
 .grant-format-library__label {
   color: token('text-tertiary');
-  font-size: 11px;
+  font-size: token('fs-xxs');
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -365,7 +365,7 @@
 .grant-format-library__head p {
   margin: 3px 0 0;
   color: token('text-tertiary');
-  font-size: 12px;
+  font-size: token('fs-tiny');
   line-height: 1.4;
 }
 
@@ -410,7 +410,7 @@
 
 .grant-format-card small {
   color: token('text-tertiary');
-  font-size: 12px;
+  font-size: token('fs-tiny');
 }
 
 .grant-format-card--custom {
@@ -444,7 +444,7 @@
   align-items: center;
   min-width: 0;
   color: token('text-tertiary');
-  font-size: 12px;
+  font-size: token('fs-tiny');
 }
 
 .grant-requirement-card__details {
@@ -507,11 +507,7 @@
 }
 
 .grant-source-card__eyebrow {
-  color: token('text-tertiary');
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  @include text-eyebrow;
 }
 
 .grant-source-card__title {
@@ -614,7 +610,7 @@
 
 .segmented-control__item:hover:not(.is-active) {
   color: token('text-primary');
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 .segmented-control__item.is-active {

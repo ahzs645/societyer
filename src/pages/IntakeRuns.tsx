@@ -25,6 +25,7 @@ import { clearOriginals, originalsUsage } from "../features/intake/originalsCach
 import { defaultModelFor, keyStorageLabel, providerHost, readLlmPrefs, readLocalApiKey, storeLocalApiKey, writeLlmPrefs, type LocalLlmProvider } from "../features/intake/localLlm";
 import { CompactRunPanel } from "../features/intake/CompactRunPanel";
 import "../features/intake/intake.css";
+import { StatTile } from "../components/StatTile";
 
 const STAGES: Array<{ id: IntakeStageId; label: string }> = [
   { id: "inventory", label: "Inventory" },
@@ -518,10 +519,10 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
           <div className="muted">{formatDateTime(run.createdAtISO)} · {run.sourceKind === "local_folder" ? "Folder" : run.sourceKind === "upload" ? "Uploaded files" : "Drive inventory"} {run.sourceRoot ? <span className="mono">{run.sourceRoot}</span> : null}</div>
           {run.stats?.error && <Banner tone="danger">{run.stats.error}</Banner>}
           <div className="stat-grid">
-            <div className="stat"><div className="stat__label">Files</div><div className="stat__value">{run.counts.files}</div></div>
-            <div className="stat"><div className="stat__label">Extractions</div><div className="stat__value">{run.counts.extractions}</div></div>
-            <div className="stat"><div className="stat__label">Clusters</div><div className="stat__value">{run.counts.clusters}</div></div>
-            <div className="stat"><div className="stat__label">Sent to a provider</div><div className="stat__value">{sent.length}</div></div>
+            <StatTile label="Files" value={run.counts.files} />
+            <StatTile label="Extractions" value={run.counts.extractions} />
+            <StatTile label="Clusters" value={run.counts.clusters} />
+            <StatTile label="Sent to a provider" value={sent.length} />
           </div>
           <div className="intake-chips">
             {Object.entries(run.counts.byDisposition ?? {}).map(([key, count]) => <Badge key={key} tone={DISPOSITION_TONE[key] ?? "neutral"}>{key} {String(count)}</Badge>)}
