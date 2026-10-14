@@ -371,7 +371,7 @@ export const BUSINESS_REGISTER_RECORD_TABLE_OBJECTS: SeedObject[] = [
       sorts: [{ fieldName: "maturityDate", direction: "asc" }],
       columns: [
         { fieldName: "name", size: 220 },
-        { fieldName: "kind", size: 120 },
+        { fieldName: "kind", size: 160 },
         { fieldName: "principalCents", size: 140 },
         { fieldName: "ratePercent", size: 90 },
         { fieldName: "maturityDate", size: 130 },

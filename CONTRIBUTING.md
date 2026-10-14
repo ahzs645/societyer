@@ -76,6 +76,7 @@ npm run test:nl-filter                      # natural-language table filter pars
 npm run test:ai-filter-action               # "Ask AI" filter action: schema-only payload, reply validation, permissions, rate limit
 npm run test:invoices                       # invoices (if present)
 npm run test:seed-parity                    # the Convex seed tells the same finance story as the in-browser demo (also after editing shared/demoData or seed.ts)
+npm run test:business-registers             # payroll, credit card and investment registers: CRA due dates, slip deadlines, maturity reminders, statement reconciliation, no full card numbers
 npm run test:xlsx                           # Excel export writer (src/lib/xlsx): package structure, typed cells, dates, formats
 
 # Legal rules, evidence and corporate records (if you touched shared/ legal, packet or register code)
