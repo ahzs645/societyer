@@ -89,6 +89,8 @@
 
 // Undo-first feedback, spotlights, page skeletons, copyable values, demo banner.
 @use "feedback";
+// Customisable dashboard grid and its Customize drawer.
+@use "dashboard";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
