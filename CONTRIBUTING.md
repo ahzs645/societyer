@@ -74,6 +74,7 @@ npm run test:record-table-acceptance        # RecordTable inventory and the shar
 npm run test:transaction-rules              # categorisation rules, approvals and statement reconciliation helpers
 npm run test:nl-filter                      # natural-language table filter parser (if present)
 npm run test:invoices                       # invoices (if present)
+npm run test:seed-parity                    # the Convex seed tells the same finance story as the in-browser demo (also after editing shared/demoData or seed.ts)
 
 # Legal rules, evidence and corporate records (if you touched shared/ legal, packet or register code)
 npm run test:legal                          # every legal and evidence check (scripts/run-legal-checks.mjs)
