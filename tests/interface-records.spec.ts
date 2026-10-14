@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { chooseViewType } from "./helpers/recordTableToolbar";
 
 async function openNavigation(page: Page) {
   const mobileMore = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
@@ -64,9 +65,9 @@ for (const width of [320, 390, 768, 1440]) {
       expect(bodyWidth, `${route} extends beyond its ${width}px viewport`).toBeLessThanOrEqual(width + 2);
     }
     await page.goto("/demo/app/deadlines");
-    await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+    await chooseViewType(page, "Calendar view");
     await expect(page.locator(".calendar-view")).toBeVisible();
-    await page.getByRole("button", { name: "Table view", exact: true }).click();
+    await chooseViewType(page, "Table view");
     await page.goto("/demo/app/bylaws-history");
     await page.getByRole("button", { name: "Current bylaws", exact: true }).click();
     await expect(page.getByRole("button", { name: "Timeline", exact: true })).toBeVisible();

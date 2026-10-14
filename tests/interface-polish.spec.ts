@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { chooseViewType } from "./helpers/recordTableToolbar";
 
 // Polish retest: detail routes with a missing id show a not-found state (FF-2),
 // and the record calendar can jump to its earliest and latest records (A6).
@@ -31,7 +32,7 @@ test("record calendar jumps to the earliest and latest records", async ({ page }
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/demo/app/meetings");
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   const calendar = page.locator(".calendar-view");
   await expect(calendar).toBeVisible();
   const title = calendar.locator(".calendar-view__title");

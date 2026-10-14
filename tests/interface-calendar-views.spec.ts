@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { chooseViewType } from "./helpers/recordTableToolbar";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { PDFDocument } from "pdf-lib";
@@ -25,7 +26,7 @@ test("calendar layouts save, discard and reload while dated records open their a
   await dialog.getByLabel("Title", { exact: true }).fill("Calendar source deadline");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   const calendar = page.locator(".calendar-view");
   await calendar.getByRole("button", { name: "Week", exact: true }).click();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -83,7 +84,7 @@ test("task phone cards honor calendar and kanban selection and retain the record
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/demo/app/tasks");
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   const calendar = page.locator(".calendar-view");
   await expect(calendar).toBeVisible();
   await calendar.getByRole("button", { name: "Week", exact: true }).click();
@@ -93,10 +94,10 @@ test("task phone cards honor calendar and kanban selection and retain the record
   const task = page.getByRole("dialog", { name: "Edit task", exact: true });
   await expect(task.getByLabel("Title", { exact: true })).toBeEnabled();
   await task.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("button", { name: "Kanban view", exact: true }).click();
+  await chooseViewType(page, "Kanban view");
   await expect(calendar).toBeHidden();
   await expect(page.locator(".kanban")).toBeVisible();
-  await page.getByRole("button", { name: "Table view", exact: true }).click();
+  await chooseViewType(page, "Table view");
   await expect(page.locator(".kanban")).toBeHidden();
   await fits(page);
   expect(errors).toEqual([]);
@@ -125,7 +126,7 @@ test("Viewer can change the presentation and inspect a deadline while save and e
   const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
   await palette.getByRole("combobox").fill("Deadlines");
   await palette.getByRole("option", { name: /^Deadlines/ }).first().click();
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   const calendar = page.locator(".calendar-view");
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
@@ -166,7 +167,7 @@ test.describe("viewer time zone", () => {
       await localDataClient.mutation("meetings:update", { id: meeting._id, patch: { scheduledAt: "2026-03-09T04:30:00Z" } });
       return meeting.title as string;
     });
-    await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+    await chooseViewType(page, "Calendar view");
     const calendar = page.locator(".calendar-view");
     await calendar.getByRole("button", { name: "Week", exact: true }).click();
     await expect(calendar.locator('[data-calendar-date="2026-03-08"]').getByRole("button", { name: title, exact: true })).toBeVisible();
