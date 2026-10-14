@@ -8491,6 +8491,34 @@
     ]
   },
   {
+    "key": "convex:financialHub:saveBudgetLines",
+    "surface": "convex",
+    "name": "financialHub:saveBudgetLines",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/financialHub.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "removeIds",
+        "table": "budgets",
+        "array": true,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:financialHub:summary",
     "surface": "convex",
     "name": "financialHub:summary",
@@ -29905,6 +29933,34 @@
         "path": "id",
         "table": "operatingSubscriptions",
         "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:financialHub:saveBudgetLines",
+    "surface": "portable",
+    "name": "financialHub:saveBudgetLines",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "removeIds",
+        "table": "budgets",
+        "array": true,
         "optional": false
       },
       {

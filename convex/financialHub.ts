@@ -26,6 +26,7 @@ import {
   upsertOperatingSubscriptionPortable,
   removeOperatingSubscriptionPortable,
   removeBudgetPortable,
+  saveBudgetLinesPortable,
   getConnectionPortable,
   updateTransactionPortable,
   summaryPortable,
@@ -144,6 +145,27 @@ export const removeBudget = authorizedMutation("financialHub:removeBudget", muta
   args: { id: v.id("budgets"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removeBudgetPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Budget grid: save a fiscal year's category lines atomically. Returns
+// per-line errors (by input index) instead of writing anything when a line fails.
+export const saveBudgetLines = authorizedMutation("financialHub:saveBudgetLines", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    fiscalYear: v.string(),
+    upserts: v.array(
+      v.object({
+        id: v.optional(v.id("budgets")),
+        category: v.string(),
+        plannedCents: v.number(),
+        notes: v.optional(v.string()),
+      }),
+    ),
+    removeIds: v.array(v.id("budgets")),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveBudgetLinesPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Edit a single imported/synced transaction. Only the user-correctable fields
