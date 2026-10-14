@@ -2,7 +2,9 @@
  * The server seed (shared/functions/seed.ts, `npm run convex:seed`) tells the
  * same finance story as the in-browser demo: transaction rules with provenance
  * on the feed, reconciliation periods, expense approval rules and claims, and
- * the invoicing demo. Both come from shared/demoData generators; this gate
+ * the invoicing demo. It also seeds the three corporation personas of the demo
+ * banner (shared/demoData/corporations.ts), which the in-browser demo creates
+ * when a persona is chosen. Both come from shared/demoData generators; this gate
  * runs the real `seed:run` mutation on convex-test (schema-validated, no user
  * identity, like the maintenance endpoint) and compares the result with the
  * static fixtures through the same portable queries the app uses.
@@ -20,6 +22,12 @@ import * as inv from "../shared/functions/invoices";
 import { demoExpenseReports } from "../shared/demoData/financeWorkflows";
 import { DEMO_RECONCILIATION_KEYS } from "../shared/demoData/financeWorkflows";
 import { tables as staticTables } from "../src/lib/staticConvexFixtures";
+import { CORPORATION_DEMO_KEYS, CORPORATION_STORIES, buildCorporationDemo, corporationDemoLocalSeed } from "../shared/demoData/corporations";
+import * as votingPowerFns from "../shared/functions/votingPower";
+import * as dividendFns from "../shared/functions/dividends";
+import * as resolutionFns from "../shared/functions/writtenResolutions";
+import * as certificateFns from "../shared/functions/shareCertificates";
+import * as settingsFns from "../shared/functions/corporationSettings";
 
 const TOKEN = "seed-parity-token";
 process.env.SOCIETYER_MAINTENANCE_TOKEN = TOKEN;
@@ -45,15 +53,17 @@ const counts = (dump: Record<string, any[]>) => Object.fromEntries(Object.entrie
 /* ------------------------------------------------- seed, re-seed and reset */
 
 const { societyId: S } = await t.mutation(seedApi.run, { serviceToken: TOKEN });
-const server = await dumpAll();
+const serverAll = await dumpAll();
+// The finance story below is Riverside's; the corporation demos are checked separately.
+const server = Object.fromEntries(Object.entries(serverAll).map(([table, rows]) => [table, table === "societies" ? rows.filter((row) => row._id === S) : rows.filter((row) => !("societyId" in row) || row.societyId === S)]));
 await t.mutation(seedApi.run, { serviceToken: TOKEN });
 const reseeded = await dumpAll();
-assert.deepEqual(counts(reseeded), counts(server), "re-running the seed replaces the demo instead of duplicating rows");
+assert.deepEqual(counts(reseeded), counts(serverAll), "re-running the seed replaces the demo instead of duplicating rows");
 await t.mutation(seedApi.reset, { serviceToken: TOKEN });
 assert.deepEqual(counts(await dumpAll()), {}, "seed:reset leaves no seeded rows behind");
 
 assert.ok(
-  !JSON.stringify(server).includes("seed-ref:"),
+  !JSON.stringify(serverAll).includes("seed-ref:"),
   "every generated reference was swapped for a real id",
 );
 
@@ -236,8 +246,43 @@ for (const invoice of server.invoices) {
   }
 }
 
+/* ------------------------------------------------- corporation demos */
+
+const corporationRows: Array<{ workspace: string; tables: number; rows: number }> = [];
+for (const key of CORPORATION_DEMO_KEYS) {
+  const local = buildCorporationDemo(key);
+  const serverSociety = serverAll.societies.find((row: any) => row.name === local.society.name);
+  assert.ok(serverSociety, `${key}: the server seed creates ${local.society.name}`);
+  const corpId = serverSociety._id;
+  let rows = 0;
+  for (const [table, localRows] of Object.entries(local.tables)) {
+    const serverRows = (serverAll[table] ?? []).filter((row: any) => row.societyId === corpId);
+    assert.equal(serverRows.length, localRows.length, `${key}: ${table} has as many rows on the server as in the in-browser demo`);
+    rows += serverRows.length;
+  }
+  corporationRows.push({ workspace: local.society.name, tables: Object.keys(local.tables).length, rows });
+  const ownerName = CORPORATION_STORIES[key].people.find((person) => person.user === "Owner")!;
+  const owner = `${ownerName.firstName} ${ownerName.lastName}`;
+  const L = portableCtx(corporationDemoLocalSeed(local), owner);
+  const R = portableCtx(serverAll, owner);
+  assert.equal(R.societyId, corpId, `${key}: the owner signs in to the seeded corporation`);
+  const asOf = local.asOf;
+  const holders = (power: any) => [...power.voting, ...power.nonVoting].map((row: any) => `${row.holderName}:${row.totalShares}:${row.totalVotes}`).sort();
+  assert.deepEqual(holders(await votingPowerFns.votingPowerPortable(R.ctx, { societyId: R.societyId, asOf })), holders(await votingPowerFns.votingPowerPortable(L.ctx, { societyId: L.societyId, asOf })), `${key}: share register holdings match`);
+  const dividendSummary = (rows: any[]) => rows.map((row) => `${row.declaredOn}:${row.shareClass}:${row.totalCents}:${row.status}`).sort();
+  assert.deepEqual(dividendSummary(await dividendFns.listPortable(R.ctx, { societyId: R.societyId })), dividendSummary(await dividendFns.listPortable(L.ctx, { societyId: L.societyId })), `${key}: dividends match`);
+  const resolutionSummary = (rows: any[]) => rows.map((row) => `${row.title}:${row.status}`).sort();
+  const serverResolutions = await resolutionFns.listPortable(R.ctx, { societyId: R.societyId });
+  assert.ok(serverResolutions.every((row: any) => row.status === "Carried"), `${key}: every seeded resolution is a verified Carried record`);
+  assert.deepEqual(resolutionSummary(serverResolutions), resolutionSummary(await resolutionFns.listPortable(L.ctx, { societyId: L.societyId })), `${key}: resolutions match`);
+  assert.equal((await certificateFns.reconcilePortable(R.ctx, { societyId: R.societyId, asOf }) as any).balanced, true, `${key}: certificates reconcile with the ledger`);
+  const deadlineSummary = (rows: any[]) => rows.map((row) => `${String(row.key).replace(/:.*/, "")}:${row.dueDate}:${row.status}`).sort();
+  assert.deepEqual(deadlineSummary(await settingsFns.complianceDeadlinesPortable(R.ctx, { societyId: R.societyId, fromISO: asOf })), deadlineSummary(await settingsFns.complianceDeadlinesPortable(L.ctx, { societyId: L.societyId, fromISO: asOf })), `${key}: derived obligations match`);
+}
+
 /* ------------------------------------------------- report */
 
 console.table(countRows);
 console.table(Object.entries(reconB).map(([period, row]: [string, any]) => ({ period, status: row.status, difference: (row.differenceCents / 100).toFixed(2), static: (reconA[period].differenceCents / 100).toFixed(2), open: row.unclearedCount })));
-console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims and ${server.invoices.length} invoices match the in-browser demo.`);
+console.table(corporationRows);
+console.log(`Seed parity checks passed: ${checkedRefs} references resolve; rules, periods, claims and ${server.invoices.length} invoices match the in-browser demo, and the ${CORPORATION_DEMO_KEYS.length} corporation demos match their in-browser workspaces.`);
