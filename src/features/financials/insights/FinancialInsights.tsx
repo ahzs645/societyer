@@ -13,6 +13,7 @@ import {
 import { todayDateOnly } from "../../../lib/format";
 import { budgetVariance, formatMoney } from "../../../lib/money";
 import type { BudgetKind } from "../lib/budgetKind";
+import { CashFlowSankeyCard } from "./CashFlowSankeyCard";
 import { FinanceRangeBar } from "./FinanceRangeBar";
 import { FinanceRangeStats } from "./FinanceRangeStats";
 import { OperatingReserveTile } from "./OperatingReserveTile";
@@ -108,6 +109,7 @@ export function FinancialInsights({ society }: { society: Society }) {
           <TopFlowsCard grouping="category" txns={data.txns} range={focus} loading={data.loading} />
         </div>
       )}
+      {!notEnough && <CashFlowSankeyCard societyId={society._id} range={focus} />}
       <BudgetVsActualCard rows={data.budgetRows} loading={data.loading} />
     </section>
   );

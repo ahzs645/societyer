@@ -130,5 +130,8 @@
 @use "chart-of-accounts"; // Accounting workbench: chart of accounts tree
 @use "insights-flows"; // Financials overview: top payees / categories, operating reserve
 
+// Sankey chart and the cash-flow card on the Financials overview.
+@use "sankey";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

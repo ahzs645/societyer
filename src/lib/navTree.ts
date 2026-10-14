@@ -4,7 +4,7 @@
  * sidebar's active-parent detection). Pure data — no React — so the palette
  * and page headers can import it without pulling in the shell.
  */
-import { FINANCE_PARENT_ID, NAV_TREE, OPTIONAL_NAV_ROUTES } from "./navConfig";
+import { FINANCE_PARENT_ID, NAV_TREE, OPTIONAL_NAV_ROUTES, type NavArea, type NavAreaChoice } from "./navConfig";
 import { GROUP_TONES, ROUTE_IDENTITY, type IconTone, type LucideIcon } from "./routeIdentity";
 
 export type NavTreeChild = {
@@ -22,6 +22,8 @@ export type NavTreeParentNode = {
   icon: LucideIcon;
   tone: IconTone;
   defaultOpen?: boolean;
+  /** Workspace area (sidebar area switcher); governance unless tagged. */
+  area: NavArea;
   children: NavTreeChild[];
 };
 
@@ -66,6 +68,7 @@ function resolveTree(): NavTreeNode[] {
       icon: entry.icon,
       tone: GROUP_TONES[firstIdentity.group],
       ...(entry.defaultOpen ? { defaultOpen: true } : {}),
+      area: entry.area ?? "governance",
       children,
     });
   }
@@ -130,6 +133,26 @@ export function navParentForPath(pathname: string): NavTreeParentNode | null {
   const route = navRouteForPath(pathname);
   return route ? navParentForRoute(route) : null;
 }
+
+/**
+ * The workspace area a pathname belongs to: the area of the section that owns
+ * it. Top-level pages (the dashboard, the portfolio) and unknown paths belong
+ * to no single area and return null, so they never force an area switch.
+ */
+export function navAreaForPath(pathname: string): NavArea | null {
+  return navParentForPath(pathname)?.area ?? null;
+}
+
+/** Whether a sidebar section (by parent id) or top-level route shows in an area. */
+export function navEntryInArea(entry: { kind: "item" } | { kind: "parent"; id: string }, area: NavAreaChoice): boolean {
+  if (area === "all") return true;
+  if (entry.kind === "item") return area === "governance";
+  return (PARENT_BY_ID.get(entry.id)?.area ?? "governance") === area;
+}
+
+const PARENT_BY_ID = new Map<string, NavTreeParentNode>(
+  RESOLVED_NAV_TREE.filter((node): node is NavTreeParentNode => node.kind === "parent").map((node) => [node.id, node]),
+);
 
 /**
  * Pages below a list route that aren't in the registry but deserve their own

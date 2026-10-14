@@ -94,6 +94,59 @@
   display: none;
 }
 
+/* Workspace area switcher (All · Governance · Finance) under the brand. */
+.sidebar-area {
+  display: flex;
+  gap: 2px;
+  width: calc(#{token('sidebar-w')} - 2 * #{token('s-2')});
+  margin: 0 token('s-2') token('s-2');
+  padding: 2px;
+  flex-shrink: 0;
+  border-radius: token('r-md');
+  background: token('bg-hover-alpha');
+}
+.app-shell.is-mobile .sidebar-area {
+  width: auto;
+}
+.sidebar-area__btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 token('s-1');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  font: inherit;
+  font-size: token('fs-xs');
+  font-weight: 500;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade');
+
+  &:hover {
+    color: token('text-primary');
+  }
+  &.is-active {
+    background: token('bg-panel');
+    color: token('text-primary');
+    box-shadow: token('elevation-1');
+  }
+}
+@media (pointer: coarse) {
+  .sidebar-area__btn {
+    height: 40px;
+  }
+}
+/* Rail: the area button leads the tools, tinted while an area narrows the nav. */
+.sidebar-rail__area.is-finance,
+.sidebar-rail__area.is-governance {
+  color: token('text-primary');
+  background: token('bg-selected-alpha');
+}
+
 /* The nav filter is available on desktop too; keep it compact there. */
 .app-shell:not(.is-mobile) .sidebar__nav-filter {
   height: 30px;

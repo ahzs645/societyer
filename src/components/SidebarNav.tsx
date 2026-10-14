@@ -15,6 +15,11 @@ import {
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight, Monitor, Moon, Sun } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Menu } from "./Menu";
+import { NAV_AREAS, type NavAreaChoice } from "../lib/navConfig";
+import { navEntryInArea } from "../lib/navTree";
+import { SHORTCUTS, type ShortcutId } from "../lib/shortcutsRegistry";
 import { TintedIconTile } from "./ui";
 import { Tooltip } from "./Tooltip";
 import { useThemePreference } from "../hooks/useThemePreference";
@@ -498,5 +503,111 @@ export function SidebarThemeCycleButton() {
         <Icon size={14} />
       </button>
     </Tooltip>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Workspace area switcher (All · Governance · Finance)
+// ---------------------------------------------------------------------------
+
+/**
+ * The tree narrowed to one area. A single remaining section (Finance) is
+ * flattened so its pages read as the area's own top-level list, with the
+ * area home (Financials overview) first.
+ */
+export function filterEntriesForArea(entries: VisibleNavEntry[], area: NavAreaChoice): VisibleNavEntry[] {
+  if (area === "all") return entries;
+  const kept = entries.filter((entry) => navEntryInArea(entry, area));
+  if (kept.length === 1 && kept[0].kind === "parent") {
+    return kept[0].children.map((child) => ({ kind: "item" as const, item: { ...child, treeLabel: undefined } }));
+  }
+  return kept;
+}
+
+type AreaSwitcherProps = {
+  area: NavAreaChoice;
+  labels: Record<NavAreaChoice, string>;
+  onChange: (area: NavAreaChoice) => void;
+};
+
+const AREA_SHORTCUTS: Partial<Record<NavAreaChoice, ShortcutId>> = {
+  all: "areaAll",
+  governance: "areaGovernance",
+  finance: "goFinancials",
+};
+
+/** Segmented radio group at the top of the expanded sidebar and the phone drawer. */
+export function SidebarAreaSwitcher({ area, labels, onChange }: AreaSwitcherProps) {
+  const { t } = useTranslation();
+  const refs = useRef(new Map<NavAreaChoice, HTMLButtonElement>());
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const index = NAV_AREAS.findIndex((entry) => entry.id === area);
+    const next = NAV_AREAS[(index + step + NAV_AREAS.length) % NAV_AREAS.length].id;
+    onChange(next);
+    refs.current.get(next)?.focus();
+  };
+  return (
+    <div className="sidebar-area" role="radiogroup" aria-label={t("navArea.label", "Workspace area")} onKeyDown={onKeyDown}>
+      {NAV_AREAS.map((entry) => {
+        const selected = entry.id === area;
+        const shortcut = AREA_SHORTCUTS[entry.id];
+        const keys = shortcut ? ` (${SHORTCUTS[shortcut].keys.join(" then ")})` : "";
+        return (
+          <button
+            key={entry.id}
+            ref={(node) => {
+              if (node) refs.current.set(entry.id, node);
+              else refs.current.delete(entry.id);
+            }}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
+            className={`sidebar-area__btn${selected ? " is-active" : ""}`}
+            title={`${t(`navArea.${entry.id}Hint`, labels[entry.id])}${keys}`}
+            onClick={() => onChange(entry.id)}
+          >
+            {labels[entry.id]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Rail mode: one button showing the current area's icon, opening a menu of areas. */
+export function SidebarRailAreaButton({ area, labels, onChange }: AreaSwitcherProps) {
+  const { t } = useTranslation();
+  const current = NAV_AREAS.find((entry) => entry.id === area) ?? NAV_AREAS[0];
+  const Icon = current.icon;
+  const label = `${t("navArea.label", "Workspace area")}: ${labels[current.id]}`;
+  return (
+    <Menu
+      minWidth={200}
+      sections={[
+        {
+          id: "areas",
+          label: t("navArea.label", "Workspace area"),
+          items: NAV_AREAS.map((entry) => {
+            const ItemIcon = entry.icon;
+            return {
+              id: entry.id,
+              label: labels[entry.id],
+              icon: <ItemIcon size={14} />,
+              hint: entry.id === area ? t("navArea.current", "current") : undefined,
+              onSelect: () => onChange(entry.id),
+            };
+          }),
+        },
+      ]}
+      trigger={
+        <button type="button" className={`sidebar-rail__tool sidebar-rail__area is-${area}`} aria-label={label} title={label} data-nav-row="">
+          <Icon size={15} />
+        </button>
+      }
+    />
   );
 }

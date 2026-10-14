@@ -5,6 +5,8 @@
 import {
   BookMarked,
   Building2,
+  Landmark,
+  LayoutGrid,
   Calendar,
   FileCheck,
   FolderOpen,
@@ -59,7 +61,32 @@ export type NavTreeConfigEntry =
       children: NavChildConfig[];
       /** Expanded the first time the desktop sidebar renders. */
       defaultOpen?: boolean;
+      /** Workspace area the section belongs to (default: governance). */
+      area?: NavArea;
     };
+
+/**
+ * Workspace areas for the sidebar's area switcher. "Finance" holds the books
+ * (financials, accounting, reconciliation, rules, approvals, invoices,
+ * grants, receipts and so on); "Governance" holds everything else. "All"
+ * shows both and is the default, so nothing is hidden until someone chooses.
+ * The names suit societies and corporations alike.
+ */
+export type NavArea = "governance" | "finance";
+export type NavAreaChoice = NavArea | "all";
+
+export const NAV_AREAS: ReadonlyArray<{
+  id: NavAreaChoice;
+  label: string;
+  i18nKey: string;
+  icon: NavIcon;
+  /** Where the area's home link (and switching to it) goes. */
+  home: string;
+}> = [
+  { id: "all", label: "All", i18nKey: "navArea.all", icon: LayoutGrid, home: "/app" },
+  { id: "governance", label: "Governance", i18nKey: "navArea.governance", icon: Landmark, home: "/app" },
+  { id: "finance", label: "Finance", i18nKey: "navArea.finance", icon: PiggyBank, home: "/app/financials" },
+];
 
 /**
  * Routes that may not exist in every build. The sidebar skips them quietly
@@ -218,6 +245,7 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
     label: "Finance",
     i18nKey: "nav.finance",
     icon: PiggyBank,
+    area: "finance",
     children: [
       { to: "/app/financials", label: "Overview", end: true },
       "/app/treasurer",
