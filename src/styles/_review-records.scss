@@ -182,7 +182,7 @@ details.exports-tables {
 }
 
 .btn-action.is-disabled {
-  opacity: 0.5;
+  opacity: token('opacity-disabled');
   pointer-events: none;
 }
 

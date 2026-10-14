@@ -1,0 +1,66 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Surfaces and motion (Foundations v2).
+//
+//   elevation-1  cards, stat tiles             (@include surface-card)
+//   elevation-2  popovers, menus, dropdowns,   (@include surface-floating)
+//                date pickers, toasts, tooltips,
+//                hover cards, command palette
+//   elevation-3  modals, drawers, bottom sheets (@include surface-dialog)
+//
+// Radii: r-card (12px) for cards, modals, popovers and menus; r-md (8px)
+// for inputs and buttons; r-lg (20px) only for the top corners of phone
+// bottom sheets.
+//
+// Motion: popovers and menus fade + scale 0.98 -> 1 (`appear-pop`), modals
+// rise 8px and fade, scrims fade, toasts slide up. Every entrance is a
+// pure CSS animation: nothing waits for animationend, so the global
+// reduced-motion rule in _foundations.scss can collapse them safely.
+// ============================================================
+
+@keyframes surface-pop {
+  from {
+    opacity: 0;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+// ⓘ background popover (markup from InfoPopover; base styles live with the
+// page header in _layout-workbench.scss). Floating surface like every other
+// popover.
+.info-popover {
+  border: 0;
+  border-radius: token('r-card');
+  box-shadow: token('elevation-2');
+  @include appear-pop(top right);
+}
+
+// Toasts: bottom-right on desktop; on tablet/phone they sit centred above
+// the bottom navigation bar (52px + home indicator).
+@media (max-width: 980px) {
+  .toast-stack {
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + #{token('s-3')});
+    max-width: none;
+    align-items: center;
+  }
+  .toast {
+    width: min(420px, 100%);
+  }
+}
+
+// Phone: page-level cards run full-bleed (see _layout-workbench.scss, which
+// drops their radius and shadow). With the card border now drawn by the
+// elevation ring, restore hairline dividers above and below each section.
+@media (max-width: 560px) {
+  .app-shell.is-mobile .page :is(.card, .stat-grid, .onboarding-compact):not(.card *):not(.card--boxed) {
+    box-shadow: 0 -1px 0 token('border-alpha'), 0 1px 0 token('border-alpha');
+  }
+}

@@ -409,7 +409,7 @@
   font-size: token('fs-sm');
   cursor: pointer;
   strong { color: token('text-primary'); font-weight: 600; }
-  &:hover:not(:disabled) { background: token('bg-hover'); }
+  &:hover:not(:disabled) { background: token('bg-hover-alpha'); }
   &.is-active { border-color: token('accent'); color: token('accent'); strong { color: inherit; } }
   &:disabled { cursor: default; opacity: 0.6; }
 }

@@ -79,7 +79,7 @@
 }
 
 .grant-edit-workbench__links a:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 
@@ -507,11 +507,7 @@
 }
 
 .grant-source-card__eyebrow {
-  color: token('text-tertiary');
-  font-size: token('fs-xxs');
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  @include text-eyebrow;
 }
 
 .grant-source-card__title {
@@ -614,7 +610,7 @@
 
 .segmented-control__item:hover:not(.is-active) {
   color: token('text-primary');
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 .segmented-control__item.is-active {

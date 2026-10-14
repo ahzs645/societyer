@@ -25,7 +25,7 @@
 }
 .switch.is-on { background: token('accent'); }
 .switch.is-on .switch__thumb { transform: translateX(12px); }
-.switch.is-disabled { opacity: 0.5; }
+.switch.is-disabled { opacity: token('opacity-disabled'); }
 .switch--sm { width: 24px; height: 14px; }
 .switch--sm .switch__thumb { width: 10px; height: 10px; }
 .switch--sm.is-on .switch__thumb { transform: translateX(10px); }
@@ -45,7 +45,7 @@
   user-select: none;
   position: relative;
 }
-.radio-row:hover:not(.is-disabled) { background: token('bg-hover'); }
+.radio-row:hover:not(.is-disabled) { background: token('bg-hover-alpha'); }
 .radio-row.is-disabled { cursor: not-allowed; opacity: 0.6; }
 .radio-row__input {
   position: absolute;
@@ -91,7 +91,7 @@
   height: 30px;
   padding: 0 8px;
   border: 1px solid token('border');
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   background: token('bg-base');
   font-size: token('fs-md');
   color: token('text-primary');
@@ -121,12 +121,9 @@
 .color-pop {
   position: fixed;
   z-index: token('z-dropdown');
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-lg');
+  @include surface-floating;
   padding: 8px;
-  animation: menuIn token('motion-move-fast') token('ease-appear');
+  @include appear-pop(top left);
 }
 .color-pop__grid {
   display: grid;
@@ -159,7 +156,7 @@
   flex: 1;
   height: 26px;
   border: 1px solid token('border');
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   padding: 0 8px;
   background: token('bg-base');
   font-family: token('font-mono');
@@ -188,7 +185,7 @@
   height: 24px;
   padding: 0 4px;
   border: 1px solid token('border');
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   background: token('bg-base');
   color: token('text-primary');
   font-family: token('font-mono');
@@ -243,7 +240,7 @@
   transition: background token('motion-fade-fast') token('ease-fade');
   color: inherit;
 }
-.bylaw-history__item:hover { background: token('bg-hover'); }
+.bylaw-history__item:hover { background: token('bg-hover-alpha'); }
 .bylaw-history__item:last-child { border-bottom: none; }
 
 /* ============================================================

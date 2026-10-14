@@ -13,28 +13,37 @@
   border: 0;
 }
 
-/* Twenty-style compact action button */
+/* Compact action button: the dense tier of the button system documented at
+ * the top of _chrome-buttons-cards.scss. Same radius, border, hover wash,
+ * focus ring and disabled treatment as `.btn--sm`, at the same 28px height. */
 .btn-action {
   @include inline-flex-center;
   gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: token('r-sm');
+  height: token('control-h-sm');
+  padding: 0 10px;
+  border-radius: token('r-md');
   font-size: token('fs-sm');
   line-height: 1;
-  font-weight: 500;
+  font-weight: token('fw-medium');
   color: token('text-secondary');
   border: 1px solid token('border');
-  /* A visible surface + hairline shadow so these read as buttons, not
-   * labels — flat transparent chips kept being missed as clickable. */
+  /* A visible surface + border so these read as buttons, not labels —
+   * flat transparent chips kept being missed as clickable. */
   background: token('bg-base');
-  box-shadow: token('shadow-xs');
   white-space: nowrap;
-  transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade');
+  transition:
+    background token('motion-fade-fast') token('ease-fade'),
+    color token('motion-fade-fast') token('ease-fade');
 }
-.btn-action:hover { background: token('bg-hover'); color: token('text-primary'); }
-.btn-action svg { width: 12px; height: 12px; }
-.btn-action--icon { padding: 0; width: 24px; justify-content: center; }
+.btn-action:hover {
+  background-image: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha'));
+  color: token('text-primary');
+}
+.btn-action:active {
+  background-image: linear-gradient(token('bg-active-alpha'), token('bg-active-alpha'));
+}
+.btn-action svg { width: 13px; height: 13px; }
+.btn-action--icon { padding: 0; width: token('control-h-sm'); justify-content: center; }
 .btn-action--primary {
   background: token('bg-base');
   border-color: token('border-strong');
@@ -165,7 +174,7 @@
   transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
 }
 .view-pill:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border-strong');
 }
 .view-pill--static {
@@ -201,7 +210,7 @@
   font-weight: 500;
   transition: background token('motion-fade-fast') token('ease-fade'), color token('motion-fade-fast') token('ease-fade');
 }
-.view-bar__btn:hover { background: token('bg-hover'); color: token('text-primary'); }
+.view-bar__btn:hover { background: token('bg-hover-alpha'); color: token('text-primary'); }
 
 /* Phones: tighten the view bar so the view pill + filter/sort buttons don't
  * eat two tall rows above the table. */

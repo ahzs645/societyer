@@ -124,9 +124,9 @@
   padding: 12px 14px;
   background: token('bg-floating');
   color: token('text-floating');
-  border: 1px solid token('border-floating');
+  border: 0;
   border-radius: token('r-card');
-  box-shadow: token('shadow-md');
+  box-shadow: token('elevation-2');
   font-size: token('fs-sm');
   line-height: 1.45;
   text-align: left;

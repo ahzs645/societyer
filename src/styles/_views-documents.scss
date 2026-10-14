@@ -686,7 +686,7 @@
 }
 button.org-outline__row {
   cursor: pointer;
-  &:hover { background: token('bg-hover'); }
+  &:hover { background: token('bg-hover-alpha'); }
   &.is-selected { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 }
 .org-outline__row--root .org-outline__name { font-weight: 700; }
@@ -744,7 +744,7 @@ button.org-outline__row {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  &:hover { background: token('bg-hover'); }
+  &:hover { background: token('bg-hover-alpha'); }
   &.is-selected { background: color-mix(in srgb, var(--accent) 12%, transparent); }
   & + & { margin-top: 2px; }
 }

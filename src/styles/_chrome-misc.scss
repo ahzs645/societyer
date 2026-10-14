@@ -170,11 +170,9 @@
   min-width: 0;
 }
 .page-header__title {
-  font-size: token('fs-lg');
-  font-weight: token('fw-semibold');
+  @include text-title-main;
   color: token('text-primary');
   margin: 0;
-  letter-spacing: -0.2px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

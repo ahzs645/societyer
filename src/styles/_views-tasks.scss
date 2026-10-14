@@ -59,7 +59,7 @@
 .task-due-button:hover:not(:disabled),
 .task-icon-button[aria-expanded="true"],
 .task-due-button[aria-expanded="true"] {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .task-icon-button:disabled,
@@ -154,7 +154,7 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.task-scope-chip:hover { background: token('bg-hover'); color: token('text-primary'); }
+.task-scope-chip:hover { background: token('bg-hover-alpha'); color: token('text-primary'); }
 .task-scope-chip.is-active {
   border-color: token('accent');
   background: token('accent-soft');
@@ -204,7 +204,7 @@
   cursor: pointer;
   text-align: left;
 }
-.task-group__toggle:hover { background: token('bg-hover'); }
+.task-group__toggle:hover { background: token('bg-hover-alpha'); }
 .task-group__chevron { color: token('text-tertiary'); transition: transform token('motion-move-fast') token('ease-move'); flex-shrink: 0; }
 .task-group__toggle[aria-expanded="true"] .task-group__chevron { transform: rotate(90deg); }
 .task-group__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -227,8 +227,8 @@
   outline: none;
 }
 .task-group__rows > .task-row:first-child { border-top-color: transparent; }
-.task-row:hover { background: token('bg-hover'); }
-.task-row:focus-visible { box-shadow: inset 2px 0 0 token('accent'); background: token('bg-hover'); }
+.task-row:hover { background: token('bg-hover-alpha'); }
+.task-row:focus-visible { box-shadow: inset 2px 0 0 token('accent'); background: token('bg-hover-alpha'); }
 .task-row.is-selected { background: token('accent-soft'); }
 .task-list:not(:has(.task-row__select)) .task-row { grid-template-columns: 24px minmax(200px, 1fr) minmax(0, 200px) 26px 96px 24px 26px; }
 /* A narrow list (inspector open, small laptop) gives the title the room. */
@@ -271,7 +271,7 @@
   cursor: pointer;
   text-align: left;
 }
-.task-quick-add:hover { color: token('text-primary'); background: token('bg-hover'); }
+.task-quick-add:hover { color: token('text-primary'); background: token('bg-hover-alpha'); }
 .task-quick-add--row { height: 36px; padding: 0 12px 0 44px; border-top: 1px solid token('border'); }
 .task-group__rows > .task-quick-add--row:first-child { border-top-color: transparent; }
 .task-quick-add--card { height: 32px; padding: 0 8px; border-radius: token('r-sm'); }
@@ -345,7 +345,7 @@
   color: token('text-secondary');
   cursor: pointer;
 }
-.task-board__col--collapsed:hover { background: token('bg-hover'); }
+.task-board__col--collapsed:hover { background: token('bg-hover-alpha'); }
 .task-board__col-vertical { writing-mode: vertical-rl; font-weight: 600; font-size: token('fs-md'); }
 
 .task-card { padding: 10px 10px 8px; @include flex-column; gap: 6px; }
@@ -372,9 +372,9 @@
   @include flex-center;
   gap: 2px;
   padding: 2px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   background: token('bg-panel');
-  box-shadow: token('shadow-sm');
+  box-shadow: token('elevation-2');
   opacity: 0;
   pointer-events: none;
   transition: opacity token('motion-fade-fast') token('ease-fade');
@@ -427,7 +427,7 @@
   padding: 0 4px;
   border-radius: token('r-sm');
 }
-.task-checklist__item:hover { background: token('bg-hover'); }
+.task-checklist__item:hover { background: token('bg-hover-alpha'); }
 .task-checklist__item input[type="checkbox"] { margin: 0; flex-shrink: 0; cursor: pointer; }
 .task-checklist__text {
   flex: 1;

@@ -7,10 +7,7 @@
   gap: 10px;
   margin: 0 0 token('s-4');
   padding: token('s-3') 14px;
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  background: token('bg-panel');
-  box-shadow: token('shadow-xs');
+  @include surface-card;
   color: token('text-secondary');
   font-size: token('fs-sm');
   line-height: 1.45;

@@ -28,7 +28,7 @@
   border-radius: token('r-sm');
   color: token('text-tertiary');
 }
-.banner__dismiss:hover { background: token('bg-hover'); color: token('text-secondary'); }
+.banner__dismiss:hover { background: token('bg-hover-alpha'); color: token('text-secondary'); }
 .banner__dismiss svg { width: 14px; height: 14px; }
 .banner--info    { border-color: color-mix(in oklab, token('info') 40%, token('border'));    background: color-mix(in oklab, token('info') 8%, token('bg-panel')); }
 .banner--info    .banner__icon { color: token('info'); }
@@ -156,11 +156,7 @@
   min-width: 0;
 }
 .record-layout__section-title {
-  font-size: token('fs-xs');
-  font-weight: token('fw-semibold');
-  color: token('text-secondary');
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  @include text-eyebrow;
 }
 .record-layout__items {
   @include flex-column;

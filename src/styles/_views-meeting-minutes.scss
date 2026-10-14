@@ -353,10 +353,7 @@
   padding-inline-end: 0;
   max-height: 240px;
   overflow-y: auto;
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-sm');
-  box-shadow: token('shadow-md');
+  @include surface-floating;
 }
 .name-autocomplete__option {
   display: flex;
@@ -379,7 +376,7 @@
   flex-shrink: 0;
 }
 .name-autocomplete__option.is-highlighted {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 .name-autocomplete__option.has-remove {
   @include flex-center;
@@ -422,7 +419,7 @@
   }
 }
 .name-autocomplete__remove:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .meeting-reminder-chip {

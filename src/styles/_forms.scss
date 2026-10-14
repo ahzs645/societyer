@@ -8,6 +8,7 @@
   background: token('bg-overlay-scrim-dense');
   z-index: token('z-drawer-backdrop');
   animation: fade token('motion-fade') token('ease-fade');
+  backdrop-filter: blur(2px);
 }
 .drawer {
   position: fixed;
@@ -17,11 +18,11 @@
   width: min(token('side-panel-w'), 100vw);
   max-width: 100vw;
   background: token('bg-panel');
-  border-left: 1px solid token('border');
-  box-shadow: token('shadow-lg');
+  border-left: 0;
+  box-shadow: token('elevation-3');
   z-index: token('z-drawer');
   @include flex-column;
-  animation: slide token('motion-move') token('ease-move');
+  animation: slide token('motion-panel') token('ease-panel');
 }
 .drawer--wide {
   width: min(980px, calc(100vw - 32px));
@@ -36,8 +37,7 @@
   min-height: token('topbar-h');
 }
 .drawer__title {
-  font-size: token('fs-lg');
-  font-weight: 600;
+  @include text-title-section;
   margin: 0;
 }
 .drawer__body {
@@ -280,7 +280,7 @@
   height: 32px;
   padding: 0 10px;
   border: 1px solid token('border');
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   background: token('bg-base');
   color: token('text-primary');
   font-size: token('fs-sm');
@@ -379,7 +379,7 @@ select.editable-cell__input:hover:not(:disabled) {
   pointer-events: auto;
 }
 .field__lock--icon:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .field__lock--icon:focus-visible {
@@ -399,7 +399,7 @@ select.editable-cell__input:hover:not(:disabled) {
   border: 1px solid transparent;
 }
 .field__unlock-btn:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .textarea {
@@ -456,16 +456,16 @@ select.editable-cell__input:hover:not(:disabled) {
   position: fixed;
   inset: 0;
   background: token('bg-overlay-scrim-dense');
+  backdrop-filter: blur(6px);
+  animation: fade token('motion-fade') token('ease-fade');
   z-index: token('z-command-palette');
   display: grid;
   place-items: flex-start center;
   padding: max(18px, env(safe-area-inset-top)) 16px 16px;
 }
 .kbar {
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-lg');
-  box-shadow: token('shadow-lg');
+  @include surface-floating;
+  @include appear-pop(top center);
   width: min(560px, 100%);
   max-width: 100%;
   overflow: hidden;
@@ -488,17 +488,13 @@ select.editable-cell__input:hover:not(:disabled) {
 }
 .kbar__group-label {
   padding: 8px 10px 4px;
-  font-size: token('fs-xxs');
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: token('text-tertiary');
+  @include text-eyebrow;
 }
 .kbar__item {
   @include flex-center;
   gap: token('s-2');
   padding: 8px 10px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   cursor: pointer;
   font-size: token('fs-md');
   width: 100%;
@@ -507,7 +503,7 @@ select.editable-cell__input:hover:not(:disabled) {
   color: inherit;
   text-align: left;
 }
-.kbar__item.is-active { background: token('bg-hover'); }
+.kbar__item.is-active { background: token('bg-hover-alpha'); }
 /* Row wraps the command button + its inline pin toggle so the pin is a real
  * sibling (not a nested <button>) anchored to the right edge. */
 .kbar__row { position: relative; }
@@ -686,7 +682,7 @@ select.editable-cell__input:hover:not(:disabled) {
   z-index: 1;
 }
 .notif-clear:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 .notif-clear--secondary { right: 28px; }
@@ -751,20 +747,16 @@ select.editable-cell__input:hover:not(:disabled) {
   position: fixed;
   z-index: token('z-dropdown');
   overflow: auto;
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  box-shadow: token('shadow-lg');
+  @include surface-floating;
   color: token('text-primary');
-  animation: menuIn token('motion-move-fast') token('ease-appear');
+  @include appear-pop(top right);
 }
 .notif-panel--sheet {
   inset: auto 0 0;
   max-height: 80dvh;
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  border-width: 1px 0 0;
   border-radius: token('r-lg') token('r-lg') 0 0;
-  box-shadow: token('shadow-strong');
+  box-shadow: token('elevation-3');
   overscroll-behavior-y: contain;
   animation: sheetIn token('motion-panel') cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -804,7 +796,7 @@ select.editable-cell__input:hover:not(:disabled) {
   @include inline-flex-center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: token('r-sm');
+  border-radius: token('r-md');
   background: token('bg-subtle');
   font-size: token('fs-sm');
   cursor: pointer;

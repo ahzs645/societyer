@@ -1,14 +1,15 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
+/* Stat tile. Rendered by <StatTile> (components/StatTile.tsx); a few pages
+ * still hand-roll the same markup. Interactive/trend extras live in
+ * _stat-tile.scss. */
 .stat {
   position: relative;
-  background: token('bg-panel');
-  border: 1px solid token('border');
-  border-radius: token('r-md');
-  padding: token('s-3');
+  @include surface-card;
+  padding: token('s-3') token('s-4');
   @include flex-column;
-  gap: 2px;
+  gap: token('s-1');
   min-width: 0;
 }
 .stat--has-tooltip .stat__label {
@@ -32,29 +33,30 @@
 }
 .stat__info:hover,
 .stat__info:focus-visible {
-  background: token('bg-transparent-light');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
-.stat__info:focus-visible {
-  outline: 2px solid token('accent');
-  outline-offset: 1px;
-}
 .stat__label {
-  font-size: token('fs-xs');
-  color: token('text-tertiary');
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 500;
+  @include text-eyebrow;
   display: flex;
   gap: 6px;
   align-items: center;
+  min-width: 0;
+}
+.stat__label svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 .stat__value {
   font-size: token('fs-xl');
-  font-weight: 700;
-  letter-spacing: 0;
+  font-weight: token('fw-semibold');
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: 1.2;
+  color: token('text-primary');
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* RollingNumber — odometer digits. The real digit stays in the DOM with a
  * transparent fill; ::before draws a 0–9 strip and slides it to --digit. */
@@ -90,11 +92,16 @@
 }
 .stat__sub {
   font-size: token('fs-xs');
-  color: token('text-secondary');
+  line-height: 1.25rem;
+  color: token('text-tertiary');
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* Status accents: color the value/sub only — the tile itself stays quiet. */
 .stat--danger .stat__value { color: token('danger'); }
 .stat--ok .stat__value { color: token('success'); }
+.stat--warn .stat__value { color: token('warn'); }
+.stat--info .stat__value { color: token('info'); }
 .stat__sub--warn { color: token('warn'); }
 .stat__sub--info { color: token('info'); }
 
@@ -107,14 +114,13 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0;
     margin-bottom: token('s-3');
-    border: 1px solid token('border');
-    border-radius: token('r-md');
-    background: token('bg-panel');
+    @include surface-card;
     overflow: hidden;
   }
   .stat {
     border: 0;
     border-radius: 0;
+    box-shadow: none;
     background: transparent;
     padding: 6px token('s-3');
     /* Hairline dividers between cells — right and bottom, suppressed at the

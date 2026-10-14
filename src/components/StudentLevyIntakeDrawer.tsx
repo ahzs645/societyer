@@ -402,7 +402,7 @@ export function StudentLevyIntakeDrawer({
           />
         </Field>
 
-        <div className="card" style={{ border: "1px solid var(--border)" }}>
+        <div className="card">
           <div className="card__head">
             <h3 className="card__title">Fee periods</h3>
             <button

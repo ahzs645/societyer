@@ -363,10 +363,7 @@
   max-height: 220px;
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid token('border');
-  border-radius: token('r-sm');
-  background: token('bg-panel');
-  box-shadow: token('shadow-md');
+  @include surface-floating;
   z-index: 3;
 }
 

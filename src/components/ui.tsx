@@ -211,11 +211,13 @@ export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
 });
 
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "ghost" | "danger" | "accent";
-export type ButtonSize = "sm" | "md";
+export type ButtonSize = "sm" | "md" | "lg";
 
 /** Variant-driven button that renders the existing .btn CSS classes.
  * Unlike bare <button className="btn">, this enforces the variant/size prop
- * set, and centralises icon sizing + disabled behaviour. */
+ * set, and centralises icon sizing + disabled behaviour. This is the
+ * canonical button: sizes sm/md/lg are 28/32/40px (see the button system
+ * notes at the top of styles/_chrome-buttons-cards.scss). */
 export function Button({
   variant = "secondary",
   size = "md",
@@ -238,6 +240,7 @@ export function Button({
   if (variant === "ghost" || variant === "tertiary") classes.push("btn--ghost");
   if (variant === "danger") classes.push("btn--danger");
   if (size === "sm") classes.push("btn--sm");
+  if (size === "lg") classes.push("btn--lg");
   if (iconOnly) classes.push("btn--icon");
   if (className) classes.push(className);
   return (

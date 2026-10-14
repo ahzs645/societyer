@@ -1,3 +1,5 @@
+@use "tokens" as *;
+
 // ============================================================
 // Reusable mixins for the patterns that recur across the styles.
 //
@@ -37,4 +39,111 @@
 @mixin flex-column {
   display: flex;
   flex-direction: column;
+}
+
+// ============================================================
+// Named text styles (Foundations v2). Use these instead of ad-hoc
+// font-size / line-height / weight combinations:
+//   text-title-main     page titles            24/32 semibold
+//   text-title-section  card + section titles  18/26 semibold
+//   text-body           default body copy      15/24
+//   text-body-secondary dense body, cells      14/20
+//   text-label          labels, table headers  13/20 medium
+//   text-eyebrow        stat labels, overlines 11/16 uppercase +0.06em
+//   text-tiny           meta lines, captions   12/16
+// Colour is left to the caller except where it is part of the style
+// (the eyebrow is tertiary).
+// ============================================================
+@mixin text-title-main {
+  font-size: token('fs-xl');
+  line-height: 2rem;
+  font-weight: token('fw-semibold');
+  letter-spacing: -0.01em;
+}
+
+@mixin text-title-section {
+  font-size: token('fs-lg');
+  line-height: 1.625rem;
+  font-weight: token('fw-semibold');
+  letter-spacing: -0.005em;
+}
+
+@mixin text-body {
+  font-size: token('fs-md');
+  line-height: 1.5rem;
+  font-weight: token('fw-regular');
+}
+
+@mixin text-body-secondary {
+  font-size: token('fs-sm');
+  line-height: 1.25rem;
+  font-weight: token('fw-regular');
+}
+
+@mixin text-label {
+  font-size: token('fs-xs');
+  line-height: 1.25rem;
+  font-weight: token('fw-medium');
+}
+
+@mixin text-eyebrow {
+  font-size: token('fs-xxs');
+  line-height: 1rem;
+  font-weight: token('fw-medium');
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: token('text-tertiary');
+}
+
+@mixin text-tiny {
+  font-size: token('fs-tiny');
+  line-height: 1rem;
+  font-weight: token('fw-regular');
+}
+
+// ============================================================
+// Surfaces (Foundations v2): elevation + radius in one place.
+//   surface-card     cards, stat tiles          elevation-1, r-card
+//   surface-floating popovers, menus, toasts    elevation-2, r-card
+//   surface-dialog   modals, drawers            elevation-3, r-card
+// The elevation tokens include the 1px hairline ring (in dark mode cards
+// get only that ring), so the surface drops its own border.
+// ============================================================
+@mixin surface($level: 1, $radius: 'r-card') {
+  background: token('bg-panel');
+  border: 0;
+  border-radius: token($radius);
+  box-shadow: token('elevation-#{$level}');
+}
+
+@mixin surface-card {
+  @include surface(1);
+}
+
+@mixin surface-floating {
+  @include surface(2);
+}
+
+@mixin surface-dialog {
+  @include surface(3);
+}
+
+// Popover/menu entrance: fade + scale 0.98 -> 1. Animates the individual
+// `scale` property so it composes with any positioning `transform`. The
+// keyframes live in _surfaces.scss. Nothing may depend on animationend:
+// reduced motion collapses the animation to a single frame.
+@mixin appear-pop($origin: top center) {
+  transform-origin: $origin;
+  animation: surface-pop token('motion-fade') token('ease-appear');
+}
+
+// Hover/press wash that reads the same on any surface (canvas, card,
+// modal, menu): translucent instead of an opaque slate step.
+@mixin hover-wash {
+  &:hover:not(:disabled):not([aria-disabled="true"]):not(.is-disabled) {
+    background: token('bg-hover-alpha');
+  }
+  &:active:not(:disabled):not([aria-disabled="true"]):not(.is-disabled) {
+    background: token('bg-active-alpha');
+  }
 }

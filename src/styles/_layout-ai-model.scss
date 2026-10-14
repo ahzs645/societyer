@@ -48,7 +48,7 @@
 }
 
 .global-ai-model__btn:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border');
   color: token('text-primary');
 }
@@ -87,10 +87,8 @@
   max-height: 260px;
   overflow: auto;
   padding: 4px;
-  border: 1px solid token('border');
-  border-radius: token('r-sm');
-  background: token('bg-panel');
-  box-shadow: token('shadow-md');
+  @include surface-floating;
+  @include appear-pop(bottom left);
 }
 
 .global-ai-model__item {
@@ -105,7 +103,7 @@
   cursor: pointer;
 }
 
-.global-ai-model__item:hover { background: token('bg-hover'); }
+.global-ai-model__item:hover { background: token('bg-hover-alpha'); }
 
 .global-ai-model__item.is-selected {
   background: token('accent-soft');
@@ -142,7 +140,7 @@
 }
 
 .global-ai-icon-btn:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   border-color: token('border');
   color: token('text-primary');
 }
@@ -194,7 +192,7 @@
 }
 
 .global-ai-file-chip__remove:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
   color: token('text-primary');
 }
 
@@ -286,7 +284,7 @@
 }
 
 .global-ai-error__actions button:hover {
-  background: token('bg-hover');
+  background: token('bg-hover-alpha');
 }
 
 .global-ai-error__dismiss {
