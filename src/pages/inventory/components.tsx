@@ -36,25 +36,23 @@ export function ItemThumb({ item }: { item: any }) {
   return <img src={item.imageUrl} alt="" style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />;
 }
 
+/** One-line receipt evidence for a table cell: the first receipt and a count of the rest. */
 export function ReceiptEvidence({ links, receiptDocumentId }: { links: any[]; receiptDocumentId?: string }) {
   if (links.length === 0) {
     return receiptDocumentId ? <span className="mono">{receiptDocumentId}</span> : <span className="muted">-</span>;
   }
+  const [first] = links;
+  const title = links.map((link) => link.receiptDocument?.title ?? link.receiptDocumentId).join(", ");
   return (
-    <div className="stack stack--xs">
-      {links.slice(0, 2).map((link) => (
-        <div key={link._id} className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-          <FileText size={12} />
-          {link.receiptDocument ? (
-            <Link to={`/app/documents/${link.receiptDocument._id}`}>{link.receiptDocument.title}</Link>
-          ) : (
-            <span className="mono">{link.receiptDocumentId}</span>
-          )}
-          {link.receiptLineLabel && <span className="muted">· {link.receiptLineLabel}</span>}
-        </div>
-      ))}
-      {links.length > 2 && <div className="muted">+{links.length - 2} more</div>}
-    </div>
+    <span className="row" style={{ gap: 6, flexWrap: "nowrap", minWidth: 0 }} title={title}>
+      <FileText size={12} aria-hidden style={{ flex: "none" }} />
+      {first.receiptDocument ? (
+        <Link className="record-cell__text" to={`/app/documents/${first.receiptDocument._id}`}>{first.receiptDocument.title}</Link>
+      ) : (
+        <span className="mono record-cell__text">{first.receiptDocumentId}</span>
+      )}
+      {links.length > 1 && <span className="muted" style={{ flex: "none" }}>+{links.length - 1}</span>}
+    </span>
   );
 }
 

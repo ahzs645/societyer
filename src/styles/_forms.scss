@@ -297,9 +297,7 @@
   transition: border-color token('motion-fade-fast') token('ease-fade'), box-shadow token('motion-fade-fast') token('ease-fade');
 }
 select.input,
-select.select,
-.table-pagination__size select,
-select.editable-cell__input {
+select.select {
   appearance: none;
   background-image:
     linear-gradient(45deg, transparent 50%, token('text-tertiary') 50%),
@@ -314,9 +312,7 @@ select.editable-cell__input {
   padding-right: 30px;
 }
 select.input:hover:not(:disabled),
-select.select:hover:not(:disabled),
-.table-pagination__size select:hover:not(:disabled),
-select.editable-cell__input:hover:not(:disabled) {
+select.select:hover:not(:disabled) {
   border-color: token('border-strong');
 }
 .input:focus,

@@ -49,7 +49,6 @@ for (const action of [
   () => b.mutation(api.views.removeField, { id: rows.fieldId }),
   () => b.mutation(api.views.reorderFields, { viewId: rows.privateId, orderedIds: [rows.fieldId] }),
   () => b.mutation(api.views.addField, { societyId: rows.societyId, viewId: rows.privateId, fieldMetadataId: rows.fieldMetadataId }),
-  () => b.mutation(api.views.deleteSharedDataTableView, { societyId: rows.societyId, id: rows.privateId }),
 ]) await assert.rejects(action, /views not found/);
 assert.equal((await a.query(api.views.get, { id: rows.privateId })).visibility, "personal");
 assert.equal((await a.query(api.views.listFieldsForView, { viewId: rows.privateId }))[0].size, 180);

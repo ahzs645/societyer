@@ -1,11 +1,10 @@
 // Single source of truth for how a data table restructures itself on a phone.
-// Both DataTable (src/components) and RecordTable (src/modules) render the
-// same Twenty-style narrow-screen treatment: drop the leading structural
-// columns (selection checkbox, drag handle) so the primary/name column sits
-// flush left, then freeze that first column while the rest scroll sideways.
-// Keeping the decision here — instead of inline booleans duplicated across the
-// two components — means the behavior can drift only in one place, and can be
-// unit-tested without a browser.
+// RecordTable (src/platform/record-engine) renders the Twenty-style
+// narrow-screen treatment: drop the leading structural columns (selection
+// checkbox, drag handle) so the primary/name column sits flush left, then
+// freeze that first column while the rest scroll sideways. Keeping the
+// decision here — instead of inline booleans in the component — means the
+// behavior can be unit-tested without a browser.
 
 export type MobileTableLayoutInput = {
   // True when the viewport is narrow enough for the phone treatment. Callers

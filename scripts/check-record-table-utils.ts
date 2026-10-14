@@ -4,6 +4,8 @@ import type { FieldMetadata, RecordField } from "../src/platform/record-engine/t
 import { aggregateRecordValues, getAvailableAggregateOperationsForFieldType } from "../src/platform/record-engine/record-table/utils/aggregateOperations";
 import { filterAndSortRecords } from "../src/platform/record-engine/record-table/utils/filterAndSortRecords";
 import { deserializeViewFiltersFromUrl, serializeViewFiltersToUrl } from "../src/platform/record-engine/record-table/utils/viewFilterGroups";
+import { adaptLegacyDataTableView } from "../src/platform/record-engine/record-table/utils/legacyDataTableView";
+import { hydrateHydratedView } from "../src/platform/record-engine/types";
 
 function field(id: string, name: string, fieldType: FieldType): RecordField {
   const metadata: FieldMetadata = {
@@ -117,5 +119,39 @@ assert.equal(
   }),
   "1 empty",
 );
+
+// A shared view saved by the retired DataTable (column-id filters, a
+// { columnId, dir } sort, column state JSON and no view columns) opens as the
+// RecordTable equivalent instead of an unfiltered, columnless view.
+{
+  const legacyFields = [field("f-title", "title", FIELD_TYPES.TEXT), field("f-status", "status", FIELD_TYPES.SELECT), field("f-due", "dueDate", FIELD_TYPES.DATE)].map((column) => column.field);
+  const legacyRaw = {
+    view: {
+      _id: "legacy",
+      objectMetadataId: "object",
+      name: "Open AGM tasks",
+      filtersJson: JSON.stringify([
+        { fieldId: "status", operator: "is_not", value: "Done" },
+        { fieldId: "__any__", operator: "contains", value: "AGM" },
+        { fieldId: "missing", operator: "is", value: "x" },
+      ]),
+      sortsJson: JSON.stringify([{ columnId: "dueDate", dir: "asc" }]),
+      isShared: true,
+    },
+    columns: [],
+  };
+  const adapted = adaptLegacyDataTableView(
+    hydrateHydratedView(legacyRaw),
+    legacyFields,
+    JSON.stringify({ hiddenColumns: ["status"], columnWidths: { title: 320 }, columnOrder: ["dueDate"] }),
+  )!;
+  assert.deepEqual(adapted.view.filters, [{ fieldMetadataId: "f-status", operator: "neq", value: "Done" }], "legacy filters map to fields and RecordTable operators; unknown columns drop");
+  assert.equal(adapted.view.searchTerm, "AGM", "any-field text becomes the view search");
+  assert.deepEqual(adapted.view.sorts, [{ fieldMetadataId: "f-due", direction: "asc" }], "legacy sort maps to its field");
+  assert.deepEqual(adapted.columns.map((column) => [column.field.name, column.isVisible, column.size]), [["dueDate", true, 160], ["title", true, 320], ["status", false, 160]], "column state gives order, widths and hidden columns");
+  assert.ok(adapted.columns.every((column) => column.viewFieldId.startsWith("virtual:")), "synthesized columns persist only when the view is saved");
+  const modern = hydrateHydratedView({ view: { ...legacyRaw.view, filtersJson: JSON.stringify([{ fieldMetadataId: "f-status", operator: "eq", value: "Open" }]), sortsJson: undefined }, columns: [{ viewField: { _id: "vf", fieldMetadataId: "f-title" }, field: legacyFields[0] }] });
+  assert.equal(adaptLegacyDataTableView(modern, legacyFields, "{}"), modern, "RecordTable views pass through untouched");
+}
 
 console.log("record table utility checks passed");

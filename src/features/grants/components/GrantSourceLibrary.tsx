@@ -6,9 +6,7 @@ import { Menu } from "../../../components/Menu";
 import { useMutation } from "convex/react";
 import { ExternalLink, FileText, Globe2, LayoutGrid, MoreHorizontal, Plus, Table2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { DataTable } from "../../../components/DataTable";
-import type { Column } from "../../../components/DataTable";
-import type { FilterField } from "../../../components/FilterBar";
+import { ObjectRecordTable } from "@/platform/record-engine";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
@@ -26,6 +24,7 @@ export function GrantSourceLibrarySection({
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("grants:write");
   const toast = useToast();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [sourceDraft, setSourceDraft] = useState<any | null>(null);
   const addGrantSourceFromLibrary = useMutation(api.grantSources.addFromLibrary);
@@ -48,110 +47,21 @@ export function GrantSourceLibrarySection({
     [sourceLibrary],
   );
 
-  const sourceTypeOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.sourceType))), [sourceRows]);
-  const statusOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.installed ? "installed" : row.status))), [sourceRows]);
-  const trustOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.trustLevel))), [sourceRows]);
-  const cadenceOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.scrapeCadence))), [sourceRows]);
-  const funderOptions = useMemo(() => uniqueOptions(sourceRows.map((row: any) => formatSourceLabel(row.funderType))), [sourceRows]);
-
-  const sourceFilterFields = useMemo<FilterField<any>[]>(() => [
-    {
-      id: "status",
-      label: "Status",
-      options: statusOptions,
-      match: (row, query) => formatSourceLabel(normalizeSourceStatus(row)).toLowerCase() === query.toLowerCase(),
-    },
-    {
-      id: "sourceType",
-      label: "Source type",
-      options: sourceTypeOptions,
-      match: (row, query) => formatSourceLabel(row.sourceType).toLowerCase() === query.toLowerCase(),
-    },
-    {
-      id: "trustLevel",
-      label: "Trust level",
-      options: trustOptions,
-      match: (row, query) => formatSourceLabel(row.trustLevel).toLowerCase() === query.toLowerCase(),
-    },
-    {
-      id: "cadence",
-      label: "Cadence",
-      options: cadenceOptions,
-      match: (row, query) => formatSourceLabel(row.scrapeCadence).toLowerCase() === query.toLowerCase(),
-    },
-    {
-      id: "funderType",
-      label: "Funder type",
-      options: funderOptions,
-      match: (row, query) => formatSourceLabel(row.funderType).toLowerCase() === query.toLowerCase(),
-    },
-    {
-      id: "jurisdiction",
-      label: "Jurisdiction",
-      match: (row, query) => String(row.jurisdiction ?? "").toLowerCase().includes(query.toLowerCase()),
-    },
-    {
-      id: "tags",
-      label: "Tags",
-      match: (row, query) => getSourceTags(row).some((tag) => tag.toLowerCase().includes(query.toLowerCase())),
-    },
-  ], [cadenceOptions, funderOptions, sourceTypeOptions, statusOptions, trustOptions]);
-
-  const sourceColumns = useMemo<Column<any>[]>(() => [
-    {
-      id: "name",
-      header: "Source",
-      accessor: (row) => row.name,
-      sortable: true,
-      width: 260,
-      render: (row) => (
-        <div className="grant-source-table-source">
-          <strong>{row.name}</strong>
-          <span>
-            {row.rowKind === "library" ? "Societyer library" : "Workspace source"} · {formatSourceLabel(row.sourceType)}
-          </span>
-        </div>
-      ),
-    },
-    {
-      id: "status",
-      header: "Status",
-      accessor: (row) => normalizeSourceStatus(row),
-      sortable: true,
-      render: (row) => (
-        <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
-          {row.installed ? "Installed" : formatSourceLabel(row.status)}
-        </Badge>
-      ),
-    },
-    {
-      id: "scope",
-      header: "Scope",
-      accessor: (row) => `${row.jurisdiction ?? ""} ${row.funderType ?? ""}`,
-      sortable: true,
-      width: 320,
-      render: (row) => (
-        <div className="grant-source-table-source">
-          <strong>{row.jurisdiction ?? "No jurisdiction"}</strong>
-          <span>{formatSourceLabel(row.funderType ?? "unknown funder")}</span>
-        </div>
-      ),
-    },
-    {
-      id: "cadence",
-      header: "Cadence",
-      accessor: (row) => row.scrapeCadence ?? "",
-      sortable: true,
-      render: (row) => formatSourceLabel(row.scrapeCadence ?? "manual"),
-    },
-    {
-      id: "tags",
-      header: "Tags",
-      accessor: (row) => getSourceTags(row).join(" "),
-      render: (row) => <SourceTagList tags={getSourceTags(row)} limit={3} />,
-      width: 220,
-    },
-  ], []);
+  // Flat records for the metadata-driven table: the composite cells (source +
+  // origin, jurisdiction + funder) keep their look through renderCell while
+  // sorting, filters, group-by, export and the sidebar read plain values.
+  const sourceRecords = useMemo(
+    () =>
+      sourceRows.map((row: any) => ({
+        ...row,
+        _id: sourceRowKey(row),
+        status: normalizeSourceStatus(row),
+        scope: [row.jurisdiction, row.funderType ? formatSourceLabel(row.funderType) : ""].filter(Boolean).join(" · "),
+        tags: getSourceTags(row),
+        _searchText: [row.notes, getSourceTags(row).join(" ")].filter(Boolean).join(" "),
+      })),
+    [sourceRows],
+  );
 
   const sourceActions = (row: any) => (
     <SourceActions
@@ -213,29 +123,53 @@ export function GrantSourceLibrarySection({
           </div>
         </div>
         {viewMode === "table" ? (
-          <DataTable
+          <ObjectRecordTable
+            societyId={societyId}
+            nameSingular="grantSource"
             label="Source library"
+            objectLabel="grant source"
             icon={<Globe2 size={14} />}
-            data={sourceLibrary === undefined ? [] : sourceRows}
+            records={sourceLibrary === undefined ? [] : sourceRecords}
             loading={sourceLibrary === undefined}
-            columns={sourceColumns}
-            filterFields={sourceFilterFields}
-            rowKey={(row) => `${row.rowKind}:${row.libraryKey ?? row._id ?? row.url}`}
-            searchPlaceholder="Search sources, jurisdictions, funders, or tags..."
-            searchExtraFields={[
-              (row) => row.notes,
-              (row) => getSourceTags(row).join(" "),
-            ]}
-            defaultSort={{ columnId: "name", dir: "asc" }}
-            pagination
-            initialPageSize={25}
-            viewsKey="grant-source-library"
+            onRecordClick={(_id, row) => {
+              if (row.libraryKey) navigate(`/app/grants/sources/${row.libraryKey}`);
+              else if (row.url) window.open(row.url, "_blank", "noopener,noreferrer");
+            }}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "name") return (
+                <span className="grant-source-table-source">
+                  <strong>{row.name}</strong>
+                  <span>
+                    {row.rowKind === "library" ? "Societyer library" : "Workspace source"} · {formatSourceLabel(row.sourceType)}
+                  </span>
+                </span>
+              );
+              if (field.name === "status") return (
+                <Badge tone={row.installed ? "success" : row.status === "active" ? "info" : "warn"}>
+                  {row.installed ? "Installed" : formatSourceLabel(row.status)}
+                </Badge>
+              );
+              if (field.name === "scope") return (
+                <div className="grant-source-table-source">
+                  <strong>{row.jurisdiction ?? "No jurisdiction"}</strong>
+                  <span>{formatSourceLabel(row.funderType ?? "unknown funder")}</span>
+                </div>
+              );
+              if (field.name === "scrapeCadence") return formatSourceLabel(row.scrapeCadence ?? "manual");
+              if (field.name === "tags") return row.tags.length ? (
+                <span className="record-cell__text" title={row.tags.map(formatTagLabel).join(", ")}>
+                  {row.tags.slice(0, 2).map(formatTagLabel).join(", ")}
+                  {row.tags.length > 2 && <span className="muted"> +{row.tags.length - 2}</span>}
+                </span>
+              ) : <span className="muted">No tags</span>;
+              return undefined;
+            }}
             renderRowActions={sourceActions}
           />
         ) : (
           <div className="grid-auto grid-auto--lg">
             {(sourceLibrary === undefined ? [] : sourceRows).map((row: any) => (
-              <GrantSourceCard key={`${row.rowKind}:${row.libraryKey ?? row._id ?? row.url}`} row={row} actions={sourceActions(row)} />
+              <GrantSourceCard key={sourceRowKey(row)} row={row} actions={sourceActions(row)} />
             ))}
             {sourceLibrary === undefined && (
               <article className="card">
@@ -502,6 +436,10 @@ function getSourceTags(row: any): string[] {
   return result;
 }
 
+function sourceRowKey(row: any): string {
+  return `${row.rowKind}:${row.libraryKey ?? row._id ?? row.url}`;
+}
+
 function normalizeSourceStatus(row: any): string {
   return row.installed ? "installed" : String(row.status ?? "unknown");
 }
@@ -517,10 +455,4 @@ function formatSourceLabel(value: unknown): string {
 
 function formatTagLabel(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function uniqueOptions(values: unknown[]): string[] {
-  return Array.from(
-    new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)),
-  ).sort((a, b) => a.localeCompare(b));
 }

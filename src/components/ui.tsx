@@ -487,7 +487,7 @@ export function Skeleton({
   return <span className={classes.join(" ")} style={merged} aria-hidden="true" />;
 }
 
-/** N stacked skeleton rows — handy for DataTable loading states. */
+/** N stacked skeleton rows — handy for table loading states. */
 export function SkeletonRows({ rows = 6, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="skeleton-stack" aria-busy="true" aria-label="Loading">

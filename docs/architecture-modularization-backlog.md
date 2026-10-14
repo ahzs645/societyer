@@ -61,8 +61,9 @@ Scoped follow-ups identified during the audit. Items already addressed are noted
   `npx convex codegen` before relying on the generated API.
 
 ### Consistency / type-safety
-- [ ] Converge the fragmented table strategy (20 metadata-layer / 20 `<DataTable>` / 22 raw
-  `<table>` pages) onto one canonical approach.
+- [ ] Converge the fragmented table strategy onto one canonical approach. The legacy
+  `<DataTable>` is gone (every register is metadata-driven through RecordTable /
+  ObjectRecordTable); raw `<table>` pages remain.
 - [ ] Decide i18n intent: only 1 of ~100 pages calls `useTranslation()` though i18n is wired in nav.
 - [ ] Eliminate the `as any` cast clusters in `convex/communications.ts` (64) and
   `convex/importSessionMergeAndApply.ts` (53) with a typed adapter each (live runtime paths).

@@ -22,7 +22,7 @@ add a guardrail**, not to invent a new structure.
 
 | Bucket | Test | Examples |
 | --- | --- | --- |
-| `components/` | *"Could I publish this to npm unchanged?"* Zero domain-entity knowledge. | `Modal`, `Select`, `DataTable`, `Toast`, `DatePicker` |
+| `components/` | *"Could I publish this to npm unchanged?"* Zero domain-entity knowledge. | `Modal`, `Select`, `Toast`, `DatePicker` |
 | `features/<x>/` | Knows a domain entity — imports a Convex table or references a business concept (motion, grant, asset). | `MotionEditor`, `DraftMinutesPicker`, `DocumentVersions` |
 | `platform/<engine>/` | Reusable framework the features are built *on* — not itself a user feature. | `record-engine` (was `modules/object-record`) |
 | `lib/` | Domain-agnostic non-UI: pure utils + app/runtime infra. | `csv`, `format`, convex client, `static-convex` |
@@ -36,7 +36,7 @@ One-line version: **a domain word in its props or imports → `features/`. Other
 ```
 src/
   app/             # shell: Layout, nav config, command/shortcut registry, routing
-  components/      # GENERIC UI only (Modal, Select, DataTable, Toast, ...)
+  components/      # GENERIC UI only (Modal, Select, Toast, ...)
     display/ feedback/ input/ layout/ navigation/ theme/   # (already exist)
   features/
     meetings/ grants/ financials/ assets/ tasks/ commitments/ ai/   # (exist)
@@ -56,16 +56,16 @@ src/
 | --- | --- |
 | `Global{Asset,Meeting,Task,Commitment}Create` | `features/{assets,meetings,tasks,commitments}/` |
 | `MotionEditor`, `DraftMinutesPicker` | `features/meetings/components/` |
-| `RecordShowPage`, `useDataTable`, `CustomFieldsPanel`, `RecordTableMetadataEmpty`, `MergeRecordsModal` | `platform/record-engine/` |
+| `RecordShowPage`, `CustomFieldsPanel`, `RecordTableMetadataEmpty`, `MergeRecordsModal` | `platform/record-engine/` |
 | `DocumentVersions`, `SignaturePanel`, `PaperlessDocumentAction` | `features/documents/` (new) |
 | `SectionRedline`, `LegalGuide` | `features/legal/` (new) |
 | `FilingBotRunner` | `features/filings/` (new) |
 | `Layout`, `Layout.internal` | `app/` (allowed shell exception) |
 | `NotificationBell`, `NotesPanel`, `ActivityTimeline` | borderline — decide per file |
 
-Everything else in `components/` (Modal, Select, Kanban, CommandPalette, `DataTable`,
-FilterBar, ...) is genuinely generic and **stays put**. Note `DataTable` is generic and
-used broadly — it belongs in `components/`, not the engine.
+Everything else in `components/` (Modal, Select, Kanban, CommandPalette, ...) is
+genuinely generic and **stays put**. (The legacy `DataTable` was retired; tables are
+metadata-driven through `platform/record-engine`.)
 
 **`lib/` → carve into three:**
 
@@ -111,7 +111,7 @@ Every slice = pure move + import-path fix (no logic change), ending on `tsc -b` 
       `src/modules/` removed; stale path comments in `convex/` + `shared/` refreshed.
 - [ ] **Slice 2b (deferred)** — relocate the record-* UI components out of `components/`.
       Deferred because they're imported via relative paths (not the `@/` alias), so each
-      needs its own import-graph rewrite; and `DataTable` is generic and should *stay*.
+      needs its own import-graph rewrite.
 - [x] **Slice 3** — `Global{Asset,Meeting,Task,Commitment}Create` moved from `components/`
       into their features (`features/assets|meetings/components|tasks|commitments/`).
       Importers repointed to `@/` alias. Verified: tsc -b, lint. (commit 7cf03ba)
