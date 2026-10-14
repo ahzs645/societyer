@@ -641,7 +641,7 @@ function filledDot(content: string | undefined) {
         width: 6,
         height: 6,
         borderRadius: "50%",
-        background: "var(--accent-9, #3b82f6)",
+        background: "var(--accent)",
       }}
     />
   );

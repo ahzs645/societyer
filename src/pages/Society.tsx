@@ -725,7 +725,7 @@ export function SocietyPage() {
       </div>
 
       <details id="more-organization-details" className="card" style={{ marginTop: 16 }}>
-        <summary style={{ cursor: "pointer", padding: "var(--space-4, 16px)", fontWeight: 600 }}>
+        <summary style={{ cursor: "pointer", padding: "var(--s-4)", fontWeight: 600 }}>
           More organization details
           <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: "var(--fs-sm)" }}>
             Registry classification, lifecycle dates, extra-provincial registrations, and tax identifiers.

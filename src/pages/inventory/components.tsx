@@ -28,7 +28,7 @@ export function LocationGlyph({ type }: { type?: string }) {
 export function ItemThumb({ item }: { item: any }) {
   if (!item.imageUrl) {
     return (
-      <span style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: 6, background: "var(--surface-muted, #f3f4f6)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted, #8a8f98)" }}>
+      <span style={{ width: 36, height: 36, flex: "0 0 auto", borderRadius: "var(--r-md)", background: "var(--bg-subtle)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)" }}>
         <ImageIcon size={14} />
       </span>
     );

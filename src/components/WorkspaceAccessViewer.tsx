@@ -62,7 +62,7 @@ export function WorkspaceAccessViewer({
       <div className="card__body row" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }} aria-live="polite">
         <Badge tone={user.role === "Owner" || user.role === "Admin" ? "success" : "info"}>{user.role}</Badge>
         {inactive ? (
-          <span style={{ color: "var(--warning)", fontSize: "var(--fs-sm)" }}>
+          <span style={{ color: "var(--warn)", fontSize: "var(--fs-sm)" }}>
             {user.status}: the table shows the assigned role but grants no access.
           </span>
         ) : (

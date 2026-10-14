@@ -79,7 +79,7 @@
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-surface, var(--bg-primary, transparent));
+  background: var(--bg-panel);
 }
 
 .continuity-grid {
@@ -91,7 +91,7 @@
 .continuity-grid__head,
 .continuity-grid__label {
   position: sticky;
-  background: var(--bg-surface, var(--bg-primary, #fff));
+  background: var(--bg-panel);
   z-index: 1;
 }
 

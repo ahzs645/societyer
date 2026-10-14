@@ -254,7 +254,7 @@ function CycleCard({ item }: { item: CycleItem }) {
         border: "1px solid var(--border)",
         borderRadius: 8,
         padding: 12,
-        background: item.status === "blocked" ? "var(--danger-soft)" : item.status === "attention" ? "var(--warn-soft)" : "var(--bg)",
+        background: item.status === "blocked" ? "var(--danger-soft)" : item.status === "attention" ? "var(--warn-soft)" : "var(--bg-panel)",
       }}
     >
       <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>

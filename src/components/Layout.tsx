@@ -1468,7 +1468,7 @@ export function Layout() {
                     padding: "6px 8px",
                     border: "1px solid var(--border)",
                     borderRadius: "var(--r-sm)",
-                    background: "var(--bg-input, var(--bg-subtle))",
+                    background: "var(--bg-subtle)",
                     color: "inherit",
                     fontSize: "var(--fs-sm)",
                   }}

@@ -7,4 +7,4 @@
 .offline-meeting-list { display: grid; gap: 16px; list-style: none; padding: 0; }
 .offline-meeting-list .card { padding: 16px; min-width: 0; }
 .offline-meeting-list form { display: grid; gap: 10px; margin-bottom: 12px; }
-.offline-meeting-error { color: var(--color-danger, #b42318); }
+.offline-meeting-error { color: var(--danger); }

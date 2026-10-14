@@ -75,14 +75,14 @@ export function ImageUploadField({
             width: 72,
             height: 72,
             flex: "0 0 auto",
-            borderRadius: 8,
-            border: "1px solid var(--border, #d8dadf)",
-            background: "var(--surface-muted, #f3f4f6)",
+            borderRadius: "var(--r-md)",
+            border: "1px solid var(--border)",
+            background: "var(--bg-subtle)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             overflow: "hidden",
-            color: "var(--muted, #8a8f98)",
+            color: "var(--text-tertiary)",
           }}
         >
           {preview ? (

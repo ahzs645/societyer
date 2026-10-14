@@ -227,13 +227,13 @@
   padding: token('s-3');
   border: 1px solid token('border');
   border-radius: token('r-md');
-  background: var(--surface);
+  background: token('bg-panel');
   text-align: left;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 
   &:hover:not(:disabled) {
-    background: var(--surface-subtle);
+    background: token('bg-hover-alpha');
     border-color: token('border-strong');
   }
 

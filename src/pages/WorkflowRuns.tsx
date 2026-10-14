@@ -228,7 +228,7 @@ export function WorkflowRunsPage() {
                 style={{
                   marginTop: 12,
                   padding: 12,
-                  background: "var(--surface-subtle)",
+                  background: "var(--bg-subtle)",
                   borderRadius: 6,
                   fontSize: "var(--fs-sm)",
                   whiteSpace: "pre-wrap",

@@ -59,7 +59,7 @@
   padding: 0 9px;
   border: 1px solid token('border');
   border-radius: token('r-md');
-  background: var(--bg);
+  background: token('bg-panel');
   color: token('text-secondary');
 }
 
@@ -77,7 +77,7 @@
   overflow: auto;
   border: 1px solid token('border');
   border-radius: token('r-md');
-  background: var(--bg);
+  background: token('bg-panel');
 }
 
 .record-picker__option {
@@ -87,7 +87,7 @@
   min-height: 42px;
   padding: 7px 10px;
   border: 0;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid token('border-color-light');
   background: transparent;
   color: token('text-primary');
   text-align: left;

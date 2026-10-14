@@ -118,7 +118,7 @@ export function PublicTransparencyPage() {
                     border: "1px solid var(--border)",
                     borderRadius: 10,
                     padding: 16,
-                    background: "var(--bg-elevated)",
+                    background: "var(--bg-panel)",
                   }}
                 >
                   <div className="row" style={{ gap: 8, marginBottom: 8 }}>

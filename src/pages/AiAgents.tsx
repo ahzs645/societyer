@@ -1100,7 +1100,7 @@ function ModelSelector({
                 padding: 10,
                 border: `1px solid ${model.id === selectedModelId ? "var(--accent)" : "var(--border)"}`,
                 borderRadius: 8,
-                background: model.id === selectedModelId ? "var(--accent-soft)" : "var(--surface)",
+                background: model.id === selectedModelId ? "var(--accent-soft)" : "var(--bg-panel)",
               }}
             >
               <span className="col" style={{ gap: 4, minWidth: 0 }}>

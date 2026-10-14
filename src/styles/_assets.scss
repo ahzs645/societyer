@@ -71,7 +71,7 @@
 }
 
 .record-kv dt {
-  color: var(--text-muted);
+  color: token('text-tertiary');
   font-size: token('fs-xs');
   margin-bottom: 2px;
 }
@@ -99,7 +99,7 @@
 .asset-label__qr {
   align-items: center;
   aspect-ratio: 1;
-  background: var(--surface-raised);
+  background: token('bg-panel');
   border: 1px solid token('border');
   border-radius: 6px;
   display: flex;
@@ -129,7 +129,7 @@
 }
 
 .asset-label__body small {
-  color: var(--text-muted);
+  color: token('text-tertiary');
 }
 
 .asset-label__error {

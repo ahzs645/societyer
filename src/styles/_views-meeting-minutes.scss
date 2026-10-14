@@ -811,7 +811,7 @@
   display: grid;
   gap: 6px;
   padding: token('s-2') 0;
-  border-top: 1px solid var(--border-subtle, token('border'));
+  border-top: 1px solid token('border');
 }
 .meeting-minutes-section-task:first-child {
   border-top: 0;

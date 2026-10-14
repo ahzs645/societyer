@@ -71,7 +71,7 @@
 
 .meeting-template-builder__sidebar {
   position: sticky;
-  top: calc(var(--topbar-height, 0px) + token('s-4'));
+  top: token('s-4');
 }
 
 .meeting-template-library {
