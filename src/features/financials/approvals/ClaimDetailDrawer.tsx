@@ -11,7 +11,11 @@ import { useToast } from "../../../components/Toast";
 import { formatDate, formatDateTime } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { ApprovalProgress, CLAIM_STATUS_LABEL, CLAIM_STATUS_TONE } from "./ApprovalProgress";
+import { FINANCE_EDIT_REQUIRED_REASON } from "../../../../shared/expenseApprovals";
 import type { QueueRow } from "./types";
+
+/** Reasons that come from the matching rule (who it names, self-approval) rather than workspace access. */
+const RULE_REASON = /approver for claims of this size|own claim/;
 
 const TRAIL_LABEL: Record<string, string> = {
   submitted: "Submitted",
@@ -170,7 +174,18 @@ export function ClaimDetailDrawer({
             </ul>
           )}
           {row.status === "Submitted" && !row.canApprove && row.cannotApproveReason && (
-            <p className="claim-drawer__reason" role="note">{row.cannotApproveReason}</p>
+            <p className="claim-drawer__reason" role="note">
+              <strong>Why you can't approve:</strong> {row.cannotApproveReason}
+              {row.cannotApproveReason === FINANCE_EDIT_REQUIRED_REASON ? (
+                <span className="claim-drawer__reason-source">
+                  {" "}Set by this workspace's <Link to="/app/approvals?tab=rules" onClick={onClose}>who can approve claims</Link> setting.
+                </span>
+              ) : RULE_REASON.test(row.cannotApproveReason) ? (
+                <span className="claim-drawer__reason-source">
+                  {" "}Set by the approval rule for claims of {formatMoney(row.ruleThresholdCents)} or more.
+                </span>
+              ) : null}
+            </p>
           )}
           {row.declinedReason && (
             <p className="claim-drawer__declined"><strong>Declined:</strong> {row.declinedReason}</p>

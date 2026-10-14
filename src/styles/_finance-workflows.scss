@@ -546,6 +546,43 @@
 .approval-rule__check { display: inline-flex; align-items: center; gap: token(s-2); cursor: pointer; }
 .approval-rules__footer { display: flex; flex-wrap: wrap; align-items: center; gap: token(s-2); }
 .approval-rules__spacer { flex: 1 1 auto; }
+.approval-rules__note { margin: 0; font-size: token(fs-xs); }
+
+/* who can approve (approver access) */
+.approvals-settings { display: flex; flex-direction: column; gap: token(s-4); }
+.approver-access > .card__head {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token(s-2) token(s-3);
+}
+.approver-access__body { display: flex; flex-direction: column; gap: token(s-3); }
+.approver-access__options {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  .radio-group { gap: token(s-2); }
+  .radio-row {
+    display: flex;
+    width: 100%;
+    padding: token(s-3);
+    border: 1px solid token(border);
+    border-radius: token(r-card);
+    background: token(bg-panel);
+    transition: border-color token(motion-fade-fast) token(ease-fade), box-shadow token(motion-fade-fast) token(ease-fade);
+    &.is-selected { border-color: token(accent); box-shadow: inset 0 0 0 1px token(accent); }
+  }
+  .radio-row__body { min-width: 0; font-size: token(fs-sm); }
+  .radio-row__label { font-weight: token(fw-medium); overflow-wrap: anywhere; }
+  .radio-row__hint { color: token(text-secondary); font-size: token(fs-xs); }
+}
+.approver-access__tradeoff { margin: 0; color: token(text-secondary); font-size: token(fs-sm); }
+.approver-access__meta { margin: 0; font-size: token(fs-xs); }
+.claim-drawer__reason-source {
+  color: token(text-secondary);
+  a { color: token(accent); text-decoration: underline; text-underline-offset: 2px; }
+}
 
 /* -------------------------------------------------------- reconciliation */
 
