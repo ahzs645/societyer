@@ -9,7 +9,7 @@ import { hasApplicablePrivacyLaw } from "../../shared/privacyRuleProfiles";
  * Color rule (Suggestion B): color = nav group identity. Every route in a
  * given group uses that group's tone, so the color tells you which area of
  * the app you're in. Add a new route by appending it to ROUTE_IDENTITY and
- * threading it into NAV_GROUPS in Layout.tsx; you don't choose a color.
+ * placing it in NAV_TREE (lib/navConfig.ts); you don't choose a color.
  *
  * If a route legitimately shouldn't follow its group's tone (rare), pass an
  * `iconColor` override to PageHeader/SettingsShell explicitly.

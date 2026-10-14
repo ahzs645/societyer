@@ -193,9 +193,10 @@ test("shared navigation and command palette contain keyboard focus and restore i
   await page.keyboard.press("?");
   const shortcuts = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
   await expectInViewport(page, shortcuts);
-  await expect(shortcuts.getByRole("button", { name: "Close", exact: true })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(shortcuts.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  // The shortcut list opens on its search box; focus stays inside the dialog.
+  await expect(shortcuts.getByRole("searchbox", { name: "Search shortcuts", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  expect(await shortcuts.evaluate((element) => element.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(shortcuts).toBeHidden();
 });
