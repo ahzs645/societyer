@@ -26,12 +26,10 @@ import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 import {
-  DEMO_RECONCILED_TRANSACTION_IDS,
+  applyFinanceWorkflowsToFeed,
   financeWorkflowApprovalRules,
   financeWorkflowExpenseReports,
-  financeWorkflowReconciliationPeriods,
   financeWorkflowRules,
-  financeWorkflowTransactions,
 } from "./staticFinanceWorkflowFixtures";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
@@ -2471,12 +2469,15 @@ const financialTransactions: Array<Record<string, any>> = [
   })),
 ];
 
-// Finance workflows demo: rules, statement periods and claims in every approval state.
+// Finance workflows demo: rules, statement periods and claims in every approval
+// state. Rules and statements only add provenance and reconciliation flags to
+// existing feed rows, so balances still equal opening + sum of transactions.
 const FINANCE_WORKFLOW_IDS = {
   societyId: SOCIETY_ID,
   connectionId: FINANCIAL_CONNECTION_ID,
   cashAccountId: CASH_ACCOUNT_ID,
   grantAccountId: GRANT_ACCOUNT_ID,
+  cardAccountId: CARD_ACCOUNT_ID,
   facilitiesExpenseAccountId: ACCOUNT_FACILITIES_EXPENSE_ID,
   fundRestrictionId: "static_fund_restriction_youth",
   ownerId: USER_OWNER_ID,
@@ -2484,10 +2485,12 @@ const FINANCE_WORKFLOW_IDS = {
   secretaryId: USER_SECRETARY_ID,
   receiptDocumentId: DOCUMENT_PRESENTATION_ID,
 };
-for (const txn of financialTransactions) Object.assign(txn, DEMO_RECONCILED_TRANSACTION_IDS[String(txn._id)] ?? {});
-financialTransactions.push(...financeWorkflowTransactions(FINANCE_WORKFLOW_IDS));
 const transactionRules = financeWorkflowRules(FINANCE_WORKFLOW_IDS);
-const reconciliationPeriods = financeWorkflowReconciliationPeriods(FINANCE_WORKFLOW_IDS, financialTransactions);
+const reconciliationPeriods = applyFinanceWorkflowsToFeed(FINANCE_WORKFLOW_IDS, financialTransactions, transactionRules, {
+  [CASH_ACCOUNT_ID]: staticBankFeed.balances.operating,
+  [GRANT_ACCOUNT_ID]: staticBankFeed.balances.restricted,
+  [CARD_ACCOUNT_ID]: staticBankFeed.balances.card,
+});
 const expenseApprovalRules = financeWorkflowApprovalRules(FINANCE_WORKFLOW_IDS);
 expenseReports.push(...(financeWorkflowExpenseReports(FINANCE_WORKFLOW_IDS) as any[]));
 

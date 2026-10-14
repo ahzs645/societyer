@@ -3,17 +3,32 @@
  * reconciliation periods (completed, auto-reconciled, out of balance and in
  * progress) and expense claims in every approval state.
  *
- * Fingerprints for closed periods are computed from the same shared code the
+ * Rules and statements are layered onto the generated bank feed
+ * (shared/demoData/bankFeed.ts) rather than adding hand-written bank lines:
+ * this module only changes categorisation provenance and reconciliation flags
+ * on existing rows, so every account balance still equals its opening balance
+ * plus the sum of its transactions and the FY statements stay calibrated.
+ *
+ * Statement balances are the feed's own balances at each statement date, and
+ * fingerprints for closed periods are computed with the same shared code the
  * runtime uses, so the demo's "balances no longer match" period is exactly the
  * one whose lines changed after completion.
  */
-import { periodFingerprint, transactionsInPeriod, type PeriodTransaction } from "../../shared/reconciliationPeriods";
+import {
+  periodFingerprint,
+  summarizePeriod,
+  transactionsInPeriod,
+  type PeriodTransaction,
+} from "../../shared/reconciliationPeriods";
+import { findMatchingRule, isUncategorized, type RuleTransaction, type TransactionRuleLike } from "../../shared/transactionRules";
+import { isInternalTransfer } from "../../shared/transferCategories";
 
 type Ids = {
   societyId: string;
   connectionId: string;
   cashAccountId: string;
   grantAccountId: string;
+  cardAccountId: string;
   facilitiesExpenseAccountId: string;
   fundRestrictionId: string;
   ownerId: string;
@@ -22,183 +37,246 @@ type Ids = {
   receiptDocumentId: string;
 };
 
-const RULE_HYDRO = "static_rule_bc_hydro";
-const RULE_SQUARE = "static_rule_square";
-const RULE_FEES = "static_rule_bank_fees";
+type Txn = Record<string, any>;
+
+const RULE_HYDRO = "static_rule_coastal_hydro";
+const RULE_DONATIONS = "static_rule_donorloop_payouts";
+const RULE_BANK_FEE = "static_rule_account_fee";
+const RULE_BRUSHSTROKE = "static_rule_brushstroke";
+const RULE_CLOUDNEST = "static_rule_cloudnest";
+const RULE_GREENWAY_CARD = "static_rule_greenway_card";
 const RULE_GRANT = "static_rule_grant_spending";
 
-const reconciled = (atISO: string, note: string, kind = "manual") => ({
-  reconciledAtISO: atISO,
-  reconciledByName: "Jordan Lee",
-  matchedKind: kind,
-  matchedId: kind,
-  reconciliationNote: note,
-});
-
-const ruled = (ruleId: string, ruleName: string, appliedAtISO: string) => ({
-  categorizedBy: "rule",
-  ruleId,
-  ruleApplication: { ruleName, batchId: `import-${appliedAtISO}`, appliedAtISO, previous: {} },
-});
-
-/** Existing ledger lines that the demo statements have already cleared. */
-export const DEMO_RECONCILED_TRANSACTION_IDS: Record<string, ReturnType<typeof reconciled>> = {
-  static_tx_org_utilities: reconciled("2026-02-03T17:00:00.000Z", "On January statement"),
-  static_tx_org_interest: reconciled("2026-04-03T17:00:00.000Z", "Interest on March statement"),
-  static_tx_org_restricted_delivery: reconciled("2026-03-02T17:00:00.000Z", "Grant program delivery cheque"),
-};
-
-export function financeWorkflowTransactions(ids: Ids): Array<Record<string, any>> {
-  const base = (key: string, accountId: string, date: string, description: string, amountCents: number, extra: Record<string, any> = {}) => ({
-    _id: `static_tx_${key}`,
-    societyId: ids.societyId,
-    connectionId: ids.connectionId,
-    accountId,
-    externalId: `csv-${key}`,
-    date,
-    description,
-    amountCents,
-    ...extra,
-  });
-  const cash = ids.cashAccountId;
-  return [
-    // January statement (completed)
-    base("jan_hydro", cash, "2026-01-14", "BC HYDRO 0042 PAYMENT", -8421, {
-      category: "Utilities",
-      accountingAccountId: ids.facilitiesExpenseAccountId,
-      reviewedAtISO: "2026-01-16T18:00:00.000Z",
-      ...ruled(RULE_HYDRO, "BC Hydro to utilities", "2026-01-16T18:00:00.000Z"),
-      ...reconciled("2026-02-03T17:00:00.000Z", "On January statement"),
-    }),
-    base("jan_donation", cash, "2026-01-20", "E-TRANSFER DEPOSIT M CHEN", 25000, {
-      category: "Donations",
-      counterparty: "M. Chen",
-      categorizedBy: "manual",
-      ...reconciled("2026-02-03T17:00:00.000Z", "Donation, receipt issued"),
-    }),
-    // February statement (completed, then a back-dated cheque was added)
-    base("feb_hydro", cash, "2026-02-13", "BC HYDRO 0043 PAYMENT", -8730, {
-      category: "Utilities",
-      accountingAccountId: ids.facilitiesExpenseAccountId,
-      reviewedAtISO: "2026-02-15T18:00:00.000Z",
-      ...ruled(RULE_HYDRO, "BC Hydro to utilities", "2026-02-15T18:00:00.000Z"),
-      ...reconciled("2026-03-04T17:00:00.000Z", "On February statement"),
-    }),
-    base("feb_square", cash, "2026-02-17", "SQUARE DEPOSIT 7781", 46500, {
-      category: "Registration fees",
-      ...ruled(RULE_SQUARE, "Square deposits to registration fees", "2026-02-18T18:00:00.000Z"),
-      ...reconciled("2026-03-04T17:00:00.000Z", "Workshop registrations"),
-    }),
-    base("feb_fee", cash, "2026-02-27", "MONTHLY ACCOUNT FEE", -1500, {
-      category: "Bank charges",
-      reviewedAtISO: "2026-02-28T18:00:00.000Z",
-      ...ruled(RULE_FEES, "Small bank fees", "2026-02-28T18:00:00.000Z"),
-      ...reconciled("2026-03-04T17:00:00.000Z", "Bank fee"),
-    }),
-    base("feb_late_cheque", cash, "2026-02-21", "CHQ 1043 RIVERSIDE HALL DEPOSIT", -25000, {
-      category: "Rent",
-      categorizedBy: "manual",
-    }),
-    // March statement (in progress)
-    base("mar_shaw", cash, "2026-03-05", "SHAW BUSINESS INTERNET 03/26", -11200, {
-      ...reconciled("2026-04-03T17:00:00.000Z", "Internet service"),
-    }),
-    base("mar_hydro", cash, "2026-03-13", "BC HYDRO 0044 PAYMENT", -8105),
-    base("mar_square", cash, "2026-03-18", "SQUARE DEPOSIT 7790", 38250),
-    base("mar_fee", cash, "2026-03-31", "MONTHLY ACCOUNT FEE", -1500, {
-      ...reconciled("2026-04-03T17:00:00.000Z", "Bank fee"),
-    }),
-    // April, not yet reconciled
-    base("apr_shaw", cash, "2026-04-06", "SHAW BUSINESS INTERNET 04/26", -11200),
-    base("apr_hydro", cash, "2026-04-14", "BC HYDRO 0045 PAYMENT", -7990),
-    base("apr_square", cash, "2026-04-15", "SQUARE DEPOSIT 7802", 41000),
-  ];
-}
+/** Rules went live at the start of calendar 2026; feed rows imported since
+ * then that a rule covers carry its provenance. */
+const RULES_LIVE_FROM = "2026-01-01";
+const RULES_CREATED_AT = "2025-12-18T18:00:00.000Z";
+const TREASURER_NAME = "Jordan Lee";
 
 export function financeWorkflowRules(ids: Ids) {
-  const at = "2026-01-10T18:00:00.000Z";
+  const base = { societyId: ids.societyId, createdByUserId: ids.treasurerId, createdAtISO: RULES_CREATED_AT, updatedAtISO: RULES_CREATED_AT };
   return [
     {
       _id: RULE_HYDRO,
-      societyId: ids.societyId,
-      name: "BC Hydro to utilities",
+      ...base,
+      name: "Coastal Hydro to facilities",
       priority: 1,
       enabled: true,
       conditions: [
-        { field: "payee", operator: "contains", value: "bc hydro" },
+        { field: "payee", operator: "contains", value: "coastal hydro" },
         { field: "direction", value: "out" },
       ],
-      actions: { category: "Utilities", accountingAccountId: ids.facilitiesExpenseAccountId, markReviewed: true },
-      createdByUserId: ids.treasurerId,
-      lastAppliedAtISO: "2026-02-15T18:00:00.000Z",
-      createdAtISO: at,
-      updatedAtISO: at,
+      actions: { category: "Facilities", accountingAccountId: ids.facilitiesExpenseAccountId, markReviewed: true },
     },
     {
-      _id: RULE_SQUARE,
-      societyId: ids.societyId,
-      name: "Square deposits to registration fees",
+      _id: RULE_BANK_FEE,
+      ...base,
+      name: "Monthly account fee",
       priority: 2,
       enabled: true,
       conditions: [
-        { field: "description", operator: "starts_with", value: "square deposit" },
-        { field: "direction", value: "in" },
+        { field: "payee", operator: "contains", value: "riverbank credit union" },
+        { field: "direction", value: "out" },
+        { field: "amount", operator: "lte", amountCents: 2500 },
       ],
-      actions: { category: "Registration fees" },
-      createdByUserId: ids.treasurerId,
-      lastAppliedAtISO: "2026-02-18T18:00:00.000Z",
-      createdAtISO: at,
-      updatedAtISO: at,
+      actions: { category: "Bank & processing fees", markReviewed: true },
     },
     {
-      _id: RULE_FEES,
-      societyId: ids.societyId,
-      name: "Small bank fees",
+      _id: RULE_DONATIONS,
+      ...base,
+      name: "DonorLoop payouts to donations",
       priority: 3,
       enabled: true,
       conditions: [
-        { field: "description", operator: "contains", value: "account fee" },
-        { field: "amount", operator: "lte", amountCents: 2500 },
+        { field: "payee", operator: "contains", value: "donorloop" },
+        { field: "direction", value: "in" },
       ],
-      actions: { category: "Bank charges", markReviewed: true },
-      createdByUserId: ids.treasurerId,
-      lastAppliedAtISO: "2026-02-28T18:00:00.000Z",
-      createdAtISO: at,
-      updatedAtISO: at,
+      actions: { category: "Donations" },
+    },
+    {
+      _id: RULE_BRUSHSTROKE,
+      ...base,
+      name: "Brushstroke Art Supply to program supplies",
+      priority: 4,
+      enabled: true,
+      conditions: [
+        { field: "payee", operator: "contains", value: "brushstroke" },
+        { field: "direction", value: "out" },
+      ],
+      actions: { category: "Program supplies" },
+    },
+    {
+      _id: RULE_GREENWAY_CARD,
+      ...base,
+      name: "Greenway Market on the Visa",
+      priority: 5,
+      enabled: true,
+      conditions: [
+        { field: "payee", operator: "contains", value: "greenway market" },
+        { field: "account", accountId: ids.cardAccountId },
+      ],
+      actions: { category: "Program supplies" },
+    },
+    {
+      _id: RULE_CLOUDNEST,
+      ...base,
+      name: "Cloudnest Workspace subscription",
+      priority: 6,
+      enabled: true,
+      conditions: [{ field: "payee", operator: "equals", value: "cloudnest workspace" }],
+      actions: { category: "Office & technology", markReviewed: true },
     },
     {
       _id: RULE_GRANT,
-      societyId: ids.societyId,
+      ...base,
       name: "Grant fund spending",
-      priority: 4,
+      priority: 7,
       enabled: false,
       conditions: [
         { field: "account", accountId: ids.grantAccountId },
         { field: "direction", value: "out" },
       ],
       actions: { category: "Program delivery", fundRestrictionId: ids.fundRestrictionId },
-      createdByUserId: ids.treasurerId,
-      createdAtISO: at,
-      updatedAtISO: at,
     },
   ];
 }
 
-export function financeWorkflowReconciliationPeriods(ids: Ids, transactions: readonly Record<string, any>[]) {
+type DemoRule = ReturnType<typeof financeWorkflowRules>[number];
+
+const byDate = (a: Txn, b: Txn) => String(a.date).localeCompare(String(b.date)) || String(a._id).localeCompare(String(b._id));
+
+/**
+ * Recurring feed lines that arrived after the last rule run, so "Apply rules
+ * to uncategorised" always has something to preview regardless of how far the
+ * demo feed runs: the latest Coastal Hydro bill, the latest account fee and the
+ * two latest DonorLoop payouts, plus the latest member e-transfer, which no
+ * rule covers. (The feed's own recent card spend and
+ * e-transfers are already partly uncategorised; some of those match a rule,
+ * the member e-transfers and most one-off merchants match none.)
+ */
+function awaitingRuleRun(transactions: readonly Txn[], ids: Ids): Txn[] {
+  const cash = transactions.filter((t) => t.accountId === ids.cashAccountId && String(t._id).startsWith("static_tx_feed_")).sort(byDate);
+  const latest = (predicate: (t: Txn) => boolean, count = 1) => cash.filter(predicate).slice(-count);
+  return [
+    ...latest((t) => t.counterparty === "Coastal Hydro"),
+    ...latest((t) => t.counterparty === "Riverbank Credit Union" && t.amountCents < 0 && t.method === "Account fee"),
+    ...latest((t) => t.counterparty === "DonorLoop Payments" && t.amountCents > 0, 2),
+    // A one-off e-transfer from a member: no rule covers it.
+    ...latest((t) => t.method === "Interac e-Transfer" && t.amountCents > 0),
+  ];
+}
+
+/** Reconciliation stamp for a line cleared on a statement. */
+function cleared(atISO: string, note: string) {
+  return { reconciledAtISO: atISO, reconciledByName: TREASURER_NAME, matchedKind: "manual", matchedId: "manual", reconciliationNote: note };
+}
+
+const UNMATCH_FIELDS = ["reconciledAtISO", "reconciledByName", "matchedKind", "matchedId", "reconciliationNote"] as const;
+
+/** Statement period ids, plus the feed lines the demo story hinges on. */
+export const DEMO_RECONCILIATION = {
+  janPeriodId: "static_recon_cash_2026_01",
+  febPeriodId: "static_recon_cash_2026_02",
+  marPeriodId: "static_recon_cash_2026_03",
+  restrictedPeriodId: "static_recon_grant_2026_q1",
+  /** Unmatched after February was completed, so February reads out of balance. */
+  febUnmatchedKey: "telecom-2026-02",
+  /** Still to tick off on the March statement; together they are the difference. */
+  marUnclearedKeys: ["interest-2026-03", "registration-fees-2026-03"],
+} as const;
+
+export const feedTransactionId = (key: string) => `static_tx_feed_${key.replace(/[^a-zA-Z0-9]+/g, "_")}`;
+
+/**
+ * Layers the finance workflows onto the generated feed (mutating the rows in
+ * place: categorisation provenance and reconciliation flags only, never
+ * amounts, dates or accounts) and returns the statement periods.
+ *
+ * `accountBalances` are the accounts' current balances; a statement balance at
+ * a date is that balance minus every later transaction, i.e. the feed's own
+ * running balance.
+ */
+export function applyFinanceWorkflowsToFeed(
+  ids: Ids,
+  transactions: Txn[],
+  rules: readonly DemoRule[],
+  accountBalances: Record<string, number>,
+) {
+  // ---- Categorisation: rule provenance and lines still to review ----------
+  const pending = new Set(awaitingRuleRun(transactions, ids).map((t) => t._id));
+  const lastApplied = new Map<string, string>();
+  for (const txn of transactions) {
+    if (pending.has(txn._id)) {
+      delete txn.category;
+      continue;
+    }
+    if (txn.date < RULES_LIVE_FROM || isUncategorized(txn) || isInternalTransfer(txn)) continue;
+    const rule = findMatchingRule(rules as unknown as Array<TransactionRuleLike & { _id: string }>, txn as RuleTransaction) as DemoRule | null;
+    if (!rule || rule.actions.category !== txn.category) continue;
+    const appliedAtISO = `${txn.date}T18:00:00.000Z`;
+    Object.assign(txn, {
+      categorizedBy: "rule",
+      ruleId: rule._id,
+      ruleApplication: { ruleName: rule.name, batchId: `feed-import-${txn.date}`, appliedAtISO, previous: {} },
+      ...("accountingAccountId" in rule.actions && rule.actions.accountingAccountId ? { accountingAccountId: rule.actions.accountingAccountId } : {}),
+      ...("markReviewed" in rule.actions && rule.actions.markReviewed ? { reviewedAtISO: appliedAtISO } : {}),
+    });
+    if ((lastApplied.get(rule._id) ?? "") < appliedAtISO) lastApplied.set(rule._id, appliedAtISO);
+  }
+  for (const rule of rules as Array<DemoRule & { lastAppliedAtISO?: string }>) {
+    const at = lastApplied.get(rule._id);
+    if (at) rule.lastAppliedAtISO = at;
+  }
+
+  // ---- Reconciliation ------------------------------------------------------
   const lines = transactions as unknown as PeriodTransaction[];
-  const fingerprint = (accountId: string, startDate: string, endDate: string, beginning: number, ending: number, exclude: string[] = []) =>
-    periodFingerprint(beginning, ending, transactionsInPeriod(lines.filter((t) => !exclude.includes(String(t._id))), { accountId, startDate, endDate }));
+  const balanceAtEndOf = (accountId: string, date: string) =>
+    (accountBalances[accountId] ?? 0) - transactions.filter((t) => t.accountId === accountId && t.date > date).reduce((sum, t) => sum + t.amountCents, 0);
+  const inPeriod = (accountId: string, startDate: string, endDate: string) =>
+    transactionsInPeriod(lines, { accountId, startDate, endDate }) as unknown as Txn[];
+  const fingerprint = (accountId: string, startDate: string, endDate: string, beginning: number, ending: number) =>
+    periodFingerprint(beginning, ending, transactionsInPeriod(lines, { accountId, startDate, endDate }));
+  const clearAll = (rows: Txn[], atISO: string, note: string, except: ReadonlySet<string> = new Set()) => {
+    for (const row of rows) if (!except.has(row._id)) Object.assign(row, cleared(atISO, note));
+  };
   const cash = ids.cashAccountId;
-  const janOpening = 3_000_000;
-  const janEnding = janOpening - 8421 + 25000 - 90000;
-  const febEnding = janEnding - 8730 + 46500 - 1500;
-  const marEnding = febEnding - 11200 - 8105 + 38250 + 12500 - 1500;
-  const grantOpening = 2_500_000;
-  const grantEnding = grantOpening - 380000;
+  const grant = ids.grantAccountId;
   const common = { societyId: ids.societyId, createdByUserId: ids.treasurerId };
+  const completedBy = { completedByUserId: ids.treasurerId, completedByName: TREASURER_NAME };
+
+  // January: every line cleared; the statement balances to $0.00.
+  const janOpening = balanceAtEndOf(cash, "2025-12-31");
+  const janEnding = balanceAtEndOf(cash, "2026-01-31");
+  const janRows = inPeriod(cash, "2026-01-01", "2026-01-31");
+  clearAll(janRows, "2026-02-04T17:00:00.000Z", "On the January 2026 statement");
+  const jan = summarizePeriod(janOpening, janEnding, janRows as unknown as PeriodTransaction[]);
+
+  // February: completed with every line cleared, then the telecom bill was
+  // unmatched to attach a corrected invoice, so the snapshot no longer matches.
+  const febEnding = balanceAtEndOf(cash, "2026-02-28");
+  const febRows = inPeriod(cash, "2026-02-01", "2026-02-28");
+  clearAll(febRows, "2026-03-04T17:00:00.000Z", "On the February 2026 statement");
+  const febFingerprint = fingerprint(cash, "2026-02-01", "2026-02-28", janEnding, febEnding);
+  const feb = summarizePeriod(janEnding, febEnding, febRows as unknown as PeriodTransaction[]);
+  const febUnmatched = febRows.find((row) => row._id === feedTransactionId(DEMO_RECONCILIATION.febUnmatchedKey));
+  if (febUnmatched) for (const field of UNMATCH_FIELDS) delete febUnmatched[field];
+
+  // March: in progress, everything ticked off except two lines.
+  const marEnding = balanceAtEndOf(cash, "2026-03-31");
+  const marUncleared = new Set<string>(DEMO_RECONCILIATION.marUnclearedKeys.map(feedTransactionId));
+  clearAll(inPeriod(cash, "2026-03-01", "2026-03-31"), "2026-04-03T17:00:00.000Z", "On the March 2026 statement", marUncleared);
+
+  // Restricted fund: quarterly statement whose lines were all cleared by the
+  // feed, so it closed itself as auto-reconciled.
+  const grantOpening = balanceAtEndOf(grant, "2025-12-31");
+  const grantEnding = balanceAtEndOf(grant, "2026-03-31");
+  const grantRows = inPeriod(grant, "2026-01-01", "2026-03-31");
+  clearAll(grantRows, "2026-04-02T17:05:00.000Z", "Matched to the bank feed");
+  const grantSummary = summarizePeriod(grantOpening, grantEnding, grantRows as unknown as PeriodTransaction[]);
+
   return [
     {
-      _id: "static_recon_cash_2026_01",
+      _id: DEMO_RECONCILIATION.janPeriodId,
       ...common,
       accountId: cash,
       startDate: "2026-01-01",
@@ -206,37 +284,34 @@ export function financeWorkflowReconciliationPeriods(ids: Ids, transactions: rea
       openingBalanceCents: janOpening,
       endingBalanceCents: janEnding,
       status: "completed",
-      completedAtISO: "2026-02-03T17:30:00.000Z",
-      completedByUserId: ids.treasurerId,
-      completedByName: "Jordan Lee",
+      completedAtISO: "2026-02-04T17:30:00.000Z",
+      ...completedBy,
       clearedFingerprint: fingerprint(cash, "2026-01-01", "2026-01-31", janOpening, janEnding),
-      clearedCount: 3,
-      clearedBalanceCents: janEnding,
-      createdAtISO: "2026-02-02T17:00:00.000Z",
-      updatedAtISO: "2026-02-03T17:30:00.000Z",
+      clearedCount: jan.clearedCount,
+      clearedBalanceCents: jan.clearedBalanceCents,
+      createdAtISO: "2026-02-03T17:00:00.000Z",
+      updatedAtISO: "2026-02-04T17:30:00.000Z",
     },
     {
-      _id: "static_recon_cash_2026_02",
+      _id: DEMO_RECONCILIATION.febPeriodId,
       ...common,
       accountId: cash,
       startDate: "2026-02-01",
       endDate: "2026-02-28",
       endingBalanceCents: febEnding,
-      // Completed before the back-dated hall cheque was entered.
       status: "out_of_balance",
       completedAtISO: "2026-03-04T17:30:00.000Z",
-      completedByUserId: ids.treasurerId,
-      completedByName: "Jordan Lee",
-      clearedFingerprint: fingerprint(cash, "2026-02-01", "2026-02-28", janEnding, febEnding, ["static_tx_feb_late_cheque"]),
-      clearedCount: 3,
-      clearedBalanceCents: febEnding,
+      ...completedBy,
+      clearedFingerprint: febFingerprint,
+      clearedCount: feb.clearedCount,
+      clearedBalanceCents: feb.clearedBalanceCents,
       outOfBalanceAtISO: "2026-03-20T16:10:00.000Z",
-      notes: "Statement PDF filed with the February board packet.",
+      notes: "Harbourline Telecom line unmatched on March 20 to attach the corrected invoice; re-clear it to close February again.",
       createdAtISO: "2026-03-03T17:00:00.000Z",
       updatedAtISO: "2026-03-20T16:10:00.000Z",
     },
     {
-      _id: "static_recon_cash_2026_03",
+      _id: DEMO_RECONCILIATION.marPeriodId,
       ...common,
       accountId: cash,
       startDate: "2026-03-01",
@@ -247,22 +322,22 @@ export function financeWorkflowReconciliationPeriods(ids: Ids, transactions: rea
       updatedAtISO: "2026-04-03T17:00:00.000Z",
     },
     {
-      _id: "static_recon_grant_2026_02",
+      _id: DEMO_RECONCILIATION.restrictedPeriodId,
       ...common,
-      accountId: ids.grantAccountId,
-      startDate: "2026-02-01",
-      endDate: "2026-02-28",
+      accountId: grant,
+      startDate: "2026-01-01",
+      endDate: "2026-03-31",
       openingBalanceCents: grantOpening,
       endingBalanceCents: grantEnding,
       status: "auto_reconciled",
-      completedAtISO: "2026-03-02T17:05:00.000Z",
-      completedByUserId: ids.treasurerId,
-      completedByName: "Jordan Lee",
-      clearedFingerprint: fingerprint(ids.grantAccountId, "2026-02-01", "2026-02-28", grantOpening, grantEnding),
-      clearedCount: 1,
-      clearedBalanceCents: grantEnding,
-      createdAtISO: "2026-03-02T17:05:00.000Z",
-      updatedAtISO: "2026-03-02T17:05:00.000Z",
+      completedAtISO: "2026-04-02T17:05:00.000Z",
+      ...completedBy,
+      clearedFingerprint: fingerprint(grant, "2026-01-01", "2026-03-31", grantOpening, grantEnding),
+      clearedCount: grantSummary.clearedCount,
+      clearedBalanceCents: grantSummary.clearedBalanceCents,
+      notes: "Quarterly statement.",
+      createdAtISO: "2026-04-02T17:05:00.000Z",
+      updatedAtISO: "2026-04-02T17:05:00.000Z",
     },
   ];
 }
