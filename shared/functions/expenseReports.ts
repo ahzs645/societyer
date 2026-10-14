@@ -432,9 +432,17 @@ export async function bulkApprovePortable(ctx: PortableMutationCtx, { societyId,
   const actor = await actorFor(ctx, societyId);
   const policy = await loadApprovalPolicy(ctx, societyId);
   const results: { id: string; status?: string; error?: string }[] = [];
+  let notFound = 0;
   for (const id of [...new Set(ids)].slice(0, 200)) {
+    let report: any;
     try {
-      const report: any = await getOwned(ctx, "expenseReports", id, societyId);
+      report = await getOwned(ctx, "expenseReports", id, societyId);
+    } catch {
+      // Never echo ids that don't belong to this workspace back to the caller.
+      notFound += 1;
+      continue;
+    }
+    try {
       const outcome = await approveOne(ctx, report, actor, policy.rules);
       results.push({ id, status: outcome.status });
     } catch (error: any) {
@@ -445,6 +453,7 @@ export async function bulkApprovePortable(ctx: PortableMutationCtx, { societyId,
     approved: results.filter((r) => r.status === "Approved").length,
     recorded: results.filter((r) => r.status === "Submitted").length,
     skipped: results.filter((r) => r.error),
+    notFound,
   };
 }
 
