@@ -6,6 +6,7 @@ import {
 } from "../../../shared/organizationDomain";
 import { deriveAgmFacts, type AgmMeetingLike } from "../../../shared/agmEvidence";
 import { legalGovernanceProfile } from "../../../shared/legalGovernanceProfiles";
+import { annualGovernanceSettings } from "../../../shared/annualGovernanceEvidence";
 import type { ComplianceFacts } from "./engine";
 import { todayDateOnly } from "../../../shared/dateOnly";
 
@@ -46,6 +47,15 @@ export function complianceFactsForOrganization(
   // A preparation workspace has no confirmed legal entity or registry obligations yet.
   if (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated" && !formationInferredFromRecords) return [];
   const entityType = organizationEntityType(organization);
+  // A corporation may discharge its annual business in writing instead of
+  // meeting (e.g. OBCA s. 104, CBCA s. 142, BC s. 182). Verified written
+  // completions count like held meetings; the latest evidence wins, so a stale
+  // profile date never hides later annual business.
+  const annualReferenceDate = [
+    cleanText(organization.annualReferenceDate) || undefined,
+    agm.annualMeetingDate,
+    ...(entityType === "society" ? [] : latestAnnualBusinessDates(organization, options.meetings, asOfDate)),
+  ].filter((date): date is string => Boolean(date)).sort().at(-1);
   const homeJurisdiction = legalGovernanceProfile(organization)?.jurisdictionCode ?? canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const homeFacts: ComplianceFacts = {
     jurisdictionCode: homeJurisdiction,
@@ -67,7 +77,7 @@ export function complianceFactsForOrganization(
     annualMeetingYear: agm.annualMeetingYear,
     agmYears: agm.agmYears,
     operatingSinceDate: agm.operatingSinceDate,
-    annualReferenceDate: cleanText(organization.annualReferenceDate) || agm.annualMeetingDate || undefined,
+    annualReferenceDate,
     agmExtensionDate: cleanText(organization.agmExtensionDate) || undefined,
     agmExtensionEvidence: cleanText(organization.agmExtensionEvidence) || undefined,
     eventDates: organizationEventDates(organization),
@@ -182,4 +192,12 @@ function organizationEventDates(organization: any): Record<string, string | unde
 
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Dates of verified annual business (held or written) for the annual-meeting interval. */
+function latestAnnualBusinessDates(organization: any, meetings: readonly AgmMeetingLike[] | undefined, asOfDate: string): string[] {
+  if (!Array.isArray(organization.annualMeetingCompletions) || !organization.annualMeetingCompletions.length) return [];
+  return (annualGovernanceSettings(organization, meetings ?? [], [], asOfDate).annualMeetingCompletions ?? [])
+    .map((item) => item.annualReferenceDate ?? item.date)
+    .filter((date): date is string => typeof date === "string" && date <= asOfDate);
 }

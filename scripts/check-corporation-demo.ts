@@ -340,6 +340,10 @@ function checkObligations(demo: CorporationDemo, label: string) {
   const facts = complianceFactsForOrganization(org, { asOfDate: demo.asOf, registrations: demo.tables.organizationRegistrations as any });
   const obligations = facts.flatMap((fact) => computeComplianceObligations(fact));
   check(obligations.length > 0, `${label}: the compliance engine produces obligations`);
+  // Annual business done by written resolution counts as the last annual
+  // meeting, so the Obligations page never asks for a date it already has.
+  const lastAnnual = (org.annualMeetingCompletions ?? []).map((row: any) => row.annualReferenceDate ?? row.date).filter((date: string) => date <= demo.asOf).sort().at(-1);
+  check(Boolean(facts[0]?.annualReferenceDate) && facts[0]?.annualReferenceDate === lastAnnual, `${label}: the last written annual business (${lastAnnual}) is the annual reference date (${facts[0]?.annualReferenceDate})`);
   check(obligations.every((row: any) => !row.dueDate || typeof row.dueDate === "string"), `${label}: obligations carry dates`);
   // The Obligations page: every past date is filed, reviewed or dismissed with
   // a reason, and every open filing obligation has its filing in the register.
