@@ -120,7 +120,6 @@ export function AssetsPage() {
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [csvInput, setCsvInput] = useState("");
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
-  const [mobileQuery, setMobileQuery] = useState("");
 
 
   const rows = (assets ?? []) as any[];
@@ -135,19 +134,6 @@ export function AssetsPage() {
     })),
     [rows],
   );
-  const mobileRows = useMemo(() => {
-    const query = mobileQuery.trim().toLowerCase();
-    if (!query) return rows;
-    return rows.filter((row) => [
-      row.assetTag,
-      row.name,
-      row.category,
-      row.serialNumber,
-      row.location,
-      row.custodianName,
-      row.responsiblePersonName,
-    ].some((value) => String(value ?? "").toLowerCase().includes(query)));
-  }, [rows, mobileQuery]);
 
   useEffect(() => {
     if (!scanCode || scanResult === undefined) return;
@@ -413,7 +399,7 @@ export function AssetsPage() {
         }
       />
 
-      <div className="stat-grid">
+      <div className="stat-grid stat-grid--scroll-phone">
         <StatTile label="Assets" value={stats.total} sub={`${stats.active} active`} />
         <StatTile label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
         <StatTile label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
@@ -431,37 +417,10 @@ export function AssetsPage() {
         </div>
       )}
 
-      <div className="asset-mobile-register">
-        <div className="asset-mobile-register__toolbar">
-          <input
-            className="input"
-            type="search"
-            aria-label="Search mobile asset register"
-            placeholder="Search assets…"
-            value={mobileQuery}
-            onChange={(event) => setMobileQuery(event.target.value)}
-          />
-          <span className="muted">{mobileRows.length} of {rows.length}</span>
-        </div>
-        <div className="asset-mobile-list">
-          {mobileRows.map((row) => (
-            <AssetMobileCard
-              key={row._id}
-              row={row}
-              documents={documents ?? []}
-              transactions={transactions ?? []}
-              onOpen={() => navigate(`/app/assets/${row._id}`)}
-              onEdit={() => openEdit(row)}
-              onAddStock={() => openStockIntake(row)}
-            />
-          ))}
-          {assets !== undefined && mobileRows.length === 0 && (
-            <div className="asset-mobile-empty">No assets match “{mobileQuery}”.</div>
-          )}
-        </div>
-      </div>
-
-      <div className="asset-desktop-register">
+      {/* One register at every width: phones get the same one-row toolbar
+          (views, search, filter, sort, group, export) above asset cards that
+          follow its row model; tablet and desktop get the table. */}
+      <div className="asset-register">
         <ObjectRecordTable
           societyId={society._id}
           nameSingular="asset"
@@ -486,6 +445,16 @@ export function AssetsPage() {
             return undefined;
           }}
           rowMenuSections={assetMenuSections}
+          renderPhoneCard={(row) => (
+            <AssetMobileCard
+              row={row}
+              documents={documents ?? []}
+              transactions={transactions ?? []}
+              onOpen={() => navigate(`/app/assets/${row._id}`)}
+              onEdit={() => openEdit(row)}
+              onAddStock={() => openStockIntake(row)}
+            />
+          )}
         />
       </div>
 

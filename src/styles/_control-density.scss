@@ -490,6 +490,25 @@ $tap-block: (
     font-size: token('fs-sm');
   }
 }
+// The narrowest phones (320px): the icon buttons sit 4px apart so the view
+// name keeps some room, and their hit areas shrink sideways to match (44px
+// tall, 36px wide) so none reaches into its neighbour. The count chip goes;
+// the view's records are right below.
+@media (max-width: 360px) {
+  .record-table__toolbar {
+    column-gap: token('s-1');
+  }
+  .record-table__toolbar-left {
+    margin-right: token('s-1');
+  }
+  .record-table__toolbar-right > .record-table__toolbar-button::after,
+  .record-table__toolbar-right > .record-table__view-switcher > .record-table__toolbar-button::after {
+    width: calc(100% + 4px);
+  }
+  .record-table__toolbar .record-table__view-count {
+    display: none;
+  }
+}
 
 // ============================================================
 // Desktop page headers: the page's actions use the default 32px button
@@ -571,6 +590,53 @@ $tap-block: (
       flex: none;
     }
   }
+}
+
+// RecordTable card body (phones, e.g. Assets): the table's row model drawn
+// as cards, with group headers between them.
+.record-cards {
+  display: grid;
+  gap: token('s-2');
+  padding-top: token('s-1');
+}
+.record-cards__group {
+  margin-top: token('s-2');
+  &:first-child {
+    margin-top: 0;
+  }
+}
+.record-cards__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  width: 100%;
+  min-height: token('control-h-touch');
+  padding: 0 token('s-1');
+  border: 0;
+  border-bottom: 1px solid token('border-color-light');
+  background: transparent;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  font-weight: token('fw-semibold');
+  text-align: left;
+}
+.record-cards__chevron {
+  flex: none;
+  color: token('text-tertiary');
+  transition: transform token('motion-move-fast') token('ease-move');
+}
+.record-cards__group-toggle[aria-expanded="true"] .record-cards__chevron {
+  transform: rotate(90deg);
+}
+.record-cards__group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-cards__group-count {
+  color: token('text-tertiary');
+  font-weight: token('fw-regular');
 }
 
 // Tasks (phones): "Current · All · Status" summary in the header row opens

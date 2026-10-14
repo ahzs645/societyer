@@ -330,40 +330,7 @@
   border-color: token('orange-6');
 }
 
-.asset-mobile-register {
-  display: none;
-}
-
 @media (max-width: 760px) {
-  .asset-desktop-register {
-    display: none;
-  }
-
-  .asset-mobile-register {
-    display: block;
-  }
-
-  .asset-mobile-register__toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-
-    .input {
-      min-width: 0;
-    }
-
-    .muted {
-      font-size: token('fs-tiny');
-      white-space: nowrap;
-    }
-  }
-
-  .asset-mobile-list {
-    display: grid;
-    gap: 10px;
-  }
 
   .asset-mobile-card {
     min-width: 0;
@@ -446,14 +413,6 @@
     .btn {
       flex: 1 1 0;
     }
-  }
-
-  .asset-mobile-empty {
-    padding: 24px 12px;
-    border: 1px dashed token('border');
-    border-radius: token('r-card');
-    color: token('text-tertiary');
-    text-align: center;
   }
 
   .form-grid {
