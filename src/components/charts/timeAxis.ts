@@ -28,7 +28,8 @@ export function timeTicks(dates: string[], plotWidth: number, minGap = 64): Axis
     if (changed) candidates.push(i);
   }
   // Drop a leading partial-period tick that would crowd the next one.
-  if (candidates.length > 1 && (candidates[1] - candidates[0]) * pxPerRow < minGap * 0.75) candidates.shift();
+  const partialStart = yearly ? dates[0].slice(5) !== "01-01" : dates[0].slice(8) !== "01";
+  if (partialStart && candidates.length > 1 && (candidates[1] - candidates[0]) * pxPerRow < minGap) candidates.shift();
 
   const every = Math.max(1, Math.ceil(minGap / Math.max(1, avgGap(candidates) * pxPerRow)));
   const picked = candidates.filter((_, i) => i % every === 0);
