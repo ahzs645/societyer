@@ -106,7 +106,8 @@ test("existing company collects its Act, addresses and share planning without fa
   const locations = await snapshot(page);
   expect(locations.tables.organizationAddresses.some((row: any) => row.street === "456 Records Road" && row.country === "Canada")).toBe(true);
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible();
+  // Phones hide the header "Saved" note; the toast still shows it.
+  await expect(page.getByText("Saved", { exact: true }).filter({ visible: true }).first()).toBeVisible();
   const afterProfileSave = await snapshot(page);
   expect(afterProfileSave.tables.societies[0].mailingAddress).toBe("\n\nNew Zealand");
   expect(afterProfileSave.tables.organizationAddresses.some((row: any) => row.type === "mailing" && row.country === "New Zealand" && row.city === "Needs review")).toBe(true);
