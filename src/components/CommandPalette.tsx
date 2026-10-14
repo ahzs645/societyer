@@ -1,5 +1,5 @@
 import { usePermissions } from "../hooks/usePermissions";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useConvex, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -568,7 +568,10 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
     return () => window.removeEventListener("kbar:pinned-changed", onPinChange);
   }, []);
 
-  useEffect(() => {
+  // Layout effect, not a passive one: when the palette replaces its loading
+  // stand-in, an Escape pressed before a passive effect ran would reach
+  // neither of them and leave the palette open.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();

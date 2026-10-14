@@ -156,7 +156,7 @@ export function CustomFieldsPage() {
       description={`Add fields for ${organizationVocabulary(society).isCorporation ? "contacts" : "members"}, directors, volunteers or staff.`}
       action={canWrite ? (
         <button type="button" className="btn btn--accent btn--sm" onClick={openNew}>
-          <Plus size={12} /> New field
+          <Plus size={12} /> Add your first field
         </button>
       ) : undefined}
     />
