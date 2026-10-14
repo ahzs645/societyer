@@ -31,6 +31,15 @@ crons.daily(
   {},
 );
 
+// Mondays 1:15pm UTC — the opt-in weekly summary: what's due, claims waiting
+// for approval and transactions needing attention.
+crons.weekly(
+  "weekly notification summary",
+  { dayOfWeek: "monday", hourUTC: 13, minuteUTC: 15 },
+  internal.notifications.sendWeeklyDigests,
+  {},
+);
+
 // Weekly retention review — flag documents past their retention period so a
 // human can decide whether to purge (CRA 7y for financial, 10y for most other
 // records; bylaws/constitution kept indefinitely).

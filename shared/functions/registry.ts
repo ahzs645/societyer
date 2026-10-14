@@ -1045,6 +1045,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "notifications:removeAllDismissed", handler: notificationsFns.notificationRemoveAllDismissed }),
   definePortableQuery({ name: "notifications:listPrefs", handler: notificationsFns.notificationsListPrefs }),
   definePortableMutation({ name: "notifications:upsertPref", handler: notificationsFns.notificationUpsertPref }),
+  definePortableQuery({ name: "notifications:settings", handler: notificationsFns.notificationSettings }),
+  definePortableMutation({ name: "notifications:setMyPref", handler: notificationsFns.notificationSetMyPref }),
+  definePortableMutation({ name: "notifications:setRule", handler: notificationsFns.notificationSetRule }),
+  definePortableMutation({ name: "notifications:evaluateAlerts", handler: notificationsFns.notificationEvaluateAlerts }),
 
   // fundingSources
   definePortableQuery({ name: "fundingSources:list", handler: fundingSourcesFns.fundingSourcesList }),

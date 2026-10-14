@@ -1,7 +1,7 @@
 import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
-import { query, mutation, action, internalMutation, internalAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { query, mutation, action, internalMutation, internalAction, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { buildConvexCapabilities } from "./providers/capabilities";
 import {
@@ -18,6 +18,13 @@ import {
   notificationRemoveAllDismissed,
   notificationsListPrefs,
   notificationUpsertPref,
+  notificationSettings,
+  notificationSetMyPref,
+  notificationSetRule,
+  notificationEvaluateAlerts,
+  scanSocietyAlerts,
+  buildDigestPlan,
+  type DigestRecipient,
 } from "../shared/functions/notifications";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -172,8 +179,50 @@ export const upsertPref = authorizedMutation("notifications:upsertPref", mutatio
   handler: async (ctx, args) => notificationUpsertPref(await toPortableMutationCtx(ctx), args),
 });
 
-// Cron: scan upcoming deadlines and filings, raise notifications for anything
-// due in ≤ 14 days that we haven't already notified about.
+
+/** The signed-in person's notification settings: kinds, switches, thresholds, weekly preview. */
+export const settings = authorizedQuery("notifications:settings", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => notificationSettings(await toPortableQueryCtx(ctx), args),
+});
+
+/** Turn one channel × kind switch on or off for the signed-in person. */
+export const setMyPref = authorizedMutation("notifications:setMyPref", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    channel: v.string(),
+    kind: v.string(),
+    enabled: v.boolean(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => notificationSetMyPref(await toPortableMutationCtx(ctx), args),
+});
+
+/** Change a workspace alert threshold (budget %, low balance, deadline lead, claim wait). */
+export const setRule = authorizedMutation("notifications:setRule", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    rule: v.string(),
+    enabled: v.boolean(),
+    value: v.number(),
+    accountId: v.optional(v.union(v.id("financialAccounts"), v.null())),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => notificationSetRule(await toPortableMutationCtx(ctx), args),
+});
+
+/** Run the alert scan for one workspace now (the cron runs it twice a day). */
+export const evaluateAlerts = authorizedMutation("notifications:evaluateAlerts", mutation)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => notificationEvaluateAlerts(await toPortableMutationCtx(ctx), args),
+});
+
+// Cron: scan deadlines, filings, grant reports, screenings, commitments and
+// director terms (within each workspace's deadline lead time), plus the
+// workspace thresholds: budget lines, low balance and claims waiting for
+// approval. The scan is shared with the in-browser workspace.
 export const scanUpcoming = internalMutation({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
@@ -181,278 +230,96 @@ export const scanUpcoming = internalMutation({
     const societies = societyId
       ? [await ctx.db.get(societyId)]
       : await ctx.db.query("societies").collect();
-
-    const now = Date.now();
-    const cutoff = now + 14 * 24 * 60 * 60 * 1000;
-    // Board mandates get a longer runway than ordinary deadlines — re-election
-    // has to be planned into the AGM agenda.
-    const TERM_EXPIRY_LEAD_DAYS = 60;
-
+    const portable = await toPortableMutationCtx(ctx);
+    let created = 0;
     for (const s of societies) {
       if (!s) continue;
-
-      const [deadlines, filings, grantReports, screenings, commitments, activeDirectors, recent] = await Promise.all([
-        ctx.db
-          .query("deadlines")
-          .withIndex("by_society", (q) => q.eq("societyId", s._id))
-          .collect(),
-        ctx.db
-          .query("filings")
-          .withIndex("by_society", (q) => q.eq("societyId", s._id))
-          .collect(),
-        ctx.db
-          .query("grantReports")
-          .withIndex("by_society", (q) => q.eq("societyId", s._id))
-          .collect(),
-        ctx.db
-          .query("volunteerScreenings")
-          .withIndex("by_society", (q) => q.eq("societyId", s._id))
-          .collect(),
-        ctx.db
-          .query("commitments")
-          .withIndex("by_society", (q) => q.eq("societyId", s._id))
-          .collect(),
-        ctx.db
-          .query("directors")
-          .withIndex("by_society_status", (q) => q.eq("societyId", s._id).eq("status", "Active"))
-          .collect(),
-        ctx.db
-          .query("notifications")
-          .withIndex("by_society", (q) => q.eq("societyId", s._id))
-          .order("desc")
-          .take(200),
-      ]);
-
-      const alreadyNotified = new Set(
-        recent.map((n) => `${n.kind}:${n.linkHref ?? ""}:${n.title}`),
-      );
-
-      for (const d of deadlines) {
-        if (d.done) continue;
-        const due = new Date(d.dueDate).getTime();
-        if (due > cutoff) continue;
-        const overdue = due < now;
-        const key = `deadline:/deadlines:${d.title}`;
-        if (alreadyNotified.has(key)) continue;
-        await ctx.db.insert("notifications", {
-          societyId: s._id,
-          kind: "deadline",
-          severity: overdue ? "err" : "warn",
-          title: overdue ? `Overdue: ${d.title}` : `Due soon: ${d.title}`,
-          body: `Category: ${d.category}. Due ${d.dueDate}.`,
-          linkHref: "/deadlines",
-          createdAtISO: new Date().toISOString(),
-        });
-      }
-
-      for (const f of filings) {
-        if (f.status === "Filed") continue;
-        const due = new Date(f.dueDate).getTime();
-        if (due > cutoff) continue;
-        const overdue = due < now;
-        const key = `filing:/filings:${f.kind} — ${f.periodLabel ?? f.dueDate}`;
-        if (alreadyNotified.has(key)) continue;
-        await ctx.db.insert("notifications", {
-          societyId: s._id,
-          kind: "filing",
-          severity: overdue ? "err" : "warn",
-          title: `${f.kind} — ${f.periodLabel ?? f.dueDate}`,
-          body: overdue
-            ? `Filing overdue as of ${f.dueDate}.`
-            : `Filing due ${f.dueDate}.`,
-          linkHref: "/filings",
-          createdAtISO: new Date().toISOString(),
-        });
-      }
-
-      for (const report of grantReports) {
-        if (report.status === "Submitted") continue;
-        const due = new Date(report.dueAtISO).getTime();
-        if (due > cutoff) continue;
-        const overdue = due < now;
-        // Deep-link to the specific grant. Stored bare; normalized to
-        // /app/grants/{id} on read. The dedup key uses the same value so it
-        // stays consistent with what's stored.
-        const linkHref = `/grants/${report.grantId}`;
-        const key = `general:${linkHref}:${report.title}`;
-        if (alreadyNotified.has(key)) continue;
-        await ctx.db.insert("notifications", {
-          societyId: s._id,
-          kind: "general",
-          severity: overdue ? "err" : "warn",
-          title: overdue ? `Grant report overdue: ${report.title}` : `Grant report due soon: ${report.title}`,
-          body: overdue
-            ? `Grant reporting deadline passed on ${report.dueAtISO}.`
-            : `Grant reporting deadline is ${report.dueAtISO}.`,
-          linkHref,
-          createdAtISO: new Date().toISOString(),
-        });
-      }
-
-      for (const screening of screenings) {
-        if (!screening.expiresAtISO) continue;
-        const due = new Date(screening.expiresAtISO).getTime();
-        if (due > cutoff) continue;
-        const overdue = due < now;
-        const key = `general:/volunteers:${screening.kind}`;
-        if (alreadyNotified.has(key)) continue;
-        await ctx.db.insert("notifications", {
-          societyId: s._id,
-          kind: "general",
-          severity: overdue ? "err" : "warn",
-          title: overdue
-            ? `Volunteer screening expired: ${screening.kind}`
-            : `Volunteer screening expiring soon: ${screening.kind}`,
-          body: overdue
-            ? `A volunteer screening deadline passed on ${screening.expiresAtISO}.`
-            : `A volunteer screening expires on ${screening.expiresAtISO}.`,
-          linkHref: "/volunteers",
-          createdAtISO: new Date().toISOString(),
-        });
-      }
-
-      for (const commitment of commitments) {
-        if (!commitment.nextDueDate || commitment.status === "Closed" || commitment.status === "Paused") continue;
-        const due = new Date(commitment.nextDueDate).getTime();
-        const commitmentCutoff = now + Math.max(14, commitment.noticeLeadDays ?? 0) * 24 * 60 * 60 * 1000;
-        if (due > commitmentCutoff) continue;
-        const overdue = due < now;
-        const title = overdue
-          ? `Commitment overdue: ${commitment.title}`
-          : `Commitment due soon: ${commitment.title}`;
-        const key = `general:/app/commitments:${title}`;
-        if (alreadyNotified.has(key)) continue;
-        await ctx.db.insert("notifications", {
-          societyId: s._id,
-          kind: "general",
-          severity: overdue ? "err" : "warn",
-          title,
-          body: overdue
-            ? `Commitment deadline passed on ${commitment.nextDueDate}.`
-            : `Commitment deadline is ${commitment.nextDueDate}${commitment.noticeLeadDays ? `; lead time is ${commitment.noticeLeadDays} days.` : "."}`,
-          linkHref: "/app/commitments",
-          createdAtISO: new Date().toISOString(),
-        });
-      }
-
-      // Director mandates: a board term needs more runway than a 14-day filing,
-      // so flag terms ending within ~60 days (Corporify's "be prepared for the
-      // AGM"). Re-election planning lives on /app/directors.
-      const termCutoff = now + TERM_EXPIRY_LEAD_DAYS * 24 * 60 * 60 * 1000;
-      for (const director of activeDirectors) {
-        if (!director.termEnd) continue;
-        const due = new Date(director.termEnd).getTime();
-        if (Number.isNaN(due) || due > termCutoff) continue;
-        const overdue = due < now;
-        const name = `${director.firstName} ${director.lastName}`.trim();
-        const title = overdue
-          ? `Director term expired: ${name}`
-          : `Director term expiring soon: ${name}`;
-        const key = `governance:/app/directors:${title}`;
-        if (alreadyNotified.has(key)) continue;
-        await ctx.db.insert("notifications", {
-          societyId: s._id,
-          kind: "governance",
-          severity: overdue ? "err" : "warn",
-          title,
-          body: overdue
-            ? `${director.position} term ended ${director.termEnd}. Re-elect or update the register before the AGM.`
-            : `${director.position} term ends ${director.termEnd}. Plan the re-election for the AGM.`,
-          linkHref: "/app/directors",
-          createdAtISO: new Date().toISOString(),
-        });
-      }
+      created += (await scanSocietyAlerts(portable, s._id)).created;
     }
+    return { societies: societies.length, created };
   },
 });
 
-/**
- * Does a (channel, kind) pair pass a user's notification prefs? An exact
- * (channel, kind) row wins; otherwise a (channel, "all") row; otherwise the
- * channel's default. Email defaults ON (opt-out per kind); SMS defaults OFF
- * (opt-in) so the daily cron never texts someone who never asked.
- */
-function digestAllows(
-  prefs: Array<{ channel: string; kind: string; enabled: boolean }>,
-  channel: string,
-  kind: string,
-): boolean {
-  const exact = prefs.find((p) => p.channel === channel && p.kind === kind);
-  if (exact) return exact.enabled;
-  const wildcard = prefs.find((p) => p.channel === channel && p.kind === "all");
-  if (wildcard) return wildcard.enabled;
-  return channel === "email";
+/** Digest recipients and their lines, honouring each person's switches and permissions. */
+export const digestPlan = internalQuery({
+  args: { societyId: v.id("societies"), cadence: v.union(v.literal("daily"), v.literal("weekly")) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, cadence }) => {
+    const society = await ctx.db.get(societyId);
+    if (!society) return { demo: false, recipients: [] };
+    const recipients = await buildDigestPlan(await toPortableQueryCtx(ctx), societyId, cadence);
+    return { demo: (society as any).demoMode === true, recipients };
+  },
+});
+
+type DigestCadence = "daily" | "weekly";
+
+async function deliverDigest(ctx: any, societyId: Id<"societies">, cadence: DigestCadence) {
+  const { demo, recipients } = await ctx.runQuery(internal.notifications.digestPlan, { societyId, cadence });
+  // Reach delivery providers through the injected capability bag instead of
+  // importing them directly. A runtime without email/sms wired gets a
+  // structured CAPABILITY_UNAVAILABLE rather than a silent send.
+  const capabilities = buildConvexCapabilities(undefined, { demo });
+  let emailsSent = 0;
+  let smsSent = 0;
+  for (const r of recipients as DigestRecipient[]) {
+    if (r.email) {
+      const subject = cadence === "weekly"
+        ? "Societyer weekly summary"
+        : `Societyer digest — ${r.emailCount} open item${r.emailCount === 1 ? "" : "s"}`;
+      const intro = cadence === "weekly" ? "Here's your week ahead:" : "Your open items:";
+      await capabilities.email.sendEmail({
+        to: r.email,
+        subject,
+        text: `Hi ${r.displayName},\n\n${intro}\n${r.emailLines.join("\n")}\n\nOpen Societyer to review. Change what you receive under Notifications → Settings.`,
+        tag: cadence === "weekly" ? "digest-weekly" : "digest",
+      });
+      emailsSent += 1;
+    }
+    // Text messages are opt-in: the plan only carries a phone for people who turned them on.
+    if (r.phone && r.smsSummary) {
+      await capabilities.sms.sendSms({ to: r.phone, body: `Societyer: ${r.smsSummary}`, tag: "digest" });
+      smsSent += 1;
+    }
+  }
+  return { emailsSent, smsSent };
 }
 
-// Action: bundle digest email + SMS for anyone who wants them. Per-user, the
-// open items are filtered by that user's per-kind prefs for each channel.
+// Action: send the digest now for one workspace (the "Send digest" button).
 export const sendDigest = authorizedAction("notifications:sendDigest", action)({
-  args: { societyId: v.id("societies") },
+  args: { societyId: v.id("societies"), cadence: v.optional(v.union(v.literal("daily"), v.literal("weekly"))) },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [users, notifications] = await Promise.all([
-      ctx.runQuery(api.users.list, { societyId }),
-      ctx.runQuery(api.notifications.list, { societyId, limit: 50, unreadOnly: true }),
-    ]);
-    if (notifications.length === 0) return { emailsSent: 0, smsSent: 0 };
-
-    // Reach delivery providers through the injected capability bag instead of
-    // importing them directly. A runtime without email/sms wired gets a
-    // structured CAPABILITY_UNAVAILABLE rather than a silent send.
-    const societies = await ctx.runQuery(api.society.list, {});
-    const demo = societies.some((society: any) => society._id === societyId && society.demoMode === true);
-    const capabilities = buildConvexCapabilities(undefined, { demo });
-    let emailsSent = 0;
-    let smsSent = 0;
-    for (const u of users) {
-      if (u.status !== "Active") continue;
-      const prefs = await ctx.runQuery(api.notifications.listPrefs, { userId: u._id });
-
-      const emailItems = notifications.filter((n: any) => digestAllows(prefs, "email", n.kind));
-      if (emailItems.length > 0 && u.email) {
-        const lines = emailItems
-          .slice(0, 10)
-          .map((n: any) => `• [${n.severity.toUpperCase()}] ${n.title}`)
-          .join("\n");
-        await capabilities.email.sendEmail({
-          to: u.email,
-          subject: `Societyer digest — ${emailItems.length} open item${emailItems.length === 1 ? "" : "s"}`,
-          text: `Hi ${u.displayName},\n\n${lines}\n\nOpen Societyer to review.`,
-          tag: "digest",
-        });
-        emailsSent += 1;
-      }
-
-      // SMS is opt-in: needs a phone AND an explicitly-enabled sms pref.
-      const smsOptedIn = prefs.some((p: any) => p.channel === "sms" && p.enabled);
-      const smsItems = notifications.filter((n: any) => digestAllows(prefs, "sms", n.kind));
-      if (smsOptedIn && u.phone && smsItems.length > 0) {
-        const top = smsItems.slice(0, 3).map((n: any) => n.title).join("; ");
-        await capabilities.sms.sendSms({
-          to: u.phone,
-          body: `Societyer: ${smsItems.length} open item${smsItems.length === 1 ? "" : "s"}. ${top}`,
-          tag: "digest",
-        });
-        smsSent += 1;
-      }
-    }
-    return { emailsSent, smsSent };
-  },
+  handler: async (ctx, { societyId, cadence }) => deliverDigest(ctx, societyId, cadence ?? "daily"),
 });
 
-// Cron entry: run the digest for every society (the public action is per-entity).
+async function deliverToEverySociety(ctx: any, cadence: DigestCadence) {
+  const societies = await ctx.runQuery(internal.notifications.societyIds, {});
+  let emailsSent = 0;
+  let smsSent = 0;
+  for (const societyId of societies as Id<"societies">[]) {
+    const r = await deliverDigest(ctx, societyId, cadence);
+    emailsSent += r.emailsSent;
+    smsSent += r.smsSent;
+  }
+  return { societies: societies.length, emailsSent, smsSent };
+}
+
+export const societyIds = internalQuery({
+  args: {},
+  returns: v.any(),
+  handler: async (ctx) => (await ctx.db.query("societies").collect()).map((s) => s._id),
+});
+
+// Cron entry: the daily digest for every workspace.
 export const sendDailyDigests = internalAction({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => {
-    const societies = await ctx.runQuery(api.society.list, {});
-    let emailsSent = 0;
-    let smsSent = 0;
-    for (const s of societies) {
-      const r = await ctx.runAction(api.notifications.sendDigest, { societyId: s._id });
-      emailsSent += r.emailsSent ?? 0;
-      smsSent += r.smsSent ?? 0;
-    }
-    return { societies: societies.length, emailsSent, smsSent };
-  },
+  handler: async (ctx) => deliverToEverySociety(ctx, "daily"),
+});
+
+// Cron entry: the weekly summary (opt-in) for every workspace.
+export const sendWeeklyDigests = internalAction({
+  args: {},
+  returns: v.any(),
+  handler: async (ctx) => deliverToEverySociety(ctx, "weekly"),
 });

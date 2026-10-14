@@ -2264,6 +2264,7 @@ async function wipe(ctx: PortableMutationCtx) {
     "signatures",
     "notifications",
     "notificationPrefs",
+    "notificationRules",
     "users",
     // Priority A/B additions
     "inspections",

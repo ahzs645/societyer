@@ -56,6 +56,8 @@ const HANDLER_POLICIES = new Set([
   "offlineMeetings:authorizedSnapshot", "offlineMeetings:syncIdentity", "offlineMeetings:downloads", "offlineMeetings:fileForDownload",
   "apiPlatform:createToken", "apiPlatform:verifyToken", "apiPlatform:resourceTenantStatus", "apiPlatform:listWebhookSubscriptionsForEvent", "apiPlatform:upsertWebhookSubscription", "apiPlatform:setWebhookSubscriptionStatus", "apiPlatform:createWebhookDelivery", "apiPlatform:updateWebhookDelivery", "apiPlatform:upsertIntegrationSyncState", "apiPlatform:bootstrapUserIdentity", "apiPlatform:migrateUserToClerk",
   "elections:castBallot", "elections:submitNomination",
+  // Saves the signed-in person's own switches only; the handler checks membership and tasks:read.
+  "notifications:setMyPref",
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",
   "invitations:accept", "invitations:getByToken", "permissions:myPermissions", "permissions:check", "permissions:listAll",
   "society:createWorkspace", "society:create", "society:list", "society:listMine", "society:current", "firm:list", "firm:organizations",
