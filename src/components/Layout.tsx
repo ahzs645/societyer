@@ -163,8 +163,11 @@ import type {
   SidebarContextMenu,
 } from "./Layout.internal";
 import {
+  SidebarAreaSwitcher,
   SidebarNavTree,
   SidebarRail,
+  SidebarRailAreaButton,
+  filterEntriesForArea,
   SidebarThemeCycleButton,
   handleSidebarNavKeyDown,
   type RailFavorite,
@@ -176,6 +179,7 @@ import { ShortcutHint } from "./ShortcutHint";
 import { openShortcutHelp } from "./ShortcutHelp";
 import { navParentForPath, navRouteForPath } from "../lib/navTree";
 import { useGoToShortcuts } from "../hooks/useGoToShortcuts";
+import { useNavAreaShell, useSwitchNavArea } from "../hooks/useNavArea";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
 
@@ -229,6 +233,8 @@ export function Layout() {
   );
   const railFlyoutRef = useRef<((id: string, focusFirst: boolean) => void) | null>(null);
   useGoToShortcuts();
+  const { area: navArea, labels: navAreaLabels } = useNavAreaShell();
+  const switchNavArea = useSwitchNavArea();
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<{
     top?: number;
@@ -698,6 +704,8 @@ export function Layout() {
   // for relabelled rows). A matching parent keeps all its pages; otherwise only
   // the matching pages show, and every remaining parent renders expanded.
   const navFilterQuery = navFilter.trim().toLowerCase();
+  // The area switcher narrows the tree; typing in the filter searches every area.
+  const areaNavTree = filterEntriesForArea(visibleNavTree, navArea);
   const displayedNavTree: VisibleNavEntry[] = navFilterQuery
     ? visibleNavTree.flatMap<VisibleNavEntry>((entry) => {
         const matches = (item: NavItem) =>
@@ -708,7 +716,7 @@ export function Layout() {
         const children = entry.children.filter(matches);
         return children.length > 0 ? [{ ...entry, children }] : [];
       })
-    : visibleNavTree;
+    : areaNavTree;
   const setParentOpen = (id: string, open: boolean) => {
     setOpenParents((prev) => {
       if (Boolean(prev[id]) === open) return prev;
@@ -1222,6 +1230,7 @@ export function Layout() {
               )}
             </div>
           </div>
+          {!isRail && <SidebarAreaSwitcher area={navArea} labels={navAreaLabels} onChange={switchNavArea} />}
           {!isMobileNav && !isRail && (
             <div className="sidebar__setup">
               <SetupPill variant="sidebar" />
@@ -1284,6 +1293,7 @@ export function Layout() {
             {isRail ? (
               <>
                 <div className="sidebar-rail__tools">
+                  <SidebarRailAreaButton area={navArea} labels={navAreaLabels} onChange={switchNavArea} />
                   <SetupPill variant="rail" />
                   <Tooltip content={<>{t("common.search")} <ShortcutHint id="commandPalette" tone="inverse" /></>} placement="right" delay={250}>
                     <button
@@ -1314,7 +1324,7 @@ export function Layout() {
                 </div>
                 <SidebarRail
                   favorites={railFavorites}
-                  entries={visibleNavTree}
+                  entries={areaNavTree}
                   activeRoute={activeNavRoute}
                   getParentLabel={getParentLabel}
                   getItemLabel={getTreeItemLabel}
@@ -1489,7 +1499,7 @@ export function Layout() {
               />
             )}
             <div className="sidebar__section sidebar__section--compact">
-              <span>{t("nav.allRecords")}</span>
+              <span>{navArea === "all" ? t("nav.allRecords") : navAreaLabels[navArea]}</span>
             </div>
             {/* With ~95 routes, type-to-jump beats scrolling. Matches L1 and
               * L2 labels; matching sections expand. */}

@@ -178,6 +178,19 @@
       "overview": "Aperçu"
     }
   },
+  "navArea": {
+    "label": "Espace de travail",
+    "all": "Tout",
+    "governance": "Gouvernance",
+    "finance": "Finances",
+    "allHint": "Afficher toutes les sections",
+    "governanceHint": "Gouvernance : tout sauf les finances",
+    "financeHint": "Finances : comptabilité, approbations, factures et subventions",
+    "current": "actuel",
+    "switchToFinance": "Passer aux Finances",
+    "switchToGovernance": "Passer à la Gouvernance",
+    "showAll": "Afficher tous les espaces"
+  },
   "sidebar": {
     "openNavigation": "Ouvrir la navigation",
     "closeNavigation": "Fermer la navigation",

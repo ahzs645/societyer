@@ -34,6 +34,8 @@ export const SHORTCUTS = {
   goTasks: { keys: ["G", "T"], label: "Go to tasks", sequence: true },
   goMeetings: { keys: ["G", "M"], label: "Go to meetings", sequence: true },
   goFinancials: { keys: ["G", "F"], label: "Go to financials", sequence: true },
+  areaGovernance: { keys: ["G", "G"], label: "Switch the sidebar to Governance", sequence: true, keywords: ["area", "workspace"] },
+  areaAll: { keys: ["G", "A"], label: "Show every sidebar area", sequence: true, keywords: ["area", "workspace", "finance"] },
 } satisfies Record<string, Shortcut>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;
@@ -72,6 +74,8 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
       SHORTCUTS.goTasks,
       SHORTCUTS.goMeetings,
       SHORTCUTS.goFinancials,
+      SHORTCUTS.areaGovernance,
+      SHORTCUTS.areaAll,
     ],
   },
   {

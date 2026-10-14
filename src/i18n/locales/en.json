@@ -178,6 +178,19 @@
       "overview": "Overview"
     }
   },
+  "navArea": {
+    "label": "Workspace area",
+    "all": "All",
+    "governance": "Governance",
+    "finance": "Finance",
+    "allHint": "Show every section",
+    "governanceHint": "Governance: everything except finance",
+    "financeHint": "Finance: books, approvals, invoices and grants",
+    "current": "current",
+    "switchToFinance": "Switch to Finance",
+    "switchToGovernance": "Switch to Governance",
+    "showAll": "Show all areas"
+  },
   "sidebar": {
     "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation",
