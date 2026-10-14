@@ -1248,7 +1248,7 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.openTasks")}</span>
-                    <Pill size="sm">{counts ? counts.openTasks : <span aria-label="Loading" className="muted">…</span>}</Pill>
+                    {counts ? <NavCountPill to="/app/tasks" count={counts.openTasks} /> : <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>}
                   </NavLink>
                   <NavLink
                     to="/app/deadlines"
@@ -1266,7 +1266,7 @@ export function Layout() {
                         <Pill size="sm" tone="warn">Set up</Pill>
                       </span>
                     ) : (
-                      <Pill size="sm">{counts.openDeadlines}</Pill>
+                      <NavCountPill to="/app/deadlines" count={counts.openDeadlines} />
                     )}
                   </NavLink>
                 </>

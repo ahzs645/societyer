@@ -288,6 +288,7 @@ export function TasksPage() {
     const open = registerRecords.filter((task) => isOpenStatus(task.status));
     return {
       all: registerRecords.length,
+      open: open.length,
       mine: open.filter((task) => isMine(task, currentUserId)).length,
       overdue: registerRecords.filter((task) => taskInScope(task, "overdue", currentUserId)).length,
       week: registerRecords.filter((task) => taskInScope(task, "week", currentUserId)).length,

@@ -182,7 +182,7 @@ export function MembersPage() {
         title="Members"
         icon={<Users size={16} />}
         iconColor="blue"
-        subtitle={membersSubtitle(society)}
+        subtitle={members ? `${membersSubtitle(society)} ${activeMemberSummary(records)}` : membersSubtitle(society)}
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
@@ -409,6 +409,12 @@ export function MembersPage() {
 function cleanAliases(value: unknown) {
   const items = Array.isArray(value) ? value : String(value ?? "").split(",");
   return Array.from(new Set(items.map((item) => String(item).trim()).filter(Boolean)));
+}
+
+/** Says what the sidebar Members badge counts (active members) beside the register total. */
+function activeMemberSummary(records: { status?: string }[]): string {
+  const active = records.filter((member) => member.status === "Active").length;
+  return `${active.toLocaleString()} active of ${records.length.toLocaleString()} ${records.length === 1 ? "member" : "members"}.`;
 }
 
 function membersSubtitle(society: any): string {
