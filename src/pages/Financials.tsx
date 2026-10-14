@@ -13,6 +13,7 @@ import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
+import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
 import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
@@ -452,6 +453,8 @@ export function FinancialsPage() {
         />
       </div>
 
+      {tab === "transactions" && <TransactionRulesBar societyId={society._id} />}
+
       {tab === "transactions" && (accounts ?? []).length > 0 && (
         <BankCsvImportCard
           societyId={society._id}
@@ -801,7 +804,7 @@ export function FinancialsPage() {
                 renderCell={({ record: t, field }) => {
                   if (field.name === "date") return <span className="mono">{t.date}</span>;
                   if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
-                  if (field.name === "category") return <Badge>{t.category ?? "uncategorized"}</Badge>;
+                  if (field.name === "category") return <span className="category-cell"><CategorizationProvenance txn={t} /><Badge>{t.category ?? "uncategorized"}</Badge></span>;
                   if (field.name === "amountCents") return <span className="mono" style={{ color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>{money(t.amountCents)}</span>;
                   if (field.name === "items") {
                     const links = linksByTransactionId.get(t._id) ?? [];

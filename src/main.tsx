@@ -84,6 +84,8 @@ const MeetingTemplatesPage = React.lazy(() => import("./pages/MeetingTemplates")
 const MeetingTemplateBuilderPage = React.lazy(() => import("./pages/MeetingTemplates").then((m) => ({ default: m.MeetingTemplateBuilderPage })));
 const MotionsPage = React.lazy(() => import("./pages/Motions").then((m) => ({ default: m.MotionsPage })));
 const TreasurerPage = React.lazy(() => import("./pages/Treasurer").then((m) => ({ default: m.TreasurerPage })));
+const ApprovalsPage = React.lazy(() => import("./pages/Approvals").then((m) => ({ default: m.ApprovalsPage })));
+const TransactionRulesPage = React.lazy(() => import("./pages/TransactionRules").then((m) => ({ default: m.TransactionRulesPage })));
 const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
 const InventoryPage = React.lazy(() => import("./pages/Inventory").then((m) => ({ default: m.InventoryPage })));
 const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
@@ -504,6 +506,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="motion-backlog" element={<Navigate to="/app/motions?tab=tabled" replace />} />
             <Route path="motion-library" element={<Navigate to="/app/motions?tab=templates" replace />} />
             <Route path="treasurer" element={<TreasurerPage />} />
+            <Route path="approvals" element={<ApprovalsPage />} />
+            <Route path="transaction-rules" element={<TransactionRulesPage />} />
             <Route
               path="assets"
               element={withModule("assets", <AssetsPage />)}

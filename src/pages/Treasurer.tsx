@@ -519,7 +519,8 @@ export function TreasurerPage() {
           <div>
             <h2 className="card__title">Expense reports</h2>
             <span className="card__subtitle">
-              Reimbursement claims with receipt evidence and approval status.
+              Reimbursement claims with receipt evidence and approval status.{" "}
+              <Link to="/app/approvals">Open approvals queue</Link>
             </span>
           </div>
           <button className="btn btn--ghost btn--sm treasurer-card-head-action" onClick={() => setExpenseDraft(newExpenseDraft())} disabled={!canWrite}>
@@ -586,7 +587,7 @@ export function TreasurerPage() {
                         <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted" })} disabled={!canWrite}>Submit</button>
                       )}
                       {report.status === "Submitted" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved" })} disabled={!canWrite}>Approve</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved" }).catch((error: any) => toast.error("Could not approve", error?.message))} disabled={!canWrite}>Approve</button>
                       )}
                       {report.status === "Approved" && (
                         (financialAccounts ?? []).length > 0 ? (
