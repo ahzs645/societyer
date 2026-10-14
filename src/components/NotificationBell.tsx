@@ -101,9 +101,9 @@ export function NotificationBell() {
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Bell key={ringKey} size={14} className={ringKey > 0 ? "notif-bell__icon is-ringing" : "notif-bell__icon"} />
+        <Bell key={`ring-${ringKey}`} size={14} className={ringKey > 0 ? "notif-bell__icon is-ringing" : "notif-bell__icon"} />
         {unreadCount > 0 ? (
-          <span key={unreadCount} className="notif-bell__badge">
+          <span key={`badge-${unreadCount}`} className="notif-bell__badge">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         ) : null}

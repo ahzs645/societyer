@@ -243,6 +243,8 @@ export function Spotlight({
     window.addEventListener("scroll", place, true);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
     observer?.observe(anchorEl);
+    // Content loading above the anchor moves it without resizing it.
+    observer?.observe(document.body);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
