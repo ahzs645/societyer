@@ -677,7 +677,7 @@ function ProgramStatementEditor({
       </div>
 
       <LineEditor
-        title="Program Revenues"
+        title="Program revenues"
         categories={REVENUE_CATEGORIES}
         lines={edit.revenues}
         kind="revenues"
@@ -686,7 +686,7 @@ function ProgramStatementEditor({
         onRemoveLine={onRemoveLine}
       />
       <LineEditor
-        title="Program Expenses"
+        title="Program expenses"
         categories={EXPENSE_CATEGORIES}
         lines={edit.expenses}
         kind="expenses"

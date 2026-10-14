@@ -117,7 +117,7 @@ export function AnnualCyclePage() {
   return (
     <div className="page">
       <PageHeader
-        title="Annual Cycle"
+        title="Annual cycle"
         icon={<ListChecks size={16} />}
         iconColor="orange"
         subtitle={`This year's ${entity.annualMeeting}, filings and records in one checklist.`}
