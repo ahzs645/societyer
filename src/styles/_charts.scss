@@ -1,0 +1,614 @@
+// ============================================================
+// Chart kit (src/components/charts) and chart placements.
+// Colours come from the --dv-* tokens; text always wears text tokens,
+// never a series colour. Marks: 2px lines, ≤24px bars with a 4px rounded
+// data end, hairline solid grid, 2px surface ring on dots.
+// ============================================================
+@use "tokens" as *;
+
+// ---------- Card shell ----------
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.chart-card__head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.chart-card__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.chart-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  margin-left: auto;
+}
+.chart-card__table-toggle {
+  gap: token('s-1');
+  white-space: nowrap;
+}
+.chart-card__body {
+  padding: token('s-3') token('s-4') token('s-4');
+  min-width: 0;
+}
+.chart-card__footer {
+  padding: token('s-3') token('s-4');
+  border-top: 1px solid token('border');
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.chart-card__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: token('s-2');
+  padding: token('s-6') token('s-4');
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+  text-align: center;
+  border: 1px dashed token('border');
+  border-radius: token('r-md');
+}
+.chart-card__skeleton {
+  display: block;
+}
+.chart-table-scroll {
+  overflow-x: auto;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+}
+.chart-table {
+  margin: 0;
+  th[scope="row"] {
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+  }
+}
+
+// ---------- Plot ----------
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-2');
+  min-width: 0;
+}
+.chart__plot {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  border-radius: token('r-sm');
+
+  &:focus-visible {
+    outline: token('focus-ring-width') solid token('focus-ring-color');
+    outline-offset: token('focus-ring-offset');
+  }
+  svg {
+    display: block;
+    overflow: visible;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  &.is-selectable svg {
+    touch-action: pan-y;
+  }
+}
+.chart-grid line {
+  stroke: token('dv-grid');
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.chart-grid line.chart-zero {
+  stroke: token('dv-axis');
+}
+.chart-axis-label {
+  fill: token('dv-label');
+  font-size: token('fs-xxs');
+  font-variant-numeric: tabular-nums;
+}
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart-line--comparison {
+  stroke: token('dv-previous') !important;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  animation: chart-fade-in token('motion-fade-slow') token('ease-fade') both;
+}
+.chart-area {
+  stroke: none;
+  animation: chart-fade-in token('motion-panel') token('ease-fade') both;
+}
+.chart-dot {
+  stroke: token('dv-surface');
+  stroke-width: 2;
+}
+.chart-crosshair line {
+  stroke: token('dv-crosshair');
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.chart-average line {
+  stroke: token('dv-average');
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.chart-ref-label {
+  fill: token('dv-label');
+  font-size: token('fs-xxs');
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: token('dv-surface');
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.chart-hover-band {
+  fill: token('dv-hover-band');
+}
+.chart-bars .is-dimmed {
+  opacity: 0.32;
+  transition: opacity token('motion-fade') token('ease-fade');
+}
+.chart-bar {
+  transform-box: fill-box;
+  animation: chart-grow-y token('motion-panel') token('ease-appear') both;
+}
+.chart-bar--up {
+  transform-origin: 50% 100%;
+}
+.chart-bar--down {
+  transform-origin: 50% 0%;
+}
+
+// Selection (drag-to-select range)
+.chart-selection__dim {
+  fill: token('dv-surface');
+  opacity: 0.55;
+}
+.chart-selection__fill {
+  fill: token('dv-selection');
+}
+.chart-selection__edge {
+  stroke: token('dv-selection-edge');
+  stroke-width: 1.5;
+}
+.chart-selection__handle {
+  fill: token('dv-surface');
+  stroke: token('dv-selection-edge');
+  stroke-width: 1.5;
+}
+.chart-clear {
+  position: absolute;
+  top: token('s-1');
+  right: token('s-1');
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  padding: 2px token('s-2');
+  border-radius: token('r-pill');
+  border: 1px solid token('border-alpha');
+  background: token('bg-frosted');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  box-shadow: token('elevation-1');
+  cursor: pointer;
+
+  &:hover {
+    color: token('text-primary');
+    background: token('bg-panel');
+  }
+}
+
+// Draw-in (one-shot on mount). The global reduced-motion rule collapses it.
+.chart-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: chart-draw-in token('motion-panel') token('ease-move') both;
+}
+.chart-fade {
+  animation: chart-fade-in token('motion-fade-slow') token('ease-fade') both;
+}
+.chart-grow-x {
+  transform-origin: 0 50%;
+  animation: chart-grow-x token('motion-panel') token('ease-appear') both;
+}
+@keyframes chart-draw-in {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes chart-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes chart-grow-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes chart-grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-draw,
+  .chart-fade,
+  .chart-area,
+  .chart-bar,
+  .chart-grow-x,
+  .chart-line--comparison {
+    animation: none;
+  }
+}
+
+// ---------- Legend ----------
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-1') token('s-3');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: 24px;
+  padding: 0 token('s-1');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  cursor: pointer;
+
+  &:hover {
+    background: token('bg-hover-alpha');
+    color: token('text-primary');
+  }
+  &.is-off {
+    color: token('text-tertiary');
+    text-decoration: line-through;
+    .chart-swatch {
+      opacity: 0.35;
+    }
+  }
+}
+.chart-legend__item--static {
+  cursor: default;
+  &:hover {
+    background: transparent;
+    color: token('text-secondary');
+  }
+}
+@media (pointer: coarse) {
+  .chart-legend__item {
+    min-height: 40px;
+  }
+}
+
+// Swatches mirror the mark: block for bars/areas, stroke for lines.
+.chart-swatch {
+  flex: none;
+  display: inline-block;
+  background: var(--swatch);
+}
+.chart-swatch--bar {
+  width: 10px;
+  height: 10px;
+  border-radius: token('r-xs');
+}
+.chart-swatch--line {
+  width: 14px;
+  height: 2px;
+  border-radius: token('r-xs');
+}
+.chart-swatch--dashed {
+  width: 14px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--swatch) 0 4px, transparent 4px 7px);
+}
+
+// ---------- Tooltip ----------
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  min-width: 160px;
+  max-width: 260px;
+  padding: token('s-2') token('s-3');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  box-shadow: token('elevation-2');
+  color: token('text-primary');
+  font-size: token('fs-xs');
+  pointer-events: none;
+  animation: chart-fade-in token('motion-fade-fast') token('ease-fade') both;
+}
+.chart-tooltip__title {
+  color: token('text-secondary');
+  margin-bottom: token('s-1');
+  font-weight: 500;
+}
+.chart-tooltip__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+.chart-tooltip__row,
+.chart-tooltip__total {
+  display: grid;
+  grid-template-columns: 14px auto 1fr;
+  align-items: center;
+  gap: token('s-2');
+}
+.chart-tooltip__total {
+  margin-top: token('s-1');
+  padding-top: token('s-1');
+  border-top: 1px solid token('border-alpha');
+  grid-template-columns: 14px auto 1fr;
+
+  &::before {
+    content: "";
+  }
+}
+.chart-tooltip__value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chart-tooltip__label {
+  color: token('text-tertiary');
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ---------- Budget bars ----------
+.budget-bars {
+  display: grid;
+  gap: token('s-4');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.budget-bar {
+  display: grid;
+  gap: token('s-1');
+  min-width: 0;
+}
+.budget-bar__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: token('s-1') token('s-3');
+  font-size: token('fs-sm');
+}
+.budget-bar__label {
+  font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.budget-bar__values {
+  font-variant-numeric: tabular-nums;
+  strong {
+    font-weight: 600;
+  }
+}
+.budget-bar__of {
+  color: token('text-tertiary');
+}
+.budget-bar__track {
+  position: relative;
+  height: 10px;
+  border-radius: token('r-pill');
+  background: token('bg-hover-alpha');
+}
+.budget-bar__plan,
+.budget-bar__fill,
+.budget-bar__over {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: token('r-pill');
+}
+.budget-bar__plan {
+  background: token('dv-track');
+}
+.budget-bar__fill {
+  background: token('dv-cat-1');
+}
+.budget-bar__over {
+  background: token('variance-unfavourable');
+  border-radius: 0 token('r-pill') token('r-pill') 0;
+}
+.budget-bar__target {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: token('r-xs');
+  background: token('dv-net');
+}
+.budget-bar__variance {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  font-size: token('fs-xs');
+  font-variant-numeric: tabular-nums;
+
+  &.is-favourable {
+    color: token('variance-favourable');
+  }
+  &.is-unfavourable {
+    color: token('variance-unfavourable');
+  }
+}
+.budget-bar__used {
+  color: token('text-tertiary');
+}
+
+// ---------- Sparkline ----------
+.sparkline {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.sparkline__line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+// ---------- Placements ----------
+.insights {
+  display: grid;
+  gap: token('s-4');
+  margin-bottom: token('s-4');
+  min-width: 0;
+}
+.insights__filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-2') token('s-3');
+}
+.insights__range-label {
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  font-variant-numeric: tabular-nums;
+}
+.insights__range-label--muted {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.insights__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: token('s-1');
+  padding: 3px token('s-2');
+  border: 1px solid token('border-alpha-strong');
+  border-radius: token('r-pill');
+  background: token('bg-panel');
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  cursor: pointer;
+
+  &:hover {
+    color: token('text-primary');
+    background: token('bg-hover-alpha');
+  }
+  &[aria-pressed="true"] {
+    color: token('text-primary');
+    border-color: token('dv-selection-edge');
+    background: token('dv-selection');
+  }
+}
+.insights__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: token('s-3');
+}
+.insights__stat-delta {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  font-variant-numeric: tabular-nums;
+}
+.insights__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: token('s-4');
+}
+@media (min-width: 1200px) {
+  .insights__grid--two {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (pointer: coarse) {
+  .insights__chip,
+  .insights .segmented__btn {
+    min-height: 40px;
+  }
+}
+
+.grant-funding-card {
+  margin-bottom: token('s-4');
+}
+.members-trend {
+  margin-bottom: token('s-4');
+}
+
+// Dashboard finance snapshot
+.finance-snapshot__body {
+  display: grid;
+  gap: token('s-3');
+}
+.finance-snapshot__balance {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: token('s-3');
+  min-width: 0;
+}
+.finance-snapshot__value {
+  font-size: token('fs-xl');
+  font-weight: 600;
+  line-height: 1.15;
+}
+.finance-snapshot__label {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.finance-snapshot__spark {
+  flex: 1 1 auto;
+  max-width: 180px;
+  min-width: 80px;
+}
+.finance-snapshot__flows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: token('s-2');
+  margin: 0;
+}
+.finance-snapshot__flow {
+  display: grid;
+  gap: 2px;
+  padding: token('s-2') token('s-3');
+  border-radius: token('r-md');
+  background: token('bg-hover-alpha');
+  min-width: 0;
+
+  dt {
+    display: inline-flex;
+    align-items: center;
+    gap: token('s-2');
+    font-size: token('fs-xs');
+    color: token('text-tertiary');
+  }
+  dd {
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}

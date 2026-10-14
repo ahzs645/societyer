@@ -87,5 +87,8 @@
 @use "review-governance";
 @use "review-people";
 
+// Chart kit + chart placements (Financials, Dashboard, Grants, Membership).
+@use "charts";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
