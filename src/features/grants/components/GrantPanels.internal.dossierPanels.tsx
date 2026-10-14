@@ -6,6 +6,8 @@ import { Badge, Field, InspectorNote } from "../../../components/ui";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
+import { Money } from "../../../components/Money";
 import {
   asAnswerLibrary,
   asComplianceFlags,
@@ -185,12 +187,10 @@ export function GrantFundingDeltaPanel({ grant }: { grant: any }) {
   return (
     <DossierSection title="Funding Delta">
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 8 }}>
-        <DossierFact label="Requested" value={money(requested)} />
-        <DossierFact label="Approved" value={money(awarded)} />
+        <DossierFact label="Requested" value={formatMoney(requested)} />
+        <DossierFact label="Approved" value={formatMoney(awarded)} />
         <DossierFact label="Difference">
-          <span className="mono" style={{ color: delta < 0 ? "var(--danger)" : "var(--success)" }}>
-            {money(delta)}
-          </span>
+          <Money cents={delta} signDisplay="exceptZero" tone={delta < 0 ? "unfavourable" : delta > 0 ? "favourable" : "auto"} />
         </DossierFact>
         {requestedWeeks !== undefined && approvedWeeks !== undefined && (
           <DossierFact label="Approved duration" value={`${requestedWeeks} weeks requested -> ${approvedWeeks} weeks approved`} />
@@ -324,7 +324,7 @@ export function GrantUseOfFundsPanel({ grant }: { grant: any }) {
               <strong>{line.label}</strong>
               {line.notes && <div className="muted" style={{ fontSize: 12 }}>{line.notes}</div>}
             </div>
-            <span className="mono">{line.amountCents === undefined ? "—" : money(line.amountCents)}</span>
+            <Money cents={line.amountCents} />
           </div>
         ))}
       </div>

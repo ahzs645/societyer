@@ -8,6 +8,7 @@ import { DatePicker } from "../../../components/DatePicker";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
 import {
   asAnswerLibrary,
   asComplianceFlags,
@@ -299,10 +300,10 @@ export function GrantEditWorkbench({
         <section className="grant-edit-workbench__panel">
           <div className="grant-edit-workbench__heading">Funding check</div>
           <div className="grant-edit-workbench__metrics">
-            <div><span>Requested</span><strong>{requested === undefined ? "—" : money(requested)}</strong></div>
-            <div><span>Awarded</span><strong>{awarded === undefined ? "—" : money(awarded)}</strong></div>
+            <div><span>Requested</span><strong className="money">{formatMoney(requested)}</strong></div>
+            <div><span>Awarded</span><strong className="money">{formatMoney(awarded)}</strong></div>
             {delta !== undefined && (
-              <div><span>Difference</span><strong className={delta < 0 ? "is-danger" : "is-success"}>{money(delta)}</strong></div>
+              <div><span>Difference</span><strong className={`money ${delta < 0 ? "is-danger" : "is-success"}`}>{formatMoney(delta, { signDisplay: "exceptZero" })}</strong></div>
             )}
           </div>
         </section>

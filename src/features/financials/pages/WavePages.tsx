@@ -5,7 +5,8 @@ import { useSociety } from "../../../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "../../../pages/_helpers";
 import { Flag } from "../../../components/ui";
 import { DataTable } from "../../../components/DataTable";
-import { money, relative } from "../../../lib/format";
+import { relative } from "../../../lib/format";
+import { formatMoney } from "../../../lib/money";
 import { ArrowLeft, Database, Eye, EyeOff, ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MoreActionsMenu } from "../../../components/MoreActionsMenu";
@@ -372,7 +373,7 @@ export function WaveAccountDetailPage() {
           isLedgerAccount
             ? `${capitalize(accountKind)} · Wave internal row`
             : activity !== undefined
-            ? `${capitalize(accountKind)} · ${activity.total ?? transactions.length} ${transactionLabel}${(activity.total ?? transactions.length) === 1 ? "" : "s"}${isCategoryAccount ? ` · ${money(linkedTotalCents)}` : ""}`
+            ? `${capitalize(accountKind)} · ${activity.total ?? transactions.length} ${transactionLabel}${(activity.total ?? transactions.length) === 1 ? "" : "s"}${isCategoryAccount ? ` · ${formatMoney(linkedTotalCents)}` : ""}`
             : `Wave ${accountKind} details`
         }
         actions={
@@ -534,7 +535,7 @@ export function WaveResourceDetailPage() {
         iconColor="green"
         subtitle={
           isWaveCounterpartyResource(resource)
-            ? `${waveTypeLabel(resource.resourceType)} · ${activity?.total ?? 0} linked transaction${activity?.total === 1 ? "" : "s"} · ${money(linkedTotalCents)}`
+            ? `${waveTypeLabel(resource.resourceType)} · ${activity?.total ?? 0} linked transaction${activity?.total === 1 ? "" : "s"} · ${formatMoney(linkedTotalCents)}`
             : `${waveSingularTypeLabel(resource.resourceType)} from Wave`
         }
         actions={

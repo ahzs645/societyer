@@ -6,7 +6,9 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Plus, Receipt, FileDown } from "lucide-react";
-import { dollarInputToCents, formatDate, money } from "../lib/format";
+import { dollarInputToCents, formatDate } from "../lib/format";
+import { formatMoney } from "../lib/money";
+import { Money } from "../components/Money";
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
 import { usePrompt } from "../components/Modal";
@@ -92,8 +94,8 @@ export function ReceiptsPage() {
       <h2>Gift</h2>
       <table>
         <tr><th>Date received</th><td>${eh(formatDate(r.receivedOnISO))}</td></tr>
-        <tr><th>Total amount</th><td>${eh(money(r.amountCents))}</td></tr>
-        <tr><th>Eligible amount for tax purposes</th><td>${eh(money(r.eligibleAmountCents))}</td></tr>
+        <tr><th>Total amount</th><td>${eh(formatMoney(r.amountCents))}</td></tr>
+        <tr><th>Eligible amount for tax purposes</th><td>${eh(formatMoney(r.eligibleAmountCents))}</td></tr>
         ${r.isNonCash ? `<tr><th>Non-cash gift</th><td>${eh(r.description ?? "—")}${r.appraiserName ? ` · Appraised by ${eh(r.appraiserName)}` : ""}</td></tr>` : ""}
       </table>
       <p class="meta">Canada Revenue Agency: <a href="https://www.canada.ca/charities-giving">canada.ca/charities-giving</a></p>
@@ -142,8 +144,8 @@ export function ReceiptsPage() {
             renderCell={({ record, field }) => {
               if (field.name === "receiptNumber") return <span className="mono">{record.receiptNumber}</span>;
               if (field.name === "receivedOnISO") return <span className="mono">{formatDate(record.receivedOnISO)}</span>;
-              if (field.name === "amountCents") return <span className="mono">{money(record.amountCents)}</span>;
-              if (field.name === "eligibleAmountCents") return <span className="mono">{money(record.eligibleAmountCents)}</span>;
+              if (field.name === "amountCents") return <Money cents={record.amountCents} struck={Boolean(record.voidedAtISO)} />;
+              if (field.name === "eligibleAmountCents") return <Money cents={record.eligibleAmountCents} struck={Boolean(record.voidedAtISO)} />;
               if (field.name === "status") return record.voidedAtISO ? <Badge tone="danger">Voided</Badge> : <Badge tone="success">Issued</Badge>;
               return undefined;
             }}
