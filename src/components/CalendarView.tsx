@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { ToneVariant } from "./ui";
 import { calendarDate, calendarDateKey, calendarWeekDays } from "../lib/calendarDates";
@@ -9,6 +9,41 @@ export type CalendarLayout = "month" | "week" | "list";
 const CALENDAR_LAYOUT_LABELS: Record<CalendarLayout, string> = { month: "Month", week: "Week", list: "Agenda" };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+/** Below this width a seven-column month grid cannot show event labels, so the
+ * calendar opens on Agenda and, if Month is chosen, renders compact day cells. */
+export const CALENDAR_COMPACT_WIDTH = 560;
+
+/** True while the element is narrower than the compact breakpoint. */
+function useCompactWidth(ref: RefObject<HTMLElement>) {
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && window.innerWidth < CALENDAR_COMPACT_WIDTH);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => setCompact(entry.contentRect.width < CALENDAR_COMPACT_WIDTH));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return compact;
+}
+
+type CalendarDayEvent = { id: string; label: string; tone?: ToneVariant };
+
+/** A compact month cell: the date plus tone dots; tapping opens that day's agenda. */
+function CompactCalendarDay({ day, rows, onOpen }: { day: Date; rows: CalendarDayEvent[]; onOpen: (day: Date) => void }) {
+  const date = <span className="calendar-view__date">{day.getDate()}</span>;
+  if (!rows.length) return date;
+  const dayLabel = day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  return <button type="button" className="calendar-view__day"
+    aria-label={`${dayLabel}: ${rows.length} ${rows.length === 1 ? "event" : "events"}`}
+    title={rows.map((row) => row.label).join("\n")} onClick={() => onOpen(day)}>
+    {date}
+    <span className="calendar-view__dots" aria-hidden="true">
+      {rows.slice(0, 3).map((row) => <span key={row.id} className={`calendar-view__dot${row.tone ? ` calendar-view__dot--${row.tone}` : ""}`} />)}
+      {rows.length > 3 && <span className="calendar-view__dot-more">+{rows.length - 3}</span>}
+    </span>
+  </button>;
+}
 
 function monthDays(anchor: Date): Date[] {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
@@ -61,8 +96,20 @@ export function CalendarView<T>({
     setAnchorState(next);
   };
   const [localLayout, setLocalLayout] = useState<CalendarLayout>("month");
-  const mode = layout ?? localLayout;
-  const changeLayout = (next: CalendarLayout) => onLayoutChange ? onLayoutChange(next) : setLocalLayout(next);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const compact = useCompactWidth(rootRef);
+  // Month is the stored default, so on a narrow screen it only means "Month"
+  // once the person picks it here; until then the calendar opens on Agenda.
+  const [explicitLayout, setExplicitLayout] = useState(false);
+  const storedMode = layout ?? localLayout;
+  const mode: CalendarLayout = compact && storedMode === "month" && !explicitLayout ? "list" : storedMode;
+  const compactMonth = compact && mode === "month";
+  const changeLayout = (next: CalendarLayout) => {
+    setExplicitLayout(true);
+    if (onLayoutChange) onLayoutChange(next);
+    else setLocalLayout(next);
+  };
+  const pendingDay = useRef<string | null>(null);
   const todayKey = calendarDateKey(new Date());
   const { byDay, undated } = useMemo(() => {
     const map = new Map<string, { item: T; label: string; tone?: ToneVariant; id: string }[]>();
@@ -88,6 +135,21 @@ export function CalendarView<T>({
     const opening = calendarOpeningDate(datedKeys);
     if (opening) setAnchorState(opening);
   }, [datedKeys]);
+  useEffect(() => {
+    const key = pendingDay.current;
+    if (mode !== "list" || !key) return;
+    pendingDay.current = null;
+    const heading = rootRef.current?.querySelector<HTMLElement>(`[data-calendar-date="${key}"] h3`);
+    if (!heading) return;
+    heading.scrollIntoView({ block: "nearest" });
+    heading.focus({ preventScroll: true });
+  }, [mode, anchor]);
+  /** Compact month cells hand off to the agenda, scrolled to that day. */
+  const openDay = (day: Date) => {
+    pendingDay.current = calendarDateKey(day);
+    setAnchor(day);
+    changeLayout("list");
+  };
   const jumpTo = (key: string | undefined) => {
     const date = key ? calendarDate(key) : null;
     if (date) setAnchor(date);
@@ -115,10 +177,10 @@ export function CalendarView<T>({
         title={event.label} onClick={() => onSelect?.(event.item)}>{event.label}</button>)}
       {rows.length > visible.length && <button type="button" className="calendar-view__more"
         aria-label={`Show all ${rows.length} events on ${calendarDateKey(day)}`}
-        onClick={() => { setAnchor(day); changeLayout("list"); }}>+{rows.length - visible.length} more</button>}
+        onClick={() => openDay(day)}>+{rows.length - visible.length} more</button>}
     </div>;
   };
-  return <div className={`calendar-view calendar-view--${mode}`}>
+  return <div ref={rootRef} className={`calendar-view calendar-view--${mode}${compactMonth ? " is-compact" : ""}`}>
     <div className="calendar-view__head">
       <div className="calendar-view__title" aria-live="polite">{title}</div>
       <div className="calendar-view__nav">
@@ -142,15 +204,19 @@ export function CalendarView<T>({
     {mode === "list" ? <div className="calendar-view__agenda" role="region" aria-label={`${monthLabel} events`}>
       {listDays.length === 0 && <p className="muted">No dated records this month.</p>}
       {listDays.map((day) => <section key={calendarDateKey(day)} data-calendar-date={calendarDateKey(day)}>
-        <h3 className="calendar-view__date">{day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3>
+        <h3 className="calendar-view__date" tabIndex={-1}>{day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3>
         {events(day)}
       </section>)}
     </div> : <div className="calendar-view__scroll" role="region" aria-label={`${mode === "week" ? "Week" : "Month"} calendar`} tabIndex={0}>
-      <div className="calendar-view__weekdays">{WEEKDAYS.map((day) => <div key={day} className="calendar-view__weekday">{day}</div>)}</div>
+      <div className="calendar-view__weekdays">{WEEKDAYS.map((day, index) => <div key={day} className="calendar-view__weekday">
+        {compactMonth ? <abbr title={WEEKDAY_NAMES[index]}>{day.slice(0, 2)}</abbr> : day}
+      </div>)}</div>
       <div className="calendar-view__grid">{days.map((day) => <div key={calendarDateKey(day)} data-calendar-date={calendarDateKey(day)}
         className={`calendar-view__cell${day.getMonth() === anchor.getMonth() ? "" : " is-outside"}${calendarDateKey(day) === todayKey ? " is-today" : ""}`}>
-        <div className="calendar-view__date">{mode === "week" ? day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : day.getDate()}</div>
-        {events(day, mode === "month" ? 3 : undefined)}
+        {compactMonth ? <CompactCalendarDay day={day} rows={byDay.get(calendarDateKey(day)) ?? []} onOpen={openDay} /> : <>
+          <div className="calendar-view__date">{mode === "week" ? day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : day.getDate()}</div>
+          {events(day, mode === "month" ? 3 : undefined)}
+        </>}
       </div>)}</div>
     </div>}
     {undated > 0 && <p className="muted calendar-view__undated">{undated} {undated === 1 ? "record without a valid date is" : "records without valid dates are"} not shown.</p>}
