@@ -1,6 +1,6 @@
 import { ViewportPopover } from "@/components/ViewportPopover";
 import { lowerLabel } from "../utils/lowerLabel";
-import { createElement, useEffect, useRef, useState, type ReactNode } from "react";
+import { createElement, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import {
   ArrowDownUp,
@@ -125,6 +125,8 @@ export function RecordTableToolbar({
     handle.get().setToolbarMounted(true);
     return () => handle.get().setToolbarMounted(false);
   }, [handle]);
+  // The page-mounted filter editor portals into this row and floats under it.
+  const toolbarRef = useCallback((element: HTMLDivElement | null) => handle.get().setToolbarElement(element), [handle]);
   const showSearch = !isMobile || searchOpen || Boolean(searchTerm);
 
   // The section icon comes from the route registry so a table's icon always
@@ -188,7 +190,7 @@ export function RecordTableToolbar({
   });
 
   return (
-    <div className="record-table__toolbar">
+    <div className="record-table__toolbar" ref={toolbarRef}>
       <div className="record-table__toolbar-left">
         {views && views.length > 0 ? (
           <div className="record-table__view-switcher" ref={viewMenuRef}>
@@ -428,9 +430,12 @@ export function RecordTableToolbar({
           <button
             type="button"
             className={
-              "record-table__toolbar-button" +
+              "record-table__toolbar-button record-table__toolbar-button--collapsible" +
               (filters.length > 0 ? " record-table__toolbar-button--active" : "")
             }
+            data-record-table-filter-trigger=""
+            aria-label={`${t("common.filter", "Filter")}${filters.length > 0 ? ` · ${filters.length}` : ""}`}
+            aria-haspopup="dialog"
             onClick={onOpenFilter}
           >
             <Filter size={12} />
@@ -441,10 +446,11 @@ export function RecordTableToolbar({
         <button
           type="button"
           className={
-            "record-table__toolbar-button" +
+            "record-table__toolbar-button record-table__toolbar-button--collapsible" +
             (sorts.length > 0 ? " record-table__toolbar-button--active" : "")
           }
           ref={sortButtonRef}
+          aria-label={`${t("common.sort", "Sort")}${sorts.length > 0 ? ` · ${sorts.length}` : ""}`}
           aria-haspopup="dialog"
           aria-expanded={sortMenuOpen}
           onClick={() => setSortMenuOpen((x) => !x)}
@@ -480,7 +486,10 @@ export function RecordTableToolbar({
         <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button
             type="button"
-            className="record-table__toolbar-button"
+            className="record-table__toolbar-button record-table__toolbar-button--options"
+            aria-label={t("common.options", "Options")}
+            aria-haspopup="dialog"
+            aria-expanded={columnMenuOpen}
             onClick={() => setColumnMenuOpen((x) => !x)}
           >
             <SlidersHorizontal size={12} />

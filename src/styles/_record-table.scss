@@ -1147,7 +1147,9 @@ select.record-table__menu-select,
 }
 
 .record-table__row:has(.record-table__cell--focused) .record-table__cell,
-.record-table__row:has(.record-table__checkbox-cell input:checked) .record-table__cell {
+.record-table__row--selected .record-table__cell,
+.record-table__row:has(.record-table__checkbox-cell input:checked) .record-table__cell,
+.record-table__row:has(.record-table__mobile-selection-checkbox input:checked) .record-table__cell {
   background: token('accent-soft');
 }
 

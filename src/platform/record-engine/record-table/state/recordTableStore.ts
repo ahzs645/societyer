@@ -112,6 +112,9 @@ export type RecordTableState = {
   setMobileSelectable: (on: boolean) => void;
   toolbarMounted: boolean;
   setToolbarMounted: (on: boolean) => void;
+  /** The mounted toolbar's root: the filter editor floats from it. */
+  toolbarElement: HTMLElement | null;
+  setToolbarElement: (element: HTMLElement | null) => void;
 
   /* selection */
   selectedRecordIds: Set<string>;
@@ -199,6 +202,7 @@ export function createRecordTableStore(opts: {
     mobileSelectionMode: false,
     mobileSelectable: false,
     toolbarMounted: false,
+    toolbarElement: null,
     selectedRecordIds: new Set(),
     selectionAnchorRowIndex: null,
     hoverPosition: null,
@@ -286,6 +290,7 @@ export function createRecordTableStore(opts: {
     setMobileSelectionMode: (mobileSelectionMode) => set({ mobileSelectionMode }),
     setMobileSelectable: (mobileSelectable) => set({ mobileSelectable }),
     setToolbarMounted: (toolbarMounted) => set({ toolbarMounted }),
+    setToolbarElement: (toolbarElement) => set({ toolbarElement }),
     setSelectionAnchorRowIndex: (selectionAnchorRowIndex) => set({ selectionAnchorRowIndex }),
 
     setHoverPosition: (pos) => set({ hoverPosition: pos }),

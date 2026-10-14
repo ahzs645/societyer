@@ -11,17 +11,20 @@ import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
 import { Tooltip } from "../../../../components/Tooltip";
 
 /**
- * Class list for a record's `<tr>`: the base row class plus the new-row flash
- * and the "open in the preview panel" highlight. Shared by the plain and the
- * virtualized body so both mark rows the same way.
+ * Class list for a record's `<tr>`: the base row class plus the new-row flash,
+ * the "open in the preview panel" highlight and the selected state (whether
+ * the checkbox sits in its own column or, on phones, in the identifier cell).
+ * Shared by the plain and the virtualized body so both mark rows the same way.
  */
 export function useRecordRowClassName(recordId: string | null) {
   const isFlashing = useRecordTableState((state) => recordId !== null && state.flashRecordIds.has(recordId));
   const isActive = useRecordTableState((state) => recordId !== null && state.panelRecordId === recordId);
+  const isSelected = useRecordTableState((state) => recordId !== null && state.selectedRecordIds.has(recordId));
   return (
     "record-table__row" +
     (isFlashing ? " row-flash" : "") +
-    (isActive ? " record-table__row--active" : "")
+    (isActive ? " record-table__row--active" : "") +
+    (isSelected ? " record-table__row--selected" : "")
   );
 }
 

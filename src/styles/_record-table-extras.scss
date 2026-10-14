@@ -320,6 +320,37 @@
   gap: 0;
 }
 
+// Portalled into the toolbar row: floats under the Filter / Ask buttons like
+// the sort popover instead of pushing the table down.
+.record-table__toolbar {
+  position: relative;
+}
+
+.record-table__filter-popover--floating {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(560px, calc(100dvh - 120px));
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-color: token('border-alpha');
+  border-radius: token('r-card');
+  box-shadow: token('elevation-2');
+}
+
+@media (max-width: 560px) {
+  // Phones: an in-flow panel at the foot of the toolbar, like the other
+  // stacked pickers, so it never hides behind the bottom navigation.
+  .record-table__filter-popover--floating {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
 .record-table__logic-select {
   width: auto;
   min-width: 140px;
@@ -698,5 +729,132 @@
 
   .record-table__bulk-bar-spacer {
     height: 132px;
+  }
+}
+
+/* --------------------------- Selected rows --------------------------- */
+
+// Selected rows tint every cell, including the sticky identifier cell that
+// carries the checkbox on phones (whose frozen-column background otherwise
+// outranks the row rule). Layered over the panel colour so the frozen cell
+// stays opaque above the columns scrolling beneath it.
+.record-table__row--selected > .record-table__cell,
+.record-table__scroll .record-table > tbody > tr.record-table__row--selected > td.record-table__cell,
+.record-table__virtuoso .record-table > tbody > tr.record-table__row--selected > td.record-table__cell {
+  background: linear-gradient(token('accent-soft'), token('accent-soft')), token('bg-panel');
+}
+
+/* ---------------------- Column headers on touch ---------------------- */
+
+// Touch has no hover, so the column-menu chevron is always shown. Reserve its
+// 36px hit area in every header's padding (the label ellipsises before it,
+// never under it — "Amo⌄"), and draw it as a quiet chevron rather than a
+// boxed button so narrow headers stay readable. The box returns while the
+// menu is open or the trigger has keyboard focus.
+@media (pointer: coarse) {
+  .record-table__header-cell,
+  .record-table__header-cell--numeric {
+    padding-right: 38px;
+  }
+
+  .record-table__header-cell .record-table__header-cell-button {
+    max-width: 100%;
+  }
+
+  .record-table__header-menu-trigger:not([aria-expanded='true']):not(:focus-visible) {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  // The frozen phone column collapses to a 38px initial while scrolled
+  // sideways; its chevron is hidden there, so is its reservation.
+  .record-table__scroll-frame.is-scrolled-x,
+  .record-table__interaction-root.is-scrolled-x {
+    .record-table > thead > tr > th:first-child {
+      padding-right: 8px;
+    }
+  }
+}
+
+/* ----------------------- Touch targets (coarse) ----------------------- */
+
+// Toolbar buttons, filter chips and the filter editor's controls reach the
+// 40px touch floor (chip removers 32px, with a 40px hit area). Desktop
+// density is unchanged.
+@media (pointer: coarse) {
+  .record-table__toolbar .record-table__toolbar-button,
+  .record-table__toolbar .record-table__view-button,
+  .record-table__toolbar .record-table__segmented button {
+    min-height: 40px;
+  }
+  .record-table__toolbar .record-table__toolbar-button {
+    min-width: 40px;
+    justify-content: center;
+  }
+  .record-table__icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .record-table__chip {
+    height: auto;
+    min-height: 32px;
+  }
+  .record-table__chip-label {
+    align-self: stretch;
+  }
+  .record-table__chip-remove {
+    position: relative;
+    width: 32px;
+    height: 32px;
+
+    &::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      transform: translate(-50%, -50%);
+    }
+  }
+  .record-table__chip-more,
+  .record-table__chip-clear {
+    min-height: 32px;
+  }
+
+  .record-table__filter-input,
+  .record-table__filter-popover-row select,
+  .record-table__filter-add,
+  .record-table__primary-btn,
+  .record-table__secondary-btn {
+    min-height: 40px;
+  }
+  .record-table__icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .record-table__filter-popover-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.3fr) 40px;
+  }
+}
+@media (pointer: coarse) and (max-width: 560px) {
+  .record-table__filter-popover-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+
+    > .record-table__icon-btn { width: 40px; height: 40px; }
+  }
+}
+
+// The narrowest phones: Filter, Sort and Options drop to their icons (the
+// active tint still marks a filtered / sorted view) so the toolbar keeps one
+// row. Their accessible names stay on the buttons.
+@media (max-width: 360px) {
+  .record-table__toolbar-button--options > span,
+  .record-table__toolbar-button--collapsible > span {
+    display: none;
+  }
+  .record-table__toolbar .record-table__segmented button {
+    min-width: 36px;
   }
 }
