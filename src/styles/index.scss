@@ -124,5 +124,7 @@
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 
+@use "insights-flows"; // Financials overview: top payees / categories, operating reserve
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

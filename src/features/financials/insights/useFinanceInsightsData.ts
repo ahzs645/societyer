@@ -27,6 +27,8 @@ export function useFinanceInsightsData(societyId: string | undefined, enabled = 
       loading,
       txns,
       currentBalance: Number(summary?.totalBalance ?? 0),
+      // Bank and card balances outside restricted accounts.
+      unrestrictedBalance: Number(summary?.unrestricted ?? summary?.totalBalance ?? 0),
       bankAccountCount,
       // Revenue lines are favourable above plan, so the bars need each line's
       // kind (the same inference the budget table on this page uses).

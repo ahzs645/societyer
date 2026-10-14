@@ -19,7 +19,7 @@ import {
   type TimeRow,
 } from "../../../components/charts";
 
-export type FinanceTxn = { _id?: string; date: string; amountCents: number; accountId?: string; category?: string };
+export type FinanceTxn = { _id?: string; date: string; amountCents: number; accountId?: string; category?: string; counterparty?: string; description?: string };
 export type FinanceAccount = { _id: string; accountType?: string };
 
 export type RangePreset = "3M" | "6M" | "12M" | "FYTD" | "ALL";

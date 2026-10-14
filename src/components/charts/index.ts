@@ -13,5 +13,6 @@ export { TimeSeriesChart, type TimeSeriesChartProps } from "./TimeSeriesChart";
 export { FlowBarChart, type FlowRow, type FlowBarChartProps } from "./FlowBarChart";
 export { BudgetBars, type BudgetBarRow, type BudgetBarLabels } from "./BudgetBars";
 export { Sparkline } from "./Sparkline";
+export { RankedBars, type RankedBarRow } from "./RankedBars";
 export * from "./dates";
 export type { ChartSeries, ChartTable, DateRange, TimeRow, TooltipRow, ValueFormatter } from "./types";
