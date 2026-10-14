@@ -7,6 +7,9 @@
  *   obca-corp Ontario OBCA corporation (existing)
  *   custom    a records-only Act: a Quebec Business Corporations Act corporation
  *   bc-society BC society (control)
+ * and opens the three populated corporation demos through the demo banner's
+ * "Try another organization type" (bc-demo, cbca-demo, obca-demo: share
+ * register, resolutions, dividends, filings; shared/demoData/corporations.ts),
  * then visits every in-app route in each, collects the rendered text (main
  * content, app chrome, the fully expanded sidebar, page info popovers and
  * checkbox/switch labels) and flags society-only copy.
@@ -39,25 +42,37 @@ test.skip(!process.env.SOCIETYER_ENTITY_SWEEP, "Runs only under playwright.entit
 // Workspaces
 // ---------------------------------------------------------------------------
 
-type WorkspaceKey = "bc-corp" | "cbca-corp" | "obca-corp" | "custom" | "bc-society";
+type WorkspaceKey = "bc-corp" | "cbca-corp" | "obca-corp" | "custom" | "bc-society" | "bc-demo" | "cbca-demo" | "obca-demo";
 type Workspace = {
   key: WorkspaceKey;
   name: string;
   stage: "existing" | "preparing";
-  act: GuidedSetupAct;
+  /** How guided setup finds the Act (not used for the demo-banner workspaces). */
+  act?: GuidedSetupAct;
+  /** Opened from the in-browser demo's persona menu instead of guided setup; routes live under /demo. */
+  demoPersona?: string;
   society: boolean;
   /** BC workspaces may legitimately mention BC PIPA. */
   bc: boolean;
 };
 
-export const WORKSPACES: Workspace[] = [
+const ALL_WORKSPACES: Workspace[] = [
   { key: "bc-corp", name: "Sweep Cedar Holdings Ltd.", stage: "existing", act: { jurisdiction: "British Columbia", act: "Business Corporations Act" }, society: false, bc: true },
   { key: "cbca-corp", name: "Sweep Maple Federal Inc.", stage: "preparing", act: { jurisdiction: "federal", act: "Canada Business Corporations Act" }, society: false, bc: false },
   { key: "obca-corp", name: "Sweep Lakeshore Ontario Inc.", stage: "existing", act: { jurisdiction: "Ontario", act: "Business Corporations Act (OBCA)" }, society: false, bc: false },
   // Records only: no reviewed legal profile for this Act.
   { key: "custom", name: "Sweep Fleuve Quebec Inc.", stage: "existing", act: { jurisdiction: "Quebec", act: "Business Corporations Act" }, society: false, bc: false },
   { key: "bc-society", name: "Sweep Harbour Community Society", stage: "existing", act: { jurisdiction: "British Columbia", act: "Societies Act" }, society: true, bc: true },
+  { key: "bc-demo", name: "Cedar Demo Holdings Ltd.", stage: "existing", demoPersona: "BC company", society: false, bc: true },
+  { key: "cbca-demo", name: "Maple Demo Federal Inc.", stage: "existing", demoPersona: "Federal CBCA corporation", society: false, bc: false },
+  { key: "obca-demo", name: "Lakeshore Demo Ontario Inc.", stage: "existing", demoPersona: "Ontario OBCA corporation", society: false, bc: false },
 ];
+// ENTITY_SWEEP_WORKSPACES=bc-demo,cbca-demo narrows a local run; the full sweep is the default.
+const ONLY_WORKSPACES = process.env.ENTITY_SWEEP_WORKSPACES?.split(",").map((key) => key.trim()).filter(Boolean);
+export const WORKSPACES: Workspace[] = ONLY_WORKSPACES ? ALL_WORKSPACES.filter((workspace) => ONLY_WORKSPACES.includes(workspace.key)) : ALL_WORKSPACES;
+
+/** The route as the workspace serves it: populated demos live under /demo. */
+const routeFor = (workspace: Workspace, route: string) => (workspace.demoPersona ? `/demo${route}` : route);
 
 const OUT_DIR = path.resolve(process.env.ENTITY_SWEEP_DATA ?? "tmp/entity-sweep");
 const stateFile = (key: WorkspaceKey) => path.join(OUT_DIR, `${key}.storage.json`);
@@ -217,12 +232,22 @@ const leakKey = (finding: Pick<Finding, "workspace" | "route" | "pattern">) => `
 // Browser helpers
 // ---------------------------------------------------------------------------
 
+async function openDemoPersona(page: Page, workspace: Workspace) {
+  await page.goto("/demo/app");
+  const trigger = page.getByRole("button", { name: /Try another organization type/ });
+  // The first visit compiles the demo bundle on a cold dev server.
+  await expect(trigger).toBeVisible({ timeout: 300_000 });
+  await trigger.click();
+  await page.getByRole("menuitem", { name: new RegExp(`^${workspace.demoPersona}`) }).click();
+  await expect(page.locator(".demo-banner")).toContainText(workspace.name, { timeout: 120_000 });
+}
+
 async function guidedSetup(page: Page, workspace: Workspace) {
   await page.goto("/setup");
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await page.waitForURL(/\/app\/society\/new/);
   const existing = workspace.stage === "existing";
-  await chooseGuidedSetupAct(page, existing, workspace.act);
+  await chooseGuidedSetupAct(page, existing, workspace.act!);
   await page.getByRole("textbox", { name: existing ? "Recorded legal name" : "Proposed name / working name", exact: true }).fill(workspace.name);
   if (existing) {
     await page.getByRole("textbox", { name: "Incorporation #", exact: true }).fill("SWEEP-0001");
@@ -405,11 +430,12 @@ test.describe("entity copy sweep", () => {
   });
 
   for (const workspace of WORKSPACES) {
-    test(`set up ${workspace.key} through the guided setup @setup`, async ({ page }) => {
+    test(`set up ${workspace.key} ${workspace.demoPersona ? "from the demo banner" : "through the guided setup"} @setup`, async ({ page }) => {
       fs.mkdirSync(OUT_DIR, { recursive: true });
-      await guidedSetup(page, workspace);
-      await page.goto("/app");
-      await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 30_000 });
+      if (workspace.demoPersona) await openDemoPersona(page, workspace);
+      else await guidedSetup(page, workspace);
+      await page.goto(routeFor(workspace, "/app"));
+      await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 180_000 });
       await settle(page);
       await page.context().storageState({ path: stateFile(workspace.key), indexedDB: true });
     });
@@ -427,12 +453,12 @@ test.describe("entity copy sweep", () => {
         let navHrefs = new Set<string>();
 
         // The sidebar is the same on every route; read it once, fully expanded.
-        await page.goto("/app", { waitUntil: "domcontentloaded" });
-        await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 30_000 });
+        await page.goto(routeFor(workspace, "/app"), { waitUntil: "domcontentloaded" });
+        await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 180_000 });
         await settle(page);
         await expandSidebar(page);
         const shell = await collect(page);
-        navHrefs = new Set(shell.navHrefs);
+        navHrefs = new Set(shell.navHrefs.map((href) => href.replace(/^\/demo(?=\/)/, "")));
         if (shard === 0) {
           findings.push(...scan(workspace, "(sidebar)", "sidebar", shell.sidebar, true));
           findings.push(...scan(workspace, "(sidebar)", "title", shell.titles, true));
@@ -440,16 +466,17 @@ test.describe("entity copy sweep", () => {
 
         for (const route of routesForShard(shard)) {
           const started = Date.now();
-          await visit(page, route);
+          await visit(page, routeFor(workspace, route));
           await workspaceButton(page, workspace).waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
           await settle(page);
-          if (route === "/app/privacy") {
+          // The fresh guided-setup workspaces have no privacy facts; the demos record theirs.
+          if (route === "/app/privacy" && !workspace.demoPersona) {
             await assertPrivacyScope(page, workspace);
             if (workspace.key === "cbca-corp") await page.screenshot({ path: path.join(OUT_DIR, "cbca-corp-privacy.png") });
           }
           const text = await collect(page);
           const popovers = await collectPopovers(page);
-          const finalPath = new URL(page.url()).pathname;
+          const finalPath = new URL(page.url()).pathname.replace(/^\/demo(?=\/)/, "");
           const inNav = navHrefs.has(route) || navHrefs.has(finalPath);
           findings.push(...scan(workspace, route, "main", text.main, inNav));
           findings.push(...scan(workspace, route, "chrome", text.chrome, inNav));
@@ -572,12 +599,13 @@ test.describe("entity copy verdict", () => {
     }
 
     // Control: the society still gets its Societies Act copy.
+    const controlSwept = WORKSPACES.some((workspace) => workspace.key === "bc-society");
     const societyActOnExpectedRoute = all.some(
       (finding) => finding.workspace === "bc-society" && finding.pattern === "societies-act" && ["/app", "/app/members"].includes(finding.route),
     );
-    expect(societyActOnExpectedRoute, "The BC society control must still show Societies Act copy on the dashboard or Members page").toBe(true);
+    if (controlSwept) expect(societyActOnExpectedRoute, "The BC society control must still show Societies Act copy on the dashboard or Members page").toBe(true);
     const societyMembersInNav = all.some((finding) => finding.workspace === "bc-society" && finding.route === "(sidebar)" && finding.pattern === "members");
-    expect(societyMembersInNav, "The BC society control must still list Members in the sidebar").toBe(true);
+    if (controlSwept) expect(societyMembersInNav, "The BC society control must still list Members in the sidebar").toBe(true);
 
     expect(
       newLeaks.map((finding) => `${leakKey(finding)} [${finding.channel}] ${finding.snippet}`),

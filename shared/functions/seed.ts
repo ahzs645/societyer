@@ -32,6 +32,7 @@ import {
 import { invoiceDemoRows, type DemoInvoiceMember, type DemoInvoiceMemberKey } from "../demoData/invoicing";
 import { businessRegisterDemoRows } from "../demoData/businessRegisters";
 import { syncRegisterDeadlines } from "./businessRegisters";
+import { CORPORATION_DEMO_KEYS, CORPORATION_DEMO_TABLE_ORDER, buildCorporationDemo, insertCorporationDemo } from "../demoData/corporations";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -2076,7 +2077,25 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     await syncAgreementDeadlines(seedCtx, (await ctx.db.get(agreementId)) as any, agreementToday);
   }
 
+  // The three corporation personas of the demo banner ("Try another
+  // organization type"), from the same generator as the in-browser demo.
+  await seedCorporationDemos(ctx);
+
   return { societyId: String(societyId) };
+}
+
+/** Insert the BC, CBCA and OBCA demo corporations (shared/demoData/corporations.ts). */
+export async function seedCorporationDemos(ctx: PortableMutationCtx): Promise<Record<string, string>> {
+  const societyIds: Record<string, string> = {};
+  for (const key of CORPORATION_DEMO_KEYS) {
+    const demo = buildCorporationDemo(key, { idFor: (local) => seedRef("corporation", `${key}:${local}`) });
+    const { societyId } = await insertCorporationDemo({
+      insert: (table, doc) => ctx.db.insert(table, doc),
+      patch: (id, doc) => ctx.db.patch(id, doc),
+    }, demo);
+    societyIds[key] = societyId;
+  }
+  return societyIds;
 }
 
 /**
@@ -2234,6 +2253,12 @@ export async function resetPortable(ctx: PortableMutationCtx): Promise<{ ok: boo
   return { ok: true };
 }
 
+const CORPORATION_WIPE_ALREADY_LISTED = new Set([
+  "activity", "tasks", "documents", "documentVersions", "deadlines", "filings", "meetings", "minutes", "directors", "users",
+  "financials", "financialTransactions", "financialAccounts", "financialConnections", "budgets", "writtenResolutions", "agreements",
+  "insurancePolicies", "recordsLocation", "archiveAccessions", "organizationIdentifiers",
+]);
+
 async function wipe(ctx: PortableMutationCtx) {
   const tables = [
     "activity",
@@ -2331,6 +2356,8 @@ async function wipe(ctx: PortableMutationCtx) {
     "secretVaultItems",
     "archiveAccessions",
     "bylawAmendments",
+    // Corporation demos (seedCorporationDemos).
+    ...CORPORATION_DEMO_TABLE_ORDER.filter((table) => !CORPORATION_WIPE_ALREADY_LISTED.has(table)),
     "societies",
   ];
   for (const t of tables) {

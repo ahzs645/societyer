@@ -84,13 +84,14 @@ npm run test:xlsx                           # Excel export writer (src/lib/xlsx)
 # Legal rules, evidence and corporate records (if you touched shared/ legal, packet or register code)
 npm run test:legal                          # every legal and evidence check (scripts/run-legal-checks.mjs)
 npm run test:legal:after-utc-midnight       # the same checks with the clock just after 00:00 UTC
+npm run test:corporation-demo               # the BC, CBCA and OBCA demo companies (shared/demoData/corporations.ts) pass the ledger, certificate, register, dividend, resolution and obligation rules
 
 # Portable functions (if you added or changed a shared/functions or Convex endpoint)
 npm run manifest:portable && npm run test:portable-manifest
 npx tsx scripts/stage2/function-inventory.ts --write && npm run test:stage2-enforced
 
 # Entity-specific copy (if you changed UI text)
-ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep   # no society-only copy in corporation workspaces, or the reverse
+ENTITY_SWEEP_STRICT=1 npm run test:entity-sweep   # no society-only copy in corporation workspaces, or the reverse (also sweeps the populated demo companies)
 ```
 
 > **Dates:** use the organization's local date (`organizationToday`, `resolutionCalendarDate`),

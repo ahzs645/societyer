@@ -468,7 +468,7 @@ export function Dashboard() {
               style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6 }}
             >
               <div className="row">
-                <Badge tone={m.type === "AGM" ? "accent" : "info"}>{m.type}</Badge>
+                <Badge tone={m.type === "AGM" ? "accent" : "info"}>{m.type === "AGM" ? entityCopy.annualMeetingTitle : m.type}</Badge>
                 <strong>{m.title}</strong>
               </div>
               <div className="muted">{formatMeetingDate(m)} · {relative(m.scheduledAt)}</div>

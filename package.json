@@ -172,6 +172,7 @@
     "test:account-hierarchy": "tsx scripts/check-account-hierarchy.ts",
     "test:finance-insights": "tsx scripts/check-finance-insights.ts",
     "test:business-registers": "tsx scripts/check-business-registers.ts",
+    "test:corporation-demo": "tsx scripts/check-corporation-demo.ts",
     "test:motion-governance": "tsx scripts/check-motion-governance.ts",
     "test:motion-tags": "tsx scripts/check-motion-tags.ts",
     "test:motions-resolve-parity": "tsx scripts/check-motions-resolve-parity.ts",

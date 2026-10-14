@@ -3,7 +3,7 @@ import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinition
 import { definePortableMutation, definePortableQuery, PortableRuntime } from "../../shared/portable/define";
 import { simulateDemoChatPortable } from "../../shared/functions/aiChat";
 import type { PortableDoc, PortablePrincipal, RuntimeKind } from "../../shared/portable/ctx";
-import { LocalStoreDb } from "../../shared/portable/localRowStore";
+import { LocalStoreDb, type RowStoreOp } from "../../shared/portable/localRowStore";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
 import { buildLocalCapabilities } from "./localCapabilities";
 import type { LocalWorkspaceSnapshot, LocalWorkspaceBinaryFile } from "./localDexieRowStore";
@@ -353,6 +353,36 @@ export class StaticConvexClient {
 
   reseedStaticDemo() {
     return this.store.reseed();
+  }
+
+  /**
+   * Add a generated demo workspace (shared/demoData/corporations.ts) to the
+   * local store in one atomic batch, keeping its fixed ids. Idempotent: when
+   * the workspace's society row is already present nothing is written, so
+   * switching personas back and forth never duplicates rows. Reseed and Wipe
+   * reset the store to the bundled seed, which drops these workspaces.
+   */
+  async seedDemoWorkspace(societyId: string, tables: Record<string, any[]>): Promise<{ societyId: string; created: boolean }> {
+    await this.store.whenHydrated();
+    if (this.store.getRow("societies", societyId)) return { societyId, created: false };
+    const ops: RowStoreOp[] = [];
+    // The society first, so every later row's owner exists when it is written.
+    for (const row of tables.societies ?? []) ops.push({ kind: "upsert", table: "societies", row });
+    for (const [table, rows] of Object.entries(tables)) {
+      if (table === "societies") continue;
+      for (const row of rows) ops.push({ kind: "upsert", table, row });
+    }
+    await this.store.rowStore.commitBatch(ops);
+    // What createWorkspace adds for a new organization: record-table metadata
+    // and the entity's document packet catalog.
+    try {
+      await this.seedRecordTableMetadataFor(societyId);
+      await this.portable.runMutation("legalOperations:seedDocumentPacketsForEntity", { societyId });
+    } catch (error) {
+      console.warn("[societyer-local] demo workspace extras were not seeded", societyId, error);
+    }
+    this.portableQueries.emit();
+    return { societyId, created: true };
   }
 
   /** Resolves once the persisted workspace has been read into memory. */

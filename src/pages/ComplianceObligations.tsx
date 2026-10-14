@@ -28,6 +28,7 @@ import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { StatTile } from "../components/StatTile";
+import { ORG_HUB_OPTION_SETS } from "../lib/orgHubOptions";
 
 export function ComplianceObligationsPage() {
   const { organization, society, isLoading, missingWorkspace } = useOrganizationWorkspace();
@@ -259,7 +260,7 @@ export function ComplianceObligationsPage() {
           <div>
             <h2 className="card__title">{organizationLabel(organization)}</h2>
             <span className="card__subtitle">
-              {jurisdictionModule.registryPortalLabel} · {capitalize(organizationEntityType(organization))}
+              {jurisdictionModule.registryPortalLabel} · {entityTypeLabel(organizationEntityType(organization))}
             </span>
           </div>
           <Badge tone={packs.length ? "success" : "warn"}>
@@ -455,6 +456,11 @@ export function ComplianceObligationsPage() {
       </section>
     </div>
   );
+}
+
+// Entity types are stored as option keys ("corporation__business_"); show their label.
+function entityTypeLabel(value: string) {
+  return ORG_HUB_OPTION_SETS.entityTypes.find((option) => option.value === value)?.label ?? capitalize(value);
 }
 
 function capitalize(value: string) {

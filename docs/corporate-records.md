@@ -36,6 +36,7 @@ financial-statement and auditor waivers as separate decisions.
 - [Records retention and cloning](#records-retention-and-cloning)
 - [YCN Access importer](#ycn-access-importer)
 - [Statute references](#statute-references)
+- [Demo companies](#demo-companies)
 - [Tests and generated files](#tests-and-generated-files)
 - [Known limits and follow-ups](#known-limits-and-follow-ups)
 
@@ -439,6 +440,42 @@ The source IDs added in this work are:
 
 The research record is in [docs/legal-research](legal-research/README.md).
 
+## Demo companies
+
+Code: `shared/demoData/corporations.ts` (the builder), `shared/demoData/corporationStories.ts` (the
+three stories), `shared/demoData/corporationIdentities.ts` (names and ids for the demo banner).
+
+The demo banner's "Try another organization type" opens a populated, fictional workspace for each
+corporate profile:
+
+| Persona | Workspace | What it shows |
+| --- | --- | --- |
+| BC company | Cedar Demo Holdings Ltd. | Table 1 articles with Parts 24–25; Class A voting, Class B non-voting and redeemable Class C preferred shares; a consented transfer and a redemption with certificates; the transparency register with a family trust looked through; annual resolutions in writing (s. 182) with the auditor waived (s. 203) |
+| Federal CBCA corporation | Maple Demo Federal Inc. | A unanimous shareholder agreement; cumulative preferred shares held by a foreign investor; a board with a non-resident director that still meets the 25% resident Canadian rule; the ISC register and its filing with the annual return |
+| Ontario OBCA corporation | Lakeshore Demo Ontario Inc. | Articles of amendment creating redeemable special shares held by a holding company; the ISC register kept since January 1, 2023; Ontario annual returns, filed with the T2 before the Ontario Business Registry opened |
+
+Each workspace has directors, officers, shareholders and controllers linked to the people
+directory, the share ledger, certificates and holdings, signed written resolutions, dividends,
+filings with receipts, a minute book, documents, agreements, tasks, deadlines and a bank feed.
+History is fixed; the yearly cycle (annual resolutions, filings, dividends and register reviews)
+runs up to the demo's "today", so the open obligations are always ahead of it.
+
+- **In the browser demo:** the banner seeds the persona's rows with fixed ids into the local
+  store the first time it is chosen (`StaticConvexClient.seedDemoWorkspace`), then reopens it.
+  Reseed from a demo company restores it; Wipe removes the demo companies with the rest of the
+  demo data.
+- **On the server:** `seed:run` (`npm run convex:seed`) inserts the same three workspaces after
+  Riverside through `insertCorporationDemo`, which swaps the generated ids for real ones.
+
+`npm run test:corporation-demo` checks every persona at several demo dates with the app's own
+rules: references and the Convex schema; issued − redeemed = outstanding per class; the posting
+gates; certificates against holdings; the 25% ownership candidates against the register;
+dividends against the dividend gate and the ledger at the record date; every resolution a
+verified "Carried" record; directors against the profile's minimum and residency rule; derived
+obligations open and dated after the demo date; and the portable queries behind each page. It
+also injects faults to prove the checks catch them. `npm run test:seed-parity` compares the
+server seed with the in-browser demo, and the entity sweep covers the three demo workspaces.
+
 ## Tests and generated files
 
 The legal regression runner (`npm run test:legal`) includes:
@@ -452,6 +489,7 @@ The legal regression runner (`npm run test:legal`) includes:
 | Packets | `check-packet-instruments.ts`, `check-packet-grammar.ts`, `check-packet-operative-data.ts` |
 | Reports | `check-minute-book-reports.ts` |
 | YCN importer | `check-ycn-date-codec.ts`, `check-ycn-share-conversion.ts`, `check-ycn-access-import.ts` |
+| Demo companies | `check-corporation-demo.ts` (`npm run test:corporation-demo`, run separately) |
 
 Before pushing a change in this area, run:
 

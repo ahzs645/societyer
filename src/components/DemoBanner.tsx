@@ -11,8 +11,9 @@ import { Menu, type MenuSection } from "./Menu";
 import { actAsLocalUser, useLocalActorChoices } from "./UserPicker";
 import { setStoredSocietyId, useSocieties, useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
-import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { maintenanceErrorMessage, resetDemoData, seedCorporationDemoWorkspace, seedDemoSociety } from "../lib/maintenanceApi";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import { corporationDemoSocietyId, isCorporationDemoKey } from "../../shared/demoData/corporationIdentities";
 import { DEMO_PERSONAS, demoPersonaWorkspaceValues, personaForOrganization, type DemoPersona } from "../lib/demoPersonas";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -37,11 +38,23 @@ export function DemoBanner() {
 
   const role = currentUser?.role ?? null;
   const currentPersona = personaForOrganization(society);
+  const localDemo = isLocalDataRuntime();
+  // The generated sample company this workspace is, if any (not a company someone set up themselves).
+  const currentDemoCorporation = isCorporationDemoKey(currentPersona) && society && society._id === corporationDemoSocietyId(currentPersona) ? currentPersona : null;
+  const personaSelected = (key: DemoPersona["key"]) => (key === "bc_society" || !localDemo ? key === currentPersona : key === currentDemoCorporation);
+  const organizationNoun = currentPersona === "bc_company" ? "company" : currentPersona && currentPersona !== "bc_society" ? "corporation" : "society";
 
   const reseed = async () => {
     setBusy("seed");
     try {
       const result = await seedDemoSociety();
+      // Reseeding from a sample company restores that company too, and keeps it open.
+      if (localDemo && currentDemoCorporation) {
+        const company = await seedCorporationDemoWorkspace(currentDemoCorporation);
+        setStoredSocietyId(company.societyId);
+        toast.success("Demo data reseeded", `${society?.name ?? "The sample company"} is back to its sample records.`);
+        return;
+      }
       setStoredSocietyId(result.societyId);
       toast.success("Demo society seeded");
     } catch (error) {
@@ -54,7 +67,9 @@ export function DemoBanner() {
   const wipe = async () => {
     const ok = await confirm({
       title: "Wipe all demo data?",
-      message: "Every table will be dropped. You can reseed immediately after.",
+      message: localDemo
+        ? "Every change is discarded and the sample companies you opened are removed. The demo starts again from Riverside Community Society."
+        : "Every table will be dropped. You can reseed immediately after.",
       confirmLabel: "Wipe",
       tone: "danger",
     });
@@ -72,7 +87,23 @@ export function DemoBanner() {
   };
 
   const switchPersona = async (persona: DemoPersona) => {
-    if (persona.key === currentPersona) return;
+    if (personaSelected(persona.key)) return;
+    // In the in-browser demo each corporation persona is a populated sample
+    // workspace with fixed ids: seed it once, then reopen it.
+    if (localDemo && isCorporationDemoKey(persona.key)) {
+      setBusy("persona");
+      try {
+        const result = await seedCorporationDemoWorkspace(persona.key);
+        setStoredSocietyId(result.societyId);
+        toast.success(result.created ? `Opened ${persona.sample.name}` : `Switched to ${persona.sample.name}`, result.created ? `A sample ${persona.label} with its share register, resolutions and filings.` : persona.label);
+        navigate("/app");
+      } catch (error) {
+        toast.error(`Couldn't open a ${persona.label} workspace`, error instanceof Error ? error.message : undefined);
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
     const existing = (societies ?? []).find((candidate) => personaForOrganization(candidate) === persona.key);
     if (existing) {
       setStoredSocietyId(existing._id);
@@ -116,7 +147,7 @@ export function DemoBanner() {
     id: `persona-${persona.key}`,
     label: persona.label,
     hint: persona.hint,
-    icon: persona.key === currentPersona ? <Check size={14} /> : <Building2 size={14} />,
+    icon: personaSelected(persona.key) ? <Check size={14} /> : <Building2 size={14} />,
     disabled: busy !== null,
     onSelect: () => void switchPersona(persona),
   }));
@@ -148,7 +179,11 @@ export function DemoBanner() {
           {society
             ? role
               ? `Previewing what the ${role} role can see and do in ${society.name}${society.name.endsWith(".") ? "" : "."}`
-              : t("demo.viewing", { name: society.name, defaultValue: "Viewing {{name}} — a demo society used to showcase the app." })
+              : organizationNoun === "company"
+                ? t("demo.viewingCompany", { name: society.name, defaultValue: "Viewing {{name}} — a demo company used to showcase the app." })
+                : organizationNoun === "corporation"
+                  ? t("demo.viewingCorporation", { name: society.name, defaultValue: "Viewing {{name}} — a demo corporation used to showcase the app." })
+                  : t("demo.viewing", { name: society.name, defaultValue: "Viewing {{name}} — a demo society used to showcase the app." })
             : "No demo society yet. Click Seed to load Riverside Community Society."}
         </span>
       </span>

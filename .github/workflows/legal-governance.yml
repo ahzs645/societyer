@@ -27,6 +27,8 @@ jobs:
       # this wrong, instead of only when CI happens to run in the evening.
       - name: Same checks just after midnight UTC
         run: npm run test:legal:after-utc-midnight
+      - name: Corporation demo workspaces (ledger, certificates, registers, dividends, obligations)
+        run: npm run test:corporation-demo
       - name: Navigation labels, translations and privacy labels
         run: npx tsx scripts/check-platform-polish.ts
       - name: Portable manifest drift
@@ -39,7 +41,7 @@ jobs:
   # configs use the Chromium that Playwright installs below.
   legal-governance-browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,9 +51,9 @@ jobs:
       - run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Strict entity copy sweep (five guided workspaces, every route)
+      - name: Strict entity copy sweep (five guided workspaces and three demo companies, every route)
         run: npm run test:entity-sweep
-        timeout-minutes: 20
+        timeout-minutes: 30
         env:
           ENTITY_SWEEP_STRICT: "1"
       - name: Corporation flow and governance copy
