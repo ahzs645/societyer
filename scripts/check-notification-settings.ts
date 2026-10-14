@@ -85,9 +85,8 @@ assert.deepEqual(titles, [
   "Due soon: Annual report",
   "Operating chequing is below $5,000",
   `Travel is over budget (FY ${fyEndYear})`,
-  `Travel passed 90% of budget (FY ${fyEndYear})`,
-], "deadline inside the 21-day lead, Travel at 90% and over plan, the low balance and the 5-day-old claim (not revenue, not a half-spent line, not a 1-day-old claim, not a deadline 25 days out)");
-assert.equal(first.created, 5);
+], "deadline inside the 21-day lead, Travel over plan, the low balance and the 5-day-old claim (not revenue, not a half-spent line, not a 1-day-old claim, not a deadline 25 days out)");
+assert.equal(first.created, 4);
 assert.equal((await owner.runMutation<{ created: number }>("notifications:evaluateAlerts", { societyId })).created, 0, "a second scan raises nothing new");
 await assert.rejects(director.runMutation("notifications:evaluateAlerts", { societyId }), /Permission/, "running the scan needs task edit access");
 // A week later the balance is still low: it comes back; the deadline doesn't repeat.
@@ -95,6 +94,15 @@ const later = await scanSocietyAlerts({ db } as any, societyId, now + 8 * DAY);
 const balanceRows = (await db.query("notifications").collect()).filter((row: any) => row.kind === "balance");
 assert.equal(balanceRows.length, 2, "a low balance is raised again after a week");
 assert.ok(later.created >= 1);
+// Rent crosses 90% (one alert), then goes over plan (a second alert).
+await txn("hall-2", -42_000, { category: "Rent", receiptStatus: "attached" });
+await scanSocietyAlerts({ db } as any, societyId, now);
+await txn("hall-3", -10_000, { category: "Rent", receiptStatus: "attached" });
+await scanSocietyAlerts({ db } as any, societyId, now);
+const rentTitles = (await db.query("notifications").collect()).map((row: any) => row.title).filter((title: string) => title.startsWith("Rent")).sort();
+assert.deepEqual(rentTitles, [`Rent is over budget (FY ${fyEndYear})`, `Rent passed 90% of budget (FY ${fyEndYear})`], "crossing the threshold, then going over plan, raises one alert each");
+const claimBody = (await db.query("notifications").collect()).find((row: any) => row.kind === "approval")?.body;
+assert.match(String(claimBody), /0 of 2 approvals so far\./);
 console.log("✓ scan: thresholds evaluated, deduped, low balance repeats weekly");
 
 // --- Who sees what in the app ------------------------------------------------------------
@@ -127,7 +135,7 @@ assert.equal(memberSettings.accounts.length, 0, "no account balances without fin
 const ownerSettings: any = await owner.runQuery("notifications:settings", { societyId });
 const budgetRule = ownerSettings.rules.find((rule: any) => rule.rule === "budget_line");
 assert.equal(budgetRule.canEdit, true);
-assert.equal(budgetRule.preview.matches, 1, "one expense line (Travel) is past 90%");
+assert.equal(budgetRule.preview.matches, 2, "two expense lines (Travel, Rent) are past 90%; Donations is revenue");
 const directorSettings: any = await director.runQuery("notifications:settings", { societyId });
 assert.ok(directorSettings.rules.every((rule: any) => rule.canEdit === false), "directors can read but not edit thresholds");
 console.log("✓ settings: kinds, thresholds and accounts follow the viewer's role");

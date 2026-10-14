@@ -606,18 +606,18 @@ async function collectAlerts(ctx: PortableQueryCtx, societyId: string, nowMs: nu
   };
   if (budgetRule.enabled) {
     for (const line of overThreshold) {
-      const levels = budgetRule.value < 100 && line.percent >= 100 ? [budgetRule.value, 100] : [budgetRule.value];
-      for (const level of levels) {
-        alerts.push({
-          kind: "budget",
-          severity: level >= 100 ? "err" : "warn",
-          title: level >= 100
-            ? `${line.category} is over budget (FY ${line.fiscalYear})`
-            : `${line.category} passed ${level}% of budget (FY ${line.fiscalYear})`,
-          body: `Spent ${formatWholeDollars(line.spentCents)} of ${formatWholeDollars(line.plannedCents)} planned (${line.percent}%).`,
-          linkHref: "/app/treasurer",
-        });
-      }
+      // The highest level reached: a line that crosses the threshold and
+      // later goes over plan gets both alerts, one already over gets one.
+      const over = budgetRule.value < 100 && line.percent >= 100;
+      alerts.push({
+        kind: "budget",
+        severity: line.percent >= 100 ? "err" : "warn",
+        title: over
+          ? `${line.category} is over budget (FY ${line.fiscalYear})`
+          : `${line.category} passed ${budgetRule.value}% of budget (FY ${line.fiscalYear})`,
+        body: `Spent ${formatWholeDollars(line.spentCents)} of ${formatWholeDollars(line.plannedCents)} planned (${line.percent}%).`,
+        linkHref: "/app/treasurer",
+      });
     }
   }
 
@@ -655,7 +655,7 @@ async function collectAlerts(ctx: PortableQueryCtx, societyId: string, nowMs: nu
         kind: "approval",
         severity: "warn",
         title: `Claim waiting over ${plural(claimRule.value, "day")}: ${claim.title}`,
-        body: `${claim.claimantName} submitted ${formatWholeDollars(Number(claim.amountCents))} on ${claimSubmittedAt(claim).slice(0, 10)}. ${approvals} of ${required} approvals so far.`,
+        body: `${claim.claimantName} submitted ${formatWholeDollars(Number(claim.amountCents))} on ${claimSubmittedAt(claim).slice(0, 10)}. ${approvals} of ${plural(required, "approval")} so far.`,
         linkHref: `/app/approvals?claim=${claim._id}`,
       });
     }
