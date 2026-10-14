@@ -1,4 +1,5 @@
-import type { ApprovalRule, ApprovalVote, ApproverAccess } from "../../../../shared/expenseApprovals";
+import type { ApprovalRule, ApprovalRuleDiffLine, ApprovalVote, ApproverAccess } from "../../../../shared/expenseApprovals";
+import type { ClaimPolicyIssue, ExpenseClaimPolicy } from "../../../../shared/expensePolicy";
 
 export type TrailEntry = { atISO: string; action: string; actorName: string; actorUserId?: string; note?: string };
 
@@ -31,6 +32,27 @@ export type QueueRow = {
   cannotApproveReason?: string;
   isMine: boolean;
   trail: TrailEntry[];
+  /** Claim-policy checks the claim misses (open claims only). */
+  policyIssues: ClaimPolicyIssue[];
+  policyException: { reason: string; at: string; by: string; byUserId?: string } | null;
+  /** Same requester and amount within 14 days (open claims only). */
+  possibleDuplicate: { _id: string; title: string; date: string } | null;
+  lastReminderAtISO?: string;
+  /** Set while the 24-hour reminder limit applies. */
+  nextReminderAtISO?: string;
+  canRemind: boolean;
+};
+
+export type PendingPolicyChange = {
+  _id: string;
+  kind: "rules" | "change_control_off";
+  proposedByName: string;
+  createdAtISO: string;
+  restoresDefaults: boolean;
+  diff: ApprovalRuleDiffLine[];
+  isMine: boolean;
+  canDecide: boolean;
+  cannotDecideReason?: string;
 };
 
 export type ApprovalQueue = {
@@ -53,6 +75,15 @@ export type ApprovalQueue = {
     updatedByName?: string;
   };
   approvers: { _id: string; name: string; role: string }[];
+  claimPolicy: ExpenseClaimPolicy & {
+    isActive: boolean;
+    isSaved: boolean;
+    canChange: boolean;
+    updatedAtISO?: string;
+    updatedByName?: string;
+  };
+  /** "Changes to approval rules need a second approver". */
+  changeControl: { enabled: boolean; canChange: boolean; pending: PendingPolicyChange | null };
 };
 
-export type QueueTab = "awaiting" | "approved" | "paid" | "closed" | "drafts" | "rules";
+export type QueueTab = "awaiting" | "approved" | "paid" | "closed" | "drafts" | "rules" | "policy";

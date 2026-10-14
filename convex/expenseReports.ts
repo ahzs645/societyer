@@ -11,6 +11,11 @@ import {
   bulkApprovePortable,
   saveApprovalRulesPortable,
   saveApproverAccessPortable,
+  saveClaimPolicyPortable,
+  attachReceiptPortable,
+  remindApproversPortable,
+  setRulesChangeControlPortable,
+  decidePolicyChangePortable,
 } from "../shared/functions/expenseReports";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -37,6 +42,8 @@ export const upsert = authorizedMutation("expenseReports:upsert", mutation)({
     paymentReference: v.optional(v.string()),
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
+    // Required to submit a claim that misses a blocking claim policy.
+    policyExceptionReason: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
@@ -53,6 +60,7 @@ export const setStatus = authorizedMutation("expenseReports:setStatus", mutation
     // paid from). Omit them to just record the payment without a journal entry.
     expenseAccountId: v.optional(v.id("financialAccounts")),
     bankAccountId: v.optional(v.id("financialAccounts")),
+    policyExceptionReason: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => setStatusPortable(await toPortableMutationCtx(ctx), args),
@@ -118,4 +126,54 @@ export const saveApproverAccess = authorizedMutation("expenseReports:saveApprove
   },
   returns: v.any(),
   handler: async (ctx, args) => saveApproverAccessPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Expense-claim policy: receipt and note thresholds and a submission window,
+// warning approvers or blocking submission. Needs finance edit access; the
+// change is recorded in the workspace activity log.
+export const saveClaimPolicy = authorizedMutation("expenseReports:saveClaimPolicy", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    receiptOverCents: v.optional(v.number()),
+    noteOverCents: v.optional(v.number()),
+    maxAgeDays: v.optional(v.number()),
+    enforcement: v.union(v.literal("warn"), v.literal("block")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveClaimPolicyPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Link an uploaded receipt document to a claim without resetting its approvals.
+export const attachReceipt = authorizedMutation("expenseReports:attachReceipt", mutation)({
+  args: { id: v.id("expenseReports"), receiptDocumentId: v.id("documents") },
+  returns: v.any(),
+  handler: async (ctx, args) => attachReceiptPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Notify the remaining approvers of a submitted claim (in-app and an Outbox
+// draft), at most once per claim per 24 hours.
+export const remindApprovers = authorizedMutation("expenseReports:remindApprovers", mutation)({
+  args: { id: v.id("expenseReports") },
+  returns: v.any(),
+  handler: async (ctx, args) => remindApproversPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// "Changes to approval rules need a second approver". Turning it off while it
+// is on is itself a change another approver must accept.
+export const setRulesChangeControl = authorizedMutation("expenseReports:setRulesChangeControl", mutation)({
+  args: { societyId: v.id("societies"), enabled: v.boolean() },
+  returns: v.any(),
+  handler: async (ctx, args) => setRulesChangeControlPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Approve or decline a pending approval-policy change (never the proposer's
+// own), or withdraw your own proposal.
+export const decidePolicyChange = authorizedMutation("expenseReports:decidePolicyChange", mutation)({
+  args: {
+    id: v.id("approvalPolicyChanges"),
+    decision: v.union(v.literal("approve"), v.literal("decline"), v.literal("withdraw")),
+    reason: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => decidePolicyChangePortable(await toPortableMutationCtx(ctx), args),
 });

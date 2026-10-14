@@ -10,7 +10,8 @@ import { useConfirm } from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { centsToDollarInput } from "../../../lib/format";
 import { formatMoney, parseMoneyInput } from "../../../lib/money";
-import { APPROVER_ROLES, validateApprovalRules, type ApprovalRule } from "../../../../shared/expenseApprovals";
+import { APPROVER_ROLES, approvalRuleWarnings, validateApprovalRules, type ApprovalRule } from "../../../../shared/expenseApprovals";
+import { RulesChangeControl } from "./RulesChangeControl";
 import type { ApprovalQueue } from "./types";
 
 type RuleDraft = {
@@ -67,6 +68,19 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
     () => [...drafts].sort((a, b) => (parseMoneyInput(a.minAmount) ?? 0) - (parseMoneyInput(b.minAmount) ?? 0)),
     [drafts],
   );
+  // Soft overlap and duplicate-threshold warnings, live as the rules are edited.
+  const warningsByKey = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const warning of approvalRuleWarnings(sorted.map(toRule))) {
+      const key = sorted[warning.index]?.key;
+      if (key) map.set(key, [...(map.get(key) ?? []), warning.message]);
+    }
+    return map;
+  }, [sorted]);
+  // While a change waits for a second approver the rules are read-only (the server refuses edits too).
+  const pendingChange = queue.changeControl.pending;
+  const editable = canWrite && !pendingChange;
+  const needsSecondApprover = queue.changeControl.enabled;
 
   const update = (key: string, patch: Partial<RuleDraft>) => {
     setDirty(true);
@@ -76,7 +90,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
 
   const persist = async (rules: ApprovalRule[], message: string) => {
     try {
-      await save({
+      const result: any = await save({
         societyId: societyId as any,
         rules: rules.map((rule) => ({
           minAmountCents: rule.minAmountCents,
@@ -90,7 +104,11 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
       });
       setDirty(false);
       setErrors([]);
-      toast.success(message, "New approvals follow these rules; claims already approved keep their approval.");
+      if (result?.pending) {
+        toast.info("Change sent for a second approval", "Another owner, admin or director must approve it before it takes effect.");
+      } else {
+        toast.success(message, "New approvals follow these rules; claims already approved keep their approval.");
+      }
     } catch (error: any) {
       toast.error("Could not save approval rules", error?.message);
     }
@@ -119,11 +137,17 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
 
   return (
     <div className="approval-rules">
+      <RulesChangeControl queue={queue} societyId={societyId} />
+      {pendingChange && (
+        <Banner tone="warn" title="This rule has a pending change">
+          The rules below stay as they are until {pendingChange.isMine ? "another owner, admin or director" : "someone other than " + pendingChange.proposedByName} approves or declines the proposed change.
+        </Banner>
+      )}
       {queue.policy.signingAuthorityCount > 0 && (
         <Banner tone="info" title="Signing authority">
           Your <Link to="/app/governance-registers">governance registers</Link> record signing-authority tiers
           ({describeTiers(queue.policy.suggested)} approvals).{" "}
-          {suggestedDiffers && canWrite && (
+          {suggestedDiffers && editable && (
             <button
               type="button"
               className="btn btn--sm"
@@ -149,7 +173,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
                 inputMode="decimal"
                 aria-label={`Rule ${index + 1} threshold`}
                 value={draft.minAmount}
-                disabled={!canWrite}
+                disabled={!editable}
                 onChange={(event) => update(draft.key, { minAmount: event.target.value })}
               />
               <span>or more need</span>
@@ -158,7 +182,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
                 className="approval-rule__count"
                 aria-label={`Rule ${index + 1} approvals required`}
                 value={String(draft.requiredApprovals)}
-                disabled={!canWrite}
+                disabled={!editable}
                 onChange={(value) => update(draft.key, { requiredApprovals: Number(value) })}
                 options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
               />
@@ -171,7 +195,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
                   type="button"
                   className={`chip chip--regular chip--sm chip--interactive approval-rule__chip${draft.approverRoles.includes(role) ? " is-selected" : ""}`}
                   aria-pressed={draft.approverRoles.includes(role)}
-                  disabled={!canWrite}
+                  disabled={!editable}
                   onClick={() => update(draft.key, { approverRoles: toggleIn(draft.approverRoles, role) })}
                 >
                   {role}s
@@ -183,7 +207,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
                   type="button"
                   className={`chip chip--regular chip--sm chip--interactive approval-rule__chip${draft.approverUserIds.includes(person._id) ? " is-selected" : ""}`}
                   aria-pressed={draft.approverUserIds.includes(person._id)}
-                  disabled={!canWrite}
+                  disabled={!editable}
                   onClick={() => update(draft.key, { approverUserIds: toggleIn(draft.approverUserIds, person._id) })}
                 >
                   {person.name}
@@ -195,17 +219,20 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
                 </span>
               )}
             </div>
+            {(warningsByKey.get(draft.key) ?? []).map((message) => (
+              <p key={message} className="approval-rule__warning" role="note">{message}</p>
+            ))}
             <div className="approval-rule__options">
               <label className="approval-rule__check">
-                <input type="checkbox" checked={draft.blockSelfApproval} disabled={!canWrite} onChange={(event) => update(draft.key, { blockSelfApproval: event.target.checked })} />
+                <input type="checkbox" checked={draft.blockSelfApproval} disabled={!editable} onChange={(event) => update(draft.key, { blockSelfApproval: event.target.checked })} />
                 Requester can't approve their own claim
               </label>
-              <Toggle size="sm" checked={draft.enabled} disabled={!canWrite} onChange={(enabled) => update(draft.key, { enabled })} label="On" />
+              <Toggle size="sm" checked={draft.enabled} disabled={!editable} onChange={(enabled) => update(draft.key, { enabled })} label="On" />
               <button
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Remove rule ${index + 1}`}
-                disabled={!canWrite || drafts.length === 1}
+                disabled={!editable || drafts.length === 1}
                 onClick={() => {
                   setDirty(true);
                   setDrafts((current) => current.filter((item) => item.key !== draft.key));
@@ -234,7 +261,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
         <button
           type="button"
           className="btn btn--ghost btn--sm"
-          disabled={!canWrite || drafts.length >= 8}
+          disabled={!editable || drafts.length >= 8}
           onClick={() => {
             setDirty(true);
             const top = Math.max(0, ...drafts.map((draft) => parseMoneyInput(draft.minAmount) ?? 0));
@@ -251,7 +278,7 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
           <button
             type="button"
             className="btn btn--sm"
-            disabled={!canWrite}
+            disabled={!editable}
             onClick={async () => {
               const ok = await confirm({
                 title: "Restore default approval rules?",
@@ -271,8 +298,8 @@ export function ApprovalRulesEditor({ queue, societyId, canWrite }: { queue: App
             Discard changes
           </button>
         )}
-        <button type="button" className="btn btn--accent btn--sm" disabled={!canWrite || !dirty} onClick={() => void onSave()}>
-          Save rules
+        <button type="button" className="btn btn--accent btn--sm" disabled={!editable || !dirty} onClick={() => void onSave()}>
+          {needsSecondApprover ? "Propose change" : "Save rules"}
         </button>
       </div>
       {!canWrite && <p className="muted">Only owners and admins can change approval rules.</p>}

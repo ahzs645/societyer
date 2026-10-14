@@ -87,6 +87,8 @@ export const EXPORTABLE_TABLES = [
   "transactionRules",
   "expenseApprovalRules",
   "expenseApprovalSettings",
+  "expenseClaimPolicy",
+  "approvalPolicyChanges",
   "invoices",
   "invoiceCatalogItems",
   "invoiceSeries",

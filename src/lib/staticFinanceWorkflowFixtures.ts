@@ -10,6 +10,7 @@ import {
   applyDemoFinanceWorkflows,
   DEMO_RECONCILIATION_KEYS,
   demoExpenseApprovalRules,
+  demoExpenseClaimPolicy,
   demoExpenseReports,
   demoTransactionRules,
   type DemoFinanceIdKind,
@@ -38,6 +39,7 @@ const STATIC_ID_PREFIX: Record<DemoFinanceIdKind, string> = {
   period: "static_recon_",
   approvalRule: "static_approval_rule_",
   expense: "static_expense_",
+  claimPolicy: "static_claim_policy_",
 };
 
 function staticRefs(ids: Ids): DemoFinanceRefs {
@@ -93,4 +95,8 @@ export function financeWorkflowApprovalRules(ids: Ids) {
 
 export function financeWorkflowExpenseReports(ids: Ids) {
   return demoExpenseReports(staticRefs(ids));
+}
+
+export function financeWorkflowClaimPolicy(ids: Ids) {
+  return [demoExpenseClaimPolicy(staticRefs(ids))];
 }

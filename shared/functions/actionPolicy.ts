@@ -140,6 +140,11 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   // never approve. setStatus keeps financials:write; saveApproverAccess
   // falls through to financials:write below.
   if (name === "expenseReports:decide" || name === "expenseReports:bulkApprove") return "financials:read";
+  // A second owner/admin/director decides approval-rule changes (the handler
+  // checks the role and that it isn't the proposer); requesters may remind
+  // approvers about their own claims (the handler allows the requester or a
+  // finance writer).
+  if (name === "expenseReports:decidePolicyChange" || name === "expenseReports:remindApprovers") return "financials:read";
   if (resource === "exports") return kind === "query" && action === "list" ? "exports:read" : "exports:download";
   return `${resource}:${kind === "query" ? "read" : "write"}` as Permission;
 }

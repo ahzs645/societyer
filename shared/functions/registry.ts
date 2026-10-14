@@ -533,6 +533,11 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "expenseReports:bulkApprove", handler: expenseReportsFns.bulkApprovePortable }),
   definePortableMutation({ name: "expenseReports:saveApprovalRules", handler: expenseReportsFns.saveApprovalRulesPortable }),
   definePortableMutation({ name: "expenseReports:saveApproverAccess", handler: expenseReportsFns.saveApproverAccessPortable }),
+  definePortableMutation({ name: "expenseReports:saveClaimPolicy", handler: expenseReportsFns.saveClaimPolicyPortable }),
+  definePortableMutation({ name: "expenseReports:attachReceipt", handler: expenseReportsFns.attachReceiptPortable }),
+  definePortableMutation({ name: "expenseReports:remindApprovers", handler: expenseReportsFns.remindApproversPortable }),
+  definePortableMutation({ name: "expenseReports:setRulesChangeControl", handler: expenseReportsFns.setRulesChangeControlPortable }),
+  definePortableMutation({ name: "expenseReports:decidePolicyChange", handler: expenseReportsFns.decidePolicyChangePortable }),
 
   // insurance
   definePortableQuery({ name: "insurance:list", handler: insuranceFns.listPortable }),

@@ -88,6 +88,8 @@ export const financeWorkflowTables = {
   expenseApprovalSettings: defineTable({
     societyId: v.id("societies"),
     approverAccess: v.string(), // finance_writers | rule_roles
+    // Approval-rule changes need a second approver (approvalPolicyChanges).
+    rulesChangeControl: v.optional(v.boolean()),
     updatedByUserId: v.optional(v.id("users")),
     updatedByName: v.optional(v.string()),
     createdAtISO: v.string(),

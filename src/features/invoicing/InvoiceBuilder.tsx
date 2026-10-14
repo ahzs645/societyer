@@ -26,6 +26,8 @@ import { BillToPicker, type BillToValue } from "./BillToPicker";
 import { InvoiceDocument, InvoicePrintPortal } from "./InvoiceDocument";
 import { InvoiceStatusPill } from "./InvoiceStatusPill";
 import { LineItemsEditor, blankLine, toLineDraft, type LineDraft } from "./LineItemsEditor";
+import { findLikelyDuplicate } from "../../../shared/expensePolicy";
+import { appRouteHref } from "../../lib/appRouteHref";
 import type { InvoiceRow, InvoiceWorkspace } from "./types";
 
 type RepeatDraft = { enabled: boolean; frequency: string; endKind: string; endAfterCount: string; endDate: string; autoSend: boolean };
@@ -132,6 +134,9 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
+  // Soft duplicate check for a new invoice: same customer and total within 14 days.
+  const [duplicateOk, setDuplicateOk] = useState(false);
+  const [duplicateRetry, setDuplicateRetry] = useState<null | (() => void)>(null);
 
   const readOnly = !canWrite || invoice?.lifecycle === "void";
   const update = (patch: Partial<Draft>) => {
@@ -165,6 +170,17 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     status: invoice?.status ?? "draft",
   };
   const organization = { ...workspace.organization, logoUrl };
+  const partyKey = (party: { partyKind: string; memberId?: string; counterpartyId?: string; billToName: string }) =>
+    party.partyKind === "member" && party.memberId ? `member:${party.memberId}` : party.partyKind === "organization" && party.counterpartyId ? `org:${party.counterpartyId}` : `name:${party.billToName.trim().toLowerCase()}`;
+  const likelyDuplicate = invoice ? null : findLikelyDuplicate(
+    { partyKey: draft.billToName.trim() ? partyKey(draft) : "", amountCents: totals.totalCents, date: draft.issueDate },
+    workspace.invoices.filter((row) => row.lifecycle !== "void").map((row) => ({ _id: row._id, partyKey: partyKey(row), amountCents: row.totalCents, date: row.issueDate, title: `${row.number} · ${row.billToName}` })),
+  );
+  const guardDuplicate = (retry: () => void) => {
+    if (!likelyDuplicate || duplicateOk) return false;
+    setDuplicateRetry(() => retry);
+    return true;
+  };
 
   const validate = () => {
     if (!draft.billToName.trim()) return "Choose who to bill.";
@@ -236,12 +252,14 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
     }
   };
 
-  const saveDraft = async () => {
+  const saveDraft = async (force = false) => {
+    if (!force && guardDuplicate(() => void saveDraft(true))) return;
     const id = await save();
     if (id) toast.success(invoice ? "Invoice saved" : `Draft ${number} saved`);
   };
 
-  const sendNow = async (draftEmail: boolean) => {
+  const sendNow = async (draftEmail: boolean, force = false) => {
+    if (!force && guardDuplicate(() => void sendNow(draftEmail, true))) return;
     const id = await save();
     if (!id) return;
     try {
@@ -366,6 +384,15 @@ export function InvoiceBuilder({ workspace, invoice, prefill, societyId, logoUrl
             <Banner tone="info" title="Payments recorded">The total can't drop below the <Money cents={invoice.paidCents} /> already paid.</Banner>
           )}
           {error && <Banner tone="danger" title="Check the invoice">{error}</Banner>}
+          {duplicateRetry && likelyDuplicate && (
+            <Banner tone="warn" title={`Looks like a duplicate of ${likelyDuplicate.title} (${formatDate(likelyDuplicate.date)})`}>
+              Same customer and total within 14 days.{" "}
+              <span className="invoice-builder__duplicate-actions">
+                <a className="btn btn--sm" href={appRouteHref(`/app/invoices?invoice=${encodeURIComponent(likelyDuplicate._id)}`)} target="_blank" rel="noopener noreferrer">View</a>
+                <button type="button" className="btn btn--sm btn--accent" onClick={() => { const retry = duplicateRetry; setDuplicateOk(true); setDuplicateRetry(null); retry(); }}>Save anyway</button>
+              </span>
+            </Banner>
+          )}
 
           <section className="invoice-builder__section" aria-labelledby="ib-billto">
             <h2 id="ib-billto" className="invoice-builder__heading">Bill to</h2>

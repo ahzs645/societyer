@@ -136,6 +136,7 @@
 @use "business-registers"; // Payroll, Credit cards and Investments registers
 
 @use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
+@use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

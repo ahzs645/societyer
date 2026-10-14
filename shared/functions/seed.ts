@@ -24,6 +24,7 @@ import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYea
 import {
   applyDemoFinanceWorkflows,
   demoExpenseApprovalRules,
+  demoExpenseClaimPolicy,
   demoExpenseReports,
   demoTransactionRules,
   type DemoFinancePerson,
@@ -2197,6 +2198,7 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
   }
   await writer.insert("reconciliationPeriods", periods);
   await writer.insert("expenseApprovalRules", demoExpenseApprovalRules(refs));
+  await writer.insert("expenseClaimPolicy", [demoExpenseClaimPolicy(refs)]);
   await writer.insert("expenseReports", demoExpenseReports(refs));
 
   // Invoicing: customers and catalog before the invoices that name them, the
@@ -2289,6 +2291,8 @@ async function wipe(ctx: PortableMutationCtx) {
     "expenseReports",
     "expenseApprovalRules",
     "expenseApprovalSettings",
+    "expenseClaimPolicy",
+    "approvalPolicyChanges",
     "reconciliationPeriods",
     "transactionRules",
     "fundRestrictions",
