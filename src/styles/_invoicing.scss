@@ -160,10 +160,30 @@
 }
 th.num .invoice-sort { flex-direction: row-reverse; }
 
+/* Tablet and phone: the bulk bar floats above the bottom navigation, like the
+ * RecordTable bulk island, so it stays reachable while scrolling. */
+@media (max-width: 980px) {
+  .invoice-bulkbar {
+    position: fixed;
+    left: token(s-2);
+    right: token(s-2);
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + #{token(s-2)});
+    z-index: token(z-dropdown);
+    border: 1px solid token(border-alpha-strong);
+    border-radius: token(r-card);
+    background: token(bg-panel);
+    box-shadow: token(elevation-3);
+  }
+  .invoice-card:has(.invoice-bulkbar) { padding-bottom: 132px; }
+}
+
 @media (max-width: 760px) {
   .invoice-toolbar__count { margin-left: 0; width: 100%; }
   .invoice-search { max-width: none; }
   .invoice-bulkbar__actions { margin-left: 0; }
+  .invoice-table tbody tr.is-selected { background: token(bg-selected-alpha); }
+  .invoice-table tbody tr.is-selected td,
+  .invoice-table tbody tr.is-selected:hover td { background: transparent; }
 
   .invoice-table thead { display: none; }
   .invoice-table,
