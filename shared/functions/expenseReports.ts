@@ -657,7 +657,7 @@ export async function remindApproversPortable(ctx: PortableMutationCtx, { id }: 
     });
   }
   // Email only approvers who haven't turned approval emails off.
-  const emailRecipients = [];
+  const emailRecipients: any[] = [];
   for (const user of recipients) {
     const prefs: NotificationPrefRow[] = (
       await ctx.db.query("notificationPrefs").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()
