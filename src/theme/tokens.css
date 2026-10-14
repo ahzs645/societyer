@@ -305,6 +305,12 @@
   --control-h-sm: 28px;  /* compact: .btn--sm, .btn-action, dense rows */
   --control-h-md: 32px;  /* default: .btn, <Button>, .input */
   --control-h-lg: 40px;  /* prominent: .btn--lg, <Button size="lg"> */
+  /* Touch (coarse pointer) scale: what a control LOOKS like on a phone. The
+     tap area is separate — an invisible 44px hit box around the control
+     (see `tap-area` in _mixins.scss), so controls stay compact visually. */
+  --control-h-touch-icon: 32px; /* icon-only buttons, row actions */
+  --control-h-touch: 36px;      /* text buttons, tabs, segments, selects, inputs */
+  --tap-target: 44px;           /* minimum hit area on touch */
 
   /* Table rhythm. */
   --row-h-compact: 36px;

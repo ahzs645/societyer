@@ -12,6 +12,9 @@ import { RecordTableFilterChips } from "./RecordTableFilterChips";
 import { RecordTableFilterPopover } from "./RecordTableFilterPopover";
 import { RecordTableScope } from "./RecordTableScope";
 import { RecordTableViewToolbar } from "./RecordTableViewToolbar";
+import { RecordTableCardList } from "./RecordTableCardList";
+import { useRecordTableState } from "../state/recordTableStore";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 
 type ViewSummary = { _id: string; name: string; position: number; isSystem: boolean };
 
@@ -80,6 +83,7 @@ export function ObjectRecordTable({
   filterViews,
   transformView,
   requiredViewNames,
+  renderPhoneCard,
   children,
 }: {
   societyId: Id<"societies"> | undefined;
@@ -110,6 +114,13 @@ export function ObjectRecordTable({
   transformView?: (view: HydratedView | null) => HydratedView | null;
   /** Seeded views this page relies on; a workspace missing one is topped up. */
   requiredViewNames?: readonly string[];
+  /**
+   * Phones: show each record as this card instead of a frozen-column table
+   * row. The cards follow the same search, filters, sort and group-by as the
+   * table (group headers sit between them); kanban and calendar views are
+   * unchanged.
+   */
+  renderPhoneCard?: (record: any) => ReactNode;
   /** Rendered inside the table scope after the table (bulk bars, footers). */
   children?: ReactNode;
 }) {
@@ -167,15 +178,51 @@ export function ObjectRecordTable({
       />
       <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
       <RecordTableFilterChips />
-      <RecordTable
+      <ObjectRecordTableBody
+        renderPhoneCard={renderPhoneCard}
+        cardListLabel={tableData.objectMetadata.labelPlural}
         loading={loading || tableData.loading}
-        selectable={selectable}
         emptyState={emptyState}
-        renderCell={renderCell}
-        renderRowActions={renderRowActions}
-        rowMenuSections={rowMenuSections}
-      />
+      >
+        <RecordTable
+          loading={loading || tableData.loading}
+          selectable={selectable}
+          emptyState={emptyState}
+          renderCell={renderCell}
+          renderRowActions={renderRowActions}
+          rowMenuSections={rowMenuSections}
+        />
+      </ObjectRecordTableBody>
       {children}
     </RecordTableScope>
   );
+}
+
+/** The table, or on phones (table view only) the page's record cards. */
+function ObjectRecordTableBody({
+  renderPhoneCard,
+  cardListLabel,
+  loading,
+  emptyState,
+  children,
+}: {
+  renderPhoneCard?: (record: any) => ReactNode;
+  cardListLabel: string;
+  loading: boolean;
+  emptyState?: ReactNode;
+  children: ReactNode;
+}) {
+  const isMobile = useIsMobile();
+  const viewType = useRecordTableState((s) => s.type);
+  if (!renderPhoneCard || !isMobile || viewType !== "table") return <>{children}</>;
+  if (loading) {
+    return (
+      <div className="record-table__loading" aria-busy="true">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={index} className="record-table__loading-row" />
+        ))}
+      </div>
+    );
+  }
+  return <RecordTableCardList renderCard={renderPhoneCard} emptyState={emptyState} label={cardListLabel} />;
 }

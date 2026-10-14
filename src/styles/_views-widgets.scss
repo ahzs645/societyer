@@ -418,17 +418,8 @@
   color: token('text-primary');
   box-shadow: token('shadow-sm');
 }
-/* Coarse pointers: the 26px segments grow to the touch floor (compact
- * segments, used inside dense rows, stop just short of it). */
-@media (pointer: coarse) {
-  .segmented__btn {
-    min-height: 40px;
-    min-width: 40px;
-  }
-  .segmented--compact .segmented__btn {
-    min-height: 36px;
-  }
-}
+/* Coarse pointers: segments are 30px inside a 36px pill, with 44px hit
+ * areas (_control-density.scss). */
 
 /* Outcome picker: row of independent .btn-action buttons (matches the
    motion action strip pattern). The active outcome gets a tinted-fill

@@ -43,14 +43,7 @@
     height: 18px;
   }
 
-  /* Form controls reach the same 40px floor as buttons (selects were 24-30px,
-   * text fields 32px). min-height wins over the fixed desktop heights. */
-  .select-trigger,
-  .select-trigger--sm,
-  input.input:not([type="checkbox"]):not([type="radio"]),
-  select.input {
-    min-height: 40px;
-  }
+  /* Form controls: 36px on touch (_control-density.scss). */
 
   /* Labelled checkboxes (provinces, settings lists): grow the row, not the
    * box, to the 40px touch floor. Rows with a hint are already two lines. */

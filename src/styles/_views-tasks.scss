@@ -490,19 +490,18 @@
 
 /* ------------------------------------------------ touch */
 
-/* Coarse pointers: the dense desktop controls (24–30px) get 36–40px hit
- * areas. The status circle, row menu and group "+" keep their 24px visual
- * size and grow an invisible touch halo instead, so rows don't get taller. */
+/* Coarse pointers: chips, the group toggle and Group-by select take the
+ * touch scale (_control-density.scss). The status circle, row menu and
+ * group "+" keep their 24px visual size and grow an invisible 40px touch
+ * halo instead, so rows don't get taller. */
 @media (pointer: coarse) {
-  .task-scope-chip { height: 36px; padding: 0 12px; }
-  .task-scope-bar__group .select-trigger { min-height: 36px; }
+  .task-scope-chip { padding: 0 12px; }
   .task-group__head { height: 44px; }
-  .task-group__toggle { height: 40px; }
   .task-icon-button { position: relative; }
   .task-icon-button::after {
     content: "";
     position: absolute;
-    inset: -8px;
+    inset: -10px;
   }
   .task-due-button { min-height: 32px; }
 }

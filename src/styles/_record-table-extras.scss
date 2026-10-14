@@ -306,12 +306,6 @@
   width: min(300px, calc(100vw - 16px));
 }
 
-@media (max-width: 560px) {
-  // Phones: "Group" collapses to its icon so the toolbar stays on one line.
-  .record-table__toolbar-button--group > span {
-    display: none;
-  }
-}
 
 /* --------------------------- Filter editor --------------------------- */
 
@@ -782,23 +776,10 @@
 // 40px touch floor (chip removers 32px, with a 40px hit area). Desktop
 // density is unchanged.
 @media (pointer: coarse) {
-  .record-table__toolbar .record-table__toolbar-button,
-  .record-table__toolbar .record-table__view-button,
-  .record-table__toolbar .record-table__segmented button {
-    min-height: 40px;
-  }
-  .record-table__toolbar .record-table__toolbar-button {
-    min-width: 40px;
-    justify-content: center;
-  }
-  .record-table__icon-button {
-    width: 40px;
-    height: 40px;
-  }
-
+  /* Toolbar buttons, icon buttons and the filter editor's controls take the
+   * touch scale in _control-density.scss. */
   .record-table__chip {
     height: auto;
-    min-height: 32px;
   }
   .record-table__chip-label {
     align-self: stretch;
@@ -807,32 +788,7 @@
     position: relative;
     width: 32px;
     height: 32px;
-
-    &::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 40px;
-      height: 40px;
-      transform: translate(-50%, -50%);
-    }
-  }
-  .record-table__chip-more,
-  .record-table__chip-clear {
-    min-height: 32px;
-  }
-
-  .record-table__filter-input,
-  .record-table__filter-popover-row select,
-  .record-table__filter-add,
-  .record-table__primary-btn,
-  .record-table__secondary-btn {
-    min-height: 40px;
-  }
-  .record-table__icon-btn {
-    width: 40px;
-    height: 40px;
+    @include tap-area;
   }
   .record-table__filter-popover-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.3fr) 40px;
@@ -841,25 +797,8 @@
 @media (pointer: coarse) and (max-width: 560px) {
   .record-table__filter-popover-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
-
-    > .record-table__icon-btn { width: 40px; height: 40px; }
   }
 }
 
-// Phones: "Options" drops to its icon so a filtered / sorted toolbar
-// ("Filter · 1", "Sort · 2") keeps one row; on the narrowest phones Filter
-// and Sort follow (the active tint still marks them). Accessible names stay
-// on the buttons.
-@media (max-width: 430px) {
-  .record-table__toolbar-button--options > span {
-    display: none;
-  }
-}
-@media (max-width: 360px) {
-  .record-table__toolbar-button--collapsible > span {
-    display: none;
-  }
-  .record-table__toolbar .record-table__segmented button {
-    min-width: 36px;
-  }
-}
+// Phones: the toolbar folds into one row of icon buttons — see the "Phone
+// toolbars" section of _control-density.scss.

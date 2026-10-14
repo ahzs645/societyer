@@ -197,21 +197,8 @@
 .btn--sm.btn--icon { width: token('control-h-sm'); }
 .btn--lg.btn--icon { width: token('control-h-lg'); }
 
-/* Touch devices: compact desktop buttons (32px / 28px) are below the ~44px
- * comfortable tap target, and row-action clusters pack several together.
- * Raise the minimum hit area without changing the desktop look. */
-@media (hover: none), (pointer: coarse) {
-  /* 40px is the design-system floor for touch targets (docs/design-system.md);
-   * small buttons keep their compact type and padding, only the hit height grows. */
-  .btn,
-  .btn-action,
-  .btn--sm {
-    min-height: 40px;
-  }
-  .btn--icon {
-    min-width: 40px;
-  }
-}
+/* Touch devices: buttons are 36px (icon buttons 32px) with an invisible
+ * 44px hit area — see _control-density.scss. */
 .btn svg {
   width: 14px;
   height: 14px;

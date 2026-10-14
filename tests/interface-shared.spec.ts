@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { chooseViewType, revealSelectRecords } from "./helpers/recordTableToolbar";
 
 // Multi-route and role-switch scenarios include several cold development loads.
 // Keep assertion deadlines strict while allowing the whole lifecycle to finish.
@@ -290,11 +291,11 @@ test("record table menus fit the viewport and alternate views retain usable cont
   await expect(sort).toBeHidden();
   await page.getByRole("button", { name: "Filter", exact: true }).click();
   await expectInViewport(page, page.locator(".record-table__filter-popover"));
-  await page.getByTitle("Kanban view", { exact: true }).click();
+  await chooseViewType(page, "Kanban view");
   await expect(page.locator(".kanban")).toBeVisible();
-  await page.getByTitle("Calendar view", { exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   await expect(page.locator(".calendar-view")).toBeVisible();
-  await page.getByTitle("Table view", { exact: true }).click();
+  await chooseViewType(page, "Table view");
   await expect(page.locator(".record-table__row").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 });
@@ -360,19 +361,24 @@ test("phone touch selection reaches bulk actions without changing the default fr
   }
   await expect(page.locator(".record-table__checkbox-cell")).toHaveCount(0);
   await expect(page.locator(".record-table__mobile-selection-checkbox")).toHaveCount(0);
-  await select.focus();
+  // Phones keep "Select records" in the table's Options menu; the row then
+  // shows an "Exit selection" toggle while selecting.
+  const exit = page.getByRole("button", { name: "Exit selection", exact: true });
+  const toggle = await revealSelectRecords(page);
+  await toggle.focus();
+  await page.keyboard.press("Space");
+  await expect(exit).toBeVisible();
+  await exit.focus();
   await page.keyboard.press("Control+k");
   const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
   await expect(palette).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(palette).toBeHidden();
-  await expect(select).toBeFocused();
+  await expect(exit).toBeFocused();
   await page.keyboard.press("Space");
-  await expect(page.getByRole("button", { name: "Exit selection", exact: true })).toBeVisible();
-  await page.keyboard.press("Space");
-  await expect(select).toBeVisible();
+  await expect(exit).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Bulk actions", exact: true })).toHaveCount(0);
-  await select.tap();
+  await (await revealSelectRecords(page)).tap();
   const checkboxes = page.locator(".record-table__mobile-selection-checkbox input");
   await expect.poll(() => checkboxes.first().evaluate((element) => element.closest("td")!.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
   await expect.poll(() => checkboxes.first().evaluate((element) => element.closest("label")!.getBoundingClientRect().width)).toBeGreaterThanOrEqual(44);
@@ -393,7 +399,7 @@ test("phone touch selection reaches bulk actions without changing the default fr
   await page.getByRole("button", { name: "Exit selection", exact: true }).tap();
   await expect(bulk).toHaveCount(0);
   await expect(checkboxes).toHaveCount(0);
-  await expect(select).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Exit selection", exact: true })).toHaveCount(0);
   await expect(page.locator(".record-table__checkbox-cell")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -460,9 +466,19 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   const activate = async (control: Locator) => {
     await control.scrollIntoViewIfNeeded();
     if (touch) {
-      const bounds = await control.boundingBox();
-      expect(bounds!.width).toBeGreaterThanOrEqual(44);
-      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      // Touch controls look compact (32/36px) and take a 44px hit area from
+      // an invisible ::after box; measure the hit area, not the drawn box.
+      const bounds = await control.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const after = getComputedStyle(element, "::after");
+        const hit = after.position === "absolute" && after.content !== "none";
+        return {
+          width: Math.max(rect.width, hit ? parseFloat(after.width) || 0 : 0),
+          height: Math.max(rect.height, hit ? parseFloat(after.height) || 0 : 0),
+        };
+      });
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
       await control.tap();
     } else await control.click();
   };

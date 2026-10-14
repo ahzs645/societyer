@@ -10,6 +10,7 @@ import { calendarDate, calendarDateKey } from "../lib/calendarDates";
 import { isPastDue } from "../../shared/dateOnly";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
+import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
@@ -32,6 +33,12 @@ import { MarkdownEditor, type MarkdownEditorHandle } from "../components/Markdow
 
 type DeadlineStatus = "open" | "complete" | "closed";
 type StatusFilter = "open" | "complete" | "closed" | "all";
+const STATUS_FILTER_ITEMS: { id: StatusFilter; label: string }[] = [
+  { id: "open", label: "Open" },
+  { id: "complete", label: "Complete" },
+  { id: "closed", label: "Closed" },
+  { id: "all", label: "All" },
+];
 
 function statusOf(record: any): DeadlineStatus {
   if (record?.status === "open" || record?.status === "complete" || record?.status === "closed") {
@@ -65,6 +72,7 @@ export function DeadlinesPage() {
   const descriptionEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const isPhone = useIsBottomSheet();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -187,24 +195,34 @@ export function DeadlinesPage() {
           <p>Internal work items belong in Tasks; promises made to funders or partners belong in Commitments.</p>
         }
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
-            <Plus size={12} /> New deadline
-          </button>
+          <>
+            {/* Phones: the status switch is a compact picker on the title row. */}
+            {isPhone && (
+              <Select<StatusFilter>
+                size="sm"
+                className="page-header-filter"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={STATUS_FILTER_ITEMS.map((item) => ({ value: item.id, label: item.label }))}
+                aria-label="Show deadlines"
+              />
+            )}
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
+              <Plus size={12} /> New deadline
+            </button>
+          </>
         }
       />
 
+        {!isPhone && (
         <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "var(--s-2)" }}>
           <Segmented<StatusFilter>
             value={statusFilter}
             onChange={setStatusFilter}
-            items={[
-              { id: "open", label: "Open" },
-              { id: "complete", label: "Complete" },
-              { id: "closed", label: "Closed" },
-              { id: "all", label: "All" },
-            ]}
+            items={STATUS_FILTER_ITEMS}
           />
         </div>
+        )}
 
       {(
         showMetadataWarning ? (

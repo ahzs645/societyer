@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { chooseViewType } from "./helpers/recordTableToolbar";
 
 const fits = async (page: import("@playwright/test").Page) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -9,7 +10,7 @@ test("tasks list groups work, edits rows in place and keeps a checklist", async 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/demo/app/tasks");
-  await page.getByRole("button", { name: "List view", exact: true }).click();
+  await chooseViewType(page, "List view");
   await expect(page.getByRole("button", { name: /^To do/ })).toHaveAttribute("aria-expanded", "true");
   await fits(page);
 
@@ -51,14 +52,21 @@ test("tasks list groups work, edits rows in place and keeps a checklist", async 
   await expect(page.locator(".task-group", { hasText: "In progress" }).locator(".task-row", { hasText: title })).toBeVisible();
 
   // The board groups by status; a saved list grouping survives a reload.
-  await page.getByRole("button", { name: "Kanban view", exact: true }).click();
+  await chooseViewType(page, "Kanban view");
   await expect(page.locator(".task-board__col", { hasText: "In progress" }).locator(".task-card", { hasText: title })).toBeVisible();
   await fits(page);
-  await page.getByRole("button", { name: "List view", exact: true }).click();
+  await chooseViewType(page, "List view");
+  // Phones keep the register, scopes and grouping behind the "Task view" summary.
+  const openTaskView = async () => {
+    const summary = page.getByRole("button", { name: /^Task view:/ });
+    if (await summary.isVisible()) await summary.click();
+  };
+  await openTaskView();
   await page.getByRole("button", { name: "Group tasks by", exact: true }).click();
   await page.getByRole("option", { name: "Due date", exact: true }).click();
   await page.reload();
   await expect(page.locator(".task-group__label", { hasText: "Overdue" })).toBeVisible();
+  await openTaskView();
   await expect(page.getByRole("button", { name: "Group tasks by", exact: true })).toContainText("Due date");
   await fits(page);
   expect(errors).toEqual([]);

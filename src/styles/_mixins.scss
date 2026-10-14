@@ -147,3 +147,33 @@
     background: token('bg-active-alpha');
   }
 }
+
+// ============================================================
+// Touch hit area. An invisible ::after box, centred on the control, at least
+// --tap-target (44px) tall and/or wide, so a compact control (32/36px on
+// phones) still takes a 44px tap without looking bigger. $axis: both | block
+// (height only — for segments and tabs packed side by side) | inline.
+// The host must be positioned: pair it with `tap-area-host` (zero
+// specificity, so a control that is already absolute/sticky keeps that).
+// Don't use it on a control whose ::after is already taken, or inside an
+// overflow container that would clip it (give that container padding).
+// ============================================================
+@mixin tap-area($axis: both) {
+  &::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    @if $axis == block {
+      width: 100%;
+    } @else {
+      width: max(100%, #{token('tap-target')});
+    }
+    @if $axis == inline {
+      height: 100%;
+    } @else {
+      height: max(100%, #{token('tap-target')});
+    }
+    transform: translate(-50%, -50%);
+  }
+}

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { chooseViewType } from "./helpers/recordTableToolbar";
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 
 test.setTimeout(100_000);
@@ -20,7 +21,7 @@ test("an unavailable rich-editor chunk leaves a real local deadline draft editab
   await expect(drawer).toBeHidden();
   expect(blocked).toBeGreaterThan(0);
   await page.reload();
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   await page.locator(".calendar-view").getByRole("button", { name: "Agenda", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Offline fallback evidence", exact: true }).click();
   // Calendar events open the record inspector, like table rows; Open edits it.
@@ -32,7 +33,7 @@ test("an unavailable rich-editor chunk leaves a real local deadline draft editab
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).toBeHidden();
   await page.reload();
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   await page.locator(".calendar-view").getByRole("button", { name: "Agenda", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Offline fallback evidence", exact: true }).click();
   await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
@@ -61,7 +62,7 @@ test("a failed rich-editor import keeps Viewer fallback text read-only", async (
   const palette = page.getByRole("dialog", { name: "Command palette", exact: true });
   await palette.getByRole("combobox").fill("Deadlines");
   await palette.getByRole("option", { name: /^Deadlines/ }).first().click();
-  await page.getByRole("button", { name: "Calendar view", exact: true }).click();
+  await chooseViewType(page, "Calendar view");
   await page.locator(".calendar-view").getByRole("button", { name: "File annual report", exact: true }).click();
   await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
   const drawer = page.getByRole("dialog", { name: "View deadline", exact: true });

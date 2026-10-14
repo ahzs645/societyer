@@ -12,6 +12,10 @@ const SCOPES: { value: TaskScope; label: string; icon: ReactNode; tone?: "danger
   { value: "unowned", label: "No owner", icon: <UserX size={12} /> },
 ];
 
+export function taskScopeLabel(scope: TaskScope): string {
+  return SCOPES.find((option) => option.value === scope)?.label ?? "All";
+}
+
 /**
  * Quick scopes over current tasks, with counts, plus the list's grouping.
  * A scope narrows the records before the table's own search and filters.

@@ -35,6 +35,7 @@ import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
+import { useIsBottomSheet } from "../../../../lib/useSheetDrag";
 import { useRegisterCommand } from "../../../../lib/commands";
 import { RecordTableGroupByPopover } from "./RecordTableGroupByPopover";
 import { RecordTableExportDialog } from "./RecordTableExportDialog";
@@ -117,7 +118,13 @@ export function RecordTableToolbar({
   // Phones: search is an icon until tapped, and the "Select records" toggle
   // sits in this row instead of taking a row of its own above the table.
   const isMobile = useIsMobile();
+  // Phones (<= 560px) fold every control into one row: the view picker, then
+  // icon buttons for view type, Filter, Sort, Group and Options. View type and
+  // Options open menus; Search and "Select records" live in the Options menu.
+  const isPhone = useIsBottomSheet();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [viewTypeMenuOpen, setViewTypeMenuOpen] = useState(false);
+  const viewTypeButtonRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSelectable = useRecordTableState((s) => s.mobileSelectable);
   const mobileSelectionMode = useRecordTableState((s) => s.mobileSelectionMode);
@@ -189,6 +196,41 @@ export function RecordTableToolbar({
     return type === "DATE" || type === "DATE_TIME";
   });
 
+  const openSearch = () => {
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
+  const toggleSelectionMode = () => {
+    if (mobileSelectionMode) handle.get().clearSelection();
+    handle.get().setMobileSelectionMode(!mobileSelectionMode);
+  };
+  const listActive = Boolean(listView?.active);
+  const isKanban = viewType === "kanban" || viewType === "board";
+  const chooseViewType = (next: "list" | "table" | "kanban" | "calendar") => {
+    if (next === "list") {
+      listView?.onSelect();
+    } else {
+      listView?.onLeave();
+      handle.get().setType(next);
+      const firstField = next === "kanban"
+        ? kanbanFieldMetadataId ?? selectableKanbanFields[0]?.fieldMetadataId
+        : next === "calendar"
+          ? calendarFieldMetadataId ?? selectableCalendarFields[0]?.fieldMetadataId
+          : undefined;
+      if (firstField && next === "kanban") handle.get().setKanbanFieldMetadataId(firstField);
+      if (firstField && next === "calendar") handle.get().setCalendarFieldMetadataId(firstField);
+    }
+    resetScrollForViewSwitch();
+  };
+  const viewTypeOptions = [
+    ...(listView ? [{ id: "list" as const, Icon: List, label: t("recordTable.listView", "List view"), short: t("recordTable.listShort", "List"), active: listActive }] : []),
+    { id: "table" as const, Icon: Table2, label: t("recordTable.tableView", "Table view"), short: t("recordTable.tableShort", "Table"), active: !listActive && viewType === "table" },
+    { id: "kanban" as const, Icon: Kanban, label: t("recordTable.kanbanView", "Kanban view"), short: t("recordTable.kanbanShort", "Board"), active: !listActive && isKanban },
+    { id: "calendar" as const, Icon: CalendarDays, label: t("recordTable.calendarView", "Calendar view"), short: t("recordTable.calendarShort", "Calendar"), active: !listActive && viewType === "calendar" },
+  ];
+  const activeViewType = viewTypeOptions.find((option) => option.active) ?? viewTypeOptions[0];
+  const ActiveViewTypeIcon = activeViewType.Icon;
+
   return (
     <div className="record-table__toolbar" ref={toolbarRef}>
       <div className="record-table__toolbar-left">
@@ -200,7 +242,7 @@ export function RecordTableToolbar({
               onClick={() => setViewMenuOpen((x) => !x)}
             >
               {resolvedIcon}
-              <span>{activeViewName}</span>
+              <span className="record-table__view-name">{activeViewName}</span>
               <span className="record-table__view-count">{filteredRecords.length}</span>
               <ChevronDown size={12} />
             </button>
@@ -233,7 +275,7 @@ export function RecordTableToolbar({
             <span className="record-table__view-count">{filteredRecords.length}</span>
           </div>
         )}
-        {isMobile && (
+        {isMobile && !isPhone && (
           <div className="record-table__mobile-tools">
             {!showSearch && (
               <button
@@ -298,6 +340,8 @@ export function RecordTableToolbar({
       )}
 
       <div className="record-table__toolbar-right">
+        {/* Unsaved-view controls: inline on wider screens, their own line on phones. */}
+        <div className="record-table__toolbar-dirty">
         {onSaveView && isDirty && (
           <>
             <button
@@ -367,7 +411,67 @@ export function RecordTableToolbar({
             <span>{t("common.saveAs", "Save as")}</span>
           </button>
         )}
+        </div>
 
+        {isPhone && mobileSelectable && mobileSelectionMode && (
+          <button
+            type="button"
+            className="record-table__toolbar-button record-table__toolbar-button--icon record-table__toolbar-button--active"
+            aria-pressed="true"
+            aria-label="Exit selection"
+            title="Exit selection"
+            onKeyDown={(event) => {
+              if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
+            }}
+            onClick={toggleSelectionMode}
+          >
+            <ListChecks size={14} />
+          </button>
+        )}
+
+        {isPhone ? (
+          <>
+            <button
+              type="button"
+              ref={viewTypeButtonRef}
+              className="record-table__toolbar-button record-table__toolbar-button--icon record-table__view-type-trigger"
+              aria-label={`${t("recordTable.viewType", "View type")}: ${activeViewType.short}`}
+              title={t("recordTable.viewType", "View type")}
+              aria-haspopup="dialog"
+              aria-expanded={viewTypeMenuOpen}
+              onClick={() => setViewTypeMenuOpen((x) => !x)}
+            >
+              <ActiveViewTypeIcon size={14} />
+            </button>
+            {viewTypeMenuOpen && (
+              <ViewportPopover
+                open
+                onClose={() => setViewTypeMenuOpen(false)}
+                anchorRef={viewTypeButtonRef}
+                label={t("recordTable.viewType", "View type")}
+                className="record-table__menu record-table__menu--right record-table__view-type-menu"
+              >
+                {viewTypeOptions.map(({ id, Icon, label: optionLabel, short, active }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={"record-table__menu-item" + (active ? " record-table__menu-item--active" : "")}
+                    aria-pressed={active}
+                    aria-label={optionLabel}
+                    title={optionLabel}
+                    onClick={() => {
+                      setViewTypeMenuOpen(false);
+                      chooseViewType(id);
+                    }}
+                  >
+                    <Icon size={14} aria-hidden="true" />
+                    <span>{short}</span>
+                  </button>
+                ))}
+              </ViewportPopover>
+            )}
+          </>
+        ) : (
         <div className="record-table__segmented" aria-label="View type">
           {listView && (
             <button
@@ -424,6 +528,7 @@ export function RecordTableToolbar({
             <CalendarDays size={12} />
           </button>
         </div>
+        )}
 
         {onOpenFilter && <RecordTableAskFilterButton />}
         {onOpenFilter && (
@@ -440,6 +545,7 @@ export function RecordTableToolbar({
           >
             <Filter size={12} />
             <span>{t("common.filter", "Filter")}{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
+            {isPhone && filters.length > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{filters.length}</b>}
           </button>
         )}
 
@@ -457,6 +563,7 @@ export function RecordTableToolbar({
         >
           <ArrowDownUp size={12} />
           <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
+          {isPhone && sorts.length > 0 && <b className="record-table__toolbar-badge" aria-hidden="true">{sorts.length}</b>}
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
@@ -497,6 +604,35 @@ export function RecordTableToolbar({
           </button>
           {columnMenuOpen && (
             <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
+              {isPhone && (
+                <div className="record-table__menu-section record-table__menu-section--tools">
+                  <button
+                    type="button"
+                    className="record-table__menu-action"
+                    aria-label={`Search ${lowerLabel(objectMetadata.labelPlural)}`}
+                    onClick={() => {
+                      setColumnMenuOpen(false);
+                      openSearch();
+                    }}
+                  >
+                    <Search size={13} aria-hidden="true" /> Search {lowerLabel(objectMetadata.labelPlural)}
+                  </button>
+                  {mobileSelectable && (
+                    <button
+                      type="button"
+                      className="record-table__menu-action"
+                      aria-pressed={mobileSelectionMode}
+                      aria-label={mobileSelectionMode ? "Exit selection" : "Select records"}
+                      onClick={() => {
+                        setColumnMenuOpen(false);
+                        toggleSelectionMode();
+                      }}
+                    >
+                      <ListChecks size={13} aria-hidden="true" /> {mobileSelectionMode ? "Exit selection" : "Select records"}
+                    </button>
+                  )}
+                </div>
+              )}
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
                   <label className="record-table__menu-label" htmlFor="record-table-kanban-field">

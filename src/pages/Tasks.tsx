@@ -60,6 +60,8 @@ import type { TaskChecklistItem } from "../../shared/taskChecklist";
 import { useSociety } from "../hooks/useSociety";
 import { formatDate, isPastDue } from "../lib/format";
 import { useIsMobile } from "../lib/useIsMobile";
+import { useIsBottomSheet } from "../lib/useSheetDrag";
+import { TaskViewSummaryButton } from "../features/tasks/TaskViewSheet";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Tooltip } from "../components/Tooltip";
 
@@ -110,6 +112,8 @@ export function TasksPage() {
   const toast = useToast();
   const undoable = useUndoableAction();
   const isMobile = useIsMobile();
+  // Phones fold the register switch, scopes and grouping into one summary button.
+  const isPhone = useIsBottomSheet();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedGoalId = searchParams.get("goalId") ?? "";
   const requestedCommitteeId = searchParams.get("committeeId") ?? "";
@@ -746,6 +750,16 @@ export function TasksPage() {
   };
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const registerSwitch = (
+    <div className="segmented" role="tablist" aria-label="Task register" style={{ maxWidth: "100%" }}>
+      <button type="button" role="tab" aria-selected={register === "current"} className={`segmented__btn${register === "current" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("current")}>
+        <ListTodo size={12} /> Current ({registerCounts.current})
+      </button>
+      <button type="button" role="tab" aria-selected={register === "historical"} className={`segmented__btn${register === "historical" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("historical")}>
+        <History size={12} /> History ({registerCounts.historical})
+      </button>
+    </div>
+  );
   return (
     <div className="page">
       <PageHeader
@@ -757,21 +771,29 @@ export function TasksPage() {
           <p>Dates set by law or regulation belong in Deadlines; promises made to funders or partners belong in Commitments.</p>
         }
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
-            <Plus size={12} /> New task
-          </button>
+          <>
+            {isPhone && (
+              <TaskViewSummaryButton
+                registerSwitch={registerSwitch}
+                register={register}
+                scope={scope}
+                onScope={setScope}
+                counts={scopeCounts}
+                groupBy={groupBy}
+                onGroupBy={setGroupBy}
+                showGrouping={layout === "list"}
+              />
+            )}
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
+              <Plus size={12} /> New task
+            </button>
+          </>
         }
       />
 
+      {!isPhone && (
       <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-      <div className="segmented" role="tablist" aria-label="Task register" style={{ maxWidth: "100%" }}>
-        <button type="button" role="tab" aria-selected={register === "current"} className={`segmented__btn${register === "current" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("current")}>
-          <ListTodo size={12} /> Current ({registerCounts.current})
-        </button>
-        <button type="button" role="tab" aria-selected={register === "historical"} className={`segmented__btn${register === "historical" ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => changeRegister("historical")}>
-          <History size={12} /> History ({registerCounts.historical})
-        </button>
-      </div>
+      {registerSwitch}
       {register === "current" && (
         <TaskScopeBar
           scope={scope}
@@ -783,6 +805,7 @@ export function TasksPage() {
         />
       )}
       </div>
+      )}
       {register === "historical" && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card__body col" style={{ gap: 8 }}>

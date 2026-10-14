@@ -2388,11 +2388,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__row-actions {
     opacity: 1;
     transform: none;
-    .btn, button, a {
-      min-width: 44px;
-      min-height: 44px;
-      box-sizing: border-box;
-    }
+    /* 32px icons with 44px hit areas (_control-density.scss). */
   }
 }
 
@@ -2632,31 +2628,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__header-cell {
     height: 44px;
   }
+  /* Header buttons, column menus, segments and toolbar controls take the
+   * touch scale in _control-density.scss. */
   .record-table__header-cell-button {
-    min-height: 40px;
     max-width: calc(100% - 40px);
   }
   .record-table__header-menu-wrap {
     right: 2px;
-  }
-  .record-table__header-menu-trigger {
-    width: 36px;
-    height: 36px;
-  }
-  .record-table__segmented {
-    height: auto;
-    button {
-      min-width: 40px;
-      width: auto;
-      min-height: 36px;
-      height: auto;
-      padding: 0 8px;
-    }
-  }
-  .record-table__aggregate-trigger,
-  .record-table__toolbar button,
-  .record-table__view-toolbar button {
-    min-height: 36px;
   }
   .record-table__header-menu button,
   .record-table__aggregate-menu button {
@@ -2664,20 +2642,8 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   }
 }
 
-/* Phones: segmented view switch + Filter + Sort + Options fit one line at
- * 390px instead of dropping "Options" onto a row of its own. */
-@media (max-width: 560px) {
-  .record-table__toolbar-right {
-    gap: 2px;
-  }
-  .record-table__toolbar .record-table__toolbar-button {
-    padding: 0 6px;
-    gap: 4px;
-  }
-  .record-table__segmented button {
-    min-width: 34px;
-  }
-}
+/* Phones fold the toolbar into one row of icon buttons — see "Phone
+ * toolbars" in _control-density.scss. */
 
 /* Phone toolbar tools: search + selection toggles share the view pill's row. */
 .record-table__mobile-tools {
