@@ -54,6 +54,27 @@ function formatDisplay(d: Date): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** Two-digit-year form for triggers too narrow for the full date ("Oct 1, 26"). */
+function formatCompact(d: Date): string {
+  return d.toLocaleDateString(undefined, { year: "2-digit", month: "short", day: "numeric" });
+}
+
+/**
+ * How much of the trigger fits: the full date with its calendar icon, the
+ * full date alone, then the two-digit-year form (with, then without, the icon).
+ */
+type TriggerFit = "full" | "full-bare" | "compact" | "compact-bare";
+
+let measureContext: CanvasRenderingContext2D | null | undefined;
+function textWidth(text: string, font: string): number | null {
+  if (measureContext === undefined) {
+    measureContext = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  }
+  if (!measureContext || !font) return null;
+  measureContext.font = font;
+  return measureContext.measureText(text).width;
+}
+
 export function DatePicker({
   value,
   onChange,
@@ -315,10 +336,48 @@ export function DatePicker({
     onChange("");
   };
 
+  // Narrow triggers (paired From / To fields on a 320px phone) would clip the
+  // year; step down to a shorter form instead. Measured, not guessed from the
+  // viewport, because the same picker sits in very different widths.
+  const fullLabel = selected ? formatDisplay(selected) : "";
+  const compactLabel = selected ? formatCompact(selected) : "";
+  const [fit, setFit] = useState<TriggerFit>("full");
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current;
+    if (!trigger || !fullLabel) {
+      setFit("full");
+      return;
+    }
+    const measure = () => {
+      const label = trigger.querySelector<HTMLElement>(".select-trigger__label");
+      if (!label || trigger.clientWidth === 0) return;
+      const style = getComputedStyle(trigger);
+      const available = trigger.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const font = getComputedStyle(label).font;
+      const full = textWidth(fullLabel, font);
+      const compact = textWidth(compactLabel, font);
+      if (full === null || compact === null) return;
+      const icon = (size === "sm" ? 12 : 14) + (parseFloat(style.columnGap) || 6);
+      // A pixel of slack for sub-pixel rounding between canvas and layout.
+      const next: TriggerFit = full + icon <= available - 1 ? "full"
+        : full <= available - 1 ? "full-bare"
+        : compact + icon <= available - 1 ? "compact"
+        : "compact-bare";
+      setFit((current) => (current === next ? current : next));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(trigger);
+    return () => observer.disconnect();
+  }, [fullLabel, compactLabel, size]);
+  const compactLabelShown = Boolean(selected) && (fit === "compact" || fit === "compact-bare");
+
   const triggerClass = [
     "select-trigger",
     "date-trigger",
     size === "sm" ? "select-trigger--sm" : "",
+    selected && (fit === "full-bare" || fit === "compact-bare") ? "date-trigger--bare" : "",
     open ? "is-open" : "",
     className ?? "",
   ]
@@ -342,10 +401,20 @@ export function DatePicker({
           aria-expanded={open}
           aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
+          title={compactLabelShown ? fullLabel : undefined}
         >
           <CalIcon size={size === "sm" ? 12 : 14} className="select-trigger__icon" />
           <span className="select-trigger__label">
-            {selected ? formatDisplay(selected) : <span className="select-trigger__placeholder">{placeholder}</span>}
+            {!selected ? (
+              <span className="select-trigger__placeholder">{placeholder}</span>
+            ) : compactLabelShown ? (
+              <>
+                <span aria-hidden="true">{compactLabel}</span>
+                <span className="sr-only">{fullLabel}</span>
+              </>
+            ) : (
+              fullLabel
+            )}
           </span>
         </button>
         {selected && clearable && !disabled && (
