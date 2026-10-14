@@ -2,17 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useNavigate } from "react-router-dom";
 import {
   CalendarClock,
-  Clipboard,
   Clock3,
   ExternalLink,
   Home,
-  Link2,
-  MoreHorizontal,
   Pencil,
   StickyNote,
-  X,
 } from "lucide-react";
-import { Menu } from "../../../../components/Menu";
 import { ErrorBoundary } from "../../../../components/ErrorBoundary";
 import { EntityChip } from "../../../../components/HoverCard/EntityChip";
 import { EntityPreviewBody } from "../../../../components/HoverCard/EntityPreview";
@@ -37,6 +32,7 @@ import { RecordTableFloatingCellEditor } from "./RecordTableCell";
 import {
   RecordPanelActionBar,
   RecordPanelDock,
+  RecordPanelOptionsMenu,
   RecordPanelShell,
   RecordPanelStackBar,
   useStackArrowKeys,
@@ -177,53 +173,12 @@ export function RecordTableSidePanel({
   }
 
   const optionsMenu = (
-    <Menu
-      align="left"
-      minWidth={190}
-      sections={[
-        {
-          id: "record",
-          items: [
-            {
-              id: "copy-link",
-              label: "Copy link",
-              icon: <Link2 size={14} />,
-              onSelect: () => void navigator.clipboard?.writeText(window.location.href),
-            },
-            ...(activeEntity
-              ? []
-              : [
-                  {
-                    id: "copy-id",
-                    label: "Copy record ID",
-                    icon: <Clipboard size={14} />,
-                    onSelect: () => void navigator.clipboard?.writeText(recordId),
-                  },
-                ]),
-            ...(stack.active > 0
-              ? [
-                  {
-                    id: "close-card",
-                    label: "Close this card",
-                    icon: <X size={14} />,
-                    onSelect: closeVisibleCard,
-                  },
-                ]
-              : []),
-            {
-              id: "close",
-              label: stack.depth > 1 ? "Close all cards" : "Close sidebar",
-              icon: <X size={14} />,
-              onSelect: closeAll,
-            },
-          ],
-        },
-      ]}
-      trigger={
-        <button type="button" className="btn record-side-panel__options">
-          <MoreHorizontal size={14} /> Options
-        </button>
-      }
+    <RecordPanelOptionsMenu
+      recordId={activeEntity ? null : recordId}
+      canCloseCard={stack.active > 0}
+      depth={stack.depth}
+      onCloseCard={closeVisibleCard}
+      onCloseAll={closeAll}
     />
   );
 

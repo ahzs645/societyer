@@ -21,6 +21,15 @@ const TRIGGER_GAP = 6;
 type Position = { top: number; left: number; placement: "below" | "above" };
 
 /**
+ * Phones and touch-first tablets: the primary pointer cannot hover, and the
+ * mouse events browsers synthesise after a tap must not open a card.
+ */
+function primaryInputIsTouch() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(hover: none)").matches;
+}
+
+/**
  * The trigger wrapper has no box (display: contents): anchor to the first
  * child element that has one, else to the nearest ancestor that does.
  */
@@ -125,8 +134,8 @@ export function HoverCard({
     closeTimer.current = null;
   }, []);
 
-  const scheduleOpen = useCallback(() => {
-    if (disabled) return;
+  const scheduleOpen = useCallback((source: "pointer" | "keyboard" = "pointer") => {
+    if (disabled || (source === "pointer" && primaryInputIsTouch())) return;
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
     closeTimer.current = null;
     if (open || openTimer.current) return;
@@ -216,7 +225,7 @@ export function HoverCard({
           } catch {
             keyboardFocus = false;
           }
-          if (keyboardFocus) scheduleOpen();
+          if (keyboardFocus) scheduleOpen("keyboard");
         }}
         onBlur={(event) => {
           const next = event.relatedTarget as Node | null;

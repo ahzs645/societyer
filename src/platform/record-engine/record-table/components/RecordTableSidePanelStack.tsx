@@ -10,14 +10,18 @@ import {
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
+  Clipboard,
   ChevronLeft,
   ChevronRight,
   Maximize2,
   Minimize2,
+  Link2,
   Minus,
+  MoreHorizontal,
   PanelRightOpen,
   X,
 } from "lucide-react";
+import { Menu } from "../../../../components/Menu";
 import { useInspectorPanel } from "../../../../components/InspectorPanel";
 import { Tooltip } from "../../../../components/Tooltip";
 import { sameEntity, type EntityRef } from "../../../../components/HoverCard/entityRefs";
@@ -265,6 +269,64 @@ export function RecordPanelShell({
       <div className="drawer-backdrop" onClick={onEscape} />
       {panel}
     </>
+  );
+}
+
+/** Footer Options: copy link or id, close this card, close everything. */
+export function RecordPanelOptionsMenu({
+  recordId,
+  canCloseCard,
+  depth,
+  onCloseCard,
+  onCloseAll,
+}: {
+  /** The table record's id; null while a related card is showing. */
+  recordId: string | null;
+  canCloseCard: boolean;
+  depth: number;
+  onCloseCard: () => void;
+  onCloseAll: () => void;
+}) {
+  return (
+    <Menu
+      align="left"
+      minWidth={190}
+      sections={[
+        {
+          id: "record",
+          items: [
+            {
+              id: "copy-link",
+              label: "Copy link",
+              icon: <Link2 size={14} />,
+              onSelect: () => void navigator.clipboard?.writeText(window.location.href),
+            },
+            ...(recordId
+              ? [{
+                  id: "copy-id",
+                  label: "Copy record ID",
+                  icon: <Clipboard size={14} />,
+                  onSelect: () => void navigator.clipboard?.writeText(recordId),
+                }]
+              : []),
+            ...(canCloseCard
+              ? [{ id: "close-card", label: "Close this card", icon: <X size={14} />, onSelect: onCloseCard }]
+              : []),
+            {
+              id: "close",
+              label: depth > 1 ? "Close all cards" : "Close sidebar",
+              icon: <X size={14} />,
+              onSelect: onCloseAll,
+            },
+          ],
+        },
+      ]}
+      trigger={
+        <button type="button" className="btn record-side-panel__options">
+          <MoreHorizontal size={14} /> Options
+        </button>
+      }
+    />
   );
 }
 
