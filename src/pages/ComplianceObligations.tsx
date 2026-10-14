@@ -25,7 +25,7 @@ import { corporationPacketForComplianceObligation } from "../../shared/corporati
 import { isCorporation } from "../../shared/organizationDomain";
 import { annualReportForAgm, dateOnly, deriveAgmFacts, noAgmAnnualReportForYear } from "../../shared/agmEvidence";
 import { useToast } from "../components/Toast";
-import { useConfirm } from "../components/Modal";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 
 export function ComplianceObligationsPage() {
@@ -44,7 +44,7 @@ export function ComplianceObligationsPage() {
   const reopenDecision = useMutation(api.complianceObligations.reopenDecision);
   const toast = useToast();
   const navigate = useNavigate();
-  const confirm = useConfirm();
+  const undoable = useUndoableAction();
   const permissions = usePermissions();
   const canReview = permissions.loaded && permissions.can("deadlines:write");
   const canTrack = canReview && permissions.can("filings:write");
@@ -206,18 +206,20 @@ export function ComplianceObligationsPage() {
   };
 
   const dismissObligation = async (obligation: (typeof obligations)[number]) => {
-    const ok = await confirm({
-      title: `Dismiss "${obligation.title}"?`,
-      message: `The ${formatDate(obligation.dueDate)} occurrence will be hidden from the calculated-date counts. The statutory duty itself is not waived; you can reopen it later.`,
-      confirmLabel: "Dismiss",
-      tone: "warn",
+    // Dismissing only hides this occurrence and reopening is one call, so
+    // act straight away and offer Undo instead of a confirmation.
+    await undoable({
+      message: "Obligation dismissed",
+      description: `${obligation.title} (${formatDate(obligation.dueDate)}) is hidden from the counts. The statutory duty itself is not waived.`,
+      errorMessage: "Could not dismiss obligation",
+      dedupeKey: `obligation-dismiss-${obligation.obligationKey}`,
+      run: () => dismissDecision({
+        ...decisionPayload(society._id, obligation),
+        notes: `Dismissed compliance obligation ${obligation.obligationKey}.`,
+      }),
+      undo: () => reopenDecision(decisionPayload(society._id, obligation)),
+      undoneMessage: "Obligation reopened",
     });
-    if (!ok) return;
-    await dismissDecision({
-      ...decisionPayload(society._id, obligation),
-      notes: `Dismissed compliance obligation ${obligation.obligationKey}.`,
-    });
-    toast.info("Obligation dismissed", obligation.title);
   };
 
   const reopenObligation = async (obligation: (typeof obligations)[number]) => {

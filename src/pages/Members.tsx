@@ -17,6 +17,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { Plus, Users, Trash2, Pencil, GitMerge, Download, Building2, ScrollText } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
@@ -54,6 +55,7 @@ export function MembersPage() {
   );
   const prompt = usePrompt();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const [selected, setSelected] = useState<any>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [bulkRows, setBulkRows] = useState<any[] | null>(null);
@@ -85,24 +87,22 @@ export function MembersPage() {
       votingRights: r.votingRights,
       notes: r.notes,
     };
-    await update({
-      id: r._id,
-      patch: {
-        status: "Inactive",
-        leftAt: todayDateOnly(),
-        votingRights: false,
-        notes: [r.notes, `Archived: ${reason}`].filter(Boolean).join("\n\n"),
-      },
-    });
-    toast.success(`Archived ${r.firstName} ${r.lastName}`, {
+    await undoable({
+      message: `Archived ${r.firstName} ${r.lastName}`,
       description: "The member record remains available for audit and retention.",
+      errorMessage: "Couldn't archive member",
       dedupeKey: `member-archive-${r._id}`,
-      action: {
-        label: "Undo",
-        onClick: async () => {
-          await update({ id: r._id, patch: prev });
+      run: () => update({
+        id: r._id,
+        patch: {
+          status: "Inactive",
+          leftAt: todayDateOnly(),
+          votingRights: false,
+          notes: [r.notes, `Archived: ${reason}`].filter(Boolean).join("\n\n"),
         },
-      },
+      }),
+      undo: () => update({ id: r._id, patch: prev }),
+      undoneMessage: "Member restored",
     });
   };
 

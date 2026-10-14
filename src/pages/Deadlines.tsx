@@ -14,6 +14,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { Plus, Trash2, Calendar, Archive, RotateCcw } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
@@ -57,6 +58,7 @@ export function DeadlinesPage() {
   const remove = usePermissionedMutation(api.deadlines.remove, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<Id<"deadlines"> | null>(null);
   const [saving, setSaving] = useState(false);
@@ -124,7 +126,6 @@ export function DeadlinesPage() {
 
   // Reopen the completed deadline and drop the occurrence its completion spawned.
   const undoComplete = async (id: Id<"deadlines">, spawnedId: string | null) => {
-    if (!canWrite) return;
     await setStatus({ id, status: "open" });
     if (spawnedId) {
       try {
@@ -141,26 +142,35 @@ export function DeadlinesPage() {
   const completeAndNotify = async (record: any) => {
     if (!canWrite) return;
     const id = record._id as Id<"deadlines">;
-    const res: any = await setStatus({ id, status: "complete" });
+    let res: any;
+    try {
+      res = await setStatus({ id, status: "complete" });
+    } catch (error) {
+      toast.error("Couldn't complete deadline", error instanceof Error ? error.message : undefined);
+      return;
+    }
     const spawnedDue: string | null = res?.spawnedDue ?? null;
     const spawnedId: string | null = res?.spawnedId ?? null;
+    let description: string | undefined;
     if (spawnedDue) {
       const when = new Date(spawnedDue).toLocaleDateString(undefined, {
         year: "numeric",
         month: "short",
         day: "numeric",
       });
-      toast.success("Deadline completed", {
-        description: `Next occurrence added for ${when}.`,
-        action: { label: "Undo", onClick: () => undoComplete(id, spawnedId) },
-      });
+      description = `Next occurrence added for ${when}.`;
     } else if (String(record?.recurrence ?? "None") !== "None") {
-      toast.success("Deadline completed", {
-        description: "This was the last occurrence — the recurrence has ended.",
-      });
-    } else {
-      toast.success("Deadline completed");
+      description = "This was the last occurrence — the recurrence has ended.";
     }
+    // Every completion can be reopened; a recurring one also drops the
+    // occurrence it spawned.
+    await undoable({
+      message: "Deadline completed",
+      description,
+      dedupeKey: `deadline-complete-${id}`,
+      undo: () => undoComplete(id, spawnedId),
+      undoneMessage: "Deadline reopened",
+    });
   };
 
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;

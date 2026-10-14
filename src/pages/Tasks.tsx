@@ -27,6 +27,7 @@ import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { usePermissions } from "../hooks/usePermissions";
 import { Drawer } from "../components/ui";
 import {
@@ -106,6 +107,7 @@ export function TasksPage() {
   const currentUserId = useCurrentUserId();
   const confirm = useConfirm();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedGoalId = searchParams.get("goalId") ?? "";
@@ -571,22 +573,22 @@ export function TasksPage() {
   const markComplete = async (task: TaskRecord) => {
     if (!canManage) return;
     if (!(await confirmHistoricalCompletion(task))) return;
-    try {
-      await update({
+    const previous = task.status;
+    await undoable({
+      message: "Task completed",
+      description: task.title,
+      errorMessage: "Could not complete task",
+      dedupeKey: `task-complete-${task._id}`,
+      run: () => update({
         id: task._id,
         patch: {
           status: "Done",
           completedByUserId: currentUserId ?? undefined,
         },
-      });
-      const previous = task.status;
-      toast.success("Task completed", {
-        description: task.title,
-        action: { label: "Undo", onClick: () => void update({ id: task._id, patch: { status: previous } }).catch(() => toast.error("Could not reopen the task")) },
-      });
-    } catch (error) {
-      toast.error("Could not complete task", error instanceof Error ? error.message : "Please try again.");
-    }
+      }),
+      undo: () => update({ id: task._id, patch: { status: previous } }),
+      undoneMessage: "Task reopened",
+    });
   };
 
   const updateInlineField = async (
@@ -730,13 +732,12 @@ export function TasksPage() {
     }
     const succeeded = changing.length - failures;
     if (succeeded > 0) {
-      toast.success(`${succeeded} task${succeeded === 1 ? "" : "s"} ${status === "Done" ? "completed" : "reopened"}`, {
-        action: {
-          label: "Undo",
-          onClick: () => {
-            for (const task of changing) void update({ id: task._id, patch: { status: task.status } }).catch(() => undefined);
-          },
-        },
+      await undoable({
+        message: `${succeeded} task${succeeded === 1 ? "" : "s"} ${status === "Done" ? "completed" : "reopened"}`,
+        dedupeKey: "task-bulk-status",
+        // Restore each task's own previous status; one failure fails the undo
+        // so the user can retry rather than end up half-restored unawares.
+        undo: () => Promise.all(changing.map((task) => update({ id: task._id, patch: { status: task.status } }))),
       });
     }
     if (failures > 0) toast.error(`${failures} task${failures === 1 ? "" : "s"} could not be changed`);
