@@ -26,6 +26,8 @@ import { budgetVariance, formatMoney } from "../lib/money";
 import { TreasurerPnlReport } from "../features/financials/components/TreasurerPnlReport";
 import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
 import { inferBudgetKind } from "../features/financials/lib/budgetKind";
+import { useSortableRows } from "../hooks/useSortableRows";
+import { SortableTh } from "../components/SortableTh";
 
 
 function getFiscalYearBounds(fyEnd: string | undefined) {
@@ -275,6 +277,17 @@ function eventDraftFromRow(event: any, source: any) {
   };
 }
 
+type VarianceRow = { category: string; plannedCents: number; actualCents: number };
+type RestrictedFundRow = {
+  grantId: string;
+  title: string;
+  funder?: string;
+  purpose?: string;
+  inflowCents: number;
+  outflowCents: number;
+  balanceCents: number;
+};
+
 export function TreasurerPage() {
   const { canWrite } = useFinancePermissions();
   const society = useSociety();
@@ -284,7 +297,16 @@ export function TreasurerPage() {
   );
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
-  const [fy, setFy] = useState(defaultFy);
+  // Default to the fiscal year Financials shows (the latest statement's
+  // label, e.g. "2025-2026", which is what budgets are keyed by); fall back to
+  // the calendar end year of the current fiscal year. Typing overrides it.
+  const financials = useQuery(api.financials.list, society ? { societyId: society._id } : "skip") as Array<{ fiscalYear: string }> | undefined;
+  const latestFinancialFy = useMemo(
+    () => (financials ?? []).map((row) => row.fiscalYear).filter(Boolean).sort((a, b) => b.localeCompare(a))[0],
+    [financials],
+  );
+  const [fyOverride, setFy] = useState<string | null>(null);
+  const fy = fyOverride ?? latestFinancialFy ?? defaultFy;
 
   const pnl = useQuery(
     api.treasury.profitAndLoss,
@@ -341,18 +363,34 @@ export function TreasurerPage() {
   const [quickEntryDraft, setQuickEntryDraft] = useState<ReturnType<typeof newQuickEntryDraft> | null>(null);
   const [quickEntryBusy, setQuickEntryBusy] = useState(false);
 
+  // Finance summary tables sort client-side (they are small and fully loaded).
+  const varianceKind = (row: { category: string }) =>
+    inferBudgetKind(row, {
+      accounts: (financialAccounts ?? []) as any[],
+      incomeCategories: (pnl?.incomeByCategory ?? []).map(({ category }) => category),
+      expenseCategories: (pnl?.expenseByCategory ?? []).map(({ category }) => category),
+    });
+  const fundingSort = useSortableRows(fundingRollup?.rows as any[] | undefined, {
+    name: (row: any) => row.name,
+    type: (row: any) => row.sourceType,
+    received: (row: any) => row.receivedCents,
+    expected: (row: any) => row.plannedCents || null,
+  });
+  const varianceSort = useSortableRows(variance as VarianceRow[] | undefined, {
+    category: (row) => row.category,
+    budget: (row) => row.plannedCents,
+    actual: (row) => row.actualCents,
+    variance: (row) => budgetVariance(row.plannedCents, row.actualCents, varianceKind(row)).cents,
+  });
+  const restrictedSort = useSortableRows(restricted as RestrictedFundRow[] | undefined, {
+    fund: (row) => row.title,
+    inflow: (row) => row.inflowCents,
+    outflow: (row) => row.outflowCents,
+    balance: (row) => row.balanceCents,
+  });
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-
-  // Server now returns these as arrays of `{ category, cents }` (object keys
-  // can't carry the en-dash characters Wave uses in category names). Map to
-  // tuples so the existing `[cat, amt]` destructuring downstream still works.
-  const incomeEntries: Array<[string, number]> = pnl
-    ? pnl.incomeByCategory.map(({ category, cents }) => [category, cents])
-    : [];
-  const expenseEntries: Array<[string, number]> = pnl
-    ? pnl.expenseByCategory.map(({ category, cents }) => [category, cents])
-    : [];
   const fundingEvents = (fundingSources ?? [])
     .flatMap((source: any) =>
       (source.events ?? []).map((event: any) => ({
@@ -478,8 +516,8 @@ export function TreasurerPage() {
                 className="input"
                 value={fy}
                 onChange={(e) => setFy(e.target.value)}
-                inputMode="numeric"
-                style={{ width: 90, maxWidth: "100%" }}
+                aria-label="Fiscal year"
+                style={{ width: 110, maxWidth: "100%" }}
               />
             </label>
           </div>
@@ -620,14 +658,14 @@ export function TreasurerPage() {
             <table className="table finance-table treasurer-funding-table">
               <thead>
                 <tr>
-                  <th>Source</th>
-                  <th>Type</th>
-                  <th className="num">Received</th>
-                  <th className="num">Expected</th>
+                  <SortableTh column="name" sort={fundingSort.sort} onSort={fundingSort.toggle}>Source</SortableTh>
+                  <SortableTh column="type" sort={fundingSort.sort} onSort={fundingSort.toggle}>Type</SortableTh>
+                  <SortableTh column="received" sort={fundingSort.sort} onSort={fundingSort.toggle} className="num">Received</SortableTh>
+                  <SortableTh column="expected" sort={fundingSort.sort} onSort={fundingSort.toggle} className="num">Expected</SortableTh>
                 </tr>
               </thead>
               <tbody>
-                {(fundingRollup?.rows ?? []).slice(0, 8).map((row: any) => (
+                {fundingSort.rows.slice(0, 8).map((row: any) => (
                   <tr key={row.key}>
                     <td>
                       <strong>{row.name}</strong>
@@ -840,25 +878,24 @@ export function TreasurerPage() {
             <table className="table finance-table treasurer-variance-table">
               <thead>
                 <tr>
-                  <th>Category</th>
-                  <th className="num">Budget</th>
-                  <th className="num">Actual</th>
-                  <th className="num">
-                    <span className="report-table__col-label">
-                      Variance
-                      <InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>
-                    </span>
-                  </th>
+                  <SortableTh column="category" sort={varianceSort.sort} onSort={varianceSort.toggle}>Category</SortableTh>
+                  <SortableTh column="budget" sort={varianceSort.sort} onSort={varianceSort.toggle} className="num">Budget</SortableTh>
+                  <SortableTh column="actual" sort={varianceSort.sort} onSort={varianceSort.toggle} className="num">Actual</SortableTh>
+                  <SortableTh
+                    column="variance"
+                    sort={varianceSort.sort}
+                    onSort={varianceSort.toggle}
+                    className="num"
+                    extra={<InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>}
+                  >
+                    Variance
+                  </SortableTh>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {variance.map((row) => {
-                  const kind = inferBudgetKind(row, {
-                    accounts: (financialAccounts ?? []) as any[],
-                    incomeCategories: incomeEntries.map(([category]) => category),
-                    expenseCategories: expenseEntries.map(([category]) => category),
-                  });
+                {varianceSort.rows.map((row) => {
+                  const kind = varianceKind(row);
                   const result = budgetVariance(row.plannedCents, row.actualCents, kind);
                   return (
                     <tr key={row.category}>
@@ -921,14 +958,14 @@ export function TreasurerPage() {
               <table className="table finance-table">
                 <thead>
                   <tr>
-                    <th>Fund</th>
-                    <th className="num">In</th>
-                    <th className="num">Out</th>
-                    <th className="num">Balance</th>
+                    <SortableTh column="fund" sort={restrictedSort.sort} onSort={restrictedSort.toggle}>Fund</SortableTh>
+                    <SortableTh column="inflow" sort={restrictedSort.sort} onSort={restrictedSort.toggle} className="num">In</SortableTh>
+                    <SortableTh column="outflow" sort={restrictedSort.sort} onSort={restrictedSort.toggle} className="num">Out</SortableTh>
+                    <SortableTh column="balance" sort={restrictedSort.sort} onSort={restrictedSort.toggle} className="num">Balance</SortableTh>
                   </tr>
                 </thead>
                 <tbody>
-                  {restricted.map((r) => (
+                  {restrictedSort.rows.map((r) => (
                     <tr key={r.grantId}>
                       <td>
                         <strong>{r.title}</strong>

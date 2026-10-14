@@ -21,6 +21,19 @@ export function formatDate(value?: DateInput, pattern = "MMM d, yyyy") {
 }
 
 /**
+ * Compact table date: "Mar 3" within the current year, "Mar 3, 2025"
+ * otherwise. Pass the organisation-local today (`YYYY-MM-DD`) so the year
+ * boundary follows the organisation, not the browser. Pair with
+ * `formatDate(value, "EEEE, MMMM d, yyyy")` in a title for the full date.
+ */
+export function formatShortDate(value?: DateInput, todayISO?: string) {
+  const d = parseDateInput(value);
+  if (!d || !isValid(d)) return "—";
+  const currentYear = todayISO && /^\d{4}/.test(todayISO) ? Number(todayISO.slice(0, 4)) : new Date().getFullYear();
+  return format(d, d.getFullYear() === currentYear ? "MMM d" : "MMM d, yyyy");
+}
+
+/**
  * Action/task due dates are free text: an ISO calendar day ("2026-10-20") is
  * shown with the app's date format, anything else ("next meeting", "ASAP",
  * "end of June") is kept exactly as written (MA-7).

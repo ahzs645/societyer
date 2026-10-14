@@ -10,7 +10,8 @@ import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
-import { formatDateTime, money } from "../lib/format";
+import { formatDate, formatDateTime, formatShortDate } from "../lib/format";
+import { organizationTodayISO } from "../lib/dateRanges";
 import { budgetVariance, formatMoney } from "../lib/money";
 import { Money } from "../components/Money";
 import { useUrlTab } from "../hooks/useUrlTab";
@@ -36,6 +37,8 @@ import {
 import { WaveCacheExplorer } from "../features/financials/components/WaveCacheExplorer";
 import { OperatingSubscriptionsCard, ProviderCard } from "../features/financials/components/FinancialDashboardCards";
 import { StatTile } from "../components/StatTile";
+import { SortableTh } from "../components/SortableTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import { YearOverYearFinancialsCard } from "../features/financials/components/YearOverYearFinancialsCard";
 import {
   OPERATING_SUBSCRIPTION_INTERVALS,
@@ -272,6 +275,17 @@ export function FinancialsPage() {
     return types;
   }, [waveSummary]);
   const budgetRows = (hub?.budgetRows ?? []) as any[];
+  const budgetSort = useSortableRows(budgetRows, {
+    category: (b: any) => b.category,
+    planned: (b: any) => b.plannedCents,
+    actual: (b: any) => b.actualCents,
+    variance: (b: any) => budgetVariance(b.plannedCents, b.actualCents, inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] })).cents,
+  });
+  const restrictedSort = useSortableRows(hub?.restrictedAccounts as Array<{ name: string; purpose?: string; balanceCents: number }> | undefined, {
+    fund: (a) => a.name,
+    purpose: (a) => a.purpose,
+    balance: (a) => a.balanceCents,
+  });
   const ledgerRevenueCents = (trialBalance ?? [])
     .filter((row: any) => row.account?.accountType === "Income")
     .reduce((sum: number, row: any) => sum + row.creditCents - row.debitCents, 0);
@@ -284,6 +298,7 @@ export function FinancialsPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+  const todayISO = organizationTodayISO(society);
 
   const openFinancialYear = (fiscalYear: string) => {
     navigate(`/app/financials/fy/${encodeURIComponent(fiscalYear)}`);
@@ -605,10 +620,14 @@ export function FinancialsPage() {
           <div className="finance-table-wrap">
             <table className="table finance-table">
               <thead>
-                <tr><th>Fund</th><th>Purpose</th><th className="num">Balance</th></tr>
+                <tr>
+                  <SortableTh column="fund" sort={restrictedSort.sort} onSort={restrictedSort.toggle}>Fund</SortableTh>
+                  <SortableTh column="purpose" sort={restrictedSort.sort} onSort={restrictedSort.toggle}>Purpose</SortableTh>
+                  <SortableTh column="balance" sort={restrictedSort.sort} onSort={restrictedSort.toggle} className="num">Balance</SortableTh>
+                </tr>
               </thead>
               <tbody>
-                {hub.restrictedAccounts.map((a, i) => (
+                {restrictedSort.rows.map((a, i) => (
                   <tr key={i}>
                     <td>{a.name}</td>
                     <td className="muted">{a.purpose ?? "—"}</td>
@@ -647,20 +666,23 @@ export function FinancialsPage() {
           <table className="table finance-table">
             <thead>
               <tr>
-                <th>Category</th>
-                <th className="num">Planned</th>
-                <th className="num">Actual</th>
-                <th className="num">
-                  <span className="report-table__col-label">
-                    Variance
-                    <InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>
-                  </span>
-                </th>
+                <SortableTh column="category" sort={budgetSort.sort} onSort={budgetSort.toggle}>Category</SortableTh>
+                <SortableTh column="planned" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Planned</SortableTh>
+                <SortableTh column="actual" sort={budgetSort.sort} onSort={budgetSort.toggle} className="num">Actual</SortableTh>
+                <SortableTh
+                  column="variance"
+                  sort={budgetSort.sort}
+                  onSort={budgetSort.toggle}
+                  className="num"
+                  extra={<InfoPopover label="About variance">{VARIANCE_HELP}</InfoPopover>}
+                >
+                  Variance
+                </SortableTh>
                 <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {budgetRows.map((b: any) => {
+              {budgetSort.rows.map((b: any) => {
                 const kind = inferBudgetKind(b, { accounts: accounts ?? [], transactions: transactions ?? [] });
                 return (
                   <tr key={b._id}>
@@ -842,7 +864,7 @@ export function FinancialsPage() {
               <RecordTable
                 loading={tableData.loading || transactions === undefined}
                 renderCell={({ record: t, field }) => {
-                  if (field.name === "date") return <span className="mono">{t.date}</span>;
+                  if (field.name === "date") return <span title={formatDate(t.date, "EEEE, MMMM d, yyyy")}>{formatShortDate(t.date, todayISO)}</span>;
                   if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
                   if (field.name === "category") return <span className="category-cell"><CategorizationProvenance txn={t} /><Badge>{t.category ?? "uncategorized"}</Badge></span>;
                   if (field.name === "amountCents") return <Money cents={t.amountCents} tone={t.amountCents > 0 ? "in" : "auto"} />;

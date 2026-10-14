@@ -104,6 +104,8 @@
 @use "finance-workflows";
 // Shell navigation: two-level sidebar, icon rail, activation pill, breadcrumbs, shortcuts.
 @use "shell-nav";
+// Client-sorted finance tables: sortable header buttons.
+@use "sortable-table";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
