@@ -520,7 +520,7 @@ export function TreasurerPage() {
             <h2 className="card__title">Expense reports</h2>
             <span className="card__subtitle">
               Reimbursement claims with receipt evidence and approval status.{" "}
-              <Link to="/app/approvals">Open approvals queue</Link>
+              <Link className="approvals-queue-link" to="/app/approvals">Open approvals queue</Link>
             </span>
           </div>
           <button className="btn btn--ghost btn--sm treasurer-card-head-action" onClick={() => setExpenseDraft(newExpenseDraft())} disabled={!canWrite}>

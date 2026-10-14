@@ -715,3 +715,11 @@
   background: token(bg-subtle);
   font-size: token(fs-sm);
 }
+
+/* Treasurer expense card → approvals queue. */
+.approvals-queue-link {
+  color: token(accent);
+  font-weight: token(fw-medium);
+  white-space: nowrap;
+  &:hover { text-decoration: underline; }
+}
