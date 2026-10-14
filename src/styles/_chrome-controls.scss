@@ -255,6 +255,6 @@
   color: token('accent');
   opacity: 0.7;
 }
-.filter-chip__remove:hover { opacity: 1; background: rgba(0,0,0,0.05); }
+.filter-chip__remove:hover { opacity: 1; background: token('bg-hover-alpha'); }
 
 /* Popover for filter field picker — fixed-positioned so coords match viewport rects */

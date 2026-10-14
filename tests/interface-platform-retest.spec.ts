@@ -38,6 +38,8 @@ test("the sidebar meeting count follows a new meeting without a reload", async (
   test.skip(testInfo.project.name !== "desktop", "the desktop sidebar shows the counts inline");
   await page.goto("/demo/app/meetings");
   const badge = page.locator(".sidebar .sidebar__item", { hasText: "Meetings" }).locator(".sidebar__count").first();
+  // Wait for the count to load before reading it.
+  await expect(badge).toHaveAttribute("title", /\d+ meetings? this year/, { timeout: 20_000 });
   const before = Number((await badge.getAttribute("title"))?.match(/\d+/)?.[0] ?? 0);
   await page.getByRole("button", { name: /^New meeting/ }).first().click();
   const dialog = page.getByRole("dialog").last();

@@ -92,3 +92,16 @@
     transform: none;
   }
 }
+
+// Filter chip remove buttons outside RecordTable keep their small glyph but
+// get a 40px hit area on touch, like the RecordTable chips.
+@media (pointer: coarse) {
+  .filter-chip__remove {
+    position: relative;
+  }
+  .filter-chip__remove::after {
+    content: "";
+    position: absolute;
+    inset: -12px;
+  }
+}

@@ -31,7 +31,8 @@ test("a missing record shows its not-found state, not the error boundary (P-O2, 
   await expect(page.getByRole("alert").filter({ hasText: "Couldn't load this page" })).toHaveCount(0);
   // A page with its own not-found state keeps it.
   await page.goto("/demo/app/documents/synthetic_missing_document");
-  await expect(page.getByText("Document not found")).toBeVisible({ timeout: 20_000 });
+  // The breadcrumb trail repeats the title, so assert on the page heading.
+  await expect(page.getByRole("heading", { level: 1, name: "Document not found" })).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(2_000);
   await expect(page.getByRole("alert").filter({ hasText: "Couldn't load this page" })).toHaveCount(0);
 });
