@@ -26,6 +26,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { StatTile } from "../components/StatTile";
 
 export function VolunteersPage() {
   const society = useSociety();
@@ -173,8 +174,8 @@ export function VolunteersPage() {
 
       {!canWrite && <p className="muted" style={{ marginTop: 0 }}>View only — changes need volunteers write access.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Pending intake" value={String(summary?.pendingApplications ?? 0)} />
-        <Stat label="Expiring checks" value={String(summary?.expiringChecks ?? 0)} tone={(summary?.overdueChecks ?? 0) > 0 ? "danger" : undefined} />
+        <StatTile label="Pending intake" value={String(summary?.pendingApplications ?? 0)} />
+        <StatTile label="Expiring checks" value={String(summary?.expiringChecks ?? 0)} tone={(summary?.overdueChecks ?? 0) > 0 ? "danger" : undefined} />
       </div>
 
       {!applicationsTable.loading && !applicationsTable.objectMetadata ? (
@@ -620,21 +621,3 @@ export function VolunteersPage() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "danger";
-}) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={tone ? { color: "var(--danger)" } : undefined}>
-        {value}
-      </div>
-    </div>
-  );
-}

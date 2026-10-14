@@ -58,16 +58,6 @@ export function ReceiptEvidence({ links, receiptDocumentId }: { links: any[]; re
   );
 }
 
-export function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: "warn" | "info" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">{value}</div>
-      {sub && <div className={tone ? `stat__sub stat__sub--${tone}` : "stat__sub"}>{sub}</div>}
-    </div>
-  );
-}
-
 // Editable count sheet — local drafts persist a counted quantity on blur, and
 // a footer row lets a counter add stock found that wasn't on the expected sheet.
 export function CountEntry({

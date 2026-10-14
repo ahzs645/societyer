@@ -51,6 +51,7 @@ import {
   Users,
 } from "lucide-react";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { StatTile } from "../components/StatTile";
 
 type Confidence = "High" | "Medium" | "Review";
 type Status = "Draft" | "Verified" | "NeedsReview" | "Archived";
@@ -450,10 +451,10 @@ export function OrganizationHistoryPage() {
       />
 
       <div className="stat-grid">
-        <Stat label="Sources" value={String(sources.length)} icon={<Archive size={14} />} sub="documents, links, and external IDs" />
-        <Stat label="Profile facts" value={String(facts.length)} icon={<FileText size={14} />} sub="editable about/profile fields" />
-        <Stat label="Converted records" value={String(boardTerms.length + motions.length + budgets.length)} icon={<BookOpen size={14} />} sub="boards, motions, and budgets" />
-        <Stat label="Needs review" value={String(reviewCount)} icon={<ShieldCheck size={14} />} sub="drafts and low-confidence records" />
+        <StatTile label="Sources" value={String(sources.length)} icon={<Archive size={14} />} sub="documents, links, and external IDs" />
+        <StatTile label="Profile facts" value={String(facts.length)} icon={<FileText size={14} />} sub="editable about/profile fields" />
+        <StatTile label="Converted records" value={String(boardTerms.length + motions.length + budgets.length)} icon={<BookOpen size={14} />} sub="boards, motions, and budgets" />
+        <StatTile label="Needs review" value={String(reviewCount)} icon={<ShieldCheck size={14} />} sub="drafts and low-confidence records" />
       </div>
 
       <Tabs<HistorySection>
@@ -1283,10 +1284,10 @@ export function OrganizationHistoryBudgetPage() {
         </div>
       )}
       <div className="stat-grid org-history__budget-stats">
-        <Stat label="Fiscal year" value={fiscalYearLabel} icon={<BookOpen size={14} />} sub={budget.sourceDate || "No source date"} />
-        <Stat label="Income" value={formatCents(budget.totalIncomeCents, budget.currency)} icon={<FileText size={14} />} />
-        <Stat label="Expenses" value={formatCents(budget.totalExpenseCents, budget.currency)} icon={<FileText size={14} />} />
-        <Stat label="Register rows" value={String(registerTransactions.length)} icon={<Archive size={14} />} sub={sourceSummary?.pageCount ? `${sourceSummary.pageCount} source pages` : undefined} />
+        <StatTile label="Fiscal year" value={fiscalYearLabel} icon={<BookOpen size={14} />} sub={budget.sourceDate || "No source date"} />
+        <StatTile label="Income" value={formatCents(budget.totalIncomeCents, budget.currency)} icon={<FileText size={14} />} />
+        <StatTile label="Expenses" value={formatCents(budget.totalExpenseCents, budget.currency)} icon={<FileText size={14} />} />
+        <StatTile label="Register rows" value={String(registerTransactions.length)} icon={<Archive size={14} />} sub={sourceSummary?.pageCount ? `${sourceSummary.pageCount} source pages` : undefined} />
       </div>
 
       {budgetTotalMismatches.length > 0 && (
@@ -1886,26 +1887,6 @@ function titleize(value: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  icon,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{icon} {label}</div>
-      <div className="stat__value">{value}</div>
-      {sub && <div className="stat__sub">{sub}</div>}
-    </div>
-  );
 }
 
 function TableScroll({ children }: { children: ReactNode }) {

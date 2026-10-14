@@ -57,9 +57,10 @@ import {
   relativeSince,
   todayDate,
 } from "./inventory/helpers";
-import { CountEntry, Stat, TabButton } from "./inventory/components";
+import { CountEntry, TabButton } from "./inventory/components";
 import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { StatTile } from "../components/StatTile";
 
 export function InventoryPage() {
   const { canWrite, canExport } = useFinancePermissions();
@@ -660,10 +661,10 @@ export function InventoryPage() {
       {/* Compact KPI row — the actionable alerts (expiring lots, count
           variances) surface as callouts below rather than as zero-value tiles. */}
       <div className="stat-grid">
-        <Stat label="Tracked records" value={(items ?? []).length} />
-        <Stat label="Locations & bins" value={(locations ?? []).length} />
-        <Stat label="On hand" value={formatQuantity(totalOnHand, "")} />
-        <Stat label="Low stock" value={lowStock.length} tone={lowStock.length ? "warn" : undefined} />
+        <StatTile label="Tracked records" value={(items ?? []).length} />
+        <StatTile label="Locations & bins" value={(locations ?? []).length} />
+        <StatTile label="On hand" value={formatQuantity(totalOnHand, "")} />
+        <StatTile label="Low stock" value={lowStock.length} tone={lowStock.length ? "warn" : undefined} />
       </div>
 
       {lowStock.length > 0 && (

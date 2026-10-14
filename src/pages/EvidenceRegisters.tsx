@@ -22,6 +22,7 @@ import {
   evidenceReviewStatusTone,
   normalizeEvidenceReviewStatus,
 } from "../../shared/documentReviewStatus";
+import { StatTile } from "../components/StatTile";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
@@ -534,13 +535,9 @@ function RegisterTable({
   );
 }
 
+/** Register counts: the tone only applies once the count is non-zero. */
 function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "warn" | "danger" | "ok" }) {
-  return (
-    <div className="stat">
-      <div className="stat__label">{label}</div>
-      <div className="stat__value" style={{ color: !value || value === 0 ? undefined : tone === "warn" ? "var(--warn)" : tone === "danger" ? "var(--danger)" : undefined }}>{value}</div>
-    </div>
-  );
+  return <StatTile label={label} value={value} tone={!value || tone === "ok" ? undefined : tone} />;
 }
 
 function Status({ value }: { value?: string }) {

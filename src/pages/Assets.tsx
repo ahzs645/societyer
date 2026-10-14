@@ -90,6 +90,7 @@ import {
   summarizeAssets,
   todayDate,
 } from "../features/assets/assetUtils";
+import { StatTile } from "../components/StatTile";
 
 export function AssetsPage() {
   const confirm = useConfirm();
@@ -427,10 +428,10 @@ export function AssetsPage() {
       />
 
       <div className="stat-grid">
-        <Stat label="Assets" value={stats.total} sub={`${stats.active} active`} />
-        <Stat label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
-        <Stat label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
-        <Stat label="Register value" value={money(stats.valueCents)} sub={stats.dueMaintenance ? `${stats.dueMaintenance} maintenance due soon` : "Book value where known"} tone={stats.dueMaintenance ? "warn" : undefined} />
+        <StatTile label="Assets" value={stats.total} sub={`${stats.active} active`} />
+        <StatTile label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
+        <StatTile label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
+        <StatTile label="Register value" value={money(stats.valueCents)} sub={stats.dueMaintenance ? `${stats.dueMaintenance} maintenance due soon` : "Book value where known"} tone={stats.dueMaintenance ? "warn" : undefined} />
       </div>
 
       {stats.openRun && (
@@ -1373,16 +1374,6 @@ function stockTotalPreview(form: { observedQuantityBefore: string; quantityAdded
   const added = Number(form.quantityAdded);
   if (!Number.isFinite(observed) || !Number.isFinite(added)) return "";
   return String(observed + added);
-}
-
-function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: "info" | "warn" | "danger" }) {
-  return (
-    <div className={`stat${tone ? ` stat--${tone}` : ""}`}>
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">{value}</div>
-      {sub && <div className="stat__sub">{sub}</div>}
-    </div>
-  );
 }
 
 function cleanEvent(form: any) {

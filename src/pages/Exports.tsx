@@ -1,5 +1,5 @@
 import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useConvex, useQuery } from "convex/react";
 import { CheckCircle2, Database, Download, FileJson, Archive, ShieldAlert, Upload } from "lucide-react";
@@ -20,6 +20,7 @@ import { localWorkspaceRestoreSupported, restoreLocalWorkspaceBackup } from "../
 import { useConfirm } from "../components/Modal";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { StatTile } from "../components/StatTile";
 
 type TableSummary = {
   name: string;
@@ -329,13 +330,13 @@ export function ExportsPage() {
       </div>}
 
       <div className="stat-grid">
-        <Stat
+        <StatTile
           label="Record coverage"
           value={validation ? (validationOk ? "Ready" : "Review") : "..."}
           icon={validationOk ? <CheckCircle2 size={14} /> : <ShieldAlert size={14} />}
           sub={validation ? `${validation.tableCount} available tables; saved files are checked during ZIP export` : "checking database coverage"}
         />
-        <Stat
+        <StatTile
           label="Export rows"
           value={totalRows == null ? "Pending" : formatNumber(totalRows)}
           icon={<Database size={14} />}
@@ -427,9 +428,9 @@ export function ExportsPage() {
           )}
           {importPreview && (
             <div className="stat-grid stat-grid--3" style={{ marginTop: 14 }}>
-              <Stat label="Source" value={importPreview.societyName} icon={<FileJson size={14} />} sub={importPreview.fileName} />
-              <Stat label="Rows" value={formatNumber(importPreview.totalRows)} icon={<Database size={14} />} sub={`${formatNumber(importPreview.exportedTableCount)} tables, ${formatNumber(importPreview.nonEmptyTables)} non-empty`} />
-              <Stat
+              <StatTile label="Source" value={importPreview.societyName} icon={<FileJson size={14} />} sub={importPreview.fileName} />
+              <StatTile label="Rows" value={formatNumber(importPreview.totalRows)} icon={<Database size={14} />} sub={`${formatNumber(importPreview.exportedTableCount)} tables, ${formatNumber(importPreview.nonEmptyTables)} non-empty`} />
+              <StatTile
                 label="Recovery"
                 value={importPreview.recoverySecretsIncluded ? "Secrets" : "Redacted"}
                 icon={<ShieldAlert size={14} />}
@@ -516,27 +517,6 @@ export function ExportsPage() {
           </div>
         </div>
       </details>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-  sub,
-}: {
-  label: string;
-  value: string;
-  icon: ReactNode;
-  sub: string;
-}) {
-  return (
-    <div className="stat">
-      <div className="stat__icon">{icon}</div>
-      <div className="stat__label">{label}</div>
-      <div className="stat__value">{value}</div>
-      <div className="stat__sub">{sub}</div>
     </div>
   );
 }
