@@ -1,5 +1,6 @@
 import type { RecordField, ViewFilter, ViewFilterGroup } from "../../types/View";
 import { applyRecordFilter } from "./filterRecords";
+import type { DateRangeContext } from "../../../../lib/dateRanges";
 
 export type SerializedViewFilters = {
   filters?: Record<string, Record<string, string | string[]>>;
@@ -22,28 +23,30 @@ export function recordMatchesViewFilters({
   columns,
   filters,
   filterGroups,
+  dateContext,
 }: {
   record: any;
   columns: RecordField[];
   filters: ViewFilter[];
   filterGroups?: ViewFilterGroup[];
+  dateContext?: DateRangeContext;
 }) {
   const fieldById = new Map(columns.map((column) => [column.fieldMetadataId, column]));
   if (!filterGroups || filterGroups.length === 0) {
     return filters.every((filter) =>
-      applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter),
+      applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter, dateContext),
     );
   }
 
   const rootGroups = filterGroups.filter((group) => !group.parentViewFilterGroupId);
   if (rootGroups.length === 0) {
     return filters.every((filter) =>
-      applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter),
+      applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter, dateContext),
     );
   }
 
   return rootGroups.every((group) =>
-    matchesGroup({ record, fieldById, filters, filterGroups, groupId: group.id }),
+    matchesGroup({ record, fieldById, filters, filterGroups, groupId: group.id, dateContext }),
   );
 }
 
@@ -53,12 +56,14 @@ function matchesGroup({
   filters,
   filterGroups,
   groupId,
+  dateContext,
 }: {
   record: any;
   fieldById: Map<string, RecordField>;
   filters: ViewFilter[];
   filterGroups: ViewFilterGroup[];
   groupId: string;
+  dateContext?: DateRangeContext;
 }) {
   const group = filterGroups.find((entry) => entry.id === groupId);
   if (!group) return true;
@@ -67,12 +72,12 @@ function matchesGroup({
     ...filters
       .filter((filter) => filter.viewFilterGroupId === groupId)
       .sort((a, b) => (a.positionInViewFilterGroup ?? 0) - (b.positionInViewFilterGroup ?? 0))
-      .map((filter) => applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter)),
+      .map((filter) => applyRecordFilter(record, fieldById.get(filter.fieldMetadataId), filter, dateContext)),
     ...filterGroups
       .filter((child) => child.parentViewFilterGroupId === groupId)
       .sort((a, b) => (a.positionInViewFilterGroup ?? 0) - (b.positionInViewFilterGroup ?? 0))
       .map((child) =>
-        matchesGroup({ record, fieldById, filters, filterGroups, groupId: child.id }),
+        matchesGroup({ record, fieldById, filters, filterGroups, groupId: child.id, dateContext }),
       ),
   ];
 
@@ -120,7 +125,7 @@ function serializeGroup(
       .map((filter) => ({
         field: filter.fieldMetadataId,
         op: filter.operator,
-        value: String(filter.value ?? ""),
+        value: typeof filter.value === "object" && filter.value !== null ? JSON.stringify(filter.value) : String(filter.value ?? ""),
         subField: filter.subFieldName ?? undefined,
       })),
     groups: groups

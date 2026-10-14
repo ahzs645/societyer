@@ -12,9 +12,11 @@ export type BulkAction = {
 };
 
 /**
- * Sticky bar shown when 1+ rows are selected. Clears selection after each
- * action unless `keepSelection` is set (useful for bulk-edit modals that
- * want the IDs to stick around).
+ * Floating "island" shown while 1+ rows are selected: count, actions, Clear.
+ * Centred at the bottom of the table on desktop; docked above the bottom
+ * navigation on phones (with a spacer so it never covers the last rows).
+ * Clears selection after each action unless `keepSelection` is set (useful
+ * for bulk-edit modals that want the IDs to stick around).
  */
 export function RecordTableBulkBar({ actions }: { actions: BulkAction[] }) {
   const selected = useRecordTableState((s) => s.selectedRecordIds);
@@ -27,8 +29,9 @@ export function RecordTableBulkBar({ actions }: { actions: BulkAction[] }) {
   const ids = selectedRecords.map((r: any) => String(r._id));
 
   return (
+    <>
     <div className="record-table__bulk-bar" role="region" aria-label="Bulk actions">
-      <div className="record-table__bulk-bar-count">
+      <div className="record-table__bulk-bar-count" aria-live="polite">
         <strong>{selected.size}</strong> selected
       </div>
       <div className="record-table__bulk-bar-actions">
@@ -56,8 +59,11 @@ export function RecordTableBulkBar({ actions }: { actions: BulkAction[] }) {
         onClick={() => handle.get().clearSelection()}
         aria-label="Clear selection"
       >
-        <X size={12} />
+        <X size={12} aria-hidden="true" />
+        <span>Clear</span>
       </button>
     </div>
+    <div className="record-table__bulk-bar-spacer" aria-hidden="true" />
+    </>
   );
 }

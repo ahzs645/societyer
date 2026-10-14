@@ -4,8 +4,13 @@ import { useSearchParams } from "react-router-dom";
 import {
   RecordTableStoreContext,
   createRecordTableStore,
+  useRecordTableState,
+  useRecordTableStoreHandle,
   type RecordTableStore,
 } from "../state/recordTableStore";
+import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
+import { useSociety } from "@/hooks/useSociety";
+import { organizationTodayISO } from "@/lib/dateRanges";
 import {
   RecordTableContext,
   type RecordTableContextValue,
@@ -106,6 +111,15 @@ export function RecordTableScope({
     }
   }, [searchParams, setSearchParams]);
 
+  // Relative date filters ("Last 30 days", "Fiscal year to date") and export
+  // file names use the organisation's calendar, not UTC.
+  const organization = useSociety() as ({ fiscalYearEnd?: string | null } & Parameters<typeof organizationTodayISO>[0]) | null | undefined;
+  const organizationToday = organizationTodayISO(organization ?? null);
+  const fiscalYearEnd = organization?.fiscalYearEnd ?? null;
+  useEffect(() => {
+    store.getState().setDateContext({ today: organizationToday, fiscalYearEnd });
+  }, [store, organizationToday, fiscalYearEnd]);
+
   // Pipe view + records into the store when they change.
   useEffect(() => {
     if (loadableView) store.getState().loadView(loadableView);
@@ -154,6 +168,10 @@ export function RecordTableScope({
     <RecordTableStoreContext.Provider value={store}>
       <RecordTableContext.Provider value={contextValue}>
         {children}
+        <RecordTableSidePanelBridge
+          recordId={activeSidePanelRecord && currentSidePanelRecord ? activeSidePanelRecord.recordId : null}
+          onNavigate={(record) => setSidePanelRecord({ scopeIdentity, recordId: String(record._id), record })}
+        />
         {activeSidePanelRecord && currentSidePanelRecord && (
           <RecordTableSidePanel
             open
@@ -172,4 +190,75 @@ export function RecordTableScope({
       </RecordTableContext.Provider>
     </RecordTableStoreContext.Provider>
   );
+}
+
+function isTypingElement(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+}
+
+/**
+ * Keeps the table and the preview panel in step: the open record is marked in
+ * the table (and its low-priority columns fold away), up/down or j/k inside
+ * the panel step to the previous/next record in the table's current order,
+ * and moving through the table with the keyboard carries the panel along.
+ */
+function RecordTableSidePanelBridge({
+  recordId,
+  onNavigate,
+}: {
+  recordId: string | null;
+  onNavigate: (record: any) => void;
+}) {
+  const handle = useRecordTableStoreHandle();
+  const { records } = useRecordTableRowModel();
+  const focusedRow = useRecordTableState((state) => state.focusedCell?.rowIndex ?? null);
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
+
+  useEffect(() => {
+    handle.get().setPanelRecordId(recordId);
+  }, [handle, recordId]);
+  useEffect(() => () => handle.get().setPanelRecordId(null), [handle]);
+
+  useEffect(() => {
+    if (!recordId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      const key = event.key.toLowerCase();
+      const step = key === "arrowdown" || key === "j" ? 1 : key === "arrowup" || key === "k" ? -1 : 0;
+      if (!step) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (isTypingElement(target)) return;
+      // Only from the panel itself (or with nothing focused): menus, the
+      // command palette and the table's own grid keep their arrow keys.
+      const fromPanel = !!target?.closest(".record-side-panel");
+      const fromNowhere = !target || target === document.body || target === document.documentElement;
+      if (!fromPanel && !fromNowhere) return;
+      if (target?.closest('[role="menu"], [role="listbox"], [role="tablist"]')) return;
+      const index = records.findIndex((record) => String(record._id) === recordId);
+      const nextIndex = index < 0 ? 0 : index + step;
+      const next = records[nextIndex];
+      if (!next) return;
+      event.preventDefault();
+      onNavigateRef.current(next);
+      const columnIndex = handle.get().focusedCell?.columnIndex ?? 0;
+      handle.get().setRangeAnchor(null);
+      handle.get().setFocusedCell({ rowIndex: nextIndex, columnIndex });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handle, recordId, records]);
+
+  // Arrowing through the grid while the panel is open shows each record.
+  const lastFocusedRow = useRef(focusedRow);
+  useEffect(() => {
+    if (lastFocusedRow.current === focusedRow) return;
+    lastFocusedRow.current = focusedRow;
+    if (!recordId || focusedRow === null) return;
+    const record = records[focusedRow];
+    if (record && String(record._id) !== recordId) onNavigateRef.current(record);
+  }, [focusedRow, recordId, records]);
+
+  return null;
 }

@@ -8,12 +8,15 @@ import {
   ChevronDown,
   EyeOff,
   Filter,
+  Rows3,
 } from "lucide-react";
 import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../types";
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { isNumericFieldType, parseNumericFilterInput } from "../utils/filterValues";
+import { defaultGroupBy, getViewGroupBy, isGroupableField, withViewGroupBy } from "../utils/groupRecords";
 
 /**
  * One header cell. Click = cycle sort (asc → desc → off). Drag the right
@@ -23,14 +26,21 @@ import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 export function RecordTableHeaderCell({
   recordField,
   isLabelIdentifier = false,
+  collapsed = false,
 }: {
   recordField: RecordField;
   isLabelIdentifier?: boolean;
+  /** Folded to zero width while the preview panel condenses the table. */
+  collapsed?: boolean;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const filters = useRecordTableState((s) => s.filters);
   const filterGroups = useRecordTableState((s) => s.filterGroups);
   const sorts = useRecordTableState((s) => s.sorts);
+  const viewType = useRecordTableState((s) => s.type);
+  const isGroupedByThis = useRecordTableState(
+    (s) => getViewGroupBy(s.viewGroups)?.fieldMetadataId === recordField.fieldMetadataId,
+  );
   const handle = useRecordTableStoreHandle();
   const isMobile = useIsMobile();
   const resizing = useRef<{ startX: number; startSize: number } | null>(null);
@@ -197,9 +207,14 @@ export function RecordTableHeaderCell({
     <th
       className={
         "record-table__header-cell" +
-        (isLabelIdentifier ? " record-table__header-cell--identifier" : "")
+        (isLabelIdentifier ? " record-table__header-cell--identifier" : "") +
+        (recordField.field.fieldType === FIELD_TYPES.CURRENCY || recordField.field.fieldType === FIELD_TYPES.NUMBER
+          ? " record-table__header-cell--numeric"
+          : "") +
+        (collapsed ? " record-table__header-cell--collapsed" : "")
       }
-      style={columnWidthStyle(recordField.size)}
+      style={columnWidthStyle(collapsed ? 0 : recordField.size)}
+      aria-hidden={collapsed || undefined}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
     >
       <button
@@ -257,6 +272,7 @@ export function RecordTableHeaderCell({
                   }}
                   placeholder={headerFilterPlaceholder(recordField)}
                   type={headerFilterInputType(recordField)}
+                  inputMode={isNumericFieldType(recordField.field.fieldType) ? "decimal" : undefined}
                 />
               </label>
               <button
@@ -267,6 +283,20 @@ export function RecordTableHeaderCell({
                 Apply filter
               </button>
             </div>
+            {viewType === "table" && isGroupableField(recordField) && (
+              <button
+                type="button"
+                onClick={() => {
+                  handle.get().setViewGroups(
+                    withViewGroupBy(handle.get().viewGroups, isGroupedByThis ? null : defaultGroupBy(recordField)),
+                  );
+                  setMenuOpen(false);
+                }}
+              >
+                <Rows3 size={13} />
+                <span>{isGroupedByThis ? "Remove grouping" : "Group by this field"}</span>
+              </button>
+            )}
             <button type="button" disabled={!canMoveLeft} onClick={() => moveColumn(-1)}>
               <ArrowLeft size={13} />
               <span>Move left</span>
@@ -323,6 +353,9 @@ function defaultHeaderOperator(recordField: RecordField): ViewFilterOperator {
 
 function canApplyHeaderFilter(recordField: RecordField, value: string) {
   if (recordField.field.fieldType === FIELD_TYPES.BOOLEAN) return true;
+  if (isNumericFieldType(recordField.field.fieldType)) {
+    return parseNumericFilterInput(recordField.field, value) !== undefined;
+  }
   return value.trim().length > 0;
 }
 
@@ -332,24 +365,14 @@ function normalizedHeaderFilterValue(
   operator: ViewFilterOperator,
 ) {
   if (operator === "isTrue" || operator === "isFalse") return null;
-  if (
-    recordField.field.fieldType === FIELD_TYPES.NUMBER ||
-    recordField.field.fieldType === FIELD_TYPES.CURRENCY ||
-    recordField.field.fieldType === FIELD_TYPES.RATING
-  ) {
-    return Number(value);
+  if (isNumericFieldType(recordField.field.fieldType)) {
+    // "1.5k", "$2,000", "(300)" — in the field's stored unit.
+    return parseNumericFilterInput(recordField.field, value) ?? null;
   }
   return value.trim();
 }
 
 function headerFilterInputType(recordField: RecordField) {
-  if (
-    recordField.field.fieldType === FIELD_TYPES.NUMBER ||
-    recordField.field.fieldType === FIELD_TYPES.CURRENCY ||
-    recordField.field.fieldType === FIELD_TYPES.RATING
-  ) {
-    return "number";
-  }
   if (
     recordField.field.fieldType === FIELD_TYPES.DATE ||
     recordField.field.fieldType === FIELD_TYPES.DATE_TIME
@@ -361,5 +384,6 @@ function headerFilterInputType(recordField: RecordField) {
 
 function headerFilterPlaceholder(recordField: RecordField) {
   if (recordField.field.fieldType === FIELD_TYPES.BOOLEAN) return "true";
+  if (recordField.field.fieldType === FIELD_TYPES.CURRENCY) return "e.g. 1.5k or $2,000";
   return "Value";
 }

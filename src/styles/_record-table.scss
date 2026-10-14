@@ -409,22 +409,52 @@ select.record-table__menu-select,
 /* -------------------------- Chips -------------------------- */
 
 .record-table__chips {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   padding: 4px 0;
+  overflow: hidden;
+}
+
+.record-table__chips-mode {
+  flex: none;
+  font-size: token('fs-xxs');
+  font-weight: token('fw-medium');
+  color: token('text-tertiary');
 }
 
 .record-table__chip {
   @include inline-flex-center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
+  flex: none;
+  max-width: min(320px, 70vw);
+  height: 24px;
+  padding: 0 2px 0 0;
+  font-size: token('fs-xxs');
   background: token('accent-soft');
   color: token('accent');
-  border-radius: 999px;
+  border-radius: token('r-pill');
   border: 1px solid transparent;
+  transition: border-color token('motion-fade-fast') token('ease-fade');
+
+  &:hover {
+    border-color: token('border-alpha-strong');
+  }
+}
+
+.record-table__chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px 0 9px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
 }
 
 .record-table__chip-remove {
@@ -433,16 +463,55 @@ select.record-table__menu-select,
   color: inherit;
   cursor: pointer;
   @include inline-flex-center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
   padding: 0;
+  border-radius: token('r-pill');
   opacity: 0.7;
 
   &:hover {
     opacity: 1;
+    background: token('bg-hover-alpha');
   }
 }
 
+.record-table__chip-more {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  font-size: token('fs-xxs');
+  font-weight: token('fw-medium');
+  color: token('text-secondary');
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-radius: token('r-pill');
+  cursor: pointer;
+
+  &:hover {
+    color: token('text-primary');
+    background: token('bg-hover');
+  }
+}
+
+// Off-screen copy measured to decide how many chips fit on the line.
+.record-table__chips-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  visibility: hidden;
+  pointer-events: none;
+  height: 0;
+  overflow: hidden;
+}
+
 .record-table__chip-clear {
-  font-size: 11px;
+  flex: none;
+  font-size: token('fs-xxs');
   background: transparent;
   border: none;
   color: token('text-tertiary');
@@ -527,30 +596,60 @@ select.record-table__menu-select,
 }
 
 .record-table__filter-popover-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.3fr) 26px;
+  align-items: center;
   gap: 6px;
-  margin-bottom: 10px;
+  padding: 3px;
+  margin: 0 -3px;
+  border-radius: token('r-sm');
 
-  select,
-  input {
-    flex: 1;
-    padding: 5px 8px;
-    font-size: 12px;
-    background: token('bg-subtle');
-    color: token('text-primary');
-    border: 1px solid token('border');
-    border-radius: 5px;
+  > .select-trigger,
+  > .record-table__filter-value > * {
+    width: 100%;
+    min-width: 0;
   }
 
-  select {
-    padding-right: 30px;
+  &.is-highlighted {
+    background: token('accent-soft');
   }
+
+  &.is-invalid .record-table__filter-input,
+  &.is-invalid .select-trigger {
+    border-color: token('red-9');
+  }
+}
+
+.record-table__filter-value {
+  min-width: 0;
+
+  .date-trigger-wrap {
+    display: flex;
+    width: 100%;
+  }
+}
+
+.record-table__filter-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  font-size: token('fs-xs');
+  background: token('bg-subtle');
+  color: token('text-primary');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
 }
 
 .record-table__filter-popover-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid token('border');
 }
 
 .record-table__primary-btn {
@@ -732,17 +831,22 @@ select.record-table__menu-select,
   color: token('text-primary');
 }
 
+// Row heights come from the density tokens: compact 36px, comfortable 44px.
+// The header keeps the compact height in both densities.
 .record-table--compact .record-table__cell,
-.record-table--compact .record-table__header-cell {
-  height: 32px;
+.record-table--comfortable .record-table__cell,
+.record-table--compact .record-table__header-cell,
+.record-table--comfortable .record-table__header-cell {
   padding-top: 0;
   padding-bottom: 0;
 }
 
-.record-table--comfortable .record-table__cell,
-.record-table--comfortable .record-table__header-cell {
-  padding-top: 9px;
-  padding-bottom: 9px;
+.record-table--compact .record-table__cell {
+  height: token('row-h-compact');
+}
+
+.record-table--comfortable .record-table__cell {
+  height: token('row-h-comfortable');
 }
 
 .record-table__thead {
@@ -758,7 +862,7 @@ select.record-table__menu-select,
 
 .record-table__header-cell {
   box-sizing: border-box;
-  height: 32px;
+  height: token('row-h-compact');
   padding: 0 8px;
   text-align: left;
   font-weight: 500;
@@ -1032,15 +1136,14 @@ select.record-table__menu-select,
 
 .record-table__row {
   border-bottom: 1px solid token('border-color-light');
-
-  &:hover {
-    background: token('bg-hover');
-  }
+  transition: background-color token('motion-fade-fast') token('ease-fade');
 }
 
+// Translucent hover over an opaque base, so the sticky identifier cell stays
+// solid while columns scroll beneath it.
 .record-table__row:hover .record-table__cell,
 .record-table__row:hover .record-table__cell--identifier {
-  background: token('bg-hover');
+  background: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha')), token('bg-panel');
 }
 
 .record-table__row:has(.record-table__cell--focused) .record-table__cell,
@@ -1050,7 +1153,7 @@ select.record-table__menu-select,
 
 .record-table__cell {
   box-sizing: border-box;
-  height: 32px;
+  height: token('row-h-compact');
   position: relative;
   padding: 0 8px;
   border-right: 1px solid token('border-color-light');
@@ -2108,29 +2211,40 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* ------------------------ Bulk action bar ------------------------ */
 
-/* Theme-consistent floating pill (was theme-INVERTED — a light bar in dark
- * mode and vice versa — which read as a theme bug rather than a design). */
+/* Floating "island": frosted, elevated, centred at the bottom of the table
+ * viewport while rows are selected. Theme-consistent (never inverted). */
 .record-table__bulk-bar {
   position: sticky;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  @include inline-flex-center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: token('bg-panel');
+  bottom: 16px;
+  // Block-level flex so the auto margins centre it under the table.
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 14px;
+  background: token('bg-frosted');
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
   color: token('text-primary');
-  border: 1px solid token('border');
-  border-radius: 8px;
-  box-shadow: token('shadow-strong');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-card');
+  box-shadow: token('elevation-2');
   z-index: 5;
   align-self: center;
+  width: fit-content;
+  max-width: calc(100% - 24px);
   margin: 12px auto 0;
-  max-width: fit-content;
+  animation: record-table-island-in token('motion-move') token('ease-appear') both;
+}
+
+@keyframes record-table-island-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
 
 .record-table__bulk-bar-count {
-  font-size: 12px;
+  font-size: token('fs-xs');
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .record-table__bulk-bar-actions {
@@ -2167,15 +2281,21 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__bulk-bar-clear {
+  @include inline-flex-center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: token('fs-xs');
   background: transparent;
-  border: none;
-  color: token('text-tertiary');
+  border: 1px solid transparent;
+  border-left-color: token('border');
+  border-radius: 0 token('r-sm') token('r-sm') 0;
+  color: token('text-secondary');
   cursor: pointer;
-  padding: 0;
-  margin-left: 4px;
 
   &:hover {
     color: token('text-primary');
+    background: token('bg-hover-alpha');
   }
 }
 
@@ -2323,8 +2443,8 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     width: 46vw !important;
     min-width: 0 !important;
   }
-  .record-table__scroll .record-table > tbody > tr > td:first-child,
-  .record-table__virtuoso .record-table > tbody > tr > td:first-child {
+  .record-table__scroll .record-table > tbody > tr:not(.record-table__group-row) > td:first-child,
+  .record-table__virtuoso .record-table > tbody > tr:not(.record-table__group-row) > td:first-child {
     position: sticky;
     left: 0;
     z-index: 1;
@@ -2365,7 +2485,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__scroll-frame.is-scrolled-x,
   .record-table__interaction-root.is-scrolled-x {
     .record-table > thead > tr > th:first-child,
-    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child,
+    .record-table > tbody > tr:not(.record-table__action-row, .record-table__group-row) > td:first-child,
     .record-table > tfoot > tr > td:first-child {
       width: 38px !important;
       overflow: hidden;
@@ -2413,7 +2533,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__scroll-frame.is-scrolled-x,
   .record-table__interaction-root.is-scrolled-x {
     .record-table > thead > tr > th:first-child::after,
-    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child::after,
+    .record-table > tbody > tr:not(.record-table__action-row, .record-table__group-row) > td:first-child::after,
     .record-table > tfoot > tr > td:first-child::after {
       content: "";
       position: absolute;
@@ -2480,17 +2600,18 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
       .record-table__identifier-avatar { display: none; }
     }
   }
+  /* Docked just above the bottom navigation (see _record-table-extras),
+   * full width, wrapping its actions. */
   .record-table__bulk-bar {
-    left: auto;
-    transform: none;
-    max-width: 100%;
-    width: 100%;
+    max-width: none;
+    width: auto;
     box-sizing: border-box;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
+    padding: 8px;
   }
-  .record-table__bulk-bar-count { flex: 1; }
-  .record-table__bulk-bar-clear { order: 1; width: 44px; height: 44px; }
+  .record-table__bulk-bar-count { flex: 1; padding-left: 6px; }
+  .record-table__bulk-bar-clear { order: 1; min-height: 44px; border-left-color: transparent; }
   .record-table__bulk-bar-actions {
     order: 2;
     width: 100%;

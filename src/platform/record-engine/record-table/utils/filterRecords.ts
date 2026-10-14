@@ -1,6 +1,8 @@
 import { FIELD_TYPES, type FieldType } from "../../types/FieldType";
 import type { RecordField, ViewFilter, ViewFilterGroup, ViewFilterOperator } from "../../types/View";
 import { recordMatchesViewFilters } from "./viewFilterGroups";
+import { isDateInRange, isDateRangeValue, resolveDateRange, type DateRangeContext } from "../../../../lib/dateRanges";
+import { todayDateOnly } from "../../../../../shared/dateOnly";
 
 const TEXT_OPERATORS = new Set<ViewFilterOperator>([
   "contains",
@@ -15,19 +17,22 @@ export function filterRecords({
   filters,
   filterGroups,
   searchTerm,
+  dateContext,
 }: {
   records: any[];
   columns: RecordField[];
   filters: ViewFilter[];
   filterGroups?: ViewFilterGroup[];
   searchTerm?: string;
+  /** Organisation calendar for relative date-range filters. */
+  dateContext?: DateRangeContext;
 }) {
   const query = searchTerm?.trim().toLowerCase() ?? "";
 
   return records.filter((record) => {
     if (
       filters.length > 0 &&
-      !recordMatchesViewFilters({ record, columns, filters, filterGroups })
+      !recordMatchesViewFilters({ record, columns, filters, filterGroups, dateContext })
     ) {
       return false;
     }
@@ -49,6 +54,7 @@ export function applyRecordFilter(
   record: any,
   column: RecordField | undefined,
   filter: ViewFilter,
+  dateContext?: DateRangeContext,
 ): boolean {
   if (!column) return true;
 
@@ -60,6 +66,15 @@ export function applyRecordFilter(
   if (filter.operator === "isNotEmpty") return !isEmptyValue(value);
   if (filter.operator === "isTrue") return coerceBoolean(value) === true;
   if (filter.operator === "isFalse") return coerceBoolean(value) === false;
+  if (filter.operator === "between") {
+    if (!isDateRangeValue(target)) return true;
+    const range = resolveDateRange(target, dateContext ?? { today: todayDateOnly() });
+    // A range that cannot resolve (e.g. a fiscal preset with no fiscal year
+    // end recorded) does not hide records.
+    if (!range) return true;
+    if (!range.start && !range.end) return true;
+    return isDateInRange(value, range);
+  }
 
   if (TEXT_OPERATORS.has(filter.operator)) {
     const actual = getSearchableValue(value, fieldType).toLowerCase();

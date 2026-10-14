@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { RecordTableHeaderCell } from "./RecordTableHeaderCell";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
+import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 
 /**
@@ -17,11 +18,11 @@ export function RecordTableHeader({
   hasRowActions?: boolean;
   showDragHandle?: boolean;
 }) {
-  const columns = useRecordTableState((s) => s.columns);
   const selected = useRecordTableState((s) => s.selectedRecordIds);
   const handle = useRecordTableStoreHandle();
   const filtered = useFilteredRecords();
   const { objectMetadata } = useRecordTableContextOrThrow();
+  const { columns: visibleColumns, collapsed } = useRecordTableColumns(objectMetadata.labelIdentifierFieldName);
 
   const allSelected = useMemo(() => {
     if (filtered.length === 0) return false;
@@ -43,8 +44,6 @@ export function RecordTableHeader({
     handle.get().setSelectionAnchorRowIndex(null);
   };
 
-  const visibleColumns = columns.filter((c) => c.isVisible);
-
   return (
     <tr className="record-table__header-row">
       {showDragHandle && <th className="record-table__drag-head" aria-hidden="true" />}
@@ -65,6 +64,7 @@ export function RecordTableHeader({
         <RecordTableHeaderCell
           key={column.viewFieldId}
           recordField={column}
+          collapsed={collapsed.has(column.viewFieldId)}
           isLabelIdentifier={
             column.field.name === objectMetadata.labelIdentifierFieldName
           }

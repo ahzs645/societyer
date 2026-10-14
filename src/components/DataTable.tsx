@@ -305,7 +305,7 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
       </div>
 
       <TableScrollWrap stickyFirst={stickyFirst}>
-      <table className={`table${density === "comfortable" ? " table--comfortable" : ""}${stickyFirst ? " table--sticky-first" : ""}`}>
+      <table className={`table data-table${density === "comfortable" ? " table--comfortable" : ""}${stickyFirst ? " table--sticky-first" : ""}`}>
         <caption className="sr-only">{label}</caption>
         <thead>
           <tr>
