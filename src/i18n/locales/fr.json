@@ -268,6 +268,8 @@
   "demo": {
     "label": "Mode démo.",
     "viewing": "Vous consultez {{name}}, une société de démonstration qui présente l'application.",
+    "viewingCompany": "Vous consultez {{name}}, une entreprise de démonstration qui présente l'application.",
+    "viewingCorporation": "Vous consultez {{name}}, une société par actions de démonstration qui présente l'application.",
     "reseed": "Réinitialiser",
     "wipe": "Effacer"
   },
