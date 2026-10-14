@@ -245,8 +245,12 @@ export function payeeKey(value: string): string {
   return words.slice(0, 3).join(" ");
 }
 
+/** "bc hydro payment" -> "BC Hydro Payment": vowel-less short words read as initialisms. */
 function titleCase(value: string): string {
-  return value.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase("en-CA"));
+  return value
+    .split(" ")
+    .map((word) => (word.length <= 4 && !/[aeiouy]/i.test(word) ? word.toLocaleUpperCase("en-CA") : word.replace(/^\p{L}/u, (letter) => letter.toLocaleUpperCase("en-CA"))))
+    .join(" ");
 }
 
 /**

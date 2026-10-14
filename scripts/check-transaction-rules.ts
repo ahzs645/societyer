@@ -122,6 +122,7 @@ const suggestions = suggestStarterRules(history, []);
 assert.equal(suggestions[0].key, "bc hydro payment");
 assert.deepEqual(suggestions[0].condition, { field: "payee", operator: "contains", value: "bc hydro" }, "condition is the shared leading words");
 assert.equal(suggestions[0].count, 3);
+assert.equal(suggestions[0].label, "BC Hydro Payment", "initialisms keep their capitals");
 assert.equal(suggestions[0].suggestedCategory, "Utilities");
 assert.deepEqual(suggestions[0].transactionIds, ["h1", "h2", "h3"]);
 assert.equal(suggestions[1].key, "square");
