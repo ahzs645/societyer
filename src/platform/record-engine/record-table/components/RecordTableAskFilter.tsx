@@ -5,7 +5,7 @@ import { Segmented } from "@/components/primitives";
 import { ShortcutHint } from "@/components/ShortcutHint";
 import { clearPendingAsk, peekPendingAsk } from "@/lib/nlFilter/bridge";
 import { canMergeFilters, combineFilterTrees, exampleQueries, readRecentQueries, type ApplyMode, type NlParseResult } from "@/lib/nlFilter";
-import { askAiForFilter, useApplyAskFilter, useAskAiAvailable, useAskFilterModel } from "./RecordTableAskFilterModel";
+import { useApplyAskFilter, useAskAi, useAskFilterModel, type AskAiRoute } from "./RecordTableAskFilterModel";
 import type { ViewFilter, ViewFilterGroup } from "../../types";
 
 /**
@@ -27,7 +27,7 @@ export function RecordTableAskFilter({
   const handle = useRecordTableStoreHandle();
   const { fields, context, parse, recentScope } = useAskFilterModel();
   const apply = useApplyAskFilter();
-  const aiAvailable = useAskAiAvailable();
+  const aiModel = useAskAi();
   const [pending] = useState(() => peekPendingAsk(tableId));
   const [query, setQuery] = useState(pending?.query ?? "");
   const [result, setResult] = useState<NlParseResult | null>(() => (pending?.preview && pending.query ? parse(pending.query) : null));
@@ -97,11 +97,11 @@ export function RecordTableAskFilter({
     aiAbort.current?.abort();
     const controller = new AbortController();
     aiAbort.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    const timeout = window.setTimeout(() => controller.abort(), 25_000);
     setAiBusy(true);
     setAiError(null);
     try {
-      const reply = await askAiForFilter(fields, query, context, controller.signal);
+      const reply = await aiModel.ask(query, controller.signal);
       if (!controller.signal.aborted) setResult(reply.status === "none" ? { ...reply, suggestions: examples } : reply);
     } catch (error) {
       if (!controller.signal.aborted || controller === aiAbort.current) {
@@ -160,7 +160,7 @@ export function RecordTableAskFilter({
           mergeable={mergeable}
           mode={effectiveMode}
           onMode={setMode}
-          aiAvailable={aiAvailable}
+          aiRoute={aiModel.route}
           aiBusy={aiBusy}
           aiError={aiError}
           onAskAi={askAi}
@@ -215,7 +215,7 @@ function AskPreview({
   mergeable,
   mode,
   onMode,
-  aiAvailable,
+  aiRoute,
   aiBusy,
   aiError,
   onAskAi,
@@ -229,7 +229,7 @@ function AskPreview({
   mergeable: boolean;
   mode: ApplyMode;
   onMode: (mode: ApplyMode) => void;
-  aiAvailable: boolean;
+  aiRoute: AskAiRoute;
   aiBusy: boolean;
   aiError: string | null;
   onAskAi: () => void;
@@ -312,8 +312,15 @@ function AskPreview({
               <Search size={12} aria-hidden="true" /> Search for &ldquo;{result.query}&rdquo;
             </button>
           )}
-          {aiAvailable && result.status !== "ok" && result.source !== "ai" && (
-            <button type="button" className="record-table__secondary-btn nl-filter__btn" onClick={onAskAi} disabled={aiBusy} aria-busy={aiBusy || undefined}>
+          {aiRoute && result.status !== "ok" && result.source !== "ai" && (
+            <button
+              type="button"
+              className="record-table__secondary-btn nl-filter__btn"
+              onClick={onAskAi}
+              disabled={aiBusy}
+              aria-busy={aiBusy || undefined}
+              title={aiRoute === "workspace" ? "Sends the column names and your request to the workspace AI provider — never any records." : "Sends the column names and your request to this device's AI provider — never any records."}
+            >
               <Sparkles size={12} aria-hidden="true" /> {aiBusy ? "Asking…" : "Ask AI"}
             </button>
           )}
