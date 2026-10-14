@@ -397,12 +397,14 @@ export function CommitmentsPage() {
               return (
                 <div className="timeline-vertical__item is-past" key={event._id}>
                   <span className="timeline-vertical__dot" />
-                  <div className="row">
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.happenedAtISO)}</span>
-                    <Badge tone="success">Completed</Badge>
-                    {event.evidenceStatus && <Badge tone={evidenceStatusTone(event.evidenceStatus)}>{reviewStatusLabel(event.evidenceStatus)}</Badge>}
+                  <div className="commitment-event__head">
+                    <div className="commitment-event__meta">
+                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDate(event.happenedAtISO)}</span>
+                      <Badge tone="success">Completed</Badge>
+                      {event.evidenceStatus && <Badge tone={evidenceStatusTone(event.evidenceStatus)}>{reviewStatusLabel(event.evidenceStatus)}</Badge>}
+                    </div>
                     <button
-                      className="btn btn--ghost btn--sm btn--icon"
+                      className="btn btn--ghost btn--sm btn--icon commitment-event__delete"
                       aria-label={`Delete completion ${event.title}`}
                       onClick={async () => {
                         const ok = await confirm({

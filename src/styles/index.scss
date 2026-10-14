@@ -121,5 +121,7 @@
 // Release QA: compliance, policies, automation, assets and administration pages.
 @use "qa-compliance";
 
+@use "commitments";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
