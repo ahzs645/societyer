@@ -1,9 +1,14 @@
 # RecordTable migration playbook
 
-The legacy `DataTable` component renders hardcoded columns per page. The new
-`RecordTable` (`src/platform/record-engine`) is metadata-driven — columns, sorts,
-filters, and saved views come from Convex tables (`objectMetadata`,
-`fieldMetadata`, `views`, `viewFields`). Migrating a page is roughly five steps.
+The legacy `DataTable` component (hardcoded columns per page) has been retired;
+every register now renders through the metadata-driven `RecordTable`
+(`src/platform/record-engine`) — columns, sorts, filters, and saved views come
+from Convex tables (`objectMetadata`, `fieldMetadata`, `views`, `viewFields`).
+This playbook describes how a table is wired. Most registers can use the
+`ObjectRecordTable` wrapper (metadata load, view toolbar, filter chips and the
+preview sidebar around one `RecordTable`); see `src/pages/inventory/tabs.tsx`.
+Objects whose rows the page assembles (joins, roll-ups) are defined in
+`convex/recordTableDomainObjects.ts`.
 
 Reference migrations that exercise every feature:
 
@@ -70,7 +75,7 @@ in `configJson`.
 
 ## Step 2 — wire up the page
 
-Replace the `<DataTable>` import + usage with:
+Render the table with:
 
 ```tsx
 import {
@@ -158,7 +163,7 @@ Then render the table:
 
 ## Step 4 — bulk actions
 
-Use `<RecordTableBulkBar>` instead of the DataTable `bulkActions` prop. Actions
+Use `<RecordTableBulkBar>` for bulk actions. Actions
 receive `(recordIds, records)`:
 
 ```tsx

@@ -105,6 +105,6 @@ record type supports every mutation.
 3. Data operations: add-new, per-column aggregates, column/view persistence,
    and capability-gated reordering.
 4. Structure: grouped sections, group creation, and large-table hardening.
-5. Migration: replace the remaining legacy `DataTable` record views. Raw
-   report/document tables remain separate unless they represent editable
-   object records.
+5. Migration: done — the legacy `DataTable` was removed and its registers
+   moved onto metadata-driven `ObjectRecordTable`s. Raw report/document
+   tables remain separate unless they represent editable object records.

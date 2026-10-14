@@ -6,17 +6,29 @@ cannot be mistaken for a complete visual audit.
 
 ## Inventory
 
-- 49 `RecordTable` render sites across 39 source files are locked in the
-  acceptance manifest in `scripts/check-record-table-acceptance.ts`.
-- 13 `DataTable` render sites remain across six source files. They are domain
-  tables rather than missed object-record views: Wave API result/detail data
-  (1), grant-source reference search (1), asset audit/report subgrids (3),
-  communications delivery logs (1), organization budget/history records (1),
-  and inventory operational subgrids (6).
-- Those domain tables intentionally keep `DataTable`, which now uses the same
-  32 px compact grid, density/options controls, resizing, search/filter/sort,
-  and mobile frozen-first-column pattern. The inventory check prevents new
-  table render sites from appearing without review.
+- 56 `RecordTable` render sites are locked in the acceptance manifest in
+  `scripts/check-record-table-acceptance.ts`. One of them is the shared
+  `ObjectRecordTable` (`platform/record-engine/record-table/components`), which
+  wraps a RecordTable with its metadata load, view toolbar (search, filters,
+  sort, group by, export, saved views), filter chips and preview sidebar.
+- 15 `ObjectRecordTable` registers are locked in the same manifest: the asset
+  register and its maintenance, custody and physical-inventory subgrids (4),
+  the inventory items, balances, movements, locations, lots and counts (6),
+  the communications delivery log and contact preferences (2), converted
+  org-history motions (1), the grant source library (1) and the Wave cache
+  explorer (1).
+- The legacy `DataTable` (and `useDataTable`, `FilterBar`, `AdvancedFilter`,
+  the local saved-views store and their styles) was removed. Each former
+  DataTable register now has seeded object metadata
+  (`convex/recordTableDomainObjects.ts`): typed fields (currency in cents,
+  dates, selects with option colours, booleans, links), a default system view
+  mirroring the old columns and default sort, and saved views such as asset
+  "Needs attention" / "Disposed", delivery "Problems" / "Email" / "SMS",
+  inventory "Low stock", and one Wave view per resource type. Rows are
+  flattened by the page (joins, roll-ups, computed flags) so every column is
+  sortable, filterable, groupable and exportable; composite cells stay as
+  `renderCell` overrides. Pagination was dropped: RecordTable virtualizes
+  above 40 rows. The check fails if a `DataTable` render or import returns.
 - The demo-only `/demo/app/table-field-lab` route renders one editable column
   for each of the 15 canonical field types.
 

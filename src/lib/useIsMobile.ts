@@ -5,7 +5,7 @@ import { mobileCardMediaQuery } from "./breakpoints";
  * Shared hook: true when the viewport is narrow enough (phone) that data
  * tables need their mobile treatment — a single frozen first column with the
  * rest of the columns scrolling horizontally, and the selection column
- * dropped. Both DataTable and RecordTable use this so they behave the same.
+ * dropped. RecordTable and the page-level mobile layouts share it so they agree.
  */
 export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(() =>
