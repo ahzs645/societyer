@@ -4197,7 +4197,6 @@ const tables: Record<string, any[]> = {
   ],
   reconciliation: [],
   subscriptionPlans,
-  subscriptions: memberSubscriptions,
   fundingSources,
   fundingSourceEvents,
   tasks,

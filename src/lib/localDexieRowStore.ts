@@ -108,6 +108,13 @@ const PROJECTION_RANGE_READ_MIN = 256;
 const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
 const LOCAL_CHANGE_JOURNAL_PRUNE_SLACK = 100;
 
+/**
+ * Tables older demo seeds wrote that no schema defines. `subscriptions` duplicated
+ * every `memberSubscriptions` row under the same ids, so the id → table map
+ * resolved those ids to the alias and member-subscription writes found nothing.
+ */
+const RETIRED_LOCAL_TABLES = new Set(["subscriptions"]);
+
 /** One table of the in-memory cache: rows by id, plus derived views built on demand. */
 type TableState = {
   rows: Map<string, any>;
@@ -1001,7 +1008,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     const external = new Map<string, readonly string[]>();
     const revisions = new Map<string, string>();
     for (const record of localRecords) {
-      if (!record?.table || !record?.value?._id) continue;
+      if (!record?.table || !record?.value?._id || RETIRED_LOCAL_TABLES.has(record.table)) continue;
       const id = record.value._id;
       let rowsById = tableMaps.get(record.table);
       if (record.deletedAtISO) {
