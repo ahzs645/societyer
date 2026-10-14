@@ -28,6 +28,7 @@ import {
 import { useState } from "react";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { MembersTrendCardLazy } from "../features/people/insights/lazy";
 
 const PLAN_INTERVALS = [
   { value: "month", label: "Monthly" },
@@ -199,6 +200,8 @@ export function MembershipPage() {
           )}
         />
       </div>
+
+      <MembersTrendCardLazy societyId={society._id} />
 
       <section style={{ marginBottom: 16 }}>
         <div className="row" style={{ gap: 6, alignItems: "center", margin: "0 0 8px" }}>

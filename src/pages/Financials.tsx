@@ -54,6 +54,7 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
+import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
 
 export function FinancialsPage() {
   const { canWrite, canEditSettings, canManageIntegration } = useFinancePermissions();
@@ -521,6 +522,8 @@ export function FinancialsPage() {
           </div>
         </div>
       )}
+
+      {tab === "overview" && <FinancialInsightsLazy society={society} />}
 
       {tab === "wave" && activeConnection && (
         <WaveCacheExplorer

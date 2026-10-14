@@ -50,6 +50,7 @@ import {
   type FieldErrors,
 } from "../../shared/recordValidation";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { GrantFundingCardLazy } from "../features/grants/insights/lazy";
 
 export function GrantsPage() {
   const { loaded, can } = usePermissions();
@@ -319,6 +320,7 @@ export function GrantsPage() {
       />
 
       <GrantSummaryStats summary={summary} />
+      <GrantFundingCardLazy societyId={society._id} />
 
       {!applicationsTable.loading && !applicationsTable.objectMetadata ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant application" />

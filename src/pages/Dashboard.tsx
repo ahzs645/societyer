@@ -44,6 +44,7 @@ import { RollingNumber } from "../components/RollingNumber";
 import { InfoPopover } from "../components/InfoPopover";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { pluralizeCounts } from "../lib/pluralizeCounts";
+import { DashboardFinanceSnapshotLazy } from "../features/financials/insights/lazy";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -525,6 +526,7 @@ export function Dashboard() {
         </div>
 
         <div className="col" style={{ gap: 16 }}>
+          <DashboardFinanceSnapshotLazy society={society} />
           {canRead("meetings:read") && (
           <div className="card">
             <div className="card__head">
