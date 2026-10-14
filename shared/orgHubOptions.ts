@@ -48,7 +48,7 @@ type OptionSetName =
   | "suffixCompanyNames";
 
 export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
-  entityTypes: ["corporation__business_", "corporation__nfp_", "society"],
+  entityTypes: ["corporation__business_", "corporation__nfp_", "society", "cooperative"],
   entityJurisdictions: [
     "federal__canada_",
     "ontario",
@@ -68,6 +68,21 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "CA-BC",
     "CA-FED-CBCA",
     "CA-ON-OBCA",
+    // Jurisdiction codes the incorporation-Act catalogue stores for Acts
+    // without a reviewed profile (shared/incorporationActs.ts).
+    "CA-FED",
+    "CA-AB",
+    "CA-MB",
+    "CA-NB",
+    "CA-NL",
+    "CA-NS",
+    "CA-ON",
+    "CA-PE",
+    "CA-QC",
+    "CA-SK",
+    "CA-NT",
+    "CA-NU",
+    "CA-YT",
   ],
   actsFormedUnder: [
     "business_corporations_act",
@@ -92,6 +107,25 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "foreign",
     "companies_act__quebec_",
     "societies_act__alberta_",
+    // Added with the incorporation-Act catalogue (shared/incorporationActs.ts).
+    "canada_cooperatives_act",
+    "business_corporations_act__alberta_",
+    "cooperatives_act__alberta_",
+    "cooperative_association_act",
+    "the_cooperatives_act__manitoba_",
+    "business_corporations_act__new_brunswick_",
+    "companies_act__nova_scotia_",
+    "co_operative_associations_act__nova_scotia_",
+    "co_operative_corporations_act__ontario_",
+    "business_corporations_act__prince_edward_island_",
+    "co_operative_associations_act__prince_edward_island_",
+    "cooperatives_act__quebec_",
+    "business_corporations_act__2021__saskatchewan_",
+    "co_operatives_act__1996__saskatchewan_",
+    "business_corporations_act__northwest_territories_",
+    "business_corporations_act__nunavut_",
+    "business_corporations_act__yukon_",
+    "another_act",
   ],
   addressTypes: ["registered_office", "registered_mailing", "records_office", "records_mailing", "mailing", "physical", "other"],
   addressStatuses: ["current", "proposed", "past"],

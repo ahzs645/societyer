@@ -413,7 +413,9 @@ type WorkspaceJurisdiction = string | LegalEntityLike | null | undefined;
 function workspaceConfig(value: WorkspaceJurisdiction) {
   if (typeof value === "object" && value) {
     const code = canonicalizeJurisdictionCode(homeJurisdictionCode(value));
-    if (code === "CA-BC" && isCorporation(value)) return BC_COMPANY_CONFIG;
+    // A BC corporation under another named Act (records only) keeps neutral copy.
+    const act = value.actFormedUnder?.trim().toLowerCase();
+    if (code === "CA-BC" && isCorporation(value)) return !act || ["business_corporations_act__british_columbia_", "business_corporations_act"].includes(act) ? BC_COMPANY_CONFIG : undefined;
     // The CA-BC config is the BC society setup (Societies Online, BC-resident
     // director copy). A BC entity that is neither a society nor a corporation —
     // e.g. a custom existing entity — gets the neutral copy instead.
