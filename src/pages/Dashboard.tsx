@@ -22,28 +22,19 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  Building2,
   Calendar,
-  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  ClipboardCheck,
-  FileCheck2,
-  Info,
   LayoutGrid,
-  ShieldCheck,
-  UploadCloud,
-  UserRoundCheck,
   Users,
   UserCog,
   X,
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
-import { organizationVocabulary, type OrganizationVocabulary } from "../lib/organizationVocabulary";
+import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { automatedComplianceChecksLabel } from "../../shared/entityRuleScope";
-import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
 import { AgreementsExpiringCard } from "../features/agreements/AgreementsExpiringCard";
 import { formatMeetingDate } from "../../shared/meetingDates";
@@ -52,26 +43,8 @@ import { InfoPopover } from "../components/InfoPopover";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { pluralizeCounts } from "../lib/pluralizeCounts";
 import { DashboardFinanceSnapshotLazy } from "../features/financials/insights/lazy";
-
-const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
-
-function readHiddenOnboardingFlowSocietyIds(): string[] {
-  try {
-    const raw = window.localStorage.getItem(HIDDEN_ONBOARDING_FLOW_KEY);
-    const value = raw ? JSON.parse(raw) : [];
-    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
-  try {
-    window.localStorage.setItem(HIDDEN_ONBOARDING_FLOW_KEY, JSON.stringify(ids));
-  } catch {
-    // Storage unavailable: the choice still applies for this visit.
-  }
-}
+import { StatTile } from "../components/StatTile";
+import { useSetupProgress } from "../hooks/useSetupProgress";
 
 export function Dashboard() {
   const society = useSociety();
@@ -103,7 +76,9 @@ export function Dashboard() {
   // null = follow the completion-based default; true/false = user override this session.
   const [onboardingExpandedOverride, setOnboardingExpandedOverride] = useState<boolean | null>(null);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
-  const [hiddenOnboardingFlowSocietyIds, setHiddenOnboardingFlowSocietyIds] = useState(readHiddenOnboardingFlowSocietyIds);
+  // The setup checklist and its dismissal are shared with the shell's setup
+  // pill: hiding the guide in either place hides it in both, live.
+  const setupProgress = useSetupProgress();
 
   if (society === undefined) return <PageLoading variant="cards" />;
   if (society === null) return <SeedPrompt />;
@@ -118,47 +93,36 @@ export function Dashboard() {
     directors: currentRoleHolders.filter((row: any) => row.roleType === "director").length,
     shareholders: currentRoleHolders.filter((row: any) => row.roleType === "shareholder").length,
   };
-  const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings, entityCopy, roleHolderCounts }).filter(step => {
-    const permission = interfaceRouteReadPermission(step.to);
-    return !permission || canRead(permission);
-  });
-  const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
-  const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
-  const onboardingProgress = onboardingSteps.length ? Math.round((completedOnboardingSteps / onboardingSteps.length) * 100) : 0;
-  const onboardingFlowHidden = hiddenOnboardingFlowSocietyIds.includes(society._id);
-  const allOnboardingComplete = completedOnboardingSteps === onboardingSteps.length;
+  const onboardingSteps = setupProgress?.steps ?? [];
+  const completedOnboardingSteps = setupProgress?.completed ?? 0;
+  const nextOnboardingStep = setupProgress?.next ?? onboardingSteps[onboardingSteps.length - 1];
+  const onboardingProgress = setupProgress?.percent ?? 0;
+  const onboardingFlowHidden = setupProgress?.hidden ?? false;
   // Once past halfway, the full 8-tile grid is mostly green checks — collapse to a
   // slim strip by default so it stops dominating the page. Auto-hide once fully done.
-  const onboardingCollapsedByDefault = completedOnboardingSteps / onboardingSteps.length >= 0.5;
+  const onboardingCollapsedByDefault = onboardingSteps.length > 0 && completedOnboardingSteps / onboardingSteps.length >= 0.5;
   const onboardingExpanded = onboardingExpandedOverride ?? !onboardingCollapsedByDefault;
   // Fresh from the new-organization flow: lead with that organization's
   // setup checklist (and a link to its onboarding workflow) instead of the
   // generic setup guide, so there is one checklist, not two.
-  // Hiding is part of the dashboard layout now; the older per-workspace
-  // "hidden setup guide" flag still counts so nobody sees it come back.
-  const showOnboarding = !welcomeWorkflowId && !allOnboardingComplete;
+  const showOnboarding = !welcomeWorkflowId && Boolean(setupProgress && !setupProgress.loading && setupProgress.total > 0 && !setupProgress.allComplete && nextOnboardingStep);
 
-  const setOnboardingFlowHidden = (hidden: boolean) => {
-    const nextIds = hidden
-      ? Array.from(new Set([...hiddenOnboardingFlowSocietyIds, society._id]))
-      : hiddenOnboardingFlowSocietyIds.filter((id) => id !== society._id);
-
-    setHiddenOnboardingFlowSocietyIds(nextIds);
-    writeHiddenOnboardingFlowSocietyIds(nextIds);
-  };
+  const setOnboardingFlowHidden = (hidden: boolean) => setupProgress?.setHidden(hidden);
 
   const moduleLabel = (id: DashboardModuleId) => DASHBOARD_MODULES.find((module) => module.id === id)?.label ?? id;
   const isModuleHidden = (id: DashboardModuleId) => dashboardLayout.hiddenSet.has(id) || (id === "setup" && onboardingFlowHidden);
   const showModule = (id: DashboardModuleId) => {
-    dashboardLayout.setHidden(id, false);
-    if (id === "setup" && onboardingFlowHidden) setOnboardingFlowHidden(false);
+    if (dashboardLayout.hiddenSet.has(id)) dashboardLayout.setHidden(id, false);
+    if (id === "setup") setOnboardingFlowHidden(false);
   };
+  // The setup guide's visibility lives in the shared per-organization flag
+  // (read by the shell's setup pill too); other modules live in the layout.
   const hideModule = (id: DashboardModuleId) =>
     void undoable({
       message: `${moduleLabel(id)} hidden`,
       description: "Bring it back any time from Customize.",
       dedupeKey: `dashboard-hide-${id}`,
-      run: () => dashboardLayout.setHidden(id, true),
+      run: () => (id === "setup" ? setOnboardingFlowHidden(true) : dashboardLayout.setHidden(id, true)),
       undo: () => showModule(id),
       undoneMessage: false,
     });
@@ -352,11 +316,11 @@ export function Dashboard() {
     stats: (
       <div className="stat-grid">
         {corporation
-          ? roleHolders !== undefined && <Stat label="Shareholders" value={roleHolderCounts.shareholders} icon={<Users size={14} />} tooltip="Current shareholders in the role-holder register" />
-          : canRead("members:read") && <Stat label="Active members" value={counts.members} icon={<Users size={14} />} tooltip="with voting rights counted separately in members list" />}
-        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={!entityCopy.societyLaw ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
-        {canRead("meetings:read") && <Stat label="Meetings this year" value={counts.meetingsThisYear} icon={<Calendar size={14} />} />}
-        {canRead("filings:read") && <Stat label="Overdue filings" value={counts.overdueFilings} tone={counts.overdueFilings ? "danger" : "ok"} icon={<AlertTriangle size={14} />} />}
+          ? roleHolders !== undefined && <StatTile label="Shareholders" value={<RollingNumber value={roleHolderCounts.shareholders} />} icon={<Users size={14} />} info="Current shareholders in the role-holder register" />
+          : canRead("members:read") && <StatTile label="Active members" value={<RollingNumber value={counts.members} />} icon={<Users size={14} />} info="Members with voting rights are counted separately in the members list." />}
+        {canRead("directors:read") && <StatTile label="Active directors" value={<RollingNumber value={counts.directors} />} icon={<UserCog size={14} />} info={!entityCopy.societyLaw ? jurisdictionCopy.directorResidencySubtext : society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
+        {canRead("meetings:read") && <StatTile label="Meetings this year" value={<RollingNumber value={counts.meetingsThisYear} />} icon={<Calendar size={14} />} />}
+        {canRead("filings:read") && <StatTile label="Overdue filings" value={<RollingNumber value={counts.overdueFilings} />} tone={counts.overdueFilings ? "danger" : "neutral"} icon={<AlertTriangle size={14} />} />}
       </div>
     ),
     compliance: (
@@ -824,115 +788,6 @@ function DashboardModuleGrid({
   );
 }
 
-function getOnboardingSteps({
-  society,
-  counts,
-  upcomingMeetings,
-  upcomingFilings,
-  overdueFilings,
-  entityCopy,
-  roleHolderCounts,
-}: {
-  society: any;
-  counts: any;
-  upcomingMeetings: any[];
-  upcomingFilings: any[];
-  overdueFilings: any[];
-  entityCopy: OrganizationVocabulary;
-  roleHolderCounts: { directors: number; shareholders: number };
-}) {
-  const corporation = entityCopy.isCorporation;
-  const hasSocietyProfile = Boolean(
-    society?.name && society?.incorporationNumber && society?.registeredOfficeAddress,
-  );
-  const hasPeople = corporation
-    ? roleHolderCounts.directors > 0 && roleHolderCounts.shareholders > 0
-    : counts.members > 0 && counts.directors > 0;
-  // Corporate by-laws are optional (and a BC company has articles only), so the
-  // articles alone complete the corporate step.
-  const hasCoreDocuments = corporation
-    ? Boolean(society?.constitutionDocId)
-    : Boolean(society?.constitutionDocId && society?.bylawsDocId);
-  const hasAgmTiming = Boolean(
-    society?.fiscalYearEnd && upcomingMeetings.some((meeting) => meeting.type === "AGM"),
-  );
-  const hasComplianceCalendar = upcomingFilings.length > 0 || overdueFilings.length > 0 || counts.openDeadlines > 0;
-  const hasMeetings = counts.meetingsThisYear > 0;
-  const hasFilingsEvidence = upcomingFilings.length > 0 || overdueFilings.length > 0;
-  const hasPrivacyRecords = Boolean(society?.privacyPolicyDocId || society?.privacyProgramStatus === "Ready");
-
-  return [
-    {
-      id: "profile",
-      title: `Set up ${entityCopy.organizationNoun} profile`,
-      description: hasSocietyProfile ? "Legal identity and registered office are recorded." : "Add the legal name, incorporation number, and registered office.",
-      to: "/app/society",
-      complete: hasSocietyProfile,
-      icon: Building2,
-    },
-    {
-      id: "people",
-      title: corporation ? "Record directors and shareholders" : "Import members/directors",
-      description: corporation
-        ? hasPeople ? "Director and shareholder registers have current records." : "Add current directors, officers, and shareholders."
-        : hasPeople ? "Member and director registers have active records." : "Bring in current member and director registers.",
-      to: corporation ? "/app/role-holders" : "/app/imports",
-      complete: hasPeople,
-      icon: UserRoundCheck,
-    },
-    {
-      id: "documents",
-      title: corporation ? `Upload ${entityCopy.bcCompany ? "articles" : "articles/by-laws"}` : entityCopy.isSociety ? "Upload constitution/bylaws" : "Upload governing documents",
-      description: hasCoreDocuments
-        ? "Core governing documents are attached."
-        : entityCopy.isSociety ? "Attach the filed constitution and current bylaws." : `Attach the ${entityCopy.governingDocuments}.`,
-      to: "/app/documents",
-      complete: hasCoreDocuments,
-      icon: UploadCloud,
-    },
-    {
-      id: "timing",
-      title: `Confirm fiscal year and ${entityCopy.annualMeeting} timing`,
-      description: hasAgmTiming ? `Fiscal year and the next ${entityCopy.annualMeeting} are visible.` : `Set the fiscal year end and schedule the next ${entityCopy.annualMeeting}.`,
-      to: "/app/compliance-settings",
-      complete: hasAgmTiming,
-      icon: CalendarClock,
-    },
-    {
-      id: "calendar",
-      title: "Create annual compliance calendar",
-      description: hasComplianceCalendar ? "Filing and deadline dates are being tracked." : "Create deadline and filing reminders for the year.",
-      to: "/app/deadlines",
-      complete: hasComplianceCalendar,
-      icon: Calendar,
-    },
-    {
-      id: "meetings",
-      title: "Run meetings and minutes",
-      description: hasMeetings ? "This year's meeting record is underway." : "Schedule meetings and capture minutes, motions, and decisions.",
-      to: "/app/meetings",
-      complete: hasMeetings,
-      icon: ClipboardCheck,
-    },
-    {
-      id: "filings",
-      title: "Track filings and evidence",
-      description: hasFilingsEvidence ? "Filing work is visible on the dashboard." : "Track annual reports, changes, confirmations, and evidence.",
-      to: "/app/filings",
-      complete: hasFilingsEvidence,
-      icon: FileCheck2,
-    },
-    {
-      id: "records",
-      title: "Keep privacy/records inspection-ready",
-      description: hasPrivacyRecords ? "Privacy or inspection readiness is documented." : "Record privacy controls, retention, and inspection readiness.",
-      to: "/app/privacy",
-      complete: hasPrivacyRecords,
-      icon: ShieldCheck,
-    },
-  ];
-}
-
 function relativeShort(iso: string) {
   try {
     const d = iso.length === 10 ? parseISO(iso) : new Date(iso);
@@ -940,45 +795,6 @@ function relativeShort(iso: string) {
   } catch {
     return "";
   }
-}
-
-function Stat({
-  label,
-  value,
-  tooltip,
-  tone,
-  icon,
-}: {
-  label: string;
-  value: number | string;
-  tooltip?: string;
-  tone?: "danger" | "ok";
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className={`stat${tooltip ? " stat--has-tooltip" : ""}`}>
-      <div className="stat__label">
-        {icon} {label}
-      </div>
-      {tooltip && (
-        <Tooltip content={tooltip} placement="top" delay={150}>
-          <button
-            type="button"
-            className="stat__info"
-            aria-label={`${label}: ${tooltip}`}
-          >
-            <Info size={14} aria-hidden="true" />
-          </button>
-        </Tooltip>
-      )}
-      <div
-        className="stat__value"
-        style={{ color: tone === "danger" ? "var(--danger)" : undefined }}
-      >
-        <RollingNumber value={value} />
-      </div>
-    </div>
-  );
 }
 
 function renderFilingRow(f: any) {
