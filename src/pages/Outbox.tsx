@@ -6,6 +6,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { useConfirm } from "../components/Modal";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -73,6 +74,7 @@ export function OutboxPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const confirm = useConfirm();
+  const undoable = useUndoableAction();
   const emails = useQuery(
     api.pendingEmails.list,
     society ? { societyId: society._id } : "skip",
@@ -209,16 +211,18 @@ export function OutboxPage() {
     }
   };
 
+  // Cancelling keeps the email in the outbox, so it is undoable: Undo puts
+  // back the previous status (and notes) with the existing update mutation.
   const doCancel = async (row: PendingEmail) => {
-    const reason = await confirm({
-      title: "Cancel this draft?",
-      message: "The email will stay in the outbox marked cancelled.",
-      confirmLabel: "Cancel draft",
-      tone: "danger",
+    await undoable({
+      message: "Draft cancelled",
+      description: "The email stays in the outbox marked cancelled.",
+      errorMessage: "Could not cancel the draft",
+      dedupeKey: `outbox-cancel-${row._id}`,
+      run: () => cancel({ id: row._id as any }),
+      undo: () => update({ id: row._id as any, patch: { status: row.status, notes: row.notes } }),
+      undoneMessage: "Draft restored",
     });
-    if (!reason) return;
-    await cancel({ id: row._id as any });
-    toast.success("Cancelled");
   };
 
   const doDelete = async (row: PendingEmail) => {

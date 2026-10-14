@@ -17,7 +17,13 @@ import { useDialogFocus } from "../lib/useDialogFocus";
 
 const ClerkAccountButton = lazy(() => import("../auth/ClerkAccountButton"));
 
-export function UserPicker() {
+/**
+ * The active users of the current workspace that the local/demo runtime lets
+ * you act as. `undefined` while loading, and always `undefined` with real
+ * sign-in (your membership decides who you are). Shared by the sidebar picker
+ * and the demo banner's role switcher.
+ */
+export function useLocalActorChoices(): LocalActorChoice[] | undefined {
   const auth = useAuth();
   const society = useSociety();
   const societyId = society?._id;
@@ -32,6 +38,18 @@ export function UserPicker() {
       setUsers(choices.filter((choice) => !choice.status || choice.status === "Active"));
     });
   }, [auth.mode, convex, societyId]);
+  return users;
+}
+
+/** Act as another workspace user (local/demo runtimes) — the picker's own mechanism. */
+export function actAsLocalUser(id: string) {
+  setStoredUserId(id as Id<"users">);
+}
+
+export function UserPicker() {
+  const auth = useAuth();
+  const society = useSociety();
+  const users = useLocalActorChoices();
   const current = useCurrentUser();
   const currentId = useCurrentUserId();
   const [open, setOpen] = useState(false);

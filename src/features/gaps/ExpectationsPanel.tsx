@@ -7,6 +7,7 @@ import { Badge, Drawer, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
 import { useConfirm } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import { useUndoableAction } from "../../hooks/useUndoableAction";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { usePermissions } from "../../hooks/usePermissions";
 import type { CadenceSuggestion } from "../../../shared/continuity";
@@ -61,6 +62,7 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
   const derive = usePermissionedMutation(api.continuity.deriveFromBylawRules, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const [form, setForm] = useState<ExpectationForm | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,7 +171,17 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
                     {canWrite && (
                       <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
                         <button type="button" className="btn btn--sm" onClick={() => { setError(null); setForm({ id: row._id, title: row.title, kind: row.kind, bodyKind: row.bodyKind, committeeId: row.committeeId, rule: row.rule, effectiveFrom: row.effectiveFrom ?? "", effectiveTo: row.effectiveTo ?? "", severity: row.severity, citation: row.citation ?? "", notes: row.notes ?? "" }); }}>Edit</button>
-                        <button type="button" className="btn btn--sm" onClick={() => run(row.status === "archived" ? "Expectation restored" : "Expectation switched off", () => update({ id: row._id, patch: { status: row.status === "archived" ? "active" : "archived" } }))}>
+                        <button type="button" className="btn btn--sm" onClick={() => row.status === "archived"
+                          ? run("Expectation restored", () => update({ id: row._id, patch: { status: "active" } }))
+                          : void undoable({
+                            message: "Expectation switched off",
+                            description: row.title,
+                            errorMessage: "Expectation switched off failed",
+                            dedupeKey: `expectation-off-${row._id}`,
+                            run: () => update({ id: row._id, patch: { status: "archived" } }),
+                            undo: () => update({ id: row._id, patch: { status: row.status } }),
+                            undoneMessage: "Expectation restored",
+                          })}>
                           {row.status === "archived" ? "Restore" : "Switch off"}
                         </button>
                         <button

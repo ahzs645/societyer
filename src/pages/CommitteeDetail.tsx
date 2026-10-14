@@ -68,9 +68,9 @@ export function CommitteeDetailPage() {
     recentCommittee?._id ? `/app/committees/${recentCommittee._id}` : null,
   );
 
-  if (society === undefined) return <PageLoading />;
+  if (society === undefined) return <PageLoading variant="detail" />;
   if (society === null) return <SeedPrompt />;
-  if (detail === undefined) return <PageLoading />;
+  if (detail === undefined) return <PageLoading variant="detail" />;
   if (detail === null) {
     return (
       <div className="page">

@@ -11,6 +11,7 @@ import { Badge, Banner } from "../components/ui";
 import { useConfirm } from "../components/Modal";
 import { RecordNotFound } from "../components/RecordNotFound";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { pluralize } from "../lib/format";
 import {
   bulkAcceptCandidates, groupQueue, latestDecisions, promotionReadiness, reviewFieldsForRecord,
@@ -76,6 +77,7 @@ export function IntakeReviewPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const confirm = useConfirm();
   const canRead = can("settings:read");
   const canWrite = loaded && can("settings:write");
@@ -273,9 +275,20 @@ export function IntakeReviewPage() {
 
   const rejectDocument = async () => {
     if (!societyId || !selectedId) return;
-    const ok = await confirm({ title: "Reject this document?", message: `${detail?.file?.name ?? "This document"} will not be promoted. Its ${pluralize(decisions.size, "field decision")} stay on record and you can reopen it later.`, confirmLabel: "Reject document", tone: "danger" });
-    if (!ok) return;
-    await setExtractionStatus({ societyId, extractionId: selectedId, status: "rejected" }).catch((error: unknown) => toast.error("Could not reject", error instanceof Error ? error.message : undefined));
+    // Rejecting is reversible (the field decisions stay on record), so act
+    // first and offer Undo rather than asking.
+    const extractionId = selectedId;
+    const previousStatus = detail?.extraction?.status && detail.extraction.status !== "rejected" ? detail.extraction.status : "in_review";
+    await undoable({
+      message: "Document rejected",
+      description: `${detail?.file?.name ?? "This document"} will not be promoted. Its ${pluralize(decisions.size, "field decision")} stay on record.`,
+      errorMessage: "Could not reject",
+      dedupeKey: `intake-reject-${extractionId}`,
+      run: () => setExtractionStatus({ societyId, extractionId, status: "rejected" }),
+      undo: () => setExtractionStatus({ societyId, extractionId, status: previousStatus }),
+      undoneMessage: "Document reopened",
+      duration: UNDO_MS,
+    });
   };
 
   // Keyboard: J/K documents, N/P fields, A accept, R reject, E edit, C can't represent, B bulk accept, ? help.

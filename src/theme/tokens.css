@@ -287,6 +287,10 @@
   --motion-fade-fast: 0.1s;   --motion-fade: 0.15s;   --motion-fade-slow: 0.2s;
   --motion-move-fast: 0.15s;  --motion-move: 0.2s;    --motion-move-slow: 0.25s;
   --motion-panel: 0.32s;
+  /* Loading placeholders: a skeleton pulse, and the slower opacity breathe
+     that replaces it under reduced motion. */
+  --motion-pulse: 1.4s;
+  --motion-breathe: 2.8s;
   --ease-fade:      cubic-bezier(0.35, 0, 0.5, 1);
   --ease-move:      cubic-bezier(0.2, 0.4, 0.2, 1);
   --ease-appear:    cubic-bezier(0, 0, 0.2, 1);

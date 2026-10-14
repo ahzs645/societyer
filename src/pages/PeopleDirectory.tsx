@@ -7,7 +7,7 @@ import { useToast } from "../components/Toast";
 import { useSociety } from "../hooks/useSociety";
 import { organizationRuleScope } from "../../shared/entityRuleScope";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Drawer, EmptyState, Field } from "../components/ui";
 import { Contact, GitMerge, MoreHorizontal, Plus, Undo2, UserPlus } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { formatDate } from "../lib/format";
@@ -250,7 +250,15 @@ export function PeopleDirectoryPage() {
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {filteredPeople.length === 0 && <p className="muted" style={{ margin: 0 }}>No one matches “{listQuery}”.</p>}
+            {filteredPeople.length === 0 && (
+              <EmptyState
+                variant="filtered"
+                size="sm"
+                description={`No one matches “${listQuery}”.`}
+                clearFiltersLabel="Clear search"
+                onClearFilters={() => { setListQuery(""); setPage(0); }}
+              />
+            )}
             {filteredPeople.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((p: any) => (
               <div
                 key={p._id}

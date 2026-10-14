@@ -11,6 +11,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
@@ -335,8 +336,8 @@ export function RecordsArchivePage() {
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
   const updateReview = usePermissionedMutation(api.evidenceRegisters.updateReview, canEdit);
-  const confirm = useConfirm();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -356,22 +357,30 @@ export function RecordsArchivePage() {
   const bulkStatus = async (rows: any[], status: string) => {
     const targets = rows.filter((row) => normalizeEvidenceReviewStatus(row.status) !== status);
     if (!targets.length) return;
-    const ok = await confirm({
-      title: `Mark ${targets.length} evidence link${targets.length === 1 ? "" : "s"} ${evidenceReviewStatusLabel(status).toLowerCase()}?`,
-      message: `${targets.length} source evidence row${targets.length === 1 ? "" : "s"} on this page will change status. Linked records and documents are not changed.`,
-      confirmLabel: `Mark ${targets.length}`,
-    });
-    if (!ok) return;
-    let updated = 0;
+    // A status change is reversible row by row, so apply it and offer Undo
+    // (restoring each row's own previous status) instead of confirming first.
+    const updated: any[] = [];
     for (const row of targets) {
       try {
         await updateReview({ table: "sourceEvidence", id: row._id, status });
-        updated += 1;
+        updated.push(row);
       } catch {
         // Keep going; the toast reports the count that changed.
       }
     }
-    toast.success(`${updated} evidence link${updated === 1 ? "" : "s"} updated`);
+    if (!updated.length) {
+      toast.error("Could not update evidence status");
+      return;
+    }
+    await undoable({
+      message: `${updated.length} evidence link${updated.length === 1 ? "" : "s"} marked ${evidenceReviewStatusLabel(status).toLowerCase()}`,
+      description: "Linked records and documents are not changed.",
+      dedupeKey: "evidence-bulk-status",
+      undo: async () => {
+        for (const row of updated) await updateReview({ table: "sourceEvidence", id: row._id, status: normalizeEvidenceReviewStatus(row.status) });
+      },
+      undoneMessage: "Evidence status restored",
+    });
   };
 
   return (

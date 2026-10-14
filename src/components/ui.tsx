@@ -25,6 +25,8 @@ import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/ro
 import { useTranslation } from "react-i18next";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
+// EmptyState variant icons (kept apart from the shared icon import above).
+import { CheckCheck, SearchX } from "lucide-react";
 
 export type Breadcrumb = {
   label: ReactNode;
@@ -98,9 +100,13 @@ export function EmptyState({
   align = "center",
   size,
   className,
+  variant = "default",
+  onClearFilters,
+  clearFiltersLabel = "Clear filters",
 }: {
   icon?: ReactNode;
-  title: ReactNode;
+  /** Optional for the "filtered" and "caught-up" variants, which supply their own. */
+  title?: ReactNode;
   /** Secondary line. Prefer over `children` for new call sites. */
   description?: ReactNode;
   /** Deprecated: kept for backward compatibility — renders in the description slot. */
@@ -109,21 +115,52 @@ export function EmptyState({
   align?: "center" | "start";
   size?: "sm" | "lg";
   className?: string;
+  /**
+   * - "filtered": a search or filter emptied a list that has records.
+   *   Defaults the title to "Nothing matches these filters" and shows a
+   *   primary "Clear filters" button when `onClearFilters` is given.
+   * - "caught-up": the list is empty because the work is done.
+   */
+  variant?: "default" | "filtered" | "caught-up";
+  onClearFilters?: () => void;
+  clearFiltersLabel?: string;
 }) {
   const classes = ["empty-state"];
+  if (variant !== "default") classes.push(`empty-state--${variant}`);
   if (align === "start") classes.push("empty-state--start");
   if (size) classes.push(`empty-state--${size}`);
   if (className) classes.push(className);
-  const body = description ?? children;
+  const preset = EMPTY_STATE_PRESETS[variant];
+  const body = description ?? children ?? preset?.description;
+  const resolvedIcon = icon ?? preset?.icon;
+  const clearAction = variant === "filtered" && onClearFilters ? (
+    <button type="button" className="btn btn--accent btn--sm" onClick={onClearFilters}>
+      {clearFiltersLabel}
+    </button>
+  ) : null;
   return (
-    <div className={classes.join(" ")}>
-      {icon && <div className="empty-state__icon">{icon}</div>}
-      <div className="empty-state__title">{title}</div>
+    <div className={classes.join(" ")} role={variant === "default" ? undefined : "status"}>
+      {resolvedIcon && <div className="empty-state__icon">{resolvedIcon}</div>}
+      <div className="empty-state__title">{title ?? preset?.title}</div>
       {body && <div className="empty-state__description">{body}</div>}
-      {action && <div className="empty-state__actions">{action}</div>}
+      {(clearAction || action) && <div className="empty-state__actions">{clearAction}{action}</div>}
     </div>
   );
 }
+
+const EMPTY_STATE_PRESETS: Record<"default" | "filtered" | "caught-up", { title: string; description: string; icon: ReactNode } | null> = {
+  default: null,
+  filtered: {
+    title: "Nothing matches these filters",
+    description: "Try a different search, or clear the filters to see everything again.",
+    icon: <SearchX size={20} aria-hidden="true" />,
+  },
+  "caught-up": {
+    title: "You're all caught up",
+    description: "Nothing needs your attention here right now.",
+    icon: <CheckCheck size={20} aria-hidden="true" />,
+  },
+};
 
 export type ErrorSummaryItem = {
   fieldId?: string;

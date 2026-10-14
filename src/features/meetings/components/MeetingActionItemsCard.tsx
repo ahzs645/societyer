@@ -9,13 +9,14 @@
  * imported minutes means typing the actions the source assigns ("Terry to
  * revise accounts list") under the agenda item they belong to.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { formatDueDate } from "@/lib/format";
 import { Select } from "@/components/Select";
 import { useConfirm } from "@/components/Modal";
+import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { ACTION_ITEM_STATUSES, ACTION_ITEM_STATUS_LABELS, actionItemStatus, type ActionItemStatus } from "../../../../shared/actionItemStatus";
 import { taskDraftFromActionItem } from "../../../../shared/meetingActionTasks";
 import { PersonNameLinkField, type DirectoryPerson } from "../../../components/PersonNameLinkField";
@@ -79,6 +80,10 @@ export function MeetingActionItemsCard({
   const [rewording, setRewording] = useState<{ key: string; text: string; dueDate: string; section: string } | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const confirm = useConfirm();
+  const undoable = useUndoableAction();
+  // Undo runs after later renders; it re-inserts into the latest lists.
+  const latest = useRef({ sections, topLevelItems });
+  latest.current = { sections, topLevelItems };
   const rows: Row[] = [
     ...topLevelItems.map((item, actionIndex) => ({ item, sectionIndex: null, actionIndex })),
     ...sections.flatMap((section: any, sectionIndex: number) =>
@@ -187,23 +192,38 @@ export function MeetingActionItemsCard({
     }
   };
 
+  // Removing an action item is reversible (it is only a list entry), so it
+  // happens straight away with Undo instead of a confirmation.
   const removeAction = async (row: Row) => {
-    const ok = await confirm({
-      title: "Remove this action item?",
-      message: `“${row.item.text}” will be removed from the minutes${row.item.taskId ? ". Its linked task stays on the task board" : ""}.`,
-      confirmLabel: "Remove action",
-      tone: "danger",
+    if (row.sectionIndex == null && !saveTopLevel) return;
+    const insertAt = <T,>(list: T[], index: number, item: T) => [...list.slice(0, index), item, ...list.slice(index)];
+    await undoable({
+      message: "Action item removed",
+      description: `“${row.item.text}”${row.item.taskId ? ". Its linked task stays on the task board" : ""}.`,
+      errorMessage: "Could not remove the action item",
+      run: async () => {
+        if (row.sectionIndex == null) {
+          await saveTopLevel!(topLevelItems.filter((_item, index) => index !== row.actionIndex));
+          return;
+        }
+        await saveSections(sections.map((section: any, index: number) => index !== row.sectionIndex ? section : {
+          ...section,
+          actionItems: (section.actionItems ?? []).filter((_item: any, actionIndex: number) => actionIndex !== row.actionIndex),
+        }));
+      },
+      undo: async () => {
+        const current = latest.current;
+        if (row.sectionIndex == null) {
+          await saveTopLevel!(insertAt(current.topLevelItems, row.actionIndex, row.item));
+          return;
+        }
+        await saveSections(current.sections.map((section: any, index: number) => index !== row.sectionIndex ? section : {
+          ...section,
+          actionItems: insertAt(section.actionItems ?? [], row.actionIndex, row.item),
+        }));
+      },
+      undoneMessage: "Action item restored",
     });
-    if (!ok) return;
-    if (row.sectionIndex == null) {
-      if (!saveTopLevel) return;
-      await saveTopLevel(topLevelItems.filter((_item, index) => index !== row.actionIndex));
-      return;
-    }
-    await saveSections(sections.map((section: any, index: number) => index !== row.sectionIndex ? section : {
-      ...section,
-      actionItems: (section.actionItems ?? []).filter((_item: any, actionIndex: number) => actionIndex !== row.actionIndex),
-    }));
   };
 
   const saveRewording = async (row: Row) => {

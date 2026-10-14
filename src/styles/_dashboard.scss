@@ -1,0 +1,116 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Customisable dashboard: module grid and the "Customize dashboard" drawer.
+// ============================================================
+
+.dashboard-grid {
+  @include flex-column;
+  gap: token('s-4');
+  min-width: 0;
+  // Columns follow the space the dashboard actually has (the inspector
+  // drawer or a collapsed sidebar change it), not the window width.
+  container: dashboard / inline-size;
+}
+
+.dashboard-module {
+  min-width: 0;
+  // A module whose card renders nothing for this workspace (no expiring
+  // agreements, no continuity gaps) leaves no empty gap.
+  &:empty { display: none; }
+}
+// Modules carry their own cards; clear margins that assumed a fixed layout.
+.dashboard-module > .stat-grid,
+.dashboard-module > .onboarding-flow,
+.dashboard-module > .onboarding-compact {
+  margin-bottom: 0;
+}
+
+// One column by default (phones, tablets, narrow windows): main, then side.
+.dashboard-columns,
+.dashboard-columns__main,
+.dashboard-columns__side {
+  @include flex-column;
+  gap: token('s-4');
+  min-width: 0;
+}
+
+// Two independent stacks once there is room for both (about a 980px window
+// with the sidebar open).
+@container dashboard (min-width: 660px) {
+  .dashboard-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .dashboard-columns--single { grid-template-columns: minmax(0, 1fr); }
+}
+
+// ---------- Customize drawer ----------
+.dashboard-customize__intro {
+  margin: 0 0 token('s-3');
+  font-size: token('fs-sm');
+}
+.dashboard-customize__group + .dashboard-customize__group { margin-top: token('s-4'); }
+.dashboard-customize__group-title {
+  margin: 0 0 token('s-2');
+  font-size: token('fs-xs');
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: token('text-tertiary');
+}
+.dashboard-customize__list {
+  @include flex-column;
+  gap: token('s-1');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dashboard-customize__empty {
+  padding: token('s-3');
+  border: 1px dashed token('border-alpha-strong');
+  border-radius: token('r-md');
+  font-size: token('fs-sm');
+  text-align: center;
+}
+.dashboard-customize__row {
+  @include flex-center;
+  gap: token('s-2');
+  padding: token('s-2');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  transition: background-color token('motion-fade') token('ease-fade'), border-color token('motion-fade') token('ease-fade');
+}
+.dashboard-customize__row.is-hidden .dashboard-customize__main { opacity: 0.7; }
+.dashboard-customize__row.is-dragging { opacity: 0.5; }
+.dashboard-customize__row.is-drop-target {
+  border-color: token('accent');
+  background: token('accent-soft');
+}
+.dashboard-customize__handle {
+  @include inline-flex-center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: token('s-7');
+  height: token('s-8');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: grab;
+}
+.dashboard-customize__handle:hover { background: token('bg-hover-alpha'); color: token('text-primary'); }
+.dashboard-customize__handle:active { cursor: grabbing; }
+.dashboard-customize__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dashboard-customize__moves {
+  @include inline-flex-center;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+.dashboard-customize__reset { margin-right: auto; }

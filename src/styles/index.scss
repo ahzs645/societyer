@@ -95,6 +95,10 @@
 // Financial report tables (statements, trial balance, P&L).
 @use "report-table";
 @use "finance-reports"; // finance chips, drilldown drawer, operational finance tables
+// Undo-first feedback, spotlights, page skeletons, copyable values, demo banner.
+@use "feedback";
+// Customisable dashboard grid and its Customize drawer.
+@use "dashboard";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

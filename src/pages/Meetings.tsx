@@ -24,6 +24,7 @@ import {
 } from "@/platform/record-engine";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
+import { useUndoableAction } from "../hooks/useUndoableAction";
 import { Plus, Calendar, AlertTriangle, CheckCircle2, Copy, Monitor, Pencil, RotateCcw, Tag, Trash2, ExternalLink, Merge } from "lucide-react";
 import type { ToneVariant } from "../components/ui";
 import { type MenuSection } from "../components/Menu";
@@ -96,6 +97,7 @@ export function MeetingsPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const toast = useToast();
+  const undoable = useUndoableAction();
   const [editing, setEditing] = useState<Doc<"meetings"> | null>(null);
   const [mergeFor, setMergeFor] = useState<{ meeting: any; suggested: string[] } | null>(null);
   const [bulk, setBulk] = useState<{ kind: BulkKind; rows: any[]; value: string } | null>(null);
@@ -536,12 +538,23 @@ export function MeetingsPage() {
                   label: "Mark source reviewed",
                   icon: <CheckCircle2 size={12} />,
                   onRun: async (_ids, rows) => {
-                    const ok = await confirm({
-                      title: `Mark ${rows.length} meeting${rows.length === 1 ? "" : "s"} source reviewed?`,
-                      message: "Each meeting and its minutes are recorded as reviewed against their source documents, with you as the reviewer.",
-                      confirmLabel: "Mark reviewed",
+                    // Reversible with "Reopen review", so mark straight away
+                    // and offer Undo instead of a confirmation.
+                    if (!canManage) return;
+                    const changing = rows.filter((row: any) => row.sourceReviewStatus !== "source_reviewed");
+                    await undoable({
+                      message: "Marked source reviewed",
+                      description: `${changing.length} meeting${changing.length === 1 ? "" : "s"} recorded as reviewed against their sources, with you as the reviewer.`,
+                      errorMessage: "Could not mark meetings reviewed",
+                      dedupeKey: "meetings-bulk-review",
+                      run: async () => {
+                        for (const row of changing) await markSourceReview({ id: row._id, status: "source_reviewed", notes: "Marked reviewed from the meetings list." });
+                      },
+                      undo: async () => {
+                        for (const row of changing) await markSourceReview({ id: row._id, status: "imported_needs_review", notes: "Source review reopened (undo) from the meetings list." });
+                      },
+                      undoneMessage: "Source review reopened",
                     });
-                    if (ok) await setReview(rows, "source_reviewed");
                   },
                 },
                 {

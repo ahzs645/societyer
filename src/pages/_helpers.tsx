@@ -13,12 +13,23 @@ import { useTranslation } from "react-i18next";
 import { translateNavLabel } from "../i18n/navLabels";
 import { useDocumentTitle } from "../lib/documentTitle";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
+import { PageSkeleton, type PageSkeletonVariant } from "../components/PageSkeleton";
 
 // The society-loading placeholder shown while `useSociety()` is undefined.
 // Extracted so the ~86 page guards share one element instead of hand-rolling
 // `<div className="page">Loading…</div>` (previously split between "…" and "...").
-export function PageLoading() {
-  return <div className="page">Loading…</div>;
+// It draws the page's outline (header, stats, rows) rather than bare text and
+// announces "Loading <page>…" once to assistive tech.
+export function PageLoading({ variant = "table", label }: { variant?: PageSkeletonVariant; label?: string } = {}) {
+  const location = useLocation();
+  const { t } = useTranslation();
+  const identity = resolveRouteIdentity(location.pathname);
+  const pageName = label ?? (identity ? translateNavLabel(t, identity.label) : null);
+  return (
+    <div className="page">
+      <PageSkeleton variant={variant} label={pageName ? `Loading ${pageName}…` : "Loading…"} />
+    </div>
+  );
 }
 
 export function SeedPrompt() {

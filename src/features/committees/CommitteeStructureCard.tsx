@@ -5,7 +5,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Field } from "../../components/ui";
 import { Select } from "../../components/Select";
-import { useConfirm } from "../../components/Modal";
+import { useUndoableAction } from "../../hooks/useUndoableAction";
 import { useToast } from "../../components/Toast";
 import { usePermissionedMutation } from "../../hooks/usePermissionedMutation";
 import { describeCadenceRule, type CadenceRule } from "../../../shared/continuityRules";
@@ -50,7 +50,7 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
   const committees = useQuery(api.committees.list, { societyId }) as any[] | undefined;
   const updateStructure = usePermissionedMutation(api.committees.updateStructure, canWrite);
   const updateCommittee = usePermissionedMutation(api.committees.update, canWrite);
-  const confirm = useConfirm();
+  const undoable = useUndoableAction();
   const toast = useToast();
   const [form, setForm] = useState<StructureForm | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,9 +242,15 @@ export function CommitteeStructureCard({ committee, canWrite, societyId }: { com
                   <button
                     type="button"
                     className="btn btn--sm btn--danger"
-                    onClick={async () => {
-                      const ok = await confirm({ title: "Remove mandate version?", message: `"${version.title ?? `Version ${index + 1}`}" (from ${version.effectiveFrom}) will be removed when you save.`, confirmLabel: "Remove", tone: "danger" });
-                      if (ok) setForm({ ...form, mandateVersions: form.mandateVersions.filter((_, i) => i !== index) });
+                    onClick={() => {
+                      // Only the unsaved draft changes, so Undo puts it straight back.
+                      void undoable({
+                        message: "Mandate version removed",
+                        description: `"${version.title ?? `Version ${index + 1}`}" (from ${version.effectiveFrom}) is removed when you save.`,
+                        run: () => setForm((current) => current && { ...current, mandateVersions: current.mandateVersions.filter((_, i) => i !== index) }),
+                        undo: () => setForm((current) => current && { ...current, mandateVersions: [...current.mandateVersions.slice(0, index), version, ...current.mandateVersions.slice(index)] }),
+                        undoneMessage: false,
+                      });
                     }}
                   >
                     <Trash2 size={12} /> Remove

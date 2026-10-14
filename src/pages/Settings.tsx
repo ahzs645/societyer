@@ -11,6 +11,7 @@ import { Select } from "../components/Select";
 import { Badge, SettingsShell } from "../components/ui";
 import { Settings as SettingsIcon, AlertTriangle } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
+import { ResetTipsButton } from "../components/Spotlight";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { WorkspaceStorageCard } from "../components/WorkspaceStorageCard";
 import { DocumentStorageSettingsCard } from "../components/DocumentStorageSettingsCard";
@@ -577,6 +578,13 @@ export function SettingsPage() {
             label={t("sidebar.showOperationsDesk")}
             hint={t("sidebar.showOperationsDeskHint")}
           />
+          <div className="settings-tips-row">
+            <div>
+              <div className="settings-tips-row__label">{t("settings.tipsLabel", "In-app tips")}</div>
+              <div className="muted">{t("settings.tipsHint", "Show the feature tips you have dismissed again.")}</div>
+            </div>
+            <ResetTipsButton onReset={() => toast.success(t("settings.tipsReset", "Tips will show again"))} />
+          </div>
         </div>
       </div>
 

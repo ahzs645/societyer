@@ -28,9 +28,9 @@ export function MemberDetailPage() {
   // above the conditional returns to satisfy the rules of hooks.
   useTrackRecentRecord("member", member?._id ? String(member._id) : null, fullNameOrNull, member?._id ? `/app/members/${member._id}` : null);
 
-  if (society === undefined) return <PageLoading />;
+  if (society === undefined) return <PageLoading variant="detail" />;
   if (society === null) return <SeedPrompt />;
-  if (members === undefined) return <PageLoading />;
+  if (members === undefined) return <PageLoading variant="detail" />;
 
   if (!member) {
     return (
