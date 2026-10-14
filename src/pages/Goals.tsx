@@ -15,6 +15,7 @@ import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
 
 const STATUSES = ["NotStarted", "OnTrack", "AtRisk", "OffTrack", "Completed"];
 const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Governance"];
@@ -140,7 +141,7 @@ export function GoalsPage() {
                 <div className="record-table__board-card-field record-table__identifier-secondary">
                   <Badge>{g.category}</Badge>
                 </div>
-                <div className="record-table__board-card-field record-table__identifier-secondary row" style={{ gap: 6 }}>
+                <div className="record-table__board-card-field record-table__identifier-secondary row" style={{ gap: 6, alignItems: "center" }}>
                   <div style={{ flex: 1, minWidth: 0 }}><Progress value={g.progressPercent} /></div>
                   <span style={{ minWidth: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.progressPercent}%</span>
                 </div>
@@ -181,7 +182,7 @@ export function GoalsPage() {
                   )}
                 </div>
                 {g.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{g.description}</div>}
-                <div className="row" style={{ gap: 8 }}>
+                <div className="row" style={{ gap: 8, alignItems: "center" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <Progress value={g.progressPercent} tone={effectiveGoalStatus(g) === "AtRisk" || effectiveGoalStatus(g) === "OffTrack" ? "warn" : undefined} />
                   </div>
@@ -282,32 +283,4 @@ export function GoalsPage() {
   );
 }
 
-/**
- * Display-only status override: a goal past its target date and not already
- * Completed/OffTrack reads as "At risk" even if nobody went back and updated
- * the manually-set status field. Doesn't touch the stored value, so board
- * drag-and-drop (grouped by the literal stored status) is unaffected.
- */
-export function effectiveGoalStatus(goal: { status?: string; targetDate?: string }) {
-  const status = goal.status ?? "NotStarted";
-  if (status === "Completed" || status === "OffTrack" || status === "AtRisk") return status;
-  if (goal.targetDate && new Date(goal.targetDate).getTime() < Date.now()) return "AtRisk";
-  return status;
-}
-
-export function goalTone(status: string) {
-  return status === "OnTrack" || status === "Completed"
-    ? ("success" as const)
-    : status === "AtRisk"
-      ? ("warn" as const)
-      : status === "OffTrack"
-        ? ("danger" as const)
-        : ("neutral" as const);
-}
-export function labelStatus(s: string) {
-  return s === "NotStarted" ? "Not started"
-    : s === "OnTrack" ? "On track"
-    : s === "AtRisk" ? "At risk"
-    : s === "OffTrack" ? "Off track"
-    : s;
-}
+export { effectiveGoalStatus, goalTone, labelStatus };

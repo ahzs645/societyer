@@ -1,4 +1,5 @@
 import { calendarDateKey } from "../lib/calendarDates";
+import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -173,7 +174,7 @@ export function CommitteeDetailPage() {
                   <Link key={g._id} to={`/app/goals/${g._id}`} className="col" style={{ padding: 10, border: "1px solid var(--border)", borderRadius: 6, gap: 6 }}>
                     <div className="row">
                       <strong>{g.title}</strong>
-                      <Badge tone={goalTone(g.status)} >{g.status}</Badge>
+                      <Badge tone={goalTone(effectiveGoalStatus(g))}>{labelStatus(effectiveGoalStatus(g))}</Badge>
                     </div>
                     <div className="row" style={{ gap: 8 }}>
                       <Progress value={g.progressPercent} tone={g.status === "AtRisk" || g.status === "OffTrack" ? "warn" : undefined} />
@@ -367,7 +368,7 @@ export function CommitteeDetailPage() {
             <Link key={g._id} to={`/app/goals/${g._id}`} className="card" style={{ display: "block" }}>
               <div className="card__head">
                 <h2 className="card__title">{g.title}</h2>
-                <Badge tone={goalTone(g.status)}>{g.status}</Badge>
+                <Badge tone={goalTone(effectiveGoalStatus(g))}>{labelStatus(effectiveGoalStatus(g))}</Badge>
               </div>
               <div className="card__body col">
                 <Progress value={g.progressPercent} tone={g.status === "AtRisk" || g.status === "OffTrack" ? "warn" : undefined} />
@@ -559,14 +560,4 @@ export function CommitteeDetailPage() {
       </Drawer>
     </div>
   );
-}
-
-function goalTone(status: string) {
-  return status === "OnTrack" || status === "Completed"
-    ? ("success" as const)
-    : status === "AtRisk"
-      ? ("warn" as const)
-      : status === "OffTrack"
-        ? ("danger" as const)
-        : ("neutral" as const);
 }
