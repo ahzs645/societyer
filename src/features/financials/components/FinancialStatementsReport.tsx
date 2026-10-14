@@ -6,10 +6,12 @@ import { buildAccountingStatements, type CurrencyStatement, type StatementRow } 
 import { FinanceDrilldownDrawer } from "./FinanceDrilldownDrawer";
 import { ledgerLineToDrilldownItem } from "./TrialBalanceReport";
 import { type LedgerLine } from "../lib/ledgerReports";
+import { hasOwnAmounts, rollupAccounts, type RollupNode } from "../lib/accountRollup";
+import type { HierarchyAccount } from "../../../../shared/accountHierarchy";
 
-type Meta = { accountId?: string; scope: "balance" | "period" };
+type Meta = { accountId?: string; /** The account and its sub-accounts, for a rolled-up row. */ accountIds?: string[]; scope: "balance" | "period" };
 type Built = ReturnType<typeof buildAccountingStatements>;
-type Drill = { accountId: string; label: string; currency: string; scope: "balance" | "period"; from: string; to: string } | null;
+type Drill = { accountIds: string[]; label: string; currency: string; scope: "balance" | "period"; from: string; to: string } | null;
 
 function byAccount(rows: StatementRow[] | undefined) {
   return new Map((rows ?? []).map((row) => [row.accountId, row]));
@@ -31,25 +33,44 @@ function sectionRows(
   totalPrior: number | undefined,
   scope: "balance" | "period",
   favourable?: "increase" | "decrease",
+  chart?: HierarchyAccount[],
 ): ReportRow<Meta>[] {
   const now = byAccount(current);
   const before = byAccount(prior);
   const accounts = mergedAccounts(current, prior);
+  // Sub-accounts nest under their parent, whose row carries the rolled-up total.
+  const tree = rollupAccounts(
+    accounts.map((account) => ({
+      accountId: account.accountId,
+      code: account.code || undefined,
+      name: account.name,
+      values: { current: now.get(account.accountId)?.amountCents ?? 0, prior: before.get(account.accountId)?.amountCents ?? 0 },
+    })),
+    chart,
+  );
+  const toRow = (node: RollupNode): ReportRow<Meta> => {
+    const row: ReportRow<Meta> = {
+      id: `${id}:${node.accountId}`,
+      kind: "row",
+      code: node.code || undefined,
+      label: node.name,
+      favourable,
+      values: node.total,
+      meta: { accountId: node.accountId, accountIds: node.accountIds, scope },
+    };
+    if (!node.children.length) return row;
+    const own: ReportRow<Meta>[] = hasOwnAmounts(node)
+      ? [{ id: `${id}:${node.accountId}:own`, kind: "row", label: `${node.name}, other`, title: `${node.name}, posted to the parent account`, favourable, values: node.own!, meta: { accountId: node.accountId, accountIds: [node.accountId], scope } }]
+      : [];
+    return { ...row, title: `${node.name}, including sub-accounts`, children: [...own, ...node.children.map(toRow)] };
+  };
   return [
     {
       id: `section:${id}`,
       kind: "section",
       label,
-      children: accounts.length
-        ? accounts.map((account) => ({
-            id: `${id}:${account.accountId}`,
-            kind: "row" as const,
-            code: account.code || undefined,
-            label: account.name,
-            favourable,
-            values: { current: now.get(account.accountId)?.amountCents ?? 0, prior: before.get(account.accountId)?.amountCents ?? 0 },
-            meta: { accountId: account.accountId, scope },
-          }))
+      children: tree.length
+        ? tree.map(toRow)
         : [{ id: `${id}:none`, kind: "note" as const, label: `No ${label.toLowerCase()} accounts with posted lines.` }],
     },
     {
@@ -68,7 +89,7 @@ export type StatementPeriods = { from: string; to: string; priorFrom: string; pr
  * Columns and rows for one currency's balance sheet and income statement,
  * shared by the on-screen report and the Excel workbook download.
  */
-export function statementTables(statement: CurrencyStatement, priorReport: Built | null, { from, to, priorFrom, priorTo }: StatementPeriods) {
+export function statementTables(statement: CurrencyStatement, priorReport: Built | null, { from, to, priorFrom, priorTo }: StatementPeriods, chart?: HierarchyAccount[]) {
   const comparing = Boolean(priorReport);
   const prior = priorReport?.statements.find((candidate) => candidate.currency === statement.currency);
   const balanceColumns: ReportColumn[] = [
@@ -80,9 +101,9 @@ export function statementTables(statement: CurrencyStatement, priorReport: Built
     ...(comparing ? [{ id: "prior", label: `${formatDate(priorFrom, "MMM d, yyyy")} – ${formatDate(priorTo, "MMM d, yyyy")}`, title: "Prior period" }] : []),
   ];
   const balanceRows: ReportRow<Meta>[] = [
-    ...sectionRows("assets", "Assets", statement.assets, prior?.assets, statement.totalAssetsCents, (comparing ? prior?.totalAssetsCents ?? 0 : undefined), "balance", "increase"),
-    ...sectionRows("liabilities", "Liabilities", statement.liabilities, prior?.liabilities, statement.totalLiabilitiesCents, (comparing ? prior?.totalLiabilitiesCents ?? 0 : undefined), "balance", "decrease"),
-    ...sectionRows("equity", "Net assets / equity", statement.equity, prior?.equity, statement.totalEquityCents, (comparing ? prior?.totalEquityCents ?? 0 : undefined), "balance"),
+    ...sectionRows("assets", "Assets", statement.assets, prior?.assets, statement.totalAssetsCents, (comparing ? prior?.totalAssetsCents ?? 0 : undefined), "balance", "increase", chart),
+    ...sectionRows("liabilities", "Liabilities", statement.liabilities, prior?.liabilities, statement.totalLiabilitiesCents, (comparing ? prior?.totalLiabilitiesCents ?? 0 : undefined), "balance", "decrease", chart),
+    ...sectionRows("equity", "Net assets / equity", statement.equity, prior?.equity, statement.totalEquityCents, (comparing ? prior?.totalEquityCents ?? 0 : undefined), "balance", undefined, chart),
     {
       id: "unclosed",
       kind: "row",
@@ -103,8 +124,8 @@ export function statementTables(statement: CurrencyStatement, priorReport: Built
     },
   ];
   const incomeRows: ReportRow<Meta>[] = [
-    ...sectionRows("income", "Revenue", statement.income, prior?.income, statement.totalIncomeCents, (comparing ? prior?.totalIncomeCents ?? 0 : undefined), "period", "increase"),
-    ...sectionRows("expenses", "Expenses", statement.expenses, prior?.expenses, statement.totalExpenseCents, (comparing ? prior?.totalExpenseCents ?? 0 : undefined), "period", "decrease"),
+    ...sectionRows("income", "Revenue", statement.income, prior?.income, statement.totalIncomeCents, (comparing ? prior?.totalIncomeCents ?? 0 : undefined), "period", "increase", chart),
+    ...sectionRows("expenses", "Expenses", statement.expenses, prior?.expenses, statement.totalExpenseCents, (comparing ? prior?.totalExpenseCents ?? 0 : undefined), "period", "decrease", chart),
     {
       id: "net",
       kind: "total",
@@ -133,7 +154,10 @@ export function FinancialStatementsReport({
   priorTo,
   fundNames,
   fundFiltered,
+  accounts,
 }: {
+  /** Chart of accounts, so sub-accounts nest under their parent. */
+  accounts?: HierarchyAccount[];
   lines: LedgerLine[];
   report: Built;
   priorReport: Built | null;
@@ -150,7 +174,7 @@ export function FinancialStatementsReport({
   const drillItems = useMemo(() => {
     if (!drill) return [];
     return lines
-      .filter((line) => String(line.accountId) === drill.accountId && line.entry.date <= drill.to && (drill.scope === "balance" || line.entry.date >= drill.from))
+      .filter((line) => drill.accountIds.includes(String(line.accountId)) && line.entry.date <= drill.to && (drill.scope === "balance" || line.entry.date >= drill.from))
       .sort((a, b) => a.entry.date.localeCompare(b.entry.date))
       .map((line) => ledgerLineToDrilldownItem(line, fundNames));
   }, [drill, lines, fundNames]);
@@ -159,8 +183,8 @@ export function FinancialStatementsReport({
     if (!row.meta?.accountId) return;
     const isPrior = columnId === "prior";
     setDrill({
-      accountId: row.meta.accountId,
-      label: `${row.code ? `${row.code} · ` : ""}${String(row.label)}`,
+      accountIds: row.meta.accountIds ?? [row.meta.accountId],
+      label: `${row.code ? `${row.code} · ` : ""}${row.title ?? String(row.label)}`,
       currency: statement.currency,
       scope: row.meta.scope,
       from: isPrior ? priorFrom : from,
@@ -173,7 +197,7 @@ export function FinancialStatementsReport({
   return (
     <>
       {report.statements.map((statement) => {
-        const { prior, balanceColumns, periodColumns, balanceRows, incomeRows } = statementTables(statement, priorReport, { from, to, priorFrom, priorTo });
+        const { prior, balanceColumns, periodColumns, balanceRows, incomeRows } = statementTables(statement, priorReport, { from, to, priorFrom, priorTo }, accounts);
         return (
           <div key={statement.currency} className="finance-statement-stack">
             <h3 className="finance-report-heading">{statement.currency} · Balance sheet as at {formatDate(to)}</h3>

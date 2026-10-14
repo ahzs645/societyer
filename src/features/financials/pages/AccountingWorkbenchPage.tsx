@@ -22,6 +22,7 @@ import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
 import { StatTile } from "../../../components/StatTile";
 import { TrialBalanceReport } from "../components/TrialBalanceReport";
+import { ChartOfAccountsCard } from "../components/ChartOfAccountsCard";
 import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
 import { JournalLinesGrid, useJournalLinesGrid } from "../components/JournalLinesGrid";
 import { useConfirm } from "../../../components/Modal";
@@ -617,6 +618,8 @@ export function AccountingWorkbenchPage() {
           </div>
         </section>
       </div>
+
+      <ChartOfAccountsCard accounts={accounts as any} canWrite={canWrite} />
 
       <section className="card">
         <div className="card__head">
