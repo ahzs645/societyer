@@ -1,5 +1,6 @@
 import type { LegalEntityLike } from "../../shared/organizationDomain";
 import { governancePageGuidance, type GovernanceGuidanceTopic } from "../lib/governancePageGuidance";
+import { useId } from "react";
 import { ChevronDown } from "lucide-react";
 import { CitationBadge } from "./CitationTooltip";
 import { useIsMobile } from "../lib/useIsMobile";
@@ -16,9 +17,12 @@ export function LegalGovernanceGuidance({ organization, topic }: { organization:
   // The guidance runs several paragraphs; on phones it starts folded so the
   // register itself is on the first screen.
   const isMobile = useIsMobile();
-  return <details className="card legal-guidance" open={!isMobile}>
+  const headingId = useId();
+  // The section keeps a labelled region for assistive technology; the
+  // disclosure inside it only controls whether the body is shown.
+  return <section className="legal-guidance-region" aria-labelledby={headingId}><details className="card legal-guidance" open={!isMobile}>
     <summary className="card__head legal-guidance__head">
-      <h2 className="card__title">{TITLES[topic]}</h2>
+      <h2 className="card__title" id={headingId}>{TITLES[topic]}</h2>
       {sources.length > 0 && <span className="card__subtitle">{sources.length} {sources.length === 1 ? "source" : "sources"}</span>}
       <ChevronDown size={14} className="legal-guidance__chevron" aria-hidden="true" />
     </summary>
@@ -34,5 +38,5 @@ export function LegalGovernanceGuidance({ organization, topic }: { organization:
       {topic === "court_orders" && <p className="muted">Link the entered order and record its court or tribunal, operative terms, filing requirements and deadlines. The order and applicable law determine who may inspect it and how long it must be kept.</p>}
       {topic === "qualifications" && <p className="muted">Qualifications apply continuously. An annual attestation is an optional governance practice unless the organization has separately adopted it. An unchecked item needs review; it does not by itself establish disqualification.</p>}
     </div>
-  </details>;
+  </details></section>;
 }
