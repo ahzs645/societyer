@@ -168,7 +168,7 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.getByRole("button", { name: "Add comment", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "In review", exact: true })).toBeDisabled();
   await openNavigation(page);
-  const recordsGroup = page.getByRole("button", { name: /^Governance records/ }).first();
+  const recordsGroup = page.getByRole("button", { name: "Compliance", exact: true }).first();
   if (await recordsGroup.getAttribute("aria-expanded") !== "true") await recordsGroup.click();
   await page.getByRole("link", { name: "Annual filings", exact: true }).click();
   await expect(page.getByRole("button", { name: "Add filing", exact: true })).toBeDisabled();
@@ -201,7 +201,7 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.getByRole("button", { name: "Add record", exact: true })).toBeDisabled();
   for (const promote of await page.getByRole("button", { name: "Promote", exact: true }).all()) await expect(promote).toBeDisabled();
   await openNavigation(page);
-  await page.getByRole("link", { name: "Obligations", exact: true }).click();
+  await page.getByRole("link", { name: "Obligations", exact: true }).first().click();
   for (const action of await page.getByRole("button", { name: /^(Track|Review|Dismiss|Reopen|Packet)$/ }).all()) await expect(action).toBeDisabled();
   expect(errors).toEqual([]);
 });
