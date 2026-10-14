@@ -138,5 +138,8 @@
 @use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
 @use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
 
+// Transactions surface: detail panel, receipt drop zone, payee names.
+@use "transaction-panel";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

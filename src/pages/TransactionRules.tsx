@@ -25,6 +25,7 @@ import { RuleEditorDrawer } from "../features/financials/rules/RuleEditorDrawer"
 import { conditionToDraft, draftFromRule, emptyRuleDraft, type RuleEditorDraft } from "../features/financials/rules/ruleDraft";
 import type { ApplyRulesResult, RuleRow, RulesWorkspace } from "../features/financials/rules/types";
 import { useUndoRuleBatch } from "../features/financials/rules/useUndoRuleBatch";
+import { PayeeNamesSection } from "../features/financials/transactions/PayeeNamesSection";
 
 /**
  * Transaction categorisation rules: an ordered list ("If … then …") applied
@@ -402,6 +403,7 @@ export function TransactionRulesPage() {
         </section>
       )}
 
+      {workspace && <PayeeNamesSection societyId={society._id} />}
       {workspace && (
         <p className="muted rule-footnote">
           Rules apply to new bank lines on <Link to="/app/financials?tab=transactions">CSV import</Link>. Editing a category by hand

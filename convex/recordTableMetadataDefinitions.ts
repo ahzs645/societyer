@@ -2818,7 +2818,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           ],
         },
       },
-      { name: "memo", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote", isReadOnly: true },
+      { name: "memo", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
       {
         name: "receiptStatus",
         label: "Receipt",
@@ -2829,6 +2829,38 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           options: [
             { value: "attached", label: "Attached", color: "green" },
             { value: "missing", label: "Missing", color: "red" },
+          ],
+        },
+      },
+      // How the category was set. Lines with a category but no stamp came in
+      // categorised from the bank feed or bookkeeping sync ("Imported").
+      {
+        name: "categorizedBy",
+        label: "Categorised by",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Zap",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "rule", label: "Rule", color: "purple" },
+            { value: "suggestion", label: "Suggested", color: "blue" },
+            { value: "manual", label: "Manual", color: "gray" },
+            { value: "imported", label: "Imported", color: "teal" },
+          ],
+        },
+      },
+      // Derived on the transactions page: why a line needs someone's attention.
+      {
+        name: "attention",
+        label: "Needs attention",
+        fieldType: FIELD_TYPES.MULTI_SELECT,
+        icon: "AlertTriangle",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "uncategorized", label: "No category", color: "amber" },
+            { value: "receipt", label: "Receipt missing", color: "red" },
+            { value: "unreviewed", label: "Not reviewed", color: "blue" },
           ],
         },
       },
@@ -2877,6 +2909,16 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         name: "Missing receipts",
         sorts: [{ fieldName: "date", direction: "desc" }],
         filters: [{ fieldName: "receiptStatus", operator: "in", value: ["missing"] }],
+      },
+      {
+        name: "Needs attention",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "attention", operator: "isNotEmpty", value: null }],
+      },
+      {
+        name: "Categorised by rule",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "categorizedBy", operator: "in", value: ["rule"] }],
       },
     ],
   },

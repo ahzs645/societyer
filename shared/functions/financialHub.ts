@@ -18,6 +18,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 import { fiscalWindow } from "./treasury";
 import { todayDateOnly } from "../dateOnly";
+import { RULE_TOUCHED_FIELDS, snapshotRuleFields } from "../transactionRules";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -516,8 +517,9 @@ export async function getConnectionPortable(ctx: PortableQueryCtx, { id }: { id:
 }
 
 // Edit a single imported/synced transaction. Only the user-correctable fields
-// (date, description, category, counterparty, amount) are patchable; the
-// account binding and external/source identifiers stay immutable.
+// (date, description, category, counterparty, amount, notes and the receipt
+// document) are patchable; the account binding and external/source
+// identifiers stay immutable. The receipt status follows the receipt document.
 export async function updateTransactionPortable(
   ctx: PortableMutationCtx,
   {
@@ -532,6 +534,9 @@ export async function updateTransactionPortable(
       category?: string;
       counterparty?: string;
       amountCents?: number;
+      memo?: string;
+      /** A document id attaches it as the receipt; null removes the receipt. */
+      receiptDocumentId?: string | null;
     };
     actingUserId?: string;
   },
@@ -541,12 +546,127 @@ export async function updateTransactionPortable(
   await requireSocietyMembership(ctx, String(row.societyId));
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
   await getOwned(ctx, "financialTransactions", id, String(row.societyId));
+  const { receiptDocumentId, memo, ...rest } = patch;
+  const next: Record<string, unknown> = { ...rest };
+  if (memo !== undefined) {
+    const trimmed = String(memo).trim();
+    if (trimmed.length > 2000) throw new Error("Keep notes under 2,000 characters.");
+    next.memo = trimmed || undefined;
+  }
+  if (receiptDocumentId !== undefined) {
+    if (receiptDocumentId) {
+      await getOwned(ctx, "documents", receiptDocumentId, String(row.societyId));
+      next.receiptDocumentId = receiptDocumentId;
+      next.receiptStatus = "attached";
+    } else {
+      next.receiptDocumentId = undefined;
+      next.receiptStatus = "missing";
+    }
+  }
   // A hand-edited category replaces any rule provenance.
   const provenance = patch.category !== undefined && patch.category !== row.category
     ? { categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined }
     : {};
-  await ctx.db.patch(id, { ...patch, ...provenance });
+  await ctx.db.patch(id, { ...next, ...provenance });
   return id;
+}
+
+/** Most transactions one bulk edit (or its undo) may touch. */
+export const BULK_TRANSACTION_LIMIT = 500;
+
+const BULK_SNAPSHOT_FIELDS = [...RULE_TOUCHED_FIELDS, "ruleApplication"] as const;
+
+/**
+ * Apply one change to several transactions (the bulk island on the
+ * transactions table): set a category, assign a fund (null clears it) or mark
+ * reviewed. Returns each changed line's previous values so the client can
+ * offer Undo through `restoreTransactions`. Lines from another organization
+ * are only counted as skipped, never named.
+ */
+export async function bulkUpdateTransactionsPortable(
+  ctx: PortableMutationCtx,
+  {
+    societyId,
+    ids,
+    patch,
+    actingUserId,
+  }: {
+    societyId: string;
+    ids: string[];
+    patch: { category?: string; fundRestrictionId?: string | null; reviewed?: boolean };
+    actingUserId?: string;
+  },
+) {
+  await requireSocietyMembership(ctx, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  const unique = [...new Set(ids.map(String))];
+  if (unique.length === 0) throw new Error("Select at least one transaction.");
+  if (unique.length > BULK_TRANSACTION_LIMIT) throw new Error(`Edit at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
+  const category = patch.category === undefined ? undefined : String(patch.category).trim();
+  if (patch.category !== undefined && !category) throw new Error("Choose a category.");
+  if (category === undefined && patch.fundRestrictionId === undefined && !patch.reviewed) throw new Error("Nothing to change.");
+  if (patch.fundRestrictionId) await getOwned(ctx, "fundRestrictions", patch.fundRestrictionId, societyId);
+  const nowISO = new Date().toISOString();
+  const previous: Array<{ id: string; values: Record<string, unknown> }> = [];
+  let skipped = 0;
+  for (const id of unique) {
+    const row: any = await ctx.db.get(id, "financialTransactions");
+    if (!row || String(row.societyId) !== String(societyId)) {
+      skipped += 1;
+      continue;
+    }
+    const values: Record<string, unknown> = snapshotRuleFields(row);
+    if (row.ruleApplication) values.ruleApplication = row.ruleApplication;
+    const next: Record<string, unknown> = {};
+    if (category !== undefined && category !== row.category) {
+      Object.assign(next, { category, categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined });
+    }
+    if (patch.fundRestrictionId !== undefined && (patch.fundRestrictionId || undefined) !== row.fundRestrictionId) {
+      next.fundRestrictionId = patch.fundRestrictionId || undefined;
+    }
+    if (patch.reviewed && !row.reviewedAtISO) next.reviewedAtISO = nowISO;
+    if (Object.keys(next).length === 0) continue;
+    await ctx.db.patch(row._id, next);
+    previous.push({ id: String(row._id), values });
+  }
+  return { updated: previous.length, skipped, previous };
+}
+
+/** Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned. */
+export async function restoreTransactionsPortable(
+  ctx: PortableMutationCtx,
+  {
+    societyId,
+    rows,
+    actingUserId,
+  }: {
+    societyId: string;
+    rows: Array<{ id: string; values: Record<string, unknown> }>;
+    actingUserId?: string;
+  },
+) {
+  await requireSocietyMembership(ctx, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  if (rows.length > BULK_TRANSACTION_LIMIT) throw new Error(`Restore at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
+  let restored = 0;
+  let skipped = 0;
+  for (const entry of rows) {
+    const row: any = await ctx.db.get(String(entry.id), "financialTransactions");
+    if (!row || String(row.societyId) !== String(societyId)) {
+      skipped += 1;
+      continue;
+    }
+    const values = entry.values ?? {};
+    if (values.fundRestrictionId) await getOwned(ctx, "fundRestrictions", String(values.fundRestrictionId), societyId);
+    if (values.accountingAccountId) await getOwned(ctx, "financialAccounts", String(values.accountingAccountId), societyId);
+    if (values.ruleId && !(await ctx.db.get(String(values.ruleId), "transactionRules"))) delete (values as any).ruleId;
+    if (values.ruleId) await getOwned(ctx, "transactionRules", String(values.ruleId), societyId);
+    const patch: Record<string, unknown> = {};
+    for (const field of BULK_SNAPSHOT_FIELDS) patch[field] = values[field] ?? undefined;
+    await ctx.db.patch(row._id, patch);
+    restored += 1;
+  }
+  return { restored, skipped };
 }
 
 // A small derived query for the dashboard — balances by purpose/category.

@@ -160,6 +160,7 @@
     "test:dividends": "tsx scripts/check-dividends.ts",
     "test:service-providers": "tsx scripts/check-service-providers.ts",
     "test:register-diff": "tsx scripts/check-register-diff.ts",
+    "test:transactions-surface": "tsx scripts/check-transactions-surface.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh",
     "backup:runtime:k8s": "./scripts/backup-runtime-data-from-k8s.sh",
