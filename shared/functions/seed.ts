@@ -16,6 +16,10 @@ import { syncMotionsForMinutes } from "./minutes";
 import { syncAgreementDeadlines } from "./agreements";
 import { addDaysIso } from "../agreements";
 import { todayDateOnly } from "../dateOnly";
+import { buildDemoBankFeed, type DemoFeedAccountKey } from "../demoData/bankFeed";
+import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../demoData/members";
+import { addDays, createRng, demoAsOfDate } from "../demoData/prng";
+import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel } from "../demoData/work";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -70,7 +74,11 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     ["Oliver", "Kim", "Regular", true],
   ] as const;
   const memberIds: Record<string, any> = {};
+  // The demo's "today" for generated activity; history before it is fixed.
+  const demoAsOf = demoAsOfDate("2026-04-21", todayDateOnly());
+  const namedMemberRows: Array<{ firstName: string; lastName: string; membershipClass: string; status: string; joinedAt: string }> = [];
   for (const [first, last, klass, voting] of memberData) {
+    const joinedAt = deterministicPastDate(`seed-member:${first} ${last}`, demoAsOf, 4);
     const id = await ctx.db.insert("members", {
       societyId,
       firstName: first,
@@ -78,10 +86,34 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       email: `${first.toLowerCase()}.${last.toLowerCase().replace(/\W/g, "")}@example.ca`,
       membershipClass: klass,
       status: "Active",
-      joinedAt: randomPastDate(4),
+      joinedAt,
       votingRights: voting,
     });
     memberIds[`${first} ${last}`] = id;
+    namedMemberRows.push({ firstName: first, lastName: last, membershipClass: klass, status: "Active", joinedAt });
+  }
+  // The rest of the register: deterministic fictional members with varied
+  // classes, join dates, departures and renewal states.
+  const generatedMembers = buildDemoMembers({
+    count: 75,
+    asOf: demoAsOf,
+    excludeNames: memberData.map(([first, last]) => `${first} ${last}`),
+  });
+  const generatedMemberIds = new Map<string, any>();
+  for (const seed of generatedMembers) {
+    const id = await ctx.db.insert("members", {
+      societyId,
+      firstName: seed.firstName,
+      lastName: seed.lastName,
+      email: `${seed.firstName}.${seed.lastName}`.toLowerCase().replace(/[^a-z.]+/g, "") + "@example.ca",
+      membershipClass: seed.membershipClass,
+      status: seed.status,
+      joinedAt: seed.joinedAt,
+      leftAt: seed.leftAt,
+      votingRights: seed.votingRights,
+      notes: seed.notes,
+    });
+    generatedMemberIds.set(seed.key, id);
   }
 
   // Directors
@@ -430,6 +462,18 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     done: false,
     recurrence: "Quarterly",
   });
+  for (const seed of DEMO_DEADLINES) {
+    await ctx.db.insert("deadlines", {
+      societyId,
+      title: seed.title,
+      description: seed.description,
+      dueDate: addDays(demoAsOf, seed.dueInDays),
+      category: seed.category,
+      status: seed.done ? "complete" : "open",
+      done: seed.done,
+      recurrence: seed.recurrence ?? "None",
+    });
+  }
 
   // Documents
   const constitutionId = await ctx.db.insert("documents", {
@@ -521,6 +565,21 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     flaggedForDeletion: true,
     tags: ["archive"],
   });
+  for (const seed of DEMO_DOCUMENTS) {
+    await ctx.db.insert("documents", {
+      societyId,
+      title: seed.title,
+      category: seed.category,
+      librarySection: seed.librarySection,
+      fileName: seed.fileName,
+      mimeType: seed.fileName.endsWith(".csv") ? "text/csv" : seed.fileName.endsWith(".xlsx") ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/pdf",
+      retentionYears: seed.retentionYears,
+      reviewStatus: seed.reviewStatus,
+      createdAtISO: `${addDays(demoAsOf, -seed.createdDaysAgo)}T17:00:00.000Z`,
+      flaggedForDeletion: false,
+      tags: seed.tags,
+    });
+  }
 
   await ctx.db.patch(societyId, {
     constitutionDocId: constitutionId,
@@ -670,11 +729,23 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     createdAtISO: nowISO,
     updatedAtISO: nowISO,
   });
-  // Finance ledger: a general (unrestricted) operating account and a
-  // restricted fund account, plus a year of categorized transactions. The
-  // year-end Organization Revenue & Expense statement is derived from these:
-  // each line is split General Fund vs Restricted Funds by the account's
-  // isRestricted flag.
+  // Finance ledger: a general (unrestricted) operating account, a restricted
+  // fund account and the organization Visa, carrying a generated bank feed of
+  // about eighteen months (shared/demoData/bankFeed.ts). The year-end
+  // Organization Revenue & Expense statement is derived from these: each line
+  // is split General Fund vs Restricted Funds by the account's isRestricted
+  // flag, and card payments (category "Transfer") are skipped.
+  const bankFeed = buildDemoBankFeed({
+    start: "2025-04-01",
+    asOf: demoAsOf,
+    duesPayments: buildDemoDuesPayments([...namedMemberRows, ...generatedMembers], { start: "2025-04-01", asOf: demoAsOf }),
+    donorNames: [...namedMemberRows, ...generatedMembers].filter((row) => row.status === "Active").map((row) => `${row.firstName} ${row.lastName}`),
+    auditorName: "Maple Leaf CPA LLP",
+    cardLast4: "4417",
+    // Opening balances at the start of FY 2025-2026: restricted cash equals
+    // the restricted funds in the approved FY 2024-2025 statements.
+    balanceAt: { date: "2025-03-31", operating: 3490000, restricted: 1200000 },
+  });
   const financialConnectionId = await ctx.db.insert("financialConnections", {
     societyId,
     provider: "demo",
@@ -692,7 +763,7 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     name: "Operating chequing",
     currency: "CAD",
     accountType: "Bank",
-    balanceCents: 3490000,
+    balanceCents: bankFeed.balances.operating,
     isRestricted: false,
     sourceSystem: "societyer",
   });
@@ -704,53 +775,53 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     name: "Restricted programs fund",
     currency: "CAD",
     accountType: "Bank",
-    balanceCents: 1200000,
+    balanceCents: bankFeed.balances.restricted,
     isRestricted: true,
     restrictedPurpose: "Restricted program funding",
     sourceSystem: "societyer",
   });
-  const orgLedger: Array<[string, string, number, string]> = [
-    // [date, description, amountCents (+rev/-exp), category] — General Fund
-    ["2025-06-30", "Membership dues", 180000, "Membership fees"],
-    ["2025-09-15", "Program registration fees", 1500000, "Registration fees"],
-    ["2025-12-20", "Year-end donations", 250000, "Donations"],
-    ["2025-11-01", "Fall fundraiser", 320000, "Fundraising"],
-    ["2026-03-31", "Bank interest", 12500, "Interest & other"],
-    ["2025-07-15", "Staff wages", -1300000, "Wages & benefits"],
-    ["2025-05-01", "Hall rent", -400000, "Rent"],
-    ["2025-04-15", "Liability insurance", -150000, "Insurance"],
-    ["2025-10-10", "Office supplies", -120000, "Office supplies"],
-    ["2025-08-20", "Program advertising", -75000, "Advertising"],
-    ["2026-01-31", "Utilities", -90000, "Utilities"],
-  ];
-  let orgTxnSeq = 0;
-  for (const [date, description, amountCents, category] of orgLedger) {
+  const cardAccountId = await ctx.db.insert("financialAccounts", {
+    societyId,
+    connectionId: financialConnectionId,
+    externalId: "organization-visa",
+    code: "2100",
+    name: "Organization Visa",
+    currency: "CAD",
+    accountType: "Credit",
+    subtype: "credit_card",
+    // Negative: what the society owes on the card right now.
+    balanceCents: bankFeed.balances.card,
+    isRestricted: false,
+    sourceSystem: "societyer",
+    normalBalance: "credit",
+  });
+  const feedAccountIds: Record<DemoFeedAccountKey, any> = {
+    operating: operatingAccountId,
+    restricted: restrictedAccountId,
+    card: cardAccountId,
+  };
+  for (const row of bankFeed.rows) {
     await ctx.db.insert("financialTransactions", {
       societyId,
       connectionId: financialConnectionId,
-      accountId: operatingAccountId,
-      externalId: `org-txn-${orgTxnSeq++}`,
-      date,
-      description,
-      amountCents,
-      category,
+      accountId: feedAccountIds[row.account],
+      externalId: `feed-${row.key}`,
+      date: row.date,
+      description: row.description,
+      amountCents: row.amountCents,
+      category: row.category,
+      counterparty: row.counterparty,
+      method: row.method,
+      status: row.status,
+      memo: row.memo,
+      receiptStatus: row.receiptStatus,
     });
   }
-  const restrictedLedger: Array<[string, string, number, string]> = [
-    ["2025-05-15", "Restricted program grant received", 500000, "Program grant"],
-    ["2026-02-28", "Restricted program delivery", -380000, "Program delivery"],
-  ];
-  for (const [date, description, amountCents, category] of restrictedLedger) {
-    await ctx.db.insert("financialTransactions", {
-      societyId,
-      connectionId: financialConnectionId,
-      accountId: restrictedAccountId,
-      externalId: `org-txn-${orgTxnSeq++}`,
-      date,
-      description,
-      amountCents,
-      category,
-    });
+  // Budget lines: the prior year (labelled like the statements) and the
+  // current year (labelled like the Treasurer page, by the year it ends).
+  for (const [category, priorCents, currentCents, notes] of DEMO_BUDGET_PLAN) {
+    await ctx.db.insert("budgets", { societyId, fiscalYear: "2025-2026", category, plannedCents: priorCents, notes });
+    await ctx.db.insert("budgets", { societyId, fiscalYear: fiscalYearEndLabel(demoAsOf), category, plannedCents: currentCents, notes });
   }
 
   // Committees
@@ -1139,14 +1210,40 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     ["samuel.ahmadi@example.ca", "Samuel Ahmadi", "Member"],
     ["volunteer@riversidecs.ca", "Volunteer account", "Viewer"],
   ] as const;
+  const userIdsByName = new Map<string, any>();
   for (const [email, name, role] of userSeed) {
-    await ctx.db.insert("users", {
+    const userId = await ctx.db.insert("users", {
       societyId,
       email,
       displayName: name,
       role,
       status: "Active",
       createdAtISO: new Date().toISOString(),
+    });
+    userIdsByName.set(name, userId);
+  }
+
+  // Generated workload so every task status, priority, due bucket and owner
+  // scope has rows. Owners are roles mapped onto this society's officers.
+  const taskOwners = { owner: "Elena Vasquez", treasurer: "Priya Shah", secretary: "Jordan Nakamura" } as const;
+  const taskCommittees = { programs: programsCommitteeId, finance: financeCommitteeId, governance: governanceCommitteeId };
+  for (const seed of DEMO_TASKS) {
+    const ownerName = seed.owner ? taskOwners[seed.owner] : undefined;
+    const ownerId = ownerName ? userIdsByName.get(ownerName) : undefined;
+    await ctx.db.insert("tasks", {
+      societyId,
+      title: seed.title,
+      description: seed.description,
+      status: seed.status,
+      priority: seed.priority,
+      assignee: ownerName ?? seed.assignee,
+      responsibleUserIds: ownerId ? [ownerId] : undefined,
+      dueDate: seed.dueInDays === undefined ? undefined : addDays(demoAsOf, seed.dueInDays),
+      committeeId: seed.committee ? taskCommittees[seed.committee] : undefined,
+      tags: seed.tags,
+      checklist: seed.checklist?.map((step, index) => ({ id: `${seed.key}-${index}`, ...step })),
+      createdAtISO: `${addDays(demoAsOf, -seed.createdDaysAgo)}T16:00:00.000Z`,
+      completedAt: seed.completedDaysAgo === undefined ? undefined : `${addDays(demoAsOf, -seed.completedDaysAgo)}T18:00:00.000Z`,
     });
   }
 
@@ -1205,6 +1302,32 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
+  }
+  // Fee tier and renewal state for each generated member's current
+  // membership year (April 1 to March 31).
+  {
+    const yearStart = Number(demoAsOf.slice(0, 4)) - (demoAsOf.slice(5) >= "04-01" ? 0 : 1);
+    for (const seed of generatedMembers) {
+      if (!seed.plan) continue;
+      const state = demoRenewalState(seed, demoAsOf);
+      const status = state === "left" ? "canceled" : state === "past_due" ? "past_due" : state === "pending" ? "pending" : "active";
+      const priceCents = seed.plan === "student" ? 500 : seed.plan === "sustainer" ? 1500 : 2500;
+      const paidOn = status === "past_due" ? `${yearStart - 1}-04-15` : seed.joinedAt >= `${yearStart}-04-01` ? seed.joinedAt : `${yearStart}-04-10`;
+      await ctx.db.insert("memberSubscriptions", {
+        societyId,
+        planId: seed.plan === "student" ? studentPlanId : seed.plan === "sustainer" ? sustainerPlanId : regularPlanId,
+        memberId: generatedMemberIds.get(seed.key),
+        email: `${seed.firstName}.${seed.lastName}`.toLowerCase().replace(/[^a-z.]+/g, "") + "@example.ca",
+        fullName: `${seed.firstName} ${seed.lastName}`,
+        status,
+        startedAtISO: `${seed.joinedAt}T17:00:00.000Z`,
+        currentPeriodEndISO: `${status === "active" ? yearStart + 1 : yearStart}-03-31T23:59:59.000Z`,
+        canceledAtISO: status === "canceled" && seed.leftAt ? `${seed.leftAt}T17:00:00.000Z` : undefined,
+        lastPaymentAtISO: status === "active" || status === "past_due" ? `${paidOn}T17:05:00.000Z` : undefined,
+        lastPaymentCents: status === "active" || status === "past_due" ? priceCents : undefined,
+        demo: true,
+      });
+    }
   }
 
   // A couple of notifications so the bell lights up on first load.
@@ -1926,10 +2049,8 @@ function inferSeedAgendaItemType(title: string) {
   return "discussion";
 }
 
-function randomPastDate(yearsBack: number) {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - Math.floor(Math.random() * yearsBack) - 1);
-  d.setMonth(Math.floor(Math.random() * 12));
-  d.setDate(1 + Math.floor(Math.random() * 27));
-  return d.toISOString().slice(0, 10);
+/** A stable date 1 to `yearsBack` years before `asOf`, chosen by `key`. */
+function deterministicPastDate(key: string, asOf: string, yearsBack: number) {
+  const rng = createRng(key);
+  return addDays(asOf, -(365 * rng.int(1, yearsBack) - rng.int(0, 364)));
 }

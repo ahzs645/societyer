@@ -148,6 +148,17 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       return resolved.length ? JSON.stringify(resolved) : undefined;
     };
 
+    // Same for default sorts: stored as [{ fieldMetadataId, direction }].
+    const buildSortsJson = (sorts?: { fieldName: string; direction: string }[]): string | undefined => {
+      const resolved = (sorts ?? [])
+        .map((sort) => {
+          const fieldMetadataId = resolveFieldId(sort.fieldName);
+          return fieldMetadataId ? { fieldMetadataId, direction: sort.direction === "asc" ? "asc" : "desc" } : null;
+        })
+        .filter(Boolean);
+      return resolved.length ? JSON.stringify(resolved) : undefined;
+    };
+
     // Seed the default view (and its columns) if missing.
     const existingViews = await ctx.db
       .query("views")
@@ -167,6 +178,7 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
         openRecordIn: obj.defaultView.openRecordIn,
         position: 0,
         filtersJson: buildFiltersJson(obj.defaultView.filters),
+        sortsJson: buildSortsJson(obj.defaultView.sorts),
         createdAtISO: now,
         updatedAtISO: now,
       });
@@ -290,6 +302,7 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
         openRecordIn: extra.openRecordIn,
         position: nextPosition,
         filtersJson: buildFiltersJson(extra.filters),
+        sortsJson: buildSortsJson(extra.sorts),
         createdAtISO: now,
         updatedAtISO: now,
       });

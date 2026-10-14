@@ -7,6 +7,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { isInternalTransfer } from "../transferCategories";
 
 export async function profitAndLossPortable(
   ctx: PortableQueryCtx,
@@ -32,9 +33,10 @@ export async function profitAndLossPortable(
   let totalExpense = 0;
 
   for (const txn of txns) {
+    if (isInternalTransfer(txn)) continue;
     const account = accountMap.get(String(txn.accountId));
     const type = account?.accountType ?? "Other";
-    const cat = txn.category ?? type;
+    const cat = txn.category ?? (type === "Bank" || type === "Credit" ? "Uncategorized" : type);
     const cents = txn.amountCents;
 
     if (type === "Income" || cents > 0) {
@@ -72,7 +74,7 @@ export async function profitAndLossPortable(
  * day after the prior year's fiscal end through the label's fiscal end, so a
  * March-31 society's "2027" resolves to 2026-04-01 … 2027-03-31.
  */
-function fiscalWindow(
+export function fiscalWindow(
   fiscalYear: string,
   fiscalYearEnd: string | undefined,
 ): { start: string; end: string } {

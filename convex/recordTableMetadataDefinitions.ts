@@ -53,10 +53,15 @@ export type SeedViewFilter = { fieldName: string; operator: string; value: unkno
 
 export type SeedViewType = "table" | "kanban" | "board" | "calendar";
 
+/** A seeded default sort, by field NAME (resolved to fieldMetadataId at seed time). */
+export type SeedViewSort = { fieldName: string; direction: "asc" | "desc" };
+
 export type SeedView = {
   name: string;
   columns?: SeedViewColumn[];
   filters?: SeedViewFilter[];
+  /** Applied when the view is first created; later changes belong to people. */
+  sorts?: SeedViewSort[];
   type?: SeedViewType;
   /** Grouping field NAME, resolved to views.kanbanFieldMetadataId at seed time. */
   kanbanFieldName?: string;
@@ -1393,6 +1398,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     ],
     defaultView: {
       name: "All transactions",
+      // Newest first: a bank feed runs to hundreds of rows.
+      sorts: [{ fieldName: "date", direction: "desc" }],
       columns: [
         { fieldName: "date", size: 130 },
         { fieldName: "description", size: 300 },
@@ -2779,18 +2786,82 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, icon: "Tag" },
       { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", config: { currencyCode: "CAD", isCents: true } },
       { name: "items", label: "Purchase links", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
+      { name: "counterparty", label: "To / from", fieldType: FIELD_TYPES.TEXT, icon: "Building2", isReadOnly: true },
+      { name: "method", label: "Method", fieldType: FIELD_TYPES.TEXT, icon: "CreditCard", isReadOnly: true },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "posted", label: "Posted", color: "gray" },
+            { value: "pending", label: "Pending", color: "amber" },
+          ],
+        },
+      },
+      { name: "memo", label: "Notes", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote", isReadOnly: true },
+      {
+        name: "receiptStatus",
+        label: "Receipt",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Paperclip",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "attached", label: "Attached", color: "green" },
+            { value: "missing", label: "Missing", color: "red" },
+          ],
+        },
+      },
     ],
+    // Column set and widths follow the common bank-ledger layout: who first
+    // (the identifier column), then date, a right-aligned amount, where the
+    // money moved, how it is categorised, notes and the receipt indicator.
     defaultView: {
       name: "Recent transactions",
+      sorts: [{ fieldName: "date", direction: "desc" }],
       columns: [
-        { fieldName: "date", size: 120 },
-        { fieldName: "description", size: 280 },
-        { fieldName: "account", size: 180 },
-        { fieldName: "category", size: 150 },
+        { fieldName: "description", size: 272 },
+        { fieldName: "date", size: 102 },
         { fieldName: "amountCents", size: 130 },
-        { fieldName: "items", size: 200 },
+        { fieldName: "account", size: 180 },
+        { fieldName: "method", size: 170 },
+        { fieldName: "category", size: 200 },
+        { fieldName: "memo", size: 300 },
+        { fieldName: "receiptStatus", size: 104 },
+        { fieldName: "status", size: 104 },
+        { fieldName: "items", size: 150 },
       ],
     },
+    extraViews: [
+      {
+        name: "To review",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "category", operator: "isEmpty", value: null }],
+      },
+      {
+        name: "Money in",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "amountCents", operator: "gt", value: 0 }],
+      },
+      {
+        name: "Money out",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "amountCents", operator: "lt", value: 0 }],
+      },
+      {
+        name: "Card",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "account", operator: "eq", value: "Organization Visa" }],
+      },
+      {
+        name: "Missing receipts",
+        sorts: [{ fieldName: "date", direction: "desc" }],
+        filters: [{ fieldName: "receiptStatus", operator: "in", value: ["missing"] }],
+      },
+    ],
   },
   {
     nameSingular: "communicationTemplate",

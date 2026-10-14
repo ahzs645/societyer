@@ -191,6 +191,12 @@ export const accountingTables = {
     accountingAccountId: v.optional(v.id("financialAccounts")),
     fundRestrictionId: v.optional(v.id("fundRestrictions")),
     reviewedAtISO: v.optional(v.string()),
+    // Bank-feed detail shown in the transactions table. All optional: imports
+    // that don't carry them simply leave the cells empty.
+    status: v.optional(v.string()), // posted | pending
+    method: v.optional(v.string()), // e.g. "Interac e-Transfer", "Visa ••4417", "Pre-authorized debit"
+    memo: v.optional(v.string()), // free-text note on the transaction
+    receiptStatus: v.optional(v.string()), // attached | missing
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])

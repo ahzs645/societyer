@@ -85,7 +85,7 @@ export function FinancialsPage() {
   );
   const transactions = useQuery(
     api.financialHub.transactions,
-    society ? { societyId: society._id, limit: 25 } : "skip",
+    society ? { societyId: society._id, limit: 1000 } : "skip",
   );
   const trialBalance = useQuery(
     api.accounting.trialBalance,
@@ -164,6 +164,8 @@ export function FinancialsPage() {
   const sorted = (items ?? []).slice().sort((a, b) => b.fiscalYear.localeCompare(a.fiscalYear));
   const latest = sorted[0];
   const fiscalYear = latest?.fiscalYear ?? new Date().getFullYear().toString();
+  // Budget lines follow the fiscal year the hub reports on (the current one).
+  const budgetFiscalYear: string = hub?.budgetFiscalYear ?? fiscalYear;
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
   const importedBudgetReviewCount = (orgHistory?.budgets ?? []).filter((budget: any) => budget.status === "NeedsReview").length;
@@ -631,7 +633,7 @@ export function FinancialsPage() {
       {tab === "overview" && activeConnection && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
-            <h2 className="card__title">Budget vs actuals — FY {fiscalYear}</h2>
+            <h2 className="card__title">Budget vs actuals — FY {budgetFiscalYear}</h2>
             <span className="card__subtitle">Plan a category, actuals come from synced transactions.</span>
             <div style={{ marginLeft: "auto" }}>
               <button
@@ -704,7 +706,7 @@ export function FinancialsPage() {
                                 onSelect: async () => {
                                   const approved = await confirm({
                                     title: "Delete budget line?",
-                                    message: `The FY ${fiscalYear} "${b.category}" budget of ${formatMoney(b.plannedCents)} will be removed. Actual transactions are not affected.`,
+                                    message: `The FY ${budgetFiscalYear} "${b.category}" budget of ${formatMoney(b.plannedCents)} will be removed. Actual transactions are not affected.`,
                                     confirmLabel: "Delete budget line",
                                     tone: "danger",
                                   });
@@ -773,7 +775,7 @@ export function FinancialsPage() {
                 className="btn btn--accent"
                 onClick={async () => {
                   const plannedCents = budgetForm.planned.trim() === "" ? Number.NaN : Math.round(Number(budgetForm.planned) * 100);
-                  const payload = { fiscalYear, category: budgetForm.category.trim(), plannedCents };
+                  const payload = { fiscalYear: budgetFiscalYear, category: budgetForm.category.trim(), plannedCents };
                   const errors = validateBudgetLineInput(payload, hub?.budgetRows ?? [], budgetForm.id);
                   setBudgetErrors(errors);
                   if (hasErrors(errors)) return;

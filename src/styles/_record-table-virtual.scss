@@ -1,0 +1,10 @@
+@use "tokens" as *;
+
+// Virtualized record tables scroll inside their own container under a sticky
+// header. Without padding, scrolling a row into view (keyboard focus, find,
+// automation) parks it underneath that header, where the header swallows its
+// clicks. Large registers (hundreds of transactions, ~100 members) always take
+// this path.
+.record-table__virtuoso {
+  scroll-padding-top: token('row-h-comfortable');
+}
