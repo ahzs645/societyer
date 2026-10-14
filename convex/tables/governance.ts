@@ -49,6 +49,24 @@ export const governanceTables = {
     paymentReference: v.optional(v.string()),
     journalEntryId: v.optional(v.id("journalEntries")),
     notes: v.optional(v.string()),
+    // Approval workflow (enforced server-side by the approval rules).
+    approvals: v.optional(v.array(v.object({
+      userId: v.id("users"),
+      name: v.string(),
+      role: v.optional(v.string()),
+      atISO: v.string(),
+    }))),
+    requiredApprovals: v.optional(v.number()),
+    declinedReason: v.optional(v.string()),
+    declinedByUserId: v.optional(v.id("users")),
+    declinedAtISO: v.optional(v.string()),
+    approvalTrail: v.optional(v.array(v.object({
+      atISO: v.string(),
+      action: v.string(), // submitted | approved | declined | paid | recalled | reset | edited
+      actorName: v.string(),
+      actorUserId: v.optional(v.id("users")),
+      note: v.optional(v.string()),
+    }))),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
