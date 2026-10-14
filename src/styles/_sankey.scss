@@ -1,0 +1,245 @@
+// ============================================================
+// Sankey chart (src/components/charts/SankeyChart.tsx) and the cash-flow
+// card on the Financials overview. Colour carries direction only: money in
+// (dv-in), money out (dv-out), a neutral middle (dv-net) and recessive
+// balancing nodes (dv-previous). Text always wears text tokens.
+// ============================================================
+@use "tokens" as *;
+
+.chart--sankey .chart__plot svg {
+  overflow: visible;
+}
+
+.sankey__head {
+  fill: token('text-secondary');
+  font-size: token('fs-xs');
+  font-weight: 500;
+}
+.sankey__head-total {
+  fill: token('text-tertiary');
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+// Bands: translucent so crossings stay legible; the hovered or selected
+// path comes forward and the rest recede.
+.sankey__link {
+  fill-opacity: 0.26;
+  stroke: transparent;
+  stroke-width: 6;
+  cursor: default;
+  transition: fill-opacity token('motion-fade-fast') token('ease-fade');
+  animation: chart-fade-in token('motion-fade-slow') token('ease-fade') both;
+
+  &:hover,
+  &.is-on {
+    fill-opacity: 0.5;
+  }
+  &.is-dimmed {
+    fill-opacity: 0.08;
+  }
+}
+.sankey__link--in { fill: token('dv-in'); }
+.sankey__link--out { fill: token('dv-out'); }
+.sankey__link--neutral { fill: token('dv-net'); }
+.sankey__link--muted { fill: token('dv-previous'); }
+
+.sankey__node {
+  transition: opacity token('motion-fade-fast') token('ease-fade');
+
+  &.is-dimmed {
+    opacity: 0.4;
+  }
+  &.is-selectable {
+    cursor: pointer;
+  }
+}
+.sankey__hit {
+  fill: transparent;
+}
+.sankey__bar {
+  stroke: token('dv-surface');
+  stroke-width: 1;
+}
+.sankey__node--in .sankey__bar { fill: token('dv-in'); }
+.sankey__node--out .sankey__bar { fill: token('dv-out'); }
+.sankey__node--neutral .sankey__bar { fill: token('dv-net'); }
+.sankey__node--muted .sankey__bar { fill: token('dv-previous'); }
+
+.sankey__ring {
+  fill: none;
+  stroke: token('focus-ring-color');
+  stroke-width: 2;
+}
+.sankey__node.is-active .sankey__name,
+.sankey__node.is-selected .sankey__name {
+  font-weight: 600;
+}
+.sankey__label {
+  font-size: token('fs-xs');
+  // A surface halo keeps middle labels readable where they sit over bands.
+  paint-order: stroke;
+  stroke: token('dv-surface');
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.sankey__name {
+  fill: token('text-primary');
+}
+.sankey__value {
+  fill: token('text-secondary');
+  font-size: token('fs-xxs');
+  font-variant-numeric: tabular-nums;
+}
+
+// ---------- Compact (phone) layout: ranked bars ----------
+.sankey-bars {
+  display: grid;
+  gap: token('s-4');
+}
+.sankey-bars__side {
+  display: grid;
+  gap: token('s-2');
+  min-width: 0;
+}
+.sankey-bars__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: token('s-2');
+  margin: 0;
+  font-size: token('fs-sm');
+  font-weight: 600;
+  color: token('text-primary');
+
+  strong {
+    font-variant-numeric: tabular-nums;
+  }
+}
+.sankey-bars__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sankey-bars__row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: token('s-2');
+  border: 1px solid transparent;
+  border-radius: token('r-md');
+  background: transparent;
+  color: token('text-primary');
+  font: inherit;
+  text-align: left;
+}
+button.sankey-bars__row {
+  cursor: pointer;
+
+  &:hover {
+    background: token('bg-hover-alpha');
+  }
+  &.is-selected {
+    border-color: token('dv-selection-edge');
+    background: token('dv-selection');
+  }
+}
+.sankey-bars__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: token('s-2');
+  min-width: 0;
+  font-size: token('fs-sm');
+}
+.sankey-bars__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sankey-bars__amount {
+  flex: none;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sankey-bars__track {
+  display: block;
+  height: 8px;
+  border-radius: token('r-pill');
+  background: token('bg-hover-alpha');
+  overflow: hidden;
+}
+.sankey-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: token('r-pill');
+}
+.sankey-bars__fill--in { background: token('dv-in'); }
+.sankey-bars__fill--out { background: token('dv-out'); }
+.sankey-bars__fill--neutral { background: token('dv-net'); }
+.sankey-bars__fill--muted { background: token('dv-previous'); }
+.sankey-bars__share {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+  font-variant-numeric: tabular-nums;
+}
+.sankey-bars__through {
+  margin: 0;
+  padding: token('s-2') token('s-3');
+  border-radius: token('r-md');
+  background: token('bg-hover-alpha');
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+  font-variant-numeric: tabular-nums;
+}
+
+// ---------- Cash-flow card ----------
+.cash-flow-sankey__hint {
+  margin: token('s-2') 0 0;
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.cash-flow-sankey__focus {
+  display: grid;
+  gap: token('s-1');
+  margin-top: token('s-3');
+  padding: token('s-3');
+  border: 1px solid token('border-alpha');
+  border-radius: token('r-md');
+  background: token('bg-hover-alpha');
+  font-size: token('fs-sm');
+  min-width: 0;
+}
+.cash-flow-sankey__focus-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-1') token('s-2');
+
+  span {
+    color: token('text-secondary');
+    font-variant-numeric: tabular-nums;
+  }
+  .insights__chip {
+    margin-left: auto;
+  }
+}
+.cash-flow-sankey__focus-line {
+  margin: 0;
+  color: token('text-secondary');
+  overflow-wrap: anywhere;
+}
+.cash-flow-sankey__focus-line--muted {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sankey__link,
+  .sankey__node {
+    animation: none;
+    transition: none;
+  }
+}

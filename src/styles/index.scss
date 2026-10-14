@@ -124,5 +124,8 @@
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 
+// Sankey chart and the cash-flow card on the Financials overview.
+@use "sankey";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

@@ -13,6 +13,7 @@ import {
 import { todayDateOnly } from "../../../lib/format";
 import { budgetVariance, formatMoney } from "../../../lib/money";
 import type { BudgetKind } from "../lib/budgetKind";
+import { CashFlowSankeyCard } from "./CashFlowSankeyCard";
 import { FinanceRangeBar } from "./FinanceRangeBar";
 import { FinanceRangeStats } from "./FinanceRangeStats";
 import {
@@ -96,6 +97,7 @@ export function FinancialInsights({ society }: { society: Society }) {
           <FlowBarChart rows={view.flowRows} showNet ariaLabel={view.flowSummary} />
         </ChartCard>
       </div>
+      {!notEnough && <CashFlowSankeyCard societyId={society._id} range={focus} />}
       <BudgetVsActualCard rows={data.budgetRows} loading={data.loading} />
     </section>
   );
