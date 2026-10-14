@@ -109,6 +109,8 @@
 @use "invoicing";
 // RecordTable "Ask" filter (plain-language request → filter chips).
 @use "nl-filter";
+// EditableGrid: spreadsheet-style bulk entry, changeset island, phone row list.
+@use "editable-grid";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

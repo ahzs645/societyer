@@ -366,6 +366,87 @@ export async function upsertBudgetPortable(
   return await ctx.db.insert("budgets", rest);
 }
 
+/**
+ * Save a fiscal year's category budget lines from the budget grid in one
+ * atomic step. Every line is validated against the final set (so a rename
+ * and a new line with the old name can land together); if any line fails,
+ * nothing is written and the per-line errors come back by input index.
+ * Only plain category lines (no program/account) are editable here.
+ */
+export async function saveBudgetLinesPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    fiscalYear: string;
+    upserts: Array<{ id?: string; category: string; plannedCents: number; notes?: string }>;
+    removeIds: string[];
+    actingUserId?: string;
+  },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: args.societyId,
+    required: "Director",
+  });
+  if (!String(args.fiscalYear ?? "").trim()) throw new Error("Choose a fiscal year.");
+  if (args.upserts.length + args.removeIds.length > 500) throw new Error("Save at most 500 budget lines at a time.");
+  const existing = await ctx.db
+    .query("budgets")
+    .withIndex("by_society_fy", (q) => q.eq("societyId", args.societyId).eq("fiscalYear", args.fiscalYear))
+    .collect();
+  const editable = new Map(
+    existing.filter((row: any) => !row.programCode && !row.accountId).map((row: any) => [String(row._id), row]),
+  );
+  const rowErrors: Array<{ index: number; field: string; message: string }> = [];
+  // Ids that are not this society's category lines for this year are counted,
+  // never echoed back, so a foreign id cannot be probed through this endpoint.
+  let unknownRemovals = 0;
+  for (const id of args.removeIds) if (!editable.has(String(id))) unknownRemovals += 1;
+  const removing = new Set(args.removeIds.map(String).filter((id) => editable.has(id)));
+  const finalRows: Array<{ _id?: string; fiscalYear: string; category: string; programCode?: string }> = existing
+    .filter((row: any) => !removing.has(String(row._id)))
+    .filter((row: any) => !args.upserts.some((u) => u.id && String(u.id) === String(row._id)))
+    .map((row: any) => ({ _id: String(row._id), fiscalYear: row.fiscalYear, category: row.category, programCode: row.programCode }));
+  args.upserts.forEach((line, index) => {
+    if (line.id && (!editable.has(String(line.id)) || removing.has(String(line.id)))) {
+      rowErrors.push({ index, field: "category", message: "This budget line no longer exists. Discard and reload the grid." });
+      return;
+    }
+    if (!Number.isSafeInteger(line.plannedCents)) {
+      rowErrors.push({ index, field: "plannedCents", message: "Budget amount must be integer cents." });
+      return;
+    }
+    const candidate = { fiscalYear: args.fiscalYear, category: String(line.category ?? "").trim(), plannedCents: line.plannedCents };
+    const errors = validateBudgetLineInput(candidate, finalRows as any);
+    for (const [field, message] of Object.entries(errors)) rowErrors.push({ index, field, message: String(message) });
+    finalRows.push({ _id: `pending-${index}`, ...candidate });
+  });
+  if (unknownRemovals > 0) {
+    rowErrors.push({ index: -1, field: "removeIds", message: `${unknownRemovals} removed line${unknownRemovals === 1 ? " was" : "s were"} not found.` });
+  }
+  if (rowErrors.length > 0) return { ok: false as const, rowErrors };
+
+  let inserted = 0;
+  let updated = 0;
+  for (const id of removing) await ctx.db.delete(id);
+  for (const line of args.upserts) {
+    const patch = {
+      category: line.category.trim(),
+      plannedCents: line.plannedCents,
+      notes: line.notes?.trim() || undefined,
+    };
+    if (line.id) {
+      await ctx.db.patch(String(line.id), patch);
+      updated += 1;
+    } else {
+      await ctx.db.insert("budgets", { societyId: args.societyId, fiscalYear: args.fiscalYear, ...patch });
+      inserted += 1;
+    }
+  }
+  return { ok: true as const, inserted, updated, removed: removing.size };
+}
+
 export async function upsertOperatingSubscriptionPortable(
   ctx: PortableMutationCtx,
   args: {

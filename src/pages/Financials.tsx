@@ -19,7 +19,7 @@ import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
-import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Database, Link2, MoreHorizontal, Pencil, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Table2, Trash2 } from "lucide-react";
 import { Menu } from "../components/Menu";
 import { InfoPopover } from "../components/InfoPopover";
 import { Tabs } from "../components/primitives";
@@ -61,6 +61,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 import { FinancialInsightsLazy } from "../features/financials/insights/lazy";
+import { BudgetGridDrawer } from "../features/financials/components/BudgetGridDrawer";
 
 const FINANCIALS_TABS = ["overview", "transactions", "wave", "subscriptions"] as const;
 
@@ -131,6 +132,7 @@ export function FinancialsPage() {
   const [waveHealth, setWaveHealth] = useState<any>(null);
   const [budgetForm, setBudgetForm] = useState<{ id?: string; category: string; planned: string } | null>(null);
   const [budgetErrors, setBudgetErrors] = useState<FieldErrors>({});
+  const [budgetGridOpen, setBudgetGridOpen] = useState(false);
   const [subscriptionForm, setSubscriptionForm] = useState<any>(null);
   const [waveMode, setWaveMode] = useState<"resources" | "structures">("resources");
   const [waveResourceType, setWaveResourceType] = useState("account");
@@ -635,7 +637,10 @@ export function FinancialsPage() {
           <div className="card__head">
             <h2 className="card__title">Budget vs actuals — FY {budgetFiscalYear}</h2>
             <span className="card__subtitle">Plan a category, actuals come from synced transactions.</span>
-            <div style={{ marginLeft: "auto" }}>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button className="btn-action" onClick={() => setBudgetGridOpen(true)}>
+                <Table2 size={12} /> Edit as grid
+              </button>
               <button
                 className="btn-action"
                 onClick={() => { setBudgetErrors({}); setBudgetForm({ category: "", planned: "" }); }} disabled={!canWrite}
@@ -795,6 +800,13 @@ export function FinancialsPage() {
               </button>
             </div>
           )}
+          <BudgetGridDrawer
+            open={budgetGridOpen}
+            onClose={() => setBudgetGridOpen(false)}
+            societyId={society._id}
+            fiscalYear={fiscalYear}
+            canWrite={canWrite}
+          />
         </div>
       )}
 

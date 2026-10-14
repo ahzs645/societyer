@@ -1,7 +1,7 @@
 import { FinancialVersionCard } from "../../../components/FinancialVersionCard";
 import { AccountingStatementsCard } from "../components/AccountingStatementsCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CreateMenu } from "../../../components/CreateMenu";
@@ -21,6 +21,9 @@ import { formatMoney } from "../../../lib/money";
 import { Money } from "../../../components/Money";
 import { TrialBalanceReport } from "../components/TrialBalanceReport";
 import { BackfillReviewDrawer } from "../components/BackfillReviewDrawer";
+import { JournalLinesGrid, useJournalLinesGrid } from "../components/JournalLinesGrid";
+import { useConfirm } from "../../../components/Modal";
+import { GridDrawer, useBeforeUnloadGuard } from "../../../components/EditableGrid";
 import {
   hasErrors,
   validateCounterpartyInput,
@@ -140,6 +143,7 @@ export function AccountingWorkbenchPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const focusedEntryId = searchParams.get("entry");
@@ -156,19 +160,11 @@ export function AccountingWorkbenchPage() {
     startDate: `${currentYear()}-01-01`,
     endDate: `${currentYear()}-12-31`,
   });
-  const [openingRows, setOpeningRows] = useState([
-    { accountId: "", side: "debit", amount: "" },
-    { accountId: "", side: "credit", amount: "" },
-  ]);
   const [journalForm, setJournalForm] = useState({
     date: today(),
     memo: "",
     fiscalYear: currentYear(),
     allowClosed: false,
-    lines: [
-      { accountId: "", side: "debit", amount: "", description: "" },
-      { accountId: "", side: "credit", amount: "", description: "" },
-    ],
   });
   const [candidateForm, setCandidateForm] = useState({
     candidateId: "",
@@ -215,6 +211,14 @@ export function AccountingWorkbenchPage() {
   const ledgerCsv = useQuery(api.accounting.exportCsv, society && canExport ? { societyId: society._id, kind: "general_ledger" } : "skip");
   const boardAuditorPackage = useQuery(api.accounting.boardAuditorPackage, society && canExport ? { societyId: society._id, fiscalYear: currentYear(), packageKind: "board_auditor" } : "skip");
 
+  const counterpartyOptions = useMemo(() => (counterparties ?? []).map((row: any) => ({ value: String(row._id), label: row.name })), [counterparties]);
+  const fundOptions = useMemo(() => (fundRestrictions ?? []).map((row: any) => ({ value: String(row._id), label: row.name })), [fundRestrictions]);
+  const grantOptions = useMemo(() => (grants ?? []).map((row: any) => ({ value: String(row._id), label: row.title })), [grants]);
+  const chartAccounts = useMemo(() => accounts ?? [], [accounts]);
+  const journalGrid = useJournalLinesGrid({ accounts: chartAccounts, counterparties: counterpartyOptions, fundRestrictions: fundOptions, grants: grantOptions });
+  const openingGrid = useJournalLinesGrid({ accounts: chartAccounts, variant: "opening", fundRestrictions: fundOptions });
+  useBeforeUnloadGuard((drawer === "journal" && journalGrid.changeset.dirty) || (drawer === "opening" && openingGrid.changeset.dirty));
+
   const candidates = transactionCandidates?.transactionCandidates ?? [];
   const cashAccounts = (accounts ?? []).filter((account: any) => ["Asset", "Bank", "Credit"].includes(account.accountType));
   const totalDebit = (trialBalance ?? []).reduce((sum: number, row: any) => sum + row.debitCents, 0);
@@ -256,25 +260,50 @@ export function AccountingWorkbenchPage() {
     }, "Fiscal period created");
   };
 
-  const saveOpening = () =>
-    run(async () => {
+  // Closing a lines drawer with pending lines asks first; confirming discards them.
+  const closeLinesDrawer = async (grid: typeof journalGrid) => {
+    if (grid.changeset.dirty) {
+      const discard = await confirm({
+        title: "Discard these lines?",
+        message: "The lines you entered have not been posted. Closing discards them.",
+        confirmLabel: "Discard lines",
+        tone: "warn",
+      });
+      if (!discard) return;
+    }
+    grid.reset();
+    setDrawer(null);
+  };
+
+  const saveOpening = () => {
+    if (openingGrid.blockedReason) {
+      toast.warn("Opening balances not posted", openingGrid.blockedReason);
+      return;
+    }
+    return run(async () => {
       await postOpening({
         societyId: society._id,
         date: periodForm.startDate || today(),
         fiscalYear: periodForm.fiscalYear,
-        lines: openingRows
-          .filter((row) => row.accountId && row.amount)
-          .map((row) => ({
-            accountId: row.accountId as any,
-            side: row.side,
-            amountCents: centsFromInput(row.amount),
-          })),
+        lines: openingGrid.toLines().map((line) => ({
+          accountId: line.accountId as any,
+          side: line.side,
+          amountCents: line.amountCents,
+          description: line.description,
+          fundRestrictionId: line.fundRestrictionId as any,
+        })),
       });
+      openingGrid.reset();
       setDrawer(null);
     }, "Opening balances posted");
+  };
 
-  const saveJournal = () =>
-    run(async () => {
+  const saveJournal = () => {
+    if (journalGrid.blockedReason) {
+      toast.warn("Journal entry not posted", journalGrid.blockedReason);
+      return;
+    }
+    return run(async () => {
       await upsertJournal({
         societyId: society._id,
         date: journalForm.date,
@@ -283,21 +312,21 @@ export function AccountingWorkbenchPage() {
         status: "posted",
         fiscalYear: journalForm.fiscalYear,
         allowClosedPeriodAdjustment: journalForm.allowClosed,
-        lines: journalForm.lines
-          .filter((line) => line.accountId && line.amount)
-          .map((line: any) => ({
-            accountId: line.accountId as any,
-            side: line.side,
-            amountCents: centsFromInput(line.amount),
-            description: line.description || undefined,
-            programCode: line.programCode?.trim() || undefined,
-            counterpartyId: (line.counterpartyId || undefined) as any,
-            fundRestrictionId: (line.fundRestrictionId || undefined) as any,
-            grantId: (line.grantId || undefined) as any,
-          })),
+        lines: journalGrid.toLines().map((line) => ({
+          accountId: line.accountId as any,
+          side: line.side,
+          amountCents: line.amountCents,
+          description: line.description,
+          programCode: line.programCode,
+          counterpartyId: line.counterpartyId as any,
+          fundRestrictionId: line.fundRestrictionId as any,
+          grantId: line.grantId as any,
+        })),
       });
+      journalGrid.reset();
       setDrawer(null);
     }, "Journal entry posted");
+  };
 
   const saveCandidateAllocation = () =>
     run(async () => {
@@ -643,29 +672,30 @@ export function AccountingWorkbenchPage() {
         </FormGrid>
       </Drawer>
 
-      <Drawer open={drawer === "opening"} onClose={() => setDrawer(null)} title="Post opening balances" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveOpening}>Post</button></>}>
-        <AccountingLines rows={openingRows} setRows={setOpeningRows} accounts={accounts ?? []} />
-      </Drawer>
+      <GridDrawer
+        open={drawer === "opening"}
+        onClose={() => void closeLinesDrawer(openingGrid)}
+        title="Post opening balances"
+        footer={<LinesDrawerFooter blockedReason={openingGrid.changeset.dirty ? openingGrid.blockedReason : null} onCancel={() => void closeLinesDrawer(openingGrid)} onPost={saveOpening} disabled={!canWrite || busy || Boolean(openingGrid.blockedReason)} />}
+      >
+        <p className="muted grid-drawer__intro">One line per account. Debits and credits must balance before you can post; paste lines straight from a spreadsheet.</p>
+        <JournalLinesGrid grid={openingGrid} label="Opening balance lines" readOnly={!canWrite} onSaveShortcut={saveOpening} />
+      </GridDrawer>
 
-      <Drawer open={drawer === "journal"} onClose={() => setDrawer(null)} title="Post journal entry" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveJournal}>Post</button></>}>
+      <GridDrawer
+        open={drawer === "journal"}
+        onClose={() => void closeLinesDrawer(journalGrid)}
+        title="Post journal entry"
+        footer={<LinesDrawerFooter blockedReason={journalGrid.changeset.dirty ? journalGrid.blockedReason : null} onCancel={() => void closeLinesDrawer(journalGrid)} onPost={saveJournal} disabled={!canWrite || busy || Boolean(journalGrid.blockedReason)} />}
+      >
         <FormGrid>
           <Field label="Date"><DatePicker value={journalForm.date} onChange={(value) => setJournalForm({ ...journalForm, date: value })} /></Field>
           <Field label="Fiscal year"><input className="input" value={journalForm.fiscalYear} onChange={(e) => setJournalForm({ ...journalForm, fiscalYear: e.target.value })} /></Field>
           <Field label="Memo"><input className="input" value={journalForm.memo} onChange={(e) => setJournalForm({ ...journalForm, memo: e.target.value })} /></Field>
           <label className="checkbox"><input type="checkbox" checked={journalForm.allowClosed} onChange={(e) => setJournalForm({ ...journalForm, allowClosed: e.target.checked })} /> Closed-period adjustment</label>
         </FormGrid>
-        <AccountingLines
-          rows={journalForm.lines}
-          setRows={(lines: any) => setJournalForm({ ...journalForm, lines })}
-          accounts={accounts ?? []}
-          includeDescription
-          links={{
-            counterparties: (counterparties ?? []).map((row: any) => ({ value: row._id, label: row.name })),
-            fundRestrictions: (fundRestrictions ?? []).map((row: any) => ({ value: row._id, label: row.name })),
-            grants: (grants ?? []).map((row: any) => ({ value: row._id, label: row.title })),
-          }}
-        />
-      </Drawer>
+        <JournalLinesGrid grid={journalGrid} label="Journal lines" readOnly={!canWrite} onSaveShortcut={saveJournal} />
+      </GridDrawer>
 
       <Drawer open={drawer === "candidate"} onClose={() => setDrawer(null)} title="Post transaction candidate" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy || !candidateForm.candidateId)} onClick={saveCandidateAllocation}>Post</button></>}>
         <div className="col">
@@ -735,41 +765,12 @@ function LinkSelect({ value, onChange, options, placeholder }: { value: string; 
   );
 }
 
-function AccountingLines({
-  rows,
-  setRows,
-  accounts,
-  includeDescription,
-  links,
-}: {
-  rows: any[];
-  setRows: (rows: any[]) => void;
-  accounts: any[];
-  includeDescription?: boolean;
-  links?: {
-    counterparties: Array<{ value: string; label: string }>;
-    fundRestrictions: Array<{ value: string; label: string }>;
-    grants: Array<{ value: string; label: string }>;
-  };
-}) {
-  const update = (index: number, patch: any) => setRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+function LinesDrawerFooter({ blockedReason, onCancel, onPost, disabled }: { blockedReason: string | null; onCancel: () => void; onPost: () => void; disabled: boolean }) {
   return (
-    <div className="accounting-lines">
-      {rows.map((row, index) => (
-        <div className="accounting-line" key={index}>
-          <Field label="Account"><AccountSelect accounts={accounts} value={row.accountId} onChange={(accountId) => update(index, { accountId })} /></Field>
-          <Field label="Side"><Select value={row.side} onChange={(value) => update(index, { side: value })} options={[{ value: "debit", label: "Debit" }, { value: "credit", label: "Credit" }]} /></Field>
-          <Field label="Amount"><input className="input" type="number" value={row.amount} onChange={(e) => update(index, { amount: e.target.value })} /></Field>
-          {includeDescription && <Field label="Program / project code" hint="Use a consistent code, for example 100 - OPERATIONS. Blank lines appear as Unallocated."><input className="input" value={row.programCode ?? ""} onChange={(e) => update(index, { programCode: e.target.value })} /></Field>}
-          {includeDescription && <Field label="Description"><input className="input" value={row.description ?? ""} onChange={(e) => update(index, { description: e.target.value })} /></Field>}
-          {links && <Field label="Counterparty"><LinkSelect placeholder="No counterparty" value={row.counterpartyId ?? ""} onChange={(counterpartyId) => update(index, { counterpartyId })} options={links.counterparties} /></Field>}
-          {links && <Field label="Restricted fund"><LinkSelect placeholder="No fund restriction" value={row.fundRestrictionId ?? ""} onChange={(fundRestrictionId) => update(index, { fundRestrictionId })} options={links.fundRestrictions} /></Field>}
-          {links && <Field label="Grant"><LinkSelect placeholder="No grant" value={row.grantId ?? ""} onChange={(grantId) => update(index, { grantId })} options={links.grants} /></Field>}
-        </div>
-      ))}
-      <button className="btn-action" type="button" onClick={() => setRows([...rows, { accountId: "", side: "debit", amount: "", description: "" }])}>
-        <PlusCircle size={12} /> Add line
-      </button>
-    </div>
+    <>
+      {blockedReason && <span className="accounting-lines-blocked" role="status">{blockedReason}</span>}
+      <button className="btn" onClick={onCancel}>Cancel</button>
+      <button className="btn btn--accent" disabled={disabled} onClick={onPost} title={blockedReason ?? undefined}>Post</button>
+    </>
   );
 }

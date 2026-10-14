@@ -1107,6 +1107,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "financialHub:upsertOperatingSubscription", handler: financialHubFns.upsertOperatingSubscriptionPortable }),
   definePortableMutation({ name: "financialHub:removeOperatingSubscription", handler: financialHubFns.removeOperatingSubscriptionPortable }),
   definePortableMutation({ name: "financialHub:removeBudget", handler: financialHubFns.removeBudgetPortable }),
+  definePortableMutation({ name: "financialHub:saveBudgetLines", handler: financialHubFns.saveBudgetLinesPortable }),
 
   // communications
   definePortableQuery({ name: "communications:listTemplates", handler: communicationsFns.listTemplatesPortable }),

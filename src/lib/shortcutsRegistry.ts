@@ -112,6 +112,25 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
     ],
   },
   {
+    id: "grid",
+    label: "Spreadsheet grids",
+    items: [
+      { keys: ["Shift", "↑", "↓", "←", "→"], label: "Extend the selected range", keywords: ["range"] },
+      { keys: ["Mod", "A"], label: "Select every cell" },
+      { keys: ["Enter"], label: "Edit the cell; Enter again saves and moves down" },
+      { keys: ["F2"], label: "Edit the cell in place" },
+      { keys: ["Tab"], label: "Save the cell and move right (Shift+Tab moves left)" },
+      { keys: ["Esc"], label: "Cancel the edit" },
+      { keys: ["Delete"], label: "Clear the selected cells", keywords: ["backspace"] },
+      { keys: ["Mod", "V"], label: "Paste rows copied from Excel or Google Sheets", keywords: ["clipboard", "tsv"] },
+      { keys: ["Mod", "X"], label: "Cut the selected cells", keywords: ["clipboard"] },
+      { keys: ["Mod", "D"], label: "Fill down from the cell above", keywords: ["copy"] },
+      { keys: ["Mod", "Z"], label: "Undo the last change", keywords: ["history"] },
+      { keys: ["Mod", "Shift", "Z"], label: "Redo", keywords: ["history"] },
+      { keys: ["Mod", "S"], label: "Save pending changes" },
+    ],
+  },
+  {
     id: "sidePanel",
     label: "Side panel",
     items: [

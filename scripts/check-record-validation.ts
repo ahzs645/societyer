@@ -126,6 +126,45 @@ await client.mutation("financialHub:upsertBudget", { societyId, fiscalYear: "203
 await rejects("duplicate budget category", client.mutation("financialHub:upsertBudget", { societyId, fiscalYear: "2031", category: "synthetic facilities", plannedCents: 100 }), /already has a budget line/);
 await rejects("negative budget", client.mutation("financialHub:upsertBudget", { societyId, fiscalYear: "2031", category: "Synthetic rent", plannedCents: -50000 }), /cannot be negative/);
 
+// Budget grid: one atomic save; a bad line writes nothing and comes back by index.
+{
+  const before: any[] = await client.query("financialHub:budgets", { societyId, fiscalYear: "2031" });
+  const facilities = before.find((row) => row.category === "Synthetic facilities");
+  assert.ok(facilities);
+  const rejected: any = await client.mutation("financialHub:saveBudgetLines", {
+    societyId,
+    fiscalYear: "2031",
+    upserts: [
+      { id: facilities._id, category: "Synthetic facilities", plannedCents: 4200000 },
+      { category: "Synthetic rent", plannedCents: 120000 },
+      { category: "synthetic RENT", plannedCents: 5 },
+      { category: "Synthetic travel", plannedCents: -1 },
+    ],
+    removeIds: ["static_budget_not_in_this_workspace"],
+  });
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(rejected.rowErrors.filter((e: any) => e.index >= 0).map((e: any) => e.index).sort(), [2, 3], "duplicate and negative lines are reported by index");
+  assert.ok(!JSON.stringify(rejected).includes("static_budget_not_in_this_workspace"), "unknown ids are counted, never echoed");
+  const unchanged: any[] = await client.query("financialHub:budgets", { societyId, fiscalYear: "2031" });
+  assert.equal(unchanged.length, before.length, "a rejected grid save writes nothing");
+  assert.equal(unchanged.find((row) => row._id === facilities._id).plannedCents, 4000000);
+  const saved: any = await client.mutation("financialHub:saveBudgetLines", {
+    societyId,
+    fiscalYear: "2031",
+    upserts: [
+      { id: facilities._id, category: "Synthetic rent", plannedCents: 4200000, notes: "Renamed" },
+      { category: "Synthetic facilities", plannedCents: 99000 },
+    ],
+    removeIds: [],
+  });
+  assert.deepEqual(saved, { ok: true, inserted: 1, updated: 1, removed: 0 }, "a rename and a new line reusing the old name land together");
+  const after: any[] = await client.query("financialHub:budgets", { societyId, fiscalYear: "2031" });
+  assert.equal(after.find((row) => row._id === facilities._id).category, "Synthetic rent");
+  const added = after.find((row) => row.category === "Synthetic facilities");
+  const removed: any = await client.mutation("financialHub:saveBudgetLines", { societyId, fiscalYear: "2031", upserts: [], removeIds: [added._id] });
+  assert.equal(removed.removed, 1);
+}
+
 // Assets: custody, maintenance and disposal.
 await rejects("checkout without custodian", client.mutation("assets:recordEvent", { assetId: "static_asset_projector", event: { eventType: "checkout" } }), /custodian/);
 await rejects("maintenance without title", client.mutation("assets:scheduleMaintenance", { assetId: "static_asset_projector", title: " ", kind: "maintenance", dueDate: "" }), /maintenance is due|due date/);
