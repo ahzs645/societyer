@@ -15613,6 +15613,22 @@
     ]
   },
   {
+    "key": "convex:notifications:digestPlan",
+    "surface": "convex",
+    "name": "notifications:digestPlan",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/notifications.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:notifications:dismiss",
     "surface": "convex",
     "name": "notifications:dismiss",
@@ -15647,6 +15663,22 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:notifications:evaluateAlerts",
+    "surface": "convex",
+    "name": "notifications:evaluateAlerts",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/notifications.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -15815,6 +15847,69 @@
     ]
   },
   {
+    "key": "convex:notifications:sendWeeklyDigests",
+    "surface": "convex",
+    "name": "notifications:sendWeeklyDigests",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/notifications.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:notifications:setMyPref",
+    "surface": "convex",
+    "name": "notifications:setMyPref",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/notifications.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:notifications:setRule",
+    "surface": "convex",
+    "name": "notifications:setRule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/notifications.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:notifications:settings",
+    "surface": "convex",
+    "name": "notifications:settings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/notifications.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:notifications:snooze",
     "surface": "convex",
     "name": "notifications:snooze",
@@ -15829,6 +15924,15 @@
         "optional": false
       }
     ]
+  },
+  {
+    "key": "convex:notifications:societyIds",
+    "surface": "convex",
+    "name": "notifications:societyIds",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/notifications.ts",
+    "idArguments": []
   },
   {
     "key": "convex:notifications:unreadCount",
@@ -37263,6 +37367,22 @@
     ]
   },
   {
+    "key": "portable:notifications:evaluateAlerts",
+    "surface": "portable",
+    "name": "notifications:evaluateAlerts",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:notifications:list",
     "surface": "portable",
     "name": "notifications:list",
@@ -37373,6 +37493,60 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:notifications:setMyPref",
+    "surface": "portable",
+    "name": "notifications:setMyPref",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:notifications:setRule",
+    "surface": "portable",
+    "name": "notifications:setRule",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "accountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:notifications:settings",
+    "surface": "portable",
+    "name": "notifications:settings",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
