@@ -41,6 +41,7 @@ import { gapTables } from "./tables/gaps";
 import { intakeTables } from "./tables/intake";
 import { agreementTables } from "./tables/agreements";
 import { financeWorkflowTables } from "./tables/financeWorkflows";
+import { invoiceTables } from "./tables/invoices";
 
 export default defineSchema({
   ...reviewEvidenceTables,
@@ -49,6 +50,7 @@ export default defineSchema({
   ...pathwayTables,
   ...intakeTables,
   ...financeWorkflowTables,
+  ...invoiceTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     onboardingAnswersJson: v.optional(v.string()),
