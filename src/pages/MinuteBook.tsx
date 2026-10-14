@@ -365,7 +365,7 @@ export function MinuteBookPage() {
 
       <div className="grid two">
         <LinkedList restricted={detail?.restrictedResources?.includes("documents")} title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
-        <LinkedList restricted={detail?.restrictedResources?.includes("meetings")} title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
+        <LinkedList restricted={detail?.restrictedResources?.includes("meetings")} title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type === "AGM" ? organizationVocabulary(society).annualMeetingTitle : row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
         <LinkedList restricted={detail?.restrictedResources?.includes("filings")} title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => humanize(row.kind)} getMeta={(row: any) => `${humanize(row.status)} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
         <LinkedList restricted={detail?.restrictedResources?.some((resource: string) => ["documents", "tasks"].includes(resource))} title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => humanize(row.status ?? row.eventType)} />
       </div>

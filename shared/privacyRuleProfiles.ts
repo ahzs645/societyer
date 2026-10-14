@@ -213,7 +213,9 @@ export function resolvePrivacyProfile(organization?: PrivacyAssessmentInput | nu
   if (isYes(federal)) {
     add("pipeda", sectorClear ? "applies" : "possible", "Federal-work status is recorded: PIPEDA covers commercial handling and qualifying employee/applicant information. Assess the specific records.");
   } else {
-    if (locations.includes("CA-BC")) add("bc_pipa", base, "BC operations are recorded. BC PIPA generally covers private organizations, including noncommercial society member information, subject to exclusions.");
+    if (locations.includes("CA-BC")) add("bc_pipa", base, organization && organizationRuleScope(organization).isSociety
+      ? "BC operations are recorded. BC PIPA generally covers private organizations, including noncommercial society member information, subject to exclusions."
+      : "BC operations are recorded. BC PIPA generally covers private organizations, subject to exclusions.");
     if (locations.includes("CA-AB")) {
       const category = org.privacyAlbertaNonprofitClass;
       if (isYes(commercial) || category === "other") add("ab_pipa", base, "Alberta operations and commercial activity, or an organization outside the defined s. 56 nonprofit class, are recorded.");

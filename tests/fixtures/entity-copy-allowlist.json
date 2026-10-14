@@ -19,7 +19,9 @@
       "channel": "main",
       "workspaces": [
         "cbca-corp",
-        "obca-corp"
+        "obca-corp",
+        "cbca-demo",
+        "obca-demo"
       ],
       "snippet": "Six years is not a blanket destruction period for constitutional records, minutes or registers\\.|constitutional records do not expire after six years\\.",
       "reason": "Reviewed CBCA s.20 and OBCA ss.140,145 records guidance distinguishes continuing articles/minutes/register obligations from accounting retention. Constitutional records describes a corporation's constating records; it does not import a society constitution requirement."
@@ -53,7 +55,8 @@
       "pattern": "bylaws",
       "route": "/app/post-incorporation",
       "workspaces": [
-        "cbca-corp"
+        "cbca-corp",
+        "cbca-demo"
       ],
       "snippet": "by-laws",
       "reason": "CBCA post-incorporation checklist: federal corporations make, confirm and amend by-laws (CBCA ss.103, 104). Correct for this pathway."
@@ -63,7 +66,9 @@
       "route": "/app/directors",
       "workspaces": [
         "cbca-corp",
-        "obca-corp"
+        "obca-corp",
+        "cbca-demo",
+        "obca-demo"
       ],
       "snippet": "(CBCA|OBCA) director qualification and by-law requirements",
       "reason": "Pathway-specific director guidance; CBCA and OBCA corporations have by-laws."
@@ -72,7 +77,8 @@
       "pattern": "agm",
       "route": "/app/post-incorporation",
       "workspaces": [
-        "bc-corp"
+        "bc-corp",
+        "bc-demo"
       ],
       "snippet": "AGM",
       "reason": "BC Business Corporations Act s.182 uses 'annual general meeting' (and annual reference date) for companies; the BC company checklist is correct."
@@ -144,7 +150,8 @@
       "route": "/app/research-library",
       "reason": "BC company research records: the BC Business Corporations Act uses 'annual general meeting' (s.182), so AGM is the correct term for this entity.",
       "workspaces": [
-        "bc-corp"
+        "bc-corp",
+        "bc-demo"
       ]
     },
     {
@@ -153,7 +160,8 @@
       "snippet": "bylaw",
       "reason": "Federal research records quote Corporations Canada source titles and notes verbatim (e.g. its model by-law guidance); evidence text is not rewritten.",
       "workspaces": [
-        "cbca-corp"
+        "cbca-corp",
+        "cbca-demo"
       ]
     },
     {
@@ -162,17 +170,37 @@
       "snippet": "bylaw",
       "reason": "Federal/Ontario research records quote source titles and notes verbatim; evidence text is not rewritten.",
       "workspaces": [
-        "obca-corp"
+        "obca-corp",
+        "obca-demo"
       ]
     },
     {
       "pattern": "agm",
       "route": "/app/compliance-settings",
       "workspaces": [
-        "bc-corp"
+        "bc-corp",
+        "bc-demo"
       ],
       "snippet": "AGM voting shareholders can defer",
       "reason": "BC company profile wording: the BC Business Corporations Act s. 182(2) uses 'annual general meeting' and lets the shareholders entitled to vote at the AGM unanimously defer, dispose of annual business or waive it."
+    },
+    {
+      "pattern": "agm",
+      "route": "/app/compliance-obligations",
+      "channel": "main",
+      "workspaces": [
+        "bc-corp",
+        "bc-demo"
+      ],
+      "snippet": "(First|Subsequent) BC company AGM deadline",
+      "reason": "BC company rule-pack obligation: the BC Business Corporations Act s. 182 calls it the annual general meeting, as on the post-incorporation checklist and research records already allowed for BC companies."
+    },
+    {
+      "pattern": "agm",
+      "route": "/app/compliance-obligations",
+      "channel": "title",
+      "snippet": "^(Obligation key: agm\\.[a-z_]+|Guide rules: [a-z0-9-]*agm-timing[a-z0-9-]*)",
+      "reason": "Stable rule-pack identifiers (obligation keys and guide-rule ids) shown in tooltips for support and audit; they are ids, not wording."
     }
   ],
   "knownLeaks": []

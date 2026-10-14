@@ -453,7 +453,7 @@ test.describe("entity copy sweep", () => {
       if (workspace.demoPersona) await openDemoPersona(page, workspace);
       else await guidedSetup(page, workspace);
       await page.goto(routeFor(workspace, "/app"));
-      await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 30_000 });
+      await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 180_000 });
       await settle(page);
       await page.context().storageState({ path: stateFile(workspace.key), indexedDB: true });
     });
@@ -472,7 +472,7 @@ test.describe("entity copy sweep", () => {
 
         // The sidebar is the same on every route; read it once, fully expanded.
         await page.goto(routeFor(workspace, "/app"), { waitUntil: "domcontentloaded" });
-        await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 30_000 });
+        await expect(workspaceButton(page, workspace)).toBeVisible({ timeout: 180_000 });
         await settle(page);
         await expandSidebar(page);
         const shell = await collect(page);

@@ -32,6 +32,8 @@ export function TimelinePage() {
   // The Now marker and "overdue" follow the organisation's calendar day, like
   // the rest of the app, not the viewer's browser clock.
   const todayISO = organizationTodayISO(society);
+  // A meeting's type is stored as "AGM"; a corporation calls it an annual meeting.
+  const annualMeetingTitle = organizationVocabulary(society).annualMeetingTitle;
   const grouped = useMemo(() => {
     const events: { date: string; kind: string; title: string; sub?: string; to?: string; past: boolean; color?: string }[] = [];
     const now = Date.now();
@@ -39,7 +41,7 @@ export function TimelinePage() {
       const committee = (committees ?? []).find((c: any) => c._id === m.committeeId);
       events.push({
         date: m.scheduledAt,
-        kind: m.type,
+        kind: m.type === "AGM" ? annualMeetingTitle : m.type,
         title: m.title,
         sub: `${m.location ?? "TBD"}${committee ? ` · ${committee.name}` : ""}`,
         to: `/app/meetings/${m._id}`,
@@ -158,7 +160,7 @@ export function TimelinePage() {
       }
     });
     return events.filter((event) => Boolean(event.date)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources, deadlines, elections, bylawAmendments, todayISO]);
+  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources, deadlines, elections, bylawAmendments, todayISO, annualMeetingTitle]);
 
   // Hooks must run before any early returns so the rules-of-hooks contract holds.
   const nowMarkerRef = useRef<HTMLDivElement | null>(null);
@@ -265,7 +267,7 @@ function capitalize(value?: string) {
 }
 
 function eventTone(kind: string) {
-  return kind === "AGM" ? "accent" : kind === "Filing" ? "warn" : kind === "Funding" || kind === "Commitment" ? "success" : "info";
+  return kind === "AGM" || kind === "Annual meeting" ? "accent" : kind === "Filing" ? "warn" : kind === "Funding" || kind === "Commitment" ? "success" : "info";
 }
 
 function kindLabel(k: string) {
