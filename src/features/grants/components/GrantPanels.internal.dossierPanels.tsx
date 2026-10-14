@@ -239,7 +239,7 @@ export function GrantDeadlineTimeline({ grant, reports }: { grant: any; reports:
       <div style={{ display: "grid", gap: 8 }}>
         {items.map((item) => (
           <div key={`${item.date}-${item.label}`} style={timelineItemStyle}>
-            <div className="mono" style={{ minWidth: 96 }}>{formatDate(item.date)}</div>
+            <div style={{ minWidth: 96 }}>{formatDate(item.date)}</div>
             <div style={{ flex: "1 1 auto", minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <strong>{item.label}</strong>

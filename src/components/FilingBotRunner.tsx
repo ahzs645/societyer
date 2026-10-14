@@ -137,7 +137,7 @@ export function FilingBotRunner({
               </Badge>
             )}
             <div style={{ flex: 1 }} />
-            <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
+            <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
               {formatDateTime((active ?? last).startedAtISO)}
             </span>
           </div>

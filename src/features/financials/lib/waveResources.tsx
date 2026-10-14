@@ -90,7 +90,7 @@ export function counterpartyTransactionColumns() {
       header: "Date",
       sortable: true,
       accessor: (row: any) => row.date,
-      render: (row: any) => <span className="table__cell--mono">{row.date}</span>,
+      render: (row: any) => <span>{formatDate(row.date)}</span>,
     },
     {
       id: "description",
@@ -145,7 +145,7 @@ export function categoryAccountTransactionColumns() {
       header: "Date",
       sortable: true,
       accessor: (row: any) => row.date,
-      render: (row: any) => <span className="table__cell--mono">{row.date}</span>,
+      render: (row: any) => <span>{formatDate(row.date)}</span>,
     },
     {
       id: "description",
@@ -194,7 +194,7 @@ export function financialTransactionColumns(account: any) {
       header: "Date",
       sortable: true,
       accessor: (row: any) => row.date,
-      render: (row: any) => <span className="table__cell--mono">{row.date}</span>,
+      render: (row: any) => <span>{formatDate(row.date)}</span>,
     },
     {
       id: "description",

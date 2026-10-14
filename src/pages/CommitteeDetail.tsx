@@ -256,8 +256,8 @@ export function CommitteeDetailPage() {
                   </td>
                   <td><Badge tone={m.role === "Chair" ? "accent" : "neutral"}>{m.role}</Badge></td>
                   <td className="muted">{m.representedOrganization ?? "—"}</td>
-                  <td className="table__cell--mono">{displayDate(m.joinedAt)}</td>
-                  <td className="table__cell--mono">{m.leftAt ? displayDate(m.leftAt) : "—"}</td>
+                  <td>{displayDate(m.joinedAt)}</td>
+                  <td>{m.leftAt ? displayDate(m.leftAt) : "—"}</td>
                   <td>{m.reviewStatus === "pending" ? <Badge tone="warn" >From roster · pending</Badge> : <Badge tone="success">Confirmed</Badge>}</td>
                   <td className="table__actions">
                     <button
@@ -311,7 +311,7 @@ export function CommitteeDetailPage() {
                 .map((m: any) => (
                   <tr key={m._id}>
                     <td><Link to={`/app/meetings/${m._id}`}><strong>{m.title}</strong></Link></td>
-                    <td className="table__cell--mono">{formatMeetingDate(m)}</td>
+                    <td>{formatMeetingDate(m)}</td>
                     <td>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</td>
                     <td><Badge tone={m.status === "Held" ? "success" : "warn"}>{m.status}</Badge></td>
                     <td>{m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>
@@ -344,7 +344,7 @@ export function CommitteeDetailPage() {
                   <td><span className={`priority-dot priority-${t.priority}`} /></td>
                   <td><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
                   <td>{t.assignee ?? "—"}</td>
-                  <td className="table__cell--mono">{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
+                  <td>{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
                   <td>
                     <Select
                       size="sm"

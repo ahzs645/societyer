@@ -169,7 +169,7 @@ export function DocumentVersionsDrawer({
               {v.isCurrent && <Badge tone="success">Current</Badge>}
               <Badge tone="info">{v.storageProvider}</Badge>
               <div style={{ flex: 1 }} />
-              <span className="muted mono" style={{ fontSize: "var(--fs-sm)" }}>
+              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                 {formatDate(v.uploadedAtISO)}
               </span>
             </div>

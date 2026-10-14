@@ -209,14 +209,14 @@ export function WorkflowRunsPage() {
                 <>
                   {" "}
                   · Started{" "}
-                  <span className="mono">{formatDateTime(selectedRun.startedAtISO)}</span>
+                  <span>{formatDateTime(selectedRun.startedAtISO)}</span>
                 </>
               )}
               {selectedRun.completedAtISO && (
                 <>
                   {" "}
                   · Completed{" "}
-                  <span className="mono">
+                  <span>
                     {formatDateTime(selectedRun.completedAtISO)}
                   </span>
                 </>

@@ -155,7 +155,7 @@ export function ReceiptsPage() {
             }
             renderCell={({ record, field }) => {
               if (field.name === "receiptNumber") return <span className="mono">{record.receiptNumber}</span>;
-              if (field.name === "receivedOnISO") return <span className="mono">{formatDate(record.receivedOnISO)}</span>;
+              if (field.name === "receivedOnISO") return <span>{formatDate(record.receivedOnISO)}</span>;
               if (field.name === "amountCents") return <Money cents={record.amountCents} struck={Boolean(record.voidedAtISO)} />;
               if (field.name === "eligibleAmountCents") return <Money cents={record.eligibleAmountCents} struck={Boolean(record.voidedAtISO)} />;
               if (field.name === "status") return record.voidedAtISO ? <Badge tone="danger">Voided</Badge> : <Badge tone="success">Issued</Badge>;

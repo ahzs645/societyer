@@ -554,7 +554,7 @@ export function BylawDiffPage() {
                         <div className="timeline-vertical__item" key={i}>
                           <span className="timeline-vertical__dot" style={{ borderColor: eventColor(ev.action) }} />
                           <div className="row">
-                            <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(ev.atISO)}</span>
+                            <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(ev.atISO)}</span>
                             <Badge tone={eventTone(ev.action)}>
                               {icon} {eventLabel(ev.action)}
                             </Badge>
