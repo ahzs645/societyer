@@ -9,7 +9,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { DatePicker } from "../components/DatePicker";
 import { Badge } from "../components/ui";
 import { formatDate } from "../lib/format";
-import { todayDateOnly } from "../../shared/dateOnly";
+import { organizationTodayISO } from "../lib/dateRanges";
 import { activeAsOf } from "../../shared/registerHistory";
 import { normalizeOptionValue, SOURCE_OPTION_VALUES } from "../../shared/orgHubOptions";
 
@@ -105,7 +105,10 @@ export function PointInTimeRegisterPage() {
   const canReadHistory = can("settings:read");
   const ROLES = organizationRuleScope(society).isCorporation ? CORPORATION_ROLES : SOCIETY_ROLES;
   const visibleRoles = ROLES.filter((role) => canReadHistory && can(role.roleType === "member" ? "members:read" : "directors:read"));
-  const [asOf, setAsOf] = useState<string>(() => todayDateOnly());
+  // Defaults to the organisation's today (and back to it when the picker is
+  // cleared) rather than the browser's calendar day.
+  const [pickedAsOf, setAsOf] = useState<string>("");
+  const asOf = pickedAsOf || organizationTodayISO(society);
   const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");
 
   // Board term starts/ends as a timeline of transitions, so the snapshot above
