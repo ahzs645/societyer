@@ -16,6 +16,8 @@ import type * as agreements from "../agreements.js";
 import type * as aiAgents from "../aiAgents.js";
 import type * as aiChat from "../aiChat.js";
 import type * as aiChatActions from "../aiChatActions.js";
+import type * as aiFilter from "../aiFilter.js";
+import type * as aiFilterActions from "../aiFilterActions.js";
 import type * as aiSettings from "../aiSettings.js";
 import type * as aiSettingsActions from "../aiSettingsActions.js";
 import type * as annualCycle from "../annualCycle.js";
@@ -213,6 +215,8 @@ declare const fullApi: ApiFromModules<{
   aiAgents: typeof aiAgents;
   aiChat: typeof aiChat;
   aiChatActions: typeof aiChatActions;
+  aiFilter: typeof aiFilter;
+  aiFilterActions: typeof aiFilterActions;
   aiSettings: typeof aiSettings;
   aiSettingsActions: typeof aiSettingsActions;
   annualCycle: typeof annualCycle;

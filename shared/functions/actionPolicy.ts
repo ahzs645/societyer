@@ -20,7 +20,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "transactionRules", "invoices", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations", "representationGaps"],
-  users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],
+  users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents", "aiFilterActions"],
   exports: ["exports"], audit: ["activity"], volunteers: ["volunteers"], communications: ["communications", "pendingEmails", "partyPortals", "publicPortal"],
   settings: ["apiPlatform", "aiSettings", "aiSettingsActions", "corporationSettings", "serviceProviders", "subscriptions", "programStatements", "secrets", "nameHistory", "recordLayouts", "objectMetadata", "customFields", "fieldMetadata", "views", "commandMenuItems", "importSessions", "intake", "intakeActions", "waveCache", "permissions", "transparency", "calendarFeed"],
 };

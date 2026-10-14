@@ -290,6 +290,8 @@ export async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUse
     modelId,
     model,
     configuredFrom: secret?.value ? effective.scope : apiKey ? "environment" : "missing",
+    /** Scope of the active provider setting ("workspace" / "personal"), or null when only the environment supplies a key. */
+    settingScope: (effective?.scope as string | undefined) ?? null,
   };
 }
 
