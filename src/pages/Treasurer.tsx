@@ -24,6 +24,7 @@ import { Money } from "../components/Money";
 import { InfoPopover } from "../components/InfoPopover";
 import { budgetVariance, formatMoney } from "../lib/money";
 import { TreasurerPnlReport } from "../features/financials/components/TreasurerPnlReport";
+import { ClaimEditorDrawer } from "../features/financials/approvals/ClaimEditorDrawer";
 import { VarianceCell, VARIANCE_HELP } from "../features/financials/components/VarianceCell";
 import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { useSortableRows } from "../hooks/useSortableRows";
@@ -351,7 +352,6 @@ export function TreasurerPage() {
   const removeFundingSource = useMutation(api.fundingSources.removeSource);
   const upsertFundingEvent = useMutation(api.fundingSources.upsertEvent);
   const removeFundingEvent = useMutation(api.fundingSources.removeEvent);
-  const upsertExpenseReport = useMutation(api.expenseReports.upsert);
   const setExpenseStatus = useMutation(api.expenseReports.setStatus);
   const removeExpenseReport = useMutation(api.expenseReports.remove);
   const upsertJournalEntry = useMutation(api.accounting.upsertJournalEntry);
@@ -1224,100 +1224,17 @@ export function TreasurerPage() {
         )}
       </Drawer>
 
-      <Drawer
-        open={!!expenseDraft}
+      <ClaimEditorDrawer
+        draft={expenseDraft}
+        onChange={setExpenseDraft}
         onClose={() => setExpenseDraft(null)}
-        title={expenseDraft?.id ? "Edit expense report" : "New expense report"}
-        footer={
-          <>
-            <button className="btn" onClick={() => setExpenseDraft(null)}>Cancel</button>
-            <button
-              className="btn btn--accent"
-              disabled={!expenseDraft?.title || !expenseDraft?.claimantName}
-              onClick={async () => {
-                await upsertExpenseReport({
-                  id: expenseDraft.id,
-                  societyId: society._id,
-                  claimantName: expenseDraft.claimantName,
-                  claimantUserId: expenseDraft.claimantUserId || undefined,
-                  title: expenseDraft.title,
-                  category: expenseDraft.category,
-                  amountCents: dollarInputToCents(expenseDraft.amountDollars) ?? 0,
-                  currency: expenseDraft.currency || "CAD",
-                  incurredAtISO: expenseDraft.incurredAtISO,
-                  submittedAtISO: expenseDraft.submittedAtISO || undefined,
-                  status: expenseDraft.status,
-                  receiptDocumentId: expenseDraft.receiptDocumentId || undefined,
-                  paymentReference: expenseDraft.paymentReference || undefined,
-                  notes: expenseDraft.notes || undefined,
-                });
-                toast.success("Expense report saved");
-                setExpenseDraft(null);
-              }}
-            >
-              Save
-            </button>
-          </>
-        }
-      >
-        {expenseDraft && (
-          <div>
-            <Field label="Claim title">
-              <input className="input" value={expenseDraft.title} onChange={(e) => setExpenseDraft({ ...expenseDraft, title: e.target.value })} />
-            </Field>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="Claimant">
-                <input className="input" value={expenseDraft.claimantName} onChange={(e) => setExpenseDraft({ ...expenseDraft, claimantName: e.target.value })} />
-              </Field>
-              <Field label="Linked user">
-                <Select
-                  value={expenseDraft.claimantUserId ?? ""}
-                  onChange={(value) => {
-                    const selected = (users ?? []).find((user: any) => user._id === value);
-                    setExpenseDraft({
-                      ...expenseDraft,
-                      claimantUserId: value,
-                      claimantName: selected?.displayName || expenseDraft.claimantName,
-                    });
-                  }}
-                  options={[{ value: "", label: "No linked user" }, ...(users ?? []).map((user: any) => ({ value: user._id, label: user.displayName }))]}
-                />
-              </Field>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="Category">
-                <Select value={expenseDraft.category} onChange={(v) => setExpenseDraft({ ...expenseDraft, category: v })} options={EXPENSE_CATEGORIES.map((value) => ({ value, label: value }))} />
-              </Field>
-              <Field label="Status">
-                <Select value={expenseDraft.status} onChange={(v) => setExpenseDraft({ ...expenseDraft, status: v })} options={EXPENSE_STATUSES.map((value) => ({ value, label: value }))} />
-              </Field>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="Amount">
-                <input className="input" type="number" min="0" step="0.01" value={expenseDraft.amountDollars} onChange={(e) => setExpenseDraft({ ...expenseDraft, amountDollars: e.target.value })} />
-              </Field>
-              <Field label="Incurred date">
-                <DatePicker value={expenseDraft.incurredAtISO} onChange={(value) => setExpenseDraft({ ...expenseDraft, incurredAtISO: value })} />
-              </Field>
-            </div>
-            <Field label="Receipt document" hint="Upload receipts in Documents, then link them here.">
-              <Select value={expenseDraft.receiptDocumentId ?? ""} onChange={(value) => setExpenseDraft({ ...expenseDraft, receiptDocumentId: value })}
-                options={[{ value: "", label: "No receipt linked" }, ...(documents ?? []).map((document: any) => ({ value: document._id, label: document.title }))]} />
-            </Field>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="Submitted date">
-                <DatePicker value={expenseDraft.submittedAtISO ?? ""} onChange={(value) => setExpenseDraft({ ...expenseDraft, submittedAtISO: value })} />
-              </Field>
-              <Field label="Payment reference">
-                <input className="input" value={expenseDraft.paymentReference ?? ""} onChange={(e) => setExpenseDraft({ ...expenseDraft, paymentReference: e.target.value })} />
-              </Field>
-            </div>
-            <Field label="Notes">
-              <MarkdownEditor rows={4} value={expenseDraft.notes ?? ""} onChange={(markdown) => setExpenseDraft({ ...expenseDraft, notes: markdown })} />
-            </Field>
-          </div>
-        )}
-      </Drawer>
+        societyId={society._id}
+        users={users}
+        documents={documents}
+        claims={expenseReports}
+        categories={EXPENSE_CATEGORIES}
+        statuses={EXPENSE_STATUSES}
+      />
 
       <Drawer
         open={!!payingReport}

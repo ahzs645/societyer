@@ -1,0 +1,291 @@
+@use "tokens" as *;
+
+/* Expense-claim policy, receipts, claim checks (policy, exceptions,
+ * duplicates), approver reminders and approval-rule change control. */
+
+/* ----------------------------------------------------------- policy card */
+.claim-policy > .card__head {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token(s-2) token(s-3);
+}
+.claim-policy__body { display: flex; flex-direction: column; gap: token(s-4); }
+.claim-policy__rules,
+.claim-policy__enforcement {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.claim-policy__rules { display: flex; flex-direction: column; gap: token(s-2); }
+.claim-policy__line {
+  display: flex;
+  align-items: center;
+  gap: token(s-3);
+  padding: token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-card);
+  background: token(bg-panel);
+  transition: opacity token(motion-fade) token(ease-fade);
+  &.is-off .claim-policy__sentence { opacity: 0.6; }
+}
+.claim-policy__check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: token(accent);
+  cursor: pointer;
+}
+.claim-policy__sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-2);
+  min-width: 0;
+  font-size: token(fs-sm);
+}
+.claim-policy__money {
+  display: inline-flex;
+  align-items: center;
+  gap: token(s-1);
+}
+.claim-policy__currency { color: token(text-tertiary); font-size: token(fs-sm); }
+.claim-policy__amount { width: 104px; }
+.claim-policy__days { width: 76px; }
+.claim-policy__legend {
+  margin: 0 0 token(s-2);
+  padding: 0;
+  font-size: token(fs-sm);
+  font-weight: token(fw-semibold);
+}
+.claim-policy__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token(s-2);
+}
+.claim-policy__meta {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: token(fs-xs);
+}
+
+/* ---------------------------------------------------------- receipt drop */
+.receipt-drop {
+  display: flex;
+  align-items: flex-start;
+  gap: token(s-3);
+  margin-top: token(s-3);
+  padding: token(s-3);
+  border: 1px dashed token(border-strong);
+  border-radius: token(r-card);
+  background: token(bg-subtle);
+  transition: background-color token(motion-fade-fast) token(ease-fade), border-color token(motion-fade-fast) token(ease-fade);
+  &.is-dragging {
+    border-color: token(accent);
+    background: token(accent-soft);
+  }
+  &.is-disabled { opacity: 0.75; }
+}
+.receipt-drop__icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: token(r-pill);
+  background: token(bg-panel);
+  color: token(text-secondary);
+}
+.receipt-drop__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 token(s-1);
+  min-width: 0;
+  font-size: token(fs-sm);
+}
+.receipt-drop__title { color: token(text-primary); }
+.receipt-drop__choose { font-size: inherit; }
+.receipt-drop__hint,
+.receipt-drop__error {
+  flex-basis: 100%;
+  font-size: token(fs-xs);
+}
+.receipt-drop__error { color: token(danger); }
+
+/* ---------------------------------------------- policy and duplicate checks */
+.claim-check {
+  display: flex;
+  align-items: flex-start;
+  gap: token(s-2);
+  margin-top: token(s-3);
+  padding: token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-card);
+  background: token(bg-subtle);
+  font-size: token(fs-sm);
+}
+.claim-check--warn,
+.claim-check--exception,
+.claim-check--duplicate {
+  border-color: token(border-alpha-strong);
+  background: token(warn-soft);
+}
+.claim-check--block {
+  border-color: token(border-color-danger);
+  background: token(danger-soft);
+}
+.claim-check__icon {
+  flex: none;
+  margin-top: 2px;
+  color: token(warn);
+  .claim-check--block & { color: token(danger); }
+}
+.claim-check__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: token(s-1);
+  min-width: 0;
+}
+.claim-check__title { font-weight: token(fw-semibold); color: token(text-primary); overflow-wrap: anywhere; }
+.claim-check__list {
+  margin: 0;
+  padding-left: 1.1em;
+  color: token(text-secondary);
+}
+.claim-check__reason { margin: token(s-1) 0 0; overflow-wrap: anywhere; }
+.claim-check__quote { color: token(text-primary); }
+.claim-check__hint { margin: 0; font-size: token(fs-xs); }
+.claim-check__label {
+  margin-top: token(s-2);
+  font-size: token(fs-xs);
+  font-weight: token(fw-semibold);
+  color: token(text-secondary);
+}
+.claim-check__textarea { width: 100%; min-height: 56px; resize: vertical; }
+.claim-check__error { font-size: token(fs-xs); color: token(danger); }
+.claim-check__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token(s-2);
+  margin-top: token(s-1);
+}
+
+/* --------------------------------------------- drawer badges and sharing */
+.claim-drawer__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: token(s-1);
+  font-size: token(fs-sm);
+}
+.claim-drawer__share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token(s-2);
+}
+.claim-drawer__reminded { margin: token(s-2) 0 0; font-size: token(fs-xs); }
+.approvals-table__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token(s-1);
+  margin-top: token(s-1);
+}
+.approvals-table__action-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: token(s-1);
+}
+
+/* ---------------------------------------------------------- claim editor */
+.claim-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: token(s-3);
+  @media (max-width: 480px) { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* --------------------------------------------------- approval-rule warnings */
+.approval-rule__warning {
+  margin: 0;
+  padding: token(s-1) token(s-2);
+  border-radius: token(r-md);
+  background: token(warn-soft);
+  color: token(text-primary);
+  font-size: token(fs-xs);
+}
+
+/* ------------------------------------------------------- change control */
+.change-control { display: flex; flex-direction: column; gap: token(s-3); }
+.change-control__setting {
+  padding: token(s-3);
+  border: 1px solid token(border);
+  border-radius: token(r-card);
+  background: token(bg-subtle);
+}
+.pending-change {
+  display: flex;
+  flex-direction: column;
+  gap: token(s-2);
+  padding: token(s-3);
+  border: 1px solid token(border-alpha-strong);
+  border-radius: token(r-card);
+  background: token(warn-soft);
+}
+.pending-change__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: token(s-2);
+}
+.pending-change__title { margin: 0; font-size: token(fs-sm); font-weight: token(fw-semibold); }
+.pending-change__meta { font-size: token(fs-xs); }
+.pending-change__diff {
+  display: flex;
+  flex-direction: column;
+  gap: token(s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: token(fs-sm);
+}
+.pending-change__line {
+  display: flex;
+  align-items: flex-start;
+  gap: token(s-2);
+  padding: token(s-1) token(s-2);
+  border-radius: token(r-md);
+  background: token(bg-panel);
+  overflow-wrap: anywhere;
+  svg { flex: none; margin-top: 3px; }
+  del { color: token(text-secondary); }
+}
+.pending-change__line--added svg,
+.pending-change__after svg { color: token(success); }
+.pending-change__line--removed svg,
+.pending-change__before svg { color: token(danger); }
+.pending-change__changed { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pending-change__before,
+.pending-change__after { display: flex; align-items: flex-start; gap: token(s-2); }
+.pending-change__why { margin: 0; font-size: token(fs-xs); }
+.pending-change__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: token(s-2);
+}
+
+/* ------------------------------------------------- invoice duplicate hint */
+.invoice-builder__duplicate-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: token(s-2);
+  margin-top: token(s-1);
+}

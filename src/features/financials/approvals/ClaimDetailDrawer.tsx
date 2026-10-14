@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
-import { Check, CircleDollarSign, Send, Undo2, X } from "lucide-react";
+import { BellRing, Check, CircleDollarSign, Link2, Send, Undo2, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
@@ -11,7 +11,17 @@ import { useToast } from "../../../components/Toast";
 import { formatDate, formatDateTime } from "../../../lib/format";
 import { formatMoney } from "../../../lib/money";
 import { ApprovalProgress, CLAIM_STATUS_LABEL, CLAIM_STATUS_TONE } from "./ApprovalProgress";
+import { DuplicateNotice, ExceptionRequest, PolicyNotice, ReminderMeta, useClaimShareActions } from "./ClaimChecks";
+import { ReceiptDropZone } from "./ReceiptDropZone";
 import { FINANCE_EDIT_REQUIRED_REASON } from "../../../../shared/expenseApprovals";
+import {
+  claimPartyKey,
+  claimSubmissionDecision,
+  evaluateClaimPolicy,
+  findLikelyDuplicate,
+  type ExpenseClaimPolicy,
+} from "../../../../shared/expensePolicy";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 import type { QueueRow } from "./types";
 
 /** Reasons that come from the matching rule (who it names, self-approval) rather than workspace access. */
@@ -25,32 +35,94 @@ const TRAIL_LABEL: Record<string, string> = {
   recalled: "Recalled",
   reset: "Approvals reset",
   draft: "Moved to draft",
+  reminded: "Approvers reminded",
+  receipt: "Receipt attached",
 };
+
+/** Statuses a claim can be (re)submitted from in this drawer. */
+const SUBMITTABLE = new Set(["Draft", "Rejected", "Recalled"]);
 
 export function ClaimDetailDrawer({
   row,
+  rows = [],
+  policy,
   societyId,
   canWrite,
   onClose,
+  onOpenClaim,
 }: {
   row: QueueRow | null;
+  /** Every claim in the queue, for the duplicate check on (re)submit. */
+  rows?: readonly QueueRow[];
+  /** The workspace claim policy, checked before (re)submitting. */
+  policy?: ExpenseClaimPolicy;
   societyId: string;
   canWrite: boolean;
   onClose: () => void;
+  /** Open another claim (the duplicate's "View"). */
+  onOpenClaim?: (id: string) => void;
 }) {
   const decide = useMutation(api.expenseReports.decide);
   const setStatus = useMutation(api.expenseReports.setStatus);
+  const attachReceipt = useMutation(api.expenseReports.attachReceipt);
   const accounts = useQuery(api.financialHub.accounts, row ? { societyId: societyId as any } : "skip") as any[] | undefined;
   const prompt = usePrompt();
   const toast = useToast();
+  const share = useClaimShareActions();
   const [busy, setBusy] = useState(false);
   const [payment, setPayment] = useState({ reference: "", expenseAccountId: "", bankAccountId: "" });
+  const [exceptionReason, setExceptionReason] = useState("");
+  const [submitTried, setSubmitTried] = useState(false);
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
+  const [duplicatePrompt, setDuplicatePrompt] = useState(false);
 
   useEffect(() => {
     setPayment({ reference: row?.paymentReference ?? "", expenseAccountId: "", bankAccountId: "" });
   }, [row?._id, row?.paymentReference]);
+  useEffect(() => {
+    setExceptionReason("");
+    setSubmitTried(false);
+    setDuplicateAcknowledged(false);
+    setDuplicatePrompt(false);
+  }, [row?._id]);
+
+  // (Re)submission checks run here too, so the requester sees them before the server refuses.
+  const submittable = Boolean(row && SUBMITTABLE.has(row.status));
+  const submitIssues = useMemo(
+    () => (row && submittable && policy
+      ? evaluateClaimPolicy(policy, { amountCents: row.amountCents, receiptDocumentId: row.receiptDocument?._id, notes: row.notes, incurredAtISO: row.incurredAtISO }, todayDateOnly())
+      : []),
+    [row, submittable, policy],
+  );
+  const submitDuplicate = useMemo(() => {
+    if (!row || !submittable) return null;
+    const candidates = rows
+      .filter((other) => !["Rejected", "Recalled"].includes(other.status))
+      .map((other) => ({ _id: other._id, partyKey: claimPartyKey(other), amountCents: other.amountCents, date: other.incurredAtISO, title: other.title }));
+    return findLikelyDuplicate({ _id: row._id, partyKey: claimPartyKey(row), amountCents: row.amountCents, date: row.incurredAtISO }, candidates);
+  }, [row, rows, submittable]);
 
   if (!row) return null;
+
+  const submit = async (label: string, success: string, duplicateOk = duplicateAcknowledged) => {
+    setSubmitTried(true);
+    if (policy && !claimSubmissionDecision(policy, submitIssues, exceptionReason).allowed) return;
+    if (submitDuplicate && !duplicateOk) {
+      setDuplicatePrompt(true);
+      return;
+    }
+    await run(label, () => setStatus({ id: row._id as any, status: "Submitted", policyExceptionReason: exceptionReason.trim() || undefined }), success,
+      submitIssues.length ? (exceptionReason.trim() ? "Approvers will see your exception request." : "Approvers will see that it misses the claim policy.") : undefined);
+  };
+
+  const onReceipt = async (documentId: string) => {
+    try {
+      await attachReceipt({ id: row._id as any, receiptDocumentId: documentId as any });
+      toast.success("Receipt attached");
+    } catch (error: any) {
+      toast.error("Could not attach the receipt", error?.message);
+    }
+  };
 
   const run = async (label: string, action: () => Promise<unknown>, success: string, description?: string) => {
     setBusy(true);
@@ -103,7 +175,7 @@ export function ClaimDetailDrawer({
     <>
       <button className="btn" type="button" onClick={onClose}>Close</button>
       {row.status === "Draft" && (
-        <button className="btn btn--accent" type="button" disabled={!canWrite || busy} onClick={() => void run("submit", () => setStatus({ id: row._id as any, status: "Submitted" }), "Claim submitted for approval")}>
+        <button className="btn btn--accent" type="button" disabled={!canWrite || busy} onClick={() => void submit("submit", "Claim submitted for approval")}>
           <Send size={12} aria-hidden="true" /> Submit for approval
         </button>
       )}
@@ -128,7 +200,7 @@ export function ClaimDetailDrawer({
         </button>
       )}
       {(row.status === "Rejected" || row.status === "Recalled") && (
-        <button className="btn" type="button" disabled={!canWrite || busy} onClick={() => void run("resubmit", () => setStatus({ id: row._id as any, status: "Submitted" }), "Claim resubmitted")}>
+        <button className="btn" type="button" disabled={!canWrite || busy} onClick={() => void submit("resubmit", "Claim resubmitted")}>
           <Undo2 size={12} aria-hidden="true" /> Resubmit
         </button>
       )}
@@ -139,7 +211,12 @@ export function ClaimDetailDrawer({
     <Drawer open onClose={onClose} title={row.title} footer={footer} className="claim-drawer">
       <div className="claim-drawer__hero">
         <Money cents={row.amountCents} currency={row.currency} variant="hero" />
-        <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge>
+        <span className="claim-drawer__badges">
+          <Badge tone={CLAIM_STATUS_TONE[row.status] ?? "neutral"}>{CLAIM_STATUS_LABEL[row.status] ?? row.status}</Badge>
+          {row.policyException && <Badge tone="warn">Policy exception</Badge>}
+          {!row.policyException && row.policyIssues.length > 0 && row.status === "Submitted" && <Badge tone="warn">Misses policy</Badge>}
+          {row.possibleDuplicate && <Badge tone="orange">Possible duplicate</Badge>}
+        </span>
       </div>
       <dl className="claim-drawer__facts">
         <div><dt>Requester</dt><dd>{row.claimantName}{row.isMine ? " (you)" : ""}</dd></div>
@@ -152,7 +229,47 @@ export function ClaimDetailDrawer({
         </div>
         {row.paymentReference && <div><dt>Payment reference</dt><dd>{row.paymentReference}</dd></div>}
       </dl>
+      {!row.receiptDocument && row.status !== "Paid" && canWrite && (
+        <ReceiptDropZone societyId={societyId} claimTitle={row.title} onUploaded={(documentId) => onReceipt(documentId)} />
+      )}
       {row.notes && <p className="claim-drawer__notes">{row.notes}</p>}
+
+      {row.status === "Submitted" && <PolicyNotice issues={row.policyIssues} exception={row.policyException} />}
+      {row.status !== "Submitted" && !submittable && row.policyException && <PolicyNotice issues={[]} exception={row.policyException} />}
+      {row.status === "Submitted" && row.possibleDuplicate && (
+        <DuplicateNotice duplicate={row.possibleDuplicate} onView={onOpenClaim ? () => onOpenClaim(row.possibleDuplicate!._id) : undefined} />
+      )}
+      {submittable && canWrite && policy && (
+        <ExceptionRequest issues={submitIssues} enforcement={policy.enforcement} value={exceptionReason} onChange={setExceptionReason} showError={submitTried} />
+      )}
+      {submittable && submitDuplicate && (duplicatePrompt || row.status === "Draft") && !duplicateAcknowledged && (
+        <DuplicateNotice
+          duplicate={submitDuplicate}
+          onView={onOpenClaim ? () => onOpenClaim(submitDuplicate._id) : undefined}
+          onContinue={duplicatePrompt ? () => { setDuplicateAcknowledged(true); setDuplicatePrompt(false); void submit(row.status === "Draft" ? "submit" : "resubmit", row.status === "Draft" ? "Claim submitted for approval" : "Claim resubmitted", true); } : undefined}
+          continueLabel={row.status === "Draft" ? "Submit anyway" : "Resubmit anyway"}
+        />
+      )}
+
+      {row.status === "Submitted" && (
+        <section className="claim-drawer__section claim-drawer__share" aria-label="Nudge approvers">
+          <div className="claim-drawer__share-actions">
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={!row.canRemind}
+              title={row.canRemind ? undefined : row.nextReminderAtISO ? "Approvers can be reminded once a day." : "Only the requester or someone with finance edit access can remind approvers."}
+              onClick={() => void share.remindApprovers(row._id)}
+            >
+              <BellRing size={12} aria-hidden="true" /> Remind approvers
+            </button>
+            <button type="button" className="btn btn--sm btn--ghost" onClick={() => void share.copyApprovalLink(row._id)}>
+              <Link2 size={12} aria-hidden="true" /> Copy approval link
+            </button>
+          </div>
+          <ReminderMeta lastReminderAtISO={row.lastReminderAtISO} nextReminderAtISO={row.nextReminderAtISO} />
+        </section>
+      )}
 
       {row.status !== "Draft" && (
         <section className="claim-drawer__section" aria-labelledby="claim-approvals">

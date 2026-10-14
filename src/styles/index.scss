@@ -123,6 +123,7 @@
 
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
+@use "expense-policy"; // Claim policy, receipts, duplicate hints, reminders, rule change control
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

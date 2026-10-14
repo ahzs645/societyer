@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, ClipboardCheck, Landmark } from "lucide-react";
+import { BellRing, Check, ClipboardCheck, Landmark, Link2, MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
+import { Menu } from "../components/Menu";
 import { Money } from "../components/Money";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
@@ -17,9 +18,11 @@ import { ApprovalProgress, CLAIM_STATUS_LABEL, CLAIM_STATUS_TONE } from "../feat
 import { ApprovalRulesEditor } from "../features/financials/approvals/ApprovalRulesEditor";
 import { ApproverAccessSetting } from "../features/financials/approvals/ApproverAccessSetting";
 import { ClaimDetailDrawer } from "../features/financials/approvals/ClaimDetailDrawer";
+import { ClaimPolicyCard } from "../features/financials/approvals/ClaimPolicyCard";
+import { useClaimShareActions } from "../features/financials/approvals/ClaimChecks";
 import type { ApprovalQueue, QueueRow, QueueTab } from "../features/financials/approvals/types";
 
-const TAB_IDS: QueueTab[] = ["awaiting", "approved", "paid", "closed", "drafts", "rules"];
+const TAB_IDS: QueueTab[] = ["awaiting", "approved", "paid", "closed", "drafts", "rules", "policy"];
 
 function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   switch (tab) {
@@ -32,7 +35,7 @@ function rowsForTab(rows: QueueRow[], tab: QueueTab): QueueRow[] {
   }
 }
 
-const EMPTY_COPY: Record<Exclude<QueueTab, "rules">, { title: string; description: string }> = {
+const EMPTY_COPY: Record<Exclude<QueueTab, "rules" | "policy">, { title: string; description: string }> = {
   awaiting: { title: "Nothing waiting for approval", description: "Submitted expense claims appear here until they have the approvals your rules require." },
   approved: { title: "Nothing to pay", description: "Approved claims wait here until someone records the payment." },
   paid: { title: "No paid claims yet", description: "Reimbursed claims are kept here with their payment reference." },
@@ -56,7 +59,15 @@ export function ApprovalsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab") as QueueTab | null;
   const tab: QueueTab = requestedTab && TAB_IDS.includes(requestedTab) ? requestedTab : "awaiting";
-  const [openId, setOpenId] = useState<string | null>(null);
+  // The open claim lives in the URL (?claim=<id>), so "Copy approval link" lands on it.
+  const openId = searchParams.get("claim");
+  const setOpenId = (id: string | null) => {
+    const params = new URLSearchParams(searchParams);
+    if (id) params.set("claim", id);
+    else params.delete("claim");
+    setSearchParams(params, { replace: !id });
+  };
+  const share = useClaimShareActions();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
@@ -64,6 +75,16 @@ export function ApprovalsPage() {
   const approvable = rows.filter((row) => row.canApprove);
   const selectedRows = approvable.filter((row) => selected.has(row._id));
   const openRow = queue?.rows.find((row) => row._id === openId) ?? null;
+  const missingClaim = Boolean(queue && openId && !openRow);
+  useEffect(() => {
+    if (!missingClaim) return;
+    toast.info("That claim isn't available", "It may have been deleted, or it belongs to another workspace.");
+    const params = new URLSearchParams(searchParams);
+    params.delete("claim");
+    setSearchParams(params, { replace: true });
+    // Only when a linked claim turns out to be missing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingClaim]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -177,11 +198,16 @@ export function ApprovalsPage() {
           { id: "closed", label: "Declined & recalled", count: counts?.closed ?? null },
           { id: "drafts", label: "My drafts", count: counts?.drafts ?? null },
           { id: "rules", label: "Approval rules" },
+          { id: "policy", label: "Claim policy" },
         ]}
       />
 
       {queue === undefined ? (
         <div className="card"><div className="card__body"><div className="record-table__loading">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div></div>
+      ) : tab === "policy" ? (
+        <div className="approvals-settings">
+          <ClaimPolicyCard queue={queue} societyId={society._id} />
+        </div>
       ) : tab === "rules" ? (
         <div className="approvals-settings">
           <ApproverAccessSetting queue={queue} societyId={society._id} />
@@ -273,6 +299,12 @@ export function ApprovalsPage() {
                         {row.title}
                       </button>
                       <span className="muted approvals-table__category">{row.category}</span>
+                      {(row.policyException || (row.status === "Submitted" && row.policyIssues.length > 0) || row.possibleDuplicate) && (
+                        <span className="approvals-table__flags">
+                          {row.policyException ? <Badge tone="warn">Policy exception</Badge> : row.status === "Submitted" && row.policyIssues.length > 0 ? <Badge tone="warn">Misses policy</Badge> : null}
+                          {row.possibleDuplicate && <Badge tone="orange">Possible duplicate</Badge>}
+                        </span>
+                      )}
                     </td>
                     <td data-label="Requester">{row.claimantName}{row.isMine ? <span className="muted"> (you)</span> : null}</td>
                     <td data-label="Amount" className="num"><Money cents={row.amountCents} currency={row.currency} /></td>
@@ -289,15 +321,43 @@ export function ApprovalsPage() {
                       )}
                     </td>
                     <td className="approvals-table__actions" onClick={(event) => event.stopPropagation()}>
-                      {tab === "awaiting" && row.canApprove ? (
-                        <button type="button" className="btn btn--sm" onClick={() => void quickApprove(row)}>
-                          <Check size={12} aria-hidden="true" /> Approve
-                        </button>
-                      ) : (
-                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpenId(row._id)}>
-                          {tab === "approved" ? "Pay" : "Open"}
-                        </button>
-                      )}
+                      <span className="approvals-table__action-group">
+                        {tab === "awaiting" && row.canApprove ? (
+                          <button type="button" className="btn btn--sm" onClick={() => void quickApprove(row)}>
+                            <Check size={12} aria-hidden="true" /> Approve
+                          </button>
+                        ) : (
+                          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpenId(row._id)}>
+                            {tab === "approved" ? "Pay" : "Open"}
+                          </button>
+                        )}
+                        {tab === "awaiting" && (
+                          <Menu
+                            align="right"
+                            trigger={
+                              <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`More actions for ${row.title}`}>
+                                <MoreHorizontal size={14} />
+                              </button>
+                            }
+                            sections={[
+                              {
+                                id: "share",
+                                items: [
+                                  {
+                                    id: "remind",
+                                    label: "Remind approvers",
+                                    icon: <BellRing size={14} />,
+                                    disabled: !row.canRemind,
+                                    hint: row.nextReminderAtISO ? "Once a day" : undefined,
+                                    onSelect: () => void share.remindApprovers(row._id),
+                                  },
+                                  { id: "copy-link", label: "Copy approval link", icon: <Link2 size={14} />, onSelect: () => void share.copyApprovalLink(row._id) },
+                                ],
+                              },
+                            ]}
+                          />
+                        )}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -308,7 +368,15 @@ export function ApprovalsPage() {
       )}
 
       {openRow && (
-        <ClaimDetailDrawer row={openRow} societyId={society._id} canWrite={canWrite} onClose={() => setOpenId(null)} />
+        <ClaimDetailDrawer
+          row={openRow}
+          rows={queue?.rows}
+          policy={queue?.claimPolicy}
+          societyId={society._id}
+          canWrite={canWrite}
+          onClose={() => setOpenId(null)}
+          onOpenClaim={(id) => setOpenId(id)}
+        />
       )}
     </div>
   );

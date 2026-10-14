@@ -7404,6 +7404,28 @@
     ]
   },
   {
+    "key": "convex:expenseReports:attachReceipt",
+    "surface": "convex",
+    "name": "expenseReports:attachReceipt",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "expenseReports",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "receiptDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:expenseReports:bulkApprove",
     "surface": "convex",
     "name": "expenseReports:bulkApprove",
@@ -7442,6 +7464,22 @@
     ]
   },
   {
+    "key": "convex:expenseReports:decidePolicyChange",
+    "surface": "convex",
+    "name": "expenseReports:decidePolicyChange",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "approvalPolicyChanges",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:expenseReports:list",
     "surface": "convex",
     "name": "expenseReports:list",
@@ -7452,6 +7490,22 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:expenseReports:remindApprovers",
+    "surface": "convex",
+    "name": "expenseReports:remindApprovers",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "expenseReports",
         "array": false,
         "optional": false
       }
@@ -7493,6 +7547,38 @@
     "key": "convex:expenseReports:saveApproverAccess",
     "surface": "convex",
     "name": "expenseReports:saveApproverAccess",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:expenseReports:saveClaimPolicy",
+    "surface": "convex",
+    "name": "expenseReports:saveClaimPolicy",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/expenseReports.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:expenseReports:setRulesChangeControl",
+    "surface": "convex",
+    "name": "expenseReports:setRulesChangeControl",
     "kind": "mutation",
     "access": "authenticated",
     "source": "convex/expenseReports.ts",
@@ -29467,6 +29553,28 @@
     ]
   },
   {
+    "key": "portable:expenseReports:attachReceipt",
+    "surface": "portable",
+    "name": "expenseReports:attachReceipt",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "expenseReports",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "receiptDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:expenseReports:bulkApprove",
     "surface": "portable",
     "name": "expenseReports:bulkApprove",
@@ -29505,6 +29613,22 @@
     ]
   },
   {
+    "key": "portable:expenseReports:decidePolicyChange",
+    "surface": "portable",
+    "name": "expenseReports:decidePolicyChange",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "approvalPolicyChanges",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:expenseReports:list",
     "surface": "portable",
     "name": "expenseReports:list",
@@ -29515,6 +29639,22 @@
       {
         "path": "societyId",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:remindApprovers",
+    "surface": "portable",
+    "name": "expenseReports:remindApprovers",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "expenseReports",
         "array": false,
         "optional": false
       }
@@ -29556,6 +29696,38 @@
     "key": "portable:expenseReports:saveApproverAccess",
     "surface": "portable",
     "name": "expenseReports:saveApproverAccess",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:saveClaimPolicy",
+    "surface": "portable",
+    "name": "expenseReports:saveClaimPolicy",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:expenseReports:setRulesChangeControl",
+    "surface": "portable",
+    "name": "expenseReports:setRulesChangeControl",
     "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
