@@ -11,6 +11,12 @@
   font-size: token('fs-sm');
 }
 
+// Guided setup (/setup): the card grid's implicit column sized itself to the
+// server field's intrinsic width, pushing Test/Connect off a 320px screen.
+.app-setup__card .card__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 // Compliance obligations: the edge-to-edge results table follows the card's
 // rounded bottom corners instead of painting over them.
 .card > .table-wrap:last-child:has(> .obligations-table) {
@@ -70,6 +76,14 @@
   .table.policies-table td[data-label="Owner"] {
     white-space: nowrap;
   }
+  // Tablet widths scroll the table sideways rather than crushing the dates
+  // to one word per line.
+  .table.policies-table td[data-label="Dates"] {
+    min-width: 170px;
+  }
+  .table.policies-table td[data-label="Documents"] {
+    min-width: 140px;
+  }
 }
 
 // Policy registry on phones: each policy is a stacked card; its actions menu
@@ -88,6 +102,8 @@
     top: token('s-2');
     right: 0;
     width: auto;
+    min-width: 0;
     padding: 0 token('s-2');
+    background: transparent;
   }
 }

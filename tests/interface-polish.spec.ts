@@ -20,7 +20,8 @@ test("detail routes with a missing id show not found, never the error boundary",
   page.on("pageerror", (error) => errors.push(`${page.url()}: ${error.message}`));
   for (const path of missing) {
     await page.goto(path);
-    await expect(page.locator("#main-content").getByText(/not found/i).first(), path).toBeVisible({ timeout: 20_000 });
+    // Phones hide the full breadcrumb trail (its last crumb also says "not found").
+    await expect(page.locator("#main-content").getByText(/not found/i).locator("visible=true").first(), path).toBeVisible({ timeout: 20_000 });
     await expect(page.locator(".page-error"), path).toHaveCount(0);
   }
   expect(errors).toEqual([]);

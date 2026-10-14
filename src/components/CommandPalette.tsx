@@ -480,10 +480,16 @@ function writeStringArray(key: string, value: string[]) {
   }
 }
 
-export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
+export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
+  initiallyOpen?: boolean;
+  /** Text typed into the loading placeholder before this chunk arrived. */
+  initialQuery?: string;
+}) {
   const [open, setOpen] = useState(initiallyOpen);
   const dialogRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".kbar__input");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initiallyOpen ? initialQuery : "");
+  // Consumed by the first open only; later opens start empty.
+  const pendingQueryRef = useRef(initiallyOpen ? initialQuery : "");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
   const [metadataCommands, setMetadataCommands] = useState<any[]>([]);
@@ -596,7 +602,8 @@ export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: bool
 
   useEffect(() => {
     if (open) {
-      setQ("");
+      setQ(pendingQueryRef.current);
+      pendingQueryRef.current = "";
       setActive(0);
       setMetadataCommands([]);
       setRecents(readRecents());
