@@ -153,7 +153,7 @@ export function CustomFieldsPage() {
     <EmptyState
       icon={<Sliders size={18} />}
       title="No custom fields yet"
-      description="Add fields for members, directors, volunteers or staff."
+      description={`Add fields for ${organizationVocabulary(society).isCorporation ? "contacts" : "members"}, directors, volunteers or staff.`}
       action={canWrite ? (
         <button type="button" className="btn btn--accent btn--sm" onClick={openNew}>
           <Plus size={12} /> New field
