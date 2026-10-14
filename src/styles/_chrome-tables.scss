@@ -889,3 +889,63 @@
  * Styled after twenty's mobile record rows: no inter-item dividers inside a
  * bordered shell, generous 12×16 padding, primary text at body size, and a
  * subtle secondary-background press state (not an accent color). */
+
+/* ------------------------------------------------------------------
+ * DataTable (`.table.data-table`) shares RecordTable's rhythm: the same
+ * density row heights, header height and tone, translucent row hover,
+ * pill filter chips and the frosted bulk-action island. Scoped to the
+ * component so hand-written `.table` markup is unchanged.
+ * ------------------------------------------------------------------ */
+.table.data-table {
+  font-size: token('fs-xs');
+}
+.table.data-table thead th {
+  height: token('row-h-compact');
+  font-size: token('fs-xs');
+  border-bottom-color: token('border');
+}
+.table.data-table tbody td {
+  height: token('row-h-compact');
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.table.data-table.table--comfortable tbody td {
+  height: token('row-h-comfortable');
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.table.data-table.table--comfortable thead th {
+  height: token('row-h-compact');
+}
+.table.data-table tbody tr:hover td,
+.table.data-table tbody tr:hover td[data-col-index="0"] {
+  background: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha')), token('bg-panel');
+}
+.table.data-table tbody tr.is-selected td {
+  background: linear-gradient(token('bg-selected-alpha'), token('bg-selected-alpha')), token('bg-panel');
+}
+
+.filter-chips .filter-chip {
+  height: 24px;
+  padding: 0 2px 0 9px;
+  border-radius: token('r-pill');
+  font-size: token('fs-xxs');
+  font-weight: token('fw-medium');
+}
+.filter-chips .filter-chip__remove {
+  width: 20px;
+  height: 20px;
+  border-radius: token('r-pill');
+}
+.filter-chips .filter-chip__remove:hover {
+  background: token('bg-hover-alpha');
+}
+
+.table-bulkbar {
+  border-radius: token('r-card');
+  background: token('bg-frosted');
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  backdrop-filter: saturate(1.6) blur(14px);
+  border-color: token('border-alpha');
+  box-shadow: token('elevation-2');
+}
