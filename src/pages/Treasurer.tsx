@@ -297,16 +297,18 @@ export function TreasurerPage() {
   );
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
-  // Default to the fiscal year Financials shows (the latest statement's
-  // label, e.g. "2025-2026", which is what budgets are keyed by); fall back to
-  // the calendar end year of the current fiscal year. Typing overrides it.
+  // Default to the budget year Financials shows for today (the budget whose
+  // window holds today, so it matches the From/To period above); then the
+  // latest statement's label (e.g. "2025-2026"); then the calendar end year of
+  // the current fiscal year. Typing overrides it.
+  const hubSummary = useQuery(api.financialHub.summary, society ? { societyId: society._id } : "skip") as { budgetFiscalYear?: string | null } | undefined;
   const financials = useQuery(api.financials.list, society ? { societyId: society._id } : "skip") as Array<{ fiscalYear: string }> | undefined;
   const latestFinancialFy = useMemo(
     () => (financials ?? []).map((row) => row.fiscalYear).filter(Boolean).sort((a, b) => b.localeCompare(a))[0],
     [financials],
   );
   const [fyOverride, setFy] = useState<string | null>(null);
-  const fy = fyOverride ?? latestFinancialFy ?? defaultFy;
+  const fy = fyOverride ?? hubSummary?.budgetFiscalYear ?? latestFinancialFy ?? defaultFy;
 
   const pnl = useQuery(
     api.treasury.profitAndLoss,
@@ -511,7 +513,7 @@ export function TreasurerPage() {
               <DatePicker value={to} onChange={(value) => setTo(value)} />
             </label>
             <label className="treasurer-period-field treasurer-period-field--fy">
-              <span className="muted">FY</span>
+              <span className="muted">Budget FY</span>
               <input
                 className="input"
                 value={fy}

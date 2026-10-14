@@ -827,7 +827,7 @@ export function FinancialsPage() {
             open={budgetGridOpen}
             onClose={() => setBudgetGridOpen(false)}
             societyId={society._id}
-            fiscalYear={fiscalYear}
+            fiscalYear={budgetFiscalYear}
             canWrite={canWrite}
           />
         </div>
