@@ -1,0 +1,367 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// ReportTable: financial statements (trial balance, balance sheet,
+// income statement, P&L, year-over-year). Statement typography: tabular
+// Inter, right-aligned amounts, hairline above subtotals, double rule under
+// totals, sticky header and first column.
+// ============================================================
+
+.report-table {
+  @include flex-column;
+  gap: token('s-2');
+  min-width: 0;
+  max-width: 100%;
+}
+
+.report-table__controls {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  justify-content: space-between;
+  min-width: 0;
+}
+.report-table__toolbar {
+  @include flex-center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.report-table__expand {
+  margin-left: auto;
+  flex: none;
+  .btn {
+    gap: token('s-1');
+  }
+}
+
+// Horizontal scroll lives inside the table container only, so the page
+// itself never overflows on phones.
+.report-table__scroll {
+  position: relative;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid token('border-color-light');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+}
+@media (min-width: 761px) {
+  // A capped height keeps the sticky header in view for long reports.
+  .report-table__scroll--capped {
+    max-height: min(75vh, 960px);
+  }
+}
+
+// `.report-table .report-table__table` outranks the phone catch-all that turns
+// every `.page table` into a block scroller: the container already scrolls, and
+// a block table would become the sticky column's scroll box and break it.
+.report-table .report-table__table {
+  display: table;
+  overflow: visible;
+  max-width: none;
+}
+.report-table__table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: token('fs-sm');
+  font-variant-numeric: tabular-nums;
+  color: token('text-primary');
+}
+
+.report-table__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: token('row-h-compact');
+  padding: 0 token('s-3');
+  background: token('bg-panel');
+  border-bottom: 1px solid token('border');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-medium');
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: middle;
+  &.num {
+    text-align: right;
+  }
+  &.is-emphasis {
+    color: token('text-secondary');
+  }
+}
+.report-table__col-label {
+  @include inline-flex-center;
+  gap: 2px;
+  .info-popover__trigger {
+    width: 20px;
+    height: 20px;
+    margin-left: 0;
+  }
+}
+
+// Sticky first column: account labels stay put while periods scroll.
+.report-table__table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: token('bg-panel');
+}
+.report-table__table thead th:first-child {
+  z-index: 3;
+}
+.report-table__label-head {
+  min-width: 200px;
+}
+
+.report-table__table tbody th,
+.report-table__table tbody td {
+  height: token('row-h-compact');
+  padding: 0 token('s-3');
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-panel');
+  font-weight: token('fw-regular');
+  text-align: left;
+  vertical-align: middle;
+}
+.report-table__table tbody td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+.report-table__value.is-emphasis {
+  font-weight: token('fw-medium');
+}
+.report-table__value.is-delta,
+.report-table__table thead th.is-delta {
+  color: token('text-secondary');
+}
+
+.report-table__label {
+  max-width: min(52vw, 420px);
+}
+.report-table__label-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: token('s-1');
+  min-width: 0;
+  padding: token('s-1') 0;
+}
+.report-table__label-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: token('s-2');
+  row-gap: 0;
+  min-width: 0;
+  line-height: 1.35;
+}
+.report-table__code {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+}
+.report-table__calc-tag {
+  padding: 0 token('s-1');
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  color: token('text-tertiary');
+  font-size: token('fs-xxs');
+  font-weight: token('fw-medium');
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.report-table__row-note {
+  flex-basis: 100%;
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: normal;
+}
+
+// Indentation by depth (sections → accounts → sub-accounts).
+.report-table__row[data-depth="1"] .report-table__label-inner { padding-left: token('s-4'); }
+.report-table__row[data-depth="2"] .report-table__label-inner { padding-left: token('s-8'); }
+.report-table__row[data-depth="3"] .report-table__label-inner { padding-left: token('s-12'); }
+.report-table__row[data-depth="4"] .report-table__label-inner { padding-left: token('s-16'); }
+
+.report-table__toggle,
+.report-table__toggle-spacer {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.report-table__toggle {
+  @include inline-flex-center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+  &:hover {
+    background: token('bg-hover-alpha');
+    color: token('text-primary');
+  }
+}
+
+// Row kinds.
+.report-table__row--section > th,
+.report-table__row--section > td {
+  background: token('bg-subtle');
+  font-weight: token('fw-semibold');
+  color: token('text-primary');
+}
+.report-table__row--subtotal > th,
+.report-table__row--subtotal > td {
+  border-top: 1px solid token('border-strong');
+  font-weight: token('fw-semibold');
+}
+.report-table__row--total > th,
+.report-table__row--total > td {
+  border-top: 1px solid token('border-strong');
+  border-bottom: 3px double token('border-strong');
+  font-weight: token('fw-semibold');
+}
+.report-table__row.is-calculated > th .report-table__label-text > span:nth-child(1):not(.report-table__code),
+.report-table__row.is-calculated > th .report-table__code + span {
+  font-style: italic;
+}
+.report-table__row--note > td.report-table__note-cell {
+  height: auto;
+  padding: token('s-2') token('s-3');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  white-space: normal;
+  // Keep the explanation readable on phones instead of stretching with the columns.
+  position: sticky;
+  left: 0;
+}
+.report-table__empty-cell {
+  padding: token('s-6') token('s-3') !important;
+  color: token('text-tertiary');
+  text-align: center !important;
+  white-space: normal;
+}
+.report-table__row.is-collapsed {
+  display: none;
+}
+
+// Interaction.
+.report-table__row.is-interactive {
+  cursor: pointer;
+}
+.report-table__row.is-interactive:hover > th,
+.report-table__row.is-interactive:hover > td {
+  background: token('bg-hover');
+}
+.report-table__row:focus-visible {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: -2px;
+}
+.report-table__row:focus-visible > th,
+.report-table__row:focus-visible > td {
+  background: token('bg-hover');
+}
+.report-table__amount {
+  display: inline-flex;
+  justify-content: flex-end;
+  max-width: 100%;
+  margin: 0 calc(-1 * #{token('s-1')});
+  padding: 2px token('s-1');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 3px;
+  transition: background token('motion-fade-fast') token('ease-fade'), text-decoration-color token('motion-fade-fast') token('ease-fade');
+  &:hover,
+  &:focus-visible {
+    background: token('bg-hover-alpha');
+    text-decoration-color: token('text-tertiary');
+  }
+}
+.report-table__pct {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .report-table__label-head {
+    min-width: 140px;
+  }
+  .report-table__label {
+    max-width: 46vw;
+  }
+  .report-table__table thead th,
+  .report-table__table tbody th,
+  .report-table__table tbody td {
+    padding-inline: token('s-2');
+  }
+  // The sticky label column needs a visible edge once periods scroll under it.
+  .report-table__table th:first-child {
+    box-shadow: 1px 0 0 token('border-color-light');
+  }
+}
+
+@media (pointer: coarse) {
+  .report-table__toggle {
+    width: 32px;
+    height: 32px;
+  }
+  .report-table__toggle-spacer {
+    width: 32px;
+  }
+  .report-table__amount {
+    min-height: 32px;
+    align-items: center;
+  }
+}
+
+@media print {
+  .report-table__controls {
+    display: none;
+  }
+  .report-table__scroll,
+  .report-table__scroll--capped {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+  }
+  .report-table__row.is-collapsed {
+    display: table-row;
+  }
+  .report-table__table {
+    min-width: 0;
+  }
+  .report-table__table thead th,
+  .report-table__table tbody th,
+  .report-table__table tbody td {
+    position: static;
+    background: transparent !important;
+    box-shadow: none;
+  }
+  .report-table__toggle,
+  .report-table__toggle-spacer {
+    display: none;
+  }
+  .report-table__amount {
+    padding: 0;
+    margin: 0;
+    text-decoration: none;
+  }
+  .report-table .money--favourable,
+  .report-table .money--unfavourable {
+    color: inherit;
+  }
+}
