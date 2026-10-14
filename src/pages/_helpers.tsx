@@ -101,7 +101,7 @@ const RELATED_DOCUMENT_VIEWS = [
 export function RelatedDocumentViews({ current }: { current: (typeof RELATED_DOCUMENT_VIEWS)[number]["to"] }) {
   const links = RELATED_DOCUMENT_VIEWS.filter((view) => view.to !== current);
   return (
-    <div className="row muted" style={{ gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
+    <div className="row muted related-views" style={{ gap: 6, alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
       <span>Related:</span>
       {links.map((view) => (
         <Link key={view.to} to={view.to} className="chip chip--sm">

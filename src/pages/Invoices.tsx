@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
 import { ArrowDown, ArrowUp, Ban, Bell, Download, FileSpreadsheet, FileText, Plus, ReceiptText, Search, Send, Settings2, Users, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
 import { Tabs } from "../components/primitives";
+import { useIsBottomSheet } from "../lib/useSheetDrag";
 import { StatTile } from "../components/StatTile";
 import { Money } from "../components/Money";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -78,6 +79,11 @@ export function InvoicesPage() {
   const [seriesFilter, setSeriesFilter] = useState<{ id: string; name: string } | null>(null);
   const [focusSeriesId, setFocusSeriesId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Phones: search is an icon beside the tabs until it's opened (or in use).
+  const isPhone = useIsBottomSheet();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const phoneSearchShown = searchOpen || search.length > 0;
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "issueDate", dir: "desc" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -297,6 +303,24 @@ export function InvoicesPage() {
       }
     : null;
   const duesCount = workspace?.duesCandidates.filter((c) => !c.existingInvoiceId).length ?? 0;
+  const invoiceTabs = (
+    <Tabs<InvoiceTab>
+      value={tab}
+      onChange={(next) => setTab(next)}
+      tabRoles
+      ariaLabel="Invoice views"
+      items={[
+        { id: "all", label: "All", count: counts?.all ?? null },
+        { id: "drafts", label: "Drafts", count: counts?.drafts ?? null },
+        { id: "outstanding", label: "Outstanding", count: counts?.outstanding ?? null },
+        { id: "overdue", label: "Overdue", count: counts?.overdue ?? null },
+        { id: "paid", label: "Paid", count: counts?.paid ?? null },
+        { id: "recurring", label: "Recurring", count: counts?.recurring ?? null },
+        { id: "customers", label: "Customers", count: counts?.customers ?? null },
+        { id: "catalog", label: "Catalog", count: counts?.catalog ?? null },
+      ]}
+    />
+  );
 
   return (
     <div className="page invoices-page">
@@ -328,7 +352,7 @@ export function InvoicesPage() {
         }
       />
 
-      <div className="stat-grid invoice-stats" role="group" aria-label="Invoice summary">
+      <div className="stat-grid stat-grid--scroll-phone invoice-stats" role="group" aria-label="Invoice summary">
         <StatTile
           label="Outstanding"
           value={<Money cents={summary?.outstandingCents ?? null} variant="hero" />}
@@ -365,22 +389,26 @@ export function InvoicesPage() {
         />
       </div>
 
-      <Tabs<InvoiceTab>
-        value={tab}
-        onChange={(next) => setTab(next)}
-        tabRoles
-        ariaLabel="Invoice views"
-        items={[
-          { id: "all", label: "All", count: counts?.all ?? null },
-          { id: "drafts", label: "Drafts", count: counts?.drafts ?? null },
-          { id: "outstanding", label: "Outstanding", count: counts?.outstanding ?? null },
-          { id: "overdue", label: "Overdue", count: counts?.overdue ?? null },
-          { id: "paid", label: "Paid", count: counts?.paid ?? null },
-          { id: "recurring", label: "Recurring", count: counts?.recurring ?? null },
-          { id: "customers", label: "Customers", count: counts?.customers ?? null },
-          { id: "catalog", label: "Catalog", count: counts?.catalog ?? null },
-        ]}
-      />
+      {isPhone ? (
+        <div className="invoice-tabs-row">
+          {invoiceTabs}
+          {LIST_TABS.has(tab) && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon"
+              aria-label="Search invoices"
+              aria-expanded={phoneSearchShown}
+              onClick={() => {
+                const next = !phoneSearchShown || Boolean(search);
+                setSearchOpen(next);
+                if (next) window.setTimeout(() => searchInputRef.current?.focus(), 0);
+              }}
+            >
+              <Search size={15} />
+            </button>
+          )}
+        </div>
+      ) : invoiceTabs}
 
       {workspace === undefined ? (
         <div className="card"><div className="card__body"><div className="record-table__loading">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="record-table__loading-row" />)}</div></div></div>
@@ -412,12 +440,15 @@ export function InvoicesPage() {
         <CatalogPanel items={workspace.catalog} societyId={society._id} canWrite={canWrite} />
       ) : LIST_TABS.has(tab) ? (
         <div className="card invoice-card">
+          {(!isPhone || phoneSearchShown || recentOnly || customerFilter || seriesFilter) && (
           <div className="invoice-toolbar">
+            {(!isPhone || phoneSearchShown) && (
             <label className="invoice-search">
               <Search size={14} aria-hidden="true" />
               <span className="sr-only">Search invoices</span>
-              <input className="input" type="search" value={search} placeholder="Search number, customer, item" onChange={(e) => setSearch(e.target.value)} />
+              <input ref={searchInputRef} className="input" type="search" value={search} placeholder="Search number, customer, item" onChange={(e) => setSearch(e.target.value)} />
             </label>
+            )}
             <div className="invoice-chips">
               {recentOnly && <FilterChip label="Paid in the last 30 days" onClear={() => setRecentOnly(false)} />}
               {customerFilter && <FilterChip label={customerFilter.name} onClear={() => setCustomerFilter(null)} />}
@@ -432,6 +463,7 @@ export function InvoicesPage() {
               {pluralize(rows.length, "invoice")} · <Money cents={rows.reduce((sum, row) => sum + (row.status === "void" ? 0 : row.balanceCents), 0)} /> due
             </span>
           </div>
+          )}
 
           {selectedRows.length > 0 && (
             <div className="invoice-bulkbar" role="region" aria-label="Bulk actions">

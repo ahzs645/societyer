@@ -211,7 +211,7 @@ export function DirectorsPage() {
       />
 
       <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
-      <div className="stat-grid">
+      <div className="stat-grid stat-grid--scroll-phone">
         <StatTile
           label="Active directors"
           value={directorsLoaded ? active.length : "—"}
