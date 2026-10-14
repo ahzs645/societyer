@@ -10,6 +10,7 @@ import {
   decidePortable,
   bulkApprovePortable,
   saveApprovalRulesPortable,
+  saveApproverAccessPortable,
 } from "../shared/functions/expenseReports";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -105,4 +106,16 @@ export const saveApprovalRules = authorizedMutation("expenseReports:saveApproval
   },
   returns: v.any(),
   handler: async (ctx, args) => saveApprovalRulesPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Who may approve claims: people with finance edit access (the default) or
+// anyone named in the matching approval rule. Needs finance edit access; the
+// change is recorded in the workspace activity log.
+export const saveApproverAccess = authorizedMutation("expenseReports:saveApproverAccess", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    approverAccess: v.union(v.literal("finance_writers"), v.literal("rule_roles")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => saveApproverAccessPortable(await toPortableMutationCtx(ctx), args),
 });

@@ -387,7 +387,10 @@ export function financeWorkflowExpenseReports(ids: Ids) {
       notes: "Deposit for the summer meal program kitchen.",
       receiptDocumentId: ids.receiptDocumentId,
     }),
-    claim("appreciation_dinner", people.avery, {
+    // Both dual-approval claims are Jordan's (a director with read-only finance
+    // access), so under the default approver access the two finance writers,
+    // Mina (Owner) and Avery (Admin), can complete them without self-approval.
+    claim("appreciation_dinner", people.jordan, {
       title: "Volunteer appreciation dinner",
       category: "Meals",
       amountCents: 128000,
@@ -396,7 +399,7 @@ export function financeWorkflowExpenseReports(ids: Ids) {
       status: "Submitted",
       requiredApprovals: 2,
       approvals: [],
-      approvalTrail: [step(people.avery, "submitted", "2026-04-13T18:00:00.000Z")],
+      approvalTrail: [step(people.jordan, "submitted", "2026-04-13T18:00:00.000Z")],
     }),
     claim("printer_toner", people.mina, {
       title: "Printer toner",
