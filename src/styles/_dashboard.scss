@@ -27,6 +27,18 @@
   margin-bottom: 0;
 }
 
+// Key numbers follow the dashboard's width too, not the window's: with the
+// Customize drawer open at 1280px the four tiles were ~115px wide and their
+// labels truncated. Four across only when each tile gets about 190px.
+.dashboard-module > .stat-grid,
+.dashboard-module > .stat-grid--3 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container dashboard (min-width: 800px) {
+  .dashboard-module > .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dashboard-module > .stat-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 // One column by default (phones, tablets, narrow windows): main, then side.
 .dashboard-columns,
 .dashboard-columns__main,
