@@ -7,6 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { PageHeader as TitleHeader } from "../pages/_helpers";
+import type { Crumb } from "./Breadcrumbs";
 import {
   clearRecordLayout,
   loadRecordLayout,
@@ -62,8 +63,11 @@ export function RecordShowPage({
   defaultTab,
   inspector,
   layout,
+  breadcrumbs,
 }: {
   title: ReactNode;
+  /** Trail above the title; derived from the route when omitted, `false` hides it. */
+  breadcrumbs?: Crumb[] | false;
   subtitle?: ReactNode;
   icon?: ReactNode;
   iconColor?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
@@ -277,6 +281,7 @@ export function RecordShowPage({
           icon={icon}
           iconColor={iconColor}
           actions={headerActions}
+          breadcrumbs={breadcrumbs}
         />
         {chips && <div className="record-show__chips">{chips}</div>}
         {customizing && layoutControlsEnabled && (

@@ -158,54 +158,6 @@
   color: token('text-placeholder');
   font-weight: 500;
 }
-.sidebar__group {
-  @include flex-column;
-  gap: 2px;
-}
-.sidebar__group-toggle {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  @include flex-between;
-  gap: 8px;
-  cursor: pointer;
-  text-align: left;
-}
-.sidebar__group-toggle {
-  padding: token('s-2') token('s-3') token('s-1');
-  border-radius: token('r-sm');
-  color: token('text-tertiary');
-  transition: background 0.08s ease, color 0.08s ease;
-}
-.sidebar__group-toggle:hover {
-  background: token('bg-transparent-light');
-  color: token('text-secondary');
-}
-.sidebar__group-toggle.is-active {
-  color: token('text-secondary');
-}
-.sidebar__group-trailing {
-  @include inline-flex-center;
-  gap: 6px;
-}
-.sidebar__group-meta {
-  color: token('text-placeholder');
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.sidebar__group-chevron {
-  flex-shrink: 0;
-  transition: transform token('anim-fast') token('anim-ease');
-}
-.sidebar__group.is-open .sidebar__group-chevron {
-  transform: rotate(180deg);
-}
-.sidebar__group-items {
-  @include flex-column;
-  gap: 2px;
-}
 .sidebar__nav {
   @include flex-column;
   padding: token('s-1') token('s-2');

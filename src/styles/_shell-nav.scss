@@ -1,0 +1,733 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+/* ============================================================
+   Shell navigation: two-level sidebar tree, icon rail + flyouts,
+   activation pill, breadcrumbs, shortcut hints, palette polish.
+   ============================================================ */
+
+/* ---------- Two-level tree ---------------------------------- */
+.sidebar__tree {
+  @include flex-column;
+  gap: 2px;
+}
+.sidebar__parent {
+  @include flex-column;
+  gap: 2px;
+}
+.sidebar__parent-toggle {
+  width: 100%;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sidebar__parent-toggle.is-active-parent {
+  color: token('text-primary');
+}
+.sidebar__parent-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: token('text-tertiary');
+  transition: transform token('motion-move-fast') token('ease-move');
+}
+.sidebar__parent.is-open .sidebar__parent-chevron {
+  transform: rotate(90deg);
+}
+/* A collapsed parent that holds the current page gets a small accent dot. */
+.sidebar__parent-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: token('r-pill');
+  background: token('accent');
+}
+.sidebar__parent-dot + .sidebar__parent-chevron {
+  margin-left: 0;
+}
+/* L2 rows hang off a hairline "rail" that starts under the parent's icon;
+ * their labels line up with the parent's label. */
+.sidebar__children {
+  position: relative;
+  @include flex-column;
+  gap: 1px;
+  margin-left: 19px;
+  padding-left: token('s-3');
+  padding-bottom: 2px;
+}
+.sidebar__children::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 4px;
+  width: 1px;
+  background: token('border-color-medium');
+}
+.sidebar__item--child {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: token('fs-sm');
+}
+.sidebar__item-slot--child:has(> .sidebar__item.is-active)::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * #{token('s-3')});
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: token('r-pill');
+  background: token('accent');
+}
+.sidebar__shortcut {
+  margin-left: auto;
+}
+
+/* Setup pill slot under the organization switcher. */
+.sidebar__setup {
+  padding: 0 token('s-2') token('s-1');
+  width: token('sidebar-w');
+  flex-shrink: 0;
+}
+.sidebar__setup:empty {
+  display: none;
+}
+
+/* The nav filter is available on desktop too; keep it compact there. */
+.app-shell:not(.is-mobile) .sidebar__nav-filter {
+  height: 30px;
+  margin: 2px 0 4px;
+}
+
+/* ---------- Icon rail (collapsed desktop sidebar) ------------ */
+.app-shell.is-rail .sidebar {
+  width: token('sidebar-w-rail');
+}
+.app-shell.is-rail :is(.sidebar__brand, .sidebar__nav, .sidebar__footer) {
+  width: token('sidebar-w-rail');
+}
+.app-shell.is-rail .sidebar__brand {
+  justify-content: center;
+  padding: token('s-2') 0;
+}
+.app-shell.is-rail .sidebar__workspace {
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+}
+.app-shell.is-rail .sidebar__brand-logo {
+  width: 24px;
+  height: 24px;
+  font-size: token('fs-xxs');
+}
+.app-shell.is-rail :is(.sidebar__brand-name, .sidebar__brand-workspace, .sidebar__brand-actions) {
+  display: none;
+}
+.app-shell.is-rail .sidebar__nav {
+  align-items: center;
+  padding: token('s-1') 0 token('s-2');
+}
+.sidebar-rail {
+  @include flex-column;
+  align-items: center;
+  gap: token('s-2');
+  width: 100%;
+}
+.sidebar-rail__section {
+  @include flex-column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+.sidebar-rail__section + .sidebar-rail__section {
+  padding-top: token('s-2');
+  border-top: 1px solid token('border-color-light');
+}
+.sidebar-rail__tools {
+  @include flex-column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding-bottom: token('s-2');
+  margin-bottom: token('s-1');
+  border-bottom: 1px solid token('border-color-light');
+}
+.sidebar-rail__item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-md');
+  background: transparent;
+  color: token('text-secondary');
+  cursor: pointer;
+  transition: background token('motion-fade-fast') token('ease-fade');
+}
+.sidebar-rail__item:hover,
+.sidebar-rail__item.is-open {
+  background: token('bg-hover-alpha');
+}
+.sidebar-rail__item.is-active {
+  background: token('bg-active-alpha');
+}
+/* Current section marker on the rail's leading edge. */
+.sidebar-rail__item.is-active::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: token('r-pill');
+  background: token('accent');
+}
+.sidebar-rail__tool {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.sidebar-rail__tool:hover {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+.sidebar-rail__bell {
+  display: grid;
+  place-items: center;
+}
+.sidebar-rail__bell .notif-bell,
+.sidebar-rail__bell .sidebar__icon-btn {
+  width: 32px;
+  height: 32px;
+}
+
+/* Bottom controls condense: avatar-sized user button, one theme button. */
+.app-shell.is-rail .sidebar__identity {
+  flex-direction: column;
+  align-items: center;
+  gap: token('s-1');
+  padding: token('s-2') 0;
+}
+.app-shell.is-rail .sidebar__identity > :not(.user-picker):not(.sidebar-rail__tool) {
+  display: none;
+}
+.app-shell.is-rail .sidebar__identity .user-picker {
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: token('r-pill');
+  overflow: hidden;
+  font-weight: token('fw-semibold');
+}
+.app-shell.is-rail .sidebar__identity .user-picker > span:first-child {
+  flex: 0 0 auto !important;
+  width: 1.1em;
+  overflow: hidden;
+  text-overflow: clip !important;
+  text-align: center !important;
+}
+.app-shell.is-rail .sidebar__identity .user-picker > :not(:first-child) {
+  display: none;
+}
+
+/* Flyout listing a rail parent's pages. */
+.sidebar-flyout {
+  position: fixed;
+  z-index: token('z-dropdown');
+  @include flex-column;
+  gap: 1px;
+  min-width: 220px;
+  max-width: min(300px, calc(100vw - 72px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: token('s-1');
+  border-radius: token('r-card');
+  background: token('bg-panel');
+  box-shadow: token('elevation-2');
+  color: token('text-primary');
+  animation: shell-nav-pop-in token('motion-fade') token('ease-appear');
+}
+.sidebar-flyout__title {
+  padding: 6px 8px 4px;
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  color: token('text-tertiary');
+}
+.sidebar-flyout__item {
+  @include flex-center;
+  gap: token('s-2');
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: token('r-sm');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  font-weight: token('fw-medium');
+}
+.sidebar-flyout__item:hover,
+.sidebar-flyout__item:focus-visible {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+.sidebar-flyout__item.is-active {
+  background: token('bg-active-alpha');
+  color: token('text-primary');
+}
+.sidebar-flyout__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: token('text-tertiary');
+}
+.sidebar-flyout__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes shell-nav-pop-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Activation pill + popover ------------------------ */
+.setup-ring {
+  flex-shrink: 0;
+  display: block;
+}
+.setup-ring__track {
+  stroke: token('border-color-medium');
+}
+.setup-ring__fill {
+  stroke: token('accent');
+  transition: stroke-dasharray token('motion-move-slow') token('ease-move');
+}
+.setup-pill {
+  @include inline-flex-center;
+  gap: token('s-2');
+  border: 1px solid token('border-color-light');
+  background: token('bg-panel');
+  color: token('text-secondary');
+  cursor: pointer;
+  font: inherit;
+  transition: background token('motion-fade-fast') token('ease-fade'), border-color token('motion-fade-fast') token('ease-fade');
+}
+.setup-pill:hover,
+.setup-pill.is-open {
+  border-color: token('border-color-medium');
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+.setup-pill--sidebar {
+  width: 100%;
+  height: 30px;
+  padding: 0 token('s-2');
+  border-radius: token('r-pill');
+  font-size: token('fs-sm');
+  font-weight: token('fw-medium');
+}
+.setup-pill__label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.setup-pill__count {
+  color: token('text-tertiary');
+  font-variant-numeric: tabular-nums;
+  font-size: token('fs-xs');
+}
+.setup-pill--rail {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: token('r-pill');
+}
+.setup-pill--topbar {
+  position: relative;
+  flex: none;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-md');
+  background: transparent;
+}
+.setup-pill__ring-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: token('fs-xxs');
+  font-weight: token('fw-semibold');
+  color: token('text-primary');
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.setup-pop {
+  position: fixed;
+  z-index: token('z-popover');
+  @include flex-column;
+  overflow-y: auto;
+  border-radius: token('r-card');
+  background: token('bg-panel');
+  box-shadow: token('elevation-2');
+  color: token('text-primary');
+  animation: shell-nav-pop-in token('motion-fade') token('ease-appear');
+}
+.setup-pop__head {
+  @include flex-center;
+  gap: token('s-3');
+  padding: token('s-3') token('s-3') token('s-2');
+}
+.setup-pop__intro {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.setup-pop__intro strong {
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+}
+.setup-pop__intro span {
+  font-size: token('fs-xs');
+  color: token('text-tertiary');
+}
+.setup-pop__steps {
+  margin: 0;
+  padding: 0 token('s-1') token('s-1');
+  list-style: none;
+  @include flex-column;
+  gap: 1px;
+}
+.setup-pop__step {
+  display: flex;
+  align-items: flex-start;
+  gap: token('s-2');
+  padding: 7px 8px;
+  border-radius: token('r-md');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  text-decoration: none;
+}
+.setup-pop__step:hover,
+.setup-pop__step:focus-visible {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+.setup-pop__state {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding-top: 1px;
+  color: token('text-placeholder');
+}
+.setup-pop__step.is-complete .setup-pop__state {
+  color: token('success');
+}
+.setup-pop__step.is-complete .setup-pop__title {
+  color: token('text-tertiary');
+  font-weight: token('fw-regular');
+}
+.setup-pop__step.is-next {
+  background: token('accent-soft');
+  color: token('text-primary');
+}
+.setup-pop__step.is-next .setup-pop__state {
+  color: token('accent');
+}
+.setup-pop__text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.setup-pop__title {
+  font-weight: token('fw-medium');
+}
+.setup-pop__desc {
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+  line-height: 1.4;
+}
+.setup-pop__go {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: token('accent');
+}
+.setup-pop__foot {
+  @include flex-between;
+  gap: token('s-2');
+  padding: token('s-2') token('s-3');
+  border-top: 1px solid token('border-color-light');
+  font-size: token('fs-sm');
+}
+.setup-pop__link {
+  color: token('accent');
+  font-weight: token('fw-medium');
+}
+.setup-pop__hide {
+  @include inline-flex-center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 token('s-2');
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  font: inherit;
+  cursor: pointer;
+}
+.setup-pop__hide:hover {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+
+/* ---------- Breadcrumbs -------------------------------------- */
+.breadcrumbs {
+  min-width: 0;
+  margin-bottom: token('s-2');
+  font-size: token('fs-sm');
+}
+.breadcrumbs__list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.breadcrumbs__item {
+  min-width: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.breadcrumbs__item.is-current {
+  max-width: 40ch;
+}
+.breadcrumbs__link {
+  color: token('text-tertiary');
+  border-radius: token('r-xs');
+}
+.breadcrumbs__link:hover {
+  color: token('text-primary');
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.breadcrumbs__text {
+  color: token('text-secondary');
+}
+.breadcrumbs__sep {
+  display: inline-grid;
+  place-items: center;
+  color: token('text-placeholder');
+}
+.breadcrumbs__back {
+  display: none;
+}
+/* The breadcrumb replaces the hand-rolled "← All meetings" back links that
+ * detail pages render above their header. */
+.page:has(.page__header--with-crumbs) > a.row.muted:first-child,
+.app-shell.is-mobile .page:has(.page__header--with-crumbs) > a.row.muted:first-child,
+.page__header--with-crumbs > .page__actions > a:has(> svg.lucide-arrow-left:first-child) {
+  display: none;
+}
+@media (max-width: 760px) {
+  /* Phones: just "← Parent", a thumb-sized link above the title. */
+  .breadcrumbs__list {
+    display: none;
+  }
+  .breadcrumbs__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    max-width: 100%;
+    margin-left: -6px;
+    padding: 0 6px;
+    border-radius: token('r-sm');
+    color: token('text-secondary');
+    font-weight: token('fw-medium');
+  }
+  .breadcrumbs__back span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .breadcrumbs__back:active {
+    background: token('bg-hover');
+  }
+  .breadcrumbs {
+    margin-bottom: 2px;
+  }
+  /* Undo the room the phone layout makes for the hidden back arrow. */
+  .app-shell.is-mobile .page:has(> a.row.muted:first-child) .page__header.page__header--with-crumbs,
+  .app-shell.is-mobile .page .page__header.page__header--with-crumbs {
+    padding-left: 0;
+  }
+}
+
+/* ---------- Shortcut hints + help dialog --------------------- */
+.shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.shortcut-hint__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.shortcut-hint__key {
+  @include inline-flex-center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid token('border-color-medium');
+  border-bottom-width: 2px;
+  border-radius: token('r-xs');
+  background: token('bg-subtle');
+  color: token('text-tertiary');
+  font-family: token('font-mono');
+  font-size: token('fs-xxs');
+  line-height: 1;
+}
+.shortcut-hint__then {
+  color: token('text-tertiary');
+  font-size: token('fs-xxs');
+}
+/* Inside dark tooltips. */
+.shortcut-hint--inverse .shortcut-hint__key {
+  border-color: transparent;
+  background: color-mix(in oklab, currentColor 18%, transparent);
+  color: inherit;
+}
+.shortcut-hint--inverse .shortcut-hint__then {
+  color: inherit;
+  opacity: 0.7;
+}
+.tooltip .shortcut-hint {
+  margin-left: 6px;
+}
+.shortcut-help__search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  @include flex-center;
+  gap: token('s-2');
+  height: 36px;
+  padding: 0 token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+  color: token('text-tertiary');
+}
+.shortcut-help__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+}
+.shortcut-help__search input:focus {
+  outline: none;
+}
+.shortcut-help__search input::-webkit-search-cancel-button {
+  display: none;
+}
+.shortcut-help__search:focus-within {
+  border-color: token('border-focus');
+}
+.shortcut-help__search button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: token('r-xs');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.shortcut-help__sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+  gap: token('s-4') token('s-6');
+  align-items: start;
+}
+.shortcut-help__section-label {
+  margin: 0;
+}
+.shortcut-help__label {
+  min-width: 0;
+}
+.shortcut-help__keys {
+  flex-shrink: 0;
+}
+.shortcut-help__empty,
+.shortcut-help__foot {
+  margin: 0;
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
+}
+
+/* ---------- Command palette polish --------------------------- */
+.kbar__group-label {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  background: token('bg-panel');
+}
+.kbar__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kbar__path {
+  color: token('text-tertiary');
+}
+.kbar__hint .shortcut-hint {
+  margin-left: token('s-2');
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-flyout,
+  .setup-pop {
+    animation: none;
+  }
+}
+
+/* Pages stay in their section even when pinned, so a pinned row only shows
+ * its unpin control on hover/focus instead of permanently. */
+.sidebar__item-slot > [data-pinned] + .sidebar__pin-toggle {
+  opacity: 0;
+  pointer-events: none;
+}
+.sidebar__item-slot:hover > [data-pinned] + .sidebar__pin-toggle,
+.sidebar__item-slot:focus-within > [data-pinned] + .sidebar__pin-toggle {
+  opacity: 1;
+  pointer-events: auto;
+}

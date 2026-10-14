@@ -63,6 +63,7 @@ import {
   Plug,
   Plus,
   Layers,
+  Keyboard,
 } from "lucide-react";
 import {
   ComponentType,
@@ -124,15 +125,18 @@ import {
   WorkbenchPageLoader,
   OfflineBellFallback,
   navItem,
-  NAV_GROUPS,
+  NAV_TREE_ENTRIES,
   ALL_NAV_ITEMS,
   ALL_NAV_ITEM_ROUTES,
   isNavItemActive,
   normalizePinnedRoutes,
   readStoredPinnedRoutes,
   getPinnedNav,
-  getGroupedNav,
-  getInitialOpenGroups,
+  filterNavTree,
+  getInitialOpenParents,
+  readStoredSidebarMode,
+  writeStoredSidebarMode,
+  writeStoredOpenParents,
   COLLAPSE_KEY,
   SPOTLIGHT_COLLAPSED_KEY,
   PINNED_ROUTES_KEY,
@@ -152,10 +156,25 @@ import {
 } from "./Layout.internal";
 import type {
   NavItem,
-  NavGroup,
+  VisibleNavEntry,
+  VisibleNavParent,
+  SidebarMode,
   FavoriteRef,
   SidebarContextMenu,
 } from "./Layout.internal";
+import {
+  SidebarNavTree,
+  SidebarRail,
+  SidebarThemeCycleButton,
+  handleSidebarNavKeyDown,
+  type RailFavorite,
+} from "./SidebarNav";
+import { SetupPill } from "./SetupPill";
+import { Tooltip } from "./Tooltip";
+import { ShortcutHint, shortcutText } from "./ShortcutHint";
+import { openShortcutHelp } from "./ShortcutHelp";
+import { navParentForPath, navRouteForPath } from "../lib/navTree";
+import { useGoToShortcuts } from "../hooks/useGoToShortcuts";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
 
@@ -176,8 +195,11 @@ export function Layout() {
   const [navFilter, setNavFilter] = useState("");
   // Tracks a touch on the mobile drawer so a decisive left-swipe can dismiss it.
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [collapsed, setCollapsed] = useState(
-    () => !isStaticDemoRuntime() && localStorage.getItem(COLLAPSE_KEY) === "1",
+  // Desktop sidebar: full tree, a 56px icon rail, or hidden (focus mode).
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(readStoredSidebarMode);
+  // Where "show sidebar" returns to after focus mode.
+  const lastVisibleModeRef = useRef<Exclude<SidebarMode, "hidden">>(
+    sidebarMode === "rail" ? "rail" : "expanded",
   );
   const [spotlightCollapsed, setSpotlightCollapsed] = useState(
     () => !isStaticDemoRuntime() && localStorage.getItem(SPOTLIGHT_COLLAPSED_KEY) === "1",
@@ -198,12 +220,14 @@ export function Layout() {
     // Views aren't included in the initial migration because they live in
     // zustand and need to be appended once that store is read in render.
   });
-  // Desktop opens the group containing the current route; the phone drawer
-  // starts with every group collapsed so the catalog reads as ~10 scannable
-  // headers instead of a 90-row scroll.
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
-    isMobileNav ? {} : getInitialOpenGroups(window.location.pathname),
+  // Expanded L1 parents. Desktop remembers the user's choice; the phone
+  // drawer starts collapsed so the catalog reads as a short list of sections.
+  // Either way the current page's parent is open.
+  const [openParents, setOpenParents] = useState<Record<string, boolean>>(() =>
+    getInitialOpenParents(window.location.pathname, isMobileNav),
   );
+  const railFlyoutRef = useRef<((id: string, focusFirst: boolean) => void) | null>(null);
+  useGoToShortcuts();
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<{
     top?: number;
@@ -328,20 +352,17 @@ export function Layout() {
   }, [navigate, toast]);
 
   useEffect(() => {
-    if (isStaticDemoRuntime()) return;
-    localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
-  }, [collapsed]);
+    writeStoredSidebarMode(sidebarMode);
+    if (sidebarMode !== "hidden") lastVisibleModeRef.current = sidebarMode;
+  }, [sidebarMode]);
 
-  // Keep the active route's sidebar group open as the user navigates. We only
-  // force-open — never auto-close — so user-collapsed groups stay that way.
+  // Keep the current page's parent open as the user navigates. We only
+  // force-open — never auto-close — so user-collapsed parents stay that way.
   useEffect(() => {
-    const groupedNav = getGroupedNav(new Set(pinnedRoutes));
-    const activeGroup = groupedNav.find((group) =>
-      group.items.some((item) => isNavItemActive(item, loc.pathname)),
-    );
-    if (!activeGroup) return;
-    setOpenGroups((prev) => (prev[activeGroup.id] ? prev : { ...prev, [activeGroup.id]: true }));
-  }, [loc.pathname, pinnedRoutes]);
+    const activeParent = navParentForPath(loc.pathname);
+    if (!activeParent) return;
+    setOpenParents((prev) => (prev[activeParent.id] ? prev : { ...prev, [activeParent.id]: true }));
+  }, [loc.pathname]);
 
   useEffect(() => {
     if (isStaticDemoRuntime()) return;
@@ -432,12 +453,17 @@ export function Layout() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+      // Shift turns "\\" into "|" on most layouts; the physical key is the same.
+      const isBackslash = e.key === "\\" || e.key === "|" || e.code === "Backslash";
+      if ((e.metaKey || e.ctrlKey) && isBackslash) {
         e.preventDefault();
         if (isMobileNav) {
           setMobileSidebarOpen((v) => !v);
+        } else if (e.shiftKey) {
+          // Focus mode: hide the sidebar entirely, or bring it back as it was.
+          setSidebarMode((mode) => (mode === "hidden" ? lastVisibleModeRef.current : "hidden"));
         } else {
-          setCollapsed((v) => !v);
+          setSidebarMode((mode) => (mode === "expanded" ? "rail" : "expanded"));
         }
       }
     };
@@ -518,15 +544,6 @@ export function Layout() {
       if (content) content.inert = false;
     };
   }, [isMobileNav, mobileInspectorOpen]);
-
-  useEffect(() => {
-    const groupedNav = getGroupedNav(new Set(pinnedRoutes));
-    const activeGroup = groupedNav.find((group) =>
-      group.items.some((item) => isNavItemActive(item, loc.pathname)),
-    );
-    if (!activeGroup) return;
-    setOpenGroups((prev) => (prev[activeGroup.id] ? prev : { ...prev, [activeGroup.id]: true }));
-  }, [loc.pathname, pinnedRoutes]);
 
   useEffect(() => {
     if (!workspaceOpen) return;
@@ -619,7 +636,6 @@ export function Layout() {
   const counts = localWorkspaceReady ? rawCounts : undefined;
   const pinnedRouteSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
-  const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
   const entityKind = useMemo(() => (society ? organizationKind(society as any) : null), [society]);
   const { can } = usePermissions();
   // The firm-wide Portfolio rolls up multiple entities; with a single entity it
@@ -651,47 +667,65 @@ export function Layout() {
       .filter((command): command is NonNullable<typeof command> => Boolean(command))
       .filter((command) => !command.module || isModuleEnabled(society, command.module));
   }, [staticCommands, pinnedCommandIds, society]);
-  const visibleGroupedNav = useMemo(
+  // The two-level tree, minus pages this organization can't use. A parent
+  // whose children are all hidden disappears with them. A pinned top-level
+  // page (Dashboard) already sits in Favorites, so it isn't repeated; pages
+  // inside a section stay in place so the section reads complete.
+  const visibleNavTree = useMemo(
     () =>
-      groupedNav.map((group) => ({
-        ...group,
-        items: group.items.filter(
+      filterNavTree(
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
           routeAllowedForEntityKind(item, entityKind) &&
           navAllowedForEntityCount(item) &&
           (!item.permission || can(item.permission)),
-      ),
-      })).filter((group) => group.items.length > 0),
-    [groupedNav, society, entityKind, isMultiEntity, can],
+      ).filter((entry) => entry.kind !== "item" || !pinnedRouteSet.has(entry.item.to)),
+    [society, entityKind, isMultiEntity, can, pinnedRouteSet],
   );
   const getNavItemLabel = (item: NavItem) => {
     const label = routeLabelForOrganization(item, society as any);
     return t(NAV_ITEM_LABEL_KEYS[label] ?? label, label);
   };
-  // Drawer nav filter (mobile): match on the translated label; groups with no
-  // hits drop out, matching groups render forced-open. Cheap enough (<100 rows)
-  // to compute per render.
+  /** Label for a row inside the tree (e.g. Financials reads "Overview" under Finance). */
+  const getTreeItemLabel = (item: NavItem) =>
+    item.treeLabel ? t(`nav.tree.${item.treeLabel.toLowerCase()}`, item.treeLabel) : getNavItemLabel(item);
+  const getParentLabel = (entry: VisibleNavParent) =>
+    entry.i18nKey ? t(entry.i18nKey, entry.label) : entry.label;
+  const activeNavRoute = navRouteForPath(loc.pathname);
+  const isRail = !isMobileNav && sidebarMode === "rail";
+  // Nav filter: matches L1 and L2 labels (translated, plus the page's own name
+  // for relabelled rows). A matching parent keeps all its pages; otherwise only
+  // the matching pages show, and every remaining parent renders expanded.
   const navFilterQuery = navFilter.trim().toLowerCase();
-  const displayedGroupedNav = navFilterQuery
-    ? visibleGroupedNav
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) =>
-            getNavItemLabel(item).toLowerCase().includes(navFilterQuery),
-          ),
-        }))
-        .filter((group) => group.items.length > 0)
-    : visibleGroupedNav;
-  const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
+  const displayedNavTree: VisibleNavEntry[] = navFilterQuery
+    ? visibleNavTree.flatMap<VisibleNavEntry>((entry) => {
+        const matches = (item: NavItem) =>
+          getTreeItemLabel(item).toLowerCase().includes(navFilterQuery) ||
+          getNavItemLabel(item).toLowerCase().includes(navFilterQuery);
+        if (entry.kind === "item") return matches(entry.item) ? [entry] : [];
+        if (getParentLabel(entry).toLowerCase().includes(navFilterQuery)) return [entry];
+        const children = entry.children.filter(matches);
+        return children.length > 0 ? [{ ...entry, children }] : [];
+      })
+    : visibleNavTree;
+  const setParentOpen = (id: string, open: boolean) => {
+    setOpenParents((prev) => {
+      if (Boolean(prev[id]) === open) return prev;
+      const next = { ...prev, [id]: open };
+      if (!isMobileNav) writeStoredOpenParents(next);
+      return next;
+    });
+  };
+  const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : sidebarMode === "hidden";
   const shellClassName = useMemo(() => {
     let value = "app-shell";
     if (isSidebarCollapsed) value += " is-collapsed";
+    if (isRail) value += " is-rail";
     if (isMobileNav) value += " is-mobile";
     if (isMobileNav && mobileSidebarOpen) value += " is-mobile-nav-open";
     if (isMobileNav && favoritesEditing) value += " is-favorites-editing";
     return value;
-  }, [isMobileNav, isSidebarCollapsed, mobileSidebarOpen, favoritesEditing]);
+  }, [isMobileNav, isSidebarCollapsed, isRail, mobileSidebarOpen, favoritesEditing]);
 
   const mobileOverlayOpen = isMobileNav && (mobileSidebarOpen || mobileInspectorOpen);
 
@@ -699,7 +733,7 @@ export function Layout() {
     if (isMobileNav) {
       setMobileSidebarOpen(true);
     } else {
-      setCollapsed(false);
+      setSidebarMode(lastVisibleModeRef.current);
     }
   };
 
@@ -707,7 +741,7 @@ export function Layout() {
     if (isMobileNav) {
       setMobileSidebarOpen((v) => !v);
     } else {
-      setCollapsed((v) => !v);
+      setSidebarMode((mode) => (mode === "expanded" ? "rail" : "expanded"));
     }
   };
 
@@ -832,6 +866,55 @@ export function Layout() {
     if (ref.kind === "command") return visiblePinnedCommands.some((cmd) => cmd.id === ref.id);
     return pinnedViews.some((view) => view.viewsKey === ref.viewsKey && view.viewId === ref.viewId);
   };
+
+  // The icon rail shows favorites as icons only (no drag, no controls).
+  const railFavorites: RailFavorite[] = favoritesOrder.flatMap<RailFavorite>((ref) => {
+    if (ref.kind === "route") {
+      const item = visiblePinnedNav.find((nav) => nav.to === ref.id);
+      if (!item) return [];
+      const Icon = item.icon;
+      return [{
+        key: favoriteRefKey(ref),
+        label: getNavItemLabel(item),
+        icon: (
+          <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
+            <Icon size={14} />
+          </TintedIconTile>
+        ),
+        to: item.to,
+        active: isNavItemActive(item, loc.pathname),
+      }];
+    }
+    if (ref.kind === "view") {
+      const view = pinnedViews.find((pv) => pv.viewsKey === ref.viewsKey && pv.viewId === ref.viewId);
+      if (!view) return [];
+      return [{
+        key: favoriteRefKey(ref),
+        label: view.label,
+        icon: (
+          <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
+            <Pin size={12} />
+          </TintedIconTile>
+        ),
+        to: `${view.to}?view=${view.viewId}`,
+        active: loc.pathname === view.to,
+      }];
+    }
+    const command = visiblePinnedCommands.find((cmd) => cmd.id === ref.id);
+    if (!command) return [];
+    const Icon = command.icon;
+    return [{
+      key: favoriteRefKey(ref),
+      label: command.label,
+      icon: (
+        <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
+          <Icon size={14} />
+        </TintedIconTile>
+      ),
+      run: () => { void command.run(); },
+      active: false,
+    }];
+  });
 
   // Touch has no drag-reorder or right-click, so each favorite row gets explicit
   // up/down/unpin controls on mobile. These are real <button>s rendered as a
@@ -1021,8 +1104,9 @@ export function Layout() {
           <button
             className="sidebar-peek"
             onClick={openSidebar}
-            title={`${t("sidebar.openSidebar")} (⌘\\)`}
+            title={`${t("sidebar.openSidebar")} (${shortcutText("hideSidebar")})`}
             aria-label={t("sidebar.openSidebar")}
+            tabIndex={sidebarMode === "hidden" ? undefined : -1}
           >
             <PanelLeftOpen size={14} />
           </button>
@@ -1108,7 +1192,7 @@ export function Layout() {
                 <button
                   className="sidebar__icon-btn"
                   onClick={() => window.dispatchEvent(new Event("kbar:open"))}
-                  title={`${t("common.search")} (/ or ⌘K)`}
+                  title={`${t("common.search")} (/ or ${shortcutText("commandPalette")})`}
                   aria-label={t("common.search")}
                 >
                   <Search size={14} />
@@ -1121,15 +1205,20 @@ export function Layout() {
                 <button
                   className="sidebar__icon-btn sidebar__toggle"
                   onClick={toggleSidebar}
-                  title={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${t("sidebar.sidebar")} (⌘\\)`}
-                  aria-label={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${t("sidebar.sidebar")}`}
+                  title={`${t("sidebar.collapse")} ${t("sidebar.sidebar")} (${shortcutText("toggleSidebar")})`}
+                  aria-label={`${t("sidebar.collapse")} ${t("sidebar.sidebar")}`}
                 >
                   <PanelLeftClose size={14} />
                 </button>
               )}
             </div>
           </div>
-          {!operationsDeskHidden && (
+          {!isMobileNav && !isRail && (
+            <div className="sidebar__setup">
+              <SetupPill variant="sidebar" />
+            </div>
+          )}
+          {!operationsDeskHidden && !isRail && (
             <div className={`sidebar__spotlight${spotlightCollapsed ? " is-collapsed" : ""}`}>
               <button
                 type="button"
@@ -1176,7 +1265,58 @@ export function Layout() {
             </div>
           )}
 
-          <nav className="sidebar__nav">
+          <nav
+            className="sidebar__nav"
+            aria-label={t("sidebar.navigation")}
+            onKeyDown={(event) =>
+              handleSidebarNavKeyDown(event, setParentOpen, isRail ? railFlyoutRef.current ?? undefined : undefined)
+            }
+          >
+            {isRail ? (
+              <>
+                <div className="sidebar-rail__tools">
+                  <SetupPill variant="rail" />
+                  <Tooltip content={<>{t("common.search")} <ShortcutHint id="commandPalette" tone="inverse" /></>} placement="right" delay={250}>
+                    <button
+                      type="button"
+                      className="sidebar-rail__tool"
+                      onClick={() => window.dispatchEvent(new Event("kbar:open"))}
+                      aria-label={t("common.search")}
+                      data-nav-row=""
+                    >
+                      <Search size={14} />
+                    </button>
+                  </Tooltip>
+                  {!aiChatHidden && (
+                    <Tooltip content="AI assistant" placement="right" delay={250}>
+                      <button
+                        type="button"
+                        className="sidebar-rail__tool"
+                        onClick={openGlobalAiAssistant}
+                        aria-label="AI assistant"
+                        data-nav-row=""
+                      >
+                        <Bot size={14} />
+                      </button>
+                    </Tooltip>
+                  )}
+                  <span className="sidebar-rail__bell"><NotificationBellSafe /></span>
+                </div>
+                <SidebarRail
+                  favorites={railFavorites}
+                  entries={visibleNavTree}
+                  activeRoute={activeNavRoute}
+                  getParentLabel={getParentLabel}
+                  getItemLabel={getTreeItemLabel}
+                  renderCount={(item) => {
+                    const count = getCount(item.to, counts);
+                    return count != null ? <NavCountPill to={item.to} count={count} /> : null;
+                  }}
+                  flyoutRef={railFlyoutRef}
+                />
+              </>
+            ) : (
+            <>
             <div className="sidebar__section sidebar__section--compact sidebar__section--favorites">
               <span>{t("nav.favorites")}</span>
               {/* iOS-style list editing: view mode keeps rows clean; Edit
@@ -1218,7 +1358,7 @@ export function Layout() {
                       aria-current={isActive ? "page" : undefined}
                       className={`sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
                       data-pinned
-                      title={!isMobileNav && collapsed ? label : undefined}
+                      data-nav-row=""
                       draggable
                       onClick={() => navigate(item.to)}
                       onKeyDown={(event) => {
@@ -1261,7 +1401,7 @@ export function Layout() {
                       tabIndex={0}
                       aria-current={isActive ? "page" : undefined}
                       className={`sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
-                      title={collapsed ? view.label : undefined}
+                      data-nav-row=""
                       draggable
                       onClick={() => navigate(target)}
                       onKeyDown={(event) => {
@@ -1281,7 +1421,7 @@ export function Layout() {
                       <span className="sidebar__nav-icon" aria-hidden="true">
                         <Pin size={12} />
                       </span>
-                      {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
+                      <span className="sidebar__nav-label">{view.label}</span>
                     </div>
                     {renderFavoriteControls(ref, index)}
                   </div>
@@ -1306,8 +1446,8 @@ export function Layout() {
                       }
                       handleCommandKeyDown(event, command.id, command.label);
                     }}
-                    title={collapsed ? command.label : undefined}
                     aria-label={command.label}
+                    data-nav-row=""
                     draggable
                     onDragStart={onFavoriteDragStart(index)}
                     onDragOver={onFavoriteDragOver(index)}
@@ -1318,7 +1458,7 @@ export function Layout() {
                     <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
                       <Icon size={14} />
                     </TintedIconTile>
-                    {!collapsed && <span className="sidebar__label">{command.label}</span>}
+                    <span className="sidebar__label">{command.label}</span>
                   </div>
                   {renderFavoriteControls(ref, index)}
                 </div>
@@ -1341,73 +1481,53 @@ export function Layout() {
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.allRecords")}</span>
             </div>
-            {/* With ~95 routes, type-to-jump beats scrolling on a phone. The
-              * filter only exists in the mobile drawer; desktop has ⌘K. */}
-            {isMobileNav && (
-              <div className="sidebar__nav-filter">
-                <Search size={13} aria-hidden="true" />
-                <input
-                  type="text"
-                  value={navFilter}
-                  onChange={(event) => setNavFilter(event.target.value)}
-                  placeholder={t("sidebar.filterNav", "Filter navigation…")}
-                  aria-label={t("sidebar.filterNav", "Filter navigation…")}
-                />
-                {navFilter && (
-                  <button
-                    type="button"
-                    aria-label={t("common.clear", "Clear")}
-                    onClick={() => setNavFilter("")}
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
-            )}
-            {navFilterQuery && displayedGroupedNav.length === 0 && (
+            {/* With ~95 routes, type-to-jump beats scrolling. Matches L1 and
+              * L2 labels; matching sections expand. */}
+            <div className="sidebar__nav-filter">
+              <Search size={13} aria-hidden="true" />
+              <input
+                type="text"
+                value={navFilter}
+                onChange={(event) => setNavFilter(event.target.value)}
+                placeholder={t("sidebar.filterNav", "Filter navigation…")}
+                aria-label={t("sidebar.filterNav", "Filter navigation…")}
+              />
+              {navFilter && (
+                <button
+                  type="button"
+                  aria-label={t("common.clear", "Clear")}
+                  onClick={() => setNavFilter("")}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {navFilterQuery && displayedNavTree.length === 0 && (
               <div className="sidebar__filter-empty">{t("sidebar.noNavMatches", "No matches")}</div>
             )}
-            {displayedGroupedNav.map((group) => {
-              const isOpen = navFilterQuery ? true : (openGroups[group.id] ?? false);
-              const hasActiveItem = group.items.some((item) => isNavItemActive(item, loc.pathname));
-
-              return (
-                <div className={`sidebar__group${isOpen ? " is-open" : ""}`} key={group.id}>
-                  <button
-                    type="button"
-                    className={`sidebar__section sidebar__group-toggle${hasActiveItem ? " is-active" : ""}`}
-                    onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !isOpen }))}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{t(`nav.${group.id}`, group.label)}</span>
-                    <span className="sidebar__group-trailing">
-                      <span className="sidebar__group-meta">{group.items.length}</span>
-                      <ChevronDown size={12} className="sidebar__group-chevron" />
-                    </span>
-                  </button>
-                  {isOpen && (
-                    <div className="sidebar__group-items">
-                      {group.items.map((item) =>
-                        renderNavItem(
-                          item,
-                          counts,
-                          collapsed,
-                          isMobileNav,
-                          getNavItemLabel,
-                          pinnedRouteSet.has(item.to),
-                          handleNavItemContextMenu,
-                          handleNavItemKeyDown,
-                          (navItem) => togglePinnedFavorite({ kind: "route", id: navItem.to }),
-                          pinnedRouteSet.has(item.to)
-                            ? t("sidebar.unpinFromFavorites")
-                            : t("sidebar.pinToFavorites"),
-                        ),
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            <SidebarNavTree
+              entries={displayedNavTree}
+              openParents={openParents}
+              forceOpen={Boolean(navFilterQuery)}
+              activeRoute={activeNavRoute}
+              onToggleParent={setParentOpen}
+              getParentLabel={getParentLabel}
+              renderItem={(item, parentId) =>
+                renderNavItem(item, {
+                  counts,
+                  label: parentId ? getTreeItemLabel(item) : getNavItemLabel(item),
+                  isPinned: pinnedRouteSet.has(item.to),
+                  isActive: activeNavRoute === item.to,
+                  parentId,
+                  onContextMenu: handleNavItemContextMenu,
+                  onKeyDown: handleNavItemKeyDown,
+                  onTogglePin: (navItem) => togglePinnedFavorite({ kind: "route", id: navItem.to }),
+                  pinActionLabel: pinnedRouteSet.has(item.to)
+                    ? t("sidebar.unpinFromFavorites")
+                    : t("sidebar.pinToFavorites"),
+                })
+              }
+            />
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.resources")}</span>
             </div>
@@ -1416,17 +1536,44 @@ export function Layout() {
               href="https://www2.gov.bc.ca/gov/content/employment-business/non-profits-sector/not-for-profit-organizations"
               target="_blank"
               rel="noreferrer"
-              title={!isMobileNav && collapsed ? t("nav.documentation") : undefined}
             >
               <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
                 <HelpCircle size={14} />
               </TintedIconTile>
               <span className="sidebar__label">{t("nav.documentation")}</span>
             </a>
+            {!isMobileNav && (
+              <button
+                type="button"
+                className="sidebar__item sidebar__item--command"
+                onClick={openShortcutHelp}
+                data-nav-row=""
+              >
+                <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
+                  <Keyboard size={14} />
+                </TintedIconTile>
+                <span className="sidebar__label">Keyboard shortcuts</span>
+                <ShortcutHint id="help" className="sidebar__shortcut" />
+              </button>
+            )}
+            </>
+            )}
           </nav>
           <div className="sidebar__identity">
             <UserPickerSafe />
-            <SidebarThemeToggle />
+            {isRail ? <SidebarThemeCycleButton /> : <SidebarThemeToggle />}
+            {isRail && (
+              <Tooltip content={<>Expand sidebar <ShortcutHint id="toggleSidebar" tone="inverse" /></>} placement="right" delay={250}>
+                <button
+                  type="button"
+                  className="sidebar-rail__tool"
+                  onClick={() => setSidebarMode("expanded")}
+                  aria-label={`${t("sidebar.expand")} ${t("sidebar.sidebar")}`}
+                >
+                  <PanelLeftOpen size={14} />
+                </button>
+              </Tooltip>
+            )}
           </div>
         </aside>
 
@@ -1708,6 +1855,7 @@ export function Layout() {
               <Search size={16} />
               <span>{t("common.search")}</span>
             </button>
+            <SetupPill variant="topbar" />
             <NotificationBellSafe />
           </header>
         )}

@@ -413,9 +413,10 @@
     font-size: token('fs-sm');
     padding-top: token('s-4');
   }
-  .app-shell.is-mobile .sidebar__group-toggle {
+  /* L2 rows sit one step smaller than their L1 parent. */
+  .app-shell.is-mobile .sidebar__item--child {
     font-size: token('fs-md');
-    padding: 8px 10px;
+    padding: 9px 10px;
   }
 
   /* Inspector becomes a page sheet on phones: it rises from the bottom,
