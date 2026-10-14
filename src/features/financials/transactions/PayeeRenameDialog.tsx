@@ -86,8 +86,8 @@ export function PayeeRenameDialog({
         displayName: displayName.trim(),
       });
       const previous = target.alias;
-      toast.success(`Renamed ${pluralize(count, "transaction")} to ${displayName.trim()}`, {
-        description: "New imports from this payee get the new name too.",
+      toast.success(count > 0 ? `Renamed ${pluralize(count, "transaction")} to ${displayName.trim()}` : `Saved the payee name ${displayName.trim()}`, {
+        description: count > 0 ? "New imports from this payee get the new name too." : "New imports from this payee get the new name.",
         duration: 10_000,
         action: {
           label: "Undo",

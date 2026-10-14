@@ -25,6 +25,12 @@
   gap: token(s-1);
   padding: token(s-4) token(s-4) token(s-3);
   border-bottom: 1px solid token(border-alpha);
+
+  .money--hero {
+    font-size: token(fs-xxl);
+    font-weight: token(fw-semibold);
+    line-height: 1.15;
+  }
 }
 
 .transaction-panel__direction {
@@ -383,6 +389,7 @@
 
 .payee-names .card__head {
   flex-wrap: wrap;
+  justify-content: space-between;
   gap: token(s-2);
 }
 

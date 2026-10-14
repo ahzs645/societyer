@@ -51,9 +51,14 @@ export function CategorizationProvenance({ txn }: { txn: ProvenanceTransaction }
   const isRule = method === "rule";
   const ruleName = txn.ruleApplication?.ruleName ?? "a rule";
   const label = isRule ? `Categorised by rule: ${ruleName}` : method === "suggestion" ? "Suggested category" : "Manually categorised";
-  const ruleId = txn.ruleId ? String(txn.ruleId) : null;
+  // A rule restored with Undo comes back under a new id; find it by name then.
+  const hostedRule = isRule && drawer?.workspace
+    ? drawer.workspace.rules.find((rule) => rule._id === String(txn.ruleId ?? "")) ??
+      drawer.workspace.rules.find((rule) => rule.name === txn.ruleApplication?.ruleName)
+    : undefined;
+  const ruleId = hostedRule?._id ?? (txn.ruleId ? String(txn.ruleId) : null);
   // In place when the page hosts the editor and the rule still exists.
-  const ruleInPlace = Boolean(ruleId && drawer?.workspace?.rules.some((rule) => rule._id === ruleId));
+  const ruleInPlace = Boolean(hostedRule);
   const canCreateRule = Boolean(drawer && canWrite && txn.category && typeof txn.amountCents === "number");
 
   return (

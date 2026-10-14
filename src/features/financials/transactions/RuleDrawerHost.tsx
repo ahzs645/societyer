@@ -16,6 +16,8 @@ export type RuleDrawerApi = {
   /** Delete a rule, with an Undo toast that puts it back in the same place. */
   deleteRule: (ruleId: string) => Promise<void>;
   canWrite: boolean;
+  /** True while the rule editor is open (a side panel can step aside for it). */
+  isOpen: boolean;
 };
 
 const RuleDrawerContext = createContext<RuleDrawerApi | null>(null);
@@ -92,8 +94,8 @@ export function useRuleDrawerHost(societyId: string | undefined, canWrite: boole
   );
 
   const api_ = useMemo<RuleDrawerApi>(
-    () => ({ workspace, openDraft, editRule, deleteRule, canWrite }),
-    [workspace, openDraft, editRule, deleteRule, canWrite],
+    () => ({ workspace, openDraft, editRule, deleteRule, canWrite, isOpen: draft !== null }),
+    [workspace, openDraft, editRule, deleteRule, canWrite, draft],
   );
 
   // The rules batch may add an `initialDraft` prop for prefilled new rules;

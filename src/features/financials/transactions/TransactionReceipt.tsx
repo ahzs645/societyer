@@ -138,7 +138,11 @@ export function TransactionReceipt({
           <UploadCloud size={18} aria-hidden="true" />
           <span className="txn-receipt__drop-title">{busy ? "Attaching…" : "Drop a receipt here, or choose a file"}</span>
           <span className="txn-receipt__drop-hint">
-            {needed ? `Payments over ${formatMoney(RECEIPT_ATTENTION_THRESHOLD_CENTS, { trimWholeCents: true })} need a receipt.` : "Saved to Documents as a receipt."}
+            {txn.receiptStatus === "attached"
+              ? "Marked as received in the bank feed. Add the file to keep it with this transaction."
+              : needed
+                ? `Payments over ${formatMoney(RECEIPT_ATTENTION_THRESHOLD_CENTS, { trimWholeCents: true })} need a receipt.`
+                : "Saved to Documents as a receipt."}
           </span>
           <input
             ref={inputRef}

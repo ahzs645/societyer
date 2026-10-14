@@ -85,10 +85,13 @@ export function useTransactionsSurface({
     [ruleDrawer.api.workspace?.fundRestrictions],
   );
 
+  // The panel and the rule editor share the docked inspector; the panel steps
+  // aside while a rule is edited and comes back when the editor closes.
+  const ruleEditorOpen = ruleDrawer.api.isOpen;
   const renderSidePanel = useCallback(
     (records: readonly PanelTransaction[]) =>
       ({ record, onClose, onNavigate }: { record: any; onClose: () => void; onNavigate: (record: any) => void }) =>
-        societyId ? (
+        societyId && !ruleEditorOpen ? (
           <TransactionDetailPanel
             record={record}
             records={records}
@@ -102,7 +105,7 @@ export function useTransactionsSurface({
             onMarkReviewed={() => runBulk([String(record._id)], { reviewed: true }, () => "Marked as reviewed")}
           />
         ) : null,
-    [aliases, canWrite, fundNames, handleUpdate, runBulk, societyId],
+    [aliases, canWrite, fundNames, handleUpdate, runBulk, ruleEditorOpen, societyId],
   );
 
   return { ruleDrawer, aliases, decorate, handleUpdate, renderSidePanel };

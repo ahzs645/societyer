@@ -897,7 +897,7 @@ export function FinancialsPage() {
                 selectable={canWrite}
                 loading={tableData.loading || transactions === undefined}
                 renderCell={({ record: t, field }) => {
-                  if (field.name === "description" && t.payeeRenamed && t.description === (t.counterparty || t.description)) return <span title={t.description}>{t.payeeName}</span>;
+                  if (field.name === "description" && t.payeeRenamed) return <span title={t.description}>{t.payeeName}</span>;
                   if (field.name === "counterparty") return t.payeeRenamed ? <span title={t.counterparty || t.description}>{t.payeeName}</span> : undefined;
                   if (field.name === "date") return <span title={formatDate(t.date, "EEEE, MMMM d, yyyy")}>{formatShortDate(t.date, todayISO)}</span>;
                   if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
