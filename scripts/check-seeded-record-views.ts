@@ -97,4 +97,24 @@ await t.run(async (ctx) => {
 
 // Idempotent: a further reseed changes nothing.
 await seed(societyId);
+
+// Every object ends up with exactly its default view plus its seeded extras —
+// including objects added after a workspace was first seeded (the operational
+// registers: assets subgrids, inventory, contact preferences, grant sources,
+// Wave data), which a reseed tops up without duplicating anything.
+const viewCounts = await t.run(async (ctx) => {
+  const counts: Record<string, number> = {};
+  for (const object of RECORD_TABLE_OBJECTS) {
+    const row = await ctx.db.query("objectMetadata").withIndex("by_society_name", (q) => q.eq("societyId", societyId).eq("nameSingular", object.nameSingular)).unique();
+    assert.ok(row, `${object.nameSingular} is seeded`);
+    const views = await ctx.db.query("views").withIndex("by_object", (q) => q.eq("objectMetadataId", row!._id)).collect();
+    counts[object.nameSingular] = views.filter((view) => view.name === object.defaultView.name || (object.extraViews ?? []).some((extra) => extra.name === view.name)).length;
+  }
+  return counts;
+});
+for (const object of RECORD_TABLE_OBJECTS) {
+  const expected = 1 + (object.extraViews ?? []).filter((extra) => extra.name !== object.defaultView.name).length;
+  if (object.nameSingular === "meeting") continue;
+  assert.equal(viewCounts[object.nameSingular], expected, `${object.nameSingular} has its default and seeded views once each after reseeding`);
+}
 console.log(`Seeded record views ok: ${RECORD_TABLE_OBJECTS.length} objects reference only defined fields; ${fixture.stale.length} stale meeting-review copies retired, personal, filtered and meeting views kept.`);

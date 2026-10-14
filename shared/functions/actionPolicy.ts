@@ -45,6 +45,11 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   communicationCampaigns: "communications", communicationDeliveries: "communications",
   grantApplications: "grants", grantTransactions: "grants", grantReports: "grants",
   governanceExpectations: "continuity", continuityPeriodMarks: "continuity",
+  assetMaintenance: "assets", assetEvents: "assets", assetVerificationItems: "assets",
+  inventoryItems: "inventoryHub", inventoryBalances: "inventoryHub", stockMovements: "inventoryHub",
+  inventoryLocations: "inventoryHub", inventoryLots: "inventoryHub", inventoryCounts: "inventoryHub",
+  memberCommunicationPrefs: "communications", organizationHistoryMotions: "organizationHistory",
+  waveCacheResources: "waveCache",
 };
 const HANDLER_POLICIES = new Set([
   "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",

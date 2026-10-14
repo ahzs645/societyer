@@ -42,6 +42,9 @@ function rulesFor(vocab: OrganizationVocabulary, organization?: LegalEntityLike 
     };
     add("meeting", { options: { type: meetingTypeOptions } });
     add("meetingTemplate", { options: { meetingType: meetingTypeOptions } });
+    // Outside a society the member table only holds contact records.
+    const contactTitle = vocab.contactNoun.charAt(0).toUpperCase() + vocab.contactNoun.slice(1);
+    add("communicationPreference", { fields: { contactName: { from: "Member", to: contactTitle } } });
     add("roleHolder", {
       options: { directorTerm: { until_the_next_annual_general_meeting: { from: "Until the next AGM", to: `Until the next ${vocab.annualMeeting}` } } },
     });

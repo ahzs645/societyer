@@ -7,6 +7,7 @@
  */
 
 import { ROUTINE_MOTION_TAGS } from "../shared/proceduralMotions";
+import { DOMAIN_RECORD_TABLE_OBJECTS } from "./recordTableDomainObjects";
 
 // Field types the registry understands — keep in sync with
 // src/platform/record-engine/types/FieldType.ts
@@ -2644,6 +2645,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       { name: "value", label: "Value", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true, config: { currencyCode: "CAD", isCents: true } },
       { name: "nextMaintenanceDate", label: "Maintenance", fieldType: FIELD_TYPES.DATE, icon: "Wrench", isReadOnly: true },
       { name: "purchaseEvidence", label: "Purchase evidence", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true },
+      { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, icon: "Tag", isReadOnly: true },
+      { name: "needsAttention", label: "Needs attention", fieldType: FIELD_TYPES.BOOLEAN, icon: "AlertTriangle", isReadOnly: true, config: { trueLabel: "Needs attention", falseLabel: "OK" } },
     ],
     defaultView: {
       name: "All inventory",
@@ -2672,6 +2675,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           { fieldName: "location", size: 150 },
         ],
       },
+      { name: "Needs attention", filters: [{ fieldName: "needsAttention", operator: "isTrue", value: true }] },
+      { name: "Disposed", filters: [{ fieldName: "status", operator: "eq", value: "Disposed" }] },
     ],
   },
   {
@@ -3070,6 +3075,12 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "proofOfNotice", size: 160 },
       ],
     },
+    extraViews: [
+      { name: "Problems", filters: [{ fieldName: "status", operator: "in", value: ["failed", "bounced"] }] },
+      { name: "Suppressed", filters: [{ fieldName: "status", operator: "in", value: ["skipped", "unsubscribed"] }] },
+      { name: "Email", filters: [{ fieldName: "channel", operator: "eq", value: "email" }] },
+      { name: "SMS", filters: [{ fieldName: "channel", operator: "eq", value: "sms" }] },
+    ],
   },
   {
     nameSingular: "grantApplication",
@@ -3600,4 +3611,5 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       },
     ],
   },
+  ...DOMAIN_RECORD_TABLE_OBJECTS,
 ];
