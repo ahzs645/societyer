@@ -170,6 +170,7 @@ import {
   type RailFavorite,
 } from "./SidebarNav";
 import { SetupPill } from "./SetupPill";
+import { GroupBySpotlight } from "./GroupBySpotlight";
 import { Tooltip } from "./Tooltip";
 import { ShortcutHint, shortcutText } from "./ShortcutHint";
 import { openShortcutHelp } from "./ShortcutHelp";
@@ -1869,6 +1870,7 @@ export function Layout() {
                   <Suspense fallback={<WorkbenchPageLoader />}>
                     <RouteAccessGate><Outlet /></RouteAccessGate>
                   </Suspense>
+                  <GroupBySpotlight />
                 </div>
                 <InspectorHost onOpenChange={setMobileInspectorOpen} />
               </div>
