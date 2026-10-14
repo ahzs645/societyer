@@ -216,10 +216,13 @@ export function groupTasks(tasks: TaskRecord[], by: TaskGroupBy, now = new Date(
 
 /* ---------------------------------------------------------------- quick scopes */
 
-export type TaskScope = "all" | "mine" | "overdue" | "week" | "unowned";
+/** "open" matches the sidebar Tasks badge: To do, In progress or Blocked. */
+export type TaskScope = "all" | "open" | "mine" | "overdue" | "week" | "unowned";
 
 export function taskInScope(task: TaskRecord, scope: TaskScope, userId: string | null | undefined, now = new Date()) {
   switch (scope) {
+    case "open":
+      return isOpenStatus(task.status);
     case "mine":
       return isMine(task, userId);
     case "overdue":

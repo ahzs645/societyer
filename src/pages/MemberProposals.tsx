@@ -121,7 +121,7 @@ export function MemberProposalsPage() {
           <RecordTable
             loading={tableData.loading || items === undefined}
             renderCell={({ record, field }) => {
-              if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
+              if (field.name === "submittedAtISO") return <span>{formatDate(record.submittedAtISO)}</span>;
               if (field.name === "signatureCount") {
                 const req = Math.max(
                   rules?.memberProposalMinSignatures ?? 1,

@@ -4,7 +4,7 @@ import { useQuery } from "convex/react";
 import { Braces, Database, ExternalLink, RefreshCw } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Flag } from "../../../components/ui";
-import { formatDateTime } from "../../../lib/format";
+import { formatDateTime, formatDate } from "../../../lib/format";
 import { Money } from "../../../components/Money";
 import {
   type WaveAccountView,
@@ -641,7 +641,7 @@ function AccountTransactionsPreview({
           <tbody>
             {rows.slice(0, 10).map((row: any) => (
               <tr key={row._id}>
-                <td className="table__cell--mono">{row.date}</td>
+                <td>{formatDate(row.date)}</td>
                 <td>
                   <strong>{row.description}</strong>
                   {isCategory
@@ -707,7 +707,7 @@ function CounterpartyTransactionsPreview({
               const accountHref = row.accountResource?._id ? `/app/financials/wave/account/${row.accountResource._id}` : null;
               return (
                 <tr key={row._id}>
-                  <td className="table__cell--mono">{row.date}</td>
+                  <td>{formatDate(row.date)}</td>
                   <td>
                     <strong>{row.description}</strong>
                     {row.externalId && <div className="muted table__cell--mono" style={{ fontSize: 11 }}>{row.externalId}</div>}
@@ -788,7 +788,7 @@ export function TransactionDrawer({
               gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
             }}
           >
-            <DetailCell label="Date" value={transaction.date} mono />
+            <DetailCell label="Date" value={formatDate(transaction.date)} />
             <DetailCell label="Account" value={account?.name ?? "—"} />
             <DetailCell
               label="Category"

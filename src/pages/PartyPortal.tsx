@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { PageLoading } from "./_helpers";
 import { Building2, Download, FileText, ShieldCheck, Users } from "lucide-react";
+import { formatDate } from "../lib/format";
 
 /**
  * Public, token-gated stakeholder portal (e.g. an auditor's read-only room).
@@ -76,7 +77,7 @@ export function PartyPortalPage() {
                   <tr key={p._id}>
                     <td><strong>{p.title}</strong>{p.summary && <div className="muted">{p.summary}</div>}</td>
                     <td>{p.category}</td>
-                    <td className="mono">{(p.publishedAtISO ?? "").slice(0, 10)}</td>
+                    <td>{formatDate(p.publishedAtISO)}</td>
                     <td>{p.downloadUrl ? <a className="btn btn--sm" href={p.downloadUrl}><Download size={12} /> Download</a> : <span className="muted">—</span>}</td>
                   </tr>
                 ))}

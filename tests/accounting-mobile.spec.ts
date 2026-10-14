@@ -9,7 +9,7 @@ test.describe("accounting responsive layout", () => {
 
     // Entries live in one "+ New" menu; setup tools sit behind "⋯ More".
     await page.getByRole("button", { name: "New", exact: true }).click();
-    for (const name of ["Journal entry", "Allocate imported transaction", "Ledger reconciliation"]) {
+    for (const name of ["Journal entry", "Opening balances", "Allocate imported transaction", "Ledger reconciliation"]) {
       await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
     }
     await page.keyboard.press("Escape");

@@ -1658,7 +1658,18 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       },
       { name: "startDate", label: "Start", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
       { name: "status", label: "Status", fieldType: FIELD_TYPES.TEXT, icon: "Activity", isReadOnly: true },
-      { name: "compensation", label: "Compensation", fieldType: FIELD_TYPES.TEXT, icon: "DollarSign", isReadOnly: true },
+      // Annual salary in cents, so the column right-aligns, sorts and sums as
+      // money. Hourly staff have no annual figure: the page renders their wage
+      // with "/hr" and the numeric value stays empty rather than mixing units.
+      {
+        name: "compensation",
+        label: "Compensation",
+        description: "Annual salary. Hourly wages are shown per hour and are not included in totals.",
+        fieldType: FIELD_TYPES.CURRENCY,
+        icon: "DollarSign",
+        isReadOnly: true,
+        config: { currencyCode: "CAD", isCents: true },
+      },
     ],
     defaultView: {
       name: "All employees",
@@ -1692,7 +1703,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     defaultView: {
       name: "All receipts",
       columns: [
-        { fieldName: "receiptNumber", size: 100 },
+        { fieldName: "receiptNumber", size: 140 },
         { fieldName: "donorName", size: 220 },
         { fieldName: "receivedOnISO", size: 120 },
         { fieldName: "amountCents", size: 130 },

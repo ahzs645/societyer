@@ -1,5 +1,4 @@
-import { calendarDateKey } from "../lib/calendarDates";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -10,6 +9,9 @@ import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { formatDate, formatDateTime, isPastDue, money } from "../lib/format";
+import { organizationTodayISO } from "../lib/dateRanges";
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function TimelinePage() {
   const society = useSociety();
@@ -27,6 +29,9 @@ export function TimelinePage() {
   const elections = useQuery(api.elections.list, society && loaded && can("elections:read") ? { societyId: society._id } : "skip");
   const bylawAmendments = useQuery(api.bylawAmendments.list, society && loaded && can("documents:read") ? { societyId: society._id } : "skip");
 
+  // The Now marker and "overdue" follow the organisation's calendar day, like
+  // the rest of the app, not the viewer's browser clock.
+  const todayISO = organizationTodayISO(society);
   const grouped = useMemo(() => {
     const events: { date: string; kind: string; title: string; sub?: string; to?: string; past: boolean; color?: string }[] = [];
     const now = Date.now();
@@ -97,7 +102,7 @@ export function TimelinePage() {
         });
       });
     });
-    const today = calendarDateKey(new Date());
+    const today = todayISO;
     (deadlines ?? []).forEach((deadline: any) => {
       if (!deadline.dueDate) return;
       const done = deadline.status ? deadline.status !== "open" : Boolean(deadline.done);
@@ -153,28 +158,43 @@ export function TimelinePage() {
       }
     });
     return events.filter((event) => Boolean(event.date)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources, deadlines, elections, bylawAmendments]);
+  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources, deadlines, elections, bylawAmendments, todayISO]);
 
   // Hooks must run before any early returns so the rules-of-hooks contract holds.
   const nowMarkerRef = useRef<HTMLDivElement | null>(null);
-  const renderNow = Date.now();
+  const [renderNow] = useState(() => Date.now());
   // Order top-to-bottom chronologically: oldest past at the top, future stretching
-  // downward, with the Now marker as the pivot. `grouped` is sorted descending by
-  // date (line 90), so past needs reversing; future is reversed back to ascending.
+  // downward, with the Today marker as the pivot. `grouped` is sorted descending
+  // by date, so past needs reversing; future is reversed back to ascending.
+  // Date-only entries (deadlines, filings) are past once their day is before the
+  // organisation's today; timestamped ones once the instant has passed.
+  const isBeforeNow = (date: string) => DATE_ONLY.test(date) ? date < todayISO : new Date(date).getTime() < renderNow;
   const past = useMemo(
-    () => grouped.filter((e) => new Date(e.date).getTime() < renderNow).slice().reverse(),
-    [grouped, renderNow],
+    () => grouped.filter((e) => isBeforeNow(String(e.date))).slice().reverse(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isBeforeNow only reads todayISO and renderNow
+    [grouped, todayISO, renderNow],
   );
   const future = useMemo(
-    () => grouped.filter((e) => new Date(e.date).getTime() >= renderNow).slice().reverse(),
-    [grouped, renderNow],
+    () => grouped.filter((e) => !isBeforeNow(String(e.date))).slice().reverse(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isBeforeNow only reads todayISO and renderNow
+    [grouped, todayISO, renderNow],
   );
 
+  // Keep the Today marker in view while the event sources load, so the user
+  // lands on the present instead of the top of the entire history. (On the
+  // first render the list is still empty, and each later source pushes the
+  // marker down.) Stop as soon as the person scrolls or types themselves.
+  const userMoved = useRef(false);
   useEffect(() => {
-    // After the initial render, scroll the Now marker into view so the user
-    // lands on the present instead of the top of the entire history.
-    nowMarkerRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    const stop = () => { userMoved.current = true; };
+    const events = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    events.forEach((name) => window.addEventListener(name, stop, { once: true, passive: true }));
+    return () => events.forEach((name) => window.removeEventListener(name, stop));
   }, []);
+  useEffect(() => {
+    if (userMoved.current || past.length === 0) return;
+    nowMarkerRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
+  }, [past.length]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -208,10 +228,10 @@ export function TimelinePage() {
               </div>
             ))}
 
-            <div className="timeline-vertical__now" ref={nowMarkerRef} aria-label="Now">
+            <div className="timeline-vertical__now" ref={nowMarkerRef} aria-label={`Today, ${formatDate(todayISO)}`}>
               <span className="timeline-vertical__now-dot" />
               <span className="timeline-vertical__now-label">
-                Now · {formatDateTime(new Date(renderNow).toISOString())}
+                Today · {formatDate(todayISO)}
               </span>
             </div>
 

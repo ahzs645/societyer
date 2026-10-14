@@ -484,6 +484,9 @@ export function AccountingWorkbenchPage() {
               minWidth={220}
               items={[
                 { id: "journal", label: "Journal entry", icon: <GitCompareArrows size={14} />, onSelect: () => setDrawer("journal") },
+                // Opening balances post a journal entry too, so they belong with
+                // the other entries as well as with the setup tools under More.
+                { id: "opening", label: "Opening balances", icon: <FileSpreadsheet size={14} />, onSelect: () => setDrawer("opening") },
                 { id: "candidate", label: "Allocate imported transaction", icon: <Split size={14} />, onSelect: () => setDrawer("candidate") },
                 { id: "reconciliation", label: "Ledger reconciliation", icon: <Scale size={14} />, onSelect: () => setDrawer("reconciliation") },
               ]}

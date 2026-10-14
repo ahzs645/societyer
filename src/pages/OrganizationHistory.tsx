@@ -53,6 +53,7 @@ import {
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { StatTile } from "../components/StatTile";
 import { Tooltip } from "../components/Tooltip";
+import { formatDueDate } from "../lib/format";
 
 type Confidence = "High" | "Medium" | "Review";
 type Status = "Draft" | "Verified" | "NeedsReview" | "Archived";
@@ -631,7 +632,7 @@ export function OrganizationHistoryPage() {
                     <tr key={term._id}>
                       <td><strong>{term.personName}</strong></td>
                       <td>{term.position}</td>
-                      <td className="table__cell--mono muted">{term.startDate || "?"} - {term.endDate || "present/unknown"}</td>
+                      <td className="muted">{formatDueDate(term.startDate) || "?"} – {formatDueDate(term.endDate) || "present/unknown"}</td>
                       <td><Badge>{term.changeType}</Badge></td>
                       <td><SourceBadges ids={term.sourceIds} sourceById={sourceById} /></td>
                       <td>
@@ -695,7 +696,7 @@ export function OrganizationHistoryPage() {
                 header: "Date",
                 sortable: true,
                 accessor: (motion) => motion.meetingDate,
-                render: (motion) => <span className="table__cell--mono muted">{motion.meetingDate || "-"}</span>,
+                render: (motion) => <span className="muted">{formatDueDate(motion.meetingDate) || "-"}</span>,
                 width: 120,
               },
               {
@@ -819,7 +820,7 @@ export function OrganizationHistoryPage() {
                   <div className="timeline-vertical__item" key={event._id}>
                     <span className="timeline-vertical__dot" />
                     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{event.eventDate}</span>
+                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDueDate(event.eventDate)}</span>
                       <Badge tone="accent">{event.category}</Badge>
                       <ConfidenceBadge confidence={event.confidence} />
                       <StatusBadge status={event.status} />
@@ -877,7 +878,7 @@ export function OrganizationHistoryPage() {
                         <strong>{source.title}</strong>
                         {source.notes && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{source.notes}</div>}
                       </td>
-                      <td className="table__cell--mono muted">{source.sourceDate || "-"}</td>
+                      <td className="muted">{formatDueDate(source.sourceDate) || "-"}</td>
                       <td><Badge>{source.category}</Badge></td>
                       <td><ConfidenceBadge confidence={source.confidence} /></td>
                       <td><SourceRecordLink source={source} /></td>
@@ -1431,7 +1432,7 @@ export function OrganizationHistoryBudgetPage() {
               <tbody>
                 {registerTransactions.map((row: any, index: number) => (
                   <tr key={`${row.transactionDate}-${row.description}-${index}`}>
-                    <td className="table__cell--mono">{row.monthLabel ?? row.transactionDate}</td>
+                    <td>{row.monthLabel ?? formatDueDate(row.transactionDate)}</td>
                     <td><strong>{row.description}</strong></td>
                     <td><Badge tone={row.debitCredit === "credit" ? "success" : row.debitCredit === "debit" ? "warn" : "neutral"}>{row.debitCredit ?? "review"}</Badge></td>
                     <td className="table__cell--mono">{formatCents(row.amountCents, budget.currency)}</td>
@@ -1559,7 +1560,7 @@ function MotionReviewCell({ motion, sourceById }: { motion: any; sourceById: Map
     <div className="org-history__motion-cell">
       <div className="org-history__motion-text">{motionTitle(motion)}</div>
       <div className="org-history__motion-meta">
-        <span className="table__cell--mono">{motion.meetingDate || "Undated"}</span>
+        <span>{formatDueDate(motion.meetingDate) || "Undated"}</span>
         {motion.meetingTitle && <span>{motion.meetingTitle}</span>}
         <Badge tone={motionReviewSourceTone(motion)}>{motionReviewSourceLabel(motion)}</Badge>
         {motion.matchedPaperlessMinutes && isPersistedMotion(motion) && <Badge tone="info">Matched minutes</Badge>}

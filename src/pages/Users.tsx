@@ -17,6 +17,7 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
 import { useConfirm } from "../components/Modal";
 import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
+import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
@@ -202,7 +203,7 @@ export function UsersPage() {
                     {status}
                   </Badge>
                 </td>
-                <td className="mono users-table__wide">{u.lastLoginAtISO ? formatDate(u.lastLoginAtISO) : "—"}</td>
+                <td className="users-table__wide">{u.lastLoginAtISO ? formatDate(u.lastLoginAtISO) : "—"}</td>
                 <td className="users-table__actions">
                   {auth.mode === "none" && (
                     <button
@@ -250,6 +251,7 @@ export function UsersPage() {
           selectedUserId={selectedUserId ?? actingUserId ?? users[0]._id}
           onSelectUser={setSelectedUserId}
           moduleSource={society}
+          entityKind={organizationKind(society as any)}
         />
       )}
 
@@ -482,7 +484,7 @@ function InvitationsPanel({
                     {status}
                   </Badge>
                 </td>
-                <td className="mono muted">{inv.createdAtISO?.slice(0, 10)}<div className="muted">Expires {inv.expiresAtISO?.slice(0, 10) ?? "Reissue required"}</div></td>
+                <td className="muted">{formatDate(inv.createdAtISO)}<div className="muted">{inv.expiresAtISO ? `Expires ${formatDate(inv.expiresAtISO)}` : "Reissue required"}</div></td>
                 <td className="table__actions">
                   {status === "pending" && (
                     <>

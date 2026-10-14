@@ -11,7 +11,7 @@ import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Plus, Users, Trash2 } from "lucide-react";
-import { dollarInputToCents, formatDate, money, initials } from "../lib/format";
+import { dollarInputToCents, formatDate, initials } from "../lib/format";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { Money } from "../components/Money";
 import { useMemo } from "react";
@@ -60,7 +60,9 @@ export function EmployeesPage() {
     ...e,
     name: `${e.firstName} ${e.lastName}`,
     status: e.endDate ? formatDate(e.endDate) : "Active",
-    compensation: e.annualSalaryCents ? money(e.annualSalaryCents) : e.hourlyWageCents ? `${money(e.hourlyWageCents)}/hr` : "—",
+    // Numeric (cents) so the currency column sorts, filters and totals; hourly
+    // wages render per hour below and stay out of the annual figure.
+    compensation: e.annualSalaryCents ?? null,
   })), [items]);
 
   if (society === undefined) return <PageLoading />;
@@ -142,7 +144,7 @@ export function EmployeesPage() {
               if (field.name === "compensation" && (record.annualSalaryCents || record.hourlyWageCents)) {
                 return record.annualSalaryCents
                   ? <Money cents={record.annualSalaryCents} trimWholeCents />
-                  : <span><Money cents={record.hourlyWageCents} />/hr</span>;
+                  : <span className="num"><Money cents={record.hourlyWageCents} />/hr</span>;
               }
               if (field.name === "employmentType") {
                 return <Badge>{EMPLOYMENT_TYPE_LABELS[record.employmentType] ?? record.employmentType}</Badge>;

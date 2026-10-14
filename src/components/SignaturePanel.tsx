@@ -292,7 +292,7 @@ export function SignaturePanel({
               <span className="signature-list-row__name">{s.signerName}</span>
               {s.signerRole && <Badge>{s.signerRole}</Badge>}
             </div>
-            <span className="signature-list-row__meta muted mono">
+            <span className="signature-list-row__meta muted">
               {formatDateTime(s.signedAtISO)}
             </span>
             <div className="signature-list-row__actions">

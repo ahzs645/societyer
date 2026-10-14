@@ -430,7 +430,7 @@ export function WorkflowDetailPage() {
                 <Badge tone={latestRun.status === "success" ? "success" : latestRun.status === "failed" ? "danger" : "warn"}>
                   {titleCase(String(latestRun.status).replace(/_/g, " "))}
                 </Badge>
-                <span className="mono muted">{formatDateTime(latestRun.startedAtISO)}</span>
+                <span className="muted">{formatDateTime(latestRun.startedAtISO)}</span>
               </div>
             ) : (
               <div className="muted">No runs yet.</div>

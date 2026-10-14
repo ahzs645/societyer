@@ -216,7 +216,7 @@ export function BackfillReviewDrawer({
                     const status = STATUS_LABEL[row.status] ?? { label: row.status, tone: "neutral" as const };
                     return (
                       <tr key={row.transactionId} className={row.status === "post" ? undefined : "backfill-review__row--excluded"}>
-                        <td className="table__cell--mono">{formatDate(row.date)}</td>
+                        <td>{formatDate(row.date)}</td>
                         <td>{row.description}</td>
                         <td>{row.category || "—"}</td>
                         <td className="num"><Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "auto"} /></td>

@@ -19,15 +19,18 @@ export function WorkspaceAccessViewer({
   selectedUserId,
   onSelectUser,
   moduleSource,
+  entityKind,
 }: {
   users: readonly AccessUser[];
   selectedUserId: string;
   onSelectUser: (userId: string) => void;
   moduleSource: Parameters<typeof normalizeModuleSettings>[0];
+  /** The organisation's kind; areas that do not apply to it are left out. */
+  entityKind?: string | null;
 }) {
   const user = users.find((entry) => entry._id === selectedUserId) ?? users[0];
   if (!user) return null;
-  const rows = getModuleAccess(user.role, moduleSource, user.status);
+  const rows = getModuleAccess(user.role, moduleSource, user.status, entityKind);
   const actionLabels = { view: "View", write: "Edit", approve: "Approve", submit: "Submit", manage: "Manage" };
   const inactive = user.status !== undefined && user.status !== "Active";
 

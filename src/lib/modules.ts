@@ -33,12 +33,17 @@ export type ModuleCategory =
   | "Public"
   | "Integrations";
 
+/** Entity kinds a module applies to; omitted means every kind. */
+export type ModuleEntityKind = "society" | "corporation";
+
 export type ModuleDefinition = {
   key: ModuleKey;
   label: string;
   category: ModuleCategory;
   description: string;
   includes: string[];
+  /** Matches the module's routes in ROUTE_IDENTITY (entityKinds). */
+  entityKinds?: ModuleEntityKind[];
 };
 
 type LegacyModuleSettings = Partial<ModuleSettings>;
@@ -173,6 +178,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Finance",
     description: "Receipt issuance, voiding, and receipt history.",
     includes: ["Donation receipts"],
+    entityKinds: ["society"],
   },
   {
     key: "membershipBilling",
@@ -180,12 +186,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: "Finance",
     description: "Plans, subscriptions, and membership billing operations.",
     includes: ["Membership & billing"],
+    entityKinds: ["society"],
   },
   {
     key: "employees",
     label: "Employee register",
     category: "Finance",
-    description: "Employee records for societies with payroll or staff.",
+    description: "Employee records for organizations with payroll or staff.",
     includes: ["Employees"],
   },
   {
@@ -210,6 +217,20 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     includes: ["Workflows", "Workflow runs", "Scheduled recipes"],
   },
 ];
+
+/**
+ * Whether a module applies to an organisation of this kind. Unknown kinds
+ * ("organization", or before the workspace loads) keep every module, like
+ * routeAllowedForEntityKind.
+ */
+export function moduleAppliesToEntityKind(
+  module: { entityKinds?: readonly ModuleEntityKind[] },
+  kind: string | null | undefined,
+): boolean {
+  if (!module.entityKinds?.length) return true;
+  if (kind === "society" || kind === "corporation") return module.entityKinds.includes(kind);
+  return true;
+}
 
 export const MODULES_BY_KEY = Object.fromEntries(
   MODULE_DEFINITIONS.map((module) => [module.key, module]),

@@ -952,7 +952,7 @@ export function AssetDetailPage() {
             rowKey={(row) => row._id as string}
             defaultSort={{ columnId: "happenedAtISO", dir: "desc" }}
             columns={[
-              { id: "happenedAtISO", header: "Date", sortable: true, accessor: (row) => row.happenedAtISO, render: (row) => <span className="mono">{formatDate(row.happenedAtISO)}</span> },
+              { id: "happenedAtISO", header: "Date", sortable: true, accessor: (row) => row.happenedAtISO, render: (row) => <span>{formatDate(row.happenedAtISO)}</span> },
               { id: "eventType", header: "Event", accessor: (row) => row.eventType, render: (row) => <span className="cell-tag">{row.eventType}</span> },
               { id: "custody", header: "Custody", accessor: (row) => row.toCustodianName, render: (row) => row.toCustodianName || row.location || "—" },
               { id: "condition", header: "Condition", accessor: (row) => row.condition },

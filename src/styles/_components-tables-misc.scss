@@ -498,6 +498,38 @@ select.editable-cell__input {
 .calendar-view__scroll { min-width: 0; max-width: 100%; overflow-x: auto; }
 .calendar-view--month .calendar-view__weekdays,
 .calendar-view--month .calendar-view__grid { min-width: 560px; }
+/* Compact month (narrow containers): seven columns that fit the width, with a
+   tappable day button and tone dots instead of truncated labels. */
+.calendar-view.is-compact .calendar-view__weekdays,
+.calendar-view.is-compact .calendar-view__grid { min-width: 0; }
+.calendar-view.is-compact .calendar-view__grid { grid-auto-rows: minmax(44px, auto); }
+.calendar-view.is-compact .calendar-view__weekday { padding: 4px 0; text-align: center; letter-spacing: 0; }
+.calendar-view.is-compact .calendar-view__weekday abbr { text-decoration: none; }
+.calendar-view.is-compact .calendar-view__cell { padding: 2px; align-items: center; }
+.calendar-view.is-compact .calendar-view__cell > .calendar-view__date { margin: 2px 0 0; }
+.calendar-view__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 40px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.calendar-view__day:hover { background: token('bg-hover'); }
+.calendar-view__day .calendar-view__date { margin: 0; }
+.calendar-view__dots { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; }
+.calendar-view__dot { width: 6px; height: 6px; border-radius: 50%; background: token('accent'); flex-shrink: 0; }
+.calendar-view__dot--success { background: token('success'); }
+.calendar-view__dot--warn { background: token('warn'); }
+.calendar-view__dot--danger { background: token('danger'); }
+.calendar-view__dot--info { background: token('info'); }
+.calendar-view__dot-more { font-size: token('fs-xs'); line-height: 1; color: token('text-tertiary'); }
 .calendar-view--week .calendar-view__event,
 .calendar-view--list .calendar-view__event { white-space: normal; overflow-wrap: anywhere; }
 .calendar-view--week .calendar-view__date { min-height: 28px; }

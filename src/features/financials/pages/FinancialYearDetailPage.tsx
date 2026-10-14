@@ -269,7 +269,7 @@ function SourceDocumentsTable({ documents }: { documents: any[] }) {
               </td>
               <td className="table__cell--mono">{documentExternalId(doc) ?? "—"}</td>
               <td><Badge tone={documentCategoryTone(doc.category)}>{doc.category ?? "Document"}</Badge></td>
-              <td className="table__cell--mono">{formatDate(doc.createdAtISO)}</td>
+              <td>{formatDate(doc.createdAtISO)}</td>
               <td>
                 {doc.url ? (
                   <a className="btn btn--ghost btn--sm" href={doc.url} target="_blank" rel="noreferrer">
@@ -327,7 +327,7 @@ function ImportSummaryTable({ imports, exactImportIds }: { imports: any[]; exact
                 <strong>{row.title}</strong>
                 {exactImportIds.has(row._id) && <div><Badge tone="success">Matches table row</Badge></div>}
               </td>
-              <td className="table__cell--mono">{formatDate(row.periodEnd)}</td>
+              <td>{formatDate(row.periodEnd)}</td>
               <td><Badge tone={row.status === "Verified" ? "success" : row.status === "Rejected" ? "danger" : "warn"}>{row.status}</Badge></td>
               <td className="num"><Money cents={row.revenueCents} negativeStyle="parentheses" /></td>
               <td className="num"><Money cents={row.expensesCents} negativeStyle="parentheses" /></td>

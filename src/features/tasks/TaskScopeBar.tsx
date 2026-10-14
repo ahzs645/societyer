@@ -1,10 +1,11 @@
-import { AlarmClock, CalendarRange, Inbox, UserRound, UserX } from "lucide-react";
+import { AlarmClock, CalendarRange, CircleDashed, Inbox, UserRound, UserX } from "lucide-react";
 import type { ReactNode } from "react";
 import { Select } from "../../components/Select";
 import { TASK_GROUP_OPTIONS, type TaskGroupBy, type TaskScope } from "./taskModel";
 
 const SCOPES: { value: TaskScope; label: string; icon: ReactNode; tone?: "danger" }[] = [
   { value: "all", label: "All", icon: <Inbox size={12} /> },
+  { value: "open", label: "Open", icon: <CircleDashed size={12} /> },
   { value: "mine", label: "Assigned to me", icon: <UserRound size={12} /> },
   { value: "overdue", label: "Overdue", icon: <AlarmClock size={12} />, tone: "danger" },
   { value: "week", label: "Due this week", icon: <CalendarRange size={12} /> },
@@ -35,7 +36,7 @@ export function TaskScopeBar({
       <div className="task-scope-bar__chips" role="group" aria-label="Show tasks">
         {SCOPES.map((option) => {
           const count = counts[option.value];
-          if (option.value !== "all" && option.value !== "mine" && count === 0 && scope !== option.value) return null;
+          if (option.value !== "all" && option.value !== "open" && option.value !== "mine" && count === 0 && scope !== option.value) return null;
           return (
             <button
               key={option.value}

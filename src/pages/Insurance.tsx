@@ -909,7 +909,7 @@ function RenewalCell({ date }: { date?: string }) {
   const tone: any = days < 0 ? "danger" : days <= 30 ? "warn" : days <= 60 ? "info" : "neutral";
   return (
     <>
-      <span className="mono">{formatDate(date)}</span>{" "}
+      <span>{formatDate(date)}</span>{" "}
       <Badge tone={tone}>{days < 0 ? `${-days}d late` : `in ${days}d`}</Badge>
     </>
   );

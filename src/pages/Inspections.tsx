@@ -141,7 +141,7 @@ export function InspectionsPage() {
           <RecordTable
             loading={tableData.loading || items === undefined}
             renderCell={({ record, field }) => {
-              if (field.name === "inspectedAtISO") return <span className="mono">{formatDate(record.inspectedAtISO)}</span>;
+              if (field.name === "inspectedAtISO") return <span>{formatDate(record.inspectedAtISO)}</span>;
               if (field.name === "inspectorType") return record.isMember ? <Badge tone="info">{insiderLabel}</Badge> : <Badge>Public</Badge>;
               if (field.name === "feeCents") return <span className="mono">{money(record.feeCents)}</span>;
               return undefined;

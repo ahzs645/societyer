@@ -123,7 +123,7 @@ export function PublicTransparencyPage() {
                 >
                   <div className="row" style={{ gap: 8, marginBottom: 8 }}>
                     <Badge>{publicationCategoryLabel(publication.category)}</Badge>
-                    <span className="muted mono" style={{ fontSize: 12 }}>
+                    <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
                       {publication.publishedAtISO ? formatDate(publication.publishedAtISO) : "Draft"}
                     </span>
                   </div>

@@ -295,8 +295,8 @@ export function CalendarSyncPage() {
             {parsed.slice(0, 100).map((e, i) => (
               <tr key={i}>
                 <td><strong>{e.summary}</strong></td>
-                <td className="mono">{formatIcsWhen(e.start, e.startTimeZone, VIEWER_TIME_ZONE)}</td>
-                <td className="mono">{formatIcsWhen(e.end, e.endTimeZone, VIEWER_TIME_ZONE)}</td>
+                <td>{formatIcsWhen(e.start, e.startTimeZone, VIEWER_TIME_ZONE)}</td>
+                <td>{formatIcsWhen(e.end, e.endTimeZone, VIEWER_TIME_ZONE)}</td>
                 <td className="muted">{e.location ?? "—"}</td>
               </tr>
             ))}

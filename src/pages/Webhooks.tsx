@@ -171,7 +171,7 @@ export function WebhooksPage() {
                 <td className="mono">{d.eventType}</td>
                 <td><Badge tone={d.status === "delivered" ? "success" : d.status === "failed" ? "danger" : "warn"}>{capitalize(d.status)}</Badge></td>
                 <td className="mono">{d.attempts ?? 0}</td>
-                <td className="mono">{d.lastAttemptAtISO ? formatDateTime(d.lastAttemptAtISO) : d.createdAtISO ? formatDateTime(d.createdAtISO) : "—"}</td>
+                <td>{d.lastAttemptAtISO ? formatDateTime(d.lastAttemptAtISO) : d.createdAtISO ? formatDateTime(d.createdAtISO) : "—"}</td>
                 <td className="muted" style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.lastError ?? "—"}</td>
               </tr>
             ))}

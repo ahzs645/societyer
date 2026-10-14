@@ -423,7 +423,7 @@ export function OutboxPage() {
                 {selected.status}
               </span>
               {selected.sentAtISO && (
-                <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
+                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
                   Sent {formatDateTime(selected.sentAtISO)}
                 </span>
               )}

@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 
+/** Matches playwright.guided-setup.config.ts (GUIDED_SETUP_PORT, default 43951). */
+const GUIDED_SETUP_ORIGIN = `http://127.0.0.1:${process.env.GUIDED_SETUP_PORT ?? 43951}`;
+
 async function start(page: Page, restore = false) {
   await page.goto("/setup");
   await page.getByRole("button", { name: restore ? /I have a backup to restore/i : /Start a new organization/i }).click();
@@ -134,7 +137,7 @@ test("restore previews a real backup on another device and preserves organizatio
   const saved = await exportedBackup(page);
   const context = await browser.newContext({ ...info.project.use });
   const target = await context.newPage();
-  await target.goto("http://127.0.0.1:43951/setup");
+  await target.goto(`${GUIDED_SETUP_ORIGIN}/setup`);
   await target.getByRole("button", { name: /I have a backup to restore/i }).click();
   await target.waitForURL(/restore=1/);
   await expect(target.getByRole("heading", { name: "Restore from a backup", exact: true })).toBeVisible();
@@ -143,7 +146,7 @@ test("restore previews a real backup on another device and preserves organizatio
   await expect(dialog.getByText(/Guided Backup Society/)).toBeVisible();
   await dialog.getByRole("button", { name: "Restore", exact: true }).click();
   await target.waitForURL(url => url.pathname === "/app");
-  await target.goto("http://127.0.0.1:43951/app/society");
+  await target.goto(`${GUIDED_SETUP_ORIGIN}/app/society`);
   await expect(target.getByLabel("Legal name", { exact: true })).toHaveValue(`Guided Backup Society ${info.project.name}`);
   const restored = await snapshot(target);
   expect(restored.tables.societies[0].onboardingAnswersJson).toBe(saved.tables.societies[0].onboardingAnswersJson);
