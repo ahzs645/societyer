@@ -87,5 +87,7 @@
 @use "review-governance";
 @use "review-people";
 
+@use "finance-workflows";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";
