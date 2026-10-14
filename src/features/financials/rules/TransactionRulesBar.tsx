@@ -6,9 +6,9 @@ import { api } from "@/lib/convexApi";
 import { useConfirm } from "../../../components/Modal";
 import { useToast } from "../../../components/Toast";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
-import { findMatchingRule, isUncategorized } from "../../../../shared/transactionRules";
+import { findApplicableRule } from "../../../../shared/transactionRules";
 import { pluralize } from "../../../lib/format";
-import type { RulesWorkspace } from "./types";
+import type { ApplyRulesResult, RulesWorkspace } from "./types";
 import { useUndoRuleBatch } from "./useUndoRuleBatch";
 
 /**
@@ -31,9 +31,10 @@ export function TransactionRulesBar({ societyId }: { societyId: string }) {
 
   const apply = async () => {
     const byRule = new Map<string, { name: string; count: number }>();
+    // Same choice as the server: rules that need attention are skipped.
+    const skip = new Set(workspace.rules.filter((rule) => (rule.problems ?? []).length > 0).map((rule) => rule._id));
     for (const txn of workspace.transactions) {
-      if (!isUncategorized(txn)) continue;
-      const rule = findMatchingRule(workspace.rules, txn);
+      const rule = findApplicableRule(workspace.rules, txn, skip);
       if (!rule) continue;
       const entry = byRule.get(rule._id) ?? { name: rule.name, count: 0 };
       entry.count += 1;
@@ -57,7 +58,7 @@ export function TransactionRulesBar({ societyId }: { societyId: string }) {
     if (!ok) return;
     setBusy(true);
     try {
-      const result = await applyRules({ societyId: societyId as any });
+      const result = (await applyRules({ societyId: societyId as any })) as ApplyRulesResult;
       undoToast(result);
     } catch (error: any) {
       toast.error("Could not apply rules", error?.message);

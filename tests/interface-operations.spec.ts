@@ -424,6 +424,67 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
   });
 }
 
+for (const width of [390, 1440]) {
+  test(`transaction rule editor names, overlaps, lists and guards rules at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await visit(page, "transaction-rules");
+    await expect(page.getByText("Coastal Hydro to facilities", { exact: true })).toBeVisible({ timeout: 45_000 });
+
+    // A rule that rule 1 already covers: no name needed, the sentence and the overlap warning update live.
+    await page.getByRole("button", { name: "New rule", exact: true }).click();
+    const editor = page.getByRole("dialog").filter({ hasText: "New rule" });
+    await editor.getByLabel("Condition 1 text").fill("coastal hydro");
+    await editor.locator("#rule-category").fill("Utilities");
+    await expect(editor.getByText('If payee contains "coastal hydro" → category Utilities', { exact: true })).toBeVisible();
+    await expect(editor.getByPlaceholder("Coastal Hydro → Utilities")).toBeVisible();
+    await expect(editor.getByText(/All 10 matches already go to a higher rule: Coastal Hydro to facilities/)).toBeVisible();
+    await expect(editor.getByRole("button", { name: /Save and apply to 0/ })).toBeDisabled();
+    await fits(page);
+    await editor.getByRole("button", { name: "Save rule", exact: true }).click();
+    const added = page.locator(".rule-row", { hasText: "Coastal Hydro → Utilities" });
+    await expect(added.getByText("Never applies: rule 1 catches all 10 matches")).toBeVisible();
+    await expect(added.getByRole("button", { name: "Move above rule 1" })).toBeVisible();
+    await fits(page);
+
+    // "Is any of" chips with payee suggestions; a duplicate is flagged; leaving with edits asks first.
+    await page.getByRole("button", { name: "New rule", exact: true }).click();
+    await editor.getByRole("button", { name: "Condition 1 comparison" }).click();
+    await page.getByRole("option", { name: /is any of/ }).click();
+    const chips = editor.getByRole("combobox", { name: "Condition 1 payees" });
+    await chips.fill("cloudnest");
+    await expect(page.getByRole("option", { name: "Cloudnest Workspace", exact: true })).toBeVisible();
+    await chips.press("Enter");
+    await expect(editor.getByRole("button", { name: "Remove Cloudnest Workspace", exact: true })).toBeVisible();
+    await editor.locator("#rule-category").fill("Software");
+    // "Is any of [X]" is the same condition as "is exactly X".
+    await expect(editor.getByText(/A rule with the same conditions already exists \(rule 6: Cloudnest Workspace subscription\)/)).toBeVisible();
+    await fits(page);
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+    await expect(editor).toBeVisible();
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Discard changes", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+
+    // An untouched rule closes without asking.
+    await page.locator(".rule-row__body").first().click();
+    await page.getByRole("dialog").filter({ hasText: "Edit rule" }).getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    if (width >= 768) {
+      // Command palette: "New transaction rule" opens a blank editor from anywhere.
+      await visit(page, "dashboard");
+      await page.keyboard.press("Control+k");
+      await page.keyboard.type("New transaction rule");
+      await page.getByRole("option", { name: /New transaction rule/ }).first().click();
+      await expect(page.getByRole("dialog").filter({ hasText: "New rule" })).toBeVisible();
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 test("financial overview contains every year-end column and opens the selected fiscal year", async ({ page }) => {
   await visit(page, "financials");
   const statements = page.getByRole("region", { name: "Year-over-year financial statements", exact: true });

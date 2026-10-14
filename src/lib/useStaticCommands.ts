@@ -11,7 +11,7 @@
 import { useMemo } from "react";
 import { useMutation } from "convex/react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, ClipboardList, Download, Eye, FileCheck2, FileCog, FilePlus, FileSignature, Gavel, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { Calendar, ClipboardList, Download, Eye, FileCheck2, FileCog, FilePlus, FileSignature, Gavel, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles, UserPlus, Zap } from "lucide-react";
 import type { ComponentType } from "react";
 import { api } from "./convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -114,6 +114,13 @@ export function useStaticCommands(): StaticCommand[] {
         // The GlobalAssetCreate modal (mounted in Layout) listens for this
         // event and pops the asset-creation form.
         run: () => { window.dispatchEvent(new Event("quickaction:add-asset")); },
+      },
+      {
+        id: "action-new-transaction-rule",
+        label: "New transaction rule",
+        icon: Zap,
+        // The Transaction rules page opens a blank rule editor on ?intent=new.
+        run: () => navigate("/app/transaction-rules?intent=new"),
       },
       {
         id: "action-invite-teammate",

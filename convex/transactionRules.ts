@@ -24,7 +24,8 @@ export const upsert = authorizedMutation("transactionRules:upsert", mutation)({
   args: {
     id: v.optional(v.id("transactionRules")),
     societyId: v.id("societies"),
-    name: v.string(),
+    // Optional: a blank name is generated from the rule's conditions and actions.
+    name: v.optional(v.string()),
     enabled: v.optional(v.boolean()),
     conditions: v.array(transactionRuleConditionValidator),
     actions: transactionRuleActionsValidator,
