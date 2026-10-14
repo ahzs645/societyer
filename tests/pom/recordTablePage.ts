@@ -102,12 +102,15 @@ export class RecordTablePage {
     return this.firstBodyCell().evaluate((el) => getComputedStyle(el).position);
   }
 
+  // Tables above the virtualization threshold render through react-virtuoso:
+  // the scroller is `.record-table__virtuoso` inside `.record-table__interaction-root`
+  // instead of `.record-table__scroll` inside `.record-table__scroll-frame`.
   scrollContainer() {
-    return this.page.locator(".record-table__scroll").first();
+    return this.page.locator(".record-table__scroll, .record-table__virtuoso").first();
   }
 
   scrollFrame() {
-    return this.page.locator(".record-table__scroll-frame").first();
+    return this.page.locator(".record-table__scroll-frame, .record-table__interaction-root").first();
   }
 
   async scrollTableToEnd() {
