@@ -14,11 +14,25 @@ import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { formatDate } from "../lib/format";
 import { Select } from "../components/Select";
-import { Badge } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { Tooltip } from "../components/Tooltip";
 
 const ITEM_TYPES = ["discussion", "motion", "report", "break", "executive_session"] as const;
 const STATUS_OPTIONS = ["Draft", "Published", "Finalized"] as const;
+
+function formatItemType(type: string): string {
+  const text = type.replace(/_/g, " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Imported and older agendas say "Final"; the editor's status is "Finalized". */
+function normalizeAgendaStatus(status: string | null | undefined): string {
+  const value = String(status ?? "").trim();
+  if (!value) return "Draft";
+  const match = STATUS_OPTIONS.find((option) => option.toLowerCase() === value.toLowerCase());
+  if (match) return match;
+  return /^final/i.test(value) ? "Finalized" : value;
+}
 
 type AgendaDraftItem = {
   title: string;
@@ -94,7 +108,7 @@ export function AgendaBuilderPage() {
 
   useEffect(() => {
     if (!selected) return;
-    setDraftStatus(selected.agenda.status ?? "Draft");
+    setDraftStatus(normalizeAgendaStatus(selected.agenda.status));
     setDraftItems((selected.items ?? []).map((item: any) => ({
       title: item.title ?? "",
       depth: item.depth === 1 ? 1 : 0,
@@ -326,7 +340,7 @@ export function AgendaBuilderPage() {
                       <strong className="agenda-builder__agenda-title">{a.title}</strong>
                       {meeting && <span className="muted agenda-builder__agenda-date">{formatMeetingDate(meeting, { withTime: false })}</span>}
                     </span>
-                    <span className="muted agenda-builder__agenda-status">{a.status}</span>
+                    <span className="muted agenda-builder__agenda-status">{normalizeAgendaStatus(a.status)}</span>
                   </button>
                 );
               })}
@@ -364,7 +378,7 @@ export function AgendaBuilderPage() {
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               {ITEM_TYPES.map((t) => (
                 <button key={t} className="btn" onClick={() => handleAddItem(t)} disabled={editingLocked}>
-                  <Plus size={12} /> {t.replace("_", " ")}
+                  <Plus size={12} /> {formatItemType(t)}
                 </button>
               ))}
               <Select
@@ -446,7 +460,7 @@ export function AgendaBuilderPage() {
   type: value
 })} options={[...ITEM_TYPES.map(type => ({
   value: type,
-  label: type.replace("_", " ")
+  label: formatItemType(type)
 }))]} className="input" disabled={editingLocked} />
                         <Tooltip content="Outdent item">
                           <button aria-label="Outdent item" className="btn" onClick={() => patchDraftItem(i, { depth: 0 })} disabled={editingLocked || item.depth === 0}>
@@ -535,7 +549,11 @@ export function AgendaBuilderPage() {
           ) : (
             <div className="card agenda-builder__empty-main">
               <div className="card__body">
-                <div className="muted">Select an agenda to edit it.</div>
+                <EmptyState
+                  icon={<ClipboardList size={20} />}
+                  title="Choose an agenda"
+                  description="Pick an agenda from the list to edit its items, or start a new one from a meeting."
+                />
               </div>
             </div>
           )}

@@ -482,7 +482,7 @@ export function MeetingsPage() {
                   const overlap = conflicts.get(record._id);
                   return (
                     <span>
-                      <span className="mono">{formatMeetingDate(record)}</span>
+                      <span className="meetings-when">{formatMeetingDate(record)}</span>
                       {overlap && (
                         <Tooltip content={`Overlaps with: ${overlap.join(", ")}`}>
                           <span

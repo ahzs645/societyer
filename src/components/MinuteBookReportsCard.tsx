@@ -64,7 +64,9 @@ export function MinuteBookReportsCard({
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
           Printable outputs built from the registers as they stood on the chosen date. Each one is a working copy to review, not a certified record.
         </p>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+        {/* Same compact as-of control as the registers: the label stays on one
+            line and the picker keeps its natural width. */}
+        <label className="register-asof__date" style={{ alignSelf: "flex-start", fontSize: "var(--fs-sm)" }}>
           <span>As of</span>
           <DatePicker value={asOf} onChange={(value) => setAsOf(value)} size="sm" />
         </label>

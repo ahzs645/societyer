@@ -6,6 +6,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useToast } from "@/components/Toast";
 import { Badge } from "@/components/ui";
+import { formatDate } from "@/lib/format";
 import { EvidenceRowsEditor, type EvidenceColumn } from "@/components/EvidenceRowsEditor";
 import { StructuredMinutesEditor, StructuredMinutesSummary } from "./MeetingDetailSupport";
 import { structuredEditFromMinutes, structuredMetadataChanges, type StructuredMinutesEdit } from "../lib/structuredMinutes";
@@ -168,7 +169,7 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
                 {nextMeetings.map((row: any, index: number) => (
                   <Badge key={index} tone="info">
                     <CalendarClock size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
-                    Next: {row.at ? String(row.at).slice(0, 10) : row.dateText ?? "date not stated"}
+                    Next: {row.at ? formatDate(String(row.at).slice(0, 10)) : row.dateText ?? "date not stated"}
                     {row.committeeId ? ` · ${(committees ?? []).find((committee: any) => String(committee._id) === String(row.committeeId))?.name ?? "committee"}` : row.bodyKey ? ` · ${NEXT_BODY_LABELS[row.bodyKey] ?? row.bodyKey}` : ""}
                     {row.location ? ` · ${row.location}` : ""}
                   </Badge>

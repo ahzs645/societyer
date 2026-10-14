@@ -18,7 +18,7 @@ import { InfoPopover } from "../components/InfoPopover";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock, Plus, Users } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
-import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
+import { formatDate, formatDateTime, pluralize, toDateTimeLocalValue } from "../lib/format";
 import { useConfirm } from "../components/Modal";
 import { validateElectionQuestion } from "../../shared/electionValidation";
 import { resolutionCalendarDate, resolutionTimeZone } from "../../shared/writtenResolutionEvidence";
@@ -271,7 +271,7 @@ export function ElectionDetailPage() {
     setOpeningElection(true);
     try {
       const result = await snapshotEligibleVoters({ electionId: election._id });
-      toast.success(`Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`);
+      toast.success(`Snapshotted ${pluralize(result.eligibleCount, "eligible voter")} and opened voting`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open the election.");
     } finally { setOpeningElection(false); }
@@ -361,7 +361,7 @@ export function ElectionDetailPage() {
               )}
               {myEligibilities.length > 0 && (
                 <Field label={isCorporation ? "Voting for shareholder" : "Voting identity"} hint={isCorporation ? "The account acts only for the selected holder. Each holder's voting weight was frozen when this election opened." : undefined}>
-                  <Select value={myEligibility?._id ?? ""} onChange={(value) => { setSelectedEligibilityId(value); setSelected({}); setAllocations({}); }} options={myEligibilities.map((row: any) => ({ value: row._id, label: `${row.fullName} · ${row.voteWeight ?? 1} votes · ${row.status}` }))} />
+                  <Select value={myEligibility?._id ?? ""} onChange={(value) => { setSelectedEligibilityId(value); setSelected({}); setAllocations({}); }} options={myEligibilities.map((row: any) => ({ value: row._id, label: `${row.fullName} · ${pluralize(row.voteWeight ?? 1, "vote")} · ${row.status}` }))} />
                 </Field>
               )}
               {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
@@ -376,7 +376,7 @@ export function ElectionDetailPage() {
                         onClick={async () => {
                           const ok = await confirm({
                             title: "Remove ballot question?",
-                            message: `"${question.title}" and its ${question.options?.length ?? 0} option(s) will be removed from this draft ballot.`,
+                            message: `"${question.title}" and its ${pluralize(question.options?.length ?? 0, "option")} will be removed from this draft ballot.`,
                             confirmLabel: "Remove question",
                             tone: "danger",
                           });
@@ -775,7 +775,7 @@ export function ElectionDetailPage() {
             <div className="card__head">
               <h2 className="card__title">Tally</h2>
               <span className="card__subtitle">
-                {electionBundle.ballotCount} ballot(s) · {election.totalEligibleVotes ?? "—"} eligible base votes
+                {pluralize(electionBundle.ballotCount ?? 0, "ballot")} · {election.totalEligibleVotes != null ? `${pluralize(election.totalEligibleVotes, "eligible base vote")}` : "eligible base votes not recorded"}
               </span>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>
@@ -785,7 +785,7 @@ export function ElectionDetailPage() {
                     <strong>{question.title}</strong>
                     <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
                       {question.totals.map((total: any) => (
-                        <Row key={total.id} label={total.label} value={`${total.votes} vote(s)`} />
+                        <Row key={total.id} label={total.label} value={pluralize(total.votes ?? 0, "vote")} />
                       ))}
                     </div>
                   </div>

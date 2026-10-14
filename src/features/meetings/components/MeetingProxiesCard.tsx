@@ -155,7 +155,7 @@ export function MeetingProxiesCard({
                 ) : (
                   <Badge tone="success">Active</Badge>
                 )}
-                {proxy.signedAtISO && <span className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>Signed {formatDate(proxy.signedAtISO)}</span>}
+                {proxy.signedAtISO && <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Signed {formatDate(proxy.signedAtISO)}</span>}
               </div>
             </div>
             <div className="meeting-conflict-row__actions">

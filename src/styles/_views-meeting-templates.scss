@@ -113,8 +113,32 @@
   gap: token('s-3');
 }
 
+/* Template rows are a fixed grid (number · title · type · presenter) rather
+   than the minutes editor's content-sized flex wrap, so every row lines up
+   whatever the title length. */
 .meeting-template-section-item .meeting-minutes-section-item__title-edit {
+  display: grid;
   grid-template-columns: auto minmax(180px, 1fr) minmax(120px, 160px) minmax(140px, 200px);
+}
+
+.meeting-template-section-item .meeting-minutes-section-item__title-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.meeting-template-section-item .meeting-minutes-section-item__title-presenter {
+  min-width: 0;
+}
+
+/* Keep the expand chevron on the title line when the row wraps. */
+.meeting-template-section-item .meeting-minutes-section-item__title {
+  align-items: flex-start;
+}
+
+.meeting-template-section-item .meeting-minutes-section-item__title > svg {
+  flex: 0 0 auto;
+  margin-top: 0.3em;
+  color: token('text-tertiary');
 }
 
 .meeting-template-section-item__type .input,
@@ -290,6 +314,7 @@
   .meeting-template-section-item__type,
   .meeting-template-section-item .meeting-minutes-section-item__title-presenter {
     grid-column: 2 / -1;
+    width: 100%;
   }
 
   .meeting-template-builder__sidebar {

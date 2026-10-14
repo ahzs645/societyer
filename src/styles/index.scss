@@ -113,6 +113,8 @@
 @use "editable-grid";
 // Client-sorted finance tables: sortable header buttons.
 @use "sortable-table";
+// Governance, meetings and records QA fixes.
+@use "governance-qa";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

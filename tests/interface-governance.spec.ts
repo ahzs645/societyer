@@ -65,7 +65,7 @@ test("people directory rejects blank names and retains saved edits on narrow scr
 test("AGM steps fit a narrow phone and local delivery actions remain honest", async ({ page }) => {
   const errors = monitor(page);
   await page.goto("/demo/app/meetings/static_meeting_agm_2025/agm");
-  await expect(page.getByRole("heading", { name: "AGM workflow · 2025 annual general meeting", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AGM workflow", exact: true })).toBeVisible();
   // The 2025 AGM was already held: its notice step is complete, so the page
   // does not offer to send notices (and the "needs a server" note is only
   // shown for meetings that have not happened yet; meetings retest 9406573).
@@ -96,7 +96,9 @@ test("minutes preview preserves the demo workspace in a new tab", async ({ page 
   const popup = await popupEvent;
   await popup.waitForLoadState("domcontentloaded");
   expect(popup.url()).toContain("/demo/app/meetings/static_meeting_agm_2025/preview");
-  await expect(popup.getByText("2025 annual general meeting", { exact: true }).first()).toBeVisible();
+  await expect(popup.getByRole("heading", { name: "Minutes preview", exact: true })).toBeVisible();
+  // The trail names the meeting: the full path on desktop, "← meeting" on phones.
+  await expect(popup.locator(".breadcrumbs a:visible").filter({ hasText: "2025 annual general meeting" })).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 

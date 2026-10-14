@@ -1,0 +1,129 @@
+@use "tokens" as *;
+
+// Governance, meetings and records: release QA fixes that don't belong to one
+// view partial.
+
+// Section headings between cards (significant individuals register). Without
+// a rule they fell back to the browser's 1.5em h2 and outweighed the page title.
+.page__section-title {
+  margin: 0 0 token('s-2');
+  font-size: token('fs-md');
+  font-weight: 600;
+  line-height: 1.4;
+  color: token('text-primary');
+}
+
+// AGM workflow "Compliance posture": label column + value with a status dot.
+// A grid (not a wrapping flex row) so a long value wraps under itself, left
+// aligned, instead of dropping to a centred line of its own.
+.agm-workflow__posture-item {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: 2px token('s-3');
+  align-items: baseline;
+}
+.agm-workflow__posture-value {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.agm-workflow__posture-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 0.55em;
+  border-radius: 50%;
+}
+@media (max-width: 560px) {
+  .agm-workflow__posture-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// Legal guidance card above the conflicts, auditors, court orders and
+// attestations registers. A <details> so phones can start it folded.
+.legal-guidance {
+  margin-bottom: token('s-4');
+}
+.legal-guidance__head {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+  gap: token('s-2');
+}
+.legal-guidance__head .card__title {
+  min-width: 0;
+}
+.legal-guidance__head .card__subtitle {
+  flex: none;
+}
+.legal-guidance__head::-webkit-details-marker {
+  display: none;
+}
+.legal-guidance__chevron {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: token('text-tertiary');
+  transition: transform token('motion-move-fast') token('ease-move');
+}
+.legal-guidance[open] .legal-guidance__chevron {
+  transform: rotate(180deg);
+}
+.legal-guidance:not([open]) > .legal-guidance__head {
+  border-bottom: 0;
+}
+// Citation chips sit at the end of a sentence; the extra leading keeps their
+// border clear of the descenders on the line above when they wrap.
+.legal-guidance__summary {
+  line-height: 1.7;
+}
+
+// Signature capture: the pad/upload field sat flush under the method toggle.
+.signature-mode-toggle + .field {
+  margin-top: token('s-3');
+}
+
+// Document workbench comments: badge · author/meta · actions on the first
+// row, the comment body across the whole card underneath.
+.document-comment {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "badge meta actions"
+    "body body body";
+  gap: token('s-1') token('s-2');
+  align-items: start;
+  padding: token('s-3');
+  border-radius: token('r-sm');
+}
+.document-comment > .badge {
+  grid-area: badge;
+}
+.document-comment__meta {
+  grid-area: meta;
+  min-width: 0;
+}
+.document-comment__actions {
+  grid-area: actions;
+}
+.document-comment__body {
+  grid-area: body;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+// Meeting stat strip at 320px: four uppercase labels broke mid-word
+// ("PRESEN/T", "MATERIA/LS"). Sentence case fits each word in its column.
+@media (max-width: 360px) {
+  .meeting-detail-page .meeting-detail-summary span {
+    text-transform: none;
+    overflow-wrap: normal;
+    hyphens: manual;
+  }
+}

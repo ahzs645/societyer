@@ -527,7 +527,7 @@ function ArchivedRoleEvidenceView({
                       <td><strong>{term.personName}</strong></td>
                       <td>{term.position}</td>
                       <td className="muted">{term.committeeName ?? "—"}</td>
-                      <td className="mono">{formatDate(term.startDate ?? term.endDate)}</td>
+                      <td>{formatDate(term.startDate ?? term.endDate)}</td>
                       <td>
                         <Badge tone={inCurrentRegister ? "info" : "neutral"}>
                           {inCurrentRegister ? "Current register" : "Historical only"}

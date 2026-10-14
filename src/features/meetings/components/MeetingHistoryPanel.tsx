@@ -121,10 +121,11 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
     catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   return <section className="card" aria-label="Meeting history" style={{ marginTop: 20 }}>
-    <div className="card__head"><h2>Meeting history</h2><p>Keep action observations and imported source document versions with their evidence. Edit quorum checkpoints in Source decisions and meeting evidence.</p></div>
+    <div className="card__head"><h2 className="card__title">Meeting history</h2></div>
     <div className="card__body" style={{ display: "grid", gap: 16 }}>
+      <p className="muted" style={{ margin: 0 }}>Keep action observations and imported source document versions with their evidence. Edit quorum checkpoints in Source decisions and meeting evidence.</p>
       {approved && <p role="status">These minutes are approved. History is read only; use the existing reopen approval workflow before making changes. External adoption assertions stay protected.</p>}
-      <div role="tablist" aria-label="Meeting history sections" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{keys.map(k => <button type="button" key={k} role="tab" aria-selected={tab === k} className={`btn ${tab === k ? "btn--primary" : "btn--ghost"}`} onClick={() => setTab(k)}>{tabs[k]} ({draft[k].length})</button>)}</div>
+      <div role="tablist" aria-label="Meeting history sections" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{keys.map(k => <button type="button" key={k} role="tab" aria-selected={tab === k} className={`btn btn--sm ${tab === k ? "btn--accent" : "btn--ghost"}`} onClick={() => setTab(k)}>{tabs[k]} ({draft[k].length})</button>)}</div>
       {error && <p role="alert" style={{ color: "var(--danger, #a21d26)", whiteSpace: "pre-wrap" }}>{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {changedOnServer && <p role="alert">New saved history is available. Your unsaved changes are retained; reload before saving to avoid replacing someone else’s work.</p>}
@@ -182,7 +183,7 @@ export function MeetingHistoryPanel({ minutes, otherMinutes, meetings, onSave, o
         })}
         <button type="button" className="btn" disabled={locked} onClick={() => { setFilter("all"); setSearch(""); add(tab); }}>Add {tab === "actionObservations" ? "action observation" : "source version"}</button>
       </div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn btn--primary" disabled={locked || !dirty || changedOnServer} onClick={save}>{busy ? "Saving…" : "Save history"}</button><button type="button" className="btn btn--ghost" disabled={busy || !dirty} onClick={() => { setDraft(copy(minutes)); setDirty(false); setError(""); setNotice("Saved history reloaded; unsaved edits discarded."); baseline.current = latest; }}>Reload saved history</button>{dirty && <span role="status">Unsaved history changes</span>}</div>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn btn--accent" disabled={locked || !dirty || changedOnServer} onClick={save}>{busy ? "Saving…" : "Save history"}</button><button type="button" className="btn btn--ghost" disabled={busy || !dirty} onClick={() => { setDraft(copy(minutes)); setDirty(false); setError(""); setNotice("Saved history reloaded; unsaved edits discarded."); baseline.current = latest; }}>Reload saved history</button>{dirty && <span role="status">Unsaved history changes</span>}</div>
     </div>
   </section>;
 }

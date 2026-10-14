@@ -322,7 +322,7 @@ export function MinuteBookPage() {
               }
               if (field.name === "linkedSource") return linkSummary(record, maps);
               if (field.name === "effectiveDate") {
-                return record.effectiveDate ? <span className="mono">{formatDate(record.effectiveDate)}</span> : <span className="muted">—</span>;
+                return record.effectiveDate ? <span>{formatDate(record.effectiveDate)}</span> : <span className="muted">—</span>;
               }
               if (field.name === "status") {
                 return <Badge tone={toneForStatus(record.status)}>{optionLabel("minuteBookStatuses", record.status)}</Badge>;
