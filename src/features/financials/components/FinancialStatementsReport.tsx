@@ -62,6 +62,62 @@ function sectionRows(
   ];
 }
 
+export type StatementPeriods = { from: string; to: string; priorFrom: string; priorTo: string };
+
+/**
+ * Columns and rows for one currency's balance sheet and income statement,
+ * shared by the on-screen report and the Excel workbook download.
+ */
+export function statementTables(statement: CurrencyStatement, priorReport: Built | null, { from, to, priorFrom, priorTo }: StatementPeriods) {
+  const comparing = Boolean(priorReport);
+  const prior = priorReport?.statements.find((candidate) => candidate.currency === statement.currency);
+  const balanceColumns: ReportColumn[] = [
+    { id: "current", label: `As at ${formatDate(to)}`, title: `As at ${formatDate(to)}`, emphasis: comparing },
+    ...(comparing ? [{ id: "prior", label: `As at ${formatDate(priorTo)}`, title: `As at ${formatDate(priorTo)}` }] : []),
+  ];
+  const periodColumns: ReportColumn[] = [
+    { id: "current", label: `${formatDate(from, "MMM d, yyyy")} – ${formatDate(to, "MMM d, yyyy")}`, title: "Current period", emphasis: comparing },
+    ...(comparing ? [{ id: "prior", label: `${formatDate(priorFrom, "MMM d, yyyy")} – ${formatDate(priorTo, "MMM d, yyyy")}`, title: "Prior period" }] : []),
+  ];
+  const balanceRows: ReportRow<Meta>[] = [
+    ...sectionRows("assets", "Assets", statement.assets, prior?.assets, statement.totalAssetsCents, (comparing ? prior?.totalAssetsCents ?? 0 : undefined), "balance", "increase"),
+    ...sectionRows("liabilities", "Liabilities", statement.liabilities, prior?.liabilities, statement.totalLiabilitiesCents, (comparing ? prior?.totalLiabilitiesCents ?? 0 : undefined), "balance", "decrease"),
+    ...sectionRows("equity", "Net assets / equity", statement.equity, prior?.equity, statement.totalEquityCents, (comparing ? prior?.totalEquityCents ?? 0 : undefined), "balance"),
+    {
+      id: "unclosed",
+      kind: "row",
+      label: `Unclosed earnings through ${formatDate(to)}`,
+      calculated: true,
+      drilldown: false,
+      note: "Revenue less expenses posted but not yet closed to net assets. It is what keeps the statement in balance until year-end closing entries are posted.",
+      values: { current: statement.unclosedEarningsCents, prior: (comparing ? prior?.unclosedEarningsCents ?? 0 : undefined) },
+    },
+    {
+      id: "total-le",
+      kind: "total",
+      label: "Liabilities and net assets including unclosed earnings",
+      values: {
+        current: statement.totalLiabilitiesCents + statement.totalEquityCents + statement.unclosedEarningsCents,
+        prior: prior ? prior.totalLiabilitiesCents + prior.totalEquityCents + prior.unclosedEarningsCents : comparing ? 0 : undefined,
+      },
+    },
+  ];
+  const incomeRows: ReportRow<Meta>[] = [
+    ...sectionRows("income", "Revenue", statement.income, prior?.income, statement.totalIncomeCents, (comparing ? prior?.totalIncomeCents ?? 0 : undefined), "period", "increase"),
+    ...sectionRows("expenses", "Expenses", statement.expenses, prior?.expenses, statement.totalExpenseCents, (comparing ? prior?.totalExpenseCents ?? 0 : undefined), "period", "decrease"),
+    {
+      id: "net",
+      kind: "total",
+      label: "Net income / (deficit)",
+      calculated: true,
+      favourable: "increase",
+      note: "Total revenue less total expenses for the period.",
+      values: { current: statement.netIncomeCents, prior: (comparing ? prior?.netIncomeCents ?? 0 : undefined) },
+    },
+  ];
+  return { prior, balanceColumns, periodColumns, balanceRows, incomeRows };
+}
+
 /**
  * Balance sheet (statement of financial position) and income statement from
  * posted journals, per currency, with optional prior-period comparatives and
@@ -117,57 +173,18 @@ export function FinancialStatementsReport({
   return (
     <>
       {report.statements.map((statement) => {
-        const prior = priorReport?.statements.find((candidate) => candidate.currency === statement.currency);
-        const balanceColumns: ReportColumn[] = [
-          { id: "current", label: `As at ${formatDate(to)}`, title: `As at ${formatDate(to)}`, emphasis: comparing },
-          ...(comparing ? [{ id: "prior", label: `As at ${formatDate(priorTo)}`, title: `As at ${formatDate(priorTo)}` }] : []),
-        ];
-        const periodColumns: ReportColumn[] = [
-          { id: "current", label: `${formatDate(from, "MMM d, yyyy")} – ${formatDate(to, "MMM d, yyyy")}`, title: "Current period", emphasis: comparing },
-          ...(comparing ? [{ id: "prior", label: `${formatDate(priorFrom, "MMM d, yyyy")} – ${formatDate(priorTo, "MMM d, yyyy")}`, title: "Prior period" }] : []),
-        ];
-        const balanceRows: ReportRow<Meta>[] = [
-          ...sectionRows("assets", "Assets", statement.assets, prior?.assets, statement.totalAssetsCents, (comparing ? prior?.totalAssetsCents ?? 0 : undefined), "balance", "increase"),
-          ...sectionRows("liabilities", "Liabilities", statement.liabilities, prior?.liabilities, statement.totalLiabilitiesCents, (comparing ? prior?.totalLiabilitiesCents ?? 0 : undefined), "balance", "decrease"),
-          ...sectionRows("equity", "Net assets / equity", statement.equity, prior?.equity, statement.totalEquityCents, (comparing ? prior?.totalEquityCents ?? 0 : undefined), "balance"),
-          {
-            id: "unclosed",
-            kind: "row",
-            label: `Unclosed earnings through ${formatDate(to)}`,
-            calculated: true,
-            drilldown: false,
-            note: "Revenue less expenses posted but not yet closed to net assets. It is what keeps the statement in balance until year-end closing entries are posted.",
-            values: { current: statement.unclosedEarningsCents, prior: (comparing ? prior?.unclosedEarningsCents ?? 0 : undefined) },
-          },
-          {
-            id: "total-le",
-            kind: "total",
-            label: "Liabilities and net assets including unclosed earnings",
-            values: {
-              current: statement.totalLiabilitiesCents + statement.totalEquityCents + statement.unclosedEarningsCents,
-              prior: prior ? prior.totalLiabilitiesCents + prior.totalEquityCents + prior.unclosedEarningsCents : comparing ? 0 : undefined,
-            },
-          },
-        ];
-        const incomeRows: ReportRow<Meta>[] = [
-          ...sectionRows("income", "Revenue", statement.income, prior?.income, statement.totalIncomeCents, (comparing ? prior?.totalIncomeCents ?? 0 : undefined), "period", "increase"),
-          ...sectionRows("expenses", "Expenses", statement.expenses, prior?.expenses, statement.totalExpenseCents, (comparing ? prior?.totalExpenseCents ?? 0 : undefined), "period", "decrease"),
-          {
-            id: "net",
-            kind: "total",
-            label: "Net income / (deficit)",
-            calculated: true,
-            favourable: "increase",
-            note: "Total revenue less total expenses for the period.",
-            values: { current: statement.netIncomeCents, prior: (comparing ? prior?.netIncomeCents ?? 0 : undefined) },
-          },
-        ];
+        const { prior, balanceColumns, periodColumns, balanceRows, incomeRows } = statementTables(statement, priorReport, { from, to, priorFrom, priorTo });
         return (
           <div key={statement.currency} className="finance-statement-stack">
             <h3 className="finance-report-heading">{statement.currency} · Balance sheet as at {formatDate(to)}</h3>
             <ReportTable<Meta>
               ariaLabel={`${statement.currency} balance sheet`}
               currency={statement.currency}
+              download={{
+                fileName: `Balance sheet ${statement.currency} ${to}`,
+                sheetName: `Balance sheet ${statement.currency}`,
+                title: [`Balance sheet as at ${formatDate(to)}`, comparing ? `${statement.currency} · compared with ${formatDate(priorTo)}` : statement.currency],
+              }}
               columns={balanceColumns}
               rows={balanceRows}
               comparison={comparing ? { current: "current", prior: "prior" } : null}
@@ -183,6 +200,11 @@ export function FinancialStatementsReport({
             <ReportTable<Meta>
               ariaLabel={`${statement.currency} income statement`}
               currency={statement.currency}
+              download={{
+                fileName: `Income statement ${statement.currency} ${from} to ${to}`,
+                sheetName: `Income statement ${statement.currency}`,
+                title: [`Income statement ${formatDate(from)} to ${formatDate(to)}`, comparing ? `${statement.currency} · compared with ${formatDate(priorFrom)} to ${formatDate(priorTo)}` : statement.currency],
+              }}
               columns={periodColumns}
               rows={incomeRows}
               comparison={comparing ? { current: "current", prior: "prior" } : null}

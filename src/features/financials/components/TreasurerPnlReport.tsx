@@ -216,6 +216,7 @@ export function TreasurerPnlReport({
       <ReportTable<Meta>
         ariaLabel="Profit and loss"
         labelHeader="Category"
+        download={{ fileName: `Profit and loss ${from} to ${to}`, title: ["Profit and loss", `${formatDate(from)} to ${formatDate(to)}`] }}
         loading={pnl === undefined || (view !== "summary" && !coverage.loaded)}
         columns={columns}
         rows={rows}

@@ -122,6 +122,7 @@
 @use "qa-compliance";
 
 @use "commitments";
+@use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

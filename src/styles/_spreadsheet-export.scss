@@ -1,0 +1,37 @@
+@use "tokens" as *;
+
+// Excel / CSV export controls on finance screens (accounting exports card,
+// statements card header). The RecordTable export dialog reuses
+// .record-table__export-choice from its own partial.
+
+.accounting-export-format {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  padding: 0 token('s-4') token('s-3');
+}
+
+.accounting-export-format__label {
+  font-size: token('fs-xs');
+  color: token('text-secondary');
+}
+
+.accounting-statements__download {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .accounting-export-format {
+    padding-inline: token('s-3');
+  }
+  .accounting-export-format .segmented {
+    flex: 1 1 auto;
+  }
+  .accounting-export-format .segmented__btn {
+    flex: 1 1 0;
+  }
+}

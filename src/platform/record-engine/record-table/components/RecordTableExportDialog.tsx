@@ -4,17 +4,16 @@ import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import {
   TABLE_EXPORT_FORMATS,
-  downloadDelimitedText,
-  exportFileName,
+  downloadTableExport,
   readLastExportFormat,
   rememberExportFormat,
-  toDelimitedText,
   type TableExportFormat,
 } from "@/lib/tableExport";
+import type { XlsxSheet } from "@/lib/xlsx";
 import type { RecordField } from "../../types";
 import { useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
-import { recordCellText } from "../utils/recordCellText";
+import { recordCellText, recordCellXlsx, recordFieldXlsxColumn } from "../utils/recordCellText";
 import { sortRecords } from "../utils/sortRecords";
 import { lowerLabel } from "../utils/lowerLabel";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
@@ -28,10 +27,25 @@ export function buildExportRows(records: any[], columns: RecordField[]): string[
   ];
 }
 
+/** The same rows as a typed sheet: currency, numbers, dates, date-times and yes/no keep their types. */
+export function buildExportSheet(name: string, records: any[], columns: RecordField[]): XlsxSheet {
+  return {
+    name,
+    columns: columns.map((column) => recordFieldXlsxColumn(column.field)),
+    rows: records.map((record) => columns.map((column) => recordCellXlsx(column.field, record[column.field.name], record))),
+  };
+}
+
+const FORMAT_NOTE: Record<TableExportFormat, string> = {
+  xlsx: "Amounts export as currency, dates as real dates and choices as their labels, with a frozen, filterable header.",
+  csv: "Amounts export as plain numbers, dates as YYYY-MM-DD and choices as their labels.",
+  tsv: "Amounts export as plain numbers, dates as YYYY-MM-DD and choices as their labels.",
+};
+
 /**
- * "Export…" for any table: file name, CSV or TSV (last choice remembered in
- * this browser), and either exactly what the view shows (its filters, sort
- * and visible columns) or every record with every field.
+ * "Export…" for any table: file name, Excel, CSV or TSV (last choice
+ * remembered in this browser), and either exactly what the view shows (its
+ * filters, sort and visible columns) or every record with every field.
  */
 export function RecordTableExportDialog({
   open,
@@ -50,6 +64,7 @@ export function RecordTableExportDialog({
   const [fileName, setFileName] = useState("");
   const [format, setFormat] = useState<TableExportFormat>("csv");
   const [scope, setScope] = useState<Scope>("view");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -64,16 +79,26 @@ export function RecordTableExportDialog({
   const allColumns = state.columns;
   const allCount = state.records.length;
 
-  const runExport = () => {
+  const runExport = async () => {
+    if (busy) return;
     const current = handle.get();
     const columns = scope === "view" ? viewColumns : allColumns;
     const records = scope === "view" ? ordered : sortRecords({ records: current.records, columns: current.columns, sorts: current.sorts });
-    const text = toDelimitedText(buildExportRows(records, columns), format);
-    const name = exportFileName(fileName || viewName, format);
-    downloadDelimitedText(name, text, format);
-    rememberExportFormat(format);
-    toast.success(`Exported ${records.length} ${lowerLabel(records.length === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)}`, name);
-    onClose();
+    setBusy(true);
+    try {
+      const name = await downloadTableExport(fileName || viewName, format, {
+        title: fileName || viewName,
+        textRows: () => buildExportRows(records, columns),
+        sheet: () => buildExportSheet(viewName || objectMetadata.labelPlural, records, columns),
+      });
+      rememberExportFormat(format);
+      toast.success(`Exported ${records.length} ${lowerLabel(records.length === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)}`, name);
+      onClose();
+    } catch (error) {
+      toast.error("Export failed", error instanceof Error ? error.message : undefined);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -85,8 +110,8 @@ export function RecordTableExportDialog({
       footer={
         <>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button type="submit" form={formId} className="btn btn--accent" disabled={scope === "view" ? ordered.length === 0 : allCount === 0}>
-            <Download size={14} aria-hidden="true" /> Export
+          <button type="submit" form={formId} className="btn btn--accent" disabled={busy || (scope === "view" ? ordered.length === 0 : allCount === 0)} aria-busy={busy || undefined}>
+            <Download size={14} aria-hidden="true" /> {busy ? "Exporting…" : "Export"}
           </button>
         </>
       }
@@ -96,7 +121,7 @@ export function RecordTableExportDialog({
         className="record-table__export"
         onSubmit={(event) => {
           event.preventDefault();
-          runExport();
+          void runExport();
         }}
       >
         <label className="field">
@@ -136,7 +161,7 @@ export function RecordTableExportDialog({
             </span>
           </label>
         </fieldset>
-        <p className="field__hint">Amounts export as plain numbers, dates as YYYY-MM-DD and choices as their labels.</p>
+        <p className="field__hint">{FORMAT_NOTE[format]}</p>
       </form>
     </Modal>
   );

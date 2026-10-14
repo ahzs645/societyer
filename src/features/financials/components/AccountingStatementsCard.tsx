@@ -15,6 +15,9 @@ import { buildAccountingStatements, buildProgramSummary } from "../../../../shar
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { todayDateOnly } from "../../../../shared/dateOnly";
 import { FinancialStatementsReport } from "./FinancialStatementsReport";
+import { Download, FileSpreadsheet } from "lucide-react";
+import { downloadXlsx } from "@/lib/xlsx";
+import { statementsWorkbook } from "../lib/statementsWorkbook";
 import { CompareToggle, FundFilterChips } from "./FinanceReportControls";
 import { VarianceCell, VARIANCE_HELP } from "./VarianceCell";
 import {
@@ -38,6 +41,7 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
   const [budgetYear, setBudgetYear] = useState(today.slice(0, 4));
   const [budgetForm, setBudgetForm] = useState({ programCode: "", accountId: "", amount: "" });
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const accounts = useQuery(api.accounting.chartAccounts, { societyId });
   const budgets = useQuery(api.financialHub.budgets, { societyId, fiscalYear: budgetYear });
   const restrictions = useQuery(api.accounting.fundRestrictions, { societyId }) as Array<{ _id: string; name: string }> | undefined;
@@ -95,8 +99,23 @@ export function AccountingStatementsCard({ societyId }: { societyId: Id<"societi
     const url = URL.createObjectURL(new Blob([rows.map(row => row.map(value => typeof value === "number" ? String(value) : escapeCsvCell(value)).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `financial-statements-${from}-${to}.csv`; link.click(); URL.revokeObjectURL(url);
   };
+  /** One workbook: each currency's balance sheet and income statement laid out as on screen, then program budgets. */
+  const downloadExcel = async () => {
+    if (!canExport || !report || exporting) return;
+    setExporting(true);
+    try {
+      const fundNote = fund === "all" ? undefined : `Fund filter: ${fund === "unrestricted" ? "no fund restriction" : fundNames.get(fund) ?? "one fund"}`;
+      const workbook = statementsWorkbook({ report, priorReport, periods: { from, to, priorFrom, priorTo }, programs, budgetYear, fundNote });
+      await downloadXlsx(`financial-statements-${from}-${to}`, workbook);
+    } catch (e) {
+      toast.error("Download failed", e instanceof Error ? e.message : undefined);
+    } finally {
+      setExporting(false);
+    }
+  };
+  const downloadDisabled = !canExport || !report || !accounts || !budgets || (!report.statements.length && !programs.length);
   return <section className="card" aria-label="Financial statements">
-    <div className="card__head"><h2 className="card__title">Financial statements</h2><InfoPopover label="About financial statements"><p>Balance sheet as at the end date and income statement for the selected period, from posted journals. The prior-year columns repeat the same dates one year earlier (statutory comparatives). Select any amount to see the journal lines behind it. Import and reconcile source records before comparing with historical statements. Currencies are reported separately.</p></InfoPopover><button className="btn-action accounting-statements__download" onClick={download} disabled={!canExport || !report || !accounts || !budgets || (!report.statements.length && !programs.length)}>Download statements CSV</button></div>
+    <div className="card__head"><h2 className="card__title">Financial statements</h2><InfoPopover label="About financial statements"><p>Balance sheet as at the end date and income statement for the selected period, from posted journals. The prior-year columns repeat the same dates one year earlier (statutory comparatives). Select any amount to see the journal lines behind it. Import and reconcile source records before comparing with historical statements. Currencies are reported separately.</p></InfoPopover><div className="accounting-statements__download" role="group" aria-label="Download statements"><button className="btn-action" onClick={() => void downloadExcel()} disabled={downloadDisabled || exporting} aria-label="Download statements Excel"><FileSpreadsheet size={12} aria-hidden="true" /> Excel</button><button className="btn-action" onClick={download} disabled={downloadDisabled} aria-label="Download statements CSV"><Download size={12} aria-hidden="true" /> CSV</button></div></div>
     <div className="card__body col accounting-statements__body">
     <div className="financials-control-row"><Field label="Report from"><DatePicker value={from} onChange={setFrom} /></Field><Field label="Report to"><DatePicker value={to} onChange={setTo} /></Field></div>
     <div className="finance-report-toolbar">
