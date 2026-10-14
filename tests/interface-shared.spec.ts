@@ -466,9 +466,19 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   const activate = async (control: Locator) => {
     await control.scrollIntoViewIfNeeded();
     if (touch) {
-      const bounds = await control.boundingBox();
-      expect(bounds!.width).toBeGreaterThanOrEqual(44);
-      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      // Touch controls look compact (32/36px) and take a 44px hit area from
+      // an invisible ::after box; measure the hit area, not the drawn box.
+      const bounds = await control.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const after = getComputedStyle(element, "::after");
+        const hit = after.position === "absolute" && after.content !== "none";
+        return {
+          width: Math.max(rect.width, hit ? parseFloat(after.width) || 0 : 0),
+          height: Math.max(rect.height, hit ? parseFloat(after.height) || 0 : 0),
+        };
+      });
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
       await control.tap();
     } else await control.click();
   };

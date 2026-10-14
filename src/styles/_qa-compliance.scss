@@ -71,7 +71,7 @@
 // three lines while badge columns kept their room.
 @media (min-width: 761px) {
   .table.policies-table td:first-child {
-    min-width: 200px;
+    min-width: 176px;
   }
   .table.policies-table td[data-label="Owner"] {
     white-space: nowrap;
@@ -79,10 +79,10 @@
   // Tablet widths scroll the table sideways rather than crushing the dates
   // to one word per line.
   .table.policies-table td[data-label="Dates"] {
-    min-width: 170px;
+    min-width: 150px;
   }
   .table.policies-table td[data-label="Documents"] {
-    min-width: 140px;
+    min-width: 124px;
   }
 }
 
