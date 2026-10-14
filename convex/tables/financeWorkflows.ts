@@ -7,9 +7,10 @@ import { v } from "convex/values";
  */
 
 export const transactionRuleConditionValidator = v.object({
-  field: v.string(), // description | payee | amount | direction | account
-  operator: v.optional(v.string()), // contains | equals | starts_with | lt | lte | eq | gte | gt | between
+  field: v.string(), // description | payee | amount | direction | account | category
+  operator: v.optional(v.string()), // contains | equals | starts_with | in | lt | lte | eq | gte | gt | between
   value: v.optional(v.string()),
+  values: v.optional(v.array(v.string())), // "in" (is any of): up to 25 exact values
   amountCents: v.optional(v.number()),
   amountMaxCents: v.optional(v.number()),
   accountId: v.optional(v.id("financialAccounts")),
@@ -26,6 +27,8 @@ export const financeWorkflowTables = {
   transactionRules: defineTable({
     societyId: v.id("societies"),
     name: v.string(),
+    // True when nobody typed a name: `name` was generated from the rule and is regenerated on save.
+    autoNamed: v.optional(v.boolean()),
     priority: v.number(), // 1 = evaluated first
     enabled: v.boolean(),
     conditions: v.array(transactionRuleConditionValidator),

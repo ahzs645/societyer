@@ -138,7 +138,72 @@ assert.equal(ws.rules[ws.rules.length - 1]._id, newRule);
 await rules.reorderPortable(mina, { societyId: S, orderedIds: [newRule, ...ws.rules.filter((r: any) => r._id !== newRule).map((r: any) => r._id)] });
 ws = await rules.workspacePortable(mina, { societyId: S });
 assert.equal(ws.rules[0]._id, newRule);
-await assert.rejects(() => rules.upsertPortable(mina, { societyId: S, name: "", conditions: [], actions: {} }), /name/);
+await assert.rejects(() => rules.upsertPortable(mina, { societyId: S, name: "", conditions: [], actions: {} }), /condition/);
+
+// The workspace reports overlap for every rule; the demo rules don't shadow each other.
+for (const rule of ws.rules) {
+  assert.ok(rule.coverage && rule.coverage.matches === rule.matchCount, `${rule.name} has coverage`);
+  assert.deepEqual(rule.problems, [], `${rule.name} needs no attention`);
+}
+// A blank name is generated, stays "auto", and follows edits.
+const autoId = await rules.upsertPortable(mina, { societyId: S, conditions: [{ field: "payee", operator: "contains", value: "coastal hydro" }, { field: "direction", value: "out" }], actions: { category: "Utilities" } });
+let autoRow = await db.get(autoId);
+assert.equal(autoRow.name, "Coastal Hydro → Utilities");
+assert.equal(autoRow.autoNamed, true);
+ws = await rules.workspacePortable(mina, { societyId: S });
+const autoWs = ws.rules.find((r: any) => r._id === autoId);
+assert.equal(autoWs.autoNamed, true);
+// It sits last, under "Coastal Hydro to facilities", which takes every match.
+const hydroRule = ws.rules.find((r: any) => r.name === "Coastal Hydro to facilities");
+assert.equal(autoWs.coverage.wins, 0);
+assert.deepEqual(autoWs.coverage.shadowedBy, [{ ruleId: hydroRule._id, count: autoWs.matchCount }]);
+assert.equal(autoWs.pendingCount, 0, "a shadowed rule has nothing to apply");
+await rules.upsertPortable(mina, { id: autoId, societyId: S, name: " ", conditions: [{ field: "payee", operator: "in", values: ["Coastal Hydro", "coastal hydro", "Harbourline Telecom"] }], actions: { category: "Utilities" } });
+autoRow = await db.get(autoId);
+assert.equal(autoRow.name, "Coastal Hydro and 1 more → Utilities", "the generated name follows the conditions");
+assert.deepEqual(autoRow.conditions, [{ field: "payee", operator: "in", value: "", values: ["Coastal Hydro", "Harbourline Telecom"] }], "is-any-of values are stored de-duplicated");
+await rules.upsertPortable(mina, { id: autoId, societyId: S, name: "Utilities by payee", conditions: autoRow.conditions, actions: { category: "Utilities" } });
+assert.equal((await db.get(autoId)).autoNamed, false);
+await assert.rejects(
+  () => rules.upsertPortable(mina, { societyId: S, conditions: [{ field: "payee", operator: "in", values: Array.from({ length: 26 }, (_, i) => `P${i}`) }], actions: { category: "X" } }),
+  /at most 25/,
+);
+await rules.removePortable(mina, { id: autoId });
+
+// A rule whose account was removed needs attention and is skipped when applying.
+const scratchAccount = await db.insert("financialAccounts", { societyId: S, connectionId: seed.financialAccounts[0].connectionId, externalId: "scratch-6100", code: "6100", name: "Scratch fees", currency: "CAD", accountType: "Expense", balanceCents: 0, isRestricted: false });
+const brokenId = await rules.upsertPortable(mina, { societyId: S, conditions: [{ field: "payee", operator: "contains", value: "coastal hydro" }], actions: { category: "Facilities", accountingAccountId: scratchAccount } });
+assert.equal((await db.get(brokenId)).name, "Coastal Hydro → Facilities");
+await rules.reorderPortable(mina, { societyId: S, orderedIds: [brokenId, ...ws.rules.filter((r: any) => r._id !== autoId).map((r: any) => r._id)] });
+await db.delete(scratchAccount);
+ws = await rules.workspacePortable(mina, { societyId: S });
+const broken = ws.rules.find((r: any) => r._id === brokenId);
+assert.deepEqual(broken.problems, ["the account was removed"]);
+assert.equal(ws.invalidRuleCount, 1);
+assert.equal(broken.pendingCount, 0, "an invalid rule has nothing to apply");
+assert.equal(ws.rules.find((r: any) => r._id === hydroRule._id).coverage.wins, hydroRule.coverage.wins, "an invalid rule above takes nothing");
+await assert.rejects(() => rules.applyToUncategorizedPortable(mina, { societyId: S, ruleId: brokenId }), /needs attention: the account was removed/);
+const skippedRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+assert.deepEqual(skippedRun.skippedRules, [{ name: "Coastal Hydro → Facilities", problem: "the account was removed" }]);
+assert.equal((await db.get(latestHydro._id)).ruleId, hydroRule._id, "the valid rule below categorised the line");
+await rules.undoBatchPortable(mina, { societyId: S, batch: skippedRun.batchId });
+await rules.removePortable(mina, { id: brokenId });
+
+// A "category is" rule re-codes lines a rule categorised, but never hand edits.
+const recodeId = await rules.upsertPortable(mina, { societyId: S, conditions: [{ field: "category", value: "Donations" }], actions: { markReviewed: true } });
+ws = await rules.workspacePortable(mina, { societyId: S });
+const recodeRow = ws.rules.find((r: any) => r._id === recodeId);
+assert.equal(recodeRow.name, "Donations → Reviewed");
+assert.ok(recodeRow.pendingCount > 0, "re-code rules preview categorised lines");
+const someDonation = seed.financialTransactions.find((t: any) => t.category === "Donations");
+await db.patch(someDonation._id, { categorizedBy: "manual" });
+const recodeRun = await rules.applyToUncategorizedPortable(mina, { societyId: S, ruleId: recodeId });
+assert.equal(recodeRun.applied, recodeRow.pendingCount - 1, "the hand-categorised line is left alone");
+assert.equal((await db.get(someDonation._id)).ruleId, undefined);
+const again = await rules.applyToUncategorizedPortable(mina, { societyId: S, ruleId: recodeId });
+assert.equal(again.applied, 0, "a re-code rule applies once");
+await rules.undoBatchPortable(mina, { societyId: S, batch: recodeRun.batchId });
+await rules.removePortable(mina, { id: recodeId });
 
 // ---- approvals (default approver access: finance edit access required)
 // Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with

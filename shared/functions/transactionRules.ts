@@ -12,16 +12,22 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
 import {
-  conditionMatches,
-  findMatchingRule,
+  autoRuleName,
+  findApplicableRule,
+  inValues,
   isUncategorized,
   restoreRuleFieldsPatch,
+  ruleCoverage,
+  ruleDisplayName,
+  ruleMatches,
   rulePatchForTransaction,
+  ruleProblems,
   sortRules,
   suggestStarterRules,
   validateRule,
   type RuleActions,
   type RuleCondition,
+  type RuleReferenceIndex,
   type TransactionRuleLike,
 } from "../transactionRules";
 
@@ -47,8 +53,10 @@ function cleanConditions(conditions: any[]): RuleCondition[] {
   return (conditions ?? []).map((raw) => {
     const field = String(raw?.field ?? "");
     if (field === "description" || field === "payee") {
+      if (raw.operator === "in") return { field, operator: "in", value: "", values: inValues(Array.isArray(raw.values) ? raw.values : []) };
       return { field, operator: (raw.operator ?? "contains") as any, value: String(raw.value ?? "").trim() };
     }
+    if (field === "category") return { field, value: String(raw.value ?? "").trim() };
     if (field === "amount") {
       const condition: any = { field, operator: raw.operator ?? "gte", amountCents: Math.round(Number(raw.amountCents)) };
       if (raw.operator === "between") condition.amountMaxCents = Math.round(Number(raw.amountMaxCents));
@@ -77,16 +85,46 @@ async function assertRuleReferences(ctx: PortableQueryCtx, societyId: string, co
   if (actions.fundRestrictionId) await getOwned(ctx, "fundRestrictions", actions.fundRestrictionId, societyId);
 }
 
-/** Everything the rules page needs: rules with live match counts, a light
- * transaction list for client-side previews, pick lists and starter rules. */
-export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  await requireSocietyMembership(ctx, societyId);
-  const [rules, txns, accounts, restrictions] = await Promise.all([
-    loadRules(ctx, societyId),
-    loadTransactions(ctx, societyId),
+async function loadReferences(ctx: PortableQueryCtx, societyId: string) {
+  const [accounts, restrictions] = await Promise.all([
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
+  const refs: RuleReferenceIndex = {
+    accountIds: new Set(accounts.map((a: any) => String(a._id))),
+    activeFundIds: new Set(restrictions.filter((r: any) => r.status !== "archived").map((r: any) => String(r._id))),
+    archivedFundIds: new Set(restrictions.filter((r: any) => r.status === "archived").map((r: any) => String(r._id))),
+  };
+  const nameOf = (rows: any[]) => (id: string) => {
+    const row = rows.find((r: any) => String(r._id) === String(id));
+    return row ? String(row.name) : undefined;
+  };
+  return { accounts, restrictions, refs, textOptions: { accountName: nameOf(accounts), fundName: nameOf(restrictions) } };
+}
+
+/** Rules that point at a removed account or an archived fund, with the reasons. */
+function invalidRules(rules: RuleRow[], refs: RuleReferenceIndex) {
+  const out = new Map<string, string[]>();
+  for (const rule of rules) {
+    const problems = ruleProblems(rule, refs);
+    if (problems.length) out.set(rule._id, problems);
+  }
+  return out;
+}
+
+/** Everything the rules page needs: rules with live match counts, overlap
+ * (`coverage`) and `problems`, a light transaction list for client-side
+ * previews, pick lists and starter rules. */
+export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
+  const [rules, txns, references] = await Promise.all([
+    loadRules(ctx, societyId),
+    loadTransactions(ctx, societyId),
+    loadReferences(ctx, societyId),
+  ]);
+  const { accounts, restrictions, refs, textOptions } = references;
+  const invalid = invalidRules(rules, refs);
+  const skip = new Set(invalid.keys());
   const transactions = txns
     .map((t: any) => ({
       _id: String(t._id),
@@ -102,20 +140,26 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const uncategorized = transactions.filter((t) => isUncategorized(t));
   const firstMatch = new Map<string, number>();
-  for (const txn of uncategorized) {
-    const rule = findMatchingRule(rules, txn);
+  for (const txn of transactions) {
+    const rule = findApplicableRule(rules, txn, skip);
     if (rule) firstMatch.set(rule._id, (firstMatch.get(rule._id) ?? 0) + 1);
   }
+  const coverage = ruleCoverage(rules, transactions, skip);
   const appliedCount = new Map<string, number>();
   for (const txn of transactions) if (txn.ruleId) appliedCount.set(txn.ruleId, (appliedCount.get(txn.ruleId) ?? 0) + 1);
   const categories = [...new Set(transactions.map((t) => String(t.category ?? "").trim()).filter((c) => c && !isUncategorized({ category: c })))].sort((a, b) => a.localeCompare(b));
   return {
     rules: rules.map((rule) => ({
       ...rule,
-      matchCount: transactions.filter((t) => rule.conditions.length > 0 && rule.conditions.every((c) => conditionMatches(c, t))).length,
+      name: ruleDisplayName(rule, textOptions),
+      autoNamed: Boolean(rule.autoNamed) || !String(rule.name ?? "").trim(),
+      matchCount: coverage[rule._id]?.matches ?? 0,
       pendingCount: firstMatch.get(rule._id) ?? 0,
       appliedCount: appliedCount.get(rule._id) ?? 0,
+      coverage: coverage[rule._id],
+      problems: invalid.get(rule._id) ?? [],
     })),
+    invalidRuleCount: invalid.size,
     transactions,
     uncategorizedCount: uncategorized.length,
     pendingMatches: [...firstMatch.values()].reduce((sum, n) => sum + n, 0),
@@ -126,13 +170,15 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     fundRestrictions: restrictions
       .filter((r: any) => r.status !== "archived")
       .map((r: any) => ({ _id: String(r._id), name: r.name, purpose: r.purpose })),
+    // Archived funds, so a rule that still tags one can name it and say it was archived (not removed).
+    archivedFunds: restrictions.filter((r: any) => r.status === "archived").map((r: any) => ({ _id: String(r._id), name: r.name })),
     suggestions: suggestStarterRules(transactions, rules, 3),
   };
 }
 
 export async function upsertPortable(
   ctx: PortableMutationCtx,
-  args: { id?: string; societyId: string; name: string; enabled?: boolean; conditions: any[]; actions: any; actingUserId?: string },
+  args: { id?: string; societyId: string; name?: string; enabled?: boolean; conditions: any[]; actions: any; actingUserId?: string },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   const conditions = cleanConditions(args.conditions);
@@ -140,11 +186,17 @@ export async function upsertPortable(
   const errors = validateRule({ name: args.name, conditions, actions });
   if (errors.length) throw new Error(errors[0]);
   await assertRuleReferences(ctx, args.societyId, conditions, actions);
+  // A blank name is generated from the rule ("Coastal Hydro → Facilities")
+  // and regenerated on every save until someone types a name.
+  const typedName = String(args.name ?? "").trim();
+  const autoNamed = !typedName;
+  const name = typedName || autoRuleName(conditions, actions, (await loadReferences(ctx, args.societyId)).textOptions);
   const nowISO = new Date().toISOString();
   if (args.id) {
     await getOwned(ctx, "transactionRules", args.id, args.societyId);
     await ctx.db.patch(args.id, {
-      name: args.name.trim(),
+      name,
+      autoNamed,
       ...(args.enabled === undefined ? {} : { enabled: args.enabled }),
       conditions,
       actions,
@@ -156,7 +208,8 @@ export async function upsertPortable(
   const priority = existing.reduce((max, rule) => Math.max(max, rule.priority), 0) + 1;
   return ctx.db.insert("transactionRules", {
     societyId: args.societyId,
-    name: args.name.trim(),
+    name,
+    autoNamed,
     priority,
     enabled: args.enabled ?? true,
     conditions,
@@ -196,20 +249,33 @@ export async function setEnabledPortable(ctx: PortableMutationCtx, { id, enabled
   await ctx.db.patch(id, { enabled, updatedAtISO: new Date().toISOString() });
 }
 
-/** Apply rules to every uncategorised transaction (or only one rule's matches). */
+/** Apply rules to every uncategorised transaction (or only one rule's
+ * matches), plus "category is" re-codes of lines that are not hand-categorised.
+ * Invalid rules are skipped and listed in `skippedRules`. */
 export async function applyToUncategorizedPortable(
   ctx: PortableMutationCtx,
   { societyId, ruleId }: { societyId: string; ruleId?: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
   if (ruleId) await getOwned(ctx, "transactionRules", ruleId, societyId);
-  const [rules, txns] = await Promise.all([loadRules(ctx, societyId), loadTransactions(ctx, societyId)]);
+  const [rules, txns, references] = await Promise.all([loadRules(ctx, societyId), loadTransactions(ctx, societyId), loadReferences(ctx, societyId)]);
+  // Rules that point at a removed account or an archived fund are skipped
+  // (and reported) rather than writing a dangling reference.
+  const invalid = invalidRules(rules, references.refs);
+  if (ruleId && invalid.has(ruleId)) {
+    throw new Error(`This rule needs attention: ${invalid.get(ruleId)![0]}. Edit the rule before applying it.`);
+  }
+  const skip = new Set(invalid.keys());
+  const skippedRules = rules
+    .filter((rule) => rule.enabled && invalid.has(rule._id) && (!ruleId || rule._id === ruleId))
+    .map((rule) => ({ name: ruleDisplayName(rule, references.textOptions), problem: invalid.get(rule._id)![0] }));
+  const named = rules.map((rule) => ({ ...rule, name: ruleDisplayName(rule, references.textOptions) }));
   const nowISO = new Date().toISOString();
   const batchId = `apply-${nowISO}-${Math.random().toString(36).slice(2, 8)}`;
   const byRule = new Map<string, { ruleId: string; name: string; count: number }>();
   let applied = 0;
   for (const txn of txns as any[]) {
-    const result = rulePatchForTransaction(rules, txn, nowISO, batchId);
+    const result = rulePatchForTransaction(named, txn, nowISO, batchId, skip);
     if (!result || (ruleId && result.rule._id !== ruleId)) continue;
     await ctx.db.patch(txn._id, result.patch);
     applied += 1;
@@ -218,7 +284,7 @@ export async function applyToUncategorizedPortable(
     byRule.set(result.rule._id, entry);
   }
   for (const id of byRule.keys()) await ctx.db.patch(id, { lastAppliedAtISO: nowISO });
-  return { batchId, applied, byRule: [...byRule.values()] };
+  return { batchId, applied, byRule: [...byRule.values()], skippedRules };
 }
 
 /** Undo every application from one batch, restoring the previous values. */
