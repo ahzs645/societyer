@@ -98,6 +98,7 @@
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",
     "test:exports:db": "tsx scripts/validate-export-database.ts",
+    "test:nl-filter": "tsx scripts/check-nl-filter.ts",
     "test:record-table-utils": "tsx scripts/check-record-table-utils.ts",
     "test:record-table-acceptance": "tsx scripts/check-record-table-acceptance.ts",
     "test:mobile-table-layout": "tsx scripts/check-mobile-table-layout.ts",
