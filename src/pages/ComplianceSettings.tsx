@@ -396,7 +396,11 @@ export function ComplianceSettingsPage() {
                     {alreadyTracked(d) && <span className="settings-deadlines__added"> · added</span>}
                   </span>
                   {d.basis ? <span className="settings-deadlines__basis">{d.basis}</span> : null}
-                  {d.sourceIds?.map((id) => <CitationBadge key={id} citationId={id} />)}
+                  {d.sourceIds?.length ? (
+                    <span className="settings-deadlines__sources">
+                      {d.sourceIds.map((id) => <CitationBadge key={id} citationId={id} />)}
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -404,7 +408,8 @@ export function ComplianceSettingsPage() {
           {historyNotices.length > 0 && <ul className="settings-deadlines" aria-label="Earlier cycles without evidence">
             {historyNotices.map((notice) => <li key={notice.key} className="settings-deadlines__item">
               <span className="settings-deadlines__date">Information</span><span className="settings-deadlines__title">{notice.title}</span>
-              <span className="settings-deadlines__basis">{notice.basis}</span>{notice.sourceIds.map((id) => <CitationBadge key={id} citationId={id} />)}
+              <span className="settings-deadlines__basis">{notice.basis}</span>
+              {notice.sourceIds.length > 0 && <span className="settings-deadlines__sources">{notice.sourceIds.map((id) => <CitationBadge key={id} citationId={id} />)}</span>}
             </li>)}
           </ul>}
         </aside>

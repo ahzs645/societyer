@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
+import { useThemePreference } from "../hooks/useThemePreference";
 import { presentRecipe } from "../lib/workflowRecipePresentation";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -122,6 +123,9 @@ export function WorkflowDetailPage() {
   const { id } = useParams();
   const society = useSociety();
   const canManage = usePermissions().can("tasks:write");
+  // React Flow forces a light colour scheme on its subtree unless told the
+  // app theme, which left white nodes and invisible zoom controls in dark mode.
+  const { resolvedTheme } = useThemePreference();
   const workflow = useRecordQuery<any>(api.workflows.get, id ? { id: id as any } : "skip");
   const runs = useQuery(api.workflows.runsForWorkflow, id && workflow ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
@@ -307,6 +311,7 @@ export function WorkflowDetailPage() {
             elementsSelectable
             onNodeClick={(_, node) => setSelectedKey(String(node.data.key))}
             proOptions={{ hideAttribution: true }}
+            colorMode={resolvedTheme}
           >
             <Background gap={20} size={1} />
             <Controls showInteractive={false} />

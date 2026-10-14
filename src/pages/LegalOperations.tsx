@@ -1790,13 +1790,15 @@ function Section({ title, count, children }: { title: string; count: number; chi
 }
 
 function SimpleTable({ cols, rows, empty }: { cols: string[]; rows: any[][]; empty: string }) {
+  // An empty register is one line, not a row of column headers (which also
+  // overflowed sideways on phones).
+  if (rows.length === 0) return <p className="muted legal-ops__empty">{empty}</p>;
   return (
     <div className="table-wrap">
       <table className="table">
         <thead><tr>{cols.map((col) => <th key={col}>{col}</th>)}</tr></thead>
         <tbody>
           {rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}
-          {rows.length === 0 && <EmptyRow cols={cols.length} label={empty} />}
         </tbody>
       </table>
     </div>
