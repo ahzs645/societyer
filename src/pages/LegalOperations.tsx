@@ -845,7 +845,7 @@ export function RightsLedgerPage() {
                   </td>
                 </tr>
               ))}
-              {(data?.classes ?? []).length === 0 && <EmptyRow cols={6} label="No rights classes yet." />}
+              {(data?.classes ?? []).length === 0 && <EmptyRow cols={6} label={corporationWorkspace ? "No share classes yet." : "No rights classes yet."} />}
             </tbody>
           </table>
         </div>
@@ -923,7 +923,7 @@ export function RightsLedgerPage() {
               </tbody>
             </table>
           </div>
-          <div className="muted" style={{ marginTop: 8 }}>
+          <div className="card__body muted" style={{ fontSize: "var(--fs-sm)" }}>
             Total votes: {voting?.totalVotes ?? 0} · Eligible voting signatories:{" "}
             {voting?.eligibleSigners?.length ?? 0} (natural persons at the age of majority). Set a class's
             votes per share to weight the roll-up; otherwise it is inferred from the voting text.

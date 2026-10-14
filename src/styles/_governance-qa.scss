@@ -117,3 +117,13 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+// Meeting stat strip at 320px: four uppercase labels broke mid-word
+// ("PRESEN/T", "MATERIA/LS"). Sentence case fits each word in its column.
+@media (max-width: 360px) {
+  .meeting-detail-page .meeting-detail-summary span {
+    text-transform: none;
+    overflow-wrap: normal;
+    hyphens: manual;
+  }
+}

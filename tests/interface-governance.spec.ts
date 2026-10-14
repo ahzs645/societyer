@@ -96,7 +96,9 @@ test("minutes preview preserves the demo workspace in a new tab", async ({ page 
   const popup = await popupEvent;
   await popup.waitForLoadState("domcontentloaded");
   expect(popup.url()).toContain("/demo/app/meetings/static_meeting_agm_2025/preview");
-  await expect(popup.getByText("2025 annual general meeting", { exact: true }).first()).toBeVisible();
+  await expect(popup.getByRole("heading", { name: "Minutes preview", exact: true })).toBeVisible();
+  // The trail names the meeting: the full path on desktop, "← meeting" on phones.
+  await expect(popup.locator(".breadcrumbs a:visible").filter({ hasText: "2025 annual general meeting" })).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
