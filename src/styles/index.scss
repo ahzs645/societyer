@@ -124,5 +124,7 @@
 @use "commitments";
 @use "spreadsheet-export"; // Excel / CSV export controls on finance screens
 
+@use "incorporation-setup"; // guided setup jurisdiction + governing Act questions
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

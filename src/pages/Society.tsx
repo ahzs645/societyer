@@ -18,6 +18,8 @@ import { InfoPopover } from "../components/InfoPopover";
 import { Field, LockedField, Badge, Drawer } from "../components/ui";
 import { Select } from "../components/Select";
 import { OptionSelect } from "../components/OptionSelect";
+import { GoverningActSelect, jurisdictionChoices } from "../components/GoverningActSelect";
+import { ENTITY_KIND_ENTITY_TYPES, entityKindForType, type IncorporationAct } from "../../shared/incorporationActs";
 import { DatePicker } from "../components/DatePicker";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { Toggle } from "../components/Controls";
@@ -217,6 +219,16 @@ export function SocietyPage() {
   // (the stored fields are untouched).
   const vocab = organizationVocabulary(form);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
+  /** A catalogued Act belongs to one jurisdiction and incorporates listed entity kinds; keep the identity consistent with it. */
+  const setGoverningAct = (value: string | undefined, act?: IncorporationAct) => setForm((f: any) => {
+    if (!act || act.actFormedUnder === f.actFormedUnder) return { ...f, actFormedUnder: value };
+    const kind = entityKindForType(f.entityType);
+    const keepsEntity = kind !== undefined && act.entityKinds.includes(kind);
+    return {
+      ...f, actFormedUnder: value, jurisdictionCode: act.jurisdictionCode, legalSubtype: act.legalSubtype,
+      ...(keepsEntity ? {} : { entityType: ENTITY_KIND_ENTITY_TYPES[act.entityKinds[0]], isMemberFunded: false }),
+    };
+  });
   const missingGovernanceCount = [
     society.constitutionDocId,
     society.bylawsDocId,
@@ -587,7 +599,7 @@ export function SocietyPage() {
                   <Select
                     value={form.jurisdictionCode ?? ""}
                     onChange={(value) => set("jurisdictionCode", value)}
-                    options={JURISDICTION_OPTIONS}
+                    options={jurisdictionChoices(JURISDICTION_OPTIONS, form.jurisdictionCode)}
                   />
                 </Field>
 
@@ -746,7 +758,7 @@ export function SocietyPage() {
               <div className="card__body">
                 <div className="org-details-field-grid">
                   <OptionSelect label="Entity type" setName="entityTypes" value={form.entityType ?? ""} onChange={(value) => { set("entityType", value); set("legalSubtype", "other"); }} emptyLabel="Needs classification" />
-                  <OptionSelect label="Act formed under" setName="actsFormedUnder" value={form.actFormedUnder ?? ""} onChange={(value) => set("actFormedUnder", value)} emptyLabel="Review governing Act" />
+                  <GoverningActSelect value={form.actFormedUnder} jurisdictionCode={form.jurisdictionCode} onChange={setGoverningAct} otherActName={setupOtherActName(society.onboardingAnswersJson)} />
                   <OptionSelect label="Organization status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
                 </div>
               </div>
@@ -1133,4 +1145,15 @@ function mask(value?: string) {
   const text = String(value ?? "");
   if (text.length <= 4) return "restricted";
   return `**** ${text.slice(-4)}`;
+}
+
+/** The Act's name recorded at setup when "Another Act" was chosen. */
+function setupOtherActName(onboardingAnswersJson?: string): string | undefined {
+  if (!onboardingAnswersJson) return undefined;
+  try {
+    const name = JSON.parse(onboardingAnswersJson)?.otherActName;
+    return typeof name === "string" && name.trim() ? name.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -20,6 +20,7 @@ import { FileText, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { INCORPORATION_JURISDICTION_CODES } from "../../shared/incorporationActs";
 
 export function PoliciesPage() {
   const society = useSociety();
@@ -276,7 +277,7 @@ export function PoliciesPage() {
             </div>
             <div className="row" style={{ gap: 12 }}>
               <OptionSelect label="Status" setName="policyStatuses" value={draft.status ?? ""} onChange={(value) => setDraft({ ...draft, status: value })} />
-              <OptionMultiSelect label="Jurisdictions" setName="entityJurisdictions" hideValues={["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA"]} values={listValues(draft.jurisdictions)} onChange={(values) => setDraft({ ...draft, jurisdictions: values })} />
+              <OptionMultiSelect label="Jurisdictions" setName="entityJurisdictions" hideValues={["CA-BC", "CA-FED-CBCA", "CA-ON-OBCA", ...INCORPORATION_JURISDICTION_CODES]} values={listValues(draft.jurisdictions)} onChange={(values) => setDraft({ ...draft, jurisdictions: values })} />
               <OptionMultiSelect label="Entity types" setName="entityTypes" values={listValues(draft.entityTypes)} onChange={(values) => setDraft({ ...draft, entityTypes: values })} rows={3} />
             </div>
             <Field label="DOCX document">

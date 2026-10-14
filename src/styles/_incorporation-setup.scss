@@ -1,0 +1,135 @@
+@use "tokens" as *;
+
+/* Guided setup: jurisdiction and governing-Act questions
+ * (src/components/GuidedOrganizationSetup.tsx). */
+
+.society-create__choice--described {
+  align-items: flex-start;
+}
+.society-create__choice--described svg {
+  margin-top: 2px;
+}
+.society-create__choice-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.society-create__choice-hint {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  font-weight: 400;
+}
+
+/* "British Columbia · Change" above the Act list. */
+.society-create__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: token('s-1');
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.society-create__context > span {
+  color: token('text-primary');
+  font-weight: 600;
+}
+
+.society-create__acts {
+  display: grid;
+  gap: token('s-2');
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.society-create__legend {
+  margin-bottom: token('s-2');
+  padding: 0;
+  font-weight: 600;
+}
+
+/* A radio card: the whole card is the label, the native radio keeps keyboard
+ * behaviour (arrow keys move within the group). */
+.society-create__act {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: token('s-3');
+  align-items: start;
+  min-width: 0;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  background: token('bg-panel');
+  color: token('text-primary');
+  cursor: pointer;
+  transition: border-color token('motion-fade') token('ease-fade'), background token('motion-fade') token('ease-fade');
+}
+.society-create__act:hover {
+  border-color: token('border-strong');
+}
+.society-create__act[data-checked] {
+  border-color: token('accent');
+  background: token('accent-soft');
+  box-shadow: 0 0 0 1px token('accent') inset;
+}
+.society-create__act:has(input:focus-visible) {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: token('focus-ring-offset');
+}
+.society-create__act input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: token('accent');
+}
+/* The card shows focus; the radio itself does not need a second ring. */
+.society-create__act input[type="radio"]:focus-visible {
+  outline: none;
+}
+.society-create__act-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.society-create__act-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.society-create__act-summary {
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  overflow-wrap: anywhere;
+}
+.society-create__act-badge {
+  display: flex;
+  margin-top: token('s-1');
+  min-width: 0;
+}
+/* Long support labels may wrap on narrow phones; let the badge grow with them. */
+.society-create__act-badge .badge {
+  max-width: 100%;
+  height: auto;
+  min-height: 20px;
+  padding-block: 1px;
+  border-radius: token('r-sm');
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+}
+
+.society-create__summary-note {
+  display: block;
+  margin-top: 2px;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.society-create__summary-address {
+  white-space: pre-line;
+}
+
+@media (pointer: coarse) {
+  .society-create__act {
+    min-height: 44px;
+  }
+}
