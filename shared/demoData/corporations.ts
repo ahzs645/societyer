@@ -524,6 +524,9 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
       stepDate: reviewDate, recordedOn: reviewDate, nextReviewDate: nextReview, createdAtISO: createdAt(reviewDate),
     });
   }
+  // Only the latest review schedules the next one; earlier ones were superseded.
+  const reviewSteps = steps.filter((step) => step.stepKind === "annual_review");
+  for (const step of reviewSteps.slice(0, -1)) delete step.nextReviewDate;
   if (register.pendingChange) {
     const awareOn = addDays(asOf, -register.pendingChange.awareDaysAgo);
     steps.push({

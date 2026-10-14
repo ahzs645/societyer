@@ -50,7 +50,7 @@ import {
   validateLedger,
 } from "../shared/equityLedger";
 import { duplicateCertificateNumber, reconcileCertificatesWithLedger, validateCertificate } from "../shared/shareCertificates";
-import { candidateFactsFromRegister, candidateSignificantIndividuals, transparencyEventsFromSteps } from "../shared/significantIndividuals";
+import { candidateFactsFromRegister, candidateSignificantIndividuals, reviewsDue, transparencyEventsFromSteps } from "../shared/significantIndividuals";
 import { looksLikeOrganization } from "../shared/nlg";
 import { dividendDeclarationProblems, dividendEntitlements } from "../shared/dividends";
 import { transferConsentRequired } from "../shared/operativeArticles";
@@ -236,6 +236,7 @@ function checkOwnershipRegister(demo: CorporationDemo, label: string, votingPowe
     check(steps.some((step) => step.stepKind === "became_significant" && step.roleHolderId === controller._id && step.recordedOn && step.notifiedOn), `${label}: ${controller.fullName}'s entry is recorded and notified`);
   }
   check(steps.some((step) => step.stepKind === "annual_review"), `${label}: annual reviews of the register are recorded`);
+  check(reviewsDue(steps as any, demo.asOf).length === 0, `${label}: no register review is overdue on the demo date`);
 }
 
 /* -------------------------------------------------------------- dividends */
