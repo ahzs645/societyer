@@ -340,6 +340,20 @@ function checkObligations(demo: CorporationDemo, label: string) {
   const obligations = facts.flatMap((fact) => computeComplianceObligations(fact));
   check(obligations.length > 0, `${label}: the compliance engine produces obligations`);
   check(obligations.every((row: any) => !row.dueDate || typeof row.dueDate === "string"), `${label}: obligations carry dates`);
+  // The Obligations page: every past date is filed, reviewed or dismissed with
+  // a reason, and every open filing obligation has its filing in the register.
+  const remediations = demo.tables.complianceRemediations ?? [];
+  for (const obligation of obligations as any[]) {
+    const filing = obligation.creates?.filingKind ? filings.find((row) => row.kind === obligation.creates.filingKind && row.dueDate === obligation.dueDate) : undefined;
+    const decision = remediations.find((row) => row.ruleId === obligation.occurrenceKey);
+    if (obligation.dueDate < demo.asOf) {
+      check(filing?.status === "Filed" || (decision && ["resolved", "dismissed"].includes(decision.status) && String(decision.notes ?? "").length > 20),
+        `${label}: past obligation "${obligation.title}" (${obligation.dueDate}) has no filing, review or reasoned dismissal`);
+      if (decision?.status === "resolved" && obligation.creates?.filingKind) failures.push(`${label}: "${obligation.title}" (${obligation.dueDate}) needs a filing or a dismissal; a review does not close a filing obligation on the page`);
+    } else if (obligation.creates?.filingKind && !decision) {
+      check(Boolean(filing), `${label}: open filing obligation "${obligation.title}" (${obligation.dueDate}) has its filing in the register`);
+    }
+  }
   const tasks = demo.tables.tasks ?? [];
   check(tasks.some((task) => task.status !== "Done" && task.dueDate >= demo.asOf), `${label}: open tasks ahead of the demo date`);
 }
@@ -497,7 +511,7 @@ await expectCaught("controller missing from the register", (demo) => {
 }, async (demo, label) => checkPortableQueries(demo, label));
 await expectCaught("unsigned resolution", (demo) => { demo.tables.writtenResolutions[0].signatures.pop(); }, checkResolutions);
 await expectCaught("latest filed annual report removed", (demo) => {
-  const filed = demo.tables.filings.filter((row) => row.status === "Filed");
+  const filed = demo.tables.filings.filter((row) => row.status === "Filed" && /AnnualReport|AnnualReturn/.test(row.kind));
   demo.tables.filings = demo.tables.filings.filter((row) => row !== filed.at(-1));
 }, checkObligations);
 await expectCaught("no resident Canadian on a CBCA board", (demo) => {

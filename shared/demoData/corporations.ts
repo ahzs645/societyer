@@ -34,6 +34,7 @@ import {
 import { annualGovernanceSettings } from "../annualGovernanceEvidence";
 import { transparencyEventsFromSteps } from "../significantIndividuals";
 import { normalizeSearchName } from "../peopleDirectory";
+import { complianceFactsForOrganization, computeComplianceObligations } from "../../src/lib/compliance";
 import { addDays, createRng, dayOfMonth, demoAsOfDate, monthKeys, nextBusinessDay } from "./prng";
 import { CORPORATION_DEMO_IDENTITIES, type CorporationDemoKey } from "./corporationIdentities";
 import { CORPORATION_STORIES, type CorporationStory, type DemoPersonSpec, type DemoResolutionSpec } from "./corporationStories";
@@ -92,6 +93,7 @@ export const CORPORATION_DEMO_TABLE_ORDER = [
   "significantIndividualSteps",
   "filings",
   "annualFilingLedger",
+  "complianceRemediations",
   "auditorAppointments",
   "agreements",
   "insurancePolicies",
@@ -701,7 +703,7 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
     if (filedAt > cutoff) break;
     const isc = key === "federal_cbca" && filedAt >= "2024-01-22";
     filings.push({
-      _id: id(`filing_annual_${year}`), societyId, kind: annualReturnKind, jurisdictionCode: identity.jurisdictionCode, contextKind: "home", sourceRegistrationId: homeRegistrationId,
+      _id: id(`filing_annual_${year}`), societyId, kind: annualReturnKind, jurisdictionCode: identity.jurisdictionCode, contextKind: "home",
       periodLabel: returnRule.anchor === "fiscal_year_end" ? `Financial year ended ${anchor}` : `${year} annual ${key === "bc_company" ? "report" : "return"}`,
       reportingYear: year, ...(returnRule.anchor === "fiscal_year_end" ? { reportingPeriodEnd: anchor } : {}),
       // Ontario returns were filed with the T2 return until the Ontario Business Registry opened on October 19, 2021.
@@ -723,7 +725,7 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
   const nextDue = returnRule.anchor === "fiscal_year_end" ? addFiscalFilingMonths(nextAnchor, returnRule.months ?? 6)! : returnRule.months ? addCalendarMonths(nextAnchor, returnRule.months)! : addComplianceDays(nextAnchor, returnRule.days ?? 0)!;
   const upcomingFilingId = id(`filing_annual_${nextCycle}`);
   add("filings", {
-    _id: upcomingFilingId, societyId, kind: annualReturnKind, jurisdictionCode: identity.jurisdictionCode, contextKind: "home", sourceRegistrationId: homeRegistrationId,
+    _id: upcomingFilingId, societyId, kind: annualReturnKind, jurisdictionCode: identity.jurisdictionCode, contextKind: "home",
     periodLabel: returnRule.anchor === "fiscal_year_end" ? `Financial year ended ${nextAnchor}` : `${nextCycle} annual ${key === "bc_company" ? "report" : "return"}`,
     reportingYear: nextCycle, ...(returnRule.anchor === "fiscal_year_end" ? { reportingPeriodEnd: nextAnchor } : {}), dueDate: nextDue, status: "Upcoming",
     submissionMethod: key === "bc_company" ? "BC Registries online" : key === "federal_cbca" ? "Corporations Canada Online Filing Centre" : "Ontario Business Registry",
@@ -732,6 +734,81 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
   });
   for (const filing of filings) {
     add("annualFilingLedger", { _id: id(`filing_ledger_${filing.reportingYear}`), societyId, jurisdiction: identity.jurisdictionCode, year: String(filing.reportingYear), filed: true, filedOn: filing.filedAt, sourceFilingId: filing._id, regnNature: profile.annualReturn.label, regnLegislation: story.legislationLabel, createdAtISO: at(filing.filedAt, 21) });
+  }
+
+  // ------------------------------------------------- director change notices
+  // Each change of directors is reported to the registry within 15 days.
+  const changeDates = [...new Set(story.directors.flatMap((term) => [term.start > identity.incorporationDate ? term.start : "", term.end ?? ""]).filter((date) => date && date <= cutoff))].sort();
+  const changeGroups: string[][] = [];
+  for (const date of changeDates) {
+    const last = changeGroups.at(-1);
+    if (last && addDays(last[0], 3) >= date) last.push(date);
+    else changeGroups.push([date]);
+  }
+  const changeKind = key === "bc_company" ? "ChangeOfDirectors" : key === "federal_cbca" ? "FederalDirectorChange" : "OntarioNoticeOfChange";
+  for (const group of changeGroups) {
+    const effective = group[0];
+    const names = story.directors.filter((term) => group.includes(term.start) || (term.end && group.includes(term.end))).map((term) => `${holderName(term.person)} (${term.end && group.includes(term.end) ? "ceased" : "appointed"})`);
+    add("filings", {
+      _id: id(`filing_director_change_${effective}`), societyId, kind: changeKind, jurisdictionCode: identity.jurisdictionCode, contextKind: "home",
+      periodLabel: `Change of directors effective ${effective}`, dueDate: addDays(effective, 15), filedAt: businessDayOnOrBefore(addDays(effective, 6)), status: "Filed",
+      submissionMethod: key === "bc_company" ? "BC Registries online" : key === "federal_cbca" ? "Corporations Canada Online Filing Centre" : effective < "2021-10-19" ? "Notice of change under the Corporations Information Act" : "Ontario Business Registry",
+      submittedByUserId: ownerUserId, confirmationNumber: `${identity.incorporationNumber}-DC-${effective.replace(/-/g, "")}`, evidenceNotes: `Directors changed: ${names.join(", ")}.`,
+    });
+  }
+
+  // ---------------------------------------- rule-pack obligations (history)
+  // The Obligations page lists every nominal date the rule packs compute since
+  // incorporation. Each past one is backed by a filing, or by a recorded review
+  // (with its evidence) or a reasoned dismissal, so the page shows history as
+  // handled and only the open cycle ahead of today.
+  const factsForRules = complianceFactsForOrganization({ ...organization }, { asOfDate: asOf, registrations: tables.organizationRegistrations as any, meetings: [] });
+  const ruleObligations = factsForRules.flatMap((facts) => computeComplianceObligations(facts));
+  const filingRows = () => tables.filings ?? [];
+  const stepIn = (from: string, to: string) => steps.find((step) => step.stepKind === "annual_review" && step.stepDate >= from && step.stepDate <= to);
+  const annualResolutionBy = (date: string) => [...resolutions].filter((row) => /^Annual resolutions of the shareholders/.test(row.title) && row.recordDateISO <= date).at(-1);
+  const directorsResolutionIn = (year: number) => resolutions.find((row) => /^Annual resolutions of the directors/.test(row.title) && row.recordDateISO.startsWith(String(year)));
+  for (const obligation of ruleObligations) {
+    const ruleId = obligation.occurrenceKey.split(":")[1] ?? obligation.occurrenceKey;
+    const kind = obligation.creates?.filingKind;
+    const due = obligation.dueDate;
+    if (kind && filingRows().some((row) => row.kind === kind && row.dueDate === due)) continue;
+    const decision = (status: "resolved" | "dismissed", notes: string, target?: { table: string; id: string }) => add("complianceRemediations", {
+      _id: id(`obligation_${ruleId.replace(/^compliance-/, "").replace(/[^a-z0-9]+/g, "_")}_${due}`), societyId, ruleId: obligation.occurrenceKey,
+      flagLevel: "info", flagText: obligation.title, evidenceRequired: obligation.creates?.requiredEvidence ?? [], status, notes,
+      ...(target ? { targetTable: target.table, targetId: target.id } : {}),
+      ...(status === "resolved" ? { resolvedAtISO: at(due < cutoff ? addDays(due, -7) : cutoff), resolvedByUserId: ownerUserId } : { dismissedAtISO: at(due < cutoff ? addDays(due, -7) : cutoff) }),
+      createdAtISO: at(due < cutoff ? addDays(due, -7) : cutoff), updatedAtISO: at(due < cutoff ? addDays(due, -7) : cutoff),
+    });
+    const notRequired =
+      kind === "FederalIscUpdate" && due < "2024-01-22" ? "Not required: sending information about individuals with significant control to Corporations Canada began on January 22, 2024."
+        : kind === "FederalAnnualReturn" && yearOf(due) === incorporationYear ? "Not required: the first annual return covers the anniversary in the year after incorporation."
+          : /transparency-annual-review/.test(ruleId) && due < register.startedOn ? "Not required: Part 4.1 of the Business Corporations Act (the transparency register) came into force on October 1, 2020."
+            : undefined;
+    if (notRequired) { decision("dismissed", notRequired); continue; }
+    if (kind === "FederalIscUpdate" || kind === "OntarioInitialReturn") {
+      const filedAt = kind === "OntarioInitialReturn" ? businessDayOnOrBefore(addDays(identity.incorporationDate, 25)) : filings.find((row) => row.dueDate === due)?.filedAt ?? businessDayOnOrBefore(addDays(due, -20));
+      const isFiled = filedAt <= cutoff;
+      add("filings", {
+        _id: id(`filing_${kind === "FederalIscUpdate" ? "isc" : "initial_return"}_${due}`), societyId, kind, jurisdictionCode: identity.jurisdictionCode, contextKind: "home",
+        periodLabel: kind === "FederalIscUpdate" ? `ISC information with the ${yearOf(due)} annual return` : "Initial return", reportingYear: yearOf(due), dueDate: due, status: isFiled ? "Filed" : "Upcoming",
+        ...(isFiled ? { filedAt, submittedByUserId: ownerUserId, confirmationNumber: `${identity.incorporationNumber}-${kind === "FederalIscUpdate" ? "ISC" : "IR"}-${yearOf(due)}` } : {}),
+        submissionMethod: kind === "FederalIscUpdate" ? "Corporations Canada Online Filing Centre" : "Initial return under the Corporations Information Act",
+        evidenceNotes: kind === "FederalIscUpdate" ? "Individuals with significant control as recorded in the ISC register (CBCA s. 21.303)." : "Initial return filed within 60 days after incorporation (Corporations Information Act s. 2).",
+      });
+      continue;
+    }
+    if (due >= asOf) continue;
+    if (kind) { decision("dismissed", "Reviewed: there was no change to report for this period. Changes of directors were filed when they happened."); continue; }
+    const yearEndReview = stepIn(addDays(due, -75), due);
+    const target =
+      /transparency-annual-review|isc-annual-review/.test(ruleId) && yearEndReview ? { table: "significantIndividualSteps", id: yearEndReview._id }
+        : /agm|annual-meeting/.test(ruleId) && annualResolutionBy(due) ? { table: "writtenResolutions", id: annualResolutionBy(due)!._id }
+          : /financials/.test(ruleId) && directorsResolutionIn(yearOf(due)) ? { table: "writtenResolutions", id: directorsResolutionIn(yearOf(due))!._id }
+            : undefined;
+    decision("resolved", target
+      ? `Done: ${target.table === "writtenResolutions" ? resolutions.find((row) => row._id === target.id)!.title : `annual review of the ${register.label} on ${yearEndReview!.stepDate}`}.`
+      : `Reviewed with the annual records review before ${due}; nothing outstanding.`, target);
   }
 
   // ---------------------------------------------------- auditor & statements
@@ -800,12 +877,12 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
   const heldMeetingId = id("meeting_board_recent");
   const minutesId = id("minutes_board_recent");
   add("meetings", {
-    _id: heldMeetingId, societyId, type: "Board", title: "Quarterly board meeting", scheduledAt: at(heldOn, 22), location: story.boardMeeting.location, electronic: true,
+    _id: heldMeetingId, societyId, type: "Board", title: "Quarterly board meeting", scheduledAt: at(heldOn, 17), location: story.boardMeeting.location, electronic: true,
     status: "Held", attendeeIds: boardAttendees.map((term) => directorIds.get(term.person)!), quorumRequired: Math.floor(boardAttendees.length / 2) + 1, minutesId,
     notes: `Agenda: ${story.boardMeeting.agenda.join("; ")}.`, hostBody: "board",
   });
   add("meetings", {
-    _id: id("meeting_board_next"), societyId, type: "Board", title: "Quarterly board meeting", scheduledAt: at(nextOn, 22), location: story.boardMeeting.location, electronic: true,
+    _id: id("meeting_board_next"), societyId, type: "Board", title: "Quarterly board meeting", scheduledAt: at(nextOn, 17), location: story.boardMeeting.location, electronic: true,
     status: "Scheduled", attendeeIds: directorsOn(asOf).map((term) => directorIds.get(term.person)!), quorumRequired: Math.floor(directorsOn(asOf).length / 2) + 1,
     notes: "Agenda to follow: year-end planning and the next annual cycle.", hostBody: "board",
   });
@@ -828,8 +905,8 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
     notes: "Signed originals of resolutions, certificates and registers. Scanned copies are in the document library.", createdAtISO: createdAt(identity.incorporationDate),
   });
   add("minutes", {
-    _id: minutesId, societyId, meetingId: heldMeetingId, heldAt: at(heldOn, 22), attendees: boardAttendees.map((term) => holderName(term.person)), absent: [], quorumMet: true,
-    chairName: chair, secretaryName: secretary, calledToOrderAt: at(heldOn, 22), adjournedAt: at(heldOn, 23, 20),
+    _id: minutesId, societyId, meetingId: heldMeetingId, heldAt: at(heldOn, 17), attendees: boardAttendees.map((term) => holderName(term.person)), absent: [], quorumMet: true,
+    chairName: chair, secretaryName: secretary, calledToOrderAt: at(heldOn, 17), adjournedAt: at(heldOn, 18, 20),
     discussion: story.boardMeeting.agenda.map((item, index) => `${index + 1}. ${item}.`).join("\n"),
     sections: story.boardMeeting.agenda.map((title) => ({ title, type: "discussion", discussion: "", decisions: [], actionItems: [], depth: 0 })),
     decisions: story.boardMeeting.decisions, actionItems: [], motions: [], appendices: [], approvedAt: addDays(heldOn, 7),
@@ -916,7 +993,7 @@ export function buildCorporationDemo(key: CorporationDemoKey, options: Corporati
   const recent = [
     ...filings.slice(-1).map((filing) => ({ at: at(filing.filedAt, 21), entityType: "filing", entityId: filing._id, action: "filed", summary: `${profile.annualReturn.label} for ${filing.reportingYear} filed with ${story.registryLabel}` })),
     ...resolutions.slice(-2).map((row) => ({ at: row.completedAtISO, entityType: "writtenResolution", entityId: row._id, action: "carried", summary: `${row.title} — signed by every ${row.body === "directors" ? "director" : "shareholder"}` })),
-    { at: at(heldOn, 23, 30), entityType: "meeting", entityId: heldMeetingId, action: "held", summary: "Quarterly board meeting held" },
+    { at: at(heldOn, 18, 30), entityType: "meeting", entityId: heldMeetingId, action: "held", summary: "Quarterly board meeting held" },
     ...steps.filter((step) => step.stepKind === "annual_review").slice(-1).map((step) => ({ at: at(step.stepDate, 20), entityType: "significantIndividualSteps", entityId: step._id, action: "recorded", summary: `Annual review of the ${register.label} recorded` })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   recent.forEach((entry, index) => add("activity", { _id: id(`activity_${index}`), societyId, actor: holderName(ownerKey), entityType: entry.entityType, entityId: entry.entityId, subjectId: entry.entityId, action: entry.action, summary: entry.summary, createdAtISO: entry.at }));
