@@ -10,8 +10,10 @@
  * TypeScript (no DOM/Node) so the Convex query and the static demo client can
  * share one derivation. The fund split keys off each transaction's account
  * `isRestricted` flag — money held in a restricted fund/account is Restricted,
- * everything else is General.
+ * everything else is General. Internal transfers are skipped.
  */
+
+import { isInternalTransfer } from "./transferCategories";
 
 export type OrgStatementLine = {
   label: string;
@@ -96,7 +98,7 @@ export function buildOrgRevenueStatement(input: {
   const expenseByCategory = new Map<string, OrgStatementLine>();
   for (const txn of rows) {
     const cents = txn.amountCents ?? 0;
-    if (cents === 0) continue;
+    if (cents === 0 || isInternalTransfer(txn)) continue;
     const restricted = restrictedById.get(String(txn.accountId)) ?? false;
     const target = cents > 0 ? revenueByCategory : expenseByCategory;
     const label = txn.category || "Uncategorized";

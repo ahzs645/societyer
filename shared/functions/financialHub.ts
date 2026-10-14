@@ -16,6 +16,8 @@
 import { assertValid, validateBudgetLineInput } from "../recordValidation";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
+import { fiscalWindow } from "./treasury";
+import { todayDateOnly } from "../dateOnly";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -487,13 +489,23 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
   const restricted = bank.filter((a) => a.isRestricted);
   const unrestricted = totalBalance - restricted.reduce((sum, a) => sum + effectiveBalance(a), 0);
 
+  // Budget vs actuals covers one fiscal year: the budgeted year containing
+  // today (else the latest budgeted year), with actuals from that year's
+  // window only, the same rule as treasury.budgetVariance.
+  const society: any = await ctx.db.get(societyId, "societies");
+  const today = todayDateOnly();
+  const categoryBudgets = budgets.filter((b: any) => !b.programCode && !b.accountId);
+  const budgetYears = [...new Set(categoryBudgets.map((b: any) => String(b.fiscalYear)))]
+    .map((label) => ({ label, ...fiscalWindow(label, society?.fiscalYearEnd) }))
+    .sort((a, b) => b.end.localeCompare(a.end));
+  const budgetYear = budgetYears.find((year) => year.start <= today && today <= year.end) ?? budgetYears[0];
   const actualsByCategory: Record<string, number> = {};
   for (const t of transactions) {
-    if (!t.category) continue;
+    if (!t.category || !budgetYear || t.date < budgetYear.start || t.date > budgetYear.end) continue;
     actualsByCategory[t.category] = (actualsByCategory[t.category] ?? 0) + Math.abs(t.amountCents);
   }
 
-  const budgetRows = budgets.filter((b: any) => !b.programCode && !b.accountId).map((b) => ({
+  const budgetRows = categoryBudgets.filter((b: any) => String(b.fiscalYear) === budgetYear?.label).map((b) => ({
     ...b,
     actualCents: actualsByCategory[b.category] ?? 0,
   }));
@@ -512,6 +524,7 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
       ledgerBacked: isLedgerBacked(a),
     })),
     budgetRows,
+    budgetFiscalYear: budgetYear?.label ?? null,
     recentTransactions: transactions
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 10),

@@ -17,6 +17,7 @@ import type { PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import { entityMeetingWording } from "../entityMeetingWording";
 import { organizationRuleScope } from "../entityRuleScope";
+import { isInternalTransfer } from "../transferCategories";
 import {
   buildOrgRevenueStatement,
   deriveFiscalRange as deriveRange,
@@ -63,9 +64,10 @@ export async function annualStatementPortable(
   const expenseByCategory = new Map<string, number>();
   const actualByCategory = new Map<string, number>();
   for (const txn of txns) {
+    if (isInternalTransfer(txn)) continue;
     const account = accountMap.get(String(txn.accountId));
     const type = account?.accountType ?? "Other";
-    const cat = txn.category ?? type;
+    const cat = txn.category ?? (type === "Bank" || type === "Credit" ? "Uncategorized" : type);
     const cents = Math.abs(txn.amountCents);
     actualByCategory.set(cat, (actualByCategory.get(cat) ?? 0) + cents);
     if (type === "Income" || txn.amountCents > 0) {
