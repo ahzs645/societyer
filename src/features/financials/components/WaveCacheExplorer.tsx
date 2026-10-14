@@ -144,7 +144,7 @@ export function WaveCacheExplorer({
                   <tr
                     key={row._id}
                     onClick={() => onSelectResource(row._id)}
-                    style={{ cursor: "pointer", background: selected ? "var(--surface-muted)" : undefined }}
+                    style={{ cursor: "pointer", background: selected ? "var(--bg-selected-alpha)" : undefined }}
                   >
                     <td>
                       <strong>{row.label}</strong>
