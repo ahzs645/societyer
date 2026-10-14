@@ -118,9 +118,10 @@
   overflow-wrap: anywhere;
 }
 
-// Meeting stat strip at 320px: four uppercase labels broke mid-word
-// ("PRESEN/T", "MATERIA/LS"). Sentence case fits each word in its column.
-@media (max-width: 360px) {
+// Meeting stat strip on phones: four uppercase labels broke mid-word
+// ("PRESEN/T", "MATERIA/LS" — at 390px too since text renders at its true
+// size). Sentence case fits each word in its column.
+@media (max-width: 430px) {
   .meeting-detail-page .meeting-detail-summary span {
     text-transform: none;
     overflow-wrap: normal;
