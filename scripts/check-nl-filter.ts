@@ -12,9 +12,19 @@ import {
   nlFieldsFromColumns,
   parseNlFilter,
   validateAiFilterReply,
+  aiFilterSchema,
+  aiFilterToParseResult,
   type NlContext,
   type NlParseResult,
 } from "../src/lib/nlFilter";
+import { DATE_RANGE_PRESETS } from "../src/lib/dateRanges";
+import {
+  AI_FILTER_DATE_PRESETS,
+  AI_FILTER_LIMITS,
+  buildAiFilterPrompt as buildSharedAiFilterPrompt,
+  sanitizeAiFilterSchema,
+  validateAiFilterJson,
+} from "../shared/nlFilterAi";
 
 const TODAY = "2026-10-14";
 
@@ -322,6 +332,121 @@ check("AI replies are validated against the schema", () => {
   assert.deepEqual(simplify(result.filters), [["amountCents", "gte", 150000], ["date", "between", { preset: "yearToDate" }]]);
   assert.deepEqual(validateAiFilterReply("nope", fields, "x").status, "none");
   assert.equal(validateAiFilterReply({ conditions: [{ field: "date", operator: "between", value: { start: "soon" } }] }, fields, "x").status, "none");
+});
+
+/* ------------------- shared AI validator (shared/nlFilterAi.ts) ------------------- */
+const memberSchema = aiFilterSchema(nlFieldsFromColumns(memberColumns));
+const transactionSchema = aiFilterSchema(nlFieldsFromColumns(transactionColumns));
+check("client schema: ids, labels, types, operators, option values and isCents only", () => {
+  const amount = transactionSchema.find((field) => field.id === "amountCents")!;
+  assert.deepEqual(Object.keys(amount).sort(), ["id", "isCents", "label", "operators", "type"]);
+  assert.equal(amount.isCents, true);
+  const status = memberSchema.find((field) => field.id === "status")!;
+  assert.deepEqual(status.options, [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }, { value: "Suspended", label: "Suspended" }]);
+  assert.ok(status.operators.includes("in") && !status.operators.includes("between"));
+  for (const field of [...memberSchema, ...transactionSchema]) {
+    assert.ok(Object.keys(field).every((key) => ["id", "label", "type", "operators", "options", "isCents"].includes(key)), field.id);
+  }
+});
+check("shared date presets mirror the date range picker", () => {
+  assert.deepEqual([...AI_FILTER_DATE_PRESETS], DATE_RANGE_PRESETS.map((preset) => preset.id));
+});
+check("prompt carries the schema, date and request — nothing else", () => {
+  const { system, user } = buildSharedAiFilterPrompt(transactionSchema, "wires over 1.5k", { today: TODAY, fiscalYearEnd: "03-31" });
+  assert.match(system, /single JSON object/);
+  const payload = JSON.parse(user);
+  assert.deepEqual(Object.keys(payload).sort(), ["datePresets", "fields", "fiscalYearEnd", "request", "today"]);
+  assert.equal(payload.today, TODAY);
+  assert.equal(payload.request, "wires over 1.5k");
+  const amount = payload.fields.find((field: any) => field.id === "amountCents");
+  assert.equal(amount.unit, "dollars");
+  assert.equal(amount.isCents, undefined, "the model answers in dollars; cents stay server-side");
+});
+check("sanitizer drops malformed fields, unknown operators and extra keys", () => {
+  const schema = sanitizeAiFilterSchema([
+    { id: "status", label: "Status", type: "SELECT", operators: ["eq", "drop table", "in"], options: [{ value: "Active", label: "Active", rows: 4 }], rows: [{ id: 1 }] },
+    { id: "status", label: "Duplicate", type: "SELECT", operators: ["eq"] },
+    { id: "", label: "No id", type: "TEXT", operators: ["eq"] },
+    { id: "notes", label: "Notes", type: "TEXT", operators: ["nope"] },
+    { id: "fee", label: "Fee", type: "NUMBER", operators: ["gt"], isCents: true },
+    { id: "lower", label: "Lower", type: "text", operators: ["eq"] },
+    "junk",
+  ]);
+  assert.deepEqual(schema, [
+    { id: "status", label: "Status", type: "SELECT", operators: ["eq", "in"], options: [{ value: "Active", label: "Active" }] },
+    { id: "fee", label: "Fee", type: "NUMBER", operators: ["gt"] },
+  ]);
+  assert.equal(sanitizeAiFilterSchema(Array.from({ length: 200 }, (_, index) => ({ id: `f${index}`, label: `F${index}`, type: "TEXT", operators: ["eq"] }))).length, AI_FILTER_LIMITS.fields);
+  assert.deepEqual(sanitizeAiFilterSchema("nope"), []);
+  assert.deepEqual(sanitizeAiFilterSchema(memberSchema), memberSchema, "idempotent on a well-formed schema");
+});
+check("validator drops out-of-schema fields, operators and values, and counts them", () => {
+  const result = validateAiFilterJson({
+    operator: "and",
+    conditions: [
+      { field: "status", operator: "eq", value: "active" },
+      { field: "status", operator: "between", value: { preset: "today" } },
+      { field: "salary", operator: "gt", value: 5 },
+      { field: "membershipClass", operator: "in", value: ["Regular", "Platinum"] },
+      { field: "joinedAt", operator: "between", value: { preset: "nextDecade" } },
+      { field: "joinedAt", operator: "gt", value: "2026-01-01" },
+      { field: "email", operator: "isEmpty", value: "ignored" },
+      { field: "firstName", operator: "contains", value: "x".repeat(500) },
+      "junk",
+    ],
+    groups: [{ operator: "or", conditions: [{ field: "votingRights", operator: "isTrue" }, { field: "lastName", operator: "startsWith", value: " Pat " }] }, { operator: "or", conditions: [{ field: "nope", operator: "eq", value: 1 }] }],
+    unmatched: ["platinum", 4, "  "],
+  }, memberSchema);
+  assert.equal(result.droppedCount, 7);
+  assert.deepEqual(result.unmatched, ["platinum"]);
+  assert.deepEqual(result.filter, {
+    operator: "and",
+    conditions: [
+      { field: "status", operator: "eq", value: "Active" },
+      { field: "joinedAt", operator: "gt", value: "2026-01-01" },
+      { field: "email", operator: "isEmpty", value: null },
+    ],
+    groups: [{ operator: "or", conditions: [{ field: "votingRights", operator: "isTrue", value: null }, { field: "lastName", operator: "startsWith", value: "Pat" }] }],
+  });
+  assert.match(result.notes[0], /Left out 7 suggested conditions/);
+});
+check("validator converts dollars to cents only for isCents currency", () => {
+  const cents = validateAiFilterJson({ conditions: [{ field: "amountCents", operator: "gte", value: "$1,500.50" }, { field: "date", operator: "between", value: { start: "2026-01-01" } }] }, transactionSchema);
+  assert.deepEqual(cents.filter?.conditions, [
+    { field: "amountCents", operator: "gte", value: 150050 },
+    { field: "date", operator: "between", value: { start: "2026-01-01" } },
+  ]);
+  const plain = sanitizeAiFilterSchema([{ id: "amount", label: "Amount", type: "CURRENCY", operators: ["gte"] }]);
+  assert.equal(validateAiFilterJson({ conditions: [{ field: "amount", operator: "gte", value: 12 }] }, plain).filter?.conditions[0].value, 12);
+});
+check("validator caps conditions and rejects non-objects", () => {
+  const many = validateAiFilterJson({ conditions: Array.from({ length: 20 }, () => ({ field: "email", operator: "isNotEmpty" })) }, memberSchema);
+  assert.equal(many.filter?.conditions.length, AI_FILTER_LIMITS.conditions);
+  assert.equal(many.droppedCount, 20 - AI_FILTER_LIMITS.conditions);
+  for (const raw of [null, "x", [], 4]) {
+    const result = validateAiFilterJson(raw, memberSchema);
+    assert.equal(result.filter, null);
+    assert.equal(result.droppedCount, 0);
+  }
+  assert.deepEqual(extractJsonObject("Sure! ```json\n{\"operator\":\"or\"}\n``` hope that helps"), { operator: "or" });
+  assert.equal(extractJsonObject("no json here"), null);
+  assert.equal(extractJsonObject("{not json}"), null);
+});
+check("server result becomes preview chips; columns the table lost are counted", () => {
+  const fields = nlFieldsFromColumns(memberColumns);
+  const result = aiFilterToParseResult({
+    filter: { operator: "or", conditions: [{ field: "status", operator: "eq", value: "Active" }, { field: "gone", operator: "eq", value: "x" }], groups: [] },
+    unmatched: [],
+    droppedCount: 1,
+    notes: [],
+  }, fields, "active");
+  assert.equal(result.source, "ai");
+  assert.equal(result.status, "partial");
+  assert.deepEqual(result.chips.map((chip) => chip.text), ["Status is Active"]);
+  assert.match(result.notes[0], /Left out 2 suggested conditions/);
+  const none = aiFilterToParseResult({ filter: null, unmatched: ["moon"], droppedCount: 0, notes: [] }, fields, "moon");
+  assert.equal(none.status, "none");
+  assert.deepEqual(none.ignored, ["moon"]);
 });
 
 console.log(`nl-filter: ${count} checks passed`);
