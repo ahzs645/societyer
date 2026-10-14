@@ -42,6 +42,7 @@ import { intakeTables } from "./tables/intake";
 import { agreementTables } from "./tables/agreements";
 import { financeWorkflowTables } from "./tables/financeWorkflows";
 import { invoiceTables } from "./tables/invoices";
+import { businessRegisterTables } from "./tables/businessRegisters";
 
 export default defineSchema({
   ...reviewEvidenceTables,
@@ -51,6 +52,7 @@ export default defineSchema({
   ...intakeTables,
   ...financeWorkflowTables,
   ...invoiceTables,
+  ...businessRegisterTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     onboardingAnswersJson: v.optional(v.string()),

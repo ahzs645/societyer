@@ -5181,6 +5181,144 @@
     ]
   },
   {
+    "key": "convex:corporateCards:removeCard",
+    "surface": "convex",
+    "name": "corporateCards:removeCard",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporateCards.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "corporateCards",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:corporateCards:removeStatement",
+    "surface": "convex",
+    "name": "corporateCards:removeStatement",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporateCards.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "cardStatements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:corporateCards:setStatementReconciled",
+    "surface": "convex",
+    "name": "corporateCards:setStatementReconciled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporateCards.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "cardStatements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:corporateCards:upsertCard",
+    "surface": "convex",
+    "name": "corporateCards:upsertCard",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporateCards.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "corporateCards",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "financialAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "agreementDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:corporateCards:upsertStatement",
+    "surface": "convex",
+    "name": "corporateCards:upsertStatement",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/corporateCards.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "cardStatements",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "cardId",
+        "table": "corporateCards",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:corporateCards:workspace",
+    "surface": "convex",
+    "name": "corporateCards:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/corporateCards.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:corporationSettings:complianceDeadlines",
     "surface": "convex",
     "name": "corporationSettings:complianceDeadlines",
@@ -11848,6 +11986,94 @@
     ]
   },
   {
+    "key": "convex:investments:remove",
+    "surface": "convex",
+    "name": "investments:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/investments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "investmentHoldings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:investments:reserves",
+    "surface": "convex",
+    "name": "investments:reserves",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/investments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:investments:upsert",
+    "surface": "convex",
+    "name": "investments:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/investments.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "investmentHoldings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "fundRestrictionId",
+        "table": "fundRestrictions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "financialAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:investments:workspace",
+    "surface": "convex",
+    "name": "investments:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/investments.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:invitations:accept",
     "surface": "convex",
     "name": "invitations:accept",
@@ -17297,6 +17523,240 @@
     "kind": "query",
     "access": "authenticated",
     "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:generateSlips",
+    "surface": "convex",
+    "name": "payroll:generateSlips",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:importPayRuns",
+    "surface": "convex",
+    "name": "payroll:importPayRuns",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:recordRemittance",
+    "surface": "convex",
+    "name": "payroll:recordRemittance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollRemittances",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:removePayRun",
+    "surface": "convex",
+    "name": "payroll:removePayRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:removeRoe",
+    "surface": "convex",
+    "name": "payroll:removeRoe",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "recordsOfEmployment",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:removeSlip",
+    "surface": "convex",
+    "name": "payroll:removeSlip",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollSlips",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:savePayRun",
+    "surface": "convex",
+    "name": "payroll:savePayRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payRuns",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:saveRoe",
+    "surface": "convex",
+    "name": "payroll:saveRoe",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "recordsOfEmployment",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:saveSettings",
+    "surface": "convex",
+    "name": "payroll:saveSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:saveSlip",
+    "surface": "convex",
+    "name": "payroll:saveSlip",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollSlips",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:syncDeadlines",
+    "surface": "convex",
+    "name": "payroll:syncDeadlines",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:payroll:workspace",
+    "surface": "convex",
+    "name": "payroll:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/payroll.ts",
     "idArguments": [
       {
         "path": "societyId",
@@ -27458,6 +27918,144 @@
     ]
   },
   {
+    "key": "portable:corporateCards:removeCard",
+    "surface": "portable",
+    "name": "corporateCards:removeCard",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "corporateCards",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporateCards:removeStatement",
+    "surface": "portable",
+    "name": "corporateCards:removeStatement",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "cardStatements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporateCards:setStatementReconciled",
+    "surface": "portable",
+    "name": "corporateCards:setStatementReconciled",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "cardStatements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:corporateCards:upsertCard",
+    "surface": "portable",
+    "name": "corporateCards:upsertCard",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "corporateCards",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "financialAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "agreementDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:corporateCards:upsertStatement",
+    "surface": "portable",
+    "name": "corporateCards:upsertStatement",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "cardStatements",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "cardId",
+        "table": "corporateCards",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:corporateCards:workspace",
+    "surface": "portable",
+    "name": "corporateCards:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:corporationSettings:complianceDeadlines",
     "surface": "portable",
     "name": "corporationSettings:complianceDeadlines",
@@ -33508,6 +34106,94 @@
     ]
   },
   {
+    "key": "portable:investments:remove",
+    "surface": "portable",
+    "name": "investments:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "investmentHoldings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:investments:reserves",
+    "surface": "portable",
+    "name": "investments:reserves",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:investments:upsert",
+    "surface": "portable",
+    "name": "investments:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "investmentHoldings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "fundRestrictionId",
+        "table": "fundRestrictions",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "financialAccountId",
+        "table": "financialAccounts",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:investments:workspace",
+    "surface": "portable",
+    "name": "investments:workspace",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:invitations:accept",
     "surface": "portable",
     "name": "invitations:accept",
@@ -38279,6 +38965,240 @@
     "key": "portable:pathways:status",
     "surface": "portable",
     "name": "pathways:status",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:generateSlips",
+    "surface": "portable",
+    "name": "payroll:generateSlips",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:importPayRuns",
+    "surface": "portable",
+    "name": "payroll:importPayRuns",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:recordRemittance",
+    "surface": "portable",
+    "name": "payroll:recordRemittance",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollRemittances",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "transactionId",
+        "table": "financialTransactions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:removePayRun",
+    "surface": "portable",
+    "name": "payroll:removePayRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:removeRoe",
+    "surface": "portable",
+    "name": "payroll:removeRoe",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "recordsOfEmployment",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:removeSlip",
+    "surface": "portable",
+    "name": "payroll:removeSlip",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollSlips",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:savePayRun",
+    "surface": "portable",
+    "name": "payroll:savePayRun",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payRuns",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:saveRoe",
+    "surface": "portable",
+    "name": "payroll:saveRoe",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "recordsOfEmployment",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:saveSettings",
+    "surface": "portable",
+    "name": "payroll:saveSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:saveSlip",
+    "surface": "portable",
+    "name": "payroll:saveSlip",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "payrollSlips",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "employeeId",
+        "table": "employees",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:syncDeadlines",
+    "surface": "portable",
+    "name": "payroll:syncDeadlines",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:payroll:workspace",
+    "surface": "portable",
+    "name": "payroll:workspace",
     "kind": "query",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

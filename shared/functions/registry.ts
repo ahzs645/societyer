@@ -84,6 +84,7 @@ import * as motionTemplatesFns from "./motionTemplates";
 const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconciliation");
 const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
 const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
+const businessRegistersFns = lazyHandlers(() => import("./businessRegisters"), "businessRegisters");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
@@ -632,6 +633,30 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invoices:setSeriesStatus", handler: invoicesFns.setSeriesStatusPortable }),
   definePortableMutation({ name: "invoices:issueFromSeries", handler: invoicesFns.issueFromSeriesPortable }),
   definePortableMutation({ name: "invoices:saveSettings", handler: invoicesFns.saveSettingsPortable }),
+
+  // business registers: payroll records, corporate cards, invested reserves
+  definePortableQuery({ name: "payroll:workspace", handler: businessRegistersFns.payrollWorkspacePortable }),
+  definePortableMutation({ name: "payroll:saveSettings", handler: businessRegistersFns.payrollSaveSettingsPortable }),
+  definePortableMutation({ name: "payroll:savePayRun", handler: businessRegistersFns.payrollSavePayRunPortable }),
+  definePortableMutation({ name: "payroll:importPayRuns", handler: businessRegistersFns.payrollImportPayRunsPortable }),
+  definePortableMutation({ name: "payroll:removePayRun", handler: businessRegistersFns.payrollRemovePayRunPortable }),
+  definePortableMutation({ name: "payroll:recordRemittance", handler: businessRegistersFns.payrollRecordRemittancePortable }),
+  definePortableMutation({ name: "payroll:saveSlip", handler: businessRegistersFns.payrollSaveSlipPortable }),
+  definePortableMutation({ name: "payroll:generateSlips", handler: businessRegistersFns.payrollGenerateSlipsPortable }),
+  definePortableMutation({ name: "payroll:removeSlip", handler: businessRegistersFns.payrollRemoveSlipPortable }),
+  definePortableMutation({ name: "payroll:saveRoe", handler: businessRegistersFns.payrollSaveRoePortable }),
+  definePortableMutation({ name: "payroll:removeRoe", handler: businessRegistersFns.payrollRemoveRoePortable }),
+  definePortableMutation({ name: "payroll:syncDeadlines", handler: businessRegistersFns.payrollSyncDeadlinesPortable }),
+  definePortableQuery({ name: "corporateCards:workspace", handler: businessRegistersFns.cardsWorkspacePortable }),
+  definePortableMutation({ name: "corporateCards:upsertCard", handler: businessRegistersFns.cardsUpsertCardPortable }),
+  definePortableMutation({ name: "corporateCards:removeCard", handler: businessRegistersFns.cardsRemoveCardPortable }),
+  definePortableMutation({ name: "corporateCards:upsertStatement", handler: businessRegistersFns.cardsUpsertStatementPortable }),
+  definePortableMutation({ name: "corporateCards:removeStatement", handler: businessRegistersFns.cardsRemoveStatementPortable }),
+  definePortableMutation({ name: "corporateCards:setStatementReconciled", handler: businessRegistersFns.cardsSetStatementReconciledPortable }),
+  definePortableQuery({ name: "investments:workspace", handler: businessRegistersFns.investmentsWorkspacePortable }),
+  definePortableQuery({ name: "investments:reserves", handler: businessRegistersFns.investmentsReservesPortable }),
+  definePortableMutation({ name: "investments:upsert", handler: businessRegistersFns.investmentsUpsertPortable }),
+  definePortableMutation({ name: "investments:remove", handler: businessRegistersFns.investmentsRemovePortable }),
 
   // signatures
   definePortableQuery({ name: "signatures:listForEntity", handler: signaturesFns.listForEntityPortable }),
