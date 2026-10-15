@@ -38,6 +38,7 @@ import {
   assertWorkspaceCreator,
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
+import { linkGoverningDocumentPortable } from "../shared/functions/governingDocuments";
 import { createWorkspacePortable } from "../shared/functions/societyCreate";
 import { buildConvexCapabilities } from "./providers/capabilities";
 import { getOwned, requireAuthenticated, requireSocietyMembership } from "../shared/functions/access";
@@ -423,4 +424,16 @@ export const updateIntegrationSettings = authorizedMutation("society:updateInteg
   args: { societyId: v.id("societies"), integrationSettings: integrationSettingsValidator },
   returns: v.id("societies"),
   handler: async (ctx, args) => updateIntegrationSettingsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** Link (or unlink, with `documentId: null`) a governing document on the profile. */
+export const linkGoverningDocument = authorizedMutation("society:linkGoverningDocument", mutation)({
+  args: {
+    societyId: v.id("societies"),
+    field: v.union(v.literal("constitutionDocId"), v.literal("bylawsDocId")),
+    documentId: v.union(v.id("documents"), v.null()),
+    updateCategory: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => linkGoverningDocumentPortable(await toPortableMutationCtx(ctx), args),
 });

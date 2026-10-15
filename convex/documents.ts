@@ -9,6 +9,7 @@ import {
   createPortable,
   markOpenedPortable,
   updateReviewStatusPortable,
+  updateCategoryPortable,
   reviewQueuesPortable,
   createPipaPolicyDraftPortable,
   rebuildPipaPolicyDraftFromSocietyPortable,
@@ -98,6 +99,17 @@ export const updateReviewStatus = authorizedMutation("documents:updateReviewStat
   },
   returns: v.any(),
   handler: async (ctx, args) => updateReviewStatusPortable(await toPortableMutationCtx(ctx), args),
+});
+
+/** File a document under another category; a governing category fills the empty profile field. */
+export const updateCategory = authorizedMutation("documents:updateCategory", mutation)({
+  args: {
+    id: v.id("documents"),
+    category: v.string(),
+    fillProfile: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => updateCategoryPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reviewQueues = authorizedQuery("documents:reviewQueues", query)({

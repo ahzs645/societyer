@@ -190,6 +190,8 @@ function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, fact
     case "articles": {
       const evidenceKeys = ctx.bcCompany ? ["bc-incorporation-agreement-articles", "bc-prepare-articles"] : ["prepare-federal-articles"];
       const packets = ctx.bcCompany ? ["bc-incorporation-agreement", "bc-articles-preparation"] : ["federal-articles-preparation"];
+      // Articles on the profile (uploaded, re-filed or chosen there) are prepared.
+      if (org.hasConstitutionDocument) return done("Articles on file");
       if (evidenceAtLeast(facts, evidenceKeys, "preparing") || pathwayNode(facts, "prepare-documents", COMPLETED_NODE)) return done();
       return packetGenerated(facts, packets) ? progress("Worksheet started") : todo();
     }

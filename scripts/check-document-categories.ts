@@ -35,6 +35,8 @@ import { PortableRuntime } from "../shared/portable/define";
 import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import { actionPermission } from "../shared/functions/actionPolicy";
+import { governingDocumentSlots } from "../shared/governingDocuments";
+import { betterAuthIssuer } from "../convex/lib/authIdentity";
 
 /* ------------------------------ normalization ----------------------------- */
 
@@ -201,3 +203,122 @@ assert.equal(cited.sourceDocumentKind, "candidate");
 assert.equal(cited.canonicalDocumentId, "d-canonical");
 
 console.log("Document category, review status and list projection checks passed.");
+
+/* ------------- governing documents: re-file, link, replace, unlink ------------- */
+
+assert.equal(actionPermission("society:linkGoverningDocument", "mutation"), "society:write");
+assert.equal(actionPermission("documents:updateCategory", "mutation"), "documents:write");
+assert.deepEqual(governingDocumentSlots({ entityType: "corporation__business_", jurisdictionCode: "CA-FED-CBCA" }).map((slot) => slot.label), ["Articles", "By-laws"]);
+assert.deepEqual(governingDocumentSlots({ entityType: "society", jurisdictionCode: "CA-BC" }).map((slot) => slot.label), ["Constitution", "Bylaws"]);
+
+const cbcaCorp = { name: "Synthetic Corp.", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act", formationStatus: "incorporated", organizationStatus: "active" };
+const bcCo = { name: "Synthetic Holdings Ltd.", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", legalSubtype: "ordinary_private_company", formationStatus: "incorporated", organizationStatus: "active" };
+const govDoc = (id: string, societyId: string, title: string, category: string, extra: Record<string, unknown> = {}) =>
+  ({ _id: id, societyId, title, category, createdAtISO: now, flaggedForDeletion: false, tags: [], ...extra });
+const issuer = betterAuthIssuer();
+const govDb = new MemoryDb({
+  seed: {
+    societies: [{ _id: "corp", ...cbcaCorp }, { _id: "bcco", ...bcCo }, { _id: "other", ...cbcaCorp, name: "Other Corp." }],
+    // Hosted (verified) identities: a trusted local workspace file owns every
+    // society in it, so isolation is checked as a hosted runtime sees it.
+    users: [
+      { _id: "corp-owner", societyId: "corp", role: "Owner", status: "Active", displayName: "Corp Owner" },
+      { _id: "corp-viewer", societyId: "corp", role: "Viewer", status: "Active" },
+      { _id: "bc-owner", societyId: "bcco", role: "Owner", status: "Active" },
+      { _id: "other-owner", societyId: "other", role: "Owner", status: "Active" },
+    ].map((user) => ({ ...user, authSubject: user._id, authProvider: "better-auth", authIssuer: issuer })),
+    documents: [
+      govDoc("g-draft", "corp", "Draft articles", "Other"),
+      govDoc("g-second", "corp", "Articles (signed)", "Other"),
+      govDoc("g-bylaws", "corp", "By-law No. 1", "Other"),
+      govDoc("g-session", "corp", "Import", "Import Session", { tags: ["import-session"] }),
+      govDoc("g-bc", "bcco", "BC articles", "Other"),
+      govDoc("g-foreign", "other", "Foreign articles", "ArticlesOfIncorporation"),
+    ],
+  },
+});
+const as = (userId: string) => new PortableRuntime({
+  db: govDb, capabilities: makeCapabilities({}),
+  principalProvider: () => ({ kind: "user" as const, runtime: "test" as const, assurance: "verified-jwt" as const, subject: userId, issuer, authProvider: "better-auth" }),
+}).registerAll(PORTABLE_FUNCTIONS);
+const corpOwner = as("corp-owner");
+const corpRow = async () => (await govDb.get("corp")) as any;
+
+// Re-filing an existing document as articles fills the empty field, like an upload.
+const refiled: any = await corpOwner.runMutation("documents:updateCategory", { id: "g-draft", category: "articles of incorporation" });
+assert.equal(refiled.category, "ArticlesOfIncorporation");
+assert.equal(refiled.filledField, "constitutionDocId");
+assert.equal(refiled.filledLabel, "Articles");
+assert.equal((await corpRow()).constitutionDocId, "g-draft", "re-categorising fills the empty articles field");
+// A second document re-filed as articles never replaces the one on file.
+const second: any = await corpOwner.runMutation("documents:updateCategory", { id: "g-second", category: "ArticlesOfIncorporation" });
+assert.equal(second.filledField, null);
+assert.equal((await corpRow()).constitutionDocId, "g-draft", "re-categorising never replaces a linked document");
+// Filing the linked document away from its category keeps it linked.
+await corpOwner.runMutation("documents:updateCategory", { id: "g-draft", category: "Other" });
+assert.equal((await corpRow()).constitutionDocId, "g-draft", "moving a linked document away does not unlink it");
+// Undo re-files without filling the profile.
+await corpOwner.runMutation("documents:updateCategory", { id: "g-bylaws", category: "Bylaws", fillProfile: false });
+assert.equal((await corpRow()).bylawsDocId, undefined, "fillProfile: false only re-files");
+await corpOwner.runMutation("documents:updateCategory", { id: "g-bylaws", category: "Other", fillProfile: false });
+// A connector metadata merge that re-files a document fills the empty field too.
+await corpOwner.runMutation("documents:mergeConnectorDocumentMetadata", { documentId: "g-bylaws", category: "Bylaws" });
+assert.equal((await corpRow()).bylawsDocId, "g-bylaws");
+await corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "bylawsDocId", documentId: null });
+await corpOwner.runMutation("documents:updateCategory", { id: "g-bylaws", category: "Other", fillProfile: false });
+
+// Choose a document on the profile: replace, with and without re-filing it.
+const replaced: any = await corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: "g-second" });
+assert.equal(replaced.previousDocumentId, "g-draft");
+assert.equal(replaced.categoryChange, null, "a document already filed as articles is not re-filed");
+assert.equal((await corpRow()).constitutionDocId, "g-second");
+const chosen: any = await corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "bylawsDocId", documentId: "g-bylaws", updateCategory: true });
+assert.deepEqual(chosen.categoryChange, { from: "Other", to: "Bylaws" });
+assert.equal((await govDb.get("g-bylaws"))?.category, "Bylaws", "the chosen document can be re-filed");
+assert.equal((await corpRow()).bylawsDocId, "g-bylaws");
+const kept: any = await corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: "g-draft", updateCategory: false });
+assert.equal(kept.categoryChange, null);
+assert.equal((await govDb.get("g-draft"))?.category, "Other", "re-filing is optional");
+
+// Unlink, then undo by linking the previous document again.
+const unlinked: any = await corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: null });
+assert.equal(unlinked.previousDocumentId, "g-draft");
+assert.equal((await corpRow()).constitutionDocId, undefined, "unlink clears the field");
+assert.equal((await govDb.get("g-draft"))?.category, "Other", "unlinking leaves the document alone");
+await corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: unlinked.previousDocumentId });
+assert.equal((await corpRow()).constitutionDocId, "g-draft");
+const govActivity = (await govDb.query("activity").collect()).filter((row: any) => row.societyId === "corp" && /^governing-document-/.test(row.action));
+assert.deepEqual(govActivity.map((row: any) => row.action), [
+  "governing-document-unlinked", "governing-document-replaced", "governing-document-linked",
+  "governing-document-replaced", "governing-document-unlinked", "governing-document-linked",
+], "each link, replace and unlink writes an activity row");
+
+// Another workspace's document is never accepted, and nothing changes.
+await assert.rejects(() => corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: "g-foreign" }), /not found/);
+await assert.rejects(() => corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "bylawsDocId", documentId: "g-foreign", updateCategory: true }), /not found/);
+await assert.rejects(() => corpOwner.runMutation("documents:updateCategory", { id: "g-foreign", category: "Other" }), /not found|not a member|required/i);
+assert.equal((await corpRow()).constitutionDocId, "g-draft");
+assert.equal((await govDb.get("g-foreign"))?.category, "ArticlesOfIncorporation");
+// Another workspace's owner can't link into this one, even its own document.
+const otherOwner = as("other-owner");
+await assert.rejects(() => otherOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: "g-foreign" }), /not found|not a member|required/i);
+await assert.rejects(() => otherOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: null }), /not found|not a member|required/i);
+assert.equal((await corpRow()).constitutionDocId, "g-draft");
+assert.ok(govActivity.every((row: any) => !/Foreign/.test(row.summary)), "no activity mentions another workspace's document");
+// Internal bookkeeping rows are not documents to link.
+await assert.rejects(() => corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: "g-session" }), /not found/);
+
+// Only the fields this organization keeps.
+await assert.rejects(() => corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "privacyPolicyDocId", documentId: "g-draft" }), /doesn't keep that document/);
+await assert.rejects(() => corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "certificateEvidenceDocumentId", documentId: "g-draft" }), /doesn't keep that document/);
+await assert.rejects(() => corpOwner.runMutation("society:linkGoverningDocument", { societyId: "corp", field: "name", documentId: null }), /doesn't keep that document/);
+const bcOwner = as("bc-owner");
+await assert.rejects(() => bcOwner.runMutation("society:linkGoverningDocument", { societyId: "bcco", field: "bylawsDocId", documentId: "g-bc" }), /doesn't keep that document/, "a BC company has no separate by-laws");
+const bcLinked: any = await bcOwner.runMutation("society:linkGoverningDocument", { societyId: "bcco", field: "constitutionDocId", documentId: "g-bc", updateCategory: true });
+assert.deepEqual(bcLinked.categoryChange, { from: "Other", to: "ArticlesOfIncorporation" });
+
+// Viewers can't change the profile.
+await assert.rejects(() => as("corp-viewer").runMutation("society:linkGoverningDocument", { societyId: "corp", field: "constitutionDocId", documentId: null }), /Permission society:write required/);
+assert.equal((await corpRow()).constitutionDocId, "g-draft");
+
+console.log("Governing documents: re-filing fills an empty field and never replaces; link, replace, unlink and re-file from the profile; other workspaces and wrong fields rejected.");
