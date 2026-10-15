@@ -336,7 +336,7 @@ function officeStep(ctx: SetupCopyContext, variant: SetupVariant): SetupStepDefi
       key: "office", phase: "prepare",
       title: "Check the registered office address",
       description: "Where legal notices are delivered. Make sure it matches the registry.",
-      to: "/app/organization-details", actionLabel: "Check the address",
+      to: "/app/society#registered-office", actionLabel: "Check the address",
     });
   }
   const description = ctx.bcSociety ? "A BC address for delivering and mailing records."
@@ -347,7 +347,7 @@ function officeStep(ctx: SetupCopyContext, variant: SetupVariant): SetupStepDefi
     key: "office", phase: "prepare",
     title: "Add the registered office address",
     description,
-    to: "/app/organization-details", actionLabel: "Add the address",
+    to: "/app/society#registered-office", actionLabel: "Add the address",
   });
 }
 
@@ -470,7 +470,7 @@ function corporationPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[]
       key: "records-office", phase: "prepare", allowNotApplicable: true,
       title: "Add the records office address",
       description: "Where the company keeps its records. It can be the same as the registered office.",
-      to: "/app/organization-details", actionLabel: "Add the address",
+      to: "/app/society#registered-office", actionLabel: "Add the address",
       reads: ["documents:read"],
     })] : []),
     step({
@@ -595,7 +595,7 @@ function corporationPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[]
       key: "provinces", phase: "organize", optional: true, allowNotApplicable: true,
       title: ctx.federal ? "Register in provinces where you do business" : "Register in other provinces where you do business",
       description: `${ctx.federal ? "Each province you operate in" : "Each other province you operate in"} may need its own registration.${ctx.operatingRegions ? ` You said you'll operate in: ${ctx.operatingRegions}.` : ""}`,
-      to: "/app/organization-details", actionLabel: "Add a registration",
+      to: "/app/society#more-organization-details", actionLabel: "Add a registration",
     }),
     accessStep(ctx, "organize"),
   ];
@@ -716,7 +716,9 @@ function existingSteps(ctx: SetupCopyContext): SetupStepDefinition[] {
       key: "governing-docs", phase: "organize",
       title: governingTitle,
       description: "The signed copies on file with the registry.",
-      to: "/app/documents", actionLabel: "Upload documents",
+      // Corporations open the upload form with Articles already chosen.
+      to: ctx.society ? "/app/documents" : "/app/documents?intent=new&category=ArticlesOfIncorporation&title=Articles%20of%20incorporation",
+      actionLabel: "Upload documents",
     }),
     ...(ctx.shareBased ? [step({
       key: "shares", phase: "organize",

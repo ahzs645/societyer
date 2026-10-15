@@ -1,3 +1,4 @@
+import { isPreparingIncorporation } from "../../shared/organizationDomain";
 import { JURISDICTION_WORKSPACE_CONFIGS } from "../../shared/jurisdictionWorkspace";
 import { formatMonthDay } from "../components/MonthDayPicker";
 import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
@@ -200,7 +201,7 @@ export function Dashboard() {
           <div className="dashboard-compliance__summary">
             <div>
               <div className="dashboard-compliance__count">
-                {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
+                {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : isPreparingIncorporation(society) ? "Checks start after incorporation" : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
               </div>
               {!completeComplianceAccess && (
                 <div className="muted">Some checks need an administrator. The items below use records available to your role.</div>

@@ -100,7 +100,12 @@ for (const [label, organization, answers] of ORGS) {
       assert.doesNotMatch(`${step.title} ${step.description} ${step.note ?? ""}`, BANNED, `${label}: ${step.key} copy`);
       assert.ok(step.description.endsWith(".") , `${label}: ${step.key} description ends with a full stop`);
       assert.equal(step.phase, phase.key);
-      if (step.to) assert.ok(step.to.startsWith("/app/") && !step.to.includes("#"), `${label}: ${step.key} links inside the app without a hash`);
+      if (step.to) {
+        assert.ok(step.to.startsWith("/app/"), `${label}: ${step.key} links inside the app`);
+        // A section anchor stays last, after the return-to-setup param.
+        const href = setupStepHref(step.to, step.key);
+        assert.match(href, new RegExp(`[?&]setup=${step.key}(#[\\w-]+)?$`), `${label}: ${step.key} keeps setup before any anchor`);
+      }
     }
     const keys = phase.steps.map((step) => step.key);
     assert.equal(new Set(keys).size, keys.length, `${label}: unique step keys in ${phase.key}`);
@@ -121,7 +126,7 @@ for (const [label, organization, answers] of ORGS) {
   assert.equal(stepOf(progress, "name").note, "Working name saved: Northstar Corp.");
   assert.equal(progress.next?.key, "office");
   assert.equal(progress.next?.title, "Add the registered office address");
-  assert.equal(progress.next?.to, "/app/organization-details");
+  assert.equal(progress.next?.to, "/app/society#registered-office");
   // No step asks for an incorporation number before the certificate.
   assert.equal(hasStep(progress, "number"), false);
   assert.ok(!steps(progress).some((step) => step.phase === "prepare" && /incorporation number|corporation number/i.test(`${step.title} ${step.description}`)));

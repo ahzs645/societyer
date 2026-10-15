@@ -60,7 +60,7 @@ test("a preparing CBCA corporation sees its phases, can skip and undo a step, an
   // Next step: the registered office (nothing in setup needs an incorporation number yet).
   const next = page.locator(".setup-next");
   await expect(next.getByRole("heading", { name: "Add the registered office address" })).toBeVisible();
-  await expect(next.getByRole("link", { name: /Add the address/ })).toHaveAttribute("href", /[?&]setup=office/);
+  await expect(next.getByRole("link", { name: /Add the address/ })).toHaveAttribute("href", /\/app\/society\?setup=office#registered-office$/);
   await fits(page);
 
   // "Doesn't apply to us" needs a reason, stays listed (crossed out) and can be undone.

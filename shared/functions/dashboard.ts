@@ -504,7 +504,7 @@ function preparingComplianceNote(society: SocietyRecord): DashboardComplianceFla
     text: `${society.name || "This organization"} isn't incorporated yet. Legal checks start once the certificate of incorporation is recorded.`,
     evidenceRequired: [],
     remediationActions: [
-      { id: "open-profile", label: "Open the organization profile", intent: "navigate", to: "/app/society" },
+      { id: "continue-setup", label: "Continue setup", intent: "navigate", to: "/app/organization-setup" },
     ],
   };
 }

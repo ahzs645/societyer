@@ -82,7 +82,7 @@ test("summary card, setup pill and the back-to-setup bar follow one setup checkl
   await expect(bar).toHaveCount(0);
 
   // Closing it keeps it closed, even with the step still in the address.
-  await page.goto("/app/organization-details?setup=office");
+  await page.goto("/app/society?setup=office#registered-office");
   await expect(bar).toContainText("Add the registered office address");
   await bar.getByRole("button", { name: "Close the back to setup bar" }).click();
   await expect(bar).toHaveCount(0);
