@@ -139,6 +139,9 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   inset: auto 0 0;
   width: 100%;
   min-width: 0;
+  /* A sheet spans the screen edge to edge; drop the anchored menu's
+   * `100vw - 16px` cap, which left a gap on the right. */
+  max-width: none;
   max-height: 70vh;
   max-height: 70dvh;
   padding: 0 max(8px, env(safe-area-inset-right))
