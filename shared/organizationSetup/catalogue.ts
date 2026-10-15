@@ -522,9 +522,9 @@ function corporationPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[]
         }),
       step({
         key: "review", phase: "prepare", optional: true,
-        title: "Have someone check it before you file",
-        description: "Optional. Ask a second person to review your filing details.",
-        to: "/app/post-incorporation", actionLabel: "Ask for a review",
+        title: "Check your details before you file",
+        description: "Optional. Have someone else check your filing details, or check them yourself if no one else can.",
+        to: "/app/post-incorporation", actionLabel: "Open the review",
         reads: ["tasks:read"],
       }),
     ] : []),
@@ -631,9 +631,9 @@ function societyPreparingSteps(ctx: SetupCopyContext): SetupStepDefinition[] {
     officeStep(ctx, "society_preparing"),
     ...(ctx.guided ? [step({
       key: "review", phase: "prepare", optional: true,
-      title: "Have someone check it before you file",
-      description: "Optional. Ask a second person to review your application.",
-      to: "/app/post-incorporation", actionLabel: "Ask for a review",
+      title: "Check your details before you file",
+      description: "Optional. Have someone else check your application, or check it yourself if no one else can.",
+      to: "/app/post-incorporation", actionLabel: "Open the review",
       reads: ["tasks:read"],
     })] : []),
   ];
