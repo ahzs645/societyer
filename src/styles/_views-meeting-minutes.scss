@@ -1128,6 +1128,22 @@
 .meeting-minutes-motion-picklist .meeting-minutes-motion-assignment__list {
   margin-top: token('s-2');
 }
+// "Assign existing motion": the motion text beside a compact Assign button,
+// at every width (the button no longer takes its own full-width row).
+.meeting-minutes-motion-picklist .meeting-minutes-motion-assignment__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.meeting-minutes-motion-assignment__motion {
+  margin: 0;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
 .meeting-minutes-action-editor {
   display: grid;
   gap: token('s-2');
@@ -1218,7 +1234,8 @@
     top: 0;
     z-index: 2;
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    // Close · title · remove · save, always on one row.
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     align-items: center;
     gap: token('s-2');
     margin: calc(-1 * token('s-3')) calc(-1 * token('s-3')) 0;
@@ -1234,14 +1251,23 @@
   .meeting-minutes-section-editor__mobile-head span {
     display: block;
     margin-top: 2px;
+    overflow: hidden;
     color: token('text-tertiary');
     font-size: token('fs-xs');
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meeting-minutes-section-editor__mobile-title {
+    min-width: 0;
   }
   .meeting-minutes-section-editor--mobile .meeting-minutes-section-editor__tabs {
     position: sticky;
     top: calc(48px + env(safe-area-inset-top, 0px));
     z-index: 1;
     width: calc(100% + (2 * token('s-3')));
+    // The strip bleeds past the editor's padding to both screen edges; the
+    // shared `max-width: 100%` would stop its underline short on the right.
+    max-width: none;
     margin-inline: calc(-1 * token('s-3'));
     border-width: 0 0 1px;
     border-radius: 0;

@@ -1307,17 +1307,24 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               <button className="btn-action btn-action--icon" type="button" onClick={cancelSectionEdit} aria-label="Cancel">
                 <X size={14} />
               </button>
-              <div>
+              <div className="meeting-minutes-section-editor__mobile-title">
                 <h2>Edit agenda item</h2>
-                <span>{agendaEntryLabel(sections.map((section: any) => ({ title: section.title ?? "", depth: section.depth === 1 ? 1 : 0 })), index, agendaNumberingMode)}</span>
+                <span>{[
+                  (() => {
+                    const number = agendaEntryLabel(sections.map((section: any) => ({ title: section.title ?? "", depth: section.depth === 1 ? 1 : 0 })), index, agendaNumberingMode);
+                    return number ? `Item ${number}` : "";
+                  })(),
+                  sectionDraft.title.trim(),
+                ].filter(Boolean).join(" · ")}</span>
               </div>
               <button
-                className="btn-action btn-action--danger"
+                className="btn-action btn-action--icon btn-action--danger"
                 type="button"
                 onClick={() => void confirmAndRemoveSection(index)}
                 aria-label="Remove section"
+                title="Remove section"
               >
-                <Trash2 size={12} /> Remove
+                <Trash2 size={14} />
               </button>
               <button className="btn-action btn-action--primary" type="button" onClick={saveSectionEdit}>
                 <Save size={12} /> Save
@@ -1454,7 +1461,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                       key={`${motion.text}-${motionIndex}`}
                     >
                       <div className="meeting-minutes-motion-assignment__text">
-                        <strong>{motion.text}</strong>
+                        <p className="meeting-minutes-motion-assignment__motion">{motion.text}</p>
                         <span>
                           {motion.outcome || "Pending"}
                           {motion.movedBy ? ` · Moved by ${motionPersonDisplayName(motion.movedBy, motionPeople, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}` : ""}
@@ -1462,9 +1469,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                         </span>
                       </div>
                       <button
-                        className="btn-action"
+                        className="btn-action meeting-minutes-motion-assignment__assign"
                         type="button"
                         onClick={() => assignMotionToSection(motionIndex, String(index))}
+                        aria-label={`Assign to this item: ${motion.text}`}
                       >
                         <Plus size={12} /> Assign
                       </button>
