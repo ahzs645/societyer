@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -1442,12 +1442,27 @@ export function FormationMaintenancePage() {
   const upsertJurisdiction = useMutation(api.legalOperations.upsertJurisdictionMetadata);
   const upsertLog = useMutation(api.legalOperations.upsertSupportLog);
   const removeFormation = useMutation(api.legalOperations.removeFormationRecord);
+  const removeNameSearch = useMutation(api.legalOperations.removeNameSearchItem);
+  const removeAmendment = useMutation(api.legalOperations.removeEntityAmendment);
   const removeAnnual = useMutation(api.legalOperations.removeAnnualMaintenanceRecord);
   const removeJurisdiction = useMutation(api.legalOperations.removeJurisdictionMetadata);
   const removeLog = useMutation(api.legalOperations.removeSupportLog);
   const confirm = useConfirm();
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
+  // `?new=nameSearch` / `?new=amendment` opens that form directly (the setup
+  // view's "Record a name search" lands here).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const newKind = searchParams.get("new");
+  useEffect(() => {
+    if (!canWrite || (newKind !== "nameSearch" && newKind !== "amendment")) return;
+    setDraft(newKind === "amendment" ? { kind: "amendment", status: "draft" } : { kind: "nameSearch" });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("new");
+      return next;
+    }, { replace: true });
+  }, [canWrite, newKind, setSearchParams]);
   const del = async (remover: (args: { id: any }) => Promise<unknown>, id: any, label: string) => {
     if (!canWrite) return;
     const ok = await confirm({
@@ -1576,6 +1591,39 @@ export function FormationMaintenancePage() {
         />
       </Section>
 
+      <Section title="Name searches" count={data?.nameSearches?.length ?? 0}>
+        <SimpleTable
+          cols={["Name", "Result", ""]}
+          rows={(data?.nameSearches ?? []).map((row: any) => [
+            <NameSearchCell row={row} />,
+            <Badge tone={row.success === true ? "success" : row.success === false ? "danger" : "neutral"}>{row.success === true ? "Approved" : row.success === false ? "Not approved" : "No result yet"}</Badge>,
+            <RowActions
+              label="name search"
+              onEdit={() => setDraft({ ...row, kind: "nameSearch", rank: row.rank ?? "", errorsText: (row.errors ?? []).join(", ") })}
+              onDelete={() => del(removeNameSearch, row._id, "name search")}
+            />,
+          ])}
+          empty="No name searches yet."
+        />
+      </Section>
+
+      <Section title="Amendments" count={data?.amendments?.length ?? 0}>
+        <SimpleTable
+          cols={["Effective", "Change", "Status", ""]}
+          rows={(data?.amendments ?? []).map((row: any) => [
+            dateLabel(row.effectiveDate),
+            amendmentSummary(row),
+            <Badge tone={toneForStatus(row.status)}>{optionLabel("amendmentStatuses", row.status)}</Badge>,
+            <RowActions
+              label="amendment"
+              onEdit={() => setDraft({ ...row, kind: "amendment", directorsMinimum: row.directorsMinimum ?? "", directorsMaximum: row.directorsMaximum ?? "" })}
+              onDelete={() => del(removeAmendment, row._id, "amendment")}
+            />,
+          ])}
+          empty="No amendments yet."
+        />
+      </Section>
+
       <Section title="Annual maintenance" count={data?.annualRecords?.length ?? 0}>
         <SimpleTable
           cols={["Year", corporateMaintenance ? "Annual meeting" : "AGM", "Filing", "Financial statement", "Status", ""]}
@@ -1626,6 +1674,41 @@ export function FormationMaintenancePage() {
       </Drawer>
     </div>
   );
+}
+
+/** Name search: the name, then rank, NUANS number and report link when recorded. */
+function NameSearchCell({ row }: { row: any }) {
+  const name = [row.name, row.suffix ? optionLabel("suffixCompanyNames", row.suffix) : ""].filter(Boolean).join(" ");
+  const report = /^https?:\/\//i.test(String(row.reportUrl ?? "")) ? String(row.reportUrl) : "";
+  const details = [
+    row.rank != null && row.rank !== "" ? `Choice ${row.rank}` : "",
+    row.nuansReportNumber ? `NUANS ${row.nuansReportNumber}` : "",
+    row.expressService ? "Express" : "",
+  ].filter(Boolean);
+  return (
+    <>
+      <strong>{name}</strong>
+      {(details.length > 0 || report) && (
+        <div className="muted">
+          {details.join(" · ")}
+          {report && <>{details.length ? " · " : ""}<a href={report} target="_blank" rel="noreferrer">Open report</a></>}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** One line describing what an amendment changes. */
+function amendmentSummary(row: any): string {
+  const changes = [
+    row.entityNameNew ? `New name: ${row.entityNameNew}` : "",
+    row.jurisdictionNew ? `Moves to ${optionLabel("entityJurisdictions", row.jurisdictionNew)}` : "",
+    row.directorsMinimum != null || row.directorsMaximum != null
+      ? `Directors: ${row.directorsMinimum ?? "?"} to ${row.directorsMaximum ?? "?"}`
+      : "",
+    row.shareClassAmendmentText ? "Changes to share or membership classes" : "",
+  ].filter(Boolean);
+  return changes.join(" · ") || row.notes || "-";
 }
 
 function TemplateDraftForm({ draft, setDraft }: { draft: any; setDraft: (draft: any) => void }) {
