@@ -30,7 +30,7 @@ for (const existing of [false, true]) {
     const name = `Qualification guided ${existing ? "existing" : "proposed"} ${marker}`;
     await completeGuidedOrganizationSetup(page, name, existing);
     await page.reload();
-    await expect(page.getByText("Workspace onboarding").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: `Set up ${name}`, exact: true })).toBeVisible();
     await assertLiveFits(page);
     const auth = await page.context().request.get("/api/auth/token");
     expect(auth.ok()).toBe(true);

@@ -136,20 +136,6 @@
   text-underline-offset: 2px;
 }
 
-// Collapsed background sections (incorporation guide, preparation notes).
-.doc-catalog-prep {
-  margin-top: token('s-4');
-
-  > summary {
-    cursor: pointer;
-    font-weight: token('fw-medium');
-    color: token('text-secondary');
-    padding: token('s-2') 0;
-  }
-
-  > summary + * { margin-top: token('s-2'); }
-}
-
 // Exports: per-table downloads tucked into a collapsed card.
 details.exports-tables {
   > summary {

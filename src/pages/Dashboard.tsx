@@ -10,8 +10,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState, Flag } from "../components/ui";
 import { formatDate, formatDateTime, formatShortDate, isPastDue, relative } from "../lib/format";
 import { organizationTodayISO } from "../lib/dateRanges";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
+import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { useUndoableAction } from "../hooks/useUndoableAction";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -24,13 +23,11 @@ import {
   AlertTriangle,
   ArrowRight,
   Calendar,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   LayoutGrid,
   Users,
   UserCog,
-  X,
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
@@ -45,14 +42,13 @@ import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { pluralizeCounts } from "../lib/pluralizeCounts";
 import { DashboardFinanceSnapshotLazy } from "../features/financials/insights/lazy";
 import { StatTile } from "../components/StatTile";
-import { useSetupProgress } from "../hooks/useSetupProgress";
-import { Tooltip } from "../components/Tooltip";
+import { useSetupGuideHidden } from "../hooks/useSetupProgress";
+import { useOrganizationSetup } from "../features/organizationSetup/useOrganizationSetup";
+import { SetupSummaryCard } from "../features/dashboard/SetupSummaryCard";
 import { effectiveGoalStatus, goalTone, labelStatus } from "../lib/goalStatus";
 
 export function Dashboard() {
   const society = useSociety();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const welcomeWorkflowId = searchParams.get("welcome");
   const { can } = usePermissions();
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const entityCopy = organizationVocabulary(society);
@@ -76,12 +72,11 @@ export function Dashboard() {
   const markPrivacyProgramReviewed = useMutation(api.dashboardRemediation.markPrivacyProgramReviewed);
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
-  // null = follow the completion-based default; true/false = user override this session.
-  const [onboardingExpandedOverride, setOnboardingExpandedOverride] = useState<boolean | null>(null);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
-  // The setup checklist and its dismissal are shared with the shell's setup
-  // pill: hiding the guide in either place hides it in both, live.
-  const setupProgress = useSetupProgress();
+  // Setup progress comes from the same source as the setup view and the
+  // shell's setup pill; hiding the summary here hides the pill too, live.
+  const { hidden: onboardingFlowHidden, setHidden: setOnboardingFlowHidden } = useSetupGuideHidden(society?._id ? String(society._id) : null);
+  const setupProgress = useOrganizationSetup(society?._id && !onboardingFlowHidden ? String(society._id) : null);
 
   if (society === undefined) return <PageLoading variant="cards" />;
   if (society === null) return <SeedPrompt />;
@@ -97,21 +92,7 @@ export function Dashboard() {
     directors: currentRoleHolders.filter((row: any) => row.roleType === "director").length,
     shareholders: currentRoleHolders.filter((row: any) => row.roleType === "shareholder").length,
   };
-  const onboardingSteps = setupProgress?.steps ?? [];
-  const completedOnboardingSteps = setupProgress?.completed ?? 0;
-  const nextOnboardingStep = setupProgress?.next ?? onboardingSteps[onboardingSteps.length - 1];
-  const onboardingProgress = setupProgress?.percent ?? 0;
-  const onboardingFlowHidden = setupProgress?.hidden ?? false;
-  // Once past halfway, the full 8-tile grid is mostly green checks — collapse to a
-  // slim strip by default so it stops dominating the page. Auto-hide once fully done.
-  const onboardingCollapsedByDefault = onboardingSteps.length > 0 && completedOnboardingSteps / onboardingSteps.length >= 0.5;
-  const onboardingExpanded = onboardingExpandedOverride ?? !onboardingCollapsedByDefault;
-  // Fresh from the new-organization flow: lead with that organization's
-  // setup checklist (and a link to its onboarding workflow) instead of the
-  // generic setup guide, so there is one checklist, not two.
-  const showOnboarding = !welcomeWorkflowId && Boolean(setupProgress && !setupProgress.loading && setupProgress.total > 0 && !setupProgress.allComplete && nextOnboardingStep);
-
-  const setOnboardingFlowHidden = (hidden: boolean) => setupProgress?.setHidden(hidden);
+  const showSetupSummary = Boolean(setupProgress && !setupProgress.complete && setupProgress.counts.total > 0);
 
   const moduleLabel = (id: DashboardModuleId) => DASHBOARD_MODULES.find((module) => module.id === id)?.label ?? id;
   const isModuleHidden = (id: DashboardModuleId) => dashboardLayout.hiddenSet.has(id) || (id === "setup" && onboardingFlowHidden);
@@ -130,7 +111,6 @@ export function Dashboard() {
       undo: () => showModule(id),
       undoneMessage: false,
     });
-  const hideOnboardingFlow = () => hideModule("setup");
 
   const runRemediationAction = async (flag: any, action: any) => {
     if (action.intent === "navigate") {
@@ -195,131 +175,9 @@ export function Dashboard() {
   };
 
   const moduleContent: Partial<Record<DashboardModuleId, ReactNode>> = {
-    setup: (showOnboarding ? (
-      <>
-        {showOnboarding && onboardingExpanded && (
-          <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
-            <div className="onboarding-flow__story">
-              <div>
-                <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
-                <p>
-                  Societyer tells you what is due, gathers the evidence, prepares the records,
-                  and keeps an audit trail.
-                </p>
-              </div>
-              <div className="onboarding-flow__actions">
-                <div className="onboarding-flow__status">
-                  <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
-                  <span>setup checks complete</span>
-                </div>
-                <button
-                  type="button"
-                  className="btn-action"
-                  onClick={() => setOnboardingExpandedOverride(false)}
-                  aria-expanded={true}
-                >
-                  Hide steps <ChevronUp size={12} />
-                </button>
-                <Tooltip content="Hide setup guide">
-                  <button
-                    type="button"
-                    className="onboarding-flow__dismiss"
-                    onClick={hideOnboardingFlow}
-                    aria-label="Hide setup guide"
-                  >
-                    <X size={14} />
-                  </button>
-                </Tooltip>
-              </div>
-            </div>
-
-            <div className="onboarding-flow__bar" aria-hidden="true">
-              <span style={{ width: `${onboardingProgress}%` }} />
-            </div>
-
-            <div className="onboarding-flow__next">
-              <div>
-                <span className="onboarding-flow__eyebrow">Next action</span>
-                <strong>{nextOnboardingStep.title}</strong>
-                <span>{nextOnboardingStep.description}</span>
-              </div>
-              <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
-                Open <ArrowRight size={12} />
-              </Link>
-            </div>
-
-            <div className="onboarding-flow__grid">
-              {onboardingSteps.map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <Link
-                    key={step.id}
-                    to={step.to}
-                    className={`onboarding-step${step.complete ? " is-complete" : ""}${step.id === nextOnboardingStep.id ? " is-next" : ""}`}
-                  >
-                    <span className="onboarding-step__index">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="onboarding-step__icon"><Icon size={16} /></span>
-                    <span className="onboarding-step__main">
-                      <strong>{step.title}</strong>
-                      <span>{step.description}</span>
-                    </span>
-                    <span className="onboarding-step__state">
-                      {step.complete ? <CheckCircle2 size={16} /> : <ArrowRight size={14} />}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
-        {showOnboarding && !onboardingExpanded && (
-          <section className="onboarding-compact" aria-labelledby="onboarding-flow-title">
-            <div
-              className="onboarding-compact__ring"
-              style={{ "--progress": `${onboardingProgress}%` } as React.CSSProperties}
-              role="img"
-              aria-label={`${completedOnboardingSteps} of ${onboardingSteps.length} setup checks complete`}
-            >
-              <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
-            </div>
-            <div className="onboarding-compact__main">
-              <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
-              <Link to={nextOnboardingStep.to} className="onboarding-compact__next">
-                <span className="onboarding-compact__next-label">Next</span>
-                <span className="onboarding-compact__next-text">
-                  <strong>{nextOnboardingStep.title}</strong>
-                  <span className="onboarding-compact__next-desc">{nextOnboardingStep.description}</span>
-                </span>
-                <ArrowRight size={14} aria-hidden="true" />
-              </Link>
-            </div>
-            <div className="onboarding-compact__actions">
-              <Tooltip content="Show all setup steps">
-                <button
-                  type="button"
-                  className="onboarding-compact__icon"
-                  onClick={() => setOnboardingExpandedOverride(true)}
-                  aria-expanded={false}
-                  aria-label="Show steps"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </Tooltip>
-              <Tooltip content="Hide setup guide">
-                <button
-                  type="button"
-                  className="onboarding-compact__icon"
-                  onClick={hideOnboardingFlow}
-                  aria-label="Hide setup guide"
-                >
-                  <X size={14} />
-                </button>
-              </Tooltip>
-            </div>
-          </section>
-        )}
-      </>
-    ) : null),
+    setup: showSetupSummary && setupProgress ? (
+      <SetupSummaryCard progress={setupProgress} organizationName={society.name} onHide={() => hideModule("setup")} />
+    ) : null,
     stats: (
       <div className="stat-grid">
         {corporation
@@ -701,18 +559,6 @@ export function Dashboard() {
           </button>
         }
       />
-
-      {welcomeWorkflowId && society && (
-        <div className="dashboard-welcome">
-          <OrganizationOnboardingPanel organization={society} />
-          <div className="dashboard-welcome__foot">
-            <Link to={`/app/workflows/${welcomeWorkflowId}`}>Open the Workspace onboarding workflow</Link>
-            <button type="button" className="btn-action" onClick={() => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("welcome"); return next; }, { replace: true })}>
-              Go to dashboard
-            </button>
-          </div>
-        </div>
-      )}
 
       <DashboardModuleGrid modules={visibleModules} content={moduleContent} layout={dashboardLayout.layout} />
 

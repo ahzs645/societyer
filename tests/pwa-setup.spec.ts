@@ -15,12 +15,9 @@ const RUNTIME_KEY = "societyer:app-runtime";
 
 async function createOrganization(page: Page, name: string) {
   await completeGuidedOrganizationSetup(page, name);
-  // Setup lands on the dashboard with the new organization's setup checklist
-  // and a link to the onboarding workflow it created. If either is missing the
+  // Setup lands on the organization's setup page. If it is missing the
   // pipeline dead-ends on its final step.
-  await expect(page.getByText("Workflow not found.")).toHaveCount(0);
-  await expect(page.getByText("Workspace onboarding").first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Organization profile").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: `Set up ${name}`, exact: true })).toBeVisible({ timeout: 20_000 });
 }
 
 async function downloadBackup(page: Page) {

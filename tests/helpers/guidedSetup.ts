@@ -40,5 +40,5 @@ export async function completeGuidedOrganizationSetup(page: Page, name: string, 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review and create", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\?welcome=/);
+  await page.waitForURL(/\/app\/organization-setup\?welcome=1/);
 }

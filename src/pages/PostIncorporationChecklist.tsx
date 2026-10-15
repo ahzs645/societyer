@@ -6,14 +6,14 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Menu } from "../components/Menu";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Select } from "../components/Select";
 import { entityPreparationDecision } from "../../shared/entitySetup";
 import { Badge, Banner, Drawer, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
-import { IncorporationPreparation } from "../components/IncorporationPreparation";
+import { setupViewStepLink } from "../lib/organizationSetupLinks";
 import { PathwayPipelineCard } from "../components/PathwayPipelineCard";
 import { todayDateOnly } from "../../shared/dateOnly";
 
@@ -187,10 +187,11 @@ export function PostIncorporationChecklistPage() {
         })
       )}
       <PathwayPipelineCard societyId={society._id} />
-      <details className="doc-catalog-prep">
-        <summary>Incorporation preparation guide</summary>
-        <IncorporationPreparation organization={society} />
-      </details>
+      {["preparing", "submitted"].includes(society.formationStatus ?? "") && (
+        <Banner className="setup-filing-link" title="Filing the incorporation">
+          What to prepare and the official filing link are in the filing step of setup. <Link className="setup-inline-link" to={setupViewStepLink("file")}>Open the filing step</Link>
+        </Banner>
+      )}
       <Drawer open={!!evidenceDraft} onClose={() => setEvidenceDraft(null)} title={evidenceDraft?.title ?? "Checklist evidence"} footer={<><button className="btn" onClick={() => setEvidenceDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || savingEvidence} onClick={saveEvidence}>{savingEvidence ? "Saving…" : "Save evidence"}</button></>}>
         {evidenceDraft && <>
           <Field label="Evidence stage"><Select disabled={!canWrite} value={evidenceDraft.stage} onChange={(value) => setEvidenceDraft({ ...evidenceDraft, stage: value })} options={[{ value: "preparing", label: "Preparing — draft only" }, { value: "executed", label: "Executed — signed internal document" }, { value: "filed", label: "Filed — official submission receipt" }, { value: "certified", label: "Certified — official registry document" }]} /></Field>

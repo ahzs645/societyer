@@ -1,6 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useDocumentTitle } from "../lib/documentTitle";
-import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -22,7 +21,8 @@ import { presentRecipe } from "../lib/workflowRecipePresentation";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Banner, Drawer, Field } from "../components/ui";
+import { ORGANIZATION_SETUP_PATH } from "../../shared/organizationSetup/types";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -297,7 +297,11 @@ export function WorkflowDetailPage() {
         </div>
       </div>
 
-      {workflow.recipe === "workspace_onboarding" && String(workflow.societyId) === String(society._id) && <OrganizationOnboardingPanel organization={society} />}
+      {workflow.recipe === "workspace_onboarding" && String(workflow.societyId) === String(society._id) && (
+        <Banner className="workflow-setup-notice">
+          Setup now lives on its own page. <Link className="setup-inline-link" to={ORGANIZATION_SETUP_PATH}>Open setup</Link>
+        </Banner>
+      )}
       {isLocalDataRuntime() && <p className="muted" style={{ padding: "8px 16px", margin: 0, fontSize: "var(--fs-sm)" }}>Running workflows needs a connected server; you can prepare and review this one here.</p>}
       <div className="workflow-shell">
         <section className="workflow-canvas" aria-label="Workflow canvas">

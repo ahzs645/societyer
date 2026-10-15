@@ -1,8 +1,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Circle, CircleDot, EyeOff } from "lucide-react";
-import { useSetupProgress, type SetupStepState } from "../hooks/useSetupProgress";
+import { ArrowRight, CheckCircle2, Circle, CircleDashed, CircleDot, Clock3, EyeOff, Lock, MinusCircle } from "lucide-react";
+import { useSetupGuideHidden } from "../hooks/useSetupProgress";
+import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
+import { useOrganizationSetup } from "../features/organizationSetup/useOrganizationSetup";
+import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
+import { ORGANIZATION_SETUP_PATH, type SetupStepState, type SetupStepView } from "../../shared/organizationSetup/types";
+import { isOrganizationSetupPath, setupPercent, setupStepLink, setupSummaryTitle } from "../lib/organizationSetupLinks";
 import { useToast } from "./Toast";
 
 type Variant = "sidebar" | "rail" | "topbar";
@@ -32,14 +38,21 @@ export function SetupRing({ percent, size = 18 }: { percent: number; size?: numb
 }
 
 const STATE_LABEL: Record<SetupStepState, string> = {
-  complete: "Complete",
-  next: "Next",
-  upcoming: "To do",
+  done: "Done",
+  in_progress: "Started",
+  todo: "To do",
+  later: "Later",
+  not_applicable: "Doesn't apply",
+  restricted: "Ask an owner or admin",
 };
 
-function StateIcon({ state }: { state: SetupStepState }) {
-  if (state === "complete") return <CheckCircle2 size={16} />;
-  if (state === "next") return <CircleDot size={16} />;
+function StateIcon({ state, next }: { state: SetupStepState; next: boolean }) {
+  if (state === "done") return <CheckCircle2 size={16} />;
+  if (next) return <CircleDot size={16} />;
+  if (state === "in_progress") return <CircleDashed size={16} />;
+  if (state === "later") return <Clock3 size={16} />;
+  if (state === "not_applicable") return <MinusCircle size={16} />;
+  if (state === "restricted") return <Lock size={16} />;
   return <Circle size={16} />;
 }
 
@@ -48,13 +61,19 @@ type Anchor = { top?: number; bottom?: number; left: number; width: number; maxH
 const POPOVER_WIDTH = 340;
 
 /**
- * Compact "Setup 6/8" activation pill. Follows the user across pages (sidebar
- * header, icon rail, or the phone top bar) and opens a popover listing the
- * remaining steps. Hidden once setup is complete or the guide is dismissed —
- * dismissal is shared with the Dashboard's setup guide.
+ * Compact "Setup 3/14" pill. Follows the user across pages (sidebar header,
+ * icon rail, or the phone top bar) and opens a popover with the current
+ * phase's steps and a link to the setup view. Reads the same progress as the
+ * setup view and the Dashboard summary card. Hidden once setup is complete or
+ * the viewer hides it (shared with the Dashboard card; never hides the view).
  */
 export function SetupPill({ variant }: { variant: Variant }) {
-  const progress = useSetupProgress();
+  const society = useSociety();
+  const societyId = society?._id ? String(society._id) : null;
+  const { hidden, setHidden } = useSetupGuideHidden(societyId);
+  // Skip the query entirely once the viewer hid the pill.
+  const progress = useOrganizationSetup(hidden ? null : societyId);
+  const permissions = usePermissions();
   const location = useLocation();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -119,7 +138,7 @@ export function SetupPill({ variant }: { variant: Variant }) {
     document.addEventListener("keydown", onKey);
     const timer = window.setTimeout(() => {
       const target =
-        popoverRef.current?.querySelector<HTMLElement>(".setup-pop__step.is-next") ??
+        popoverRef.current?.querySelector<HTMLElement>("a.setup-pop__step.is-next") ??
         popoverRef.current?.querySelector<HTMLElement>("a, button");
       target?.focus({ preventScroll: true });
     }, 0);
@@ -130,18 +149,30 @@ export function SetupPill({ variant }: { variant: Variant }) {
     };
   }, [open]);
 
-  if (!progress || progress.loading || progress.hidden || progress.allComplete || progress.total === 0) return null;
-  // The Dashboard shows the full checklist; don't repeat it there.
-  if (location.pathname === "/app" || location.pathname === "/app/") return null;
+  if (hidden || !progress || progress.complete || progress.counts.total === 0) return null;
+  // The Dashboard has the summary card and the setup view has everything.
+  if (location.pathname === "/app" || location.pathname === "/app/" || isOrganizationSetupPath(location.pathname)) return null;
 
-  const { completed, total, percent, steps } = progress;
-  const summary = `Setup ${completed} of ${total} complete`;
+  const { done: completed, total } = progress.counts;
+  const percent = setupPercent(progress);
+  const summary = `Setup: ${completed} of ${total} done`;
+  const phase = progress.phases.find((candidate) => candidate.key === progress.currentPhase) ?? progress.phases[0];
+  const steps = phase?.steps ?? [];
+  const nextKey = progress.next?.key;
+  const restricted = (step: SetupStepView) => {
+    if (step.state === "restricted") return true;
+    // The progress query already checks route access; this catches a link the
+    // viewer's role can't open before the next update arrives.
+    const permission = step.to ? interfaceRouteReadPermission(step.to.split(/[?#]/)[0]) : undefined;
+    return Boolean(permissions.loaded && permission && !permissions.can(permission));
+  };
 
   const hide = () => {
     setOpen(false);
-    progress.setHidden(true);
-    toast.info("Setup guide hidden", {
-      action: { label: "Undo", onClick: () => progress.setHidden(false) },
+    setHidden(true);
+    toast.info("Setup reminder hidden", {
+      description: "The setup page is still in the menu.",
+      action: { label: "Undo", onClick: () => setHidden(false) },
     });
   };
 
@@ -191,30 +222,41 @@ export function SetupPill({ variant }: { variant: Variant }) {
           <div className="setup-pop__head">
             <SetupRing percent={percent} size={32} />
             <div className="setup-pop__intro">
-              <strong id={titleId}>Finish setting up</strong>
-              <span>{completed} of {total} checks complete</span>
+              <strong id={titleId}>{setupSummaryTitle(progress, society?.name)}</strong>
+              <span>{completed} of {total} done{phase ? ` · ${phase.statusNote ?? phase.title}` : ""}</span>
             </div>
           </div>
           <ol className="setup-pop__steps">
             {steps.map((step) => {
-              const state = progress.stateOf(step);
+              const isNext = step.key === nextKey;
+              const locked = restricted(step);
+              const state: SetupStepState = locked ? "restricted" : step.state;
+              const body = (
+                <>
+                  <span className="setup-pop__state"><StateIcon state={state} next={isNext && !locked} /></span>
+                  <span className="setup-pop__text">
+                    <span className="setup-pop__title">{step.title}{step.optional ? <span className="setup-pop__optional"> (optional)</span> : null}</span>
+                    {isNext && !locked && <span className="setup-pop__desc">{step.description}</span>}
+                    {locked && <span className="setup-pop__desc">Ask an owner or admin to do this.</span>}
+                  </span>
+                  <span className="sr-only">, {isNext && !locked ? "Next" : STATE_LABEL[state]}</span>
+                  {isNext && !locked && <ArrowRight size={14} className="setup-pop__go" aria-hidden="true" />}
+                </>
+              );
+              const className = `setup-pop__step is-${state.replace("_", "-")}${isNext && !locked ? " is-next" : ""}`;
               return (
-                <li key={step.id}>
-                  <Link to={step.to} className={`setup-pop__step is-${state}`} onClick={() => setOpen(false)}>
-                    <span className="setup-pop__state"><StateIcon state={state} /></span>
-                    <span className="setup-pop__text">
-                      <span className="setup-pop__title">{step.title}</span>
-                      {state === "next" && <span className="setup-pop__desc">{step.description}</span>}
-                    </span>
-                    <span className="sr-only">, {STATE_LABEL[state]}</span>
-                    {state === "next" && <ArrowRight size={14} className="setup-pop__go" aria-hidden="true" />}
-                  </Link>
+                <li key={step.key}>
+                  {locked ? (
+                    <div className={className}>{body}</div>
+                  ) : (
+                    <Link to={setupStepLink(step)} className={className} onClick={() => setOpen(false)}>{body}</Link>
+                  )}
                 </li>
               );
             })}
           </ol>
           <div className="setup-pop__foot">
-            <Link to="/app" className="setup-pop__link" onClick={() => setOpen(false)}>Open the setup guide</Link>
+            <Link to={ORGANIZATION_SETUP_PATH} className="setup-pop__link" onClick={() => setOpen(false)}>Open setup</Link>
             <button type="button" className="setup-pop__hide" onClick={hide}>
               <EyeOff size={13} aria-hidden="true" /> Hide
             </button>
