@@ -14,6 +14,10 @@ test("saved pathway branches, freezes inputs, requires independent review and re
   const panel = page.getByRole("region", { name: "Saved incorporation pathway" });
   await expect(panel.getByRole("button", { name: "Start pathway", exact: true })).toBeVisible({ timeout: 25_000 });
   await panel.getByRole("button", { name: "Start pathway", exact: true }).click();
+  // The workspace already knows the name: it is filled in and marked with its source.
+  await expect(panel.getByRole("textbox", { name: "Proposed legal or working name" })).toHaveValue("Pathway Browser Preparation Inc.");
+  await expect(panel.getByTestId("pathway-input-proposedName")).toHaveAttribute("data-source", "workspace");
+  await expect(panel.getByTestId("pathway-input-proposedName").getByRole("link", { name: "Organization profile", exact: true })).toBeVisible();
   await panel.getByRole("textbox", { name: "Proposed legal or working name" }).fill("Pathway Browser Preparation Inc.");
   await panel.getByRole("textbox", { name: "Registered office address" }).fill("100 Example Street, Ottawa, Ontario");
   await panel.getByRole("textbox", { name: "Initial directors and consent references" }).fill("Example Director — synthetic consent reference");
@@ -32,6 +36,9 @@ test("saved pathway branches, freezes inputs, requires independent review and re
   await page.getByRole("option", { name: "Browser preparation evidence" }).click();
   await prepare.getByRole("button", { name: "Complete step" }).click();
   await expect(panel.getByTestId("pathway-node-review").getByRole("button", { name: "Approve review" })).toHaveCount(0);
+  // Another reviewer exists, so the initiator is not offered a self-review.
+  await expect(panel.getByTestId("pathway-node-review").getByTestId("pathway-self-review")).toHaveCount(0);
+  await expect(panel.getByTestId("pathway-node-review").getByText("Needs a second person who can edit documents, not the person who started this run.", { exact: true })).toBeVisible();
   // Refresh proves IndexedDB persistence and frozen branch choice.
   await page.reload();
   await expect(panel.getByRole("textbox", { name: "Registered office address" })).toHaveValue("100 Example Street, Ottawa, Ontario", { timeout: 25_000 });

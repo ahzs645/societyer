@@ -14,7 +14,7 @@ export const start = authorizedMutation("pathways:start", mutation)({ args: { so
 export const saveInput = authorizedMutation("pathways:saveInput", mutation)({ args: { runId: v.id("pathwayRuns"), inputs: v.any() }, handler: async (ctx: any, args: any) => pathway.saveInputPortable(await toPortableMutationCtx(ctx), args) });
 const stepArgs = { runId: v.id("pathwayRuns"), nodeKey: v.string(), notes: v.optional(v.string()) };
 export const completeStep = authorizedMutation("pathways:completeStep", mutation)({ args: { ...stepArgs, documentId: v.optional(v.id("documents")) }, handler: async (ctx: any, args: any) => pathway.completeStepPortable(await toPortableMutationCtx(ctx), args) });
-export const approve = authorizedMutation("pathways:approve", mutation)({ args: stepArgs, handler: async (ctx: any, args: any) => pathway.approvePortable(await toPortableMutationCtx(ctx), args) });
+export const approve = authorizedMutation("pathways:approve", mutation)({ args: { ...stepArgs, confirmSelfReview: v.optional(v.boolean()) }, handler: async (ctx: any, args: any) => pathway.approvePortable(await toPortableMutationCtx(ctx), args) });
 export const reject = authorizedMutation("pathways:reject", mutation)({ args: stepArgs, handler: async (ctx: any, args: any) => pathway.rejectPortable(await toPortableMutationCtx(ctx), args) });
 export const requestSubmission = authorizedMutation("pathways:requestSubmission", mutation)({ args: { runId: v.id("pathwayRuns"), nodeKey: v.string() }, handler: async (ctx: any, args: any) => {
   const id = await pathway.requestSubmissionPortable(await toPortableMutationCtx(ctx), args);

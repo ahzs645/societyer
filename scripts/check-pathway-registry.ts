@@ -8,6 +8,7 @@ import { entityPreparationDecision, LEGAL_SUBTYPE_OPTIONS } from "../shared/enti
 import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
 import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
 import { assertPacketCompatible } from "../shared/templateProvenance";
+import { pathwayWorkspaceDefaults, type PathwayWorkspaceFacts } from "../shared/pathways/workspaceDefaults";
 
 const bc: PathwayEntity = { jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", legalSubtype: "ordinary_private_company" };
 const federal: PathwayEntity = { jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act", legalSubtype: "federal_private_corporation" };
@@ -117,4 +118,21 @@ assert.throws(() => validatePipelineGraph({ version: 1, nodes: [{ key: "submit",
 assert.throws(() => validatePipelineGraph({ version: 1, nodes: [{ key: "step", title: "One", kind: "manual", dependsOn: [] }, { key: "step", title: "Duplicate", kind: "manual", dependsOn: [] }] }), /unique/i);
 assert.throws(() => validatePipelineGraph({ version: 1, nodes: [{ key: "step", title: "Undeclared condition", kind: "manual", dependsOn: [], condition: { field: "forgedAuthority", operator: "equals", value: true } }] }), /declared/i);
 assert.throws(() => validatePathwayRegistry([{ ...synthetic, pipeline: { ...syntheticGraph, nodes: syntheticGraph.nodes.map(node => node.key === "licensed-record" ? { ...node, packetKey: "unowned-packet" } : node) } }]), /packet/i);
-console.log("Pathway registry checks passed: shared selector drift, explicit classification, route/packet ownership, synthetic extension, graph dependencies and approval boundaries.");
+// Every input a registered pathway asks for can come from the workspace when the workspace has it.
+const fullFacts: PathwayWorkspaceFacts = {
+  society: false,
+  profile: { name: "Facts Inc.", numbered: false, registeredOfficeAddress: "1 Main St", purposes: "Purposes" },
+  addresses: [{ type: "records_office", status: "current", street: "2 Records Rd", city: "Victoria", country: "Canada" }],
+  roleHolders: [{ roleType: "director", status: "proposed", fullName: "Dana Director" }],
+  controllers: [{ roleType: "controller", status: "proposed", fullName: "Dana Director" }],
+  societyDirectors: [{ firstName: "Sam", lastName: "Society", status: "Active" }],
+  rightsClasses: [{ className: "Common", classType: "share", status: "proposed" }],
+};
+for (const entry of PATHWAY_REGISTRY.filter(candidate => candidate.pipeline)) {
+  const facts = { ...fullFacts, society: entry.setup.entityType === "society" };
+  const defaults = pathwayWorkspaceDefaults(entry.pipeline!, facts);
+  for (const field of entry.pipeline!.inputFields ?? []) assert.ok(defaults[field.key], `${entry.key} input ${field.key} has no workspace default source`);
+  validatePipelineInputs(entry.pipeline!, Object.fromEntries(Object.entries(defaults).map(([key, value]) => [key, value.value])), true);
+  if (entry.setup.entityType !== "society") assert.equal(entry.pipeline!.inputFields?.find(field => field.key === "significantControl")?.required, undefined, "significant control is an optional company input");
+}
+console.log("Pathway registry checks passed: shared selector drift, explicit classification, route/packet ownership, synthetic extension, graph dependencies, approval boundaries and workspace default coverage.");

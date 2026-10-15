@@ -8,6 +8,8 @@ import { makeCapabilities } from "../shared/portable/capabilities";
 import type { PortableQueryCtx } from "../shared/portable/ctx";
 import { requirePermissionPortable } from "../shared/functions/permissions";
 import { requireDocumentAccess } from "../shared/functions/documents";
+import { requireCurrentSubmissionApproval, SELF_REVIEW_CONFIRMATION } from "../shared/functions/pathways";
+import type { PipelineGraph } from "../shared/pathways/pipeline";
 
 const payloadJson = JSON.stringify({ pathwayKey: "bc-society-incorporation", version: "1", input: { name: "Approved society" }, evidence: [{ documentId: "document", versionId: "version", contentSha256: "a".repeat(64) }] });
 const seed: SubmissionRecord = {
@@ -217,4 +219,22 @@ for (const status of ["manual_required", "attested", "rejected", "blocked", "unc
   await db.patch("actor", { status: "Active" });
 }
 
-console.log("Pathway submission dispatcher: approved bytes, trusted adapters, concurrent claims, current authority, manual handoff and uncertain-outcome no-retry checks passed.");
+// A solo founder's recorded self-review authorizes the handoff; an unrecorded or forged one never does.
+{
+  const graph: PipelineGraph = { version: 1, nodes: [
+    { key: "review", title: "Review", kind: "approval", dependsOn: [], approval: { permission: "documents:write", distinctInitiator: true } },
+    { key: "file", title: "File", kind: "submission", dependsOn: ["review"], submission: { adapterId: "official-portal" } },
+  ] };
+  const run: any = { _id: "run", societyId: "society", graph, inputs: {}, createdByUserId: "actor" };
+  const steps = (review: Record<string, unknown>): any[] => [
+    { _id: "review-step", nodeKey: "review", state: "approved", approvedByUserId: "actor", approvedPayloadsJson: JSON.stringify({ file: "digest" }), ...review },
+    { _id: "file-step", nodeKey: "file", state: "pending" },
+  ];
+  await requireCurrentSubmissionApproval(ctx, run, steps({ selfReviewedByUserId: "actor", selfReviewedAtISO: "2026-10-15T00:00:00.000Z", selfReviewConfirmation: SELF_REVIEW_CONFIRMATION }), "file", "digest");
+  await assert.rejects(() => requireCurrentSubmissionApproval(ctx, run, steps({}), "file", "digest"), /authority is invalid/, "self-approval without a recorded self-review");
+  await assert.rejects(() => requireCurrentSubmissionApproval(ctx, run, steps({ selfReviewedByUserId: "actor", selfReviewConfirmation: "ok" }), "file", "digest"), /authority is invalid/, "the confirmation must be the reviewed statement");
+  await assert.rejects(() => requireCurrentSubmissionApproval(ctx, run, steps({ selfReviewedByUserId: "someone-else", selfReviewConfirmation: SELF_REVIEW_CONFIRMATION }), "file", "digest"), /authority is invalid/, "the self-review belongs to the approver");
+  await assert.rejects(() => requireCurrentSubmissionApproval(ctx, run, steps({ selfReviewedByUserId: "actor", selfReviewConfirmation: SELF_REVIEW_CONFIRMATION }), "file", "other-digest"), /differs/, "a self-review still pins the approved payload");
+}
+
+console.log("Pathway submission dispatcher: approved bytes, trusted adapters, concurrent claims, current authority, manual handoff, uncertain-outcome no-retry and recorded self-review checks passed.");

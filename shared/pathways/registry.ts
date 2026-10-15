@@ -44,6 +44,7 @@ function incorporationPipeline(key: string, guide: IncorporationPreparationGuide
       ...(company ? [
         { key: "namedCompany", label: "Use a named company (turn off for a numbered company)", type: "boolean" as const, required: true },
         { key: "shareStructure", label: "Share structure and subscription review reference", type: "text" as const, required: true },
+        { key: "significantControl", label: "Individuals with significant control", type: "text" as const },
       ] : [{ key: "purposes", label: "Society purposes", type: "text" as const, required: true }]),
       ...(key === "bc_company" ? [{ key: "recordsOffice", label: "BC records office address", type: "text" as const, required: true }] : []),
     ],
@@ -67,7 +68,7 @@ function incorporationPathway(input: Omit<PathwayDefinition, "version" | "prepar
   const registrationPackets = (flow?.steps ?? []).filter((step) => step.packetKey && step.appliesTo.contextKinds?.includes("extra_provincial"))
     .flatMap((step) => catalog.filter((packet) => packet.key === step.packetKey));
   return {
-    ...input, version: "2026-10-03.1", preparation, flow,
+    ...input, version: "2026-10-15.1", preparation, flow,
     packetKeys: [...new Set([...catalog
       .filter((packet) => packet.jurisdictions.some((code) => input.eligibility.jurisdictions.includes(canonicalizeJurisdictionCode(code))))
       .map((packet) => packet.key), ...registrationPackets.map((packet) => packet.key)])],

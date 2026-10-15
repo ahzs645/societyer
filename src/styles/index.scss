@@ -152,6 +152,7 @@
 // Pages organization setup steps link to (profile locks, share register, guided setup).
 @use "setup-destinations";
 @use "governing-documents"; // profile governing documents: rows, "Choose a document" picker
+@use "pathway-pipeline"; // saved incorporation pathway: workspace defaults, solo self-review
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

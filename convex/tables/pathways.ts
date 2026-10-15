@@ -5,6 +5,8 @@ export const pathwayTables = {
   pathwayRuns: defineTable({
     societyId: v.id("societies"), pathwayKey: v.string(), pathwayVersion: v.string(), pathwayTitle: v.string(),
     graph: v.any(), inputs: v.any(), inputsFrozen: v.boolean(), createdByUserId: v.id("users"),
+    // Where each frozen input came from: a workspace register, or typed in the run.
+    inputSourcesJson: v.optional(v.string()),
     status: v.string(), createdAtISO: v.string(), updatedAtISO: v.string(),
   }).index("by_society", ["societyId"]),
   pathwaySteps: defineTable({
@@ -12,6 +14,8 @@ export const pathwayTables = {
     notes: v.optional(v.string()), documentId: v.optional(v.id("documents")), documentVersionId: v.optional(v.id("documentVersions")),
     documentSnapshotJson: v.optional(v.string()), completedByUserId: v.optional(v.id("users")),
     approvedByUserId: v.optional(v.id("users")), approvedPayloadsJson: v.optional(v.string()),
+    // A review by the run's initiator, allowed only while no one else in the workspace could review.
+    selfReviewedByUserId: v.optional(v.id("users")), selfReviewedAtISO: v.optional(v.string()), selfReviewConfirmation: v.optional(v.string()),
     updatedAtISO: v.string(),
   }).index("by_society", ["societyId"]).index("by_run", ["runId"]).index("by_run_node", ["runId", "nodeKey"]),
   pathwaySubmissionOutbox: defineTable({
