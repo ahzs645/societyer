@@ -114,7 +114,7 @@ export default defineConfig({
     // Qualification observes one source snapshot; backend/codegen or traces
     // must not invalidate an authenticated browser in the middle of a test.
     hmr: frozenQualification ? false : undefined,
-    watch: frozenQualification ? null : { ignored: ["**/tmp/**", "**/artifacts/**"] },
+    watch: frozenQualification ? null : { ignored: ["**/tmp/**", "**/artifacts/**", "**/.claude/**"] },
     proxy: {
       "/api": {
         target: apiServerTarget,
