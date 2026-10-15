@@ -115,6 +115,16 @@ export function isSociety(organization?: LegalEntityLike | null): boolean {
   return organizationKind(organization) === "society";
 }
 
+/**
+ * The organization is still being prepared (or has been filed) and no
+ * certificate of incorporation is on record yet: there is no legal entity,
+ * so registers hold proposed people and statutory checks do not apply.
+ */
+export function isPreparingIncorporation(organization?: { formationStatus?: string | null; organizationStatus?: string | null } | null): boolean {
+  if (!organization || organization.formationStatus === "incorporated") return false;
+  return organization.formationStatus === "preparing" || organization.formationStatus === "submitted" || organization.organizationStatus === "pre_incorporation";
+}
+
 export function isFederalCbca(organization?: LegalEntityLike | null): boolean {
   if (isMemberBasedCorporation(organization)) return false;
   const jurisdiction = homeJurisdictionCode(organization);

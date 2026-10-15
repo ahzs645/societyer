@@ -148,5 +148,8 @@
 // Touch control density: 32/36px controls with 44px hit areas (coarse pointers).
 @use "control-density";
 
+// Pages organization setup steps link to (profile locks, share register, guided setup).
+@use "setup-destinations";
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

@@ -701,16 +701,25 @@ export function LockedField({
   label,
   hint,
   reason,
+  requireUnlock = true,
   children,
 }: {
   label: string;
   hint?: string;
   /** Why the field is locked — shown in the unlock confirmation. */
   reason: string;
+  /**
+   * False when editing has no legal consequence yet (an empty field, or a
+   * proposed detail of an organization that is still being prepared): the
+   * field is then a plain editable field with no lock.
+   */
+  requireUnlock?: boolean;
   /** A render prop receiving the current locked state — your input must respect it (e.g. `disabled={locked}`). */
   children: (locked: boolean) => ReactNode;
 }) {
-  const [locked, setLocked] = useState(true);
+  const [unlocked, setUnlocked] = useState(false);
+  const locked = requireUnlock && !unlocked;
+  const setLocked = (value: boolean) => setUnlocked(!value);
   const confirm = useConfirm();
   const generatedId = useStableDomId("field");
   const fieldId = generatedId;
@@ -732,10 +741,10 @@ export function LockedField({
   };
 
   return (
-    <div className={`field field--lockable${locked ? "" : " is-unlocked"}`}>
+    <div className={`field${requireUnlock ? ` field--lockable${locked ? "" : " is-unlocked"}` : ""}`}>
       <div className="field__label-row">
         <label className="field__label" htmlFor={fieldId}>{label}</label>
-        {locked ? (
+        {!requireUnlock ? null : locked ? (
           <Tooltip content={reason}>
             <button
               className="field__lock field__lock--icon"
@@ -743,7 +752,7 @@ export function LockedField({
               type="button"
               aria-label={`Unlock ${label}`}
             >
-              <Lock aria-hidden="true" />
+              <Lock aria-hidden="true" /> <span className="field__lock-text" aria-hidden="true">Edit</span>
             </button>
           </Tooltip>
         ) : (

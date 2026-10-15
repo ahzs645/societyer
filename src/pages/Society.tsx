@@ -5,9 +5,9 @@ import { EntitySetupFields } from "../components/EntitySetupFields";
 import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
 import { IncorporationPreparation } from "../components/IncorporationPreparation";
 import { authenticatedFetch } from "@/lib/authToken";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -29,7 +29,7 @@ import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
-import { homeJurisdictionCode, isCorporation, isSociety } from "../../shared/organizationDomain";
+import { homeJurisdictionCode, isCorporation, isPreparingIncorporation, isSociety } from "../../shared/organizationDomain";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { TooltipCopyable } from "../components/TooltipCopyable";
@@ -173,6 +173,45 @@ export function SocietyPage() {
   const [addingLifecycleDate, setAddingLifecycleDate] = useState(false);
   const [lifecycleDateType, setLifecycleDateType] = useState<LifecycleDateKey | "">("");
   const [lifecycleDateValue, setLifecycleDateValue] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const moreDetailsRef = useRef<HTMLDetailsElement>(null);
+  /** Open "More organization details" (a collapsed section) and bring a part of it into view. */
+  const openMoreDetails = (targetId = "more-organization-details") => {
+    const details = moreDetailsRef.current;
+    if (!details) return;
+    details.open = true;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => {
+      (document.getElementById(targetId) ?? details).scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+    });
+  };
+  const formReady = Boolean(form);
+  const { hash } = useLocation();
+  // Links to #registered-office (setup's "registered office" step, Registered
+  // locations → Manage) or #more-organization-details land on an open
+  // section, scrolled into view, not on a collapsed summary. Other query
+  // parameters (?setup=office) are left alone.
+  useEffect(() => {
+    if (!formReady || !permissions.loaded) return;
+    if (hash === "#registered-office") openMoreDetails("registered-office");
+    else if (hash === "#more-organization-details") openMoreDetails();
+  }, [formReady, permissions.loaded, hash]);
+  // ?intent=address also opens the new-address form.
+  useEffect(() => {
+    if (!formReady || !permissions.loaded) return;
+    if (searchParams.get("intent") !== "address") return;
+    openMoreDetails("registered-office");
+    if (canEdit) {
+      setDrawerKind("address");
+      setDraft({ type: "registered_office", status: "current", country: "Canada", street: "", city: "" });
+    }
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formReady, permissions.loaded, searchParams]);
 
   // Re-seed whenever the workspace itself changes, not just the first time a
   // society arrives. A local workspace answers from its seed until IndexedDB is
@@ -218,7 +257,14 @@ export function SocietyPage() {
   // member-funded status are society concepts and stay hidden for corporations
   // (the stored fields are untouched).
   const vocab = organizationVocabulary(form);
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : k === "formationStatus" ? { organizationStatus: organizationStatusForFormation(v, f.organizationStatus) } : {}) }));
+  // Saved state decides the locks: before incorporation (or while a field is
+  // still empty) editing has no legal consequence, so no unlock is asked for.
+  const savedPreparing = isPreparingIncorporation(society);
+  const lockWhenSet = (value: unknown) => !savedPreparing && hasText(value);
+  // The form decides what status the page shows, so a status change reads
+  // back immediately, before it is saved.
+  const preparing = isPreparingIncorporation(form);
   /** A catalogued Act belongs to one jurisdiction and incorporates listed entity kinds; keep the identity consistent with it. */
   const setGoverningAct = (value: string | undefined, act?: IncorporationAct) => setForm((f: any) => {
     if (!act || act.actFormedUnder === f.actFormedUnder) return { ...f, actFormedUnder: value };
@@ -495,7 +541,11 @@ export function SocietyPage() {
       <PageHeader
         routeKey="/app/society"
         title="Organization profile"
-        subtitle={form.organizationStatus === "pre_incorporation" ? "Preparing incorporation. Add the assigned registry number and effective date after confirmation." : "Governing details, registered office, and key flags."}
+        subtitle={preparing
+          ? form.formationStatus === "submitted"
+            ? "Filed with the registry. The registry number and date come from the certificate of incorporation."
+            : "Preparing incorporation. The registry number and date come from the certificate of incorporation."
+          : "Governing details, registered office, and key flags."}
         actions={
           <>
             <span className="muted society-header__updated" style={{ fontSize: "var(--fs-sm)" }}>
@@ -519,10 +569,16 @@ export function SocietyPage() {
       <div className="society-layout">
         <main className="society-layout__main">
           <div className="card">
-            <div className="card__head"><h2 className="card__title">Identity</h2></div>
+            <div className="card__head">
+              <h2 className="card__title">Identity</h2>
+              {/* One status for an organization that is not incorporated yet; the detailed
+                  formation and workspace statuses stay under "More organization details". */}
+              {preparing && <Badge tone="info">{form.formationStatus === "submitted" ? "Filed, waiting for the certificate" : "Preparing incorporation"}</Badge>}
+            </div>
             <div className="card__body">
               <LockedField
-                label="Legal name"
+                label={preparing ? "Proposed name" : "Legal name"}
+                requireUnlock={lockWhenSet(society.name)}
                 reason="Changing the legal name can require a special resolution, name reservation, and registry filing. Review the active jurisdiction guide and governing documents first."
               >
                 {(locked) => (
@@ -536,33 +592,50 @@ export function SocietyPage() {
               </LockedField>
 
               <div className="society-field-grid society-field-grid--three society-field-grid--registry-dates">
-                <LockedField
-                  label="Incorporation #"
-                  reason="The incorporation or corporation number is assigned by the registry and generally stays stable for the life of the organization. Edit only to fix a data-entry error."
-                >
-                  {(locked) => (
-                    <input
-                      className="input"
-                      disabled={locked}
-                      value={form.incorporationNumber ?? ""}
-                      onChange={(e) => set("incorporationNumber", e.target.value)}
-                    />
-                  )}
-                </LockedField>
-                <LockedField
-                  label="Incorporation date"
-                  reason="The date of incorporation is a historical fact recorded by the registry. Edit only to fix a data-entry error."
-                >
-                  {(locked) => (
-                    <DatePicker
-                      disabled={locked}
-                      value={form.incorporationDate ?? ""}
-                      onChange={(v) => set("incorporationDate", v)}
-                    />
-                  )}
-                </LockedField>
+                {savedPreparing ? (
+                  <>
+                    {/* Not assigned yet: these come from the certificate of incorporation. */}
+                    <Field label="Incorporation #" hint="From the certificate">
+                      <input className="input" disabled value="" placeholder="Not assigned yet" />
+                    </Field>
+                    <Field label="Incorporation date" hint="From the certificate">
+                      <input className="input" disabled value="" placeholder="Not incorporated yet" />
+                    </Field>
+                  </>
+                ) : (
+                  <>
+                    <LockedField
+                      label="Incorporation #"
+                      requireUnlock={lockWhenSet(society.incorporationNumber)}
+                      reason="The incorporation or corporation number is assigned by the registry and generally stays stable for the life of the organization. Edit only to fix a data-entry error."
+                    >
+                      {(locked) => (
+                        <input
+                          className="input"
+                          disabled={locked}
+                          value={form.incorporationNumber ?? ""}
+                          onChange={(e) => set("incorporationNumber", e.target.value)}
+                        />
+                      )}
+                    </LockedField>
+                    <LockedField
+                      label="Incorporation date"
+                      requireUnlock={lockWhenSet(society.incorporationDate)}
+                      reason="The date of incorporation is a historical fact recorded by the registry. Edit only to fix a data-entry error."
+                    >
+                      {(locked) => (
+                        <DatePicker
+                          disabled={locked}
+                          value={form.incorporationDate ?? ""}
+                          onChange={(v) => set("incorporationDate", v)}
+                        />
+                      )}
+                    </LockedField>
+                  </>
+                )}
                 <LockedField
                   label="Fiscal year end"
+                  requireUnlock={lockWhenSet(society.fiscalYearEnd)}
                   reason={corporate
                     ? `Changing the fiscal year end can require a review of the ${vocab.governingDocuments} and the CRA's rules. Affects every filing deadline downstream.`
                     : "Changing the fiscal year end can require a bylaw amendment and notification to the CRA. Affects every filing deadline downstream."}
@@ -580,6 +653,7 @@ export function SocietyPage() {
 
               <LockedField
                 label={governance.purposesLabel}
+                requireUnlock={lockWhenSet(society.purposes)}
                 reason={corporate
                   ? "Business activities or article restrictions can require shareholder approval and a registry filing to change."
                   : "Purposes can require member approval and a registry filing to change. Charities may also need CRA review."}
@@ -605,6 +679,7 @@ export function SocietyPage() {
 
                 {!corporate && <LockedField
                   label="Status flags"
+                  requireUnlock={!savedPreparing}
                   reason="Charity status is controlled by the CRA. Jurisdiction-specific status flags should be reviewed against the governing statute and filed documents."
                 >
                   {(locked) => (
@@ -638,7 +713,19 @@ export function SocietyPage() {
                 <h2 className="card__title">Registered locations</h2>
                 <Badge>{detail === undefined ? "..." : displayedLocationCount}</Badge>
               </div>
-              <a className="btn btn--sm" href="#more-organization-details" style={{ marginLeft: "auto" }}>Manage</a>
+              <a
+                className="btn btn--sm"
+                href="#registered-office"
+                style={{ marginLeft: "auto" }}
+                onClick={(event) => {
+                  // Same target as the setup link; works again after the section is collapsed.
+                  event.preventDefault();
+                  window.history.replaceState(window.history.state, "", "#registered-office");
+                  openMoreDetails("registered-office");
+                }}
+              >
+                Manage
+              </a>
             </div>
             <div className="card__body">
               <div className="society-address-list">
@@ -690,14 +777,20 @@ export function SocietyPage() {
                     <tr>
                       <th>Document</th>
                       <th>Status</th>
-                      <th>Notes</th>
+                      <th><span className="sr-only">Action</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <DocTableRow label={governance.formationDocumentLabel} present={!!society.constitutionDocId} />
+                    {/* Uploading with the matching category puts the document on file
+                        (documents:create links the first one to the profile). */}
+                    <DocTableRow
+                      label={governance.formationDocumentLabel}
+                      docId={society.constitutionDocId}
+                      uploadHref={documentUploadHref(corporate ? "ArticlesOfIncorporation" : "Constitution", corporate ? (vocab.bcCompany ? "Articles" : "Articles of incorporation") : "Constitution")}
+                    />
                     {/* A BC company's articles take the place of separate by-laws. */}
-                    {!vocab.bcCompany && <DocTableRow label={corporate ? "By-laws" : "Bylaws"} present={!!society.bylawsDocId} />}
-                    <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} present={!!society.privacyPolicyDocId} />
+                    {!vocab.bcCompany && <DocTableRow label={corporate ? "By-laws" : "Bylaws"} docId={society.bylawsDocId} uploadHref={documentUploadHref("Bylaws", corporate ? "By-laws" : "Bylaws")} />}
+                    <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} docId={society.privacyPolicyDocId} uploadHref="/app/privacy" uploadLabel="Add" />
                   </tbody>
                 </table>
               </div>
@@ -737,7 +830,7 @@ export function SocietyPage() {
         </aside>
       </div>
 
-      <details id="more-organization-details" className="card" style={{ marginTop: 16 }}>
+      <details id="more-organization-details" ref={moreDetailsRef} className="card" style={{ marginTop: 16 }}>
         <summary style={{ cursor: "pointer", padding: "var(--s-4)", fontWeight: 600 }}>
           More organization details
           <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: "var(--fs-sm)" }}>
@@ -759,7 +852,9 @@ export function SocietyPage() {
                 <div className="org-details-field-grid">
                   <OptionSelect label="Entity type" setName="entityTypes" value={form.entityType ?? ""} onChange={(value) => { set("entityType", value); set("legalSubtype", "other"); }} emptyLabel="Needs classification" />
                   <GoverningActSelect value={form.actFormedUnder} jurisdictionCode={form.jurisdictionCode} onChange={setGoverningAct} otherActName={setupOtherActName(society.onboardingAnswersJson)} />
-                  <OptionSelect label="Organization status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
+                  {/* While preparing, the legal formation status below is the one status;
+                      the workspace status follows it (see organizationStatusForFormation). */}
+                  {!preparing && <OptionSelect label="Organization status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />}
                 </div>
               </div>
             </div>
@@ -846,6 +941,7 @@ export function SocietyPage() {
 
           <div className="org-detail-registers">
             <DetailSection
+              id="registered-office"
               icon={<MapPin size={14} />}
               title="Structured addresses"
               count={detail?.addresses?.length ?? 0}
@@ -965,7 +1061,28 @@ function AddressSummary({ label, row, fallback, hint }: { label: string; row?: a
   );
 }
 
-function DocTableRow({ label, present }: { label: string; present: boolean }) {
+function hasText(value: unknown) {
+  return typeof value === "string" ? value.trim() !== "" : value !== undefined && value !== null;
+}
+
+/**
+ * Keep the workspace status in step with the legal formation status chosen on
+ * the profile: preparing or filed means "Preparing incorporation"; a verified
+ * certificate (or an existing entity) makes a preparing workspace active. Other statuses (archived,
+ * removed) are left as they are.
+ */
+function organizationStatusForFormation(formationStatus: string | undefined, current: string | undefined) {
+  if (formationStatus === "preparing" || formationStatus === "submitted") return "pre_incorporation";
+  if ((formationStatus === "incorporated" || formationStatus === "unverified_existing") && (!current || current === "pre_incorporation")) return "active";
+  return current;
+}
+
+function documentUploadHref(category: string, title: string) {
+  return `/app/documents?${new URLSearchParams({ intent: "new", category, title }).toString()}`;
+}
+
+function DocTableRow({ label, docId, uploadHref, uploadLabel = "Upload" }: { label: string; docId?: string; uploadHref: string; uploadLabel?: string }) {
+  const present = Boolean(docId);
   return (
     <tr>
       <td>
@@ -974,8 +1091,10 @@ function DocTableRow({ label, present }: { label: string; present: boolean }) {
       <td>
         <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
       </td>
-      <td className={present ? "table__cell--muted" : undefined}>
-        {present ? "—" : "No linked document"}
+      <td className="society-doc-table__action">
+        {present
+          ? <Link className="btn btn--ghost btn--sm" to={`/app/documents/${docId}`} aria-label={`Open ${label}`}>Open</Link>
+          : <Link className="btn btn--sm" to={uploadHref} aria-label={`${uploadLabel} ${label}`}>{uploadLabel}</Link>}
       </td>
     </tr>
   );
@@ -1002,9 +1121,9 @@ function isAddressPart(value: unknown) {
   return Boolean(text) && text.toLowerCase() !== "needs review";
 }
 
-function DetailSection({ icon, title, count, action, children }: any) {
+function DetailSection({ id, icon, title, count, action, children }: any) {
   return (
-    <div className="card org-detail-section">
+    <div id={id} className="card org-detail-section">
       <div className="card__head">
         <div className="row" style={{ gap: 8 }}>
           {icon}
