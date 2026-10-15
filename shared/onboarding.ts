@@ -62,6 +62,39 @@ export function onboardingGovernanceSummary(answers: OrganizationOnboardingAnswe
   return `Initial setup: ${structure}${answers.classDetails.trim() ? `; supplied class notes: ${answers.classDetails.trim()}` : ""}.${actNote} Documents: ${answers.governanceDocuments.replaceAll("_", " ")}. People: ${answers.peopleReadiness.replaceAll("_", " ")}.${answers.operatingRegions.trim() ? ` Operating regions: ${answers.operatingRegions.trim()}.` : ""} Review these answers against the governing documents before creating actual register entries or granting access.`;
 }
 
+/** One saved setup answer in plain language, e.g. { label: "Documents", value: "you'll draft them here" }. */
+export type OnboardingAnswerLine = { label: string; value: string };
+
+/** Shown under the saved answers wherever they are listed. */
+export const ONBOARDING_ANSWERS_FOOTER = "These are the answers you gave when you created the workspace. Check them against your documents.";
+
+/**
+ * The answers saved at creation, in plain language for the setup view and the
+ * setup task. Never shows raw option values ("needs_review", "add_later").
+ */
+export function describeOnboardingAnswers(answers: OrganizationOnboardingAnswers | null | undefined, organization: LegalEntityLike): OnboardingAnswerLine[] {
+  if (!answers) return [];
+  const shares = isCorporation(organization);
+  const classDetails = answers.classDetails.trim();
+  const structure = answers.governanceStructure === "needs_review" ? "not decided yet"
+    : answers.governanceStructure === "multiple_classes" ? (shares ? "several classes of shares" : "several membership classes")
+    : (shares ? "one class of shares" : "one membership class");
+  const lines: OnboardingAnswerLine[] = [
+    { label: shares ? "Share classes" : "Membership classes", value: classDetails ? `${structure} (${classDetails})` : structure },
+    { label: "Documents", value: answers.governanceDocuments === "need_to_prepare" ? "you'll draft them here" : answers.governanceDocuments === "available" ? "you have signed copies to upload" : "you need to find or check them" },
+    { label: "People", value: answers.peopleReadiness === "ready_to_add" ? "details ready to enter" : "you'll add them later" },
+  ];
+  if (answers.operatingRegions.trim()) lines.push({ label: "Where you'll operate", value: answers.operatingRegions.trim() });
+  const act = incorporationActById(answers.incorporationActId);
+  if (act?.actFormedUnder === ANOTHER_ACT_VALUE) lines.push({ label: "Governing Act", value: incorporationActTitle(act, answers.otherActName) });
+  return lines;
+}
+
+/** `describeOnboardingAnswers` as "Label: value" sentences. */
+export function onboardingAnswerSentences(answers: OrganizationOnboardingAnswers | null | undefined, organization: LegalEntityLike): string[] {
+  return describeOnboardingAnswers(answers, organization).map((line) => `${line.label}: ${line.value}`);
+}
+
 export function validateInitialOrganizationProfile(form: Record<string, any>): void {
   if (!form.name?.trim()) throw new Error("Enter the legal or proposed organization name.");
   if (form.name.length > 300) throw new Error("Organization name must be 300 characters or fewer.");

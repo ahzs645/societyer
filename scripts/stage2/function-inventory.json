@@ -17005,6 +17005,76 @@
     ]
   },
   {
+    "key": "convex:organizationSetup:decideStep",
+    "surface": "convex",
+    "name": "organizationSetup:decideStep",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/organizationSetup.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:organizationSetup:markSubmitted",
+    "surface": "convex",
+    "name": "organizationSetup:markSubmitted",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/organizationSetup.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:organizationSetup:progress",
+    "surface": "convex",
+    "name": "organizationSetup:progress",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/organizationSetup.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:organizationSetup:recordIncorporation",
+    "surface": "convex",
+    "name": "organizationSetup:recordIncorporation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/organizationSetup.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "certificateDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:orgChartAssignments:list",
     "surface": "convex",
     "name": "orgChartAssignments:list",
@@ -39192,6 +39262,76 @@
         "table": "documents",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:organizationSetup:decideStep",
+    "surface": "portable",
+    "name": "organizationSetup:decideStep",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:organizationSetup:markSubmitted",
+    "surface": "portable",
+    "name": "organizationSetup:markSubmitted",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:organizationSetup:progress",
+    "surface": "portable",
+    "name": "organizationSetup:progress",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:organizationSetup:recordIncorporation",
+    "surface": "portable",
+    "name": "organizationSetup:recordIncorporation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "certificateDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
       }
     ]
   },

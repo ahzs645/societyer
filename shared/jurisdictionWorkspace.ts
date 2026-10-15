@@ -1,4 +1,5 @@
-import { onboardingGovernanceSummary, readOnboardingAnswersJson } from "./onboarding";
+import { onboardingAnswerSentences, readOnboardingAnswersJson } from "./onboarding";
+import { ORGANIZATION_SETUP_PATH } from "./organizationSetup/types";
 import { PATHWAY_REGISTRY, resolvePathway } from "./pathways/registry";
 import { canonicalizeJurisdictionCode, DEFAULT_HOME_JURISDICTION_CODE, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "./organizationDomain";
 import { organizationRuleScope } from "./entityRuleScope";
@@ -589,55 +590,30 @@ export const WORKSPACE_ONBOARDING_WORKFLOW_CONFIG = {
   ],
 } as const;
 
+/**
+ * The one task a new workspace starts with. The setup page
+ * (`/app/organization-setup`) computes every step from the records, so the
+ * task only points there; it no longer lists steps that never close on their
+ * own, and never asks a pre-incorporation workspace for an incorporation
+ * number or date it can't have yet.
+ */
 export function buildWorkspaceOnboardingTasks(args: any) {
-  const missingIdentity = [
-    !args.incorporationNumber ? "incorporation number" : null,
-    !args.incorporationDate ? "incorporation date" : null,
-    !args.fiscalYearEnd ? "fiscal year end" : null,
-  ].filter(Boolean);
   const organization = { ...args, jurisdictionCode: args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE };
-  const registry = registryOnboardingCopy(organization);
-  const governance = workspaceGovernanceCopy(organization);
-  const answers = readOnboardingAnswersJson(args.onboardingAnswersJson, args);
-  const initialSetup = answers ? ` ${onboardingGovernanceSummary(answers, organization)}` : "";
-  return [
-    ...(args?.organizationStatus === "pre_incorporation" ? [{
-      title: "Prepare incorporation before recording an active registration",
-      description: "Complete the formation preparation worksheet, review the correct official incorporation process, submit externally, and retain the certificate, registry number, and effective date before marking this organization active.",
-      priority: "High",
-      tags: ["formation", "incorporation"],
-    }] : []),
-    {
-      title: registry.taskTitle,
-      description: `${registry.taskDescription}${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
-      priority: missingIdentity.length ? "High" : "Medium",
-      tags: ["optional", "registry"],
-    },
-    {
-      title: "Set registered locations",
-      description: "Record registered office delivery and mailing addresses. Add a records location only if records are kept somewhere other than the registered office.",
-      priority: args.registeredOfficeAddress ? "Medium" : "High",
-      tags: ["addresses", "records"],
-    },
-    {
-      title: "Add governance documents",
-      description: governance.documentsDescription + initialSetup,
-      priority: "High",
-      tags: ["documents", "governance"],
-    },
-    {
-      title: "Add people and workspace access",
-      description: governance.peopleDescription + initialSetup,
-      priority: "High",
-      tags: ["people", "access"],
-    },
-    {
-      title: "Optional: finish advanced setup later",
-      description: `Choose only what matters: annual calendar, ${governance.registerLabel.toLowerCase()}, finance controls, privacy and records program, insurance/risk, integrations, or a board adoption packet.`,
-      priority: "Low",
-      tags: ["optional", "advanced-setup"],
-    },
-  ];
+  const name = String(args?.name ?? "").trim() || "your organization";
+  let answers: ReturnType<typeof readOnboardingAnswersJson>;
+  try { answers = readOnboardingAnswersJson(args?.onboardingAnswersJson, args); } catch { answers = undefined; }
+  const answerLines = onboardingAnswerSentences(answers, organization);
+  const preIncorporation = args?.organizationStatus === "pre_incorporation";
+  const description = [
+    `Open Setup (${ORGANIZATION_SETUP_PATH}) to see what to do next. Each step is ticked off as soon as the record is added, ${preIncorporation ? "from getting ready to file through to the certificate." : "so you can work through it in any order."}`,
+    ...(answerLines.length ? ["", "Your setup answers:", ...answerLines.map((line) => `- ${line}`)] : []),
+  ].join("\n");
+  return [{
+    title: `Finish setting up ${name}`,
+    description,
+    priority: "Medium",
+    tags: preIncorporation ? ["organization-setup", "formation"] : ["organization-setup"],
+  }];
 }
 
 export function workspaceOnboardingWorkflowConfig(organization: LegalEntityLike & { organizationStatus?: string; formationStatus?: string; onboardingAnswersJson?: string } = {}) {
