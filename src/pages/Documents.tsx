@@ -28,6 +28,7 @@ import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { organizationVocabulary } from "../lib/organizationVocabulary";
+import { isCorporation } from "../../shared/organizationDomain";
 import { documentHasFile, openDocumentFile } from "../lib/documentOpen";
 import {
   documentCategoryFacets,
@@ -112,7 +113,14 @@ export function DocumentsPage() {
   }, [currentViewId, reviewViewId]);
   const allRows: any[] = useMemo(() => browse?.rows ?? [], [browse]);
   const activeRows = useMemo(() => allRows.filter((row) => showArchived || !row.archivedAtISO), [allRows, showArchived]);
-  const facets = useMemo(() => documentCategoryFacets(activeRows), [activeRows]);
+  // Corporations file articles and a certificate of incorporation; societies a constitution and bylaws.
+  const corporationAudience = society ? isCorporation(society) : undefined;
+  const bcCompanyAudience = society ? organizationVocabulary(society).bcCompany : undefined;
+  const categoryAudience = useMemo(
+    () => (corporationAudience === undefined ? undefined : { corporation: corporationAudience, bcCompany: bcCompanyAudience }),
+    [corporationAudience, bcCompanyAudience],
+  );
+  const facets = useMemo(() => documentCategoryFacets(activeRows, categoryAudience), [activeRows, categoryAudience]);
   const showCounts = useMemo(() => ({
     all: activeRows.length,
     needs_review: activeRows.filter((row) => row.reviewStatus === "needs_review" || row.reviewStatus === "in_review").length,
@@ -144,7 +152,7 @@ export function DocumentsPage() {
       return next;
     }, { replace: true });
   }, [canEdit, params, setParams, society]);
-  const categoryOptions = useMemo(() => documentCategoryOptions(allRows.map((row) => row.category)), [allRows]);
+  const categoryOptions = useMemo(() => documentCategoryOptions(allRows.map((row) => row.category), categoryAudience), [allRows, categoryAudience]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -399,7 +407,7 @@ export function DocumentsPage() {
             emptyState={<div className="muted" style={{ padding: 16 }}>No documents match these filters.</div>}
             renderCell={({ record: r, field }) => {
               if (field.name === "title") return <DocumentTitleCell row={r} />;
-              if (field.name === "category") return <Badge tone={documentCategoryTone(r.category)}>{documentCategoryLabel(r.category)}</Badge>;
+              if (field.name === "category") return <Badge tone={documentCategoryTone(r.category)}>{documentCategoryLabel(r.category, categoryAudience)}</Badge>;
               if (field.name === "reviewStatus") return <Badge tone={documentReviewStatusTone(r.reviewStatus)}>{documentReviewStatusLabel(r.reviewStatus)}</Badge>;
               if (field.name === "sourceDate") return r.sourceDate ? <span>{r.sourceDate}</span> : <span className="muted">—</span>;
               if (field.name === "sourceSystemLabel") return r.sourceSystemLabel ? <span>{r.sourceSystemLabel}</span> : <span className="muted">Added here</span>;

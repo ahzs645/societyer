@@ -28,6 +28,7 @@ import {
 import { isHistoricalSourceAction } from "../taskStatus";
 import { todayDateOnly } from "../dateOnly";
 import { financeControlFindingsFor } from "./expenseReports";
+import { isCorporation, isPreparingIncorporation } from "../organizationDomain";
 
 
 /* ------------------ bylaw-rule resolution (inlined, pure) ---------------- */
@@ -188,6 +189,8 @@ type SocietyRecord = DashboardSociety & {
   memberDataGapDocumented?: boolean;
   constitutionDocId?: string;
   bylawsDocId?: string;
+  formationStatus?: string;
+  organizationStatus?: string;
 };
 
 type GoalRecord = DashboardGoal & {
@@ -214,7 +217,9 @@ const OPEN_GOAL_STATUSES = ["AtRisk", "OffTrack", "OnTrack", "NotStarted"];
 const OPEN_TASK_STATUSES = ["Todo", "InProgress", "Blocked"];
 const PREVIEW_SCAN_LIMIT = 100;
 
-const DASHBOARD_READ_PERMISSIONS: readonly Permission[] = ["members:read", "directors:read", "meetings:read", "filings:read", "deadlines:read", "conflicts:read", "committees:read", "commitments:read", "tasks:read", "documents:read", "users:read", "audit:read", "settings:read", "financials:read"];
+// society:read is required to open the dashboard at all; listing it also
+// reports it in readAccess, so the setup guide's profile step is shown.
+const DASHBOARD_READ_PERMISSIONS: readonly Permission[] = ["society:read", "members:read", "directors:read", "meetings:read", "filings:read", "deadlines:read", "conflicts:read", "committees:read", "commitments:read", "tasks:read", "documents:read", "users:read", "audit:read", "settings:read", "financials:read"];
 
 async function dashboardReadAccess(ctx: PortableQueryCtx, societyId: string) {
   await requirePermissionPortable(ctx, societyId, "society:read");
@@ -324,6 +329,18 @@ export async function summaryPortable(
     readAccess.has("deadlines:read") ? ctx.db.query("complianceRemediations").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
     readAccess.has("documents:read") ? getActiveBylawRuleSet(ctx, societyId) : Promise.resolve(null),
   ]);
+  const corporation = isCorporation(society);
+  const preparing = isPreparingIncorporation(society);
+  // A corporation's directors are usually kept on Corporation people (the
+  // role-holder register) rather than the society director roster, so both
+  // count; a person on both is counted once.
+  const roleHolderDirectors = corporation && readAccess.has("directors:read")
+    ? (await ctx.db.query<any>("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect())
+        .filter((row) => row.roleType === "director" && row.status === "current")
+    : [];
+  const rosterNames = new Set(activeDirectors.map((director) => personNameKey(`${director.firstName ?? ""} ${director.lastName ?? ""}`)));
+  const extraDirectors = roleHolderDirectors.filter((row) => !rosterNames.has(personNameKey(roleHolderName(row))));
+  const legalDirectors = [...activeDirectors, ...extraDirectors.map(roleHolderAsDirector)];
 
   const bcResidents = activeDirectors.filter((d) => d.isBCResident).length;
   // Board roster for the overview card — officers (chair/president/etc.) first,
@@ -332,7 +349,7 @@ export async function summaryPortable(
     /chair|president/i.test(position) ? 0
     : /vice|treasurer|secretary/i.test(position) ? 1
     : 2;
-  const board: DashboardBoardMember[] = [...activeDirectors]
+  const board: DashboardBoardMember[] = [...legalDirectors]
     .sort((a, b) =>
       officerRank(a.position) - officerRank(b.position) ||
       `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`),
@@ -373,7 +390,7 @@ export async function summaryPortable(
     if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
     return readAccess.has("documents:read");
   });
-  const evidenceFlags = evaluateDashboardComplianceRules({
+  const legalFlags = evaluateDashboardComplianceRules({
     society: society
       ? {
           ...society,
@@ -386,13 +403,17 @@ export async function summaryPortable(
           bylawsDocId: society.bylawsDocId,
         }
       : null,
-    activeDirectors: activeDirectors.map((director: Record<string, any>) => ({
+    activeDirectors: legalDirectors.map((director: Record<string, any>) => ({
       consentOnFile: director.consentOnFile,
       isBCResident: director.isBCResident,
       residentCanadianStatus: director.residentCanadianStatus,
     })),
     rulesConfigured: Boolean(rules?._id),
   }, { ...applicableRulePack, rules: visibleRules }, visibleRules.length === applicableRulePack.rules.length);
+  // Before the certificate there is no legal entity yet: director minimums,
+  // residency and the other statutory checks do not apply, so a preparing
+  // organization gets one neutral note instead of red flags on day one.
+  const evidenceFlags: DashboardComplianceFlag[] = preparing && society ? [preparingComplianceNote(society)] : legalFlags;
   // Finance controls (expense approval rules) for people who can read the
   // books. They are internal-control findings, not statutory checks, so they
   // carry no citation; any finding replaces the "no gaps" line.
@@ -422,7 +443,7 @@ export async function summaryPortable(
     society: toDashboardSociety(society),
     counts: {
       members: activeMembers.length,
-      directors: activeDirectors.length,
+      directors: legalDirectors.length,
       bcResidents,
       meetingsThisYear: meetingsThisYear.length,
       overdueFilings: overdueFilings.length,
@@ -440,6 +461,51 @@ export async function summaryPortable(
     openTasks: openTaskPreview.map(toDashboardTask),
     complianceFlags,
     evidenceChains,
+  };
+}
+
+function personNameKey(name: string) {
+  return name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function roleHolderName(row: Record<string, any>) {
+  return String(row.fullName || [row.firstName, row.lastName].filter(Boolean).join(" ") || "");
+}
+
+/** Residency on the role-holder record, read the way the director rules expect it. */
+function roleHolderResidentCanadian(value?: string): "yes" | "no" | "unknown" {
+  if (!value) return "unknown";
+  if (value.startsWith("a_canadian_citizen_ordinarily_resident") || value.startsWith("a_permanent_resident") || value === "a_canadian_citizen_that_meets_the_test_in_schedule_a") return "yes";
+  if (value.startsWith("not_a_canadian_citizen") || value.startsWith("a_canadian_citizen_that_is_not_ordinarily_resident")) return "no";
+  return "unknown";
+}
+
+function roleHolderAsDirector(row: Record<string, any>) {
+  const name = roleHolderName(row);
+  return {
+    _id: row._id,
+    firstName: name,
+    lastName: "",
+    position: row.officerTitle ? "Director and officer" : "Director",
+    termStart: row.startDate,
+    termEnd: row.endDate,
+    isBCResident: false,
+    // Consent to act is kept as evidence on the director roster; a register
+    // entry alone does not show it.
+    consentOnFile: false,
+    residentCanadianStatus: roleHolderResidentCanadian(row.citizenshipResidency),
+  };
+}
+
+function preparingComplianceNote(society: SocietyRecord): DashboardComplianceFlag {
+  return {
+    ruleId: "DASHBOARD-COMPLIANCE-PREPARING",
+    level: "ok",
+    text: `${society.name || "This organization"} isn't incorporated yet. Legal checks start once the certificate of incorporation is recorded.`,
+    evidenceRequired: [],
+    remediationActions: [
+      { id: "open-profile", label: "Open the organization profile", intent: "navigate", to: "/app/society" },
+    ],
   };
 }
 

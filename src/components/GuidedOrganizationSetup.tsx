@@ -63,7 +63,10 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
   const [otherActName, setOtherActName] = useState("");
   const [sameMailing, setSameMailing] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [answers, setAnswers] = useState({ governanceStructure: "needs_review", classDetails: "", governanceDocuments: "needs_review", peopleReadiness: "add_later", operatingRegions: "" });
+  // The optional governance questions start unanswered (""), so Review never
+  // shows a default as if the founder had chosen it; buildValues stores the
+  // neutral "not decided yet" values for anything left unanswered.
+  const [answers, setAnswers] = useState<GovernanceAnswers>({ governanceStructure: "", classDetails: "", governanceDocuments: "", peopleReadiness: "", operatingRegions: "" });
   const [form, setForm] = useState<Record<string, any>>({
     name: "", incorporationNumber: "", incorporationDate: "", fiscalYearEnd: "", officialEmail: "",
     ...BLANK_IDENTITY, isMemberFunded: false, isCharity: false,
@@ -116,7 +119,7 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
     setEntityKind(kind);
     if (next?.actFormedUnder !== ANOTHER_ACT_VALUE) setOtherActName("");
     applyAct(next, kind);
-    setAnswers((current) => ({ ...current, governanceStructure: "needs_review", classDetails: "" }));
+    setAnswers((current) => ({ ...current, governanceStructure: "", classDetails: "" }));
   };
   const chooseEntityKind = (kind: IncorporationEntityKind) => {
     setEntityKind(kind);
@@ -128,6 +131,9 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
     const setupAnswers = {
       version: 1, previousUse: restoreRequested ? "returning" : "new", organizationStage: stage,
       pathwayKey: setup?.pathwayKey, incorporationActId: act?.id, ...(another ? { otherActName: otherActName.trim() } : {}), ...answers,
+      governanceStructure: answers.governanceStructure || UNANSWERED.governanceStructure,
+      governanceDocuments: answers.governanceDocuments || UNANSWERED.governanceDocuments,
+      peopleReadiness: answers.peopleReadiness || UNANSWERED.peopleReadiness,
     } as OrganizationOnboardingAnswers;
     return { ...form, mailingAddress: sameMailing ? form.registeredOfficeAddress : form.mailingAddress, onboardingAnswersJson: JSON.stringify(setupAnswers) };
   };
@@ -183,7 +189,8 @@ export function GuidedOrganizationSetup({ onCreate, saving, restoreCard, restore
       </div>
       {progress !== null && (
         <div className="society-create__progress">
-          {/* The step title is the card heading; the bar alone shows progress. */}
+          {/* The step title is the card heading; the count and bar show progress. */}
+          <span className="society-create__step-count" aria-hidden="true">Step {step + 1} of {STEPS.length}</span>
           <div
             className="society-create__progress-bar"
             role="progressbar"
@@ -330,6 +337,9 @@ function ActNotice({ act, stage, preparationMessage }: { act: IncorporationAct; 
 
 type GovernanceAnswers = { governanceStructure: string; classDetails: string; governanceDocuments: string; peopleReadiness: string; operatingRegions: string };
 
+/** What an unanswered optional question is stored as: "not decided yet". */
+const UNANSWERED = { governanceStructure: "needs_review", governanceDocuments: "needs_review", peopleReadiness: "add_later" } as const;
+
 /** Optional governance answers. Only collectable here (nothing edits the
  * onboarding answers afterwards), so they stay available behind a toggle. */
 function GovernanceNotes({ corporate, answers, setAnswers, form, set }: {
@@ -343,10 +353,10 @@ function GovernanceNotes({ corporate, answers, setAnswers, form, set }: {
     <details className="society-create__optional">
       <summary>Add governance notes now <span>Optional</span></summary>
       <div className="society-create__optional-body">
-        <Field label={corporate ? "Shareholder / share class structure" : "Member / membership class structure"}><Select value={answers.governanceStructure} onChange={(value) => setAnswers((current) => ({ ...current, governanceStructure: value }))} options={[{ value: "needs_review", label: "Not sure — review the governing documents" }, { value: "single_class", label: corporate ? "One share class" : "One membership class" }, { value: "multiple_classes", label: corporate ? "Multiple share classes" : "Multiple membership classes" }]} /></Field>
+        <Field label={corporate ? "Shareholder / share class structure" : "Member / membership class structure"}><Select value={answers.governanceStructure} placeholder="Not answered" onChange={(value) => setAnswers((current) => ({ ...current, governanceStructure: value }))} options={[{ value: "needs_review", label: "Not sure — review the governing documents" }, { value: "single_class", label: corporate ? "One share class" : "One membership class" }, { value: "multiple_classes", label: corporate ? "Multiple share classes" : "Multiple membership classes" }]} /></Field>
         <Field label={corporate ? "Share class names and rights to review" : "Membership types and voting rights to review"}><textarea className="input" rows={3} maxLength={2000} value={answers.classDetails} onChange={(event) => setAnswers((current) => ({ ...current, classDetails: event.target.value }))} placeholder={corporate ? "e.g. Class A voting common shares" : "e.g. Voting members and non-voting associates"} /></Field>
-        <Field label="Governance documents"><Select value={answers.governanceDocuments} onChange={(value) => setAnswers((current) => ({ ...current, governanceDocuments: value }))} options={[{ value: "needs_review", label: "Need to locate or review them" }, { value: "available", label: "Have existing signed documents to upload" }, { value: "need_to_prepare", label: "Need to prepare drafts" }]} /></Field>
-        <Field label={corporate ? "Directors, officers and shareholders" : "Directors, officers and members"}><Select value={answers.peopleReadiness} onChange={(value) => setAnswers((current) => ({ ...current, peopleReadiness: value }))} options={[{ value: "add_later", label: "Gather details and add people later" }, { value: "ready_to_add", label: "Have details ready for the people registers" }]} /></Field>
+        <Field label="Governance documents"><Select value={answers.governanceDocuments} placeholder="Not answered" onChange={(value) => setAnswers((current) => ({ ...current, governanceDocuments: value }))} options={[{ value: "needs_review", label: "Need to locate or review them" }, { value: "available", label: "Have existing signed documents to upload" }, { value: "need_to_prepare", label: "Need to prepare drafts" }]} /></Field>
+        <Field label={corporate ? "Directors, officers and shareholders" : "Directors, officers and members"}><Select value={answers.peopleReadiness} placeholder="Not answered" onChange={(value) => setAnswers((current) => ({ ...current, peopleReadiness: value }))} options={[{ value: "add_later", label: "Gather details and add people later" }, { value: "ready_to_add", label: "Have details ready for the people registers" }]} /></Field>
         <Field label="Purposes / business activities"><textarea className="input" rows={3} value={form.purposes} onChange={(event) => set("purposes", event.target.value)} /></Field>
         <Field label="Where will the organization operate?" hint="Provinces or countries"><textarea className="input" rows={2} maxLength={2000} value={answers.operatingRegions} onChange={(event) => setAnswers((current) => ({ ...current, operatingRegions: event.target.value }))} /></Field>
         <div className="society-field-grid"><Field label="Privacy / records contact name"><input className="input" value={form.privacyOfficerName} onChange={(event) => set("privacyOfficerName", event.target.value)} /></Field><Field label="Privacy / records contact email"><input className="input" type="email" value={form.privacyOfficerEmail} onChange={(event) => set("privacyOfficerEmail", event.target.value)} /></Field></div>

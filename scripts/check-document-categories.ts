@@ -16,6 +16,7 @@ import {
   documentCategoryGroupKey,
   documentCategoryLabel,
   documentCategoryOptions,
+  governanceSlotForCategory,
   isInternalDocumentRecord,
   normalizeDocumentCategory,
 } from "../shared/documentCategories";
@@ -69,6 +70,23 @@ const options = documentCategoryOptions(["Audit", "Recovered source review", "Im
 assert.ok(options.some((option) => option.value === "Board Packages"), "categories in use are offered");
 assert.ok(!options.some((option) => option.value === "Import Candidate"), "internal categories are never offered");
 assert.equal(options.filter((option) => option.value === "Audit").length, 1, "no duplicate options");
+
+/* -------------------------- governing documents by entity ------------------ */
+
+const labels = (audience: Parameters<typeof documentCategoryOptions>[1]) => documentCategoryOptions([], audience).map((option) => option.label);
+assert.ok(labels({ corporation: false }).includes("Constitution") && labels({ corporation: false }).includes("Bylaws"), "a society keeps its constitution and bylaws");
+assert.ok(!labels({ corporation: false }).includes("Articles of incorporation"), "a society is not offered articles of incorporation");
+assert.ok(labels({ corporation: true }).includes("Articles of incorporation") && labels({ corporation: true }).includes("Certificate of incorporation"), "a corporation files articles and a certificate");
+assert.ok(labels({ corporation: true }).includes("By-laws") && !labels({ corporation: true }).includes("Constitution"), "a corporation has by-laws, not a constitution");
+assert.ok(labels({ corporation: true, bcCompany: true }).includes("Articles") && !labels({ corporation: true, bcCompany: true }).some((label) => /by-?laws/i.test(label)), "a BC company has articles only");
+assert.ok(documentCategoryOptions(["Constitution"], { corporation: true }).some((option) => option.value === "Constitution"), "a category in use is never hidden");
+assert.equal(normalizeDocumentCategory("Articles of Incorporation"), "ArticlesOfIncorporation");
+assert.equal(governanceSlotForCategory("ArticlesOfIncorporation", { corporation: true }), "constitutionDocId");
+assert.equal(governanceSlotForCategory("CertificateOfIncorporation", { corporation: true }), "constitutionDocId");
+assert.equal(governanceSlotForCategory("Bylaws", { corporation: true, bcCompany: true }), undefined);
+assert.equal(governanceSlotForCategory("Constitution", { corporation: false }), "constitutionDocId");
+assert.equal(governanceSlotForCategory("CertificateOfIncorporation", { corporation: false }), undefined);
+assert.equal(governanceSlotForCategory("Minutes", { corporation: true }), undefined);
 
 /* ------------------------------ review status ----------------------------- */
 

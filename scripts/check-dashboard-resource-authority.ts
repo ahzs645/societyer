@@ -59,7 +59,8 @@ await test.run(async ctx => {
   const scoped = { ...portable, principal: { kind: "service" as const, runtime: "test" as const, assurance: "trusted-internal" as const, subject: "dashboard-service", actorUserId: String(fixture.users.Owner), societyId: String(fixture.societyId), scopes: ["society:read", "meetings:read"] } };
   const service = await summaryPortable(scoped, { societyId: String(fixture.societyId) });
   assert.equal(service.upcomingMeetings.length, 1); assert.equal(service.counts.members, 0); assert.deepEqual(service.board, []); assert.deepEqual(service.openTasks, []); assert.deepEqual(service.complianceFlags, []); assert.deepEqual(service.evidenceChains, []);
-  assert.deepEqual(service.readAccess, ["meetings:read"]);
+  // society:read gates the dashboard itself, so it is always reported (the setup guide's profile step uses it).
+  assert.deepEqual(service.readAccess, ["society:read", "meetings:read"]);
   assert.equal((await navCountsPortable(scoped, { societyId: String(fixture.societyId) })).openTasks, 0);
   await assert.rejects(() => summaryPortable({ ...scoped, principal: { ...scoped.principal, scopes: ["meetings:read"] } }, { societyId: String(fixture.societyId) }), /Service scope society:read required/);
   let membershipReads = 0;

@@ -364,26 +364,19 @@ select.select:hover:not(:disabled) {
 }
 .field__lock svg { width: 10px; height: 10px; }
 
-/* Icon-only lock affordance: hidden at rest, fades in on field hover/focus.
- * Keeps the affordance discoverable without cluttering the label row. */
+/* Lock affordance: a quiet "Edit" pill that is always visible (a hover-only
+ * icon could not be found or tapped on touch screens). The confirmation it
+ * opens explains the legal consequences before the field unlocks. */
 .field__lock--icon {
-  width: 20px;
-  height: 20px;
-  padding: 0;
+  min-height: 20px;
+  padding: 1px 6px;
   justify-content: center;
   border-radius: token('r-sm');
   background: transparent;
   border-color: transparent;
-  opacity: 0;
-  pointer-events: none;
 }
 .field__lock--icon svg { width: 12px; height: 12px; }
-.field--lockable:hover .field__lock--icon,
-.field--lockable:focus-within .field__lock--icon,
-.field__lock--icon:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
+.field__lock-text { line-height: 1; }
 .field__lock--icon:hover {
   background: token('bg-hover-alpha');
   color: token('text-primary');

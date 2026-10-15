@@ -16,7 +16,9 @@ import { buildPrivacyPolicyDraft, privacyPolicyDraftTitle, privacyPolicyDraftTag
  */
 
 import { assertValid, validateDocumentInput } from "../recordValidation";
-import { isInternalDocumentRecord, normalizeDocumentCategory } from "../documentCategories";
+import { governanceSlotForCategory, isInternalDocumentRecord, normalizeDocumentCategory } from "../documentCategories";
+import { isCorporation } from "../organizationDomain";
+import { legalGovernanceProfile } from "../legalGovernanceProfiles";
 import { normalizeDocumentReviewStatus, storedDocumentReviewStatus } from "../documentReviewStatus";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
@@ -417,15 +419,36 @@ export async function createPortable(
   if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   if (args.agendaItemId) await getOwned(ctx, "agendaItems", args.agendaItemId, args.societyId);
   assertValid(validateDocumentInput(args));
-  return ctx.db.insert("documents", {
+  const category = normalizeDocumentCategory(args.category);
+  const documentId = await ctx.db.insert("documents", {
     ...args,
-    category: normalizeDocumentCategory(args.category),
+    category,
     ...(args.reviewStatus !== undefined ? { reviewStatus: storedDocumentReviewStatus(args.reviewStatus) } : {}),
     title: args.title.trim(),
     tags: uniqueStrings(args.tags),
     createdAtISO: new Date().toISOString(),
     flaggedForDeletion: false,
   });
+  await fillEmptyGovernanceSlot(ctx, args.societyId, documentId, category);
+  return documentId;
+}
+
+/**
+ * The first governing document uploaded under its category (articles or the
+ * certificate they come with, a constitution, bylaws) goes on file on the
+ * organization profile, so "Articles: Missing" and the setup and dashboard
+ * document checks clear. A document already on file is never replaced; the
+ * BC Registry import keeps its own replace option.
+ */
+async function fillEmptyGovernanceSlot(ctx: PortableMutationCtx, societyId: string, documentId: string, category: string) {
+  const society = await ctx.db.get<any>(societyId, "societies");
+  if (!society) return;
+  const slot = governanceSlotForCategory(category, {
+    corporation: isCorporation(society),
+    bcCompany: legalGovernanceProfile(society)?.id === "bc_company",
+  });
+  if (!slot || society[slot]) return;
+  await ctx.db.patch(societyId, { [slot]: documentId, updatedAt: Date.now() });
 }
 
 function uniqueStrings(values: string[]) {

@@ -22,11 +22,32 @@ export type KnownDocumentCategory = {
   /** Offered in the "New document" category picker. */
   pickable?: boolean;
   aliases?: string[];
+  /** Offered only to these kinds of organization (all when absent). */
+  entities?: readonly DocumentCategoryEntity[];
+  /** Wording for a corporation, when it differs ("By-laws"). */
+  corporationLabel?: string;
 };
 
+export type DocumentCategoryEntity = "society" | "corporation" | "bc_company";
+
+/**
+ * Who the category list is for: a society keeps its constitution and bylaws;
+ * a corporation files articles and a certificate of incorporation (a BC
+ * company has articles only, no by-laws).
+ */
+export type DocumentCategoryAudience = { corporation?: boolean; bcCompany?: boolean };
+
+function audienceEntity(audience?: DocumentCategoryAudience): DocumentCategoryEntity | undefined {
+  if (!audience) return undefined;
+  if (audience.bcCompany) return "bc_company";
+  return audience.corporation ? "corporation" : "society";
+}
+
 export const KNOWN_DOCUMENT_CATEGORIES: readonly KnownDocumentCategory[] = [
-  { key: "Constitution", label: "Constitution", tone: "accent", pickable: true },
-  { key: "Bylaws", label: "Bylaws", tone: "accent", pickable: true, aliases: ["bylaw", "by-laws", "by laws"] },
+  { key: "Constitution", label: "Constitution", tone: "accent", pickable: true, entities: ["society"] },
+  { key: "ArticlesOfIncorporation", label: "Articles of incorporation", tone: "accent", pickable: true, entities: ["corporation", "bc_company"], aliases: ["articles", "articles of incorporation"] },
+  { key: "CertificateOfIncorporation", label: "Certificate of incorporation", tone: "accent", pickable: true, aliases: ["certificate of incorporation", "incorporation certificate"] },
+  { key: "Bylaws", label: "Bylaws", corporationLabel: "By-laws", tone: "accent", pickable: true, entities: ["society", "corporation"], aliases: ["bylaw", "by-laws", "by laws"] },
   { key: "Minutes", label: "Minutes", tone: "success", pickable: true, aliases: ["meeting minutes"] },
   { key: "FinancialStatement", label: "Financial statement", tone: "warn", pickable: true, aliases: ["financial statements", "financial-statements"] },
   { key: "Policy", label: "Policy", tone: "info", pickable: true, aliases: ["policies"] },
@@ -87,9 +108,9 @@ export function documentCategoryGroupKey(value: unknown) {
   return knownDocumentCategory(normalized) ? normalized : `custom:${categoryMatchKey(normalized)}`;
 }
 
-export function documentCategoryLabel(value: unknown) {
+export function documentCategoryLabel(value: unknown, audience?: DocumentCategoryAudience) {
   const known = knownDocumentCategory(value);
-  if (known) return known.label;
+  if (known) return knownCategoryLabel(known, audience);
   const raw = String(value ?? "").replace(/\s+/g, " ").trim();
   if (!raw) return "Other";
   // Humanize CamelCase or kebab-case keys from imports ("MeetingPackage", "meeting-package").
@@ -112,28 +133,58 @@ export function isInternalDocumentRecord(doc: any) {
   return isInternalDocumentCategory(doc.category) || tags.some((tag: string) => INTERNAL_TAGS.includes(tag));
 }
 
-/** Categories for a picker: the known pickable ones plus any category already in use. */
-export function documentCategoryOptions(inUse: Iterable<unknown> = []) {
+function knownCategoryLabel(category: KnownDocumentCategory, audience?: DocumentCategoryAudience) {
+  const entity = audienceEntity(audience);
+  if (category.key === "ArticlesOfIncorporation" && entity === "bc_company") return "Articles";
+  if (category.corporationLabel && (entity === "corporation" || entity === "bc_company")) return category.corporationLabel;
+  return category.label;
+}
+
+/**
+ * Categories for a picker: the known pickable ones for this kind of
+ * organization, plus any category already in use (so nothing in use is ever
+ * hidden, whatever its wording).
+ */
+export function documentCategoryOptions(inUse: Iterable<unknown> = [], audience?: DocumentCategoryAudience) {
+  const entity = audienceEntity(audience);
   const options = new Map<string, { value: string; label: string }>();
   for (const category of KNOWN_DOCUMENT_CATEGORIES) {
-    if (category.pickable) options.set(documentCategoryGroupKey(category.key), { value: category.key, label: category.label });
+    if (!category.pickable || (entity && category.entities && !category.entities.includes(entity))) continue;
+    options.set(documentCategoryGroupKey(category.key), { value: category.key, label: knownCategoryLabel(category, audience) });
   }
   for (const value of inUse) {
     if (isInternalDocumentCategory(value)) continue;
     const key = documentCategoryGroupKey(value);
-    if (!options.has(key)) options.set(key, { value: normalizeDocumentCategory(value), label: documentCategoryLabel(value) });
+    if (!options.has(key)) options.set(key, { value: normalizeDocumentCategory(value), label: documentCategoryLabel(value, audience) });
   }
   return [...options.values()];
 }
 
+/**
+ * The profile slot a governing document fills when it is uploaded under its
+ * category: articles (or the certificate they come with) and a society's
+ * constitution are the formation document; bylaws are bylaws.
+ */
+export function governanceSlotForCategory(value: unknown, audience: DocumentCategoryAudience): "constitutionDocId" | "bylawsDocId" | undefined {
+  const key = knownDocumentCategory(value)?.key;
+  if (audience.corporation || audience.bcCompany) {
+    if (key === "ArticlesOfIncorporation" || key === "CertificateOfIncorporation") return "constitutionDocId";
+    if (key === "Bylaws" && !audience.bcCompany) return "bylawsDocId";
+    return undefined;
+  }
+  if (key === "Constitution") return "constitutionDocId";
+  if (key === "Bylaws") return "bylawsDocId";
+  return undefined;
+}
+
 /** Category facet with counts, most used first; "Other" last. */
-export function documentCategoryFacets(docs: Iterable<{ category?: unknown }>) {
+export function documentCategoryFacets(docs: Iterable<{ category?: unknown }>, audience?: DocumentCategoryAudience) {
   const facets = new Map<string, { key: string; value: string; label: string; tone: DocumentCategoryTone; count: number }>();
   for (const doc of docs) {
     const key = documentCategoryGroupKey(doc.category);
     const existing = facets.get(key);
     if (existing) existing.count += 1;
-    else facets.set(key, { key, value: normalizeDocumentCategory(doc.category), label: documentCategoryLabel(doc.category), tone: documentCategoryTone(doc.category), count: 1 });
+    else facets.set(key, { key, value: normalizeDocumentCategory(doc.category), label: documentCategoryLabel(doc.category, audience), tone: documentCategoryTone(doc.category), count: 1 });
   }
   return [...facets.values()].sort((a, b) =>
     Number(a.value === "Other") - Number(b.value === "Other") || b.count - a.count || a.label.localeCompare(b.label));

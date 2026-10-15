@@ -149,6 +149,8 @@
 @use "control-density";
 
 @use "setup-integration"; // setup summary card, setup pill states, "Back to setup" strip
+// Pages organization setup steps link to (profile locks, share register, guided setup).
+@use "setup-destinations";
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

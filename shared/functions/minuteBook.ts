@@ -20,7 +20,7 @@ import { isCorporation, type LegalEntityLike } from "../organizationDomain";
 import { todayDateOnly } from "../dateOnly";
 import { writtenResolutionView } from "./writtenResolutions";
 
-const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
+const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "ArticlesOfIncorporation", "CertificateOfIncorporation", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
 const DOCUMENT_PREVIEW_LIMIT_PER_CATEGORY = 1;
 const MEETING_RECORD_LIMIT = 5;
 const MINUTES_RECORD_LIMIT = 5;
@@ -1092,7 +1092,10 @@ function minuteBookChecks({
   // category (G-15): the society profile links the constitution and bylaws,
   // and minutes records (or meetings with linked minutes) evidence minutes.
   const categorySet = new Set(binderDocuments.map((doc) => doc.category));
-  const constitutionOnFile = categorySet.has("Constitution") || Boolean(society?.constitutionDocId);
+  // A corporation's articles may be filed under their own category (or come
+  // attached to the certificate of incorporation, as federal articles do).
+  const constitutionOnFile = categorySet.has("Constitution") || Boolean(society?.constitutionDocId) ||
+    (isCorporation(society) && (categorySet.has("ArticlesOfIncorporation") || categorySet.has("CertificateOfIncorporation")));
   const bylawsOnFile = categorySet.has("Bylaws") || Boolean(society?.bylawsDocId);
   const minutesOnFile = categorySet.has("Minutes") || minutes.length > 0 || meetings.some((meeting) => meeting.minutesId);
   const coreDocuments = coreBinderDocuments(society);

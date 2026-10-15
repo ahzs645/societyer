@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { usePrompt } from "./Modal";
 import { Tooltip } from "./Tooltip";
+import { useScrollOverflow } from "../hooks/useScrollOverflow";
 
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
@@ -571,6 +572,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     ref,
   ) {
     const editorHostRef = useRef<HTMLDivElement | null>(null);
+    // Phones scroll the toolbar sideways; fade whichever edge has buttons out of sight.
+    const toolbarRef = useRef<HTMLDivElement | null>(null);
+    const toolbarOverflow = useScrollOverflow(toolbarRef);
     const crepeRef = useRef<Crepe | null>(null);
     const pendingFocusRef = useRef(false);
     const pendingMarkdownRef = useRef<string | undefined>(undefined);
@@ -957,7 +961,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid || undefined}
       >
-        <div className="markdown-editor__toolbar" role="toolbar" aria-label="Formatting">
+        <div ref={toolbarRef} className="markdown-editor__toolbar" role="toolbar" aria-label="Formatting" data-overflow={toolbarOverflow}>
           {TOOLBAR_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = item.isActive(active);

@@ -1,0 +1,99 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Pages that organization setup steps link to: the profile, documents,
+// corporation people, the share register and guided setup. Touch sizes
+// follow _control-density (32/36px boxes with a 44px hit area).
+// ============================================================
+
+// ------------------------------------------------ profile: field locks
+@media (pointer: coarse) {
+  .field__lock {
+    position: relative;
+    min-height: token('control-h-touch-icon');
+    padding-inline: 10px;
+    font-size: token('fs-xs');
+    @include tap-area;
+  }
+}
+
+// ---------------------------------------- profile: governance documents
+// The last column is an Upload / Open action, sized to its button.
+.society-doc-table th:last-child,
+.society-doc-table td.society-doc-table__action {
+  width: 1px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+// ------------------------------------------- corporation people register
+// Missing roles are buttons that open the add form; recorded ones are badges.
+.role-register-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-2');
+}
+
+// ---------------------------------------------------------- share register
+// Long voting text wraps on wide screens instead of widening the table.
+.rights-ledger-table td.rights-ledger-table__wrap {
+  min-width: 220px;
+  max-width: 420px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  // Stacked cards (table--stack-mobile): actions sit under the details,
+  // left-aligned and on screen.
+  .table.rights-ledger-table td.rights-ledger-table__wrap {
+    min-width: 0;
+    max-width: none;
+  }
+  .rights-ledger-table__actions .row {
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+  }
+}
+
+// ------------------------------------------------------------ guided setup
+.society-create__step-count {
+  display: block;
+}
+@media (pointer: coarse) {
+  .society-create__back,
+  .society-create__cancel,
+  .society-create__link,
+  .society-create__edit {
+    position: relative;
+    min-height: token('control-h-touch-icon');
+    @include tap-area;
+  }
+  .society-create__back {
+    min-height: token('control-h-touch');
+  }
+  // "Edit" and "Change" sit at the end of a summary row: keep the box compact
+  // and let the hit area do the work.
+  .society-create__edit {
+    @include inline-flex-center;
+    padding-inline: 10px;
+  }
+  // The whole label row is the checkbox's tap area.
+  .society-create .checkbox {
+    min-height: token('tap-target');
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+  }
+  .society-create .select-trigger {
+    min-height: token('control-h-touch');
+  }
+  .app-setup__title-row .info-popover__trigger,
+  .society-create .info-popover__trigger {
+    position: relative;
+    @include tap-area;
+  }
+}

@@ -160,7 +160,7 @@ function LocalStorageOption({
                 </ul>
               </InfoPopover>
             </div>
-            <span className="card__subtitle">Best for one society with one or two officers.</span>
+            <span className="card__subtitle">Best for a small organization with one or two people keeping the records.</span>
           </div>
         </div>
       </div>
