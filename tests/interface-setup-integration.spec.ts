@@ -63,9 +63,9 @@ test("summary card, setup pill and the back-to-setup bar follow one setup checkl
     expect(barBox!.height).toBeLessThanOrEqual(64);
   }
   await fits(page);
-  await page.getByRole("button", { name: "New", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Director", exact: true }).click();
+  // `?role=director` opens the add form with the role already chosen.
   const drawer = page.getByRole("dialog", { name: "New role holder", exact: true });
+  await expect(drawer).toBeVisible();
   await drawer.getByLabel("Full name", { exact: true }).fill("Avery First Director");
   await drawer.getByRole("button", { name: "Save", exact: true }).click();
   await expect(drawer).toHaveCount(0);
