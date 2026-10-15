@@ -116,6 +116,7 @@ export const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Policies": "nav.policies",
   "Portfolio": "nav.portfolio",
   "Post-incorporation": "nav.postIncorporation",
+  Setup: "nav.organizationSetup",
   "Records archive": "nav.recordsArchive",
   "Research library": "nav.researchLibrary",
   "Rights ledger": "nav.rightsLedger",
