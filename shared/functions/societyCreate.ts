@@ -174,15 +174,18 @@ export async function createWorkspacePortable(
     createdByUserId: ownerUserId,
   });
 
+  // One "Finish setting up {name}" task that points at the setup page, which
+  // computes every step from the records. Workspaces created earlier keep
+  // their "workspace-onboarding" tasks; this tag tells the two apart.
   const taskIds: string[] = [];
-  for (const task of buildWorkspaceOnboardingTasks(args)) {
+  for (const task of buildWorkspaceOnboardingTasks({ ...args, name })) {
     taskIds.push(await ctx.db.insert("tasks", {
       societyId,
       workflowId,
       ...task,
       status: "Todo",
       priority: task.priority,
-      tags: ["workspace-onboarding", ...task.tags],
+      tags: task.tags,
       createdAtISO: now,
     }));
   }

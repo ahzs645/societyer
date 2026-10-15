@@ -21,10 +21,11 @@ const created = await client.mutation("society:createWorkspace", {
 
 await verifyFixtureFormation(client, created.societyId, "2025-02-10");
 
-assert.equal(created.taskIds.length, 5);
+// New workspaces get one task that points at the setup page.
+assert.equal(created.taskIds.length, 1);
 
 const tasks = await client.query("tasks:list", { societyId: created.societyId });
-assert.ok(tasks.some((task: any) => task.title.includes("Corporations Canada")));
+assert.ok(tasks.some((task: any) => task.title === "Finish setting up Northstar Federal Holdings Inc."));
 assert.equal(tasks.some((task: any) => task.description.includes("BC Registry")), false);
 
 const [workspace] = await client.query("society:list", {});
