@@ -4,10 +4,110 @@ import { hasPermission, requirePermissionPortable, type Permission } from "./per
 import { requireDocumentAccess } from "./documents";
 import { getPathway, resolvePathway } from "../pathways/registry";
 import { activePipelineApprovals, canonicalPipelineJson, evaluatePipeline, pipelineAncestors, pipelineSha256, validatePipelineGraph, validatePipelineInputs, type PipelineGraph, type PipelineInputs, type PipelineNode, type PipelineStep } from "../pathways/pipeline";
+import { effectivePathwayInputs, pathwayWorkspaceDefaults, readPathwayInputSources, type PathwayInputSource, type PathwayWorkspaceFacts } from "../pathways/workspaceDefaults";
+import { organizationEntityType } from "../organizationDomain";
+import { readOnboardingAnswersJson } from "../onboarding";
 
-type Run = PortableDoc & { societyId: string; pathwayKey: string; pathwayVersion: string; pathwayTitle: string; graph: PipelineGraph; inputs: PipelineInputs; inputsFrozen: boolean; createdByUserId: string; status: string };
+type Run = PortableDoc & {
+  societyId: string; pathwayKey: string; pathwayVersion: string; pathwayTitle: string; graph: PipelineGraph; inputs: PipelineInputs; inputsFrozen: boolean; createdByUserId: string; status: string;
+  inputSourcesJson?: string;
+  /** Derived on load: what the user saved in an open run, and where each effective input came from. */
+  savedInputs?: PipelineInputs; inputSources?: Record<string, PathwayInputSource>;
+};
 type Step = PortableDoc & PipelineStep;
 const now = () => new Date().toISOString();
+
+/** Roles that may record a preparation review. */
+const REVIEWER_ROLES = ["Owner", "Admin", "Director"];
+/** The statement a solo reviewer confirms; stored verbatim on the step and in the run history. */
+export const SELF_REVIEW_CONFIRMATION = "No one else can review this; I've checked it myself";
+
+async function canRead(ctx: PortableQueryCtx, societyId: string, permission: Permission) {
+  try { await requirePermissionPortable(ctx, societyId, permission); return true; }
+  catch (error) {
+    if (error instanceof Error && /^(?:Permission|Service scope) [a-zA-Z]+:read required\.$/.test(error.message)) return false;
+    throw error;
+  }
+}
+
+/**
+ * Workspace facts a pathway can use as input defaults, read only from this
+ * workspace's rows and only from registers the viewer may read.
+ */
+async function workspaceFacts(ctx: PortableQueryCtx, societyId: string): Promise<PathwayWorkspaceFacts> {
+  const society = await ctx.db.get(societyId, "societies");
+  const isSociety = organizationEntityType(society).includes("society");
+  if (!society) return { society: isSociety };
+  const [profile, directors, controllers, records] = await Promise.all((["society:read", "directors:read", "settings:read", "documents:read"] as Permission[]).map((permission) => canRead(ctx, societyId, permission)));
+  const own = (rows: Record<string, any>[]): any[] => rows.filter((row) => String(row.societyId) === String(societyId));
+  const bySociety = async (table: string) => own(await ctx.db.query(table).withIndex("by_society", (q) => q.eq("societyId", societyId)).collect());
+  const roles = async (roleType: string) => own(await ctx.db.query("roleHolders").withIndex("by_society_role", (q) => q.eq("societyId", societyId).eq("roleType", roleType)).collect());
+  let setupClassDetails: string | undefined;
+  try { setupClassDetails = readOnboardingAnswersJson(society.onboardingAnswersJson)?.classDetails; } catch { setupClassDetails = undefined; }
+  return {
+    society: isSociety,
+    ...(profile ? {
+      profile: { name: society.name, numbered: society.numbered, registeredOfficeAddress: society.registeredOfficeAddress, purposes: society.purposes },
+      addresses: await bySociety("organizationAddresses"),
+      setupClassDetails,
+    } : {}),
+    ...(records ? { recordsLocations: await bySociety("recordsLocation"), rightsClasses: await bySociety("rightsClasses") } : {}),
+    ...(directors ? isSociety
+      ? { societyDirectors: own(await ctx.db.query("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect()) }
+      : { roleHolders: await roles("director") } : {}),
+    ...(controllers && !isSociety ? { controllers: await roles("controller") } : {}),
+  };
+}
+
+/** An open run uses what the user saved, else the workspace default; a frozen run uses its snapshot. */
+async function withEffectiveInputs(ctx: PortableQueryCtx, run: Run, facts?: PathwayWorkspaceFacts) {
+  if (run.inputsFrozen) { run.inputSources = readPathwayInputSources(run.inputSourcesJson); return run; }
+  run.savedInputs = run.inputs;
+  const { inputs, sources } = effectivePathwayInputs(run.graph, run.inputs, pathwayWorkspaceDefaults(run.graph, facts ?? await workspaceFacts(ctx, run.societyId)));
+  run.inputs = validatePipelineInputs(run.graph, inputs);
+  run.inputSources = sources;
+  return run;
+}
+
+/** The first recorded transition copies the effective inputs, with their sources, into the run. */
+async function freezeInputs(ctx: PortableMutationCtx, run: Run, actorId: string) {
+  if (run.inputsFrozen) return;
+  const sources = run.inputSources ?? {};
+  await ctx.db.patch(run._id, { inputs: run.inputs, inputsFrozen: true, inputSourcesJson: canonicalPipelineJson(sources) });
+  const fromWorkspace = Object.fromEntries(Object.entries(sources).flatMap(([key, source]) => source.kind === "workspace" ? [[key, source.label]] : []));
+  if (Object.keys(fromWorkspace).length) await audit(ctx, run, actorId, "inputs.frozen", { inputsSha256: await pipelineSha256(canonicalPipelineJson(run.inputs)), fromWorkspace });
+  run.inputsFrozen = true;
+}
+
+/** Whether a membership could record this review: active, a reviewer role, the permission, and a live identity. */
+async function eligibleReviewer(ctx: PortableQueryCtx, societyId: string, user: Record<string, any> | null | undefined, permission: Permission) {
+  if (!user || String(user.societyId) !== String(societyId) || !isActiveMembership(user) || !REVIEWER_ROLES.includes(String(user.role)) || !hasPermission(String(user.role), permission)) return false;
+  if (user.externalIdentityId) {
+    const identity = await ctx.db.get(user.externalIdentityId, "externalIdentities");
+    if (!identity || identity.status !== "Active") return false;
+  }
+  return true;
+}
+
+/** Other members of the run's workspace who could record the review instead of `userId`. */
+async function otherEligibleReviewers(ctx: PortableQueryCtx, societyId: string, userId: string, permission: Permission) {
+  const users = await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  let count = 0;
+  for (const user of users) if (String(user._id) !== String(userId) && await eligibleReviewer(ctx, societyId, user, permission)) count += 1;
+  return count;
+}
+
+/**
+ * Four-eyes by default. The person who started the run may review it only
+ * when no one else in the workspace could, and (to approve) only after
+ * confirming the self-review statement. Checked again at every review.
+ */
+async function requireReviewSeparation(ctx: PortableQueryCtx, run: Run, node: PipelineNode, actor: Record<string, any>, confirmSelfReview: boolean | undefined) {
+  if (node.approval?.distinctInitiator === false || actor._id !== run.createdByUserId) return false;
+  if (await otherEligibleReviewers(ctx, run.societyId, actor._id, node.approval?.permission ?? "documents:write") > 0) throw new Error("An independent reviewer must review this preparation; the initiator cannot self-approve while someone else in the workspace can review it.");
+  if (confirmSelfReview !== true) throw new Error(`No one else in this workspace can review this preparation. To review it yourself, confirm: ${SELF_REVIEW_CONFIRMATION}.`);
+  return true;
+}
 
 async function audit(ctx: PortableMutationCtx, run: Run, actorId: string, event: string, detail: unknown, nodeKey?: string) {
   await ctx.db.insert("pathwayAudit", { societyId: run.societyId, runId: run._id, event, ...(nodeKey ? { nodeKey } : {}), actorUserId: actorId, atISO: now(), detailJson: canonicalPipelineJson(detail) });
@@ -29,7 +129,7 @@ async function actorStillAuthorized(ctx: PortableQueryCtx, societyId: string, ac
   return actor;
 }
 
-async function loadRun(ctx: PortableQueryCtx, runId: string, permission: Permission = "tasks:write") {
+async function loadRun(ctx: PortableQueryCtx, runId: string, permission: Permission = "tasks:write", facts?: PathwayWorkspaceFacts) {
   const candidate = await ctx.db.get<Run>(runId, "pathwayRuns");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("Pipeline run not found.");
   const actor = await requirePermissionPortable(ctx, candidate.societyId, permission);
@@ -41,6 +141,7 @@ async function loadRun(ctx: PortableQueryCtx, runId: string, permission: Permiss
   const selected = resolvePathway(society);
   if (!selected.allowed || selected.pathway?.key !== run.pathwayKey || getPathway(run.pathwayKey)?.version !== run.pathwayVersion || canonicalPipelineJson(run.graph) !== canonicalPipelineJson(getPathway(run.pathwayKey)?.pipeline)) throw new Error("The registered pathway or organization classification changed. Start a reviewed current run.");
   await actorStillAuthorized(ctx, run.societyId, run.createdByUserId, "tasks:write");
+  await withEffectiveInputs(ctx, run, facts);
   return { run, actor, steps: await rowsForRun(ctx, run) };
 }
 
@@ -105,7 +206,8 @@ export async function requireCurrentSubmissionApproval(ctx: PortableQueryCtx, ru
     const step = steps.find(entry => entry.nodeKey === node.key)!;
     if (step.state !== "approved" || !step.approvedByUserId) throw new Error("Submission requires current preparation approval.");
     const approver = await actorStillAuthorized(ctx, run.societyId, step.approvedByUserId, node.approval?.permission ?? "documents:write");
-    if (!["Owner", "Admin", "Director"].includes(String(approver.role)) || (node.approval?.distinctInitiator !== false && step.approvedByUserId === run.createdByUserId)) throw new Error("Submission approval authority is invalid.");
+    const recordedSelfReview = step.selfReviewedByUserId === step.approvedByUserId && step.selfReviewConfirmation === SELF_REVIEW_CONFIRMATION;
+    if (!REVIEWER_ROLES.includes(String(approver.role)) || (node.approval?.distinctInitiator !== false && step.approvedByUserId === run.createdByUserId && !recordedSelfReview)) throw new Error("Submission approval authority is invalid.");
     const approved = JSON.parse(step.approvedPayloadsJson ?? "{}");
     if (approved[submissionKey] !== digest) throw new Error("The submitted payload differs from the approved snapshot.");
   }
@@ -158,25 +260,28 @@ export async function completeStepPortable(ctx: PortableMutationCtx, { runId, no
   const cleanedNotes = notes?.trim();
   if (cleanedNotes && cleanedNotes.length > 10000) throw new Error("Evidence notes are too long.");
   await ctx.db.patch(step._id, { state: "completed", ...(cleanedNotes ? { notes: cleanedNotes } : {}), ...(evidence ? { documentId, documentSnapshotJson: evidence.json, ...(evidence.version ? { documentVersionId: evidence.version._id } : {}) } : {}), completedByUserId: actor._id, updatedAtISO: now() });
-  await ctx.db.patch(runId, { inputsFrozen: true });
+  await freezeInputs(ctx, run, actor._id);
   await audit(ctx, run, actor._id, "step.evidence-recorded", { documentId: documentId ?? null, notes: cleanedNotes ?? null }, nodeKey);
   await refreshStatus(ctx, run); return null;
 }
 
-export async function approvePortable(ctx: PortableMutationCtx, args: { runId: string; nodeKey: string; notes?: string }) {
+export async function approvePortable(ctx: PortableMutationCtx, args: { runId: string; nodeKey: string; notes?: string; confirmSelfReview?: boolean }) {
   const { run, actor, steps } = await loadRun(ctx, args.runId, "documents:write");
   if (ctx.principal.kind !== "user") throw new Error("A human reviewer must record the preparation approval.");
   await checkEvidence(ctx, run, steps);
   const { node, step } = assertReady(run, steps, args.nodeKey);
   if (node.kind !== "approval") throw new Error("This step is not an approval gate.");
   await requirePermissionPortable(ctx, run.societyId, node.approval?.permission ?? "documents:write");
-  if (!["Owner", "Admin", "Director"].includes(String(actor.role))) throw new Error("A current authorized preparation reviewer is required.");
-  if (node.approval?.distinctInitiator !== false && actor._id === run.createdByUserId) throw new Error("An independent reviewer must approve this preparation; the initiator cannot self-approve.");
+  if (!REVIEWER_ROLES.includes(String(actor.role))) throw new Error("A current authorized preparation reviewer is required.");
+  const selfReview = await requireReviewSeparation(ctx, run, node, actor, args.confirmSelfReview);
+  // Freeze first: the approved digest covers the inputs the run keeps.
+  await freezeInputs(ctx, run, actor._id);
   const hashes: Record<string, string> = {};
   for (const submission of run.graph.nodes.filter(entry => entry.kind === "submission" && pipelineAncestors(run.graph, entry.key).some(ancestor => ancestor.key === node.key))) hashes[submission.key] = await pipelineSha256(payloadForSubmission(run, steps, submission.key));
-  await ctx.db.patch(step._id, { state: "approved", approvedByUserId: actor._id, approvedPayloadsJson: canonicalPipelineJson(hashes), ...(args.notes?.trim() ? { notes: args.notes.trim().slice(0, 10000) } : {}), updatedAtISO: now() });
-  await ctx.db.patch(run._id, { inputsFrozen: true });
-  await audit(ctx, run, actor._id, "review.approved", { payloadHashes: hashes, notes: args.notes ?? null }, node.key);
+  const atISO = now();
+  const selfRecord = selfReview ? { selfReviewedByUserId: actor._id, selfReviewedAtISO: atISO, selfReviewConfirmation: SELF_REVIEW_CONFIRMATION } : {};
+  await ctx.db.patch(step._id, { state: "approved", approvedByUserId: actor._id, approvedPayloadsJson: canonicalPipelineJson(hashes), ...selfRecord, ...(args.notes?.trim() ? { notes: args.notes.trim().slice(0, 10000) } : {}), updatedAtISO: atISO });
+  await audit(ctx, run, actor._id, selfReview ? "review.self-approved" : "review.approved", { payloadHashes: hashes, notes: args.notes ?? null, ...(selfReview ? { selfReview: { byUserId: actor._id, atISO, confirmation: SELF_REVIEW_CONFIRMATION, otherEligibleReviewers: 0 } } : {}) }, node.key);
   await refreshStatus(ctx, run); return null;
 }
 
@@ -188,10 +293,13 @@ export async function rejectPortable(ctx: PortableMutationCtx, args: { runId: st
   if (node.kind !== "approval") throw new Error("This step is not an approval gate.");
   await requirePermissionPortable(ctx, run.societyId, node.approval?.permission ?? "documents:write");
   if (!args.notes?.trim()) throw new Error("Record the reason for rejecting preparation.");
-  if (!["Owner", "Admin", "Director"].includes(String(actor.role)) || (node.approval?.distinctInitiator !== false && actor._id === run.createdByUserId)) throw new Error("An independent authorized reviewer is required.");
-  await ctx.db.patch(step._id, { state: "rejected", approvedByUserId: actor._id, notes: args.notes.trim().slice(0, 10000), updatedAtISO: now() });
-  await ctx.db.patch(run._id, { inputsFrozen: true });
-  await audit(ctx, run, actor._id, "review.rejected", { notes: args.notes }, node.key);
+  if (!REVIEWER_ROLES.includes(String(actor.role))) throw new Error("An independent authorized reviewer is required.");
+  // Sending your own preparation back needs no confirmation, but still only when no one else could review it.
+  const selfReview = await requireReviewSeparation(ctx, run, node, actor, true);
+  const atISO = now();
+  await ctx.db.patch(step._id, { state: "rejected", approvedByUserId: actor._id, notes: args.notes.trim().slice(0, 10000), ...(selfReview ? { selfReviewedByUserId: actor._id, selfReviewedAtISO: atISO } : {}), updatedAtISO: atISO });
+  await freezeInputs(ctx, run, actor._id);
+  await audit(ctx, run, actor._id, selfReview ? "review.self-rejected" : "review.rejected", { notes: args.notes }, node.key);
   await refreshStatus(ctx, run); return null;
 }
 
@@ -215,7 +323,7 @@ export async function requestSubmissionPortable(ctx: PortableMutationCtx, { runI
   const atISO = now();
   const submissionId = await ctx.db.insert("pathwaySubmissionOutbox", { societyId: run.societyId, runId, stepKey: nodeKey, adapterId: node.submission.adapterId, payloadJson, approvedSha256, idempotencyKey, actorId: actor._id, documentIds: [...new Set(documentIds)], status: manual ? "manual_required" : "queued", ...(node.submission.officialUrl ? { officialUrl: node.submission.officialUrl } : {}), createdAtISO: atISO, updatedAtISO: atISO });
   await ctx.db.patch(step._id, { state: manual ? "manual_required" : "queued", updatedAtISO: atISO });
-  await ctx.db.patch(runId, { inputsFrozen: true });
+  await freezeInputs(ctx, run, actor._id);
   await audit(ctx, run, actor._id, manual ? "submission.manual-handoff" : "submission.queued", { submissionId, approvedSha256, adapterId: node.submission.adapterId }, nodeKey);
   await refreshStatus(ctx, run); return submissionId;
 }
@@ -247,27 +355,59 @@ export async function statusPortable(ctx: PortableQueryCtx, { societyId }: { soc
   const resolved = resolvePathway(society);
   const runs = await ctx.db.query<Run>("pathwayRuns").withIndex("by_society", q => q.eq("societyId", societyId)).order("desc").take(30);
   const snapshots: any[] = [];
+  let facts: PathwayWorkspaceFacts | undefined;
+  const loadFacts = async () => (facts ??= await workspaceFacts(ctx, societyId));
+  const reviewerCounts = new Map<string, Promise<number>>();
+  const othersThan = (userId: string, permission: Permission) => {
+    const key = `${userId}:${permission}`;
+    if (!reviewerCounts.has(key)) reviewerCounts.set(key, otherEligibleReviewers(ctx, societyId, userId, permission));
+    return reviewerCounts.get(key)!;
+  };
+  const memberName = async (userId: string) => {
+    if (userId === actor._id) return "You";
+    const user = await ctx.db.get(userId, "users");
+    return user && String(user.societyId) === String(societyId) ? String(user.displayName ?? "").trim() || "A workspace member" : "A former member";
+  };
   for (const run of runs) {
     let inaccessible = false, authorityError: string | undefined;
     run.graph = validatePipelineGraph(run.graph); run.inputs = validatePipelineInputs(run.graph, run.inputs);
     const steps = await rowsForRun(ctx, run);
     try { await checkEvidence(ctx, run, steps); } catch (error) { inaccessible = true; authorityError = (error as Error).message; }
     if (inaccessible) { snapshots.push({ _id: run._id, pathwayKey: run.pathwayKey, pathwayVersion: run.pathwayVersion, pathwayTitle: run.pathwayTitle, status: "restricted", nodes: [], inputs: {}, inputsFrozen: true, graph: { version: 1, inputFields: [], nodes: [] }, message: authorityError }); continue; }
-    try { await loadRun(ctx, run._id, "tasks:read"); } catch (error) { authorityError = (error as Error).message; }
+    try { await loadRun(ctx, run._id, "tasks:read", run.inputsFrozen ? undefined : await loadFacts()); } catch (error) { authorityError = (error as Error).message; }
+    await withEffectiveInputs(ctx, run, run.inputsFrozen ? undefined : await loadFacts());
+    const workspaceDefaults = run.inputsFrozen ? undefined : pathwayWorkspaceDefaults(run.graph, await loadFacts());
     const submissions = await ctx.db.query("pathwaySubmissionOutbox").withIndex("by_run", q => q.eq("runId", run._id)).collect();
     const derived = evaluatePipeline(run.graph, run.inputs, steps);
     const nodes: any[] = [];
     for (const node of derived) {
       const step = steps.find(entry => entry.nodeKey === node.key)!;
-      const eligibleReviewer = !authorityError && ctx.principal.kind === "user" && ["Owner", "Admin", "Director"].includes(String(actor.role)) && hasPermission(String(actor.role), node.approval?.permission ?? "documents:write") && (node.approval?.distinctInitiator === false || actor._id !== run.createdByUserId);
+      const reviewPermission = node.approval?.permission ?? "documents:write";
+      const reviewerRole = ctx.principal.kind === "user" && REVIEWER_ROLES.includes(String(actor.role)) && hasPermission(String(actor.role), reviewPermission);
+      const fourEyes = node.kind === "approval" && node.approval?.distinctInitiator !== false;
+      const eligibleReviewer = !authorityError && reviewerRole && (!fourEyes || actor._id !== run.createdByUserId);
+      // Solo workspaces: the initiator may review only when no one else could (re-checked by approve).
+      const independentReviewers = fourEyes ? await othersThan(run.createdByUserId, reviewPermission) : undefined;
+      const canSelfReview = !authorityError && reviewerRole && fourEyes && node.state === "ready" && actor._id === run.createdByUserId && independentReviewers === 0;
+      let selfReview: Record<string, unknown> | undefined;
+      if (step.selfReviewedByUserId) {
+        const laterReviewers = await othersThan(String(step.selfReviewedByUserId), reviewPermission);
+        selfReview = {
+          byUserId: step.selfReviewedByUserId, byName: await memberName(String(step.selfReviewedByUserId)), atISO: step.selfReviewedAtISO,
+          ...(step.selfReviewConfirmation ? { confirmation: step.selfReviewConfirmation } : {}),
+          // A reviewer who joined later is a gentle suggestion, never a block.
+          secondReviewerAvailable: laterReviewers > 0,
+        };
+      }
       let approvalError: string | undefined;
       if (node.kind === "submission" && node.state === "ready") try { await requireCurrentSubmissionApproval(ctx, run, steps, node.key, await pipelineSha256(payloadForSubmission(run, steps, node.key))); } catch (error) { approvalError = (error as Error).message; }
-      nodes.push({ ...node, ...(step.notes ? { notes: step.notes } : {}), ...(step.documentId ? { documentId: step.documentId } : {}), ...(step.completedByUserId ? { completedByUserId: step.completedByUserId } : {}), ...(step.approvedByUserId ? { approvedByUserId: step.approvedByUserId } : {}), blockedReason: authorityError ?? approvalError ?? node.blockedReason, canComplete: !authorityError && node.state === "ready" && ["manual", "document"].includes(node.kind) && hasPermission(String(actor.role), "tasks:write"), canApprove: node.state === "ready" && node.kind === "approval" && eligibleReviewer, canReject: node.state === "ready" && node.kind === "approval" && eligibleReviewer, canSubmit: !authorityError && !approvalError && node.state === "ready" && node.kind === "submission" && hasPermission(String(actor.role), "tasks:write") && hasPermission(String(actor.role), "filings:submit") });
+      nodes.push({ ...node, ...(step.notes ? { notes: step.notes } : {}), ...(step.documentId ? { documentId: step.documentId } : {}), ...(step.completedByUserId ? { completedByUserId: step.completedByUserId } : {}), ...(step.approvedByUserId ? { approvedByUserId: step.approvedByUserId } : {}), ...(selfReview ? { selfReview } : {}), ...(independentReviewers !== undefined ? { independentReviewerAvailable: independentReviewers > 0 } : {}), blockedReason: authorityError ?? approvalError ?? node.blockedReason, canComplete: !authorityError && node.state === "ready" && ["manual", "document"].includes(node.kind) && hasPermission(String(actor.role), "tasks:write"), canApprove: node.state === "ready" && node.kind === "approval" && eligibleReviewer, canSelfReview, canReject: node.state === "ready" && node.kind === "approval" && (eligibleReviewer || canSelfReview), canSubmit: !authorityError && !approvalError && node.state === "ready" && node.kind === "submission" && hasPermission(String(actor.role), "tasks:write") && hasPermission(String(actor.role), "filings:submit") });
     }
     const auditRows = await ctx.db.query("pathwayAudit").withIndex("by_run", q => q.eq("runId", run._id)).order("desc").take(100);
-    snapshots.push({ ...run, nodes, submissions: submissions.map(row => ({ _id: row._id, stepKey: row.stepKey, adapterId: row.adapterId, status: row.status, createdAtISO: row.createdAtISO, officialUrl: row.officialUrl, error: row.error, receipt: row.receiptJson ? JSON.parse(row.receiptJson) : undefined, canRecordReceipt: !authorityError && actor._id === row.actorId && row.status === "manual_required" && ctx.principal.kind === "user" && hasPermission(String(actor.role), "tasks:write") && hasPermission(String(actor.role), "filings:submit") })), audit: auditRows });
+    const { inputSourcesJson: _storedSources, ...runFields } = run;
+    snapshots.push({ ...runFields, ...(workspaceDefaults ? { workspaceDefaults } : {}), nodes, submissions: submissions.map(row => ({ _id: row._id, stepKey: row.stepKey, adapterId: row.adapterId, status: row.status, createdAtISO: row.createdAtISO, officialUrl: row.officialUrl, error: row.error, receipt: row.receiptJson ? JSON.parse(row.receiptJson) : undefined, canRecordReceipt: !authorityError && actor._id === row.actorId && row.status === "manual_required" && ctx.principal.kind === "user" && hasPermission(String(actor.role), "tasks:write") && hasPermission(String(actor.role), "filings:submit") })), audit: auditRows });
   }
-  return { ...resolved, runs: snapshots, currentUserId: actor._id, canStart: resolved.allowed && Boolean(resolved.pathway?.pipeline) && hasPermission(String(actor.role), "tasks:write"), canAdvance: hasPermission(String(actor.role), "tasks:write"), canApprove: ctx.principal.kind === "user" && ["Owner", "Admin", "Director"].includes(String(actor.role)) && hasPermission(String(actor.role), "documents:write"), submissionCapabilities: [{ adapterId: "official-portal", available: false, mode: "manual", reason: "Official portal filing requires an authorized human. No automated filing is performed." }] };
+  return { ...resolved, runs: snapshots, currentUserId: actor._id, selfReviewConfirmation: SELF_REVIEW_CONFIRMATION, canStart: resolved.allowed && Boolean(resolved.pathway?.pipeline) && hasPermission(String(actor.role), "tasks:write"), canAdvance: hasPermission(String(actor.role), "tasks:write"), canApprove: ctx.principal.kind === "user" && ["Owner", "Admin", "Director"].includes(String(actor.role)) && hasPermission(String(actor.role), "documents:write"), submissionCapabilities: [{ adapterId: "official-portal", available: false, mode: "manual", reason: "Official portal filing requires an authorized human. No automated filing is performed." }] };
 }
 
 /** Trusted dispatchers call this at claim time and immediately before sending. */
