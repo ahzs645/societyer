@@ -133,6 +133,7 @@ const meetingsMergePreviewPortable = meetingMergeFns.mergePreviewPortable;
 import * as notificationsFns from "./notifications";
 import * as partyPortalsFns from "./partyPortals";
 import * as societyFns from "./society";
+import * as governingDocumentFns from "./governingDocuments";
 import * as subscriptionsFns from "./subscriptions";
 import * as transparencyFns from "./transparency";
 import * as usersFns from "./users";
@@ -785,6 +786,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "documents:create", handler: documentsFns.createPortable }),
   definePortableMutation({ name: "documents:markOpened", handler: documentsFns.markOpenedPortable }),
   definePortableMutation({ name: "documents:updateReviewStatus", handler: documentsFns.updateReviewStatusPortable }),
+  definePortableMutation({ name: "documents:updateCategory", handler: documentsFns.updateCategoryPortable }),
   definePortableMutation({ name: "documents:createPipaPolicyDraft", handler: documentsFns.createPipaPolicyDraftPortable }),
   definePortableMutation({ name: "documents:rebuildPipaPolicyDraftFromSociety", handler: documentsFns.rebuildPipaPolicyDraftFromSocietyPortable }),
   definePortableMutation({ name: "documents:createMemberDataGapMemoDraft", handler: documentsFns.createMemberDataGapMemoDraftPortable }),
@@ -1038,6 +1040,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "society:updateInventorySettings", handler: societyFns.updateInventorySettingsPortable }),
   definePortableMutation({ name: "society:updateNotificationSettings", handler: societyFns.updateNotificationSettingsPortable }),
   definePortableMutation({ name: "society:updateIntegrationSettings", handler: societyFns.updateIntegrationSettingsPortable }),
+  definePortableMutation({ name: "society:linkGoverningDocument", handler: governingDocumentFns.linkGoverningDocumentPortable }),
 
   // subscriptions
   definePortableQuery({ name: "subscriptions:plans", handler: subscriptionsFns.plansPortable }),

@@ -6587,6 +6587,22 @@
     ]
   },
   {
+    "key": "convex:documents:updateCategory",
+    "surface": "convex",
+    "name": "documents:updateCategory",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/documents.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:documents:updateDraftContent",
     "surface": "convex",
     "name": "documents:updateDraftContent",
@@ -20767,6 +20783,28 @@
     ]
   },
   {
+    "key": "convex:society:linkGoverningDocument",
+    "surface": "convex",
+    "name": "society:linkGoverningDocument",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:society:list",
     "surface": "convex",
     "name": "society:list",
@@ -29736,6 +29774,22 @@
         "table": "documents",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:documents:updateCategory",
+    "surface": "portable",
+    "name": "documents:updateCategory",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "documents",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -42382,6 +42436,28 @@
       {
         "path": "id",
         "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:society:linkGoverningDocument",
+    "surface": "portable",
+    "name": "society:linkGoverningDocument",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
         "array": false,
         "optional": false
       }

@@ -165,6 +165,10 @@ for (const [label, organization, answers] of ORGS) {
   assert.equal(stepOf(progress, "name").state, "done");
   assert.equal(stepOf(progress, "directors").state, "done", "a proposed director completes the step");
   assert.equal(stepOf(progress, "articles").state, "done");
+  // Articles linked on the profile count as prepared, with no worksheet.
+  const linked = evaluateOrganizationSetup(facts({ ...cbca, hasConstitutionDocument: true }, {}, preparingAnswers("federal_cbca")));
+  assert.equal(stepOf(linked, "articles").state, "done", "articles on file complete the articles step");
+  assert.equal(stepOf(linked, "articles").note, "Articles on file");
   assert.equal(progress.currentPhase, "prepare", "ISC is still open");
   assert.equal(progress.next?.key, "isc");
   // "Doesn't apply" needs a reason; without one it is ignored.

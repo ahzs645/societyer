@@ -16,9 +16,8 @@ import { buildPrivacyPolicyDraft, privacyPolicyDraftTitle, privacyPolicyDraftTag
  */
 
 import { assertValid, validateDocumentInput } from "../recordValidation";
-import { governanceSlotForCategory, isInternalDocumentRecord, normalizeDocumentCategory } from "../documentCategories";
-import { isCorporation } from "../organizationDomain";
-import { legalGovernanceProfile } from "../legalGovernanceProfiles";
+import { documentCategoryLabel, governanceSlotForCategory, isInternalDocumentRecord, normalizeDocumentCategory } from "../documentCategories";
+import { governingDocumentAudience, governingDocumentSlot, type GoverningDocumentField } from "../governingDocuments";
 import { normalizeDocumentReviewStatus, storedDocumentReviewStatus } from "../documentReviewStatus";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
@@ -434,21 +433,65 @@ export async function createPortable(
 }
 
 /**
- * The first governing document uploaded under its category (articles or the
- * certificate they come with, a constitution, bylaws) goes on file on the
- * organization profile, so "Articles: Missing" and the setup and dashboard
- * document checks clear. A document already on file is never replaced; the
- * BC Registry import keeps its own replace option.
+ * The first governing document uploaded or re-filed under its category
+ * (articles or the certificate they come with, a constitution, bylaws) goes on
+ * file on the organization profile, so "Articles: Missing" and the setup and
+ * dashboard document checks clear. A document already on file is never
+ * replaced (people replace it from the profile); the BC Registry import keeps
+ * its own replace option. Returns the field it filled, if any.
  */
-async function fillEmptyGovernanceSlot(ctx: PortableMutationCtx, societyId: string, documentId: string, category: string) {
+async function fillEmptyGovernanceSlot(ctx: PortableMutationCtx, societyId: string, documentId: string, category: string): Promise<GoverningDocumentField | undefined> {
   const society = await ctx.db.get<any>(societyId, "societies");
-  if (!society) return;
-  const slot = governanceSlotForCategory(category, {
-    corporation: isCorporation(society),
-    bcCompany: legalGovernanceProfile(society)?.id === "bc_company",
-  });
-  if (!slot || society[slot]) return;
+  if (!society) return undefined;
+  const slot = governanceSlotForCategory(category, governingDocumentAudience(society));
+  if (!slot || society[slot]) return undefined;
   await ctx.db.patch(societyId, { [slot]: documentId, updatedAt: Date.now() });
+  return slot;
+}
+
+/**
+ * File a document under another category. Re-filing it as a governing
+ * document fills that profile field when it is empty, as an upload does; a
+ * linked document filed away from its category stays linked (the profile
+ * notes the new category). `fillProfile: false` only re-files (Undo).
+ */
+export async function updateCategoryPortable(
+  ctx: PortableMutationCtx,
+  { id, category, fillProfile = true }: { id: string; category: string; fillProfile?: boolean },
+) {
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  const societyId = String(candidate.societyId);
+  const user = await requireSocietyMembership(ctx, societyId);
+  const document = await getOwned(ctx, "documents", id, societyId);
+  const allows = await documentAccessPredicate(ctx, societyId);
+  if (isInternalDocumentRecord(document) || !allows(document)) throw new Error("documents not found.");
+  if (!String(category ?? "").trim()) throw new Error("Choose a category.");
+  const next = normalizeDocumentCategory(category);
+  const previous = normalizeDocumentCategory(document.category);
+  if (next === document.category) return { previousCategory: previous, category: next, changed: false, filledField: null };
+  await ctx.db.patch(id, { category: next });
+  const society = await ctx.db.get<any>(societyId, "societies");
+  const label = documentCategoryLabel(next, governingDocumentAudience(society));
+  await ctx.db.insert("activity", {
+    societyId,
+    actor: user.displayName ?? "You",
+    entityType: "document",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: id,
+    action: "category-changed",
+    summary: `Filed ${document.title} as ${label}`,
+    createdAtISO: new Date().toISOString(),
+  });
+  const filledField = fillProfile ? await fillEmptyGovernanceSlot(ctx, societyId, id, next) ?? null : null;
+  return {
+    previousCategory: document.category ?? previous,
+    category: next,
+    changed: true,
+    filledField,
+    filledLabel: filledField ? governingDocumentSlot(society, filledField)?.label ?? null : null,
+  };
 }
 
 function uniqueStrings(values: string[]) {
@@ -1097,6 +1140,10 @@ export async function mergeConnectorDocumentMetadataPortable(
       sha256: args.sha256 ?? currentVersion.sha256,
       changeNote: args.changeNote ?? currentVersion.changeNote,
     });
+  }
+  // Re-filed under a governing category: fill the empty profile field.
+  if (args.category !== undefined && normalizeDocumentCategory(args.category) !== normalizeDocumentCategory(document.category)) {
+    await fillEmptyGovernanceSlot(ctx, String(document.societyId), args.documentId, args.category);
   }
 
   return { documentId: args.documentId, versionId: currentVersion?._id ?? null, reused: true };
