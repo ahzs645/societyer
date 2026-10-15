@@ -275,13 +275,14 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/employees": { icon: Briefcase, group: "people", label: "Employees", module: "employees" },
 
   // ---- Work ----
+  "/app/organization-setup": { icon: ListChecks, group: "work", label: "Setup" },
   "/app/goals": { icon: Target, group: "work", label: "Goals" },
   "/app/tasks": { icon: ListTodo, group: "work", label: "Tasks" },
   "/app/deadlines": { icon: CalendarClock, group: "work", label: "Deadlines" },
   "/app/commitments": { icon: ClipboardList, group: "work", label: "Commitments" },
   "/app/documents": { icon: FolderOpen, group: "work", label: "Documents" },
   "/app/document-catalog": { icon: FileText, group: "work", label: "Document catalog" },
-  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation", entityKinds: ["corporation"] },
+  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation", entityKinds: ["corporation", "society"] },
   "/app/library": { icon: BookOpen, group: "work", label: "Library" },
   "/app/communications": { icon: Mail, group: "work", label: "Communications", module: "communications" },
   "/app/outbox": { icon: Inbox, group: "work", label: "Outbox" },

@@ -99,5 +99,9 @@ export const ORGANIZATION_SETUP_PATH = "/app/organization-setup";
 export const SETUP_RETURN_PARAM = "setup";
 
 export function setupStepHref(to: string, key: SetupStepKey): string {
-  return `${to}${to.includes("?") ? "&" : "?"}${SETUP_RETURN_PARAM}=${encodeURIComponent(key)}`;
+  // Keep a section anchor ("/app/society#more-organization-details") after the query.
+  const hashAt = to.indexOf("#");
+  const path = hashAt === -1 ? to : to.slice(0, hashAt);
+  const hash = hashAt === -1 ? "" : to.slice(hashAt);
+  return `${path}${path.includes("?") ? "&" : "?"}${SETUP_RETURN_PARAM}=${encodeURIComponent(key)}${hash}`;
 }

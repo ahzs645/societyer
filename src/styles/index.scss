@@ -143,6 +143,8 @@
 
 @use "panels-hovercards"; // hover cards, stacked record panels, minimise dock
 
+@use "organization-setup"; // /app/organization-setup: phases, steps, next step, setup sheets
+
 // Touch control density: 32/36px controls with 44px hit areas (coarse pointers).
 @use "control-density";
 

@@ -132,6 +132,7 @@ export const NAV_TREE: readonly NavTreeConfigEntry[] = [
     i18nKey: "nav.work",
     icon: ListTodo,
     children: [
+      "/app/organization-setup",
       "/app/tasks",
       "/app/goals",
       "/app/deadlines",

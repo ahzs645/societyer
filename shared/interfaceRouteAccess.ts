@@ -8,6 +8,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/setup": "society:read",
   "/app/society": "society:read",
   "/app/organization-details": "society:read",
+  "/app/organization-setup": "society:read",
   "/app/org-history": "society:read",
   "/app/portfolio": "society:read",
   "/app/research-library": "society:read",
