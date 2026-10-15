@@ -272,6 +272,8 @@ for (const [label, organization, answers] of ORGS) {
   const answers = preparingAnswers("bc_society");
   let progress = evaluateOrganizationSetup(facts(bcSociety, { societyDirectors: 1 }, answers));
   assert.equal(progress.variant, "society_preparing");
+  assert.equal(stepOf(progress, "name").action, undefined, "societies can't use a numbered name, so no numbered-name choice");
+  assert.match(String(stepOf(progress, "name").to), /new=nameSearch/);
   assert.deepEqual(progress.phases.map((phase) => phase.title), ["Get ready to apply", "Apply to BC Registries", "After your society is incorporated", "Keep it in good standing"]);
   assert.equal(stepOf(progress, "name").title, "Reserve your society's name");
   assert.equal(stepOf(progress, "directors").state, "in_progress");

@@ -311,7 +311,8 @@ function nameStep(ctx: SetupCopyContext): SetupStepDefinition {
       key: "name", phase: "prepare",
       title: "Reserve your society's name",
       description: ctx.guided ? "Get a name approved through BC Registries before you apply." : `Check with ${ctx.registry} that the name is available before you apply.`,
-      to: "/app/formation-maintenance", actionLabel: "Choose a name", action: "choose_name",
+      // Societies can't use a numbered name, so this is a plain link.
+      to: "/app/formation-maintenance?new=nameSearch", actionLabel: "Record a name request",
     });
   }
   const description = ctx.federal && ctx.shareBased
@@ -323,7 +324,9 @@ function nameStep(ctx: SetupCopyContext): SetupStepDefinition {
     key: "name", phase: "prepare",
     title: `Choose your ${ctx.noun}'s name`,
     description,
-    to: "/app/formation-maintenance", actionLabel: "Choose a name", action: "choose_name",
+    // "Use a numbered name" sits beside this link (NameStepChoice); the link
+    // opens the name search form directly.
+    to: "/app/formation-maintenance?new=nameSearch", actionLabel: "Record a name search", action: "choose_name",
   });
 }
 
