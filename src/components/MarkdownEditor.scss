@@ -401,8 +401,18 @@
     overscroll-behavior-x: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
-    padding-right: 24px;
+  }
+  // The faded edge follows the scroll position (data-overflow from
+  // useScrollOverflow, as on tab strips), so the row reads as "swipe for
+  // more" until its last button is in view.
+  .markdown-editor__toolbar[data-overflow='end'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  }
+  .markdown-editor__toolbar[data-overflow='start'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  }
+  .markdown-editor__toolbar[data-overflow='both'] {
+    mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
   }
   .markdown-editor__toolbar::-webkit-scrollbar {
     display: none;
