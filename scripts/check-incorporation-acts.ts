@@ -169,7 +169,7 @@ for (const [act, stage] of [[albertaBca, "preparing"], [cbca, "existing"], [albe
   const saved = client.exportLocalWorkspaceSnapshot().tables.societies.find((row: any) => row._id === created.societyId)!;
   check(saved.jurisdictionCode === act.jurisdictionCode && saved.actFormedUnder === act.actFormedUnder, `${act.id}: workspace stores the catalogue setup.`);
 }
-const otherTasks = client.exportLocalWorkspaceSnapshot().tables.tasks.filter((task: any) => task.description.includes("Governing Act named at setup: Special Act"));
+const otherTasks = client.exportLocalWorkspaceSnapshot().tables.tasks.filter((task: any) => task.description.includes("Governing Act: Special Act"));
 check(otherTasks.length > 0, "Another Act: the named Act reaches the onboarding tasks.");
 
 if (problems.length) {

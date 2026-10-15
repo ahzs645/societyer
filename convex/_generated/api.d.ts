@@ -114,6 +114,7 @@ import type * as objectMetadata from "../objectMetadata.js";
 import type * as orgChartAssignments from "../orgChartAssignments.js";
 import type * as organizationDetails from "../organizationDetails.js";
 import type * as organizationHistory from "../organizationHistory.js";
+import type * as organizationSetup from "../organizationSetup.js";
 import type * as paperless from "../paperless.js";
 import type * as paperlessHelpers from "../paperlessHelpers.js";
 import type * as partyPortals from "../partyPortals.js";
@@ -313,6 +314,7 @@ declare const fullApi: ApiFromModules<{
   orgChartAssignments: typeof orgChartAssignments;
   organizationDetails: typeof organizationDetails;
   organizationHistory: typeof organizationHistory;
+  organizationSetup: typeof organizationSetup;
   paperless: typeof paperless;
   paperlessHelpers: typeof paperlessHelpers;
   partyPortals: typeof partyPortals;

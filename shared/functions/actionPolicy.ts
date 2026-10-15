@@ -7,7 +7,7 @@ import { isAllowedOption } from "../orgHubOptions";
 import { assertWorkspaceCreator } from "./society";
 
 const RESOURCE_GROUPS: Record<string, readonly string[]> = {
-  society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm"],
+  society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm", "organizationSetup"],
   members: ["members", "memberHistory", "memberGovernance", "personHistory", "peopleDirectory", "roleHolderHistory", "registerHistory", "orgChartAssignments"],
   directors: ["directors"], employees: ["employees", "remuneration"], committees: ["committees"],
   meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts"],

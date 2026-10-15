@@ -51,6 +51,7 @@ import * as constatingFns from "./constating";
 import * as corporationSettingsFns from "./corporationSettings";
 const pathwayFns = lazyHandlers(() => import("./pathways"), "pathways");
 const postIncorporationFns = lazyHandlers(() => import("./postIncorporation"), "postIncorporation");
+const organizationSetupFns = lazyHandlers(() => import("./organizationSetup"), "organizationSetup");
 import * as recordsLocationFns from "./recordsLocation";
 import * as remunerationFns from "./remuneration";
 import * as activityFns from "./activity";
@@ -392,6 +393,11 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "pathways:recordManualReceipt", handler: pathwayFns.recordManualReceiptPortable }),
   definePortableQuery({ name: "postIncorporation:checklist", handler: postIncorporationFns.checklistPortable }),
   definePortableMutation({ name: "postIncorporation:recordEvidence", handler: postIncorporationFns.recordEvidencePortable }),
+  // organizationSetup
+  definePortableQuery({ name: "organizationSetup:progress", handler: organizationSetupFns.progressPortable }),
+  definePortableMutation({ name: "organizationSetup:decideStep", handler: organizationSetupFns.decideStepPortable }),
+  definePortableMutation({ name: "organizationSetup:markSubmitted", handler: organizationSetupFns.markSubmittedPortable }),
+  definePortableMutation({ name: "organizationSetup:recordIncorporation", handler: organizationSetupFns.recordIncorporationPortable }),
 
   // recordsLocation
   definePortableQuery({ name: "recordsLocation:get", handler: recordsLocationFns.recordsLocationGet }),

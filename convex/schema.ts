@@ -78,6 +78,14 @@ export default defineSchema({
       confirmationNumber: v.optional(v.string()), notes: v.optional(v.string()),
       recordedAtISO: v.string(), recordedByUserId: v.optional(v.id("users")),
     }))),
+    // Organization setup: "Doesn't apply to us" / "Remind me later" per step,
+    // and the filing recorded with "I've filed it".
+    setupStepDecisions: v.optional(v.array(v.object({
+      stepKey: v.string(), decision: v.string(), reason: v.optional(v.string()),
+      decidedAtISO: v.string(), decidedByUserId: v.optional(v.id("users")),
+    }))),
+    filingSubmittedAtISO: v.optional(v.string()),
+    filingReference: v.optional(v.string()),
     craBnStatus: v.optional(v.string()),
     craRcStatus: v.optional(v.string()),
     gstHstStatus: v.optional(v.string()),
