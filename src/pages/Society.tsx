@@ -4,6 +4,8 @@ import { formatAddressText } from "../../shared/structuredAddress";
 import { EntitySetupFields } from "../components/EntitySetupFields";
 import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
 import { IncorporationPreparation } from "../components/IncorporationPreparation";
+import { GoverningDocumentPicker, GoverningDocumentRow, useGoverningDocumentActions } from "../features/governingDocuments/GoverningDocuments";
+import { governingDocumentSlots, type GoverningDocumentField } from "../../shared/governingDocuments";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
@@ -168,6 +170,8 @@ export function SocietyPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [importingGovernance, setImportingGovernance] = useState(false);
+  const [choosingField, setChoosingField] = useState<GoverningDocumentField | null>(null);
+  const governingActions = useGoverningDocumentActions(society);
   const [seededAddressSocietyId, setSeededAddressSocietyId] = useState<string | null>(null);
   const [autoBackfilledSocietyId, setAutoBackfilledSocietyId] = useState<string | null>(null);
   const [drawerKind, setDrawerKind] = useState<DrawerKind | null>(null);
@@ -277,6 +281,8 @@ export function SocietyPage() {
       ...(keepsEntity ? {} : { entityType: ENTITY_KIND_ENTITY_TYPES[act.entityKinds[0]], isMemberFunded: false }),
     };
   });
+  const governingSlots = governingDocumentSlots(form);
+  const choosingSlot = governingSlots.find((slot) => slot.field === choosingField);
   const missingGovernanceCount = [
     society.constitutionDocId,
     society.bylawsDocId,
@@ -786,23 +792,38 @@ export function SocietyPage() {
                     <tr>
                       <th>Document</th>
                       <th>Status</th>
-                      <th><span className="sr-only">Action</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Uploading with the matching category puts the document on file
-                        (documents:create links the first one to the profile). */}
-                    <DocTableRow
-                      label={governance.formationDocumentLabel}
-                      docId={society.constitutionDocId}
-                      uploadHref={documentUploadHref(corporate ? "ArticlesOfIncorporation" : "Constitution", corporate ? (vocab.bcCompany ? "Articles" : "Articles of incorporation") : "Constitution")}
-                    />
-                    {/* A BC company's articles take the place of separate by-laws. */}
-                    {!vocab.bcCompany && <DocTableRow label={corporate ? "By-laws" : "Bylaws"} docId={society.bylawsDocId} uploadHref={documentUploadHref("Bylaws", corporate ? "By-laws" : "Bylaws")} />}
+                    {/* Uploading or re-filing with the matching category puts the first
+                        document on file; "Choose a document" links any document here.
+                        A BC company's articles take the place of separate by-laws. */}
+                    {governingSlots.map((slot) => (
+                      <GoverningDocumentRow
+                        key={slot.field}
+                        slot={slot}
+                        docId={society[slot.field]}
+                        documents={evidenceDocuments}
+                        organization={form}
+                        canEdit={canEdit}
+                        uploadHref={documentUploadHref(slot.category, slot.categoryLabel)}
+                        onChoose={() => setChoosingField(slot.field)}
+                        onUnlink={() => { void governingActions.unlink(slot); }}
+                      />
+                    ))}
                     <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} docId={society.privacyPolicyDocId} uploadHref="/app/privacy" uploadLabel="Add" />
                   </tbody>
                 </table>
               </div>
+              <GoverningDocumentPicker
+                open={Boolean(choosingSlot)}
+                slot={choosingSlot ?? null}
+                organization={form}
+                currentDocumentId={choosingSlot ? society[choosingSlot.field] : undefined}
+                documents={evidenceDocuments}
+                onClose={() => setChoosingField(null)}
+                onChoose={(document, refile) => governingActions.choose(choosingSlot!, document, refile)}
+              />
             </div>
           </div>
 
@@ -1093,17 +1114,17 @@ function documentUploadHref(category: string, title: string) {
 function DocTableRow({ label, docId, uploadHref, uploadLabel = "Upload" }: { label: string; docId?: string; uploadHref: string; uploadLabel?: string }) {
   const present = Boolean(docId);
   return (
-    <tr>
+    <tr className="gov-doc-row">
       <td>
         <strong>{label}</strong>
+        <div className="gov-doc-row__actions">
+          {present
+            ? <Link className="btn btn--ghost btn--sm" to={`/app/documents/${docId}`} aria-label={`Open ${label}`}>Open</Link>
+            : <Link className="btn btn--sm" to={uploadHref} aria-label={`${uploadLabel} ${label}`}>{uploadLabel}</Link>}
+        </div>
       </td>
       <td>
         <Badge tone={present ? "success" : "warn"}>{present ? "On file" : "Missing"}</Badge>
-      </td>
-      <td className="society-doc-table__action">
-        {present
-          ? <Link className="btn btn--ghost btn--sm" to={`/app/documents/${docId}`} aria-label={`Open ${label}`}>Open</Link>
-          : <Link className="btn btn--sm" to={uploadHref} aria-label={`${uploadLabel} ${label}`}>{uploadLabel}</Link>}
       </td>
     </tr>
   );

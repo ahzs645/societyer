@@ -151,6 +151,7 @@
 @use "setup-integration"; // setup summary card, setup pill states, "Back to setup" strip
 // Pages organization setup steps link to (profile locks, share register, guided setup).
 @use "setup-destinations";
+@use "governing-documents"; // profile governing documents: rows, "Choose a document" picker
 
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

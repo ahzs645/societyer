@@ -1,0 +1,149 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Governing documents on the organization profile: each row says which
+// document is on file (and notes one filed under another category), with
+// Upload / Choose a document, or Open / Replace / Unlink. The picker lists
+// this workspace's documents; on phones it is the full-width bottom sheet.
+// ============================================================
+
+// Actions sit under the label: the card is a narrow column on desktop and
+// the full width of a phone, so the table never scrolls sideways.
+.table.society-doc-table {
+  // Fill the card and wrap long document titles instead of scrolling.
+  width: 100%;
+}
+.society-doc-table thead th:last-child {
+  text-align: left;
+}
+.society-doc-table .gov-doc-row td {
+  vertical-align: top;
+  padding-block: token('s-2');
+}
+.society-doc-table .gov-doc-row td:first-child {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.gov-doc-row__title,
+.gov-doc-row__note {
+  display: block;
+  margin-top: 2px;
+  font-size: token('fs-xs');
+  line-height: 1.4;
+}
+.gov-doc-row__title {
+  color: token('text-secondary');
+}
+.gov-doc-row__note {
+  color: token('warn');
+}
+.gov-doc-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: token('s-1');
+  margin-top: token('s-2');
+}
+
+// ------------------------------------------------------------ the picker
+.gov-doc-picker {
+  display: flex;
+  flex-direction: column;
+  gap: token('s-3');
+  min-width: 0;
+}
+.gov-doc-picker__intro,
+.gov-doc-picker__empty,
+.gov-doc-picker__more {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.gov-doc-picker__error {
+  margin: 0;
+  color: token('danger');
+  font-size: token('fs-sm');
+}
+.gov-doc-picker__search {
+  position: relative;
+  display: block;
+  svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: token('text-tertiary');
+    pointer-events: none;
+  }
+  .input {
+    width: 100%;
+    padding-left: 32px;
+  }
+}
+.gov-doc-picker__list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(360px, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+}
+.gov-doc-picker__option {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  min-height: token('tap-target');
+  padding: token('s-2') token('s-3');
+  cursor: pointer;
+  & + & {
+    border-top: 1px solid token('border');
+  }
+  &:hover {
+    background: token('bg-hover-alpha');
+  }
+  &.is-selected {
+    background: token('bg-selected-alpha');
+  }
+  &.is-current {
+    cursor: default;
+    opacity: 0.8;
+  }
+  input[type="radio"] {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: token('accent');
+  }
+  .badge {
+    flex-shrink: 0;
+  }
+}
+.gov-doc-picker__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.gov-doc-picker__title {
+  font-weight: token('fw-medium');
+  overflow-wrap: anywhere;
+}
+.gov-doc-picker__meta {
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+}
+.gov-doc-picker__refile {
+  padding: token('s-2') token('s-3');
+  border-radius: token('r-md');
+  background: token('bg-subtle');
+}
+@media (pointer: coarse) {
+  .gov-doc-picker__option input[type="radio"] {
+    width: 20px;
+    height: 20px;
+  }
+}

@@ -39,7 +39,8 @@ import {
   evidenceReviewStatusTone,
   normalizeDocumentReviewStatus,
 } from "../../shared/documentReviewStatus";
-import { documentCategoryLabel } from "../../shared/documentCategories";
+import { documentCategoryLabel, documentCategoryOptions, normalizeDocumentCategory } from "../../shared/documentCategories";
+import { governingDocumentAudience } from "../../shared/governingDocuments";
 import { SOURCE_VERSION_STATUSES, SOURCE_VERSION_STATUS_LABELS, type SourceVersionStatus } from "../../shared/documentVersioning";
 import {
   ArrowLeft,
@@ -73,6 +74,7 @@ export function DocumentWorkbenchPage() {
   const signatures = useQuery(api.signatures.listForEntity, documentId ? { entityType: "document", subjectId: String(documentId) } : "skip");
   const markOpened = useMutation(api.documents.markOpened);
   const updateReviewStatus = useMutation(api.documents.updateReviewStatus);
+  const updateCategory = useMutation(api.documents.updateCategory);
   const createComment = useMutation(api.documentComments.create);
   const setCommentStatus = useMutation(api.documentComments.setStatus);
   const removeComment = useMutation(api.documentComments.remove);
@@ -371,6 +373,26 @@ export function DocumentWorkbenchPage() {
           <div className="card">
             <div className="card__head"><h2 className="card__title">Document state</h2></div>
             <div className="card__body col" style={{ gap: 6 }}>
+              <Field label="Category">
+                <Select
+                  value={normalizeDocumentCategory(document.category)}
+                  disabled={!canEdit}
+                  searchable
+                  options={documentCategoryOptions([document.category], governingDocumentAudience(society))}
+                  onChange={async (value) => {
+                    if (!value || value === normalizeDocumentCategory(document.category)) return;
+                    try {
+                      const result: any = await updateCategory({ id: document._id, category: value });
+                      const label = documentCategoryLabel(result?.category ?? value, governingDocumentAudience(society));
+                      // Re-filed as a governing document: it fills the empty profile field.
+                      if (result?.filledLabel) toast.success(`${result.filledLabel} on file`, `Filed as ${label}. The organization profile now lists this document.`);
+                      else toast.success("Category saved", label);
+                    } catch (error: any) {
+                      toast.error("Could not change the category", error?.message ?? String(error));
+                    }
+                  }}
+                />
+              </Field>
               <Detail label="Added">{formatDateTime(document.createdAtISO)}</Detail>
               {provenance?.sourceDate && <Detail label="Source date">{provenance.sourceDate}</Detail>}
               <Detail label="Last opened">{document.lastOpenedAtISO ? formatDateTime(document.lastOpenedAtISO) : "Not opened"}</Detail>
