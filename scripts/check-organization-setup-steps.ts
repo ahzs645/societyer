@@ -231,7 +231,7 @@ for (const [label, organization, answers] of ORGS) {
   assert.equal(progress.variant, "corporation_preparing");
   assert.equal(progress.currentPhase, "organize");
   assert.equal(stepOf(progress, "certificate").state, "done");
-  assert.equal(stepOf(progress, "certificate").note, "Incorporated on 2026-02-01");
+  assert.equal(stepOf(progress, "certificate").note, "Incorporated on February 1, 2026");
   assert.equal(stepOf(progress, "organize").state, "in_progress", "the organize packet counts as started");
   assert.equal(phaseOf(progress, "maintain").status, "ongoing");
   // Without answers, a workspace that went through "I've filed it" keeps the preparing track.

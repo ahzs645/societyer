@@ -22,6 +22,7 @@
  *   (destination page or the registers its rule reads) and it isn't done.
  */
 
+import { formatLongDate } from "../locale";
 import type { OrganizationOnboardingAnswers } from "../onboarding";
 import {
   SETUP_PHASE_ORDER,
@@ -207,7 +208,7 @@ function stepStatus(definition: SetupStepDefinition, variant: SetupVariant, fact
       return done(parts.join(" · "));
     }
     case "certificate":
-      if (incorporated) return done(org.certificateDate ? `Incorporated on ${org.certificateDate}` : undefined);
+      if (incorporated) return done(org.certificateDate ? `Incorporated on ${formatLongDate(org.certificateDate)}` : undefined);
       return org.certificateEvidenceDocumentId ? progress("Certificate uploaded") : todo();
     case "organize": {
       const keys = ctx.bcCompany ? ["bc-organize-records"] : ["hold-organizational-meeting", "make-bylaws"];

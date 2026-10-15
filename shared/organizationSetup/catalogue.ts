@@ -15,6 +15,7 @@
  */
 
 import { jurisdictionModuleContract } from "../jurisdictionWorkspace";
+import { formatLongDate } from "../locale";
 import {
   ANOTHER_ACT_VALUE,
   incorporationActForValue,
@@ -262,7 +263,7 @@ export function setupStageLabel(organization: SetupOrganization, ctx: SetupCopyC
   switch (clean(organization.formationStatus)) {
     case "preparing": return "Getting ready to incorporate";
     case "submitted": return `Filed — waiting for ${ctx.registry}`;
-    case "incorporated": return organization.certificateDate ? `Incorporated on ${organization.certificateDate}` : "Incorporated";
+    case "incorporated": return organization.certificateDate ? `Incorporated on ${formatLongDate(organization.certificateDate)}` : "Incorporated";
     case "unverified_existing": return "Already incorporated — certificate not uploaded yet";
     default: return "Already incorporated";
   }
