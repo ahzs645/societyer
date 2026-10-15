@@ -173,6 +173,7 @@ import {
   type RailFavorite,
 } from "./SidebarNav";
 import { SetupPill } from "./SetupPill";
+import { SetupReturnBanner } from "./SetupReturnBanner";
 import { GroupBySpotlight } from "./GroupBySpotlight";
 import { Tooltip } from "./Tooltip";
 import { ShortcutHint } from "./ShortcutHint";
@@ -1895,6 +1896,7 @@ export function Layout() {
           <div className="workbench">
             <div className="workbench__panel">
               <DemoBanner />
+              <SetupReturnBanner />
               <div className="workbench__body">
                 <div className="workbench__content" ref={workbenchContentRef}>
                   <Suspense fallback={<WorkbenchPageLoader />}>

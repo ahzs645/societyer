@@ -7,19 +7,10 @@
   background: token('bg-base');
 }
 
-.organization-onboarding-panel {
-  margin: token('s-4');
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.organization-onboarding-panel__steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: token('s-4');
-  padding-left: token('s-5');
-}
-.organization-onboarding-panel__steps p {
-  margin: token('s-1') 0 0;
+// Onboarding workflows point at the setup view instead of repeating it.
+.workflow-setup-notice {
+  flex-shrink: 0;
+  margin: token('s-3') token('s-4') 0;
 }
 
 .workflow-topbar {

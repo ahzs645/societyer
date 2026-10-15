@@ -15,7 +15,9 @@ import { usePermissions } from "../hooks/usePermissions";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { InfoPopover } from "../components/InfoPopover";
-import { Field, LockedField, Badge, Drawer } from "../components/ui";
+import { Field, LockedField, Badge, Drawer, Banner } from "../components/ui";
+import { ORGANIZATION_SETUP_PATH } from "../../shared/organizationSetup/types";
+import { setupViewStepLink } from "../lib/organizationSetupLinks";
 import { Select } from "../components/Select";
 import { OptionSelect } from "../components/OptionSelect";
 import { GoverningActSelect, jurisdictionChoices } from "../components/GoverningActSelect";
@@ -77,9 +79,9 @@ export function SocietyNewPage() {
       const result = await createWorkspace(values as any);
       auth.refreshMembership(result.societyId);
       setStoredSocietyId(result.societyId);
-      toast.success("Workspace created", `${result.taskIds.length} onboarding tasks created.`);
-      // Land on the dashboard with the new organization's setup checklist.
-      navigate(`/app?welcome=${encodeURIComponent(String(result.workflowId))}`);
+      // Land on the setup view. Its one-time welcome confirms the new
+      // workspace, so no toast covers the steps on arrival (phones).
+      navigate(`${ORGANIZATION_SETUP_PATH}?welcome=1`);
     } finally { setSaving(false); }
   };
   return <GuidedOrganizationSetup onCreate={create} saving={saving} restoreCard={restoreCard} canRestore={canRestore} restoreRequested={searchParams.get("restore") === "1"} />;
@@ -513,7 +515,14 @@ export function SocietyPage() {
         }
       />
 
-      {["preparing", "submitted"].includes(form.formationStatus ?? "") && <IncorporationPreparation organization={form} />}
+      {["preparing", "submitted"].includes(form.formationStatus ?? "") && (
+        <>
+          <Banner className="society-setup-link" title={form.formationStatus === "submitted" ? "Filed and waiting for the certificate" : "Getting ready to incorporate"}>
+            Track filing and the rest of setup on one page. <Link className="setup-inline-link" to={setupViewStepLink(form.formationStatus === "submitted" ? "certificate" : "file")}>Open setup</Link>
+          </Banner>
+          <IncorporationPreparation organization={form} />
+        </>
+      )}
 
       <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="society-layout">

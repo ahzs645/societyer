@@ -38,7 +38,7 @@ export type DashboardModuleDefinition = {
 
 /** Default order and placement: the classic dashboard. */
 export const DASHBOARD_MODULES: DashboardModuleDefinition[] = [
-  { id: "setup", label: "Setup guide", description: "Checklist for getting the workspace in good standing.", placement: "full" },
+  { id: "setup", label: "Setup guide", description: "How far setup has come and the next step.", placement: "full" },
   { id: "stats", label: "Key numbers", description: "People, meetings and overdue filings at a glance.", placement: "full" },
   { id: "compliance", label: "Compliance posture", description: "Automated checks and what resolves them.", placement: "main" },
   { id: "continuity", label: "Record continuity", description: "Gaps in the meeting and filing record.", placement: "main" },

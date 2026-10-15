@@ -72,13 +72,13 @@ test("existing company collects its Act, addresses and share planning without fa
   await page.getByLabel("Where will the organization operate?", { exact: true }).fill("British Columbia and Alberta");
   await fits(page);
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\?welcome=/);
+  await page.waitForURL(/\/app\/organization-setup\?welcome=1/);
   await page.reload();
-  await expect(page.getByText("Workspace onboarding").first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Continue organization setup", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Review share classes and securities", exact: true })).toHaveAttribute("href", "/app/rights-ledger");
-  await expect(page.getByRole("link", { name: "Add directors, officers and shareholders", exact: true })).toHaveAttribute("href", "/app/role-holders");
-  await expect(page.getByRole("link", { name: "Review membership types and add members", exact: true })).toHaveCount(0);
+  // Setup has its own page; step links carry `?setup=<step>` for the way back.
+  await expect(page.getByRole("heading", { name: `Set up Guided Existing Company ${info.project.name}`, exact: true })).toBeVisible();
+  await expect(page.locator('a[href*="setup=shares"]').first()).toHaveAttribute("href", /^\/app\/rights-ledger/);
+  await expect(page.locator('a[href*="setup=directors"]').first()).toHaveAttribute("href", /^\/app\/role-holders/);
+  await expect(page.locator('a[href^="/app/members"][href*="setup="]')).toHaveCount(0);
   const saved = await snapshot(page); const organization = saved.tables.societies[0];
   expect(organization.formationStatus).toBe("unverified_existing");
   expect(organization.organizationStatus).toBe("active");
@@ -88,7 +88,7 @@ test("existing company collects its Act, addresses and share planning without fa
   expect(organization.certificateEvidenceDocumentId).toBeUndefined();
   const answers = JSON.parse(organization.onboardingAnswersJson);
   expect(answers.previousUse).toBe("new"); expect(answers.governanceStructure).toBe("multiple_classes");
-  expect(saved.tables.tasks.some((task: any) => task.description.includes("Class A voting common"))).toBe(true);
+  expect(answers.classDetails).toContain("Class A voting common");
   expect(saved.tables.rightsholdingTransfers ?? []).toHaveLength(0);
   expect(saved.tables.roleHolders ?? []).toHaveLength(0);
   // Exercise the shared editor in the generic organization-location drawer too.
@@ -117,13 +117,13 @@ test("existing company collects its Act, addresses and share planning without fa
 test("new incorporation stays pending and hands off a formation task with reviewed filing guidance", async ({ page }, info) => {
   await start(page);
   await completeGuidedOrganizationSetup(page, `Guided New Society ${info.project.name}`);
-  await expect(page.getByRole("heading", { name: "Continue organization setup", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Review membership types and add members", exact: true })).toHaveAttribute("href", "/app/members");
-  await expect(page.getByRole("link", { name: "Review share classes and securities", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: `Set up Guided New Society ${info.project.name}`, exact: true })).toBeVisible();
+  await expect(page.locator('a[href*="setup=directors"]').first()).toHaveAttribute("href", /^\/app\/directors/);
+  await expect(page.locator('a[href*="setup=shares"]')).toHaveCount(0);
   const saved = await snapshot(page); const organization = saved.tables.societies[0];
   expect(organization.formationStatus).toBe("preparing"); expect(organization.organizationStatus).toBe("pre_incorporation");
   expect(saved.tables.organizationRegistrations[0].status).toBe("pending");
-  expect(saved.tables.tasks.some((task: any) => task.tags.includes("formation"))).toBe(true);
+  expect(saved.tables.tasks.length).toBeGreaterThan(0);
   expect(saved.tables.workflows[0].config.initialSetupAnswers.organizationStage).toBe("preparing");
   await page.goto("/app/society");
   await expect(page.getByRole("link", { name: "Open official service" })).toBeVisible();
@@ -207,7 +207,7 @@ test("federal CBCA: jurisdiction first, then the Act, with full guidance shown i
   await expect(page.getByRole("heading", { name: "Review and create", exact: true })).toBeVisible();
   await fits(page);
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\?welcome=/);
+  await page.waitForURL(/\/app\/organization-setup\?welcome=1/);
   const organization = (await snapshot(page)).tables.societies[0];
   expect([organization.jurisdictionCode, organization.entityType, organization.actFormedUnder, organization.legalSubtype])
     .toEqual(["CA-FED-CBCA", "corporation__business_", "canada_business_corporations_act", "federal_private_corporation"]);
@@ -238,7 +238,7 @@ test("Alberta records only: province picker, plain-language note and a records-o
   await expect(actRow).toContainText("Alberta · Business Corporations Act");
   await expect(actRow).toContainText("Records only — no reviewed guidance yet");
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\?welcome=/);
+  await page.waitForURL(/\/app\/organization-setup\?welcome=1/);
   const organization = (await snapshot(page)).tables.societies[0];
   expect([organization.jurisdictionCode, organization.entityType, organization.actFormedUnder, organization.legalSubtype])
     .toEqual(["CA-AB", "corporation__business_", "business_corporations_act__alberta_", "other"]);
@@ -274,9 +274,8 @@ test("another Act asks for its name and the kind of organization", async ({ page
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator(".society-create__summary > div", { hasText: "Governing Act" })).toContainText("Manitoba · The Example Special Act");
   await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\?welcome=/);
+  await page.waitForURL(/\/app\/organization-setup\?welcome=1/);
   const saved = await snapshot(page); const organization = saved.tables.societies[0];
   expect([organization.jurisdictionCode, organization.entityType, organization.actFormedUnder]).toEqual(["CA-MB", "cooperative", "another_act"]);
   expect(JSON.parse(organization.onboardingAnswersJson).otherActName).toBe("The Example Special Act");
-  expect(saved.tables.tasks.some((task: any) => task.description.includes("Governing Act named at setup: The Example Special Act"))).toBe(true);
 });

@@ -148,5 +148,7 @@
 // Touch control density: 32/36px controls with 44px hit areas (coarse pointers).
 @use "control-density";
 
+@use "setup-integration"; // setup summary card, setup pill states, "Back to setup" strip
+
 // Foundations v2 (money, numeric alignment, focus, motion). Keep last.
 @use "foundations";

@@ -1,0 +1,297 @@
+@use "tokens" as *;
+@use "mixins" as *;
+
+// ============================================================
+// Organization setup outside the setup view: the Dashboard summary card,
+// the shell pill's step states, and the "Back to setup" strip.
+// ============================================================
+
+// ---------- Dashboard summary card --------------------------
+.setup-summary {
+  @include surface-card;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: token('s-3') token('s-4');
+  padding: token('s-3') token('s-3') token('s-3') token('s-4');
+}
+.setup-summary__ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.setup-summary__ring-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  font-variant-numeric: tabular-nums;
+  color: token('text-primary');
+}
+.setup-summary__main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.setup-summary__title {
+  margin: 0;
+  font-size: token('fs-md');
+  font-weight: token('fw-semibold');
+  line-height: 1.3;
+  color: token('text-primary');
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.setup-summary__meta,
+.setup-summary__next {
+  margin: 0;
+  font-size: token('fs-sm');
+  color: token('text-secondary');
+  overflow-wrap: anywhere;
+}
+.setup-summary__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 token('s-2');
+}
+.setup-summary__count {
+  font-variant-numeric: tabular-nums;
+}
+.setup-summary__status::before {
+  content: "·";
+  margin-right: token('s-2');
+  color: token('text-tertiary');
+}
+.setup-summary__next-label {
+  color: token('text-tertiary');
+}
+.setup-summary__next-link {
+  color: token('text-primary');
+  font-weight: token('fw-medium');
+  text-decoration: none;
+}
+.setup-summary__next-link:hover {
+  color: token('accent');
+  text-decoration: underline;
+}
+.setup-summary__actions {
+  @include flex-center;
+  gap: token('s-1');
+}
+.setup-summary__continue {
+  white-space: nowrap;
+}
+.setup-summary__hide {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.setup-summary__hide:hover {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+// Narrow cards: the button drops under the text, the × stays top right.
+@container dashboard (max-width: 560px) {
+  .setup-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "ring main hide"
+      "go go go";
+    align-items: start;
+  }
+  .setup-summary__ring { grid-area: ring; }
+  .setup-summary__main { grid-area: main; }
+  .setup-summary__actions { display: contents; }
+  .setup-summary__hide { grid-area: hide; }
+  .setup-summary__continue {
+    grid-area: go;
+    justify-self: stretch;
+    justify-content: center;
+  }
+}
+
+// ---------- Links into setup from other pages --------------
+.setup-filing-link {
+  margin-top: token('s-4');
+}
+.society-setup-link {
+  margin-bottom: token('s-4');
+}
+
+// ---------- Shell pill: step states -------------------------
+.setup-pop__step.is-done .setup-pop__state {
+  color: token('success');
+}
+.setup-pop__step.is-done .setup-pop__title,
+.setup-pop__step.is-not-applicable .setup-pop__title {
+  color: token('text-tertiary');
+  font-weight: token('fw-regular');
+}
+.setup-pop__step.is-not-applicable .setup-pop__title {
+  text-decoration: line-through;
+}
+.setup-pop__step.is-in-progress .setup-pop__state {
+  color: token('accent');
+}
+.setup-pop__step.is-restricted {
+  cursor: default;
+}
+.setup-pop__step.is-restricted:hover {
+  background: transparent;
+  color: token('text-secondary');
+}
+.setup-pop__optional {
+  color: token('text-tertiary');
+  font-weight: token('fw-regular');
+}
+
+// ---------- "Back to setup" strip ---------------------------
+.setup-return {
+  @include flex-center;
+  flex: none;
+  gap: token('s-2');
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px token('s-2') 4px token('s-3');
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-subtle');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+}
+.setup-return.is-done {
+  background: token('success-soft');
+}
+.setup-return__back {
+  @include inline-flex-center;
+  flex: none;
+  gap: 4px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: token('r-sm');
+  color: token('accent');
+  font-weight: token('fw-medium');
+  text-decoration: none;
+  white-space: nowrap;
+}
+.setup-return__back:hover {
+  background: token('bg-hover-alpha');
+}
+.setup-return__sep {
+  flex: none;
+  color: token('text-tertiary');
+}
+.setup-return__step {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: token('text-primary');
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-return__status {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+.setup-return__todo {
+  color: token('text-tertiary');
+}
+.setup-return__done,
+.setup-return__next {
+  @include inline-flex-center;
+  gap: 4px;
+  max-width: 100%;
+  color: token('green-11');
+  font-weight: token('fw-medium');
+}
+.setup-return__next {
+  min-width: 0;
+  text-decoration: none;
+}
+.setup-return__next > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup-return__next:hover .setup-return__next-title {
+  text-decoration: underline;
+}
+.setup-return__close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.setup-return__close:hover {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+
+// Phones: one line. The step title gives way first; "Done. Next: …" moves
+// to its own line rather than pushing the page sideways.
+@media (max-width: 640px) {
+  .setup-return {
+    flex-wrap: wrap;
+    row-gap: 0;
+    padding-left: token('s-4');
+  }
+  .setup-return__step {
+    flex: 1 1 0;
+  }
+  .setup-return:has(.setup-return__next) .setup-return__close {
+    order: 4;
+  }
+  .setup-return__status:has(.setup-return__next) {
+    order: 5;
+    flex: 1 1 100%;
+    padding-bottom: 2px;
+  }
+  .setup-return:has(.setup-return__next) .setup-return__sep--status {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .setup-return__back,
+  .setup-return__close,
+  .setup-return__next,
+  .setup-summary__hide,
+  .setup-summary__next-link {
+    position: relative;
+    @include tap-area;
+  }
+  .setup-return__close,
+  .setup-summary__hide {
+    width: token('control-h-touch-icon');
+    height: token('control-h-touch-icon');
+  }
+}
+
+// Links into setup inside banners read as links, not body text.
+.setup-inline-link {
+  color: token('accent');
+  font-weight: token('fw-medium');
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.setup-inline-link:hover {
+  color: token('accent-hover');
+}

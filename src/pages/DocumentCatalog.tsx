@@ -13,7 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
-import { IncorporationPreparation } from "../components/IncorporationPreparation";
+import { setupViewStepLink } from "../lib/organizationSetupLinks";
 import { incorporationPreparationForOrganization } from "../../shared/incorporationPreparation";
 import { incorporationWorksheetText, incorporationWorksheetFileName } from "../../shared/incorporationWorksheet";
 import { isCorporation } from "../../shared/organizationDomain";
@@ -407,10 +407,11 @@ export function DocumentCatalogPage() {
         </div>
       )}
 
-      <details className="doc-catalog-prep">
-        <summary>Incorporation preparation guide</summary>
-        <IncorporationPreparation organization={society} />
-      </details>
+      {["preparing", "submitted"].includes(society.formationStatus ?? "") && (
+        <Banner className="setup-filing-link" title="Filing the incorporation">
+          What to prepare and the official filing link are in the filing step of setup. <Link className="setup-inline-link" to={setupViewStepLink("file")}>Open the filing step</Link>
+        </Banner>
+      )}
     </div>
   );
 }
