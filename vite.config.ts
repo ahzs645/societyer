@@ -114,7 +114,10 @@ export default defineConfig({
     // Qualification observes one source snapshot; backend/codegen or traces
     // must not invalidate an authenticated browser in the middle of a test.
     hmr: frozenQualification ? false : undefined,
-    watch: frozenQualification ? null : { ignored: ["**/tmp/**", "**/artifacts/**", "**/.claude/**"] },
+    // Only this checkout's own .claude folder (agent worktrees live there):
+    // a "**/.claude/**" glob would also match every file of a dev server
+    // that is itself running inside one of those worktrees.
+    watch: frozenQualification ? null : { ignored: ["**/tmp/**", "**/artifacts/**", `${path.resolve(__dirname, ".claude")}/**`] },
     proxy: {
       "/api": {
         target: apiServerTarget,
