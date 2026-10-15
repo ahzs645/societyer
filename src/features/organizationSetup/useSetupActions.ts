@@ -1,9 +1,6 @@
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { SetupStepKey } from "../../../shared/organizationSetup/types";
-// SETUP-FALLBACK (delete at merge): local stand-ins until the organizationSetup mutations exist.
-import { SETUP_FALLBACK_ACTIVE } from "./fallback/setupFallback";
-import { fallbackSetupActions } from "./fallback/useSetupFallback";
 
 export type SetupActions = {
   /** `organizationSetup:decideStep`: "Doesn't apply to us" (needs a reason), "Remind me later", or undo (`null`). */
@@ -19,6 +16,5 @@ export function useSetupActions(): SetupActions {
   const decideStep = useMutation(api.organizationSetup.decideStep);
   const markSubmitted = useMutation(api.organizationSetup.markSubmitted);
   const recordIncorporation = useMutation(api.organizationSetup.recordIncorporation);
-  if (SETUP_FALLBACK_ACTIVE) return fallbackSetupActions; // SETUP-FALLBACK (delete at merge)
   return { decideStep, markSubmitted, recordIncorporation } as SetupActions;
 }

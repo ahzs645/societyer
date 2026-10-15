@@ -1,10 +1,10 @@
 import { useEffect, useId, useState } from "react";
 import type { SetupStepView } from "../../../shared/organizationSetup/types";
 import { Drawer } from "../../components/ui";
-import { NOT_APPLICABLE_REASONS } from "./setupCopy";
+import { SETUP_DECISION_REASON_MAX, SETUP_NOT_APPLICABLE_REASONS } from "../../../shared/organizationSetup/catalogue";
 
 const OTHER = "__other__";
-const MAX_REASON = 300;
+const MAX_REASON = SETUP_DECISION_REASON_MAX;
 
 /** "Doesn't apply to us": pick a preset reason or write one (a sheet on phones). */
 export function SkipStepDialog({
@@ -69,7 +69,7 @@ export function SkipStepDialog({
           </p>
           <fieldset className="setup-form__choices" aria-describedby={error ? errorId : undefined}>
             <legend className="setup-form__legend">Why doesn't it apply?</legend>
-            {[...NOT_APPLICABLE_REASONS, OTHER].map((value) => (
+            {[...SETUP_NOT_APPLICABLE_REASONS, OTHER].map((value) => (
               <label key={value} className={`setup-choice${choice === value ? " is-checked" : ""}`}>
                 <input
                   type="radio"

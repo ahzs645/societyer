@@ -7,9 +7,6 @@ import {
   type SetupStepKey,
   type SetupStepView,
 } from "../../../shared/organizationSetup/types";
-// SETUP-FALLBACK (delete at merge): local derivation until organizationSetup:progress exists.
-import { SETUP_FALLBACK_ACTIVE } from "./fallback/setupFallback";
-import { useFallbackOrganizationSetup } from "./fallback/useSetupFallback";
 
 /**
  * Setup progress for one workspace: phases, steps with computed state, the
@@ -18,14 +15,7 @@ import { useFallbackOrganizationSetup } from "./fallback/useSetupFallback";
  * banner. `undefined` while loading (or when `societyId` is missing).
  */
 export function useOrganizationSetup(societyId: string | null | undefined): OrganizationSetupProgress | undefined {
-  const live = useQuery(
-    api.organizationSetup.progress,
-    societyId && !SETUP_FALLBACK_ACTIVE ? { societyId } : "skip",
-  ) as OrganizationSetupProgress | undefined;
-  // SETUP-FALLBACK (delete at merge, along with `&& !SETUP_FALLBACK_ACTIVE` above).
-  const fallback = useFallbackOrganizationSetup(societyId, SETUP_FALLBACK_ACTIVE);
-  if (SETUP_FALLBACK_ACTIVE) return fallback;
-  return live;
+  return useQuery(api.organizationSetup.progress, societyId ? { societyId } : "skip") as OrganizationSetupProgress | undefined;
 }
 
 /** Every step of the progress, in phase order. */

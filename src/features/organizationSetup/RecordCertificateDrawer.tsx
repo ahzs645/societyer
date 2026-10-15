@@ -166,7 +166,7 @@ export function RecordCertificateDrawer({
         <Field label="Date on the certificate" required error={errors.date}>
           <DatePicker value={date} max={today} onChange={(value) => { setDate(value); setErrors((prev) => ({ ...prev, date: "" })); }} />
         </Field>
-        <Field label="Certificate reference" hint="Optional. Any other reference printed on the certificate.">
+        <Field label="Certificate reference" hint="Optional. If you leave it empty, the number above is used.">
           <input className="input" value={reference} maxLength={120} onChange={(event) => setReference(event.target.value)} />
         </Field>
         {errors.form && <p className="field__error" role="alert">{errors.form}</p>}

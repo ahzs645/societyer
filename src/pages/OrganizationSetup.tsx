@@ -20,7 +20,7 @@ import { SetupAnswersSummary } from "../features/organizationSetup/SetupAnswersS
 import { SkipStepDialog } from "../features/organizationSetup/SkipStepDialog";
 import { MarkFiledDrawer } from "../features/organizationSetup/MarkFiledDrawer";
 import { RecordCertificateDrawer } from "../features/organizationSetup/RecordCertificateDrawer";
-import { registryNameFor, setupStageLabel } from "../features/organizationSetup/setupCopy";
+import { setupCopyContext, setupStageLabel } from "../../shared/organizationSetup/catalogue";
 
 /** Filed with the registry, certificate not recorded yet. */
 function isWaitingForRegistry(progress: OrganizationSetupProgress | undefined) {
@@ -40,7 +40,7 @@ export function OrganizationSetupPage() {
   const canWrite = loaded && can("society:write");
   const [searchParams, setSearchParams] = useSearchParams();
   const welcome = searchParams.get("welcome") === "1";
-  const registry = registryNameFor(society);
+  const registry = society ? setupCopyContext(society).registry : "the registry";
   const disclosure = useSetupDisclosure(progress);
   const handlers = useSetupHandlers(society, registry);
   const waitingForRegistry = isWaitingForRegistry(progress);
@@ -64,7 +64,7 @@ export function OrganizationSetupPage() {
   if (society === null) return <SeedPrompt />;
 
   const today = organizationTodayISO(society);
-  const stage = progress ? setupStageLabel(progress, society) : undefined;
+  const stage = setupStageLabel(society, setupCopyContext(society));
   const currentIndex = progress ? progress.phases.findIndex((phase) => phase.key === progress.currentPhase) : -1;
   const dismissWelcome = () => {
     const next = new URLSearchParams(searchParams);
