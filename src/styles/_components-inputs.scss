@@ -26,7 +26,10 @@
   /* Bottom-right on desktop; toasts slide up into place. Clear the home
    * indicator in standalone PWA / landscape. */
   bottom: max(16px, env(safe-area-inset-bottom, 0px));
-  right: max(16px, env(safe-area-inset-right, 0px));
+  /* Beside an open inspector column, not over its footer (Save / Cancel):
+   * InspectorHost publishes --inspector-inset while one is open on desktop.
+   * A paused (hovered) toast must never sit on the button being reached for. */
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + var(--inspector-inset, 0px));
   @include flex-column;
   align-items: stretch;
   gap: 8px;
@@ -201,7 +204,7 @@
   border-radius: token('r-md');
   font-size: token('fs-xs');
   line-height: 1.4;
-  max-width: 360px;
+  max-width: min(360px, calc(100vw - 16px));
   pointer-events: none;
   box-shadow: token('elevation-2');
   animation: tooltipIn token('motion-fade') token('ease-appear');

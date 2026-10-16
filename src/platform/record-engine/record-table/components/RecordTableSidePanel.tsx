@@ -77,10 +77,16 @@ export function RecordTableSidePanel({
         .filter((column) => column.field.name !== labelIdentifierFieldName),
     [columns, labelIdentifierFieldName],
   );
+  // People records keep their name in first/last name fields; without them
+  // the panel and its minimised dock read only "Member".
+  const personName = [record?.firstName, record?.lastName].filter(Boolean).join(" ") || undefined;
   const title = String(
     record?.[labelIdentifierFieldName] ??
       record?.name ??
       record?.title ??
+      record?.displayName ??
+      record?.fullName ??
+      personName ??
       objectMetadata.labelSingular,
   );
   const initial = title.trim().charAt(0).toUpperCase() || objectMetadata.labelSingular.charAt(0);

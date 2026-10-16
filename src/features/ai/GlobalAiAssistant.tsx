@@ -34,6 +34,7 @@ import {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -51,6 +52,8 @@ import { useToast } from "../../components/Toast";
 
 import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT } from "./aiAssistantEvents";
 import { Tooltip } from "../../components/Tooltip";
+import { useDialogFocus } from "../../lib/useDialogFocus";
+import { useKeyboardInsetTracking } from "../../lib/useVisualViewportBottomInset";
 import { MarkdownTable } from "./MarkdownTable";
 export { openGlobalAiAssistant } from "./aiAssistantEvents";
 
@@ -114,6 +117,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const canReadSettings = can("settings:read");
   const canListModels = can("settings:write") && !localOnly;
   const [open, setOpen] = useState(initiallyOpen);
+  const closeAssistant = useCallback(() => setOpen(false), []);
   const actingUserId = useCurrentUserId() ?? undefined;
   const location = useLocation();
   const navigate = useNavigate();
@@ -237,14 +241,12 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, [canRead]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  // Dialog keyboard handling: Esc closes (after any menu or picker open in
+  // it), Tab stays inside, and closing returns focus to the control that
+  // opened the assistant. The composer is its first focus.
+  const shellRef = useDialogFocus<HTMLDivElement>(open && canRead, closeAssistant);
+  // The composer stays above the on-screen keyboard (CSS reads the inset).
+  useKeyboardInsetTracking(open && canRead);
 
   useEffect(() => {
     setSelectedThreadId(undefined);
@@ -467,8 +469,8 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   return (
     <>
       {open && canRead && (
-        <div className="global-ai-shell" role="dialog" aria-modal="true" aria-label="Societyer AI assistant">
-          <button className="global-ai-backdrop" type="button" aria-label="Close AI assistant" onClick={() => setOpen(false)} />
+        <div ref={shellRef} className="global-ai-shell" role="dialog" aria-modal="true" aria-label="Societyer AI assistant" tabIndex={-1}>
+          <button className="global-ai-backdrop" type="button" aria-label="Close AI assistant" tabIndex={-1} onClick={closeAssistant} />
           <aside
             className="global-ai-drawer"
             onDragEnter={handleDragEnter}
@@ -493,12 +495,12 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                   </span>
                 )}
                 <Tooltip content="AI settings">
-                  <button type="button" className="icon-btn" onClick={openSettings} disabled={!canReadSettings} aria-label="AI settings">
+                  <button type="button" className="icon-btn global-ai-icon-btn" onClick={openSettings} disabled={!canReadSettings} aria-label="AI settings">
                     <Settings size={14} />
                   </button>
                 </Tooltip>
                 <Tooltip content="Close">
-                  <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close AI assistant">
+                  <button type="button" className="icon-btn global-ai-icon-btn" onClick={closeAssistant} aria-label="Close AI assistant">
                     <PanelRightClose size={14} />
                   </button>
                 </Tooltip>
@@ -630,6 +632,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                   <div className="global-ai-composer__box">
                     <textarea
                       ref={composerRef}
+                      data-autofocus=""
                       readOnly={!canWrite || busy}
                       value={input}
                       onChange={(event) => setInput(event.target.value)}

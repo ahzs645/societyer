@@ -10,8 +10,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft } from "lucide-react";
-import { mobileMediaQuery } from "../lib/breakpoints";
+import { mobileMediaQuery, mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { useMediaQuery, useSheetDrag } from "../lib/useSheetDrag";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
+import { leaveTextFieldOnEscape } from "../lib/useDialogFocus";
 
 type HistoryEntry = { id: string; restore: () => void };
 
@@ -162,6 +164,24 @@ export function InspectorHost({ onOpenChange }: { onOpenChange?: (isOpen: boolea
     window.localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
   }, [inspectorWidth]);
 
+  // Phones and tablets: the inspector (and every drawer in it) keeps its
+  // footer above the on-screen keyboard; the CSS reads --keyboard-inset.
+  useKeyboardInsetTracking();
+
+  // Desktop: the open inspector is a column at the right edge of the page.
+  // Floating page chrome anchored bottom-right (the minimised record dock)
+  // reads --inspector-inset to sit beside the column instead of over its
+  // footer.
+  const isOverlayInspector = useMediaQuery(mobileSidebarMediaQuery);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isOpen && !isOverlayInspector) root.style.setProperty("--inspector-inset", `${inspectorWidth}px`);
+    else root.style.removeProperty("--inspector-inset");
+    return () => {
+      root.style.removeProperty("--inspector-inset");
+    };
+  }, [isOpen, isOverlayInspector, inspectorWidth]);
+
   useEffect(() => {
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
@@ -201,6 +221,9 @@ export function InspectorHost({ onOpenChange }: { onOpenChange?: (isOpen: boolea
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.key === "Escape" && isOpen) {
+        // Typing in the panel: leave the field first (it saves on blur);
+        // the next Escape closes the panel.
+        if (leaveTextFieldOnEscape(event.target, sheetRef.current)) return;
         inspector.closeActive();
         return;
       }

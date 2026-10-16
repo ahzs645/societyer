@@ -483,7 +483,11 @@ export function RecordPanelDock({
         </button>
       </Tooltip>
     </div>,
-    document.body,
+    // Inside the app shell's stacking context (it is `isolation: isolate`),
+    // so the dock layers with the page: over the content and the bottom
+    // navigation, under the sidebar, inspector, drawers and the AI panel.
+    // Dialogs, menus and toasts portal to <body> and stay above it.
+    document.querySelector(".app-shell") ?? document.body,
   );
 }
 

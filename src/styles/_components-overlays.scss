@@ -477,6 +477,16 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
   margin-top: 8px;
   border-top: 1px solid token('border');
 }
+.calendar__keys {
+  margin-right: auto;
+}
+/* Touch screens have no arrow or PgUp keys to hint at. */
+.calendar--sheet .calendar__keys {
+  display: none;
+}
+@media (pointer: coarse) {
+  .calendar__keys { display: none; }
+}
 
 /* ============================================================
    Modal + Confirm
@@ -784,5 +794,55 @@ body.modal-resizing {
     width: 32px;
     height: 32px;
     right: 2px;
+  }
+}
+
+/* ============================================================
+   Overlays above the on-screen keyboard
+   ============================================================
+ * While a text field has focus and the keyboard covers part of the screen,
+ * useKeyboardInsetTracking (src/lib/useVisualViewportBottomInset.ts) sets
+ * [data-keyboard-open], --keyboard-inset and --visible-height on <html>.
+ * iOS (and Android without `interactive-widget=resizes-content`) leaves
+ * the layout viewport full height, so `bottom: 0` overlays would keep their
+ * footers, composers and lists behind the keyboard. Phone Modal and Select
+ * sheets follow the same frame through inline styles. */
+:root[data-keyboard-open] {
+  // Inspector drawers (forms in the record panel and every "New …" drawer):
+  // the host ends at the keyboard, so the footer sits on top of it and the
+  // body scrolls in the space left.
+  .app-shell.is-mobile .inspector-host.is-open {
+    bottom: var(--keyboard-inset);
+  }
+  .app-shell.is-mobile .inspector-host.is-open .inspector {
+    padding-bottom: 0;
+  }
+  // Drawers outside the app layout.
+  .drawer {
+    bottom: var(--keyboard-inset);
+  }
+  // AI assistant: the composer rides on the keyboard.
+  .global-ai-drawer {
+    bottom: var(--keyboard-inset);
+  }
+  // Command palette: the results end where the visible area does.
+  .kbar__list {
+    max-height: max(120px, calc(var(--visible-height) - 120px));
+  }
+  // Calendar sheets: the typed-date field raises the keyboard.
+  .calendar.calendar--sheet {
+    bottom: var(--keyboard-inset);
+    max-height: calc(var(--visible-height) - 12px);
+    padding-bottom: 12px;
+  }
+  // Toasts stay readable above the keyboard instead of under it.
+  .toast-stack {
+    bottom: calc(var(--keyboard-inset) + 12px);
+  }
+  // Android resizes the window for the keyboard (interactive-widget in
+  // index.html), which would lift the bottom navigation onto the keyboard
+  // and take a row from the form being typed into. iOS covers it anyway.
+  .bottom-nav {
+    visibility: hidden;
   }
 }

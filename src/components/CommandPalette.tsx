@@ -61,6 +61,7 @@ import { useStaticCommands } from "../lib/useStaticCommands";
 import { CREATE_COMMAND_IDS, useCreateCommands } from "../lib/createCommands";
 import { formatDueDate } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import { ROUTE_IDENTITY, groupToneCssVar, resolveRouteIdentity, routeAllowedForEntityKind, routeLabelForOrganization, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 import { navParentForRoute } from "../lib/navTree";
@@ -488,6 +489,8 @@ export function CommandPalette({ initiallyOpen = false, initialQuery = "" }: {
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const dialogRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".kbar__input");
+  // The result list fits the area above the on-screen keyboard.
+  useKeyboardInsetTracking(open);
   const [q, setQ] = useState(initiallyOpen ? initialQuery : "");
   // Consumed by the first open only; later opens start empty.
   const pendingQueryRef = useRef(initiallyOpen ? initialQuery : "");

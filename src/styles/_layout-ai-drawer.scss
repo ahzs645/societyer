@@ -18,6 +18,8 @@
 .global-ai-drawer__head {
   min-height: 52px;
   padding: 10px 14px;
+  /* Standalone PWA: clear the status bar. */
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
   @include flex-between;
   gap: 12px;
   border-bottom: 1px solid token('border');
@@ -63,6 +65,18 @@
 .global-ai-head-actions {
   @include flex-center;
   gap: 6px;
+}
+
+/* Settings and Close get a full touch target (they were bare 14px icons). */
+@media (pointer: coarse) {
+  .global-ai-head-actions .global-ai-icon-btn {
+    width: token('tap-target');
+    height: token('tap-target');
+  }
+  .global-ai-head-actions {
+    gap: 2px;
+    margin-right: -8px;
+  }
 }
 
 .global-ai-draftcount {
@@ -181,6 +195,7 @@
 
 .global-ai-main {
   min-width: 0;
+  min-height: 0;
   @include flex-column;
 }
 
@@ -313,8 +328,27 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px 14px 12px;
+  /* Clear the home indicator; with the keyboard up there is none to clear. */
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   @include flex-column;
   gap: 8px;
+}
+:root[data-keyboard-open] {
+  .global-ai-composer {
+    padding-bottom: 12px;
+    /* 60dvh ignores the keyboard; keep room for the conversation above. */
+    max-height: calc(var(--visible-height, 100dvh) * 0.6);
+  }
+  /* The notes above the box scroll; the box and its Send bar stay in view. */
+  .global-ai-composer__box {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+  }
+  /* The static attachment hint returns once the keyboard closes. */
+  .global-ai-composer > p.muted:not([role]) {
+    display: none;
+  }
 }
 
 .global-ai-composer__context {
