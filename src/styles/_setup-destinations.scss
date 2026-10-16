@@ -37,6 +37,16 @@
 }
 
 // ---------------------------------------------------------- share register
+// Holder / class cells carry a second (muted) line: give them breathing room
+// instead of letting the two lines touch the row hairlines.
+.table.rights-ledger-table tbody td {
+  padding-block: 6px;
+}
+.rights-ledger-table__qty {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 // Long voting text wraps on wide screens instead of widening the table.
 .rights-ledger-table td.rights-ledger-table__wrap {
   min-width: 220px;

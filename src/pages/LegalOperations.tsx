@@ -912,7 +912,7 @@ export function RightsLedgerPage() {
       <Section title={corporationWorkspace ? "Current share holdings" : "Current holdings"} count={currentHoldings.length}>
         <div className="table-wrap">
           <table className="table table--stack-mobile rights-ledger-table">
-            <thead><tr><th>Holder</th><th>Class</th><th>Quantity</th><th>Source</th></tr></thead>
+            <thead><tr><th>Holder</th><th>Class</th><th className="rights-ledger-table__qty">Quantity</th><th>Source</th></tr></thead>
             <tbody>
               {currentHoldings.map((holding: any) => {
                 const rightsClass = data?.classes?.find((item: any) => item._id === holding.rightsClassId);
@@ -926,7 +926,7 @@ export function RightsLedgerPage() {
                       <div className="muted">{holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}</div>
                     </td>
                     <td data-label="Class">{rightsClass?.className || holding.rightsClassId}<div className="muted">{rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}</div></td>
-                    <td data-label="Quantity">{holding.quantity}</td>
+                    <td data-label="Quantity" className="rights-ledger-table__qty">{formatQuantity(holding.quantity)}</td>
                     <td data-label="Source">
                       <div className="row" style={{ gap: 6, alignItems: "center" }}>
                         <Badge tone="success">Posted ledger</Badge>
@@ -992,7 +992,7 @@ export function RightsLedgerPage() {
       <Section title="Holding and transfer events" count={data?.transfers?.length ?? 0}>
         <div className="table-wrap">
           <table className="table table--stack-mobile rights-ledger-table">
-            <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From</th><th>To</th><th>Quantity</th><th>Status</th><th>Evidence</th><th><span className="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From</th><th>To</th><th className="rights-ledger-table__qty">Quantity</th><th>Status</th><th>Evidence</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {(data?.transfers ?? []).map((row: any) => {
                 const rightsClass = data?.classes?.find((item: any) => item._id === row.rightsClassId);
@@ -1005,7 +1005,7 @@ export function RightsLedgerPage() {
                     <td data-label="Class">{rightsClass?.className || "Unlinked"}</td>
                     <td data-label="From">{source?.fullName || row.sourceHolderName || "Treasury/new issue"}</td>
                     <td data-label="To">{destination?.fullName || row.destinationHolderName || "No destination"}</td>
-                    <td data-label="Quantity">{row.quantity ?? "-"}</td>
+                    <td data-label="Quantity" className="rights-ledger-table__qty">{formatQuantity(row.quantity, "-")}</td>
                     <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsholdingTransferStatuses", row.status)}</Badge></td>
                     <td data-label="Evidence">
                       {row.precedentRunId ? (
@@ -1189,11 +1189,11 @@ export function RightsLedgerPage() {
               <div>
                 <h4 style={{ margin: "0 0 6px" }}>Holdings by class</h4>
                 <table className="table">
-                  <thead><tr><th>Class</th><th>Quantity</th></tr></thead>
+                  <thead><tr><th>Class</th><th className="rights-ledger-table__qty">Quantity</th></tr></thead>
                   <tbody>
                     {holdings.map((h: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === h.rightsClassId);
-                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td>{h.quantity}</td></tr>;
+                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td className="rights-ledger-table__qty">{formatQuantity(h.quantity)}</td></tr>;
                     })}
                     {holdings.length === 0 && <EmptyRow cols={2} label="No holdings on this date." />}
                   </tbody>
@@ -1203,7 +1203,7 @@ export function RightsLedgerPage() {
               <div>
                 <h4 style={{ margin: "0 0 6px" }}>Transfer history</h4>
                 <table className="table">
-                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th>Qty</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Type</th><th>Class</th><th>From → To</th><th className="rights-ledger-table__qty">Qty</th></tr></thead>
                   <tbody>
                     {holderTransfers.map((t: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === t.rightsClassId);
@@ -1215,7 +1215,7 @@ export function RightsLedgerPage() {
                           <td>{optionLabel("rightsholdingTransferTypes", t.transferType)}</td>
                           <td>{rc?.className || "—"}</td>
                           <td>{(src?.fullName || t.sourceHolderName || "Treasury")} → {(dst?.fullName || t.destinationHolderName || "—")}</td>
-                          <td>{t.quantity ?? "—"}</td>
+                          <td className="rights-ledger-table__qty">{formatQuantity(t.quantity)}</td>
                         </tr>
                       );
                     })}
@@ -1919,6 +1919,13 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = f
       <Field label="Error message"><MarkdownEditor rows={4} value={draft.errorMessage ?? ""} onChange={(markdown) => setDraft({ ...draft, errorMessage: markdown })} /></Field>
     </>
   );
+}
+
+/** Share and rights quantities read with thousands separators (200,000). */
+function formatQuantity(value: unknown, empty = "—"): string {
+  if (value === null || value === undefined || value === "") return empty;
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-CA", { maximumFractionDigits: 6 }) : String(value);
 }
 
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
