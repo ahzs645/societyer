@@ -130,7 +130,7 @@ export function NotificationsPage() {
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Recent</h2>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="notifications__head-actions">
             {scope === "dismissed" && dismissedCount > 0 && (
               <button
                 className="btn-action btn-action--danger"
