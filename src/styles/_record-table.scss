@@ -818,7 +818,12 @@ select.record-table__menu-select,
   background: token('bg-panel');
   border: 1px solid token('border');
   border-radius: 6px;
-  overflow: hidden;
+  /* Virtuoso sets `overflow-y: auto` inline; the X axis is ours. A register
+   * wider than its frame scrolls sideways at every width (the sticky header
+   * and the frozen identifier column live inside this same scroller, so they
+   * stay aligned with the body). */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .record-table {
@@ -2418,7 +2423,6 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     overscroll-behavior-x: contain;
   }
   .record-table__virtuoso {
-    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
