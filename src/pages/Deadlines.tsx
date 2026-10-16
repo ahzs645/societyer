@@ -304,7 +304,7 @@ export function DeadlinesPage() {
                   const isComplete = s === "complete";
                   const isClosed = s === "closed";
                   return (
-                    <div className="deadline-title-cell">
+                    <div className="deadline-title-cell" title={record.description ? `${record.title}\n${record.description}` : undefined}>
                       <strong
                         style={{
                           textDecoration: isComplete ? "line-through" : "none",

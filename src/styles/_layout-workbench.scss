@@ -499,18 +499,25 @@
     flex-wrap: nowrap;
     align-items: flex-start;
 
+    /* The title never gives up its longest word ("T a s k s" one letter per
+     * line): the measurement above reserves that room, and if it ever comes
+     * up short (fonts or labels changing after it ran) the actions shrink
+     * instead — a text action such as Tasks' "Current · All · Status"
+     * truncates with an ellipsis. */
     > .page__header-main {
       flex: 1 1 auto;
-      min-width: 0;
+      min-width: min-content;
     }
 
     /* A long name wraps beside its icon tile rather than dropping under it. */
     .page__title {
       flex-wrap: nowrap;
+      overflow-wrap: break-word;
     }
 
     > .page__actions {
-      flex: none;
+      flex: 0 1 auto;
+      min-width: 0;
       width: auto;
       flex-wrap: nowrap;
       justify-content: flex-end;
