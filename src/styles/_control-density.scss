@@ -660,6 +660,10 @@ $tap-block: (
 // as cards, with group headers between them.
 .record-cards {
   display: grid;
+  // One column that never grows past the list: without it the implicit
+  // track sizes to the min-content of nowrap card titles and the cards run
+  // off a 320px screen.
+  grid-template-columns: minmax(0, 1fr);
   gap: token('s-2');
   padding-top: token('s-1');
 }
