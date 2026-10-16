@@ -954,11 +954,17 @@ select.record-table__menu-select,
   }
 }
 
+/* The column menu: a vertical list in a viewport-fixed layer portaled to the
+ * body (ViewportPopover places it under its trigger and keeps it on screen),
+ * so neither the table's scroller nor a short table clips it. */
 .record-table__header-menu {
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
+  z-index: token('z-popover');
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: max-content;
   min-width: 210px;
+  max-width: min(280px, calc(100vw - 16px));
   padding: 5px;
   background: token('bg-panel');
   border: 1px solid token('border');
@@ -969,9 +975,10 @@ select.record-table__menu-select,
   color: token('text-primary');
 
   button {
-    @include inline-flex-center;
+    display: flex;
+    align-items: center;
     justify-content: flex-start;
-    
+    width: 100%;
     gap: 8px;
     padding: 6px 8px;
     font: inherit;
@@ -993,15 +1000,6 @@ select.record-table__menu-select,
       opacity: 0.55;
     }
   }
-}
-
-/* Flipped by RecordTableHeaderCell when a right-aligned menu would run past the
-   left edge of the table — as it does on the first column, where the app shell
-   clips it and the sidebar swallows the clicks. Declared after the base rule so
-   it wins the `right` declaration. */
-.record-table__header-menu--align-start {
-  right: auto;
-  left: 0;
 }
 
 .record-table__header-menu-section {
