@@ -269,14 +269,21 @@ $tap-block: (
     height: token('control-h-touch-icon');
   }
   // The fixed top bar covers anything above the banner, so the switch's
-  // hit area reaches down into the page instead of up: only as far as the
-  // page's 8px top padding (the banner sits above the page, _shell-nav), so
-  // it never takes taps meant for the title row's controls.
+  // hit area reaches down into the page instead of up.
   .demo-banner .btn::after {
     top: 0;
-    bottom: calc(-1 * #{token('s-2')});
+    bottom: -14px;
     height: auto;
     transform: translateX(-50%);
+  }
+  // Phones: the slim banner sits above the page (_shell-nav) and the page
+  // starts 12px below it, where the first row's controls (back link, title
+  // ⓘ) reach up with hit areas of their own. The switch takes 8px of that
+  // gap (a 40px hit area) and leaves the rest to them.
+  @media (max-width: 760px) {
+    .demo-banner .btn::after {
+      bottom: -8px;
+    }
   }
 
   // Bottom navigation is a bar, not buttons: each item's tap area is the
@@ -357,11 +364,13 @@ $tap-block: (
 // toolbars below, lists start within about a quarter of the screen.
 // ============================================================
 @media (max-width: 560px) {
+  // 12px: room for the demo switch's hit area above the first row's
+  // controls (see the banner rule above).
   .app-shell.is-mobile .page {
-    padding-top: token('s-2');
+    padding-top: token('s-3');
   }
   .app-shell.is-mobile .page > a.row.muted:first-child {
-    top: calc(#{token('s-2')} + 2px);
+    top: calc(#{token('s-3')} + 2px);
   }
   .page__header {
     margin-bottom: token('s-2');
