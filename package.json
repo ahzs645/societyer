@@ -103,6 +103,7 @@
     "test:exports:db": "tsx scripts/validate-export-database.ts",
     "test:nl-filter": "tsx scripts/check-nl-filter.ts",
     "test:record-table-utils": "tsx scripts/check-record-table-utils.ts",
+    "test:role-holder-inline-edit": "tsx scripts/check-role-holder-inline-edit.ts",
     "test:record-table-acceptance": "tsx scripts/check-record-table-acceptance.ts",
     "test:mobile-table-layout": "tsx scripts/check-mobile-table-layout.ts",
     "test:meeting-governance": "tsx scripts/check-meeting-governance.ts",

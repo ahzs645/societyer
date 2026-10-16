@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CheckCheck, CircleCheck, CircleDashed, Link2, PenLine, Zap } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, CheckCheck, ChevronDown, ChevronUp, CircleCheck, CircleDashed, Link2, PenLine, Zap } from "lucide-react";
 import { Drawer } from "../../../components/ui";
 import { Money } from "../../../components/Money";
 import { ShortcutHint } from "../../../components/ShortcutHint";
@@ -19,6 +19,8 @@ import {
   categorizedByValue,
 } from "../../../../shared/transactionAttention";
 import type { PayeeAliasRow } from "./usePayeeAliases";
+import { useRecordTableRowModel } from "../../../platform/record-engine/record-table/hooks/useRecordTableRowModel";
+import { useRecordTableStoreHandle } from "../../../platform/record-engine/record-table/state/recordTableStore";
 
 /** A transactions-table row as the Financials page maps it. */
 export type PanelTransaction = {
@@ -137,6 +139,21 @@ export function TransactionDetailPanel({
     void onUpdate("memo", memo);
   };
 
+  // Previous / next follow the table's current order (search, filters and
+  // sort applied), like ↑ / ↓ — buttons so phones and touch can step too.
+  const { records: tableOrder } = useRecordTableRowModel();
+  const tableHandle = useRecordTableStoreHandle();
+  const position = tableOrder.findIndex((row: any) => String(row._id) === String(record._id));
+  const step = (delta: number) => {
+    const nextIndex = position + delta;
+    const next = position < 0 ? undefined : tableOrder[nextIndex];
+    if (!next) return;
+    onNavigate(next as PanelTransaction);
+    const columnIndex = tableHandle.get().focusedCell?.columnIndex ?? 0;
+    tableHandle.get().setRangeAnchor(null);
+    tableHandle.get().setFocusedCell({ rowIndex: nextIndex, columnIndex });
+  };
+
   const copyLink = async () => {
     const link = transactionDeepLink(record._id);
     try {
@@ -171,6 +188,14 @@ export function TransactionDetailPanel({
           </button>
           <span className="transaction-panel__nav-hint" aria-hidden="true">
             <ShortcutHint keys={["↑"]} /> <ShortcutHint keys={["↓"]} /> next and previous
+          </span>
+          <span role="group" aria-label="Step through transactions" style={{ display: "inline-flex", gap: 4 }}>
+            <button type="button" className="btn btn--sm btn--icon" aria-label="Previous transaction" aria-keyshortcuts="ArrowUp" disabled={position <= 0} onClick={() => step(-1)}>
+              <ChevronUp size={14} aria-hidden="true" />
+            </button>
+            <button type="button" className="btn btn--sm btn--icon" aria-label="Next transaction" aria-keyshortcuts="ArrowDown" disabled={position < 0 || position >= tableOrder.length - 1} onClick={() => step(1)}>
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
           </span>
         </>
       }

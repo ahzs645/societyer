@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo } from "react";
+import { type HTMLAttributes, type MouseEvent as ReactMouseEvent, type ReactNode, useMemo } from "react";
 import { GripVertical, MoreHorizontal, PanelRightOpen } from "lucide-react";
 import { Menu, type MenuSection } from "../../../../components/Menu";
 import { RecordTableRowContext } from "../contexts/RecordTableRowContext";
@@ -9,6 +9,7 @@ import type { RecordTableCellRenderer } from "./RecordTable";
 import { useRecordTableRowModel } from "../hooks/useRecordTableRowModel";
 import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
 import { Tooltip } from "../../../../components/Tooltip";
+import { useLongPress } from "../hooks/useLongPress";
 
 /**
  * Class list for a record's `<tr>`: the base row class plus the new-row flash,
@@ -38,6 +39,7 @@ export function RecordTableRow({
   rowMenuSections,
   showOpenRecordAction = false,
   renderCell,
+  longPressSelect = false,
 }: {
   record: any;
   rowIndex: number;
@@ -50,6 +52,8 @@ export function RecordTableRow({
   rowMenuSections?: (record: any) => MenuSection[];
   showOpenRecordAction?: boolean;
   renderCell?: RecordTableCellRenderer;
+  /** Touch: holding a finger on the row starts selection with this row. */
+  longPressSelect?: boolean;
 }) {
   const { objectMetadata, onRecordClick, onReorder } = useRecordTableContextOrThrow();
   const isSelected = useRecordTableState((s) =>
@@ -78,6 +82,31 @@ export function RecordTableRow({
     handle.get().setSelectedRecordIds(next);
     handle.get().setSelectionAnchorRowIndex(rowIndex);
   };
+
+  const longPress = useLongPress(longPressSelect ? () => {
+    // Phones keep selection behind "Select records"; a long-press is the
+    // shortcut into it, starting with the pressed row.
+    if (handle.get().mobileSelectable) handle.get().setMobileSelectionMode(true);
+    const next = new Set(handle.get().selectedRecordIds);
+    next.add(recordId);
+    handle.get().setSelectedRecordIds(next);
+    handle.get().setSelectionAnchorRowIndex(rowIndex);
+  } : undefined);
+  const pressHandlers: Partial<HTMLAttributes<HTMLTableCellElement>> | undefined = longPressSelect || mobileSelectionMode
+    ? {
+        ...longPress,
+        onClickCapture: (event: ReactMouseEvent<HTMLTableCellElement>) => {
+          longPress.onClickCapture?.(event);
+          if (event.isPropagationStopped() || !mobileSelectionMode) return;
+          // While selecting on a phone a tap anywhere on a row ticks it,
+          // rather than opening or editing it.
+          if ((event.target as Element).closest(".record-table__mobile-selection-checkbox")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          toggleRow();
+        },
+      }
+    : undefined;
 
   const rowValue = useMemo(
     () => ({ record, recordId, rowIndex }),
@@ -154,6 +183,7 @@ export function RecordTableRow({
             </label>
           ) : undefined}
           renderCell={renderCell}
+          pressHandlers={pressHandlers}
         />
       ))}
       {/* Actions come BEFORE the fill cell so they anchor to where the data

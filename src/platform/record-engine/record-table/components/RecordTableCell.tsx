@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode, type RefObject } from "react";
 import { columnWidthStyle } from "../utils/columnWidth";
 import { createPortal } from "react-dom";
 import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
@@ -6,6 +6,9 @@ import type { RecordField } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { FieldInput, isFieldEditable } from "../../record-field/components/FieldInput";
+import { FieldInputFlushContext, type RegisterFieldInputFlush } from "../../record-field/components/fieldInputFlush";
+import { useRecordTableUpdate } from "../hooks/useRecordTableUpdate";
+import { useCoarsePointer } from "../hooks/useCoarsePointer";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableRowContextOrThrow } from "../contexts/RecordTableRowContext";
@@ -25,6 +28,7 @@ export function RecordTableCell({
   renderCell,
   selectionControl,
   collapsed = false,
+  pressHandlers,
 }: {
   recordField: RecordField;
   isLabelIdentifier: boolean;
@@ -33,6 +37,8 @@ export function RecordTableCell({
   selectionControl?: ReactNode;
   /** Folded to zero width while the preview panel condenses the table. */
   collapsed?: boolean;
+  /** Row-level touch handlers (long-press to select) spread on the cell. */
+  pressHandlers?: Partial<HTMLAttributes<HTMLTableCellElement>>;
 }) {
   const tableCtx = useRecordTableContextOrThrow();
   const { record, recordId, rowIndex } = useRecordTableRowContextOrThrow();
@@ -74,9 +80,29 @@ export function RecordTableCell({
       ? state.editingInitialValue
       : undefined,
   );
+  // Touch screens have no hover: the name cell offers its rename pencil
+  // whenever any cell in its row is focused.
+  const isRowFocused = useRecordTableState(
+    (state) => isLabelIdentifier && state.focusedCell?.rowIndex === rowIndex,
+  );
+  const isPending = useRecordTableState((state) => {
+    const edit = state.pendingEdits.get(recordId)?.get(recordField.field.name);
+    return !!edit && !edit.settled;
+  });
   const handle = useRecordTableStoreHandle();
   const cellRef = useRef<HTMLTableCellElement | null>(null);
+  const lastPointerTypeRef = useRef<string>("mouse");
   const isMobile = useIsMobile();
+  const isCoarsePointer = useCoarsePointer();
+  const saveCell = useRecordTableUpdate();
+  // The open editor hands the table its "save now" call, used when a click
+  // or tap lands outside the table (see RecordTable's outside handler).
+  const registerFlush = useCallback<RegisterFieldInputFlush>((flush) => {
+    handle.get().setEditorFlush(flush);
+    return () => {
+      if (handle.get().editorFlush === flush) handle.get().setEditorFlush(null);
+    };
+  }, [handle]);
 
   const value = record[recordField.field.name];
   const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
@@ -106,14 +132,17 @@ export function RecordTableCell({
   };
 
   const commit = async (nextValue: unknown) => {
+    // One commit per edit: a blur that follows an outside-click save (or an
+    // Enter) must not write the value a second time.
+    const editing = handle.get().editingCell;
+    if (editing?.rowIndex !== rowIndex || editing.columnIndex !== columnIndex) return;
     handle.get().setEditingCell(null);
     handle.get().setEditingInitialValue(undefined);
     if (nextValue === value) return;
-    await tableCtx.onUpdate?.({
-      recordId,
-      fieldName: recordField.field.name,
-      value: nextValue,
-    });
+    await saveCell(
+      { recordId, fieldName: recordField.field.name, value: nextValue },
+      { fieldLabel: recordField.field.label },
+    );
   };
 
   return (
@@ -131,6 +160,12 @@ export function RecordTableCell({
       }
       tabIndex={isFocused && !collapsed ? 0 : -1}
       aria-selected={isFocused || isInRange}
+      aria-busy={isPending || undefined}
+      {...pressHandlers}
+      onPointerDown={(event) => {
+        lastPointerTypeRef.current = event.pointerType;
+        pressHandlers?.onPointerDown?.(event);
+      }}
       aria-hidden={collapsed || undefined}
       style={columnWidthStyle(collapsed ? 0 : recordField.size)}
       onMouseDown={(event) => {
@@ -166,6 +201,7 @@ export function RecordTableCell({
           return;
         }
         if (state.rangeAnchor) state.setRangeAnchor(null);
+        const wasFocused = state.focusedCell?.rowIndex === rowIndex && state.focusedCell.columnIndex === columnIndex;
         handle.get().setFocusedCell({ rowIndex, columnIndex });
         cellRef.current?.focus({ preventScroll: true });
         // Researcher's phone table opens an editable field from the cell tap
@@ -173,6 +209,15 @@ export function RecordTableCell({
         // record, while every other editable field enters edit mode in one
         // tap instead of exposing a tiny pencil that needs a second tap.
         if (isMobile && canEdit && !isLabelIdentifier) {
+          event.preventDefault();
+          startEdit();
+          return;
+        }
+        // Touch on a wider screen (tablets): the first tap focuses the cell
+        // and shows its pencil; tapping the focused cell again edits it, so
+        // nobody has to rely on a double-tap.
+        const touch = lastPointerTypeRef.current === "touch" || lastPointerTypeRef.current === "pen";
+        if (touch && wasFocused && canEdit && !(isLabelIdentifier && tableCtx.onRecordClick)) {
           event.preventDefault();
           startEdit();
         }
@@ -198,17 +243,25 @@ export function RecordTableCell({
           <span className="record-table__identifier-avatar" aria-hidden="true">
             {identifierInitial(value)}
           </span>
-          <span className="record-table__cell-content">{previewedContent}</span>
+          <span className="record-table__cell-content" style={isPending ? PENDING_CONTENT_STYLE : undefined}>{previewedContent}</span>
         </button>
       ) : (
-        <div className="record-table__cell-content">{previewedContent}</div>
+        <div className="record-table__cell-content" style={isPending ? PENDING_CONTENT_STYLE : undefined}>{previewedContent}</div>
       )}
       {/* Only render the overlay when it has at least one action — an empty
           container shows up as a tiny floating box over the cell. */}
-      {(isHovered || isFocused) &&
+      {(isHovered || isFocused || (isCoarsePointer && isRowFocused && canEdit)) &&
         !isEditing &&
         (secondaryActions.length > 0 || canEdit) && (
-        <div className="record-table__cell-actions" onClick={(event) => event.stopPropagation()}>
+        <div
+          className={
+            "record-table__cell-actions" +
+            // Hover-only actions are hidden on touch; the focused cell (and
+            // its row's name cell) keep theirs so editing has a visible way in.
+            ((isFocused || isRowFocused) && isCoarsePointer ? " record-table__cell-actions--touch" : "")
+          }
+          onClick={(event) => event.stopPropagation()}
+        >
           {secondaryActions.map((action) => (
             <button
               key={action.label}
@@ -245,6 +298,7 @@ export function RecordTableCell({
       {isEditing && (
         <RecordTableFloatingCellEditor
           anchorRef={cellRef}
+          registerFlush={registerFlush}
           value={value}
           field={recordField.field}
           initialValue={editingInitialValue}
@@ -260,6 +314,9 @@ export function RecordTableCell({
   );
 }
 
+/** A saved-but-not-yet-confirmed value reads as provisional until it lands. */
+const PENDING_CONTENT_STYLE = { opacity: 0.55 } as const;
+
 export function RecordTableFloatingCellEditor({
   anchorRef,
   value,
@@ -267,8 +324,11 @@ export function RecordTableFloatingCellEditor({
   initialValue,
   onCommit,
   onCancel,
+  registerFlush,
 }: {
   anchorRef: RefObject<HTMLElement>;
+  /** Lets the host save the draft when it closes the editor from outside. */
+  registerFlush?: RegisterFieldInputFlush;
   value: unknown;
   field: RecordField["field"];
   initialValue?: string;
@@ -321,13 +381,15 @@ export function RecordTableFloatingCellEditor({
       onMouseDown={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <FieldInput
-        value={value}
-        field={field}
-        initialValue={initialValue}
-        onCommit={onCommit}
-        onCancel={onCancel}
-      />
+      <FieldInputFlushContext.Provider value={registerFlush ?? null}>
+        <FieldInput
+          value={value}
+          field={field}
+          initialValue={initialValue}
+          onCommit={onCommit}
+          onCancel={onCancel}
+        />
+      </FieldInputFlushContext.Provider>
     </div>,
     document.body,
   );

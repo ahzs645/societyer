@@ -40,6 +40,10 @@ const STATUS_FILTER_ITEMS: { id: StatusFilter; label: string }[] = [
   { id: "all", label: "All" },
 ];
 
+function statusLabel(status: StatusFilter) {
+  return STATUS_FILTER_ITEMS.find((item) => item.id === status)?.label ?? status;
+}
+
 function statusOf(record: any): DeadlineStatus {
   if (record?.status === "open" || record?.status === "complete" || record?.status === "closed") {
     return record.status;
@@ -71,7 +75,15 @@ export function DeadlinesPage() {
   const [saving, setSaving] = useState(false);
   const descriptionEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState<any>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [statusFilter, setStatusFilterState] = useState<StatusFilter>("open");
+  // Deadlines moved to a status this tab hides (a kanban drop, a status
+  // edit) stay on screen until the tab changes, so they do not vanish
+  // mid-gesture; the toast explains where they went.
+  const [movedOutIds, setMovedOutIds] = useState<ReadonlySet<string>>(() => new Set());
+  const setStatusFilter = (next: StatusFilter) => {
+    setMovedOutIds(new Set());
+    setStatusFilterState(next);
+  };
   const isPhone = useIsBottomSheet();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -84,10 +96,12 @@ export function DeadlinesPage() {
 
   const allRecords = (items ?? []) as any[];
   const records = useMemo(() => {
-    const visible = statusFilter === "all" ? allRecords : allRecords.filter((r) => statusOf(r) === statusFilter);
+    const visible = statusFilter === "all"
+      ? allRecords
+      : allRecords.filter((r) => statusOf(r) === statusFilter || movedOutIds.has(String(r._id)));
     // Soonest first by default (a sort chosen in the table still wins); undated last.
     return [...visible].sort((a, b) => String(a.dueDate || "\uffff").localeCompare(String(b.dueDate || "\uffff")));
-  }, [allRecords, statusFilter]);
+  }, [allRecords, statusFilter, movedOutIds]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -148,7 +162,7 @@ export function DeadlinesPage() {
   // Complete a deadline and make the outcome visible: a recurring one silently
   // rolls forward, so surface the next date (with an Undo) instead of it looking
   // like nothing changed.
-  const completeAndNotify = async (record: any) => {
+  const completeAndNotify = async (record: any, moved?: { note: string; show: { label: string; onClick: () => void } }) => {
     if (!canWrite) return;
     const id = record._id as Id<"deadlines">;
     let res: any;
@@ -175,7 +189,8 @@ export function DeadlinesPage() {
     // occurrence it spawned.
     await undoable({
       message: "Deadline completed",
-      description,
+      description: [description, moved?.note].filter(Boolean).join(" ") || undefined,
+      secondaryAction: moved?.show,
       dedupeKey: `deadline-complete-${id}`,
       undo: () => undoComplete(id, spawnedId),
       undoneMessage: "Deadline reopened",
@@ -238,10 +253,30 @@ export function DeadlinesPage() {
               if (fieldName === "status") {
                 const nextStatus = value as DeadlineStatus;
                 const rec = allRecords.find((r) => r._id === recordId);
-                if (nextStatus === "complete" && rec && statusOf(rec) !== "complete") {
-                  await completeAndNotify(rec);
+                const previousStatus = rec ? statusOf(rec) : "open";
+                // Moving a deadline out of the current tab (e.g. dropping an
+                // Open card on Complete) keeps it visible here and says so,
+                // with Undo and a way to follow it to its new tab.
+                const leavesView = statusFilter !== "all" && nextStatus !== statusFilter && previousStatus !== nextStatus;
+                if (leavesView) setMovedOutIds((current) => new Set(current).add(String(recordId)));
+                const moved = leavesView ? {
+                  note: `Not in ${statusLabel(statusFilter)} any more; shown here until you switch tabs.`,
+                  show: { label: "Show", onClick: () => setStatusFilter(nextStatus) },
+                } : undefined;
+                if (nextStatus === "complete" && rec && previousStatus !== "complete") {
+                  await completeAndNotify(rec, moved);
                 } else {
                   await setStatus({ id: recordId as Id<"deadlines">, status: nextStatus });
+                  if (moved) {
+                    await undoable({
+                      message: `Moved to ${statusLabel(nextStatus)}`,
+                      description: moved.note,
+                      secondaryAction: moved.show,
+                      dedupeKey: `deadline-status-${recordId}`,
+                      undo: () => setStatus({ id: recordId as Id<"deadlines">, status: previousStatus }),
+                      undoneMessage: `Moved back to ${statusLabel(previousStatus)}`,
+                    });
+                  }
                 }
                 return;
               }

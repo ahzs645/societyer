@@ -23,6 +23,7 @@ import { optionLabel } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { roleHolderInlinePatch } from "../lib/roleHolderInlineEdit";
 import {
   RecordTable,
   RecordTableFilterChips,
@@ -151,8 +152,13 @@ export function RoleHoldersPage() {
   ) as Array<{ op: string; key: string; name: string }> | undefined;
   // A new shareholder takes the share class only when exactly one exists;
   // before any class is set up there is nothing to assign.
-  const shareClassArgs = society && isCorporation(society) && draft && !draft._id && draft.roleType === "shareholder" ? { societyId: society._id } : "skip";
+  // Also loaded for inline edits of the class name, which relink the class id.
+  const shareClassArgs = society && isCorporation(society) && (canWrite || (draft && !draft._id && draft.roleType === "shareholder")) ? { societyId: society._id } : "skip";
   const shareClassLedger = useQuery(api.legalOperations.rightsLedger, shareClassArgs) as { classes?: any[] } | undefined;
+  const shareClassOptions = useMemo(
+    () => (shareClassLedger?.classes ?? []).map((row: any) => ({ _id: String(row._id), className: String(row.className ?? "") })),
+    [shareClassLedger],
+  );
   // Filled at most once per open form, so clearing the field keeps it clear.
   const shareClassFilled = useRef(false);
   useEffect(() => {
@@ -375,7 +381,9 @@ export function RoleHoldersPage() {
               if (!canWrite) return;
               const record = records.find((row) => row._id === recordId);
               if (!record) return;
-              await persistRoleHolder({ ...record, [fieldName]: value });
+              // A class name edited inline relinks (or unlinks) the class id,
+              // so voting power follows the name shown, as in the drawer.
+              await persistRoleHolder(roleHolderInlinePatch(record, fieldName, value, shareClassOptions));
             } : undefined}
           >
             <RecordTableViewToolbar
@@ -1215,7 +1223,7 @@ export function RightsLedgerPage() {
                           <td>{optionLabel("rightsholdingTransferTypes", t.transferType)}</td>
                           <td>{rc?.className || "—"}</td>
                           <td>{(src?.fullName || t.sourceHolderName || "Treasury")} → {(dst?.fullName || t.destinationHolderName || "—")}</td>
-                          <td className="rights-ledger-table__qty">{formatQuantity(t.quantity)}</td>
+                          <td className="rights-ledger-table__qty">{formatQuantity(t.quantity, "—")}</td>
                         </tr>
                       );
                     })}
@@ -1921,13 +1929,6 @@ function FormationDraftForm({ draft, setDraft, jurisdictionByCode, corporate = f
   );
 }
 
-/** Share and rights quantities read with thousands separators (200,000). */
-function formatQuantity(value: unknown, empty = "—"): string {
-  if (value === null || value === undefined || value === "") return empty;
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number.toLocaleString("en-CA", { maximumFractionDigits: 6 }) : String(value);
-}
-
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
     <div className="card">
@@ -2290,4 +2291,11 @@ function toneForStatus(status?: string) {
   if (/(draft|review|proposed|generating|signing|name_search|filing|organizing)/.test(value)) return "warn" as const;
   if (/(void|cancel|inactive|former|error|critical)/.test(value)) return "danger" as const;
   return "neutral" as const;
+}
+
+/** Share and unit counts with thousands separators (100,000, not 100000). */
+function formatQuantity(quantity: unknown, empty = "") {
+  if (quantity === null || quantity === undefined || quantity === "") return empty;
+  const value = typeof quantity === "number" ? quantity : Number(quantity);
+  return Number.isFinite(value) ? value.toLocaleString() : String(quantity);
 }

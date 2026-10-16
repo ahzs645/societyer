@@ -10,6 +10,8 @@ const CALENDAR_LAYOUT_LABELS: Record<CalendarLayout, string> = { month: "Month",
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+/** Room left above a scrolled-to agenda day for the app's sticky top bar. */
+const AGENDA_SCROLL_MARGIN = 72;
 /** Below this width a seven-column month grid cannot show event labels, so the
  * calendar opens on Agenda and, if Month is chosen, renders compact day cells. */
 export const CALENDAR_COMPACT_WIDTH = 560;
@@ -139,9 +141,21 @@ export function CalendarView<T>({
     const key = pendingDay.current;
     if (mode !== "list" || !key) return;
     pendingDay.current = null;
-    const heading = rootRef.current?.querySelector<HTMLElement>(`[data-calendar-date="${key}"] h3`);
-    if (!heading) return;
-    heading.scrollIntoView({ block: "nearest" });
+    const section = rootRef.current?.querySelector<HTMLElement>(`[data-calendar-date="${key}"]`);
+    const heading = section?.querySelector<HTMLElement>("h3");
+    if (!section || !heading) return;
+    // Bring the day to the top (below the app's sticky bar, via the
+    // section's scroll margin) so its events show, not just its heading at
+    // the bottom edge. When the whole agenda fits, keep the layout switch in
+    // view too.
+    const root = rootRef.current;
+    const rootRect = root?.getBoundingClientRect();
+    const sectionRect = section.getBoundingClientRect();
+    if (root && rootRect && sectionRect.bottom - rootRect.top <= window.innerHeight - AGENDA_SCROLL_MARGIN) {
+      root.scrollIntoView({ block: "start" });
+    } else {
+      section.scrollIntoView({ block: "start" });
+    }
     heading.focus({ preventScroll: true });
   }, [mode, anchor]);
   /** Compact month cells hand off to the agenda, scrolled to that day. */
@@ -180,7 +194,7 @@ export function CalendarView<T>({
         onClick={() => openDay(day)}>+{rows.length - visible.length} more</button>}
     </div>;
   };
-  return <div ref={rootRef} className={`calendar-view calendar-view--${mode}${compactMonth ? " is-compact" : ""}`}>
+  return <div ref={rootRef} className={`calendar-view calendar-view--${mode}${compactMonth ? " is-compact" : ""}`} style={{ scrollMarginTop: AGENDA_SCROLL_MARGIN }}>
     <div className="calendar-view__head">
       <div className="calendar-view__title" aria-live="polite">{title}</div>
       <div className="calendar-view__nav">
@@ -203,7 +217,7 @@ export function CalendarView<T>({
     </div>
     {mode === "list" ? <div className="calendar-view__agenda" role="region" aria-label={`${monthLabel} events`}>
       {listDays.length === 0 && <p className="muted">No dated records this month.</p>}
-      {listDays.map((day) => <section key={calendarDateKey(day)} data-calendar-date={calendarDateKey(day)}>
+      {listDays.map((day) => <section key={calendarDateKey(day)} data-calendar-date={calendarDateKey(day)} style={{ scrollMarginTop: AGENDA_SCROLL_MARGIN }}>
         <h3 className="calendar-view__date" tabIndex={-1}>{day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3>
         {events(day)}
       </section>)}
