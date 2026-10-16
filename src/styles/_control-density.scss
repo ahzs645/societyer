@@ -202,6 +202,15 @@ $tap-block: (
     min-width: token('control-h-touch');
     justify-content: center;
   }
+  // The search pill is the 36px field height (tablets too, where it was a
+  // 28px pill around a 22px input); the input fills it, so the whole pill
+  // takes the tap.
+  .record-table__search {
+    height: token('control-h-touch');
+  }
+  .record-table__search-input {
+    align-self: stretch;
+  }
   .record-table__icon-button,
   .record-table__icon-btn {
     width: token('control-h-touch-icon');

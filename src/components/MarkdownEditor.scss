@@ -434,3 +434,29 @@
     box-shadow: var(--shadow-strong);
   }
 }
+
+// Touch (phones and tablets): 36px formatting buttons, 4px apart, each with
+// a 44px-tall hit area (block axis only, so neighbours don't overlap). The
+// toolbar's 4px block padding holds the hit areas inside its box, which
+// scrolls sideways on phones and would otherwise clip them.
+@media (pointer: coarse) {
+  .markdown-editor__toolbar {
+    gap: 4px;
+    padding-block: 4px;
+  }
+  .markdown-editor__toolbar-button {
+    position: relative;
+    flex: none;
+    width: var(--control-h-touch);
+    height: var(--control-h-touch);
+  }
+  .markdown-editor__toolbar-button::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: max(100%, var(--tap-target));
+    transform: translate(-50%, -50%);
+  }
+}
