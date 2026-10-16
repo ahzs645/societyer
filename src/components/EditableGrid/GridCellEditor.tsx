@@ -108,7 +108,7 @@ function DateEditor<R extends GridRow>({ value, onCommitValue, onCancel }: Edito
   );
 }
 
-function SelectEditor<R extends GridRow>({ col, row, value, initialText, mode, anchor, label, onCommitValue, onCancel }: EditorProps<R>) {
+function SelectEditor<R extends GridRow>({ col, row, value, initialText, mode, anchor, label, onCommitText, onCommitValue, onCancel }: EditorProps<R>) {
   const options = useMemo(() => columnOptions(col, row), [col, row]);
   // Opening with Enter/F2 shows the full list; typing starts a search.
   const [query, setQuery] = useState(mode === "replace" ? initialText : "");
@@ -158,6 +158,10 @@ function SelectEditor<R extends GridRow>({ col, row, value, initialText, mode, a
     const option = visible[index];
     doneRef.current = true;
     if (option) onCommitValue(option.value, move);
+    // Typed text that matches no option is kept (flagged, like any value
+    // that doesn't parse) and the selection still moves on, instead of the
+    // text vanishing and Tab doing nothing.
+    else if (query.trim()) onCommitText(query, move);
     else onCancel();
   };
 

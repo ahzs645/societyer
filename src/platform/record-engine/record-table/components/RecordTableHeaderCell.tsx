@@ -177,23 +177,37 @@ export function RecordTableHeaderCell({
     setMenuOpen(false);
   };
 
-  const onResizeMouseDown = (e: React.MouseEvent) => {
+  // Pointer events, so a finger or pen resizes a column as a mouse does.
+  // Capturing the pointer keeps the drag on the handle even when the finger
+  // runs ahead of it, and stops the table scroller from panning meanwhile.
+  const onResizePointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    const target = e.currentTarget;
+    const pointerId = e.pointerId;
+    try {
+      target.setPointerCapture(pointerId);
+    } catch {
+      // Capture is a nicety: window listeners below still follow the drag.
+    }
     resizing.current = { startX: e.clientX, startSize: recordField.size };
-    const onMove = (ev: MouseEvent) => {
-      if (!resizing.current) return;
+    const onMove = (ev: PointerEvent) => {
+      if (!resizing.current || ev.pointerId !== pointerId) return;
       const delta = ev.clientX - resizing.current.startX;
       const next = Math.max(80, resizing.current.startSize + delta);
       handle.get().resizeColumn(recordField.viewFieldId, next);
     };
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
       resizing.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const resizeWithKeyboard = (event: React.KeyboardEvent) => {
@@ -323,7 +337,9 @@ export function RecordTableHeaderCell({
       {!isMobile && (
         <span
           className="record-table__resize-handle"
-          onMouseDown={onResizeMouseDown}
+          onPointerDown={onResizePointerDown}
+          // The browser must not pan or zoom the table while a finger drags it.
+          style={{ touchAction: "none" }}
           aria-label="Resize column"
           aria-orientation="vertical"
           aria-valuemin={80}

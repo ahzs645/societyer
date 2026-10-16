@@ -1,5 +1,5 @@
 import { useStore } from "zustand";
-import { useRecordTableStoreOrThrow, type RecordTableStore } from "../state/recordTableStore";
+import { applyPendingEdits, useRecordTableStoreOrThrow, type RecordTableStore } from "../state/recordTableStore";
 import { filterAndSortRecords } from "../utils/filterAndSortRecords";
 
 type CacheEntry<T> = { deps: readonly unknown[]; value: T };
@@ -40,11 +40,13 @@ export function useFilteredRecords() {
   const sorts = useStore(store, (s) => s.sorts);
   const searchTerm = useStore(store, (s) => s.searchTerm);
   const dateContext = useStore(store, (s) => s.dateContext);
+  // Inline edits show (and sort/filter) as soon as they are made.
+  const pendingEdits = useStore(store, (s) => s.pendingEdits);
 
   return memoForStore(
     filteredCache,
     store,
-    [records, columns, filters, filterGroups, sorts, searchTerm, dateContext],
-    () => filterAndSortRecords({ records, columns, filters, filterGroups, sorts, searchTerm, dateContext }),
+    [records, pendingEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext],
+    () => filterAndSortRecords({ records: applyPendingEdits(records, pendingEdits), columns, filters, filterGroups, sorts, searchTerm, dateContext }),
   );
 }

@@ -1,4 +1,4 @@
-import { forwardRef, type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 // NOTE: if you're adding another hook to this file, it MUST go above all the
 // early returns (`if (loading) ...`, etc). React's rules of hooks require a
 // stable call order on every render. An earlier iteration had a useMemo
@@ -6,7 +6,7 @@ import { forwardRef, type CSSProperties, type ReactNode, useCallback, useEffect,
 // count grew past the threshold on a re-render.
 import { lowerLabel } from "../utils/lowerLabel";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
-import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { useRecordTableState, useRecordTableStoreHandle, type CellPosition } from "../state/recordTableStore";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { useRecordTableRowModel, type RecordTableRowItem } from "../hooks/useRecordTableRowModel";
 import { useRecordTableColumns } from "../hooks/useRecordTableColumns";
@@ -18,6 +18,7 @@ import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./RecordTableAggregateFooter";
 import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableActionRow";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
+import { useRecordTableUpdate } from "../hooks/useRecordTableUpdate";
 import { useCurrentUserId } from "../../../../hooks/useCurrentUser";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
@@ -252,6 +253,7 @@ export function RecordTable({
   const viewId = useRecordTableState((s) => s.viewId);
   const hasFilters = useRecordTableState((s) => s.filters.length > 0 || s.searchTerm.trim().length > 0);
   const handle = useRecordTableStoreHandle();
+  const saveRecord = useRecordTableUpdate();
   const getTableState = handle.get;
   const tableRootRef = useRef<HTMLDivElement | null>(null);
   const scrollCleanupRef = useRef<(() => void) | null>(null);
@@ -434,6 +436,43 @@ export function RecordTable({
     selectable: effectiveSelectable || inlineSelection,
   });
 
+  // The focused/editing cell follows its record, not its row number: when an
+  // edit (or anyone's change) re-sorts the rows, the ring moves with the
+  // record it was on, and the moved row flashes so the jump is visible.
+  const previousRowRecordsRef = useRef<any[]>(rowModel.records);
+  useLayoutEffect(() => {
+    const previous = previousRowRecordsRef.current;
+    const next = rowModel.records;
+    previousRowRecordsRef.current = next;
+    if (previous === next) return;
+    const state = handle.get();
+    if (!state.focusedCell && !state.editingCell) return;
+    const indexById = new Map<string, number>();
+    next.forEach((record, index) => indexById.set(String(record?._id), index));
+    const follow = (position: CellPosition | null) => {
+      if (!position) return position;
+      const recordId = previous[position.rowIndex]?._id;
+      if (recordId == null) return position;
+      const rowIndex = indexById.get(String(recordId));
+      if (rowIndex === undefined || rowIndex === position.rowIndex) return position;
+      return { ...position, rowIndex };
+    };
+    const focusedCell = follow(state.focusedCell);
+    const editingCell = follow(state.editingCell);
+    if (focusedCell === state.focusedCell && editingCell === state.editingCell) return;
+    handle.set({ focusedCell, editingCell, rangeAnchor: null });
+    const movedId = focusedCell ? next[focusedCell.rowIndex]?._id : null;
+    if (movedId != null && focusedCell !== state.focusedCell) {
+      const id = String(movedId);
+      handle.get().setFlashRecordIds(new Set([...handle.get().flashRecordIds, id]));
+      window.setTimeout(() => {
+        const remaining = new Set(handle.get().flashRecordIds);
+        remaining.delete(id);
+        handle.get().setFlashRecordIds(remaining);
+      }, FLASH_DURATION_MS);
+    }
+  }, [rowModel.records, handle]);
+
   const itemIndexByRowIndex = rowModel.itemIndexByRowIndex;
   useEffect(() => {
     if (!focusedCell) return;
@@ -472,6 +511,12 @@ export function RecordTable({
       // Inline editors portal their popovers (select menus, calendars) to
       // <body>; interacting with them must not tear the editor down.
       if (!root || !isOutsidePointerEvent(event, root)) return;
+      // Tapping or clicking away finishes an edit the way Enter does: save
+      // the open editor's draft before tearing it down. (Clearing first
+      // unmounted the input before its blur could save, losing the edit.)
+      // Escape remains the way to throw an edit away.
+      const { editingCell, editorFlush } = handle.get();
+      if (editingCell && editorFlush && editorFlush() === false) return;
       handle.get().setFocusedCell(null);
       handle.get().setEditingInitialValue(undefined);
       handle.get().setEditingCell(null);
@@ -572,6 +617,9 @@ export function RecordTable({
           getItemId={(record) => String(record._id)}
           getColumnId={(record) => normalizeBoardValue(record[groupColumn.field.name])}
           canMove={canMoveBoardRecords}
+          // Values that match no column (empty, retired options) gather in
+          // their own column instead of silently dropping off the board.
+          unassignedLabel={`No ${groupColumn.field.label.toLowerCase()}`}
           onMove={(record, toColumnId) => {
             if (!onUpdate) return;
             const value =
@@ -580,11 +628,10 @@ export function RecordTable({
                 : groupColumn.field.fieldType === FIELD_TYPES.BOOLEAN
                   ? toColumnId === "true"
                   : toColumnId;
-            void onUpdate({
-              recordId: String(record._id),
-              fieldName: groupColumn.field.name,
-              value,
-            });
+            void saveRecord(
+              { recordId: String(record._id), fieldName: groupColumn.field.name, value },
+              { fieldLabel: groupColumn.field.label },
+            );
           }}
           renderCard={(record) => {
             const detailColumns = boardDetailColumns
@@ -723,6 +770,7 @@ export function RecordTable({
                       renderRowActions={renderRowActions}
                       rowMenuSections={rowMenuSections}
                       showOpenRecordAction={hasOpenRecordAction}
+                      longPressSelect={selectable}
                       renderCell={renderCell}
                     />
                   </PlainRecordRow>
@@ -805,6 +853,7 @@ export function RecordTable({
               renderRowActions={renderRowActions}
               rowMenuSections={rowMenuSections}
               showOpenRecordAction={hasOpenRecordAction}
+              longPressSelect={selectable}
               renderCell={renderCell}
             />
           )

@@ -26,7 +26,15 @@ type RecordBoardProps<T> = {
    * caller can position a portal'd menu at the click coordinates. */
   onItemContextMenu?: (item: T, event: ReactMouseEvent<HTMLDivElement>) => void;
   emptyLabel?: string;
+  /**
+   * Items whose column id matches no column (an empty value, a retired
+   * option) are shown in an extra column with this label rather than
+   * dropped from the board. Cards can move out of it but not into it.
+   */
+  unassignedLabel?: string;
 };
+
+const UNASSIGNED_COLUMN_ID = "__record-board-unassigned__";
 
 function groupBoardItems<T>(
   columns: RecordBoardColumn[],
@@ -34,10 +42,13 @@ function groupBoardItems<T>(
   getColumnId: (item: T) => string,
 ) {
   const grouped = new Map<string, T[]>(columns.map((column) => [column.id, []]));
+  const unassigned: T[] = [];
   for (const item of items) {
-    const columnId = getColumnId(item);
-    grouped.set(columnId, [...(grouped.get(columnId) ?? []), item]);
+    const bucket = grouped.get(getColumnId(item));
+    if (bucket) bucket.push(item);
+    else unassigned.push(item);
   }
+  grouped.set(UNASSIGNED_COLUMN_ID, unassigned);
   return grouped;
 }
 
@@ -54,16 +65,22 @@ export function RecordBoard<T>({
   onItemClick,
   onItemContextMenu,
   emptyLabel,
+  unassignedLabel = "Other",
 }: RecordBoardProps<T>) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
 
   const grouped = groupBoardItems(columns, items, getColumnId);
+  const unassignedCount = grouped.get(UNASSIGNED_COLUMN_ID)?.length ?? 0;
+  const shownColumns: RecordBoardColumn[] = unassignedCount > 0
+    ? [...columns, { id: UNASSIGNED_COLUMN_ID, label: unassignedLabel, tone: "gray" }]
+    : columns;
 
   return (
     <div className="kanban">
-      {columns.map((col) => {
+      {shownColumns.map((col) => {
         const colItems = grouped.get(col.id) ?? [];
+        const acceptsDrop = canMove && col.id !== UNASSIGNED_COLUMN_ID;
         return (
           <div className="kanban__col" key={col.id}>
             <div className="kanban__head">
@@ -76,7 +93,7 @@ export function RecordBoard<T>({
             <div
               className={`kanban__body${overCol === col.id ? " is-dragging-over" : ""}`}
               onDragOver={
-                canMove
+                acceptsDrop
                   ? (e) => {
                       e.preventDefault();
                       setOverCol(col.id);
@@ -84,12 +101,12 @@ export function RecordBoard<T>({
                   : undefined
               }
               onDragLeave={
-                canMove
+                acceptsDrop
                   ? () => setOverCol((current) => (current === col.id ? null : current))
                   : undefined
               }
               onDrop={
-                canMove
+                acceptsDrop
                   ? (e) => {
                       e.preventDefault();
                       if (dragId) {

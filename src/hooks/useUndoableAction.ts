@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { useToast } from "../components/Toast";
+import { useToast, type ToastAction } from "../components/Toast";
 
 /**
  * Undo-first feedback for reversible actions.
@@ -43,6 +43,8 @@ export type UndoableActionOptions = {
   dedupeKey?: string;
   /** How long Undo stays available, in ms. */
   duration?: number;
+  /** A second choice beside Undo in the toast (e.g. "Show" the moved record). */
+  secondaryAction?: ToastAction;
 };
 
 const DEFAULT_UNDO_MS = 8000;
@@ -69,6 +71,7 @@ export function useUndoableAction() {
         undoLabel = "Undo",
         dedupeKey,
         duration = DEFAULT_UNDO_MS,
+        secondaryAction,
       } = options;
 
       if (dedupeKey) {
@@ -109,6 +112,7 @@ export function useUndoableAction() {
         description,
         dedupeKey,
         duration,
+        secondaryAction,
         action: { label: undoLabel, onClick: () => void attemptUndo() },
       });
       return true;

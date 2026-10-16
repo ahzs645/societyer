@@ -12,6 +12,7 @@ import type {
 } from "../../types";
 import { COUNTRY_OPTIONS } from "../countryOptions";
 import { normalizeEmails, normalizeLinks, normalizePhones } from "./display/StructuredFieldDisplays";
+import { useFieldInputFlush } from "./fieldInputFlush";
 
 export type StructuredFieldInputProps = {
   value: unknown;
@@ -25,6 +26,7 @@ export function AddressInput({ value, onCommit, onCancel }: StructuredFieldInput
   const firstInput = useRef<HTMLInputElement>(null);
   useEffect(() => { firstInput.current?.focus(); firstInput.current?.select(); }, []);
   const set = (key: keyof AddressValue, next: string) => setDraft((current) => ({ ...current, [key]: next || null }));
+  useDirtyFlush(draft, () => onCommit(cleanObject(draft)), onCancel);
 
   return (
     <div className="record-cell__structured-editor record-cell__address-editor" role="group" aria-label="Edit address">
@@ -56,6 +58,7 @@ export function FullNameInput({ value, onCommit, onCancel }: StructuredFieldInpu
   const firstInput = useRef<HTMLInputElement>(null);
   useEffect(() => { firstInput.current?.focus(); firstInput.current?.select(); }, []);
   const set = (key: keyof FullNameValue, next: string) => setDraft((current) => ({ ...current, [key]: next || null }));
+  useDirtyFlush(draft, () => onCommit(cleanObject(draft)), onCancel);
   return (
     <div className="record-cell__structured-editor" role="group" aria-label="Edit full name">
       <EditorField label="Prefix"><input ref={firstInput} value={draft.honorificPrefix ?? ""} onChange={(event) => set("honorificPrefix", event.target.value)} /></EditorField>
@@ -70,6 +73,7 @@ export function FullNameInput({ value, onCommit, onCancel }: StructuredFieldInpu
 
 export function RichTextInput({ value, onCommit, onCancel }: StructuredFieldInputProps) {
   const [draft, setDraft] = useState(String(value ?? ""));
+  useDirtyFlush(draft, () => onCommit(draft), onCancel);
   return (
     <div className="record-cell__structured-editor record-cell__long-editor">
       <label><span>Rich text</span><textarea autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} /></label>
@@ -84,8 +88,15 @@ export function RawJsonInput({ value, onCommit, onCancel }: StructuredFieldInput
   });
   const [error, setError] = useState("");
   const apply = () => {
-    try { onCommit(JSON.parse(draft)); } catch { setError("Enter valid JSON before applying."); }
+    try {
+      onCommit(JSON.parse(draft));
+      return true;
+    } catch {
+      setError("Enter valid JSON before applying.");
+      return false;
+    }
   };
+  useDirtyFlush(draft, apply, onCancel);
   return (
     <div className="record-cell__structured-editor record-cell__long-editor">
       <label><span>JSON</span><textarea autoFocus className="mono" value={draft} onChange={(event) => { setDraft(event.target.value); setError(""); }} /></label>
@@ -116,6 +127,7 @@ function MultiValueInput({ initial, label, type = "text", onCommit, onCancel, to
   const [items, setItems] = useState(() => initial.length ? initial : [""]);
   const cleanItems = useMemo(() => items.map((item) => item.trim()).filter(Boolean), [items]);
   const setItem = (index: number, value: string) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? value : item));
+  useDirtyFlush(items, () => onCommit(toValue(cleanItems)), onCancel);
   return (
     <div className="record-cell__structured-editor record-cell__multi-value-editor" role="group" aria-label={`Edit ${label.toLowerCase()} values`}>
       <div className="record-cell__multi-value-list">
@@ -130,6 +142,21 @@ function MultiValueInput({ initial, label, type = "text", onCommit, onCancel, to
       <EditorActions onCancel={onCancel} onApply={() => onCommit(toValue(cleanItems))} />
     </div>
   );
+}
+
+/**
+ * Clicking or tapping outside applies a changed draft (as Apply does) and
+ * simply closes an untouched one, so no unchanged value is written.
+ */
+function useDirtyFlush<T>(draft: T, apply: () => boolean | void, cancel: () => void) {
+  const [initial] = useState(() => JSON.stringify(draft));
+  useFieldInputFlush(() => {
+    if (JSON.stringify(draft) === initial) {
+      cancel();
+      return;
+    }
+    return apply();
+  });
 }
 
 function EditorField({ label, wide = false, children }: { label: string; wide?: boolean; children: React.ReactNode }) {

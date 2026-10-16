@@ -51,6 +51,9 @@ export function usePersistView({
     const state = handle.get();
     if (!state.viewId) throw new Error("No active view to save.");
     const viewId = state.viewId as Id<"views">;
+    // A quick search typed over a view without a saved search is not part
+    // of the view (it never marks it unsaved), so saving keeps it out.
+    const searchTerm = state.savedView?.searchTerm ? state.searchTerm : "";
     await updateView({
       id: viewId,
       patch: {
@@ -64,7 +67,7 @@ export function usePersistView({
         sortsJson: JSON.stringify(state.sorts),
         viewGroupsJson: JSON.stringify(state.viewGroups),
         viewFieldGroupsJson: JSON.stringify(state.fieldGroups),
-        searchTerm: state.searchTerm || undefined,
+        searchTerm: searchTerm || undefined,
         anyFieldFilterValue: state.anyFieldFilterValue || undefined,
         visibility: state.visibility,
         openRecordIn: state.openRecordIn,
@@ -117,7 +120,7 @@ export function usePersistView({
     // Promote live state into `savedView` so isDirty flips back to false.
     requireCurrentAuthority();
     handle.set({ columns: savedColumns });
-    handle.get().markSaved({ ...state, columns: savedColumns });
+    handle.get().markSaved({ ...state, columns: savedColumns, searchTerm });
   }, [updateField, updateView, addField, reorderFields, societyId, handle, requireCurrentAuthority]);
 
   const saveAsNewView = useCallback(

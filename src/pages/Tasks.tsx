@@ -38,7 +38,8 @@ import {
   type TaskFormValue,
 } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { TaskListView } from "../features/tasks/TaskListView";
+import { TaskListView, usePhoneTaskSelection } from "../features/tasks/TaskListView";
+import { useLongPress } from "../platform/record-engine/record-table/hooks/useLongPress";
 import { TaskBoardView } from "../features/tasks/TaskBoardView";
 import { TaskScopeBar } from "../features/tasks/TaskScopeBar";
 import { TaskChecklist } from "../features/tasks/TaskChecklist";
@@ -1118,6 +1119,7 @@ function TaskPhoneList({
 }) {
   const records = useFilteredRecords() as TaskRecord[];
   const viewType = useRecordTableState((state) => state.type);
+  usePhoneTaskSelection(canManage && viewType === "table");
   if (viewType !== "table") return <RecordTable selectable={false} />;
 
   if (records.length === 0) {
@@ -1150,20 +1152,7 @@ function TaskPhoneList({
           !["Done", "Cancelled", "Unknown"].includes(task.status);
 
         return (
-          <div
-            key={task._id}
-            className="card"
-            style={{ padding: 12, cursor: "pointer" }}
-            role="button"
-            tabIndex={0}
-            onClick={() => onEdit(task)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onEdit(task);
-              }
-            }}
-          >
+          <TaskPhoneCard key={task._id} task={task} canManage={canManage} onOpen={() => onEdit(task)}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               <span
                 className={`priority-dot priority-${task.priority}`}
@@ -1246,9 +1235,73 @@ function TaskPhoneList({
                 />
               </span>
             </div>
-          </div>
+          </TaskPhoneCard>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A phone task card that joins table selection: "Select records" (Options
+ * menu) or a long-press shows a checkbox on every card, and a tap then ticks
+ * the card instead of opening it, so the bulk actions are reachable.
+ */
+function TaskPhoneCard({
+  task,
+  canManage,
+  onOpen,
+  children,
+}: {
+  task: TaskRecord;
+  canManage: boolean;
+  onOpen: () => void;
+  children: ReactNode;
+}) {
+  const taskId = String(task._id);
+  const handle = useRecordTableStoreHandle();
+  const selected = useRecordTableState((state) => state.selectedRecordIds.has(taskId));
+  const selecting = useRecordTableState((state) => state.mobileSelectable && state.mobileSelectionMode);
+  const toggle = () =>
+    handle.get().setSelectedRecordIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  const longPress = useLongPress(canManage ? () => {
+    if (handle.get().mobileSelectable) handle.get().setMobileSelectionMode(true);
+    handle.get().setSelectedRecordIds((previous) => new Set(previous).add(taskId));
+  } : undefined);
+  const activate = () => (selecting ? toggle() : onOpen());
+  return (
+    <div
+      className="card"
+      style={{ padding: 12, cursor: "pointer", boxShadow: selected ? "inset 0 0 0 2px var(--accent)" : undefined }}
+      role="button"
+      tabIndex={0}
+      aria-label={task.title}
+      aria-pressed={selecting ? selected : undefined}
+      {...longPress}
+      onClick={activate}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          activate();
+        }
+      }}
+    >
+      {selecting && (
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 32, marginBottom: 4 }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input type="checkbox" checked={selected} onChange={toggle} aria-label={`Select ${task.title}`} style={{ width: 20, height: 20, margin: 0 }} />
+          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{selected ? "Selected" : "Select"}</span>
+        </label>
+      )}
+      {children}
     </div>
   );
 }
