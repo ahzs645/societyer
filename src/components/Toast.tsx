@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, AlertTriangle, Info, X, AlertCircle } from "lucide-react";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 
 export type ToastTone = "success" | "error" | "warn" | "info";
 
@@ -53,6 +54,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
   const idRef = useRef(1);
   const timersRef = useRef<Map<number, number>>(new Map());
+  // When each running timer fires, and how long a paused toast had left.
+  const deadlinesRef = useRef<Map<number, number>>(new Map());
+  const remainingRef = useRef<Map<number, number>>(new Map());
+  // Toasts sit above the on-screen keyboard (CSS reads the inset).
+  useKeyboardInsetTracking();
 
   const remove = useCallback((id: number) => {
     const timers = timersRef.current;
@@ -61,8 +67,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(t);
       timers.delete(id);
     }
+    deadlinesRef.current.delete(id);
+    remainingRef.current.delete(id);
     setItems((xs) => xs.filter((x) => x.id !== id));
   }, []);
+
+  const schedule = useCallback((id: number, ms: number) => {
+    const existing = timersRef.current.get(id);
+    if (existing) window.clearTimeout(existing);
+    timersRef.current.set(id, window.setTimeout(() => remove(id), ms));
+    deadlinesRef.current.set(id, Date.now() + ms);
+    remainingRef.current.delete(id);
+  }, [remove]);
+
+  // Hovering or focusing a toast holds it on screen (an Undo is often still
+  // being reached for); leaving it gives back the time that was left.
+  const pause = useCallback((id: number) => {
+    const timer = timersRef.current.get(id);
+    if (!timer) return;
+    window.clearTimeout(timer);
+    timersRef.current.delete(id);
+    remainingRef.current.set(id, Math.max(0, (deadlinesRef.current.get(id) ?? Date.now()) - Date.now()));
+  }, []);
+  const resume = useCallback((id: number) => {
+    const left = remainingRef.current.get(id);
+    if (left === undefined) return;
+    schedule(id, Math.max(1500, left));
+  }, [schedule]);
 
   const show = useCallback<ToastApi["show"]>(
     ({ tone, title, description, duration, action, dedupeKey }) => {
@@ -80,19 +111,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           );
         });
         if (matched) {
-          const existing = timersRef.current.get(matched.id);
-          if (existing) window.clearTimeout(existing);
-          const handle = window.setTimeout(() => remove(matched!.id), d);
-          timersRef.current.set(matched.id, handle);
+          schedule(matched.id, d);
           return;
         }
       }
       const id = idRef.current++;
       setItems((xs) => [...xs, { id, tone, title, description, duration: d, action, dedupeKey }]);
-      const handle = window.setTimeout(() => remove(id), d);
-      timersRef.current.set(id, handle);
+      schedule(id, d);
     },
-    [remove],
+    [schedule],
   );
 
   const api: ToastApi = {
@@ -116,7 +143,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {createPortal(
         <div className="toast-stack" aria-live="polite">
           {items.map((t) => (
-            <ToastItem key={t.id} toast={t} onClose={() => remove(t.id)} />
+            <ToastItem
+              key={t.id}
+              toast={t}
+              onClose={() => remove(t.id)}
+              onPause={() => pause(t.id)}
+              onResume={() => resume(t.id)}
+            />
           ))}
         </div>,
         document.body,
@@ -125,7 +158,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+function ToastItem({
+  toast,
+  onClose,
+  onPause,
+  onResume,
+}: {
+  toast: Toast;
+  onClose: () => void;
+  onPause: () => void;
+  onResume: () => void;
+}) {
   const Icon =
     toast.tone === "success"
       ? CheckCircle2
@@ -135,7 +178,17 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
           ? AlertTriangle
           : Info;
   return (
-    <div className={`toast toast--${toast.tone}`} role="status">
+    <div
+      className={`toast toast--${toast.tone}`}
+      // Errors interrupt; everything else waits its turn.
+      role={toast.tone === "error" ? "alert" : "status"}
+      onMouseEnter={onPause}
+      onMouseLeave={onResume}
+      onFocus={onPause}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onResume();
+      }}
+    >
       <Icon className="toast__icon" />
       <div className="toast__body">
         <div className="toast__title">{toast.title}</div>
