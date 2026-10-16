@@ -23,6 +23,7 @@ import { optionLabel } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import { roleHolderInlinePatch } from "../lib/roleHolderInlineEdit";
 import {
   RecordTable,
   RecordTableFilterChips,
@@ -151,8 +152,13 @@ export function RoleHoldersPage() {
   ) as Array<{ op: string; key: string; name: string }> | undefined;
   // A new shareholder takes the share class only when exactly one exists;
   // before any class is set up there is nothing to assign.
-  const shareClassArgs = society && isCorporation(society) && draft && !draft._id && draft.roleType === "shareholder" ? { societyId: society._id } : "skip";
+  // Also loaded for inline edits of the class name, which relink the class id.
+  const shareClassArgs = society && isCorporation(society) && (canWrite || (draft && !draft._id && draft.roleType === "shareholder")) ? { societyId: society._id } : "skip";
   const shareClassLedger = useQuery(api.legalOperations.rightsLedger, shareClassArgs) as { classes?: any[] } | undefined;
+  const shareClassOptions = useMemo(
+    () => (shareClassLedger?.classes ?? []).map((row: any) => ({ _id: String(row._id), className: String(row.className ?? "") })),
+    [shareClassLedger],
+  );
   // Filled at most once per open form, so clearing the field keeps it clear.
   const shareClassFilled = useRef(false);
   useEffect(() => {
@@ -375,7 +381,9 @@ export function RoleHoldersPage() {
               if (!canWrite) return;
               const record = records.find((row) => row._id === recordId);
               if (!record) return;
-              await persistRoleHolder({ ...record, [fieldName]: value });
+              // A class name edited inline relinks (or unlinks) the class id,
+              // so voting power follows the name shown, as in the drawer.
+              await persistRoleHolder(roleHolderInlinePatch(record, fieldName, value, shareClassOptions));
             } : undefined}
           >
             <RecordTableViewToolbar
@@ -926,7 +934,7 @@ export function RightsLedgerPage() {
                       <div className="muted">{holder?.roleType ? optionLabel("representativeTypes", holder.roleType) : "Unlinked holder"}</div>
                     </td>
                     <td data-label="Class">{rightsClass?.className || holding.rightsClassId}<div className="muted">{rightsClass?.classType ? optionLabel("rightsClassTypes", rightsClass.classType) : "No class record"}</div></td>
-                    <td data-label="Quantity">{holding.quantity}</td>
+                    <td data-label="Quantity">{formatQuantity(holding.quantity)}</td>
                     <td data-label="Source">
                       <div className="row" style={{ gap: 6, alignItems: "center" }}>
                         <Badge tone="success">Posted ledger</Badge>
@@ -1005,7 +1013,7 @@ export function RightsLedgerPage() {
                     <td data-label="Class">{rightsClass?.className || "Unlinked"}</td>
                     <td data-label="From">{source?.fullName || row.sourceHolderName || "Treasury/new issue"}</td>
                     <td data-label="To">{destination?.fullName || row.destinationHolderName || "No destination"}</td>
-                    <td data-label="Quantity">{row.quantity ?? "-"}</td>
+                    <td data-label="Quantity">{formatQuantity(row.quantity, "-")}</td>
                     <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{optionLabel("rightsholdingTransferStatuses", row.status)}</Badge></td>
                     <td data-label="Evidence">
                       {row.precedentRunId ? (
@@ -1193,7 +1201,7 @@ export function RightsLedgerPage() {
                   <tbody>
                     {holdings.map((h: any) => {
                       const rc = data?.classes?.find((c: any) => c._id === h.rightsClassId);
-                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td>{h.quantity}</td></tr>;
+                      return <tr key={h.rightsClassId}><td>{rc?.className || h.rightsClassId}</td><td>{formatQuantity(h.quantity)}</td></tr>;
                     })}
                     {holdings.length === 0 && <EmptyRow cols={2} label="No holdings on this date." />}
                   </tbody>
@@ -1215,7 +1223,7 @@ export function RightsLedgerPage() {
                           <td>{optionLabel("rightsholdingTransferTypes", t.transferType)}</td>
                           <td>{rc?.className || "—"}</td>
                           <td>{(src?.fullName || t.sourceHolderName || "Treasury")} → {(dst?.fullName || t.destinationHolderName || "—")}</td>
-                          <td>{t.quantity ?? "—"}</td>
+                          <td>{formatQuantity(t.quantity, "—")}</td>
                         </tr>
                       );
                     })}
@@ -2283,4 +2291,11 @@ function toneForStatus(status?: string) {
   if (/(draft|review|proposed|generating|signing|name_search|filing|organizing)/.test(value)) return "warn" as const;
   if (/(void|cancel|inactive|former|error|critical)/.test(value)) return "danger" as const;
   return "neutral" as const;
+}
+
+/** Share and unit counts with thousands separators (100,000, not 100000). */
+function formatQuantity(quantity: unknown, empty = "") {
+  if (quantity === null || quantity === undefined || quantity === "") return empty;
+  const value = typeof quantity === "number" ? quantity : Number(quantity);
+  return Number.isFinite(value) ? value.toLocaleString() : String(quantity);
 }
