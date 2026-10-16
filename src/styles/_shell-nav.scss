@@ -877,15 +877,9 @@
   .demo-banner {
     min-height: 0;
     padding-block: 0;
-    /* The switch's hit area reaches 14px down into the page; lift the banner
-     * above the page so the page doesn't take those taps. */
+    /* The switch's hit area reaches into the page's top padding; lift the
+     * banner above the page so the page doesn't take those taps. */
     position: relative;
-    z-index: 1;
-  }
-  /* …except where a page control's own hit area meets that band: the title's
-   * ⓘ sits just under the banner and, at the same level but later in the
-   * page, keeps its full 44px. */
-  .page__title-row > .info-popover__trigger {
     z-index: 1;
   }
 }

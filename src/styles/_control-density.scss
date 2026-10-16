@@ -269,10 +269,12 @@ $tap-block: (
     height: token('control-h-touch-icon');
   }
   // The fixed top bar covers anything above the banner, so the switch's
-  // hit area reaches down into the page instead of up.
+  // hit area reaches down into the page instead of up: only as far as the
+  // page's 8px top padding (the banner sits above the page, _shell-nav), so
+  // it never takes taps meant for the title row's controls.
   .demo-banner .btn::after {
     top: 0;
-    bottom: -14px;
+    bottom: calc(-1 * #{token('s-2')});
     height: auto;
     transform: translateX(-50%);
   }
