@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
-import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
+import { keyboardSheetStyle, useVisualViewportFrame } from "../lib/useVisualViewportBottomInset";
 import i18n from "../i18n";
 
 type ModalSize = "sm" | "md" | "lg" | "xl";
@@ -84,7 +84,7 @@ export function Modal({
   // be too, riding above the on-screen keyboard.
   const isSheet = useIsBottomSheet();
   useSheetDrag(dialogRef, { enabled: open && isSheet && dismissOnBackdrop, onDismiss: onClose });
-  const keyboardInset = useVisualViewportBottomInset(open && isSheet);
+  const keyboardFrame = useVisualViewportFrame(open && isSheet);
 
   if (!open) return null;
   const maxWidth = width != null ? `${width}px` : MODAL_WIDTH_VARS[size];
@@ -105,7 +105,7 @@ export function Modal({
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth, zIndex: modalZ, ...resize.style, ...(isSheet && keyboardInset > 0 ? { bottom: keyboardInset, maxHeight: `calc(100dvh - ${keyboardInset + 12}px)` } : null) }}
+        style={{ maxWidth, zIndex: modalZ, ...resize.style, ...(isSheet ? keyboardSheetStyle(keyboardFrame) : null) }}
       >
         {resize.handles}
         {isSheet && <div className="sheet-grabber" aria-hidden="true" />}

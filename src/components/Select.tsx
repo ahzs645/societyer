@@ -6,7 +6,7 @@ import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
 import { getDialogFocusables } from "../lib/useDialogFocus";
-import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
+import { keyboardSheetStyle, useVisualViewportFrame } from "../lib/useVisualViewportBottomInset";
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -107,7 +107,7 @@ export function Select<T extends string>({
   // Keeps the bottom sheet above the on-screen keyboard: iOS overlays the
   // keyboard on the layout viewport, so a `bottom: 0` sheet disappears
   // behind it the moment the search input is focused.
-  const keyboardInset = useVisualViewportBottomInset(open && isBottomSheet);
+  const keyboardFrame = useVisualViewportFrame(open && isBottomSheet);
   useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
@@ -377,12 +377,7 @@ export function Select<T extends string>({
                 onKeyDown={onMenuKey}
                 style={
                   isBottomSheet
-                    ? keyboardInset > 0
-                      ? {
-                          bottom: keyboardInset,
-                          maxHeight: `calc(100vh - ${keyboardInset + 12}px)`,
-                        }
-                      : undefined
+                    ? keyboardSheetStyle(keyboardFrame) ?? undefined
                     : !pos
                       ? undefined
                       : {

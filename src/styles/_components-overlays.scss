@@ -161,7 +161,13 @@ $sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 .menu.menu--sheet .menu__item-icon svg { width: 16px; height: 16px; }
 .menu.menu--sheet .menu__search {
+  /* The whole sheet scrolls; keep the search field pinned at its top so
+   * typing never pushes it out of view. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 8px 10px;
+  background: token('bg-panel');
 }
 .menu.menu--sheet .menu__search-input {
   font-size: token('fs-input-touch');
