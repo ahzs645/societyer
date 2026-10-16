@@ -473,9 +473,16 @@ $tap-block: (
     white-space: nowrap;
   }
   // The name doesn't fit beside the count (RecordTableToolbar measures):
-  // the name keeps the room.
+  // the name keeps the room. The count stays in the button's accessible
+  // name ("All members 90"), only visually hidden.
   .record-table__view-button.is-tight > .record-table__view-count {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .record-table__toolbar .record-table__view-count {
     flex: none;
