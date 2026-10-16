@@ -12,6 +12,9 @@ import { createPortal } from "react-dom";
 import { MenuRow, MenuSectionLabel } from "./ui";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
+import { focusAdjacentTo } from "../lib/useDialogFocus";
+import { useFloatingLayerStack } from "../lib/overlayStack";
+import { backdropDismissProps, swallowFollowingClick } from "../lib/floatingLayer";
 
 export type MenuItem = {
   id: string;
@@ -54,7 +57,13 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   const itemCount = sections.reduce((n, s) => n + s.items.length, 0);
   const isBottomSheet = isPhone && itemCount > SHEET_MIN_ITEMS;
 
-  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
+  // Closing by Esc, backdrop or swipe hands focus back to the trigger.
+  const dismiss = () => {
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
+  const layer = useFloatingLayerStack(open);
 
   const flat = useMemo(() => sections.flatMap((s) => s.items.filter((i) => !i.disabled)), [sections]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -108,6 +117,8 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
       if (triggerRef.current?.contains(t)) return;
       if (menuRef.current?.contains(t)) return;
       setOpen(false);
+      // The same tap must not also dismiss the dialog behind the menu.
+      swallowFollowingClick({ onlyBackdrops: true });
     };
     const onScroll = (event: Event) => {
       // A long sheet must remain open while its own options are scrolled.
@@ -131,40 +142,67 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
       setPosClamped(true);
     };
     const onResize = () => { if (!isBottomSheet) setOpen(false); };
+    // Capture phase, and the keys stop here: the open menu owns them, so
+    // Esc closes only the menu (not the panel or dialog it sits in) and the
+    // arrows don't also page through stacked cards behind it.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        (triggerRef.current as HTMLElement | null)?.focus();
-      } else if (e.key === "ArrowDown") {
+      // A layer opened above this menu handles its own keys.
+      if (!layer.isTop()) return;
+      const own = () => {
         e.preventDefault();
+        e.stopPropagation();
+      };
+      if (e.key === "Escape") {
+        own();
+        dismiss();
+      } else if (e.key === "Tab") {
+        own();
+        setOpen(false);
+        focusAdjacentTo(triggerRef.current, e.shiftKey);
+      } else if (e.key === "ArrowDown") {
+        own();
         setActiveIdx((i) => Math.min(i + 1, flat.length - 1));
       } else if (e.key === "ArrowUp") {
-        e.preventDefault();
+        own();
         setActiveIdx((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Home") {
+        own();
+        setActiveIdx(0);
+      } else if (e.key === "End") {
+        own();
+        setActiveIdx(flat.length - 1);
       } else if (e.key === "Enter") {
-        e.preventDefault();
+        own();
         const item = flat[activeIdx];
-        if (item) {
-          item.onSelect?.();
-          setOpen(false);
-        }
+        if (item) select(item);
       }
     };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, flat, activeIdx, align, isBottomSheet]);
 
   useEffect(() => {
     if (open) setActiveIdx(0);
   }, [open]);
+
+  // Focus follows the active row, so screen readers announce it and Space
+  // or Enter act on it. Waits for an anchored menu to be placed (it renders
+  // hidden for one frame while it measures).
+  const menuShown = open && (isBottomSheet || posClamped);
+  useEffect(() => {
+    if (!menuShown) return;
+    const rows = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)');
+    rows?.[activeIdx]?.focus({ preventScroll: true });
+  }, [menuShown, activeIdx]);
 
   const cloned = cloneElement(trigger, {
     ref: (node: HTMLElement | null) => {
@@ -186,8 +224,11 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
 
   const select = (item: MenuItem) => {
     if (item.disabled) return;
-    item.onSelect?.();
+    // Back on the trigger first: an action that opens a dialog records the
+    // trigger as the control to return to, not a menu row about to unmount.
+    triggerRef.current?.focus({ preventScroll: true });
     setOpen(false);
+    item.onSelect?.();
   };
 
   const renderSections = () => {
@@ -226,11 +267,7 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
         ? createPortal(
             <>
               {isBottomSheet && (
-                <div
-                  className="menu-backdrop"
-                  aria-hidden="true"
-                  onMouseDown={() => setOpen(false)}
-                />
+                <div className="menu-backdrop" style={layer.backdrop} {...backdropDismissProps(dismiss)} />
               )}
               <div
                 ref={menuRef}
@@ -238,8 +275,9 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
                 role="menu"
                 style={
                   isBottomSheet || !pos
-                    ? undefined
+                    ? layer.panel
                     : {
+                        ...layer.panel,
                         top: pos.top,
                         left: posClamped ? pos.left : (align === "right" ? undefined : pos.left),
                         right: posClamped ? undefined : (align === "right" ? window.innerWidth - pos.left : undefined),

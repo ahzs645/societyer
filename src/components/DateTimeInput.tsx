@@ -4,6 +4,9 @@ import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useFloatingLayerStack } from "../lib/overlayStack";
+import { backdropDismissProps, swallowFollowingClick } from "../lib/floatingLayer";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
 type Props = {
@@ -90,7 +93,14 @@ export function DateTimeInput({
   const [isBottomSheet, setIsBottomSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
-  useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
+  // Closing by backdrop tap or swipe hands focus back to the trigger.
+  const dismiss = () => {
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+  useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
+  const layer = useFloatingLayerStack(open);
+  useKeyboardInsetTracking(open && isBottomSheet);
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -146,6 +156,8 @@ export function DateTimeInput({
       if (triggerRef.current?.contains(t)) return;
       if (popRef.current?.contains(t)) return;
       setOpen(false);
+      // One tap closes one layer: not also the dialog behind the calendar.
+      swallowFollowingClick({ onlyBackdrops: true });
     };
     const onScroll = (e: Event) => {
       // A bottom sheet is viewport-pinned — it can't drift from its anchor —
@@ -167,8 +179,11 @@ export function DateTimeInput({
       const left = Math.min(Math.max(8, anchor.left), Math.max(8, window.innerWidth - panel.width - 8));
       setPos({ top, left });
     };
+    // A keyboard opening for a field in the popover only changes the height
+    // (Android resizes the window for it); that must not close the popover.
+    const openedWidth = window.innerWidth;
     const onResize = () => {
-      if (isBottomSheet) return;
+      if (isBottomSheet || window.innerWidth === openedWidth) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
@@ -295,18 +310,14 @@ export function DateTimeInput({
         ? createPortal(
             <>
             {isBottomSheet && (
-              <div
-                className="menu-backdrop"
-                aria-hidden="true"
-                onMouseDown={() => setOpen(false)}
-              />
+              <div className="menu-backdrop" style={layer.backdrop} {...backdropDismissProps(dismiss)} />
             )}
             <div
               ref={popRef}
               role="dialog"
               aria-label="Date and time picker"
               className={`calendar calendar--with-time${isBottomSheet ? " calendar--sheet" : ""}`}
-              style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
+              style={isBottomSheet || !pos ? layer.panel : { ...layer.panel, top: pos.top, left: pos.left }}
             >
               {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
               <div className="calendar__typed">

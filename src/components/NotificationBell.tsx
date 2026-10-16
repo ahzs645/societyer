@@ -9,6 +9,8 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/format";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useFloatingLayerStack } from "../lib/overlayStack";
+import { backdropDismissProps, swallowFollowingClick } from "../lib/floatingLayer";
 import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
 import { useSociety } from "../hooks/useSociety";
 import { Tooltip } from "./Tooltip";
@@ -42,7 +44,13 @@ export function NotificationBell() {
   // Phones: the panel is a swipe-dismissable bottom sheet, not a popover
   // hanging off a bell in the corner.
   const isSheet = useIsBottomSheet();
-  useSheetDrag(panelRef, { enabled: open && isSheet, onDismiss: () => setOpen(false) });
+  // Closing by backdrop tap or swipe hands focus back to the bell.
+  const dismissPanel = () => {
+    setOpen(false);
+    btnRef.current?.focus({ preventScroll: true });
+  };
+  useSheetDrag(panelRef, { enabled: open && isSheet, onDismiss: dismissPanel });
+  const layer = useFloatingLayerStack(open);
   // Ring the bell when the unread count goes UP (not on first load / reads).
   const unreadCount = unread ?? 0;
   const prevUnreadRef = useRef<number | null>(null);
@@ -78,6 +86,7 @@ export function NotificationBell() {
       if (panelRef.current?.contains(e.target as Node)) return;
       if (btnRef.current?.contains(e.target as Node)) return;
       setOpen(false);
+      swallowFollowingClick({ onlyBackdrops: true });
     };
     window.addEventListener("mousedown", h);
     window.addEventListener("resize", place);
@@ -116,7 +125,7 @@ export function NotificationBell() {
       {open && (isSheet || anchor) &&
         createPortal(
           <>
-          {isSheet && <div className="menu-backdrop" aria-hidden="true" onMouseDown={() => setOpen(false)} />}
+          {isSheet && <div className="menu-backdrop" style={layer.backdrop} {...backdropDismissProps(dismissPanel)} />}
           <div
             ref={panelRef}
             role="dialog"
@@ -124,7 +133,8 @@ export function NotificationBell() {
             aria-modal={isSheet || undefined}
             tabIndex={-1}
             className={`notif-panel${isSheet ? " notif-panel--sheet" : ""}`}
-            style={isSheet || !anchor ? undefined : {
+            style={isSheet || !anchor ? layer.panel : {
+              ...layer.panel,
               top: anchor.top,
               left: anchor.left,
               width: anchor.width,

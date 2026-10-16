@@ -17,7 +17,14 @@ import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useIsBottomSheet, useSheetDrag } from "../lib/useSheetDrag";
-import { keyboardSheetStyle, useVisualViewportFrame } from "../lib/useVisualViewportBottomInset";
+import {
+  keyboardDialogStyle,
+  keyboardSheetStyle,
+  hasTouchScreen,
+  useKeyboardInsetTracking,
+  useVisualViewportFrame,
+} from "../lib/useVisualViewportBottomInset";
+import { useOverlayStackSlot } from "../lib/overlayStack";
 import i18n from "../i18n";
 
 type ModalSize = "sm" | "md" | "lg" | "xl";
@@ -81,10 +88,19 @@ export function Modal({
     elementRef: dialogRef,
   });
   // Phones: a bottom sheet, swipe-dismissable only when a backdrop tap would
-  // be too, riding above the on-screen keyboard.
+  // be too, riding above the on-screen keyboard. The swipe starts only from
+  // the grabber or header: a drag in a form's body scrolls it, and a long
+  // downward scroll gesture must never throw away what was typed.
   const isSheet = useIsBottomSheet();
-  useSheetDrag(dialogRef, { enabled: open && isSheet && dismissOnBackdrop, onDismiss: onClose });
-  const keyboardFrame = useVisualViewportFrame(open && isSheet);
+  useSheetDrag(dialogRef, {
+    enabled: open && isSheet && dismissOnBackdrop,
+    onDismiss: onClose,
+    handle: ".sheet-grabber, .modal__head",
+  });
+  // Every width: tablets get a keyboard too, and a centred dialog must then
+  // fit the visible area above it.
+  const keyboardFrame = useVisualViewportFrame(open && (isSheet || hasTouchScreen()));
+  useKeyboardInsetTracking(open);
 
   if (!open) return null;
   const maxWidth = width != null ? `${width}px` : MODAL_WIDTH_VARS[size];
@@ -105,7 +121,14 @@ export function Modal({
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
-        style={{ maxWidth, zIndex: modalZ, ...resize.style, ...(isSheet ? keyboardSheetStyle(keyboardFrame) : null) }}
+        style={{
+          maxWidth,
+          zIndex: modalZ,
+          ...resize.style,
+          ...(isSheet
+            ? keyboardSheetStyle(keyboardFrame)
+            : keyboardDialogStyle(keyboardFrame, { centredByTransform: !resize.active })),
+        }}
       >
         {resize.handles}
         {isSheet && <div className="sheet-grabber" aria-hidden="true" />}
@@ -180,7 +203,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                       : "btn--accent"
                 }`}
                 onClick={() => close(true)}
-                autoFocus
+                // The dialog opens on its action, not on the header Close button.
+                data-autofocus=""
               >
                 {state.confirmLabel ?? i18n.t("common.confirm", "Confirm")}
               </button>
@@ -281,7 +305,7 @@ export function PromptProvider({ children }: { children: ReactNode }) {
           {state.message && <div style={{ marginBottom: 10, color: "var(--text-secondary)" }}>{state.message}</div>}
           {state.multiline ? (
             <textarea
-              autoFocus
+              data-autofocus=""
               className="textarea"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -290,7 +314,7 @@ export function PromptProvider({ children }: { children: ReactNode }) {
             />
           ) : (
             <input
-              autoFocus
+              data-autofocus=""
               className="input"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -318,23 +342,10 @@ function useStableDomId(prefix: string) {
   return `${prefix}-${id.replace(/:/g, "")}`;
 }
 
-/** Monotonic counter tracking how many dialogs are currently open. Each
- * mounting dialog grabs the next slot so nested modals stack correctly, even
- * when they render into the same portal root. */
-let openDialogCount = 0;
-
+/** Each opening dialog takes the slot above the highest open one, so nested
+ * modals stack correctly even when they render into the same portal root. */
 export function useDialogStackSlot(open: boolean): number {
-  const [slot, setSlot] = useState(0);
-  useEffect(() => {
-    if (!open) return;
-    openDialogCount += 1;
-    const current = openDialogCount;
-    setSlot(current);
-    return () => {
-      openDialogCount = Math.max(0, openDialogCount - 1);
-    };
-  }, [open]);
-  return slot;
+  return useOverlayStackSlot(open, "dialog");
 }
 
 // ---------------- Drag-to-resize dialog frame ---------------- //

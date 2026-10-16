@@ -5,8 +5,10 @@ import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
-import { getDialogFocusables } from "../lib/useDialogFocus";
+import { focusAdjacentTo } from "../lib/useDialogFocus";
 import { keyboardSheetStyle, useVisualViewportFrame } from "../lib/useVisualViewportBottomInset";
+import { useFloatingLayerStack } from "../lib/overlayStack";
+import { backdropDismissProps, swallowFollowingClick } from "../lib/floatingLayer";
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -108,7 +110,13 @@ export function Select<T extends string>({
   // keyboard on the layout viewport, so a `bottom: 0` sheet disappears
   // behind it the moment the search input is focused.
   const keyboardFrame = useVisualViewportFrame(open && isBottomSheet);
-  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
+  // Closing by backdrop tap or swipe hands focus back to the trigger, like Esc.
+  const dismiss = () => {
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+  useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
+  const layer = useFloatingLayerStack(open);
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
   const wasOpenRef = useRef(defaultOpen);
@@ -191,6 +199,8 @@ export function Select<T extends string>({
       if (triggerRef.current?.contains(t)) return;
       if (menuRef.current?.contains(t)) return;
       setOpen(false);
+      // One tap closes one layer: not also the dialog behind the menu.
+      swallowFollowingClick({ onlyBackdrops: true });
     };
     // Keep an anchored menu attached during page scrolling. A trigger click
     // can follow a browser scroll in the same frame; dismissing that delayed
@@ -212,12 +222,18 @@ export function Select<T extends string>({
       const left = Math.min(Math.max(8, anchor.left), Math.max(8, window.innerWidth - (menu?.width ?? anchor.width) - 8));
       setPos({ top, left, width: anchor.width });
     };
+    // A keyboard opening for a field in the popover only changes the height
+    // (Android resizes the window for it); that must not close the popover.
+    const openedWidth = window.innerWidth;
     const onResize = () => {
-      if (isBottomSheet) return;
+      if (isBottomSheet || window.innerWidth === openedWidth) return;
       setOpen(false);
     };
+    // Capture phase: the open menu owns Esc, so the drawer or dialog it sits
+    // in never sees it, wherever focus is. A layer stacked above it (a
+    // select in a sheet opened from this one) handles its own Esc first.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && layer.isTop()) {
         e.preventDefault();
         e.stopPropagation();
         setOpen(false);
@@ -227,13 +243,14 @@ export function Select<T extends string>({
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- layer.isTop is stable
   }, [open, isBottomSheet, triggerless]);
 
   useEffect(() => {
@@ -287,13 +304,8 @@ export function Select<T extends string>({
       triggerRef.current?.focus({ preventScroll: true });
     } else if (e.key === "Tab") {
       e.preventDefault();
-      if (!triggerRef.current) { setOpen(false); return; }
-      const root = triggerRef.current.closest<HTMLElement>('[role="dialog"]') ?? document.body;
-      const focusable = getDialogFocusables(root);
-      const index = focusable.indexOf(triggerRef.current);
-      const next = focusable[(index + (e.shiftKey ? -1 : 1) + focusable.length) % focusable.length];
       setOpen(false);
-      next?.focus({ preventScroll: true });
+      focusAdjacentTo(triggerRef.current, e.shiftKey);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(i + 1, visibleItems.length - 1));
@@ -361,11 +373,7 @@ export function Select<T extends string>({
         ? createPortal(
             <>
               {isBottomSheet && (
-                <div
-                  className="menu-backdrop"
-                  aria-hidden="true"
-                  onMouseDown={() => setOpen(false)}
-                />
+                <div className="menu-backdrop" style={layer.backdrop} {...backdropDismissProps(dismiss)} />
               )}
               <div
                 ref={menuRef}
@@ -377,10 +385,11 @@ export function Select<T extends string>({
                 onKeyDown={onMenuKey}
                 style={
                   isBottomSheet
-                    ? keyboardSheetStyle(keyboardFrame) ?? undefined
+                    ? { ...layer.panel, ...keyboardSheetStyle(keyboardFrame) }
                     : !pos
-                      ? undefined
+                      ? layer.panel
                       : {
+                          ...layer.panel,
                           top: pos.top,
                           left: pos.left,
                           minWidth: Math.max(menuMinWidth ?? 0, pos.width),

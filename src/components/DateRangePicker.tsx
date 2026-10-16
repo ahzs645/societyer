@@ -5,7 +5,8 @@ import { DatePicker } from "./DatePicker";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
-import { floatingLayerProps, isOutsidePointerEvent } from "../lib/floatingLayer";
+import { backdropDismissProps, floatingLayerProps, isOutsidePointerEvent, swallowFollowingClick } from "../lib/floatingLayer";
+import { useFloatingLayerStack } from "../lib/overlayStack";
 import {
   DATE_RANGE_PRESETS,
   describeDateRange,
@@ -74,7 +75,13 @@ export function DateRangePicker({
     () => DATE_RANGE_PRESETS.filter((preset) => !preset.fiscal || hasFiscalYear),
     [hasFiscalYear],
   );
-  useSheetDrag(panelRef, { enabled: open && isSheet, onDismiss: () => setOpen(false) });
+  // Closing by backdrop tap or swipe hands focus back to the trigger.
+  const dismiss = () => {
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+  useSheetDrag(panelRef, { enabled: open && isSheet, onDismiss: dismiss });
+  const layer = useFloatingLayerStack(open);
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -124,6 +131,8 @@ export function DateRangePicker({
       // The custom-range calendars portal to <body>; they count as inside.
       if (!isOutsidePointerEvent(event, panelRef, triggerRef)) return;
       setOpen(false);
+      // One tap closes one layer: not also the dialog behind the panel.
+      swallowFollowingClick({ onlyBackdrops: true });
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
@@ -174,7 +183,7 @@ export function DateRangePicker({
       {open
         ? createPortal(
             <>
-              {isSheet && <div className="menu-backdrop" aria-hidden="true" onMouseDown={() => setOpen(false)} />}
+              {isSheet && <div className="menu-backdrop" style={layer.backdrop} {...backdropDismissProps(dismiss)} />}
               <div
                 ref={panelRef}
                 {...floatingLayerProps}
@@ -183,7 +192,7 @@ export function DateRangePicker({
                 aria-modal={isSheet || undefined}
                 aria-labelledby={headingId}
                 tabIndex={-1}
-                style={isSheet ? undefined : pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }}
+                style={{ ...layer.panel, ...(isSheet ? null : pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }) }}
               >
                 {isSheet && <div className="sheet-grabber" aria-hidden="true" />}
                 <div className="date-range-picker__head" id={headingId}>Date range</div>
