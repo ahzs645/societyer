@@ -22,12 +22,15 @@ type Toast = {
   description?: string;
   duration: number;
   action?: ToastAction;
+  /** A second, non-undo choice shown before `action` (e.g. "Show"). */
+  secondaryAction?: ToastAction;
   dedupeKey?: string;
 };
 
 type ToastOpts = {
   description?: string;
   action?: ToastAction;
+  secondaryAction?: ToastAction;
   duration?: number;
   /** Suppresses duplicate toasts with the same key while one is visible —
    * replaces the existing toast's content and resets its timer instead. */
@@ -96,7 +99,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [schedule]);
 
   const show = useCallback<ToastApi["show"]>(
-    ({ tone, title, description, duration, action, dedupeKey }) => {
+    ({ tone, title, description, duration, action, secondaryAction, dedupeKey }) => {
       // Keep actionable toasts on screen a bit longer so the user can reach the Undo button.
       const d = duration ?? (action ? 8000 : tone === "error" ? 6000 : 3500);
       if (dedupeKey) {
@@ -106,7 +109,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           if (!matched) return xs;
           return xs.map((x) =>
             x.id === matched!.id
-              ? { ...x, tone, title, description, action, duration: d }
+              ? { ...x, tone, title, description, action, secondaryAction, duration: d }
               : x,
           );
         });
@@ -116,7 +119,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }
       }
       const id = idRef.current++;
-      setItems((xs) => [...xs, { id, tone, title, description, duration: d, action, dedupeKey }]);
+      setItems((xs) => [...xs, { id, tone, title, description, duration: d, action, secondaryAction, dedupeKey }]);
       schedule(id, d);
     },
     [schedule],
@@ -194,6 +197,17 @@ function ToastItem({
         <div className="toast__title">{toast.title}</div>
         {toast.description && <div className="toast__desc">{toast.description}</div>}
       </div>
+      {toast.secondaryAction && (
+        <button
+          className="toast__action"
+          onClick={() => {
+            toast.secondaryAction!.onClick();
+            onClose();
+          }}
+        >
+          {toast.secondaryAction.label}
+        </button>
+      )}
       {toast.action && (
         <button
           className="toast__action"
