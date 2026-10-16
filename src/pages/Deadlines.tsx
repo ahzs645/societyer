@@ -260,8 +260,8 @@ export function DeadlinesPage() {
                 const leavesView = statusFilter !== "all" && nextStatus !== statusFilter && previousStatus !== nextStatus;
                 if (leavesView) setMovedOutIds((current) => new Set(current).add(String(recordId)));
                 const moved = leavesView ? {
-                  note: `It's no longer in ${statusLabel(statusFilter)}, so it stays here only until you switch tabs.`,
-                  show: { label: `Show ${statusLabel(nextStatus)}`, onClick: () => setStatusFilter(nextStatus) },
+                  note: `Not in ${statusLabel(statusFilter)} any more; shown here until you switch tabs.`,
+                  show: { label: "Show", onClick: () => setStatusFilter(nextStatus) },
                 } : undefined;
                 if (nextStatus === "complete" && rec && previousStatus !== "complete") {
                   await completeAndNotify(rec, moved);
