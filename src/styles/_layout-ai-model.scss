@@ -322,12 +322,23 @@
 
   .global-ai-body {
     grid-template-columns: 1fr;
+    /* The chat row takes what the thread strip leaves and no more, so the
+     * composer stays inside the drawer when the keyboard shortens it. */
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .global-ai-thread-list {
     max-height: 132px;
     border-right: 0;
     border-bottom: 1px solid token('border');
+  }
+
+  /* While typing, the conversation gets the rows the thread strip used. */
+  :root[data-keyboard-open] .global-ai-thread-list {
+    display: none;
+  }
+  :root[data-keyboard-open] .global-ai-body {
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .global-ai-thread-list__items {

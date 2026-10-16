@@ -759,7 +759,12 @@ select.select:hover:not(:disabled) {
   overscroll-behavior-y: contain;
   animation: sheetIn token('motion-panel') cubic-bezier(0.32, 0.72, 0, 1);
 }
+/* The panel scrolls as a whole; its header actions and footer links stay
+ * pinned so "Mark all read" and "View all" never sit 20 rows away. */
 .notif-panel__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -785,8 +790,12 @@ select.select:hover:not(:disabled) {
   .notif-panel .notif-row { padding-right: 76px; }
 }
 .notif-panel__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   padding: 8px;
   text-align: center;
+  border-top: 1px solid token('border');
   background: token('bg-panel');
 }
 

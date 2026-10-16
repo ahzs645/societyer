@@ -4,6 +4,9 @@ import { Calendar as CalIcon, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useFloatingLayerStack } from "../lib/overlayStack";
+import { backdropDismissProps, swallowFollowingClick } from "../lib/floatingLayer";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import { parseTypedDate, TYPED_DATE_HINT } from "../lib/typedDate";
 
 type Props = {
@@ -119,7 +122,15 @@ export function DatePicker({
   const [isBottomSheet, setIsBottomSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
-  useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: () => setOpen(false) });
+  // Closing by backdrop tap or swipe hands focus back to the trigger.
+  const dismiss = () => {
+    setOpen(false);
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+  useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
+  const layer = useFloatingLayerStack(open);
+  // The typed-date field raises the keyboard; the sheet rides above it.
+  useKeyboardInsetTracking(open && isBottomSheet);
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -144,8 +155,16 @@ export function DatePicker({
       setTyped("");
       setTypedError(null);
     } else {
-      setFocusDate(selected ?? new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1));
+      // No value yet: start on today when it is in view (and allowed),
+      // otherwise on the first of the month.
+      const now = new Date();
+      const todayAllowed = !(minD && now < minD) && !(maxD && now > maxD);
+      const todayInView = now.getFullYear() === viewMonth.getFullYear() && now.getMonth() === viewMonth.getMonth();
+      setFocusDate(selected ?? (todayInView && todayAllowed
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        : new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1)));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -191,6 +210,8 @@ export function DatePicker({
       if (triggerRef.current?.contains(t)) return;
       if (popRef.current?.contains(t)) return;
       setOpen(false);
+      // One tap closes one layer: not also the dialog behind the calendar.
+      swallowFollowingClick({ onlyBackdrops: true });
     };
     const onScroll = (e: Event) => {
       // Ignore scrolling inside the calendar and keep visible anchors aligned.
@@ -204,8 +225,11 @@ export function DatePicker({
       const left = Math.min(Math.max(8, anchor.left), Math.max(8, window.innerWidth - (calendar?.width ?? 0) - 8));
       setPos({ top, left });
     };
+    // A keyboard opening for a field in the popover only changes the height
+    // (Android resizes the window for it); that must not close the popover.
+    const openedWidth = window.innerWidth;
     const onResize = () => {
-      if (isBottomSheet) return;
+      if (isBottomSheet || window.innerWidth === openedWidth) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
@@ -432,11 +456,7 @@ export function DatePicker({
         ? createPortal(
             <>
             {isBottomSheet && (
-              <div
-                className="menu-backdrop"
-                aria-hidden="true"
-                onMouseDown={() => setOpen(false)}
-              />
+              <div className="menu-backdrop" style={layer.backdrop} {...backdropDismissProps(dismiss)} />
             )}
             <div
               ref={popRef}
@@ -446,7 +466,7 @@ export function DatePicker({
               aria-modal={isBottomSheet || undefined}
               tabIndex={-1}
               onKeyDown={onPopoverKey}
-              style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
+              style={isBottomSheet || !pos ? layer.panel : { ...layer.panel, top: pos.top, left: pos.left }}
             >
               {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
               <div className="calendar__typed">
@@ -585,7 +605,8 @@ export function DatePicker({
                 </div>
               )}
               <div className="calendar__foot">
-                <span className="muted" style={{ fontSize: "var(--fs-xxs)", marginRight: "auto" }}>
+                {/* Keyboard hint: hidden on touch screens, which have no arrow keys. */}
+                <span className="muted calendar__keys" style={{ fontSize: "var(--fs-xxs)" }}>
                   ← → · PgUp/PgDn · T = today
                 </span>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => pick(today)}>

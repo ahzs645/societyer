@@ -1,4 +1,6 @@
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { useMediaQuery } from "../lib/useSheetDrag";
+import { useKeyboardInsetTracking } from "../lib/useVisualViewportBottomInset";
 import {
   Children,
   cloneElement,
@@ -575,6 +577,12 @@ export function Banner({
   );
 }
 
+/** A drawer's first text field (a `data-autofocus` marker still wins). */
+const DRAWER_FIRST_FIELD = [
+  ".drawer__body input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([disabled]):not([readonly])",
+  ".drawer__body textarea:not([disabled]):not([readonly])",
+].join(", ");
+
 export function Drawer({
   open,
   onClose,
@@ -601,7 +609,17 @@ export function Drawer({
   const inspector = useInspectorPanel();
   const panelId = useId();
   const titleId = useStableDomId("drawer-title");
-  const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
+  // With a mouse and keyboard, a form drawer opens on its first field. Touch
+  // keeps focus off text fields so the keyboard doesn't cover the form the
+  // moment it opens.
+  const finePointer = useMediaQuery("(pointer: fine)");
+  // Esc while typing leaves the field first, so save-on-blur fields save and
+  // unsubmitted text is not thrown away with the drawer.
+  const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose, finePointer ? DRAWER_FIRST_FIELD : undefined, {
+    escapeLeavesTextField: true,
+  });
+  // Standalone drawers keep their footer above the on-screen keyboard.
+  useKeyboardInsetTracking(open);
 
   useEffect(() => {
     if (!open || !inspector) return;

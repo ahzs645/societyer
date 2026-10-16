@@ -539,12 +539,17 @@
 
 /* ---------- Minimised dock ---------- */
 
+// Page layer (rendered inside the app shell): above page content and the
+// bottom navigation, below the sidebar,
+// inspector, drawers, the AI panel, dialogs and toasts — it must never cover
+// their Save or Send controls. Beside an open desktop inspector column it
+// moves left of it (InspectorHost publishes --inspector-inset).
 .record-panel-dock {
   @include surface-floating;
   position: fixed;
-  right: max(16px, env(safe-area-inset-right, 0px));
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + var(--inspector-inset, 0px));
   bottom: max(16px, env(safe-area-inset-bottom, 0px));
-  z-index: token('z-dropdown');
+  z-index: token('z-dock');
   display: flex;
   align-items: center;
   max-width: min(320px, calc(100vw - 32px));
@@ -617,6 +622,7 @@
 
 @media (max-width: 980px) {
   // The dock clears the bottom navigation bar.
+  .app-shell.is-mobile .record-panel-dock,
   .app-shell.is-mobile ~ .record-panel-dock,
   body:has(.bottom-nav) .record-panel-dock {
     bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 12px);
@@ -673,6 +679,10 @@
 // Hover cards never open on touch, but a coarse pointer with a mouse
 // attached (tablets) still gets them; keep their links tappable.
 @media (pointer: coarse) {
+  // No ⌘↵ on a touch screen.
+  .record-side-panel__open kbd {
+    display: none;
+  }
   .entity-chip {
     min-height: 40px;
     padding-right: token('s-3');

@@ -51,3 +51,64 @@ export function isOutsidePointerEvent(event: Event, ...containers: Container[]):
   }
   return !isInsideFloatingLayer(target);
 }
+
+/** Dimming layers whose click dismisses the overlay they belong to. */
+export const OVERLAY_BACKDROP_SELECTOR = [
+  ".modal-backdrop",
+  ".drawer-backdrop",
+  ".menu-backdrop",
+  ".inspector-host__backdrop",
+  ".global-ai-backdrop",
+  "[data-overlay-backdrop]",
+].join(", ");
+
+/**
+ * Swallow the click that follows a dismissing press, so one tap closes one
+ * layer: the tap that dismisses a menu or calendar must not also land on the
+ * dialog backdrop (closing the dialog and losing its form) or on a control in
+ * the sheet underneath.
+ *
+ * `onlyBackdrops` limits it to clicks that would reach an overlay backdrop —
+ * for anchored popovers, where an outside tap on a real control (another
+ * field, a button) should still do what it says.
+ */
+export function swallowFollowingClick({ onlyBackdrops = false }: { onlyBackdrops?: boolean } = {}) {
+  if (typeof window === "undefined") return;
+  const onClick = (event: MouseEvent) => {
+    cleanup();
+    const target = event.target instanceof Element ? event.target : null;
+    if (onlyBackdrops && !target?.closest(OVERLAY_BACKDROP_SELECTOR)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  };
+  // A later press starts a new gesture; its click belongs to that gesture.
+  const onNextPress = () => cleanup();
+  const timer = window.setTimeout(cleanup, 700);
+  // Registered after the current press finishes dispatching.
+  const armTimer = window.setTimeout(() => window.addEventListener("pointerdown", onNextPress, true), 0);
+  function cleanup() {
+    window.clearTimeout(timer);
+    window.clearTimeout(armTimer);
+    window.removeEventListener("click", onClick, true);
+    window.removeEventListener("pointerdown", onNextPress, true);
+  }
+  window.addEventListener("click", onClick, true);
+}
+
+/**
+ * Props for a sheet's dimming backdrop: a press dismisses the layer, keeps
+ * focus from dropping to <body> (the dismiss handler restores it to the
+ * trigger), and the click that follows is swallowed so it can't reach the
+ * layer underneath.
+ */
+export function backdropDismissProps(dismiss: () => void) {
+  return {
+    "aria-hidden": true as const,
+    onMouseDown: (event: { preventDefault(): void }) => {
+      event.preventDefault();
+      swallowFollowingClick();
+      dismiss();
+    },
+  };
+}
