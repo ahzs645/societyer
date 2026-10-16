@@ -882,6 +882,12 @@
     position: relative;
     z-index: 1;
   }
+  /* …except where a page control's own hit area meets that band: the title's
+   * ⓘ sits just under the banner and, at the same level but later in the
+   * page, keeps its full 44px. */
+  .page__title-row > .info-popover__trigger {
+    z-index: 1;
+  }
 }
 
 /* 320px phones: five bottom-nav labels fit without ellipsis. */
