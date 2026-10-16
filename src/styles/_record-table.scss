@@ -763,6 +763,19 @@ select.record-table__menu-select,
   overflow-x: auto;
 }
 
+/* The sideways scroller is also the sticky header's scroll container, so on
+ * a long plain (non-virtualised) table the page scroll carried the column
+ * headers away (documents: 24 tall rows). Tablet and desktop cap such a
+ * table at about a screen, like the virtualised registers' 600px scroller,
+ * so the header stays pinned above its rows; phones keep one page scroll. */
+@media (min-width: 761px) {
+  .record-table__scroll {
+    max-height: max(600px, calc(100dvh - 200px));
+    overflow-y: auto;
+    scroll-padding-top: token('row-h-comfortable');
+  }
+}
+
 .record-table__interaction-root,
 .record-table__scroll-frame {
   outline: none;
