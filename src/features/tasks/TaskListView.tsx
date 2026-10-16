@@ -3,10 +3,12 @@
  * owner), rows whose properties change in place, and an inline composer at
  * the end of each group that starts a task with that group's values.
  */
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CalendarDays, ChevronRight, Plus } from "lucide-react";
 import { useFilteredRecords } from "@/platform/record-engine";
-import { useRecordTableState } from "../../platform/record-engine/record-table/state/recordTableStore";
+import { useRecordTableState, useRecordTableStoreHandle } from "../../platform/record-engine/record-table/state/recordTableStore";
+import { useLongPress } from "../../platform/record-engine/record-table/hooks/useLongPress";
+import { useIsMobile } from "../../lib/useIsMobile";
 import { TaskQuickAdd } from "./TaskQuickAdd";
 import { TaskAvatar, TaskChecklistBadge, TaskLinkChip, TaskPriorityIcon, TaskStatusIcon } from "./TaskVisuals";
 import { TaskDueMenu, TaskMoreMenu, TaskPriorityMenu, TaskStatusMenu, type TaskViewActions } from "./TaskMenus";
@@ -31,6 +33,7 @@ export function TaskListView({
   // used, else the first shown); ↑ / ↓ / Home / End move between rows.
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  usePhoneTaskSelection(actions.canManage);
 
   if (records.length === 0 && !actions.canManage) {
     return <TaskListEmpty hasTasks={hasTasks} />;
@@ -153,6 +156,14 @@ function TaskRow({
   const selected = useRecordTableState((s) => s.selectedRecordIds.has(String(task._id)));
   const anySelected = useRecordTableState((s) => s.selectedRecordIds.size > 0);
   const setSelected = useRecordTableState((s) => s.setSelectedRecordIds);
+  // Phones: "Select records" (Options menu) or a long-press turns rows into
+  // checkboxes; a tap then ticks the row instead of opening it.
+  const selecting = useRecordTableState((s) => s.mobileSelectable && s.mobileSelectionMode);
+  const handle = useRecordTableStoreHandle();
+  const longPress = useLongPress(actions.canManage ? () => {
+    if (handle.get().mobileSelectable) handle.get().setMobileSelectionMode(true);
+    setSelected((previous) => new Set(previous).add(String(task._id)));
+  } : undefined);
   const link = taskPrimaryLink(task);
   const owner = taskOwnerName(task);
   const closed = isClosedStatus(task.status);
@@ -166,12 +177,22 @@ function TaskRow({
 
   return (
     <div
-      className={`task-row${selected ? " is-selected" : ""}${closed ? " is-closed" : ""}${anySelected ? " has-selection" : ""}`}
+      className={`task-row${selected ? " is-selected" : ""}${closed ? " is-closed" : ""}${anySelected || selecting ? " has-selection" : ""}`}
       role="button"
       tabIndex={tabStop ? 0 : -1}
       aria-label={task.title}
+      aria-pressed={selecting ? selected : undefined}
       aria-keyshortcuts="ArrowRight ArrowLeft"
       onFocus={onActivate}
+      {...longPress}
+      onClickCapture={(event) => {
+        longPress.onClickCapture?.(event);
+        if (event.isPropagationStopped() || !selecting) return;
+        if ((event.target as Element).closest(".task-row__select-touch")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSelected();
+      }}
       onClick={() => actions.open(task)}
       // Capture: the inline menus stop their keydowns from bubbling.
       onKeyDownCapture={(event) => {
@@ -201,7 +222,25 @@ function TaskRow({
           <input type="checkbox" checked={selected} onChange={toggleSelected} aria-label={`Select ${task.title}`} tabIndex={-1} />
         </span>
       )}
-      <TaskStatusMenu task={task} actions={actions} tabIndex={-1} />
+      {selecting ? (
+        // Sits in the status slot of the phone layout, so it needs no grid
+        // changes; a real checkbox with a full-height tap area.
+        <label
+          className="task-menu-anchor task-row__select-touch"
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 24, minHeight: 32 }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={toggleSelected}
+            aria-label={`Select ${task.title}`}
+            style={{ width: 20, height: 20, margin: 0 }}
+          />
+        </label>
+      ) : (
+        <TaskStatusMenu task={task} actions={actions} tabIndex={-1} />
+      )}
       <span className="task-row__title">
         <span className="task-row__title-text">{task.title}</span>
         <TaskChecklistBadge checklist={task.checklist} />
@@ -216,6 +255,27 @@ function TaskRow({
       <span className="task-row__more"><TaskMoreMenu task={task} actions={actions} tabIndex={-1} /></span>
     </div>
   );
+}
+
+/**
+ * Offers the phone "Select records" toggle (the toolbar's Options menu) for
+ * the task list, as RecordTable does for its own rows, and leaves selection
+ * mode when the list goes away or the screen grows past phone width.
+ */
+export function usePhoneTaskSelection(canManage: boolean) {
+  const isMobile = useIsMobile();
+  const handle = useRecordTableStoreHandle();
+  const enabled = canManage && isMobile;
+  useEffect(() => {
+    handle.get().setMobileSelectable(enabled);
+    return () => {
+      handle.get().setMobileSelectable(false);
+      if (handle.get().mobileSelectionMode) {
+        handle.get().setMobileSelectionMode(false);
+        handle.get().clearSelection();
+      }
+    };
+  }, [enabled, handle]);
 }
 
 function TaskListEmpty({ hasTasks }: { hasTasks: boolean }) {
