@@ -203,6 +203,7 @@
   --z-bottom-nav:       23;   /* mobile bottom nav */
   --z-sidebar-backdrop: 24;   /* mobile sidebar backdrop */
   --z-sidebar:          25;   /* mobile sidebar panel */
+  --z-dock:             23;   /* minimised record dock: the bottom-nav band, painted after it; under the sidebar, inspector, drawers, AI panel, dialogs and toasts */
   --z-inspector:        31;   /* mobile inspector overlay */
   --z-drawer-backdrop:  40;
   --z-drawer:           41;
