@@ -65,19 +65,8 @@
 }
 
 // ---- Meeting template editor ---------------------------------------------
+// (The builder stacks agenda-first below 1240px: _views-meeting-templates.)
 @media (max-width: 760px) {
-  // The agenda is the work; template details follow it on phones.
-  .meeting-templates-page .meeting-template-builder {
-    grid-template-areas:
-      "agenda"
-      "sidebar";
-  }
-  .meeting-templates-page .meeting-template-builder__main {
-    grid-row: 1;
-  }
-  .meeting-templates-page .meeting-template-builder__sidebar {
-    grid-row: 2;
-  }
   // Library entries are list rows inside their section, not cards in a card.
   .meeting-templates-page .meeting-template-library {
     gap: 0;
