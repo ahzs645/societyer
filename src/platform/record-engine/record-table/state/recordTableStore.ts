@@ -38,6 +38,50 @@ import { todayDateOnly } from "../../../../../shared/dateOnly";
 
 export type CellPosition = { rowIndex: number; columnIndex: number };
 
+export type PendingEdit = { value: unknown; token: number; settled: boolean };
+
+let pendingEditToken = 0;
+
+function sameValue(a: unknown, b: unknown) {
+  if (Object.is(a, b)) return true;
+  const isBlank = (value: unknown) => value === null || value === undefined || value === "";
+  if (isBlank(a) && isBlank(b)) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+function withoutPendingEdits(
+  pending: Map<string, Map<string, PendingEdit>>,
+  drop: (recordId: string, fieldName: string, edit: PendingEdit) => boolean,
+) {
+  let changed = false;
+  const next = new Map<string, Map<string, PendingEdit>>();
+  for (const [recordId, fields] of pending) {
+    const kept = new Map<string, PendingEdit>();
+    for (const [fieldName, edit] of fields) {
+      if (drop(recordId, fieldName, edit)) changed = true;
+      else kept.set(fieldName, edit);
+    }
+    if (kept.size > 0) next.set(recordId, kept);
+  }
+  return changed ? next : pending;
+}
+
+/** Records with the pending inline edits laid over them. */
+export function applyPendingEdits(records: any[], pending: Map<string, Map<string, PendingEdit>>) {
+  if (pending.size === 0) return records;
+  return records.map((record) => {
+    const fields = pending.get(String(record?._id));
+    if (!fields) return record;
+    const next = { ...record };
+    for (const [fieldName, edit] of fields) next[fieldName] = edit.value;
+    return next;
+  });
+}
+
 type SavedViewSnapshot = {
   viewId: string | null;
   columns: RecordField[];
@@ -132,6 +176,22 @@ export type RecordTableState = {
   setEditingCell: (pos: CellPosition | null) => void;
   editingInitialValue?: string;
   setEditingInitialValue: (value?: string) => void;
+  /**
+   * Commits the open inline editor's draft the same way Enter does. Editors
+   * register it while mounted so an outside click/tap can save the edit
+   * before the editor is torn down. Returns false when the draft cannot be
+   * saved (invalid JSON, …) and the editor should stay open.
+   */
+  editorFlush: (() => boolean | void) | null;
+  setEditorFlush: (flush: (() => boolean | void) | null) => void;
+
+  /**
+   * Inline edits sent to the server but not yet reflected in `records`.
+   * Shown straight away (optimistic) and marked pending until they land.
+   */
+  pendingEdits: Map<string, Map<string, PendingEdit>>;
+  beginPendingEdit: (recordId: string, fieldName: string, value: unknown) => number;
+  settlePendingEdit: (token: number, ok: boolean) => void;
 
   /* loaded records */
   records: any[];
@@ -209,6 +269,8 @@ export function createRecordTableStore(opts: {
     focusedCell: null,
     editingCell: null,
     editingInitialValue: undefined,
+    editorFlush: null,
+    pendingEdits: new Map(),
     records: [],
     collapsedGroupKeys: new Set(),
     rangeAnchor: null,
@@ -297,8 +359,55 @@ export function createRecordTableStore(opts: {
     setFocusedCell: (pos) => set({ focusedCell: pos }),
     setEditingCell: (pos) => set({ editingCell: pos, editingInitialValue: pos ? get().editingInitialValue : undefined }),
     setEditingInitialValue: (value) => set({ editingInitialValue: value }),
+    setEditorFlush: (editorFlush) => set({ editorFlush }),
 
-    setRecords: (records) => set({ records }),
+    beginPendingEdit: (recordId, fieldName, value) => {
+      const token = ++pendingEditToken;
+      set((state) => {
+        const next = new Map(state.pendingEdits);
+        const fields = new Map(next.get(recordId) ?? []);
+        fields.set(fieldName, { value, token, settled: false });
+        next.set(recordId, fields);
+        return { pendingEdits: next };
+      });
+      return token;
+    },
+    settlePendingEdit: (token, ok) =>
+      set((state) => {
+        const byId = new Map(state.records.map((record) => [String(record?._id), record]));
+        // A failed save drops the edit, so the old value shows again. A saved
+        // one stays until the records reflect it, so the old value never
+        // flashes back in between.
+        const pendingEdits = withoutPendingEdits(state.pendingEdits, (recordId, fieldName, edit) =>
+          edit.token === token && (!ok || sameValue(byId.get(recordId)?.[fieldName], edit.value)),
+        );
+        if (!ok) return pendingEdits === state.pendingEdits ? state : { pendingEdits };
+        let marked = false;
+        const next = new Map(pendingEdits);
+        for (const [recordId, fields] of pendingEdits) {
+          for (const [fieldName, edit] of fields) {
+            if (edit.token !== token) continue;
+            const copy = new Map(next.get(recordId) ?? fields);
+            copy.set(fieldName, { ...edit, settled: true });
+            next.set(recordId, copy);
+            marked = true;
+          }
+        }
+        const result = marked ? next : pendingEdits;
+        return result === state.pendingEdits ? state : { pendingEdits: result };
+      }),
+
+    setRecords: (records) =>
+      set((state) => {
+        if (state.pendingEdits.size === 0) return { records };
+        const byId = new Map(records.map((record) => [String(record?._id), record]));
+        // New server data: saved edits have landed, and unsaved ones that the
+        // data already matches are done too.
+        const pendingEdits = withoutPendingEdits(state.pendingEdits, (recordId, fieldName, edit) =>
+          edit.settled || sameValue(byId.get(recordId)?.[fieldName], edit.value),
+        );
+        return { records, pendingEdits };
+      }),
 
     setCollapsedGroupKeys: (collapsedGroupKeys) => set({ collapsedGroupKeys }),
     toggleGroupCollapsed: (key) =>
@@ -526,7 +635,9 @@ export function computeIsDirty(s: RecordTableState): boolean {
   return (
     s.viewId !== snap.viewId ||
     s.density !== snap.density ||
-    s.searchTerm !== snap.searchTerm ||
+    // A quick search is transient: it only counts as a change when the
+    // saved view itself carries a search (which it then edits or clears).
+    (snap.searchTerm !== "" && s.searchTerm !== snap.searchTerm) ||
     s.anyFieldFilterValue !== snap.anyFieldFilterValue ||
     s.type !== snap.type ||
     s.kanbanFieldMetadataId !== snap.kanbanFieldMetadataId ||

@@ -16,6 +16,7 @@ import {
   RawJsonInput,
   RichTextInput,
 } from "./StructuredFieldInputs";
+import { useFieldInputFlush } from "./fieldInputFlush";
 
 /**
  * Edit-mode input for a cell. Renders a type-appropriate control, wires
@@ -63,6 +64,8 @@ function TextInput({ value, onCommit, onCancel, field, initialValue }: FieldInpu
     ref.current?.focus();
     ref.current?.select();
   }, []);
+  const commit = () => onCommit(draft === "" && field.isNullable ? null : draft);
+  useFieldInputFlush(commit);
   return (
     <input
       ref={ref}
@@ -70,11 +73,11 @@ function TextInput({ value, onCommit, onCancel, field, initialValue }: FieldInpu
       className="record-cell__input"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => onCommit(draft === "" && field.isNullable ? null : draft)}
+      onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          onCommit(draft === "" && field.isNullable ? null : draft);
+          commit();
         } else if (e.key === "Escape") {
           e.preventDefault();
           onCancel();
@@ -110,6 +113,7 @@ function NumberInput({ value, onCommit, onCancel, field, initialValue }: FieldIn
     if (Number.isNaN(num)) onCancel();
     else onCommit(num);
   };
+  useFieldInputFlush(commit);
   return (
     <input
       ref={ref}
@@ -167,6 +171,7 @@ function CurrencyInput({ value, onCommit, onCancel, field, initialValue }: Field
     }
     onCommit(isCents ? Math.round(amount * 100) : amount);
   };
+  useFieldInputFlush(commit);
   return (
     <input
       ref={ref}
@@ -358,6 +363,8 @@ function DateInput({ value, onCommit, onCancel, field }: FieldInputProps) {
     const next = draftRef.current;
     onCommit(next === "" && field.isNullable ? null : next);
   };
+  // A click or tap outside saves a date already picked, as closing does.
+  useFieldInputFlush(handleClose);
 
   return isDateTime ? (
     <DateTimeInput
@@ -393,6 +400,10 @@ function ArrayInput({ value, onCommit, onCancel, field }: FieldInputProps) {
     const parts = draft.split(",").map((s) => s.trim()).filter(Boolean);
     onCommit(parts.length === 0 && field.isNullable ? null : parts);
   };
+  useFieldInputFlush(() => {
+    if (draft === initial) onCancel();
+    else commit();
+  });
   return (
     <input
       ref={ref}
@@ -439,6 +450,12 @@ function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps)
   const toggle = (v: string) =>
     setSelected((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
   const commit = () => onCommit(selected.length === 0 && field.isNullable ? null : selected);
+  // Tapping away keeps the ticks made so far, like Done.
+  useFieldInputFlush(() => {
+    const changed = selected.length !== initial.length || selected.some((item) => !initial.includes(item));
+    if (changed) commit();
+    else onCancel();
+  });
   const filteredOptions = options.filter((option) => option.label.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (

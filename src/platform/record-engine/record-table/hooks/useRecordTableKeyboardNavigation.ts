@@ -8,6 +8,7 @@ import { useRecordTableColumns } from "./useRecordTableColumns";
 import { recordCellText } from "../utils/recordCellText";
 import { copyAsTsv } from "../../../../lib/clipboard";
 import { useToast } from "../../../../components/Toast";
+import { useRecordTableUpdate } from "./useRecordTableUpdate";
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -65,6 +66,35 @@ export function useRecordTableKeyboardNavigation({
   const focusedCell = useRecordTableState((state) => state.focusedCell);
   const handle = useRecordTableStoreHandle();
   const toast = useToast();
+  const saveCell = useRecordTableUpdate();
+
+  // Delete/Backspace on a cell clears it at once and offers Undo, which puts
+  // the previous value back. A stray key press never loses data silently.
+  const clearCell = useCallback(
+    async (record: any, field: FieldMetadata) => {
+      const recordId = String(record._id);
+      const previous = record[field.name];
+      const cleared = clearedValueForField(field);
+      if (isBlankValue(previous) && isBlankValue(cleared)) return;
+      const saved = await saveCell({ recordId, fieldName: field.name, value: cleared }, { fieldLabel: field.label });
+      if (!saved) return;
+      let undone = false;
+      toast.success(`Cleared ${field.label.toLowerCase()}`, {
+        dedupeKey: `record-table-clear-${recordId}-${field.name}`,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            if (undone) return;
+            undone = true;
+            void saveCell({ recordId, fieldName: field.name, value: previous }, { fieldLabel: field.label }).then((ok) => {
+              if (ok) toast.info("Undone", { description: `${field.label} restored`, dedupeKey: `record-table-clear-${recordId}-${field.name}` });
+            });
+          },
+        },
+      });
+    },
+    [saveCell, toast],
+  );
 
   const copy = useCallback(async () => {
     const state = handle.get();
@@ -98,11 +128,21 @@ export function useRecordTableKeyboardNavigation({
     (event: ReactKeyboardEvent<HTMLElement>) => {
       if (!enabled) return;
       if (event.key === "Escape") {
-        const wasEditing = !!handle.get().editingCell;
-        handle.get().setEditingInitialValue(undefined);
-        handle.get().setEditingCell(null);
-        handle.get().setRangeAnchor(null);
-        if (!wasEditing) handle.get().setFocusedCell(null);
+        const state = handle.get();
+        const wasEditing = !!state.editingCell;
+        // Escape steps back one layer: the editor, then the focused cell,
+        // then the row selection.
+        // Marked handled so the bulk island's own Escape (which clears the
+        // selection) does not also act on the same key press.
+        if (wasEditing || state.focusedCell || state.rangeAnchor || state.selectedRecordIds.size > 0) event.preventDefault();
+        if (!wasEditing && !state.focusedCell && !state.rangeAnchor && state.selectedRecordIds.size > 0) {
+          state.clearSelection();
+          return;
+        }
+        state.setEditingInitialValue(undefined);
+        state.setEditingCell(null);
+        state.setRangeAnchor(null);
+        if (!wasEditing) state.setFocusedCell(null);
         return;
       }
       // ⌘/Ctrl+C copies the selected cells (or rows, or the focused cell).
@@ -196,8 +236,7 @@ export function useRecordTableKeyboardNavigation({
           handle.get().setEditingCell(null);
           handle.get().setEditingInitialValue(undefined);
           handle.get().setFocusedCell(current);
-          const value = clearedValueForField(column.field);
-          void onUpdate({ recordId: String(record._id), fieldName: column.field.name, value });
+          void clearCell(record, column.field);
         }
         return;
       } else if (isPrintableEditKey(event)) {
@@ -223,6 +262,7 @@ export function useRecordTableKeyboardNavigation({
       handle.get().setFocusedCell(next);
     },
     [
+      clearCell,
       copy,
       enabled,
       focusedCell,
@@ -239,6 +279,10 @@ export function useRecordTableKeyboardNavigation({
 
 function isPrintableEditKey(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey">) {
   return event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
+}
+
+function isBlankValue(value: unknown) {
+  return value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
 }
 
 function clearedValueForField(field: FieldMetadata) {

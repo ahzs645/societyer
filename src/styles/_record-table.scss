@@ -2381,6 +2381,12 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
  * wide action groups covering the frozen identifier or the visible data. */
 @media (hover: none), (pointer: coarse) {
   .record-table__cell-actions { display: none; }
+  /* …except on the focused cell (and its row's name cell): with no hover,
+   * that pencil is the visible way into editing. */
+  .record-table__cell-actions.record-table__cell-actions--touch { display: inline-flex; }
+  .record-table__cell-actions--touch .record-table__cell-action { width: 32px; height: 32px; }
+  /* A finger needs more than the 4px mouse handle to grab a column edge. */
+  .record-table__resize-handle { width: 12px; }
   .record-table__row-actions-head,
   .record-table__row-actions-cell {
     position: static;
