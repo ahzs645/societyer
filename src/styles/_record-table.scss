@@ -2306,36 +2306,31 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   }
 }
 
-/* ----- per-row actions (sticky right column) ----- */
+/* ----- per-row actions (trailing column) ----- */
 
-/* The actions anchor is zero-width so it overlays the table's fill area
- * instead of making an otherwise-fitting table overflow by one control. */
 /* The actions cells sit BEFORE the fill cell, so on a monitor wider than the
  * table they anchor next to the last data column (short mouse travel) instead
- * of the far screen edge. `position: sticky; right: 0` only engages when the
- * table actually overflows — then they pin to the viewport edge and stay
- * reachable while the columns scroll beneath. Real (auto) width, opaque
- * background, so the stuck state doesn't float transparently over data. */
+ * of the far screen edge. They stay in the table's flow at every width: a
+ * sticky `right: 0` column pinned over a table wider than its frame covered
+ * the last data columns (300px+ when a page has text actions like "Schedule
+ * meeting"), swallowed header clicks (sort, column menu) and painted the
+ * hover background and buttons over values. In the flow they scroll with the
+ * row; the record stays one click away through its name and the row's
+ * context menu. */
 .record-table__row-actions-head {
   padding: 0;
-  position: sticky;
-  right: 0;
-  z-index: 2;
-  /* Empty header cell: never paint over the last column's label. */
+  /* Empty header cell: never paint over or take clicks from a column label. */
   background: transparent;
+  pointer-events: none;
   border-bottom: 1px solid token('border-color-light');
 }
 
-/* While a row's actions are hidden, the pinned cell is see-through so it
- * never paints a sliver over the end of the row; it only takes a background
- * when the row is hovered or focused and the actions appear. */
+/* While a row's actions are hidden, the cell is see-through; it only takes a
+ * background when the row is hovered or focused and the actions appear. */
 .record-table__row-actions-cell {
   white-space: nowrap;
   padding: 0 6px;
   vertical-align: middle;
-  position: sticky;
-  right: 0;
-  z-index: 1;
   background: transparent;
   border-bottom: 1px solid token('border-color-light');
 }
@@ -2364,13 +2359,8 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 /* Narrow windows (phones without touch emulation, split-screen desktops):
- * a sticky actions column wider than the visible table would cover every data
- * cell. Keep it in the scroll flow, always visible, like the touch layout. */
+ * no hover to rely on, so the actions are always visible, like touch. */
 @media (max-width: 760px) {
-  .record-table__row-actions-head,
-  .record-table__row-actions-cell {
-    position: static;
-  }
   .record-table__row-actions {
     opacity: 1;
     transform: none;
@@ -2386,10 +2376,6 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
  * wide action groups covering the frozen identifier or the visible data. */
 @media (hover: none), (pointer: coarse) {
   .record-table__cell-actions { display: none; }
-  .record-table__row-actions-head,
-  .record-table__row-actions-cell {
-    position: static;
-  }
   .record-table__row-actions {
     opacity: 1;
     transform: none;
