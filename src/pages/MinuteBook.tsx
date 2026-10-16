@@ -300,7 +300,6 @@ export function MinuteBookPage() {
             currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
             onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
             onOpenFilter={() => setFilterOpen((value) => !value)}
-            actions={<Badge>{items.length}</Badge>}
           />
           <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
           <RecordTableFilterChips />

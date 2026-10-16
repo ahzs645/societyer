@@ -463,6 +463,11 @@ $tap-block: (
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  // The name doesn't fit beside the count (RecordTableToolbar measures):
+  // the name keeps the room.
+  .record-table__view-button.is-tight > .record-table__view-count {
+    display: none;
+  }
   .record-table__toolbar .record-table__view-count {
     flex: none;
     padding: 0 6px;
