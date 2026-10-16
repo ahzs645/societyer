@@ -505,7 +505,7 @@
      * instead — a text action such as Tasks' "Current · All · Status"
      * truncates with an ellipsis. */
     > .page__header-main {
-      flex: 1 1 auto;
+      flex: 1 1 0;
       min-width: min-content;
     }
 
