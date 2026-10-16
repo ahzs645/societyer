@@ -2467,25 +2467,27 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   /* Researcher-style compact identifier: as soon as the table is scrolled
    * sideways, the frozen name column collapses to a 38px single-letter card
    * so the data columns get the width; scrolling back to the start restores
-   * the full name. */
+   * the full name. Only a real identifier cell collapses (it has the letter
+   * card); a plain first column (Members, Directors: first name) keeps its
+   * frozen width instead of clipping to "Conn", "Fatim". */
   .record-table__scroll-frame.is-scrolled-x,
   .record-table__interaction-root.is-scrolled-x {
-    .record-table > thead > tr > th:first-child,
-    .record-table > tbody > tr:not(.record-table__action-row, .record-table__group-row) > td:first-child,
-    .record-table > tfoot > tr > td:first-child {
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > thead > tr > th:first-child,
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tbody > tr:not(.record-table__action-row, .record-table__group-row) > td:first-child,
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tfoot > tr > td:first-child {
       width: 38px !important;
       overflow: hidden;
     }
 
-    .record-table > thead > tr > th:first-child .record-table__header-cell-label,
-    .record-table > thead > tr > th:first-child .record-table__header-menu-wrap {
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > thead > tr > th:first-child .record-table__header-cell-label,
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > thead > tr > th:first-child .record-table__header-menu-wrap {
       display: none;
     }
 
     /* The button reserves 24px for the (now hidden) column-menu chevron;
      * inside the 38px cell that squeezed the flex row to ~0 and crushed
      * the field icon with it. */
-    .record-table > thead > tr > th:first-child .record-table__header-cell-button {
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > thead > tr > th:first-child .record-table__header-cell-button {
       max-width: 100%;
 
       .record-table__header-cell-icon {
@@ -2498,12 +2500,12 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
      * ~100px. Bounding the inner block bounds the cell's intrinsic width
      * (same trick as the title cap above), letting the 38px stick — the
      * counter clips while compact, exactly like Researcher's footer. */
-    .record-table > tfoot > tr > td:first-child .record-table__aggregate {
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tfoot > tr > td:first-child .record-table__aggregate {
       max-width: 26px;
       overflow: hidden;
     }
 
-    .record-table > tbody > tr > td:first-child .record-table__identifier-button {
+    .record-table:has(> tbody > tr > td.record-table__cell--identifier:first-child) > tbody > tr > td:first-child .record-table__identifier-button {
       padding: 0;
 
       .record-table__cell-content {
