@@ -233,6 +233,12 @@ export function Select<T extends string>({
     // in never sees it, wherever focus is. A layer stacked above it (a
     // select in a sheet opened from this one) handles its own Esc first.
     const onKey = (e: KeyboardEvent) => {
+      // Tab from outside the list (focus still on the trigger) moves on
+      // as usual and takes the list with it; inside, onMenuKey handles it.
+      if (e.key === "Tab" && !triggerless && layer.isTop() && !menuRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        return;
+      }
       if (e.key === "Escape" && layer.isTop()) {
         e.preventDefault();
         e.stopPropagation();
@@ -253,14 +259,23 @@ export function Select<T extends string>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- layer.isTop is stable
   }, [open, isBottomSheet, triggerless]);
 
-  useEffect(() => {
+  // A layout effect: the list has focus by the time it is painted, so a key
+  // pressed the moment it appears (Esc, Tab, an arrow) reaches the list and
+  // not the trigger behind it. The timer covers a list that mounts late.
+  useLayoutEffect(() => {
     if (!open) {
       setQuery("");
       return;
     }
     const currentIdx = visibleItems.findIndex((o) => o.value === value);
     setActiveIdx(currentIdx >= 0 ? currentIdx : 0);
-    const timer = (!renderedSearchable || isBottomSheet) ? window.setTimeout(() => menuRef.current?.focus({ preventScroll: true }), 0) : undefined;
+    if (renderedSearchable && !isBottomSheet) return;
+    const focusList = () => {
+      const menu = menuRef.current;
+      if (menu && !menu.contains(document.activeElement)) menu.focus({ preventScroll: true });
+    };
+    focusList();
+    const timer = window.setTimeout(focusList, 0);
     return () => window.clearTimeout(timer);
   }, [open, value, visibleItems, renderedSearchable, isBottomSheet]);
 

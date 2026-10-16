@@ -102,9 +102,13 @@ export function useDialogFocus<T extends HTMLElement>(
       openerRef.current.element = active instanceof HTMLElement && !ref.current?.contains(active) ? active : null;
     }
     const previous = openerRef.current.element;
+    // The dialog's own node, for telling "focus is still in the closing
+    // dialog" apart from "the user has moved on" when restoring.
+    let dialogNode: HTMLElement | null = ref.current;
     const timer = window.setTimeout(() => {
       const root = ref.current;
       if (!root) return;
+      dialogNode = root;
       // 1. A `data-autofocus` marker in the content.
       const marked = root.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR);
       if (marked) {
@@ -155,8 +159,18 @@ export function useDialogFocus<T extends HTMLElement>(
       // after that commit, without stealing focus from a newly opened overlay.
       const observer = new MutationObserver(restore);
       const expiry = window.setTimeout(() => observer.disconnect(), 1000);
+      const closingNode = ref.current ?? dialogNode;
       function restore() {
         if (!previous?.isConnected) { observer.disconnect(); window.clearTimeout(expiry); return; }
+        // Focus already went somewhere on purpose (a control the user moved
+        // to, a field another layer focused): leave it there. Only focus
+        // dropped to <body> by the dialog unmounting is handed back.
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active !== document.body && active.isConnected && !closingNode?.contains(active)) {
+          observer.disconnect();
+          window.clearTimeout(expiry);
+          return;
+        }
         const activeOverlay = document.activeElement instanceof Element
           ? document.activeElement.closest('dialog,[role="dialog"],[role="listbox"],[role="menu"]') : null;
         if (activeOverlay && !activeOverlay.contains(previous)) { observer.disconnect(); window.clearTimeout(expiry); return; }
