@@ -299,8 +299,26 @@
   list-style-type: lower-alpha;
 }
 
+/* Beside the 320px sidebar the agenda card is ~384px wide at 1024 and
+ * ~390px on a 768 tablet, but an agenda row (number · title · type ·
+ * presenter, plus the chevron and remove button) needs ~560px, and the
+ * card's overflow clip would cut its controls off. Below ~1240px the builder
+ * stacks instead: the agenda (the work) first at full width, the template
+ * details and agenda library after it. */
+@media (max-width: 1240px) {
+  .meeting-template-builder {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "agenda"
+      "sidebar";
+  }
+
+  .meeting-template-builder__sidebar {
+    position: static;
+  }
+}
+
 @media (max-width: 760px) {
-  .meeting-template-builder,
   .meeting-template-section-editor__panel,
   .meeting-template-editor__meta,
   .meeting-templates__template {
@@ -315,17 +333,6 @@
   .meeting-template-section-item .meeting-minutes-section-item__title-presenter {
     grid-column: 2 / -1;
     width: 100%;
-  }
-
-  .meeting-template-builder__sidebar {
-    position: static;
-    grid-row: 1;
-  }
-
-  .meeting-template-builder {
-    grid-template-areas:
-      "sidebar"
-      "agenda";
   }
 
   .meeting-template-builder__library {

@@ -260,6 +260,16 @@ details.exports-tables {
   }
 
   .chip { flex: none; white-space: nowrap; }
+
+  // Touch: the chips' 44px hit areas overhang the row; transparent block
+  // padding (cancelled by the negative margin) keeps them inside the scroll
+  // box, which then has nothing to scroll vertically.
+  @media (pointer: coarse) {
+    overflow-y: hidden;
+    padding-block: 8px;
+    margin-top: -8px;
+    margin-bottom: calc(#{token('s-3')} - 8px);
+  }
 }
 
 .documents-facets__divider {

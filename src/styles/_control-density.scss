@@ -202,6 +202,15 @@ $tap-block: (
     min-width: token('control-h-touch');
     justify-content: center;
   }
+  // The search pill is the 36px field height (tablets too, where it was a
+  // 28px pill around a 22px input); the input fills it, so the whole pill
+  // takes the tap.
+  .record-table__search {
+    height: token('control-h-touch');
+  }
+  .record-table__search-input {
+    align-self: stretch;
+  }
   .record-table__icon-button,
   .record-table__icon-btn {
     width: token('control-h-touch-icon');
@@ -266,6 +275,15 @@ $tap-block: (
     bottom: -14px;
     height: auto;
     transform: translateX(-50%);
+  }
+  // Phones: the slim banner sits above the page (_shell-nav) and the page
+  // starts 12px below it, where the first row's controls (back link, title
+  // ⓘ) reach up with hit areas of their own. The switch takes 8px of that
+  // gap (a 40px hit area) and leaves the rest to them.
+  @media (max-width: 760px) {
+    .demo-banner .btn::after {
+      bottom: -8px;
+    }
   }
 
   // Bottom navigation is a bar, not buttons: each item's tap area is the
@@ -346,11 +364,13 @@ $tap-block: (
 // toolbars below, lists start within about a quarter of the screen.
 // ============================================================
 @media (max-width: 560px) {
+  // 12px: room for the demo switch's hit area above the first row's
+  // controls (see the banner rule above).
   .app-shell.is-mobile .page {
-    padding-top: token('s-2');
+    padding-top: token('s-3');
   }
   .app-shell.is-mobile .page > a.row.muted:first-child {
-    top: calc(#{token('s-2')} + 2px);
+    top: calc(#{token('s-3')} + 2px);
   }
   .page__header {
     margin-bottom: token('s-2');
@@ -461,6 +481,18 @@ $tap-block: (
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  // The name doesn't fit beside the count (RecordTableToolbar measures):
+  // the name keeps the room. The count stays in the button's accessible
+  // name ("All members 90"), only visually hidden.
+  .record-table__view-button.is-tight > .record-table__view-count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
     white-space: nowrap;
   }
   .record-table__toolbar .record-table__view-count {
@@ -660,6 +692,10 @@ $tap-block: (
 // as cards, with group headers between them.
 .record-cards {
   display: grid;
+  // One column that never grows past the list: without it the implicit
+  // track sizes to the min-content of nowrap card titles and the cards run
+  // off a 320px screen.
+  grid-template-columns: minmax(0, 1fr);
   gap: token('s-2');
   padding-top: token('s-1');
 }

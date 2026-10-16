@@ -230,6 +230,26 @@ export function RecordTableToolbar({
   ];
   const activeViewType = viewTypeOptions.find((option) => option.active) ?? viewTypeOptions[0];
   const ActiveViewTypeIcon = activeViewType.Icon;
+  const viewCount = filteredRecords.length;
+
+  // Phones share one toolbar row between the view picker and five icon
+  // buttons, so a picker with a count chip could cut the view's name to one
+  // letter ("R…"). When the name doesn't fit beside the count, the count
+  // steps aside (`is-tight`) and the name gets its room.
+  useEffect(() => {
+    const switcher = viewMenuRef.current;
+    const button = switcher?.querySelector<HTMLElement>(".record-table__view-button");
+    const name = button?.querySelector<HTMLElement>(".record-table__view-name");
+    if (!switcher || !button || !name) return;
+    const measure = () => {
+      button.classList.remove("is-tight");
+      button.classList.toggle("is-tight", name.scrollWidth > name.clientWidth + 1);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (switcher.parentElement) observer?.observe(switcher.parentElement);
+    return () => observer?.disconnect();
+  }, [activeViewName, viewCount]);
 
   return (
     <div className="record-table__toolbar" ref={toolbarRef}>
@@ -239,6 +259,9 @@ export function RecordTableToolbar({
             <button
               type="button"
               className="record-table__view-button"
+              // The count chip can be visually hidden on phones (is-tight);
+              // the name keeps it either way.
+              aria-label={`${activeViewName} ${viewCount}`}
               onClick={() => setViewMenuOpen((x) => !x)}
             >
               {resolvedIcon}

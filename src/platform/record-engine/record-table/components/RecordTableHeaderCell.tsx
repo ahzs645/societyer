@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { columnWidthStyle } from "../utils/columnWidth";
 import {
   ArrowDown,
@@ -14,7 +15,8 @@ import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../ty
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { useIsMobile } from "../../../../lib/useIsMobile";
-import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { floatingLayerProps, isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { ViewportPopover } from "../../../../components/ViewportPopover";
 import { isNumericFieldType, parseNumericFilterInput } from "../utils/filterValues";
 import { defaultGroupBy, getViewGroupBy, isGroupableField, withViewGroupBy } from "../utils/groupRecords";
 
@@ -46,11 +48,7 @@ export function RecordTableHeaderCell({
   const resizing = useRef<{ startX: number; startSize: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  // The menu hangs right-aligned off its trigger, which pushes it past the left
-  // edge of the table for the first column — where the app shell clips it and
-  // the sidebar takes the clicks. Flip it to open rightward when there isn't
-  // room, measured after it mounts so it accounts for the real width.
-  const [alignStart, setAlignStart] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
   const [filterValue, setFilterValue] = useState("");
 
   const sort = sorts.find((s) => s.fieldMetadataId === recordField.fieldMetadataId);
@@ -75,22 +73,6 @@ export function RecordTableHeaderCell({
 
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [menuOpen]);
-
-  useLayoutEffect(() => {
-    if (!menuOpen) {
-      setAlignStart(false);
-      return;
-    }
-    const wrap = menuRef.current;
-    const menu = wrap?.querySelector(".record-table__header-menu");
-    if (!wrap || !menu) return;
-    // Stay inside the table's own scroll frame; anything left of it is either
-    // clipped by the shell or covered by the sidebar.
-    const frame = wrap.closest(".record-table__scroll-frame, .record-table__interaction-root");
-    const leftLimit = frame ? frame.getBoundingClientRect().left : 0;
-    const overflowsLeft = wrap.getBoundingClientRect().right - menu.getBoundingClientRect().width < leftLimit;
-    setAlignStart(overflowsLeft);
   }, [menuOpen]);
 
   const cycleSort = () => {
@@ -255,12 +237,17 @@ export function RecordTableHeaderCell({
         >
           <ChevronDown size={12} />
         </button>
-        {menuOpen && (
-          <div
-            className={
-              "record-table__header-menu" +
-              (alignStart ? " record-table__header-menu--align-start" : "")
-            }
+        {/* A vertical menu in a viewport-fixed layer (portaled out of the
+            table's scroller, which clipped it on phones and on short tables),
+            right-aligned to the trigger and kept on screen. */}
+        {menuOpen && createPortal(
+          <div {...floatingLayerProps} className="record-table__header-menu-layer">
+          <ViewportPopover
+            open
+            onClose={closeMenu}
+            anchorRef={menuRef}
+            label={`${recordField.field.label} column`}
+            className="record-table__header-menu"
           >
             <button type="button" onClick={() => setSort("asc")}>
               <ArrowUp size={13} />
@@ -331,7 +318,9 @@ export function RecordTableHeaderCell({
               <EyeOff size={13} />
               <span>{isLabelIdentifier ? "Identifier field" : "Hide field"}</span>
             </button>
-          </div>
+          </ViewportPopover>
+          </div>,
+          document.body,
         )}
       </div>
       {!isMobile && (

@@ -178,7 +178,9 @@ export function DemoBanner() {
         <span className="demo-banner__detail">
           {society
             ? role
-              ? `Previewing what the ${role} role can see and do in ${society.name}${society.name.endsWith(".") ? "" : "."}`
+              ? // The "Viewing as" switch beside it names the role; the
+                // sentence stays short enough to show whole on a laptop.
+                `Previewing ${society.name} as ${role}${role.endsWith(".") ? "" : "."}`
               : organizationNoun === "company"
                 ? t("demo.viewingCompany", { name: society.name, defaultValue: "Viewing {{name}} — a demo company used to showcase the app." })
                 : organizationNoun === "corporation"

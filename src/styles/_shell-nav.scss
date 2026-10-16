@@ -582,6 +582,19 @@
   color: token('text-tertiary');
   border-radius: token('r-xs');
 }
+/* Touch (tablets keep the full trail): the 17px text links take a ~44px
+ * tall hit area. Vertical padding on an inline link grows its hit box
+ * without moving the line; the item's matching padding (cancelled by a
+ * negative margin) keeps that box inside the item's ellipsis clip. */
+@media (pointer: coarse) {
+  .breadcrumbs__item {
+    padding-block: 13px;
+    margin-block: -13px;
+  }
+  .breadcrumbs__link {
+    padding-block: 13px;
+  }
+}
 .breadcrumbs__link:hover {
   color: token('text-primary');
   text-decoration: underline;
@@ -621,6 +634,13 @@
     border-radius: token('r-sm');
     color: token('text-secondary');
     font-weight: token('fw-medium');
+  }
+  /* A 32px link with a 44px hit area. */
+  @media (pointer: coarse) {
+    .breadcrumbs__back {
+      position: relative;
+      @include tap-area;
+    }
   }
   .breadcrumbs__back span {
     overflow: hidden;
@@ -857,6 +877,10 @@
   .demo-banner {
     min-height: 0;
     padding-block: 0;
+    /* The switch's hit area reaches into the page's top padding; lift the
+     * banner above the page so the page doesn't take those taps. */
+    position: relative;
+    z-index: 1;
   }
 }
 

@@ -312,3 +312,36 @@
   font-size: token('fs-sm');
   color: token('text-secondary');
 }
+
+// --- Inbox card head --------------------------------------------------------------
+
+// The scope switch (All / Unread / Dismissed) and "Delete all cleared",
+// right-aligned beside "Recent".
+.notifications__head-actions {
+  display: flex;
+  align-items: center;
+  gap: token('s-3');
+  min-width: 0;
+  margin-left: auto;
+}
+
+// Phones: the switch takes the head's full width on its own line and its
+// three segments share it, so "Dismissed (0)" is never cut off at 320px.
+@media (max-width: 760px) {
+  .notifications__head-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+
+    > .segmented {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+
+    > .segmented .segmented__btn {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-inline: 6px;
+      white-space: nowrap;
+    }
+  }
+}
