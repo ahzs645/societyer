@@ -19,7 +19,12 @@ export function useRecordTableUpdate() {
   const toast = useToast();
 
   return useCallback(
-    async (args: RecordTableUpdateArgs, options: { fieldLabel?: string } = {}): Promise<boolean> => {
+    async (
+      args: RecordTableUpdateArgs,
+      // `dedupeKey` lets a failure replace a toast the caller already showed
+      // (e.g. "Cleared … · Undo"), instead of stacking beside it.
+      options: { fieldLabel?: string; dedupeKey?: string } = {},
+    ): Promise<boolean> => {
       if (!onUpdate) return false;
       const token = handle.get().beginPendingEdit(args.recordId, args.fieldName, args.value);
       try {
@@ -31,6 +36,7 @@ export function useRecordTableUpdate() {
         handle.get().settlePendingEdit(token, false);
         toast.error(options.fieldLabel ? `Couldn't save ${options.fieldLabel.toLowerCase()}` : "Couldn't save the change", {
           description: error instanceof Error && error.message ? error.message : "Try again in a moment.",
+          dedupeKey: options.dedupeKey,
         });
         return false;
       }

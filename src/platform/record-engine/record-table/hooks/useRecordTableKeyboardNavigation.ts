@@ -76,22 +76,28 @@ export function useRecordTableKeyboardNavigation({
       const previous = record[field.name];
       const cleared = clearedValueForField(field);
       if (isBlankValue(previous) && isBlankValue(cleared)) return;
-      const saved = await saveCell({ recordId, fieldName: field.name, value: cleared }, { fieldLabel: field.label });
-      if (!saved) return;
+      const dedupeKey = `record-table-clear-${recordId}-${field.name}`;
+      // The cell empties at once (optimistic) and Undo is offered straight
+      // away; a failed save puts the value back and replaces this toast.
+      const saving = saveCell({ recordId, fieldName: field.name, value: cleared }, { fieldLabel: field.label, dedupeKey });
       let undone = false;
       toast.success(`Cleared ${field.label.toLowerCase()}`, {
-        dedupeKey: `record-table-clear-${recordId}-${field.name}`,
+        dedupeKey,
         action: {
           label: "Undo",
           onClick: () => {
             if (undone) return;
             undone = true;
-            void saveCell({ recordId, fieldName: field.name, value: previous }, { fieldLabel: field.label }).then((ok) => {
-              if (ok) toast.info("Undone", { description: `${field.label} restored`, dedupeKey: `record-table-clear-${recordId}-${field.name}` });
-            });
+            // Restore after the clear has been sent, so they land in order.
+            void saving
+              .then(() => saveCell({ recordId, fieldName: field.name, value: previous }, { fieldLabel: field.label }))
+              .then((ok) => {
+                if (ok) toast.info("Undone", { description: `${field.label} restored`, dedupeKey });
+              });
           },
         },
       });
+      await saving;
     },
     [saveCell, toast],
   );
