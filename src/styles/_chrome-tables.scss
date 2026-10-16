@@ -222,6 +222,18 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }
+/* Touch: the 44px hit areas of the header sort buttons and of the last
+ * row's 32px actions overhang the scroll box by up to 6px, which clipped
+ * them (and left the box 4-8px of vertical overflow). Transparent block
+ * padding, cancelled by the negative margin and kept out of the panel
+ * background, holds them inside without moving the table. */
+@media (pointer: coarse) {
+  .table-wrap {
+    padding-block: 6px;
+    margin-block: -6px;
+    background-clip: content-box;
+  }
+}
 .card > .table {
   width: 100%;
   min-width: 100%;

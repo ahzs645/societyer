@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { Braces, Database, ExternalLink, RefreshCw } from "lucide-react";
@@ -6,6 +6,7 @@ import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Flag } from "../../../components/ui";
 import { formatDateTime, formatDate } from "../../../lib/format";
 import { Money } from "../../../components/Money";
+import { useScrollOverflow } from "../../../hooks/useScrollOverflow";
 import {
   type WaveAccountView,
   WaveResourceValue,
@@ -551,6 +552,10 @@ export function WaveAccountViewControls({
   style?: Record<string, any>;
 }) {
   const accountRows = rows.filter((row) => row.resourceType === "account");
+  // Phones scroll the views sideways in one row; fade whichever edge has
+  // views out of sight ("swipe for more").
+  const stripRef = useRef<HTMLDivElement>(null);
+  const overflow = useScrollOverflow(stripRef, [accountRows.length]);
   if (accountRows.length === 0) return null;
   const options: Array<{ value: WaveAccountView; label: string; title: string }> = [
     { value: "transaction", label: "Money accounts", title: "Bank, cash, credit card, and payroll clearing accounts." },
@@ -561,7 +566,7 @@ export function WaveAccountViewControls({
   ];
 
   return (
-    <div className="wave-account-views" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
+    <div ref={stripRef} className="wave-account-views" data-overflow={overflow === "none" ? undefined : overflow} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
       {options.map((option) => {
         const count = accountRows.filter((row) => waveAccountMatchesView(row, option.value)).length;
         return (

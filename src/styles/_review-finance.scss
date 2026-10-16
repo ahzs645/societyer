@@ -367,11 +367,29 @@
 }
 @media (max-width: 760px) {
   // Account views scroll sideways in one row instead of wrapping into three.
+  // The scroll box clips its buttons' 44px hit areas and would scroll
+  // vertically by the overhang: 4px of transparent block padding holds the
+  // hit areas (the negative margin keeps the 36px row), and the clipped
+  // edge fades (data-overflow from useScrollOverflow).
   .wave-account-views {
     flex-wrap: nowrap !important;
     overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 4px;
+    margin-block: -4px;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    &::-webkit-scrollbar { display: none; }
+    &[data-overflow='end'] {
+      mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    }
+    &[data-overflow='start'] {
+      mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+    }
+    &[data-overflow='both'] {
+      mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+    }
   }
   .wave-account-views > * {
     flex-shrink: 0;
