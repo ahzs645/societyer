@@ -259,6 +259,9 @@ export function RecordTableToolbar({
             <button
               type="button"
               className="record-table__view-button"
+              // The count chip can be visually hidden on phones (is-tight);
+              // the name keeps it either way.
+              aria-label={`${activeViewName} ${viewCount}`}
               onClick={() => setViewMenuOpen((x) => !x)}
             >
               {resolvedIcon}
