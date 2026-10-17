@@ -36,6 +36,12 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "invalid-token"
   },
   {
+    "pattern": "/reset-password",
+    "path": "/demo/reset-password",
+    "kind": "public",
+    "fixture": "invalid-token"
+  },
+  {
     "pattern": "/public",
     "path": "/demo/public",
     "kind": "public",

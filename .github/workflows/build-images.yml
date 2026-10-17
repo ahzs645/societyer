@@ -28,6 +28,7 @@ jobs:
           npm run test:clerk-gateway
           npm run test:auth-token
           npm run test:microsoft-sso
+          npm run test:multi-user-pipeline
       - name: Verify workspace access and incorporation preparation
         run: |
           npm run test:workspace-access

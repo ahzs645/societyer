@@ -178,13 +178,14 @@ against `http://societyer.k8s.home:3220`.
 
 ## Auth modes
 
-Societyer supports three identity modes:
+Societyer supports four identity modes:
 
 - **`VITE_AUTH_MODE=none` / `AUTH_MODE=none`** — keep the current local/demo workflow. The user picker remains available and no auth server is required.
+- **`VITE_AUTH_MODE=convex` / `AUTH_MODE=convex`** — the simplest hosted setup: sign-up, sign-in, email verification and password reset run inside your Convex deployment, so you deploy only the frontend and Convex. Gateway features (API tokens, webhooks, connectors, n8n documents) aren't available. See [Sign-in hosted in Convex](docs/convex-hosted-auth-setup.md).
 - **`VITE_AUTH_MODE=better-auth` / `AUTH_MODE=better-auth`** — enable Better Auth for real login/session handling.
 - **`VITE_AUTH_MODE=clerk` / `AUTH_MODE=clerk`** — use Clerk for sign-in and account profiles while Societyer retains workspace roles and invitations. See [Clerk setup](docs/clerk-setup.md) for frontend, Convex, gateway, and container configuration.
 
-For either hosted sign-in mode, start the API sidecar alongside Vite:
+For the `better-auth` and `clerk` modes, start the API sidecar alongside Vite:
 
 ```bash
 npm run dev:full
@@ -373,7 +374,7 @@ backup JSON does not embed originals, and local restore replaces the workspace.
 
 - BC society workspace records: society profile, members, directors, meetings, minutes, conflicts, filings, deadlines, documents, bylaws, privacy, financials, elections, grants, volunteers, transparency, and module settings.
 - Public/static demo and backend-backed app modes: `/demo` runs without Convex or auth; `/app` runs against hosted or self-hosted Convex.
-- Identity modes: `none` keeps the local/demo user picker; `better-auth` enables real login/session handling through the auth sidecar.
+- Identity modes: `none` keeps the local/demo user picker; `better-auth` enables real login/session handling through the auth sidecar; `clerk` delegates sign-in to Clerk; `convex` hosts sign-in inside the Convex deployment with no sidecar.
 - Multi-society data model and workspace selection: the app can list society records and persists the selected society locally.
 - Document files and versions: Convex storage uploads plus RustFS-backed document version uploads are wired into the document workflows.
 - Filing support: Societies Online and CRA pre-fill payloads can be reviewed, copied, and exported for manual filing; filed records store submission method, confirmation number, fee, and evidence.

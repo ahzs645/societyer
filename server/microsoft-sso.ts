@@ -47,7 +47,7 @@ export function getMicrosoftSsoConfig(
 }
 
 export function microsoftProviderDiscovery(
-  mode: "none" | "better-auth" | "clerk",
+  mode: "none" | "better-auth" | "clerk" | "convex",
   config: MicrosoftSsoConfig | undefined,
 ) {
   return { mode, microsoft: { enabled: mode === "better-auth" && Boolean(config) } };

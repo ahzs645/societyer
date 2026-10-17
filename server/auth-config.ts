@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
-import { authSessionDurationSeconds, resolveAuthIssuer, validateHostedAuth } from "../shared/authConfiguration";
+import { authSessionDurationSeconds, resolveAuthIssuer, validateHostedAuth, type SessionBroker } from "../shared/authConfiguration";
 import { createMicrosoftSsoProvider, getMicrosoftSsoConfig } from "./microsoft-sso";
 
 const DEVELOPMENT_AUTH_SECRET =
@@ -14,7 +14,7 @@ function env(name: string, fallback?: string): string | undefined {
   return process.env[name] ?? fallback;
 }
 
-export function getAuthMode(): "none" | "better-auth" | "clerk" {
+export function getAuthMode(): SessionBroker {
   return validateHostedAuth(process.env, process.env.CONVEX_URL ?? process.env.VITE_CONVEX_URL ?? process.env.CONVEX_SELF_HOSTED_URL);
 }
 

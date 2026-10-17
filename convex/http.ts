@@ -16,8 +16,26 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { hostedPrincipal } from "./lib/authIdentity";
 import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
 import { workspaceCreationAccessPortable } from "../shared/functions/society";
+import { resolveSessionBroker } from "../shared/authConfiguration";
+import { authComponent, createAuth, hostedAuthEmailConfigured } from "./hostedAuth";
 
 const http = httpRouter();
+// Convex-hosted login (AUTH_MODE=convex) serves Better Auth from this
+// deployment's /api/auth/*. Other brokers keep these routes absent; like
+// auth.config.ts, changing AUTH_MODE takes effect on the next deploy.
+if (resolveSessionBroker(process.env) === "convex") {
+  authComponent.registerRoutes(http, createAuth, { cors: true });
+}
+
+/** Sign-in page options for the Convex-hosted broker. Deployment settings only, no records. */
+export const authCapabilities = authorizedQuery("http:authCapabilities", query)({
+  args: {},
+  returns: v.object({ mode: v.string(), emailDelivery: v.boolean() }),
+  handler: async () => ({
+    mode: resolveSessionBroker(process.env),
+    emailDelivery: hostedAuthEmailConfigured(),
+  }),
+});
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 

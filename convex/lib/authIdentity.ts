@@ -6,10 +6,32 @@ export function betterAuthIssuer(): string {
   return resolveAuthIssuer(process.env);
 }
 
+/** Issuer of the Convex-hosted broker: this deployment's HTTP actions origin. */
+export function convexHostedIssuer(): string | undefined {
+  return process.env.CONVEX_SITE_URL || undefined;
+}
+
 /** Identity supplied here has already been verified by Convex auth.config. */
 export function hostedPrincipal(identity: UserIdentity | null): PortablePrincipal {
   if (!identity) return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
   const mode = resolveSessionBroker(process.env);
+  if (mode === "convex") {
+    // Only this deployment's own signer is trusted; there is no machine bridge.
+    const convexIssuer = convexHostedIssuer();
+    if (!convexIssuer || identity.issuer !== convexIssuer) return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
+    return {
+      kind: "user",
+      runtime: "convex-hosted",
+      assurance: "verified-jwt",
+      subject: identity.subject,
+      issuer: convexIssuer,
+      authProvider: "convex",
+      tokenIdentifier: identity.tokenIdentifier,
+      email: identity.email,
+      emailVerified: identity.emailVerified,
+      ...(identity.name ? { name: identity.name } : {}),
+    };
+  }
   const isBetterAuth = identity.issuer === betterAuthIssuer();
   const clerkIssuer = mode === "clerk" ? resolveClerkIssuer(process.env) : undefined;
   const isClerk = Boolean(clerkIssuer && identity.issuer === clerkIssuer);

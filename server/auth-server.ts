@@ -11,6 +11,9 @@ const port = Number(process.env.AUTH_SERVER_PORT ?? 8787);
 
 async function main() {
   const authMode = getAuthMode();
+  if (authMode === "convex") {
+    throw new Error("AUTH_MODE=convex serves sign-in from the Convex deployment itself; this gateway cannot verify those sessions. Deploy only the frontend and Convex, or choose better-auth/clerk to use gateway features.");
+  }
   if (authMode === "clerk") clerkVerificationConfig();
 
   const app = express();

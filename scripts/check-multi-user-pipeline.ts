@@ -1,13 +1,14 @@
 /**
  * End-to-end multi-user pipeline through the hosted Convex functions, once per
- * human session broker (Clerk and Better Auth):
+ * human session broker (Clerk, gateway Better Auth, and Convex-hosted sign-in):
  *
  *   sign up -> create a workspace as Owner -> sign in again -> invite an
  *   existing account and a brand-new account -> accept -> role-gated access.
  *
  * convex-test stands in for JWT verification (`withIdentity`), so this proves
  * the Convex side of the flow. Live keys and the browser redirects still need
- * a staging sign-in (see docs/clerk-setup.md).
+ * a staging sign-in (see docs/clerk-setup.md); scripts/check-convex-hosted-auth-live.ts
+ * covers the Convex-hosted broker against a running deployment.
  */
 import assert from "node:assert/strict";
 import { convexTest } from "convex-test";
@@ -28,11 +29,14 @@ const modules = {
 
 const CLERK_ISSUER = "https://pipeline.clerk.accounts.dev";
 
-async function runPipeline(mode: "clerk" | "better-auth") {
+const CONVEX_SITE = "https://pipeline-123.convex.site";
+
+async function runPipeline(mode: "clerk" | "better-auth" | "convex") {
   process.env.AUTH_MODE = mode;
   process.env.VITE_AUTH_MODE = mode;
   process.env.CLERK_JWT_ISSUER_DOMAIN = CLERK_ISSUER;
-  const issuer = mode === "clerk" ? CLERK_ISSUER : betterAuthIssuer();
+  process.env.CONVEX_SITE_URL = CONVEX_SITE;
+  const issuer = mode === "clerk" ? CLERK_ISSUER : mode === "convex" ? CONVEX_SITE : betterAuthIssuer();
   const t = convexTest(schema, modules);
   const person = (subject: string, email: string, name: string, emailVerified = true) =>
     t.withIdentity({ subject, issuer, email, name, emailVerified });
@@ -160,4 +164,5 @@ async function runPipeline(mode: "clerk" | "better-auth") {
 process.env.SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT = "1";
 await runPipeline("clerk");
 await runPipeline("better-auth");
+await runPipeline("convex");
 console.log("Multi-user pipeline checks passed.");
