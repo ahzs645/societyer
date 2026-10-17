@@ -21,6 +21,10 @@ import { organizationKind } from "../../shared/organizationDomain";
 import { hasErrors, validateWorkspaceUserInput, type FieldErrors } from "../../shared/recordValidation";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
+// Share links admit whoever opens them, so they can't grant Owner or Admin.
+const LINK_ROLES = ["Director", "Member", "Viewer"];
+type InviteForm = { kind: "email" | "link"; email: string; label: string; role: string; expiresInDays: number };
+const NEW_INVITE: InviteForm = { kind: "email", email: "", label: "", role: "Member", expiresInDays: 7 };
 
 export function UsersPage() {
   const society = useSociety();
@@ -391,7 +395,7 @@ function InvitationsPanel({
   const toast = useToast();
   const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [form, setForm] = useState<{ email: string; role: string; expiresInDays: number } | null>(null);
+  const [form, setForm] = useState<InviteForm | null>(null);
   const [issuedTokens, setIssuedTokens] = useState<Record<string, string>>({});
 
   // ?intent=invite (from the "Invite teammate" command palette action) opens
@@ -404,7 +408,7 @@ function InvitationsPanel({
     }
     if (inviteIntentHandled.current) return;
     inviteIntentHandled.current = true;
-    setForm({ email: "", role: "Member", expiresInDays: 7 });
+    setForm(NEW_INVITE);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("intent");
@@ -413,17 +417,15 @@ function InvitationsPanel({
   }, [searchParams, setSearchParams]);
 
   const invite = async () => {
-    if (!form?.email.trim()) return;
+    if (!form || (form.kind === "email" && !form.email.trim())) return;
     try {
-    const issued = await create({
-      societyId,
-      email: form.email.trim(),
-      role: form.role,
-      expiresInDays: form.expiresInDays,
-    });
+    const issued = await create(form.kind === "link"
+      ? { societyId, kind: "link", role: form.role, expiresInDays: form.expiresInDays, ...(form.label.trim() ? { label: form.label.trim() } : {}) }
+      : { societyId, email: form.email.trim(), role: form.role, expiresInDays: form.expiresInDays });
     setIssuedTokens((previous) => ({ ...previous, [issued.id]: issued.token }));
     setForm(null);
-    toast.success("Invitation created — copy the link before leaving this page");
+    // The secret is only available now; copy it while the click still counts as a user gesture.
+    await copyInvitationLink(issued.token, "Invitation created and link copied — send it to the person you're inviting");
     } catch (error) { toast.error("Could not create invitation", error instanceof Error ? error.message : String(error)); }
   };
 
@@ -431,14 +433,14 @@ function InvitationsPanel({
     (i: any) => !i.acceptedAtISO && !i.revokedAtISO && i.expiresAtISO && Date.parse(i.expiresAtISO) > Date.now(),
   );
 
-  const copyInvitationLink = async (token: string) => {
+  const copyInvitationLink = async (token: string, copiedMessage = "Invitation link copied") => {
     const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     const link = new URL(`${basePath}invite/${encodeURIComponent(token)}`, window.location.origin).toString();
     try {
       await navigator.clipboard.writeText(link);
-      toast.success("Invitation link copied");
+      toast.success(copiedMessage);
     } catch {
-      toast.error("Could not copy the invitation link");
+      toast.error("Could not copy the invitation link", "Use the copy button in the invitations list before leaving this page.");
     }
   };
 
@@ -447,12 +449,12 @@ function InvitationsPanel({
       <div className="card__head">
         <h2 className="card__title">Invitations</h2>
         <span className="card__subtitle">
-          Invitations require a verified email, expire automatically, and can be used once. Links are available only when created.
+          Email invitations require that verified email; share links admit whoever opens them and can't grant Owner or Admin. All invitations expire and work once. Links are available only when created.
         </span>
         <button
           className="btn-action btn-action--primary"
           style={{ marginLeft: "auto" }}
-          onClick={() => setForm({ email: "", role: "Member", expiresInDays: 7 })}
+          onClick={() => setForm(NEW_INVITE)}
         >
           <PlusCircle size={12} /> Invite
         </button>
@@ -460,7 +462,7 @@ function InvitationsPanel({
       <table className="table">
         <thead>
           <tr>
-            <th>Email</th>
+            <th>Invitee</th>
             <th>Role</th>
             <th>Status</th>
             <th>Created</th>
@@ -477,7 +479,12 @@ function InvitationsPanel({
                   ? "expired" : "pending";
             return (
               <tr key={inv._id}>
-                <td className="mono">{inv.email}</td>
+                <td>
+                  {inv.kind === "link"
+                    ? <><Badge>Share link</Badge> <span className="muted">{inv.label || "Anyone with the link"}</span></>
+                    : <span className="mono">{inv.email}</span>}
+                  {inv.acceptedBy && <div className="muted">Joined as {inv.acceptedBy.displayName} ({inv.acceptedBy.email})</div>}
+                </td>
                 <td><Badge>{inv.role}</Badge></td>
                 <td>
                   <Badge tone={status === "accepted" ? "success" : status === "revoked" ? "danger" : "warn"}>
@@ -503,7 +510,9 @@ function InvitationsPanel({
                         onClick={async () => {
                           const ok = await confirm({
                             title: "Revoke invitation?",
-                            message: `The pending invitation for ${inv.email} will be cancelled.`,
+                            message: inv.kind === "link"
+                              ? "The share link will stop working."
+                              : `The pending invitation for ${inv.email} will be cancelled.`,
                             confirmLabel: "Revoke",
                             tone: "danger",
                           });
@@ -536,7 +545,7 @@ function InvitationsPanel({
         footer={
           <>
             <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={invite} disabled={!form?.email.trim()}>
+            <button className="btn btn--accent" onClick={invite} disabled={!form || (form.kind === "email" && !form.email.trim())}>
               Create invitation
             </button>
           </>
@@ -544,13 +553,46 @@ function InvitationsPanel({
       >
         {form && (
           <div>
-            <Field label="Email">
-              <input
-                className="input"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+            <Field label="Who can use it">
+              <Select
+                value={form.kind}
+                onChange={(v) => {
+                  const kind = v as InviteForm["kind"];
+                  const role = kind === "link" && !LINK_ROLES.includes(form.role) ? "Member" : form.role;
+                  setForm({ ...form, kind, role });
+                }}
+                options={[
+                  { value: "email", label: "Only this email address" },
+                  { value: "link", label: "Anyone with the link" },
+                ]}
               />
             </Field>
+            {form.kind === "email" ? (
+              <Field label="Email">
+                <input
+                  className="input"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </Field>
+            ) : (
+              <>
+                <p className="muted" style={{ marginTop: 0 }}>
+                  Whoever opens this link first while signed in joins the workspace. Share it only with the person
+                  you mean to invite. It can grant Director, Member or Viewer; promote them after they join if needed.
+                </p>
+                <Field label="Note (optional)">
+                  <input
+                    className="input"
+                    value={form.label}
+                    maxLength={120}
+                    placeholder="Who it's for, e.g. Sam, new treasurer"
+                    onChange={(e) => setForm({ ...form, label: e.target.value })}
+                  />
+                </Field>
+              </>
+            )}
             <Field label="Expires in">
               <Select value={String(form.expiresInDays)} onChange={(v) => setForm({ ...form, expiresInDays: Number(v) })} options={[1, 7, 14, 30].map((days) => ({ value: String(days), label: `${days} day${days === 1 ? "" : "s"}` }))} />
             </Field>
@@ -558,7 +600,7 @@ function InvitationsPanel({
               <Select
                 value={form.role}
                 onChange={(v) => setForm({ ...form, role: v })}
-                options={assignableRoles.map((r) => ({ value: r, label: r }))}
+                options={assignableRoles.filter((r) => form.kind === "email" || LINK_ROLES.includes(r)).map((r) => ({ value: r, label: r }))}
               />
             </Field>
           </div>

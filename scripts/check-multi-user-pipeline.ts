@@ -120,6 +120,31 @@ async function runPipeline(mode: "clerk" | "better-auth" | "convex") {
   await t.run((ctx) => ctx.db.patch(expired.id, { expiresAtISO: new Date(Date.now() - 1000).toISOString() }));
   assert.equal((await erin.mutation(api.invitations.accept, { token: expired.token })).status, "invitation-expired");
 
+  // 7b. Share links: no email binding, so no administrative roles and no verified email needed.
+  await assert.rejects(() => alice.mutation(api.invitations.create, { societyId, kind: "link", role: "Admin" }), /Share links can grant/, label("link cannot grant Admin"));
+  await assert.rejects(() => alice.mutation(api.invitations.create, { societyId, kind: "link", role: "Owner" }), /Share links can grant/);
+  await assert.rejects(() => alice.mutation(api.invitations.create, { societyId, kind: "link", email: "x@example.org", role: "Member" }), /isn't tied to an email/);
+  const shareLink = await alice.mutation(api.invitations.create, { societyId, kind: "link", role: "Member", label: "Gina, new treasurer" });
+  // A current member opening it leaves it for the person it was meant for.
+  assert.equal((await bob.mutation(api.invitations.accept, { token: shareLink.token })).status, "bound", label("member opening a link doesn't use it"));
+  const gina = person(`${mode}-gina`, "gina@personal.example", "Gina Unverified", false);
+  const ginaJoined = await gina.mutation(api.invitations.accept, { token: shareLink.token });
+  assert.equal(ginaJoined.status, "invitation-accepted", label("unverified account joins through a share link"));
+  const ginaRow = await userRow(ginaJoined.userId);
+  assert.equal(ginaRow.role, "Member");
+  assert.equal(ginaRow.emailVerifiedAtISO, undefined, label("membership records the email as unverified"));
+  const henry = person(`${mode}-henry`, "henry@example.org", "Henry");
+  assert.equal((await henry.mutation(api.invitations.accept, { token: shareLink.token })).status, "invitation-already-accepted", label("share link is single-use"));
+  const linkRow = (await alice.query(api.invitations.list, { societyId })).find((row: any) => row._id === shareLink.id);
+  assert.deepEqual([linkRow.kind, linkRow.label, linkRow.acceptedBy?.displayName], ["link", "Gina, new treasurer", "Gina Unverified"], label("admins see who used the link"));
+  // A link row that somehow carries an administrative role is refused at acceptance.
+  const tampered = await alice.mutation(api.invitations.create, { societyId, kind: "link", role: "Viewer" });
+  await t.run((ctx) => ctx.db.patch(tampered.id, { role: "Admin" }));
+  assert.equal((await henry.mutation(api.invitations.accept, { token: tampered.token })).status, "invalid-invitation", label("tampered link role refused"));
+  // The first sign-in path (token passed to ensureCurrentMembership) honours links too.
+  const viaLogin = await alice.mutation(api.invitations.create, { societyId, kind: "link", role: "Viewer" });
+  assert.equal((await henry.mutation(api.users.ensureCurrentMembership, { societyId, invitationToken: viaLogin.token })).status, "invitation-accepted");
+
   // 8. Access levels.
   const dave = person(`${mode}-dave`, "dave@example.org", "Dave Admin");
   const daveJoined = await dave.mutation(api.invitations.accept, { token: daveInvite.token });
@@ -158,7 +183,7 @@ async function runPipeline(mode: "clerk" | "better-auth" | "convex") {
   const impostor = t.withIdentity({ subject: `${mode}-alice`, issuer: "https://impostor.example", email: "alice@example.org", emailVerified: true });
   await assert.rejects(() => impostor.query(api.society.getById, { id: societyId }), /not found|Authentication required|Access denied/, label("foreign issuer rejected"));
 
-  console.log(`  ${mode}: sign-up, Owner creation, re-login, existing/new invitees, revocation/expiry, role gates, disable, issuer isolation`);
+  console.log(`  ${mode}: sign-up, Owner creation, re-login, existing/new invitees, share links, revocation/expiry, role gates, disable, issuer isolation`);
 }
 
 process.env.SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT = "1";

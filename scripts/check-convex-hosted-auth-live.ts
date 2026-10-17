@@ -48,11 +48,16 @@ const linkTo = (address: string, subject: RegExp) => {
 };
 
 /** One browser: its own cookie storage, Better Auth client and Convex client. */
+// A self-hosted backend with no proxy in front takes the client IP from
+// X-Forwarded-For, so locally each simulated browser can have its own address.
+// Convex Cloud sets the client IP itself and the per-IP step is skipped there.
+const simulateIps = /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(convexUrl);
+// Fresh simulated addresses per run, so earlier runs' throttle buckets don't carry over.
+const ipBlock = `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
 let browsers = 0;
+const ipHeaders = (ip: string) => (simulateIps ? { "x-forwarded-for": ip } : {});
 function browser() {
-  // Behind a proxy that sets the client IP header, each browser has its own address.
-  const ipHeader = process.env.LIVE_CLIENT_IP_HEADER;
-  const ip = ipHeader ? { [ipHeader]: `192.0.2.${++browsers}` } : {};
+  const ip = ipHeaders(`${ipBlock}.${++browsers % 250}`);
   const store = new Map<string, string>();
   const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); } };
   const auth = createAuthClient({
@@ -159,20 +164,32 @@ try {
   forged.setAuth("eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.invalid");
   await assert.rejects(() => forged.query(api.http.currentPrincipalMemberships, {}));
 
-  // 8. With AUTH_CLIENT_IP_HEADER on the deployment, sign-in is throttled per client IP.
-  const ipHeader = process.env.LIVE_CLIENT_IP_HEADER;
-  if (ipHeader) {
-    const attempt = (ip: string) => createAuthClient({
-      baseURL: convexSiteUrl, plugins: [convexClient()],
-      fetchOptions: { headers: { origin: siteUrl, [ipHeader]: ip } },
-    }).signIn.email({ email: aliceEmail, password: "wrong-password-123" });
-    const statuses = [];
-    for (let i = 0; i < 4; i++) statuses.push((await attempt(`203.0.113.${run.length}`)).error?.status);
-    assert.deepEqual(statuses, [401, 401, 401, 429], "Fourth rapid attempt from one IP is throttled");
-    assert.equal((await attempt("198.51.100.7")).error?.status, 401, "Another IP keeps its own allowance");
+  // 8. Sign-in throttling, per account and per client IP.
+  const attempt = (email: string, password: string, ip: string) => createAuthClient({
+    baseURL: convexSiteUrl, plugins: [convexClient()],
+    fetchOptions: { headers: { origin: siteUrl, ...ipHeaders(ip) } },
+  }).signIn.email({ email, password });
+  const lockEmail = `lockout-${run}@example.org`;
+  await signUpAndVerify(lockEmail, "Lockout Target", "lockout-right-password");
+  // A success refills the account's allowance, so only failures in a row add up.
+  for (let i = 0; i < 5; i++) assert.equal((await attempt(lockEmail, "wrong-password-123", `${ipBlock}.${10 + i}`)).error?.status, 401);
+  assert.equal((await attempt(lockEmail, "lockout-right-password", `${ipBlock}.20`)).error, null, "Correct password still works");
+  const failures = [];
+  for (let i = 0; i < 11; i++) failures.push((await attempt(lockEmail, "wrong-password-123", `${ipBlock}.${30 + i}`)).error?.status);
+  assert.deepEqual(failures, [...Array(10).fill(401), 429], "11th failure in a row is throttled even from a new IP each time");
+  const locked = await attempt(lockEmail, "lockout-right-password", `${ipBlock}.50`);
+  assert.equal(locked.error?.status, 429, "While throttled, the account refuses even the right password");
+  assert.match(locked.error?.message ?? "", /Try again in \d+ minute/);
+  if (simulateIps) {
+    // One address trying many accounts runs out after 30 attempts.
+    const sprayIp = `${ipBlock}.251`;
+    const spray = [];
+    for (let i = 0; i < 31; i++) spray.push((await attempt(`spray-${i}-${run}@example.org`, "wrong-password-123", sprayIp)).error?.status);
+    assert.deepEqual(spray, [...Array(30).fill(401), 429], "31st attempt from one IP is throttled");
+    assert.equal((await attempt(`spray-x-${run}@example.org`, "wrong-password-123", `${ipBlock}.252`)).error?.status, 401, "Another IP keeps its own allowance");
   }
 
-  console.log("Live Convex-hosted auth checks passed: sign-up, email verification, Owner workspace, re-login, invites (new and existing accounts), password reset, disable, forged token.");
+  console.log(`Live Convex-hosted auth checks passed: sign-up, email verification, Owner workspace, re-login, invites (new and existing accounts), password reset, disable, forged token, per-account throttling${simulateIps ? ", per-IP throttling" : ""}.`);
 } finally {
   mailServer.close();
 }

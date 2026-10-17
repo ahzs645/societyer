@@ -11,7 +11,11 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth/minimal";
-import { components } from "./_generated/api";
+import { generateRandomString } from "better-auth/crypto";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { components, internal } from "./_generated/api";
+import { internalAction } from "./_generated/server";
+import { v } from "convex/values";
 import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import { sendEmail } from "./providers/email";
@@ -36,6 +40,62 @@ async function sendAuthLink(to: string, subject: string, intro: string, url: str
   });
 }
 
+type Allowance = { capacity: number; perHour: number };
+/**
+ * Attempts allowed per account email and per client IP, as token buckets: up
+ * to `capacity` at once, refilling `perHour`. Sign-in refills the account's
+ * bucket on success, so only failures add up there. The email limits on
+ * sign-up and email-sending routes bound how much mail one address receives.
+ */
+const THROTTLES: Record<string, { email?: Allowance; ip?: Allowance }> = {
+  "/sign-in/email": { email: { capacity: 10, perHour: 10 }, ip: { capacity: 30, perHour: 60 } },
+  "/sign-up/email": { email: { capacity: 3, perHour: 3 }, ip: { capacity: 10, perHour: 10 } },
+  "/request-password-reset": { email: { capacity: 3, perHour: 3 }, ip: { capacity: 10, perHour: 10 } },
+  "/send-verification-email": { email: { capacity: 3, perHour: 3 }, ip: { capacity: 10, perHour: 10 } },
+  "/reset-password": { ip: { capacity: 10, perHour: 10 } },
+};
+
+const throttleEmail = (body: unknown) => {
+  const email = (body as { email?: unknown } | undefined)?.email;
+  return typeof email === "string" && email.trim() ? email.trim().toLowerCase().slice(0, 320) : undefined;
+};
+
+/** Client IP from Convex request metadata; null outside an HTTP request. */
+async function clientIp(ctx: GenericCtx<DataModel>): Promise<string | null> {
+  const meta = (ctx as { meta?: { getRequestMetadata?: () => Promise<{ ip: string | null }> } }).meta;
+  return meta?.getRequestMetadata ? (await meta.getRequestMetadata()).ip : null;
+}
+
+function throttleHooks(ctx: GenericCtx<DataModel>) {
+  // Only HTTP requests (actions) reach these routes; other callers build a static instance.
+  if (!("runMutation" in ctx)) return {};
+  return {
+    before: createAuthMiddleware(async (hook) => {
+      const rule = THROTTLES[hook.path];
+      if (!rule) return;
+      const email = throttleEmail(hook.body);
+      const ip = await clientIp(ctx);
+      const buckets = [
+        ...(rule.email && email ? [{ key: `${hook.path}:email:${email}`, ...rule.email }] : []),
+        ...(rule.ip && ip ? [{ key: `${hook.path}:ip:${ip}`, ...rule.ip }] : []),
+      ];
+      if (!buckets.length) return;
+      const { ok, retryAfterMs } = await ctx.runMutation(internal.authThrottle.take, { buckets });
+      if (!ok) {
+        const minutes = Math.max(1, Math.ceil(retryAfterMs / 60_000));
+        throw new APIError("TOO_MANY_REQUESTS", {
+          message: `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+        });
+      }
+    }),
+    after: createAuthMiddleware(async (hook) => {
+      if (hook.path !== "/sign-in/email" || hook.context.returned instanceof Error) return;
+      const email = throttleEmail(hook.body);
+      if (email) await ctx.runMutation(internal.authThrottle.reset, { key: `${hook.path}:email:${email}` });
+    }),
+  };
+}
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   // Route registration builds a static instance at deploy time; only a
   // selected Convex broker needs real site and secret configuration.
@@ -46,7 +106,6 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     throw new Error("AUTH_MODE=convex requires a BETTER_AUTH_SECRET of at least 32 characters on the Convex deployment.");
   }
   const emailConfigured = hostedAuthEmailConfigured();
-  const clientIpHeader = process.env.AUTH_CLIENT_IP_HEADER?.trim().toLowerCase() || undefined;
   return betterAuth({
     baseURL: process.env.CONVEX_SITE_URL,
     secret: secret || "inactive-convex-broker-placeholder-secret-0000",
@@ -55,6 +114,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 10,
+      // A reset ends every session, including one an attacker may hold.
+      revokeSessionsOnPasswordReset: true,
       // With mail configured, an account must prove its mailbox before it can
       // sign in. Invitations always require a verified email.
       requireEmailVerification: emailConfigured,
@@ -77,12 +138,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] },
     },
     session: { expiresIn: authSessionDurationSeconds(process.env), disableSessionRefresh: true },
-    // Better Auth throttles per client IP. Convex HTTP actions don't receive one
-    // unless a trusted proxy in front adds it, and without an IP every visitor
-    // would share one sign-in bucket, so throttling needs the proxy's header.
-    // Convex isolates keep no memory between requests: count in the database.
-    rateLimit: { enabled: Boolean(clientIpHeader), storage: "database" },
-    advanced: { ipAddress: clientIpHeader ? { ipAddressHeaders: [clientIpHeader] } : { disableIpTracking: true } },
+    // Better Auth's limiter reads the client IP from request headers, which
+    // Convex doesn't forward, and would put every visitor in one shared bucket.
+    // `throttleHooks` limits by account and by Convex's own client IP instead.
+    rateLimit: { enabled: false },
+    advanced: { ipAddress: { disableIpTracking: true } },
+    hooks: throttleHooks(ctx),
     plugins: [
       crossDomain({ siteUrl: siteUrls[0] }),
       convex({
@@ -97,3 +158,36 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     ],
   });
 };
+
+/**
+ * Operator-only recovery when the deployment has no mail sender: returns a
+ * one-hour password-reset link to hand to the account holder yourself.
+ *
+ *   npx convex run hostedAuth:issuePasswordResetLink '{"email":"sam@example.org"}'
+ *
+ * Internal, so only someone with deployment access (CLI or dashboard) can run
+ * it. Workspace Owners can't: an account may belong to other workspaces, and
+ * resetting its password would hand over those too. Using the link ends the
+ * account's other sessions.
+ */
+export const issuePasswordResetLink = internalAction({
+  args: { email: v.string(), appUrl: v.optional(v.string()) },
+  returns: v.string(),
+  handler: async (ctx, { email, appUrl }) => {
+    if (resolveSessionBroker(process.env) !== "convex") throw new Error("Reset links are for AUTH_MODE=convex deployments.");
+    const auth = createAuth(ctx);
+    const authContext = await auth.$context;
+    const account = await authContext.internalAdapter.findUserByEmail(email.trim().toLowerCase());
+    if (!account) throw new Error(`No account uses ${email.trim()}.`);
+    const token = generateRandomString(32);
+    await authContext.internalAdapter.createVerificationValue({
+      identifier: `reset-password:${token}`,
+      value: account.user.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    // The app's own reset page; pass appUrl when it is served under a sub-path.
+    const base = (appUrl ?? resolveConvexAuthSiteUrls(process.env)[0]).replace(/\/+$/, "");
+    console.log(`Issued a password-reset link for account ${account.user.id}.`);
+    return `${base}/reset-password?token=${encodeURIComponent(token)}`;
+  },
+});

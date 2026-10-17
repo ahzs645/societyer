@@ -37,6 +37,8 @@ if (JSON.stringify(portableTables) !== JSON.stringify(exportTables)) {
 const NON_WORKSPACE_EXPORT_TABLES = new Set([
   "documentUploadHandles", "storageOwnership", "externalIdentities", "powersync_checkpoints",
   "offlineMeetingAggregates", "offlineMeetingReceipts", "offlineMeetingDownloads", "offlineMeetingScopes",
+  // Sign-in throttle buckets for the Convex-hosted broker; transient, not workspace records.
+  "authRateLimits",
 ]);
 const forbidden = exportTables.filter(table => NON_WORKSPACE_EXPORT_TABLES.has(table));
 if (forbidden.length) throw new Error(`Internal authorization/synchronization tables must not be exported: ${forbidden.join(", ")}.`);

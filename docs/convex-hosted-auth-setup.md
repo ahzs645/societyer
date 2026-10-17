@@ -24,6 +24,17 @@ last-Owner safeguard behave exactly as in the other modes.
 
 The gateway refuses to start in this mode, because it can't verify these sessions.
 
+Why each needs the Node gateway today, and what moving it into Convex would take:
+
+| Feature | Why it needs Node today | Moving it into Convex |
+|---|---|---|
+| API tokens / REST API (`/api/v1`) | Express routes; the gateway checks `soc_` tokens and signs short-lived JWTs to act as the token owner | Moderate: HTTP-action routes plus an internal "act as member" path; mostly mechanical across ~50 resources |
+| Webhooks | Only the gateway sends them, and only for changes made through the REST API (edits in the app send none). Retries are in-memory timers lost on restart | Easy, and an improvement: emit from Convex mutations, deliver from scheduled actions, so app edits fire webhooks and retries survive restarts |
+| Browser connectors (BC Registry, Wave, GCOS live) | Drive a real Chrome through Playwright in a separate container with saved sign-ins | Not feasible inside Convex; keep the runner as its own service and talk to it from Convex directly |
+| Registry/bylaws imports | Need that browser session, local export folders and `pdftotext` | Hard while they depend on the runner; the GCOS uploaded-file import alone is easy to move |
+| n8n document generation | Fills PDFs from template files on disk and stores the result on the gateway's disk | Easy to moderate: callback as an HTTP action, PDFs in Convex storage, `pdf-lib` in a Node action |
+| Microsoft sign-in | Lives in the gateway's Better Auth; adds tenant pinning and verified ID tokens | Easy to moderate: the same provider code can be added to this mode's Better Auth; the Entra redirect URI changes |
+
 ## 1. Configure the Convex deployment
 
 Set these on the Convex deployment (dashboard → Settings → Environment
@@ -35,8 +46,7 @@ variables, or `npx convex env set NAME value`):
 | `SITE_URL` | Yes | The app's origin, e.g. `https://app.example.org`. Comma-separate extra origins (the first is the primary). Only these origins may call the sign-in routes or receive email links. |
 | `BETTER_AUTH_SECRET` | Yes | At least 32 random characters, e.g. `openssl rand -base64 36`. Keep it stable: changing it signs everyone out. |
 | `SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT=1` | Recommended | Explicit authenticated enforcement, as for other hosted modes |
-| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | For invitations | Email delivery for verification and password reset (see below) |
-| `AUTH_CLIENT_IP_HEADER` | Optional | Turns on per-IP sign-in throttling (see below) |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | Recommended | Email delivery for verification, password reset and email-bound invitations (see below) |
 | `AUTH_SESSION_MAX_AGE_SECONDS` | Optional | Session length, 300–86400 seconds (default 8 hours) |
 
 `CONVEX_SITE_URL` is provided by Convex automatically; it becomes the token
@@ -46,30 +56,67 @@ Then deploy (`npx convex deploy`, or `npx convex dev` while developing).
 Like the other modes, a change to `AUTH_MODE` takes effect on the next deploy,
 because Convex reads the auth configuration and HTTP routes at deploy time.
 
-### Email delivery is what makes invitations work
-
-Accepting an invitation requires a verified email, so that a leaked invite link
-can't be used by someone else's account. Verification needs a mail sender:
-
-- **With `RESEND_API_KEY` and `RESEND_FROM_EMAIL` set:** new accounts get a
-  verification link and can't sign in until they open it. "Forgot your
-  password?" appears on the sign-in page.
-- **Without them:** accounts are created and signed in immediately, and people
-  can create their own workspaces, but nobody can accept an invitation and there
-  is no self-service password reset. The sign-in page hides the reset option.
+### Email delivery, invitations and password reset
 
 Use a [Resend](https://resend.com) API key with a sender on a domain you've
 verified with Resend. These are the same variables the communications module uses.
 
+| | With email delivery | Without it |
+|---|---|---|
+| New accounts | Must open a verification link before signing in | Signed in immediately; email unverified |
+| "Only this email address" invitations | Work | Can't be accepted (they require a verified email) |
+| "Anyone with the link" invitations | Work | Work |
+| Forgot password | Self-service from the sign-in page | Operator issues a reset link (below) |
+
+**Share links.** On the Users page, choose *Anyone with the link* when inviting.
+The link is the credential: whoever opens it first while signed in joins, with
+no email match. So a share link:
+
+- can grant Director, Member or Viewer, never Owner or Admin (an Owner promotes
+  people after they join);
+- works once and expires (1–30 days);
+- isn't used up when a current member opens it.
+
+The invitations list shows who joined through each link, so check that it was the
+person you meant. Their email is recorded as unverified.
+
+**Operator password reset.** Without email, someone with access to the Convex
+deployment (CLI or dashboard) can issue a one-hour reset link and pass it to the
+person:
+
+```bash
+npx convex run hostedAuth:issuePasswordResetLink '{"email":"sam@example.org"}'
+# add "appUrl":"https://example.org/app" if the app is served under a sub-path
+```
+
+Using the link ends the account's other sessions. Workspace Owners can't do this
+from the app on purpose: one login account can belong to several workspaces, so
+resetting its password would also hand over those other workspaces.
+
 ### Sign-in throttling
 
-Better Auth limits repeated sign-in attempts per client IP address. Convex HTTP
-actions don't receive the visitor's IP on their own, and without one every
-visitor would share a single allowance. So throttling is off unless you set
-`AUTH_CLIENT_IP_HEADER` to a header that a **trusted** proxy in front of Convex
-sets to the real client IP (for example `x-forwarded-for` behind your own
-reverse proxy, or `cf-connecting-ip` behind Cloudflare). Don't set it to a
-header clients can supply themselves. Passwords must be at least 10 characters.
+Repeated attempts are limited in two independent ways, following the approach of
+Convex's own auth library:
+
+| Route | Per account email | Per client IP |
+|---|---|---|
+| Sign in | 10 failures in a row, then 1 more every 6 minutes; a successful sign-in resets it | 30 at once, refilling 60/hour |
+| Sign up, forgot password, resend verification | 3/hour (limits mail sent to one address) | 10/hour |
+| Reset password with a token | | 10/hour |
+
+A throttled request gets "Too many attempts. Try again in N minutes." The
+per-account limit works whatever the IP. That matters because:
+
+- **Convex Cloud** sets the client IP itself.
+- **A self-hosted backend** takes the IP from the client's `X-Forwarded-For`
+  header, so put a reverse proxy in front that *overwrites* that header with the
+  real address (for nginx: `proxy_set_header X-Forwarded-For $remote_addr;`).
+  Without one, the per-IP limit can be bypassed, but the per-account limit still
+  holds.
+
+The tradeoff of the per-account limit: someone who knows an email address can
+deliberately trigger the limit and lock that person out for a while. Lockouts
+are temporary, never permanent. Passwords must be at least 10 characters.
 
 ## 2. Build the frontend
 
@@ -123,7 +170,9 @@ That runs the full pipeline over real HTTP and covers:
 - signing in again in a new browser to the same membership;
 - invitations to a new account and to an existing account;
 - password reset and disabling a member;
-- rejection of a forged token, and per-IP throttling when `LIVE_CLIENT_IP_HEADER` is set.
+- rejection of a forged token;
+- per-account throttling, plus per-IP throttling against a local backend (where
+  the test can simulate addresses).
 
 ## Moving from another mode
 

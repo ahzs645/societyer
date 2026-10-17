@@ -3487,6 +3487,33 @@
     "idArguments": []
   },
   {
+    "key": "convex:authThrottle:purgeIdle",
+    "surface": "convex",
+    "name": "authThrottle:purgeIdle",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/authThrottle.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:authThrottle:reset",
+    "surface": "convex",
+    "name": "authThrottle:reset",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/authThrottle.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:authThrottle:take",
+    "surface": "convex",
+    "name": "authThrottle:take",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/authThrottle.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:bylawAmendments:createDraft",
     "surface": "convex",
     "name": "bylawAmendments:createDraft",
@@ -10400,6 +10427,15 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "convex:hostedAuth:issuePasswordResetLink",
+    "surface": "convex",
+    "name": "hostedAuth:issuePasswordResetLink",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/hostedAuth.ts",
+    "idArguments": []
   },
   {
     "key": "convex:importSessions:applyApprovedDocuments",

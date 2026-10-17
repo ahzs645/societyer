@@ -91,7 +91,7 @@ export function InvitationAcceptPage() {
     );
   }
   if (result.status === "invitation-email-unverified" && auth.mode === "convex") {
-    return <InvitationState message="Your email address isn't verified yet. Open the verification link we emailed you, then come back to this invitation. If no email arrives, ask the workspace administrator to check that the server's email delivery is set up." />;
+    return <InvitationState message="Your email address isn't verified yet. Open the verification link we emailed you, then come back to this invitation. If no email arrives, ask the workspace administrator for a share link instead." />;
   }
   return <InvitationState message={FAILURE_MESSAGES[result.status] ?? "This invitation cannot be accepted."} />;
 }

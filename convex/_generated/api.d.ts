@@ -26,6 +26,7 @@ import type * as apiPlatform from "../apiPlatform.js";
 import type * as assets from "../assets.js";
 import type * as attestations from "../attestations.js";
 import type * as auditors from "../auditors.js";
+import type * as authThrottle from "../authThrottle.js";
 import type * as authorization from "../authorization.js";
 import type * as bylawAmendments from "../bylawAmendments.js";
 import type * as bylawRules from "../bylawRules.js";
@@ -278,6 +279,7 @@ declare const fullApi: ApiFromModules<{
   assets: typeof assets;
   attestations: typeof attestations;
   auditors: typeof auditors;
+  authThrottle: typeof authThrottle;
   authorization: typeof authorization;
   bylawAmendments: typeof bylawAmendments;
   bylawRules: typeof bylawRules;

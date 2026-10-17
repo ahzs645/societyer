@@ -11,7 +11,7 @@ import { assertValid, validateWorkspaceUserInput } from "../recordValidation";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
-import { findInvitation, invitationAvailability, invitationIssuerAuthorized } from "./invitationTokens";
+import { findInvitation, invitationAvailability, invitationIssuerAuthorized, isShareLinkInvitation, LINK_INVITATION_ROLES } from "./invitationTokens";
 import { matchesAuthBinding, normalizeAuthIssuer, matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 
 export type MembershipResolution =
@@ -246,7 +246,10 @@ export async function ensureCurrentMembershipPortable(
   if (!invitation) return { status: "invalid-invitation" };
   const unavailable = invitationAvailability(invitation);
   if (unavailable) return { status: unavailable } as MembershipResolution;
-  if (!principal.emailVerified) return { status: "invitation-email-unverified" };
+  // Email invitations bind to a verified mailbox. A share link is itself the
+  // credential, which is why it can't carry administrative roles.
+  const shareLink = isShareLinkInvitation(invitation);
+  if (!shareLink && !principal.emailVerified) return { status: "invitation-email-unverified" };
   if (!await invitationIssuerAuthorized(ctx, invitation)) return { status: "invitation-issuer-unavailable" };
   if (invitation.societyId !== args.societyId) {
     return { status: "invitation-society-mismatch" };
@@ -254,12 +257,17 @@ export async function ensureCurrentMembershipPortable(
   if (invitation.revokedAtISO) return { status: "invitation-revoked" };
   if (invitation.acceptedAtISO) return { status: "invitation-already-accepted" };
   if (!ROLES.includes(invitation.role as Role)) return { status: "invalid-invitation" };
-  if (!principal.emailVerified) return { status: "invitation-email-unverified" };
-  if (
-    !principal.email ||
-    principal.email.toLowerCase() !== invitation.email.toLowerCase()
-  ) {
-    return { status: "invitation-email-mismatch" };
+  if (shareLink) {
+    if (!(LINK_INVITATION_ROLES as readonly string[]).includes(invitation.role)) return { status: "invalid-invitation" };
+    if (!principal.email) return { status: "invitation-email-mismatch" };
+  } else {
+    if (!principal.emailVerified) return { status: "invitation-email-unverified" };
+    if (
+      !principal.email ||
+      principal.email.toLowerCase() !== invitation.email.toLowerCase()
+    ) {
+      return { status: "invitation-email-mismatch" };
+    }
   }
 
   const externalIdentityId = await ensureExternalIdentityPortable(ctx, principal.issuer, principal.subject);
