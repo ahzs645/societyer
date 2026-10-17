@@ -56,6 +56,40 @@
   }
 }
 
+// Phones: while a full-screen form is open — the inspector sheet or a
+// standalone drawer, or a phone dialog sheet with a Save / Cancel footer —
+// toasts drop in at the top of the visible area instead of sitting just above
+// the footer, where they covered the form's fields and crowded the buttons.
+// The top of the visible area is also clear of the on-screen keyboard: while
+// it is open (--keyboard-inset / --visible-height, set by
+// useKeyboardInsetTracking) the stack follows the top of what is visible.
+// Desktop keeps its bottom-right stack beside an open inspector column.
+@mixin toast-stack-at-top {
+  top: max(
+    calc(env(safe-area-inset-top, 0px) + #{token('s-2')}),
+    calc(100% - var(--keyboard-inset, 0px) - var(--visible-height, 100%) + #{token('s-2')})
+  );
+  bottom: auto;
+
+  .toast {
+    animation-name: toastDropIn;
+  }
+}
+@keyframes toastDropIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 768px) {
+  body:has(.app-shell.is-mobile .inspector-host.is-open, .drawer) .toast-stack {
+    @include toast-stack-at-top;
+  }
+}
+@media (max-width: 560px) {
+  body:has(.modal .modal__foot) .toast-stack {
+    @include toast-stack-at-top;
+  }
+}
+
 // Phone: page-level cards run full-bleed (see _layout-workbench.scss, which
 // drops their radius and shadow). With the card border now drawn by the
 // elevation ring, restore hairline dividers above and below each section.

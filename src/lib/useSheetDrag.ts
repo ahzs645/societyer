@@ -8,6 +8,13 @@ import { bottomSheetMediaQuery } from "./breakpoints";
  */
 export const SHEET_MIN_ITEMS = 6;
 
+/**
+ * A phone sheet listing more options than this gets a search field by
+ * default (Select), so a province or category is a few letters away rather
+ * than a long scroll. Pages opt out with `searchable={false}`.
+ */
+export const SHEET_SEARCH_MIN_ITEMS = 12;
+
 /** iOS sheet curve (also what vaul / UIKit sheets use). */
 export const SHEET_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
 

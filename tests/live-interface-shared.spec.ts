@@ -62,7 +62,8 @@ test("live member drawer keeps nested date and selection controls usable without
   await expectInsideViewport(page, drawer);
   const joined = drawer.getByLabel("Joined", { exact: true });
   await joined.click();
-  const calendar = page.getByRole("dialog", { name: "Date picker", exact: true });
+  // A phone sheet is titled with the field it was opened from.
+  const calendar = page.getByRole("dialog", { name: page.viewportSize()!.width <= 560 ? "Joined" : "Date picker", exact: true });
   await expectInsideViewport(page, calendar);
   await page.keyboard.press("ArrowRight");
   await expect(calendar.locator(".calendar__cell.is-active")).toBeFocused();

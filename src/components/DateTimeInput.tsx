@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useSheetTitle } from "../lib/sheetTitle";
+import { SheetHeader } from "./SheetHeader";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { useFloatingLayerStack } from "../lib/overlayStack";
@@ -29,6 +31,8 @@ type Props = {
   onClose?: () => void;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
+  /** Title of the phone bottom sheet. Defaults to the field's label. */
+  sheetTitle?: string;
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -56,7 +60,7 @@ function sameDay(a: Date, b: Date) {
 export function DateTimeInput({
   value,
   onChange,
-  placeholder = "Pick date & time",
+  placeholder: placeholderProp,
   disabled,
   clearable = true,
   size = "md",
@@ -69,7 +73,9 @@ export function DateTimeInput({
   onClose,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
+  sheetTitle,
 }: Props) {
+  const placeholder = placeholderProp ?? "Pick date & time";
   const parsed = parse(value);
   const today = new Date();
   const [open, setOpen] = useState(defaultOpen);
@@ -100,6 +106,14 @@ export function DateTimeInput({
   };
   useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
   const layer = useFloatingLayerStack(open);
+  // Phones title the sheet with the field it was opened from.
+  const sheetTitleId = `${useId()}-sheet-title`;
+  const resolvedSheetTitle = useSheetTitle(open && isBottomSheet, () => ({
+    explicit: sheetTitle,
+    trigger: triggerRef.current,
+    placeholder: placeholderProp,
+    fallback: "Choose a date and time",
+  }));
   useKeyboardInsetTracking(open && isBottomSheet);
 
   useEffect(() => {
@@ -315,11 +329,13 @@ export function DateTimeInput({
             <div
               ref={popRef}
               role="dialog"
-              aria-label="Date and time picker"
+              aria-label={isBottomSheet ? undefined : "Date and time picker"}
+              aria-labelledby={isBottomSheet ? sheetTitleId : undefined}
+              aria-modal={isBottomSheet || undefined}
               className={`calendar calendar--with-time${isBottomSheet ? " calendar--sheet" : ""}`}
               style={isBottomSheet || !pos ? layer.panel : { ...layer.panel, top: pos.top, left: pos.left }}
             >
-              {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
+              {isBottomSheet && <SheetHeader id={sheetTitleId} title={resolvedSheetTitle} onClose={dismiss} />}
               <div className="calendar__typed">
                 <label htmlFor={typedInputId} className="sr-only">Type a date</label>
                 <input
