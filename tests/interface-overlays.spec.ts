@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { runRowAction } from "./helpers/rowActions";
+import { pinnedRowActions, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
 
 /** The first filing row that still offers "Mark filed". */
 function unfiledRow(page: Page) {
@@ -163,8 +163,11 @@ test("an outside tap closes an anchored select inside a modal but keeps the moda
 
 test("closing a confirm by Esc or Cancel returns focus to the control that opened it", async ({ page }) => {
   await page.goto("/demo/app/filings");
-  const del = page.getByRole("button", { name: "Delete filing" }).first();
-  await del.click();
+  const row = page.locator(".record-table__row").filter({ has: page.locator('button[aria-label="Delete filing"]') }).first();
+  // A table wider than its frame runs the delete from the pinned "Row
+  // actions" menu, which hands focus back to that button.
+  const del = await rowActionsArePinned(row) ? pinnedRowActions(row) : row.getByRole("button", { name: "Delete filing" });
+  await runRowAction(row, "Delete filing");
   const confirm = page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Cancel" }) }).last();
   await expect(confirm).toBeVisible();
   // The confirm opens on its action, not on the header Close button.
@@ -173,7 +176,7 @@ test("closing a confirm by Esc or Cancel returns focus to the control that opene
   await expect(confirm).toBeHidden();
   await expect(del).toBeFocused();
 
-  await del.click();
+  await runRowAction(row, "Delete filing");
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(confirm).toBeHidden();
