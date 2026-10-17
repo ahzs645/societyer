@@ -4,7 +4,8 @@ import { expect, test, type Page } from "@playwright/test";
 // sideways on desktop, the meeting template builder keeps its controls in
 // the card, the row-actions column no longer swallows header clicks (and a
 // table wider than its frame pins a compact "Row actions" button instead),
-// and phone pages don't scroll sideways.
+// long plain tables keep their header in a box only when they need one, and
+// phone pages don't scroll sideways.
 
 async function noPageSideways(page: Page) {
   const widths = await page.evaluate(() => ({
@@ -169,3 +170,96 @@ test("touch keeps the inline row actions", async ({ page }, testInfo) => {
   await expect(row.getByRole("button", { name: "Mark filed" })).toBeVisible();
   await expect(row.getByRole("button", { name: /^Row actions for/ })).toBeHidden();
 });
+
+test("a short plain table has no inner scroll box", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "tablet"].includes(testInfo.project.name), "the cap applies from 761px");
+  await page.goto("/demo/app/meeting-templates");
+  const scroller = page.locator(".record-table__scroll");
+  await expect(page.locator(".record-table__row").first()).toBeVisible();
+  const box = await scroller.evaluate((el) => ({
+    capped: el.hasAttribute("data-capped"),
+    overflowY: getComputedStyle(el).overflowY,
+    maxHeight: getComputedStyle(el).maxHeight,
+    scrollable: el.scrollHeight > el.clientHeight,
+  }));
+  expect(box).toEqual({ capped: false, overflowY: "hidden", maxHeight: "none", scrollable: false });
+});
+
+test("a long plain table keeps its header in view and hands the wheel back to the page", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "wheel scrolling");
+  await page.goto("/demo/app/documents");
+  const scroller = page.locator(".record-table__scroll");
+  await expect(page.locator(".record-table__row").first()).toBeVisible();
+  await expect(scroller).toHaveAttribute("data-capped", "");
+  await scroller.evaluate((el) => el.scrollIntoView({ block: "nearest" }));
+  const pageScroller = page.locator(".page").first();
+  const box = (await scroller.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 300));
+
+  // Scrolling inside the box: the header stays pinned to its top.
+  await page.mouse.wheel(0, 200);
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  const pinned = await scroller.evaluate((el) => {
+    const head = el.querySelector(".record-table__thead")!.getBoundingClientRect();
+    return Math.abs(head.top - el.getBoundingClientRect().top) <= 1;
+  });
+  expect(pinned, "header pinned to the top of the box").toBe(true);
+
+  // At the box's end the wheel carries on to the page (no containment).
+  await scroller.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  const pageBefore = await pageScroller.evaluate((el) => el.scrollTop);
+  const maxPage = await pageScroller.evaluate((el) => el.scrollHeight - el.clientHeight);
+  test.skip(maxPage - pageBefore < 20, "the page has no room left to scroll");
+  const at = (await scroller.boundingBox())!;
+  await page.mouse.move(at.x + at.width / 2, Math.max(at.y + 60, Math.min(at.y + at.height - 60, 700)));
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => pageScroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(pageBefore);
+  expect(await scroller.evaluate((el) => getComputedStyle(el).overscrollBehaviorY)).toBe("auto");
+});
+
+test("keyboard row navigation scrolls within a long table's box", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "keyboard path");
+  await page.goto("/demo/app/documents");
+  const scroller = page.locator(".record-table__scroll");
+  await expect(scroller).toHaveAttribute("data-capped", "");
+  await page.locator(".record-table__row").first().locator("td.record-table__cell").nth(1).click();
+  const rows = await page.locator(".record-table__row").count();
+  for (let i = 0; i < rows - 1; i += 1) await page.keyboard.press("ArrowDown");
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  // The focused cell ends up in the box, clear of the sticky header and footer.
+  await expect.poll(() => scroller.evaluate((el) => {
+    const cell = el.querySelector<HTMLElement>(".record-table__cell--focused");
+    if (!cell) return "no focused cell";
+    const box = cell.getBoundingClientRect();
+    const head = el.querySelector(".record-table__thead")!.getBoundingClientRect();
+    const foot = el.querySelector("tfoot")?.getBoundingClientRect();
+    return box.top >= head.bottom - 1 && box.bottom <= (foot ? foot.top : el.getBoundingClientRect().bottom) + 1 ? "visible" : "hidden";
+  })).toBe("visible");
+});
+
+for (const route of ["assets", "tasks"]) {
+  test(`/${route} has no page-level sideways scroll at 320`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "narrow-phone", "320px check");
+    await page.goto(`/demo/app/${route}`);
+    await expect(page.locator(".main h1").first()).toBeVisible();
+    if (route === "assets") await expect(page.locator(".record-cards__item").first()).toBeVisible();
+    else await expect(page.locator(".task-row").first()).toBeVisible();
+    await noPageSideways(page);
+
+    // Phone header titles never break mid-word ("T a s k s").
+    const title = page.locator(".page__title-text").first();
+    const lines = await title.evaluate((el) => {
+      const words = (el.textContent ?? "").trim().split(/\s+/).length;
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24;
+      return { words, lines: Math.round(el.getBoundingClientRect().height / lineHeight) };
+    });
+    expect(lines.lines).toBeLessThanOrEqual(lines.words);
+
+    if (route === "assets") {
+      const overflowing = await page.locator(".record-cards__item").evaluateAll((cards) =>
+        cards.filter((card) => card.getBoundingClientRect().right > innerWidth + 1).length,
+      );
+      expect(overflowing).toBe(0);
+    }
+  });
+}

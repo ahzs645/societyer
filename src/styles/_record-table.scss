@@ -767,12 +767,35 @@ select.record-table__menu-select,
  * a long plain (non-virtualised) table the page scroll carried the column
  * headers away (documents: 24 tall rows). Tablet and desktop cap such a
  * table at about a screen, like the virtualised registers' 600px scroller,
- * so the header stays pinned above its rows; phones keep one page scroll. */
+ * so the header stays pinned above its rows; phones keep one page scroll.
+ *
+ * Only a table taller than the cap gets the box: RecordTable sets
+ * `data-capped` (same max(600px, viewport - 200px) sum). A shorter one has
+ * no vertical scroller at all (overflow-x: auto alone would make Y `auto`
+ * too, so a few pixels of overhang turned it into a wheel trap). The box
+ * leaves overscroll at its default, so a wheel or trackpad scroll that
+ * reaches its top or bottom carries on to the page. Scroll padding keeps a
+ * row moved to by keyboard clear of the sticky header and footer. */
 @media (min-width: 761px) {
   .record-table__scroll {
+    overflow-y: hidden;
+  }
+
+  .record-table__scroll[data-capped] {
     max-height: max(600px, calc(100dvh - 200px));
     overflow-y: auto;
     scroll-padding-top: token('row-h-comfortable');
+    scroll-padding-bottom: token('row-h-comfortable');
+  }
+}
+
+/* Visible but quiet scrollbars on the table's own scrollers (the global
+ * 10px webkit bar is heavy inside a card). */
+@media (hover: hover) and (pointer: fine) {
+  .record-table__scroll,
+  .record-table__virtuoso {
+    scrollbar-width: thin;
+    scrollbar-color: token('border-strong') transparent;
   }
 }
 

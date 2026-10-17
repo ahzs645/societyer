@@ -146,10 +146,15 @@ function PlainRecordRow({
 const FLASH_MAX_NEW_ROWS = 10;
 const FLASH_DURATION_MS = 2800;
 
-function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
+/** Tablet/desktop long-table cap; keep in step with `[data-capped]` in _record-table.scss. */
+const SCROLL_CAP_MIN = 600;
+const SCROLL_CAP_VIEWPORT_OFFSET = 200;
+
+function trackScrollState(node: HTMLElement, classTarget: HTMLElement, { capHeight = false } = {}) {
   let isScrolledX = false;
   let isScrolledY = false;
   let hasMoreRight = false;
+  let isCapped = false;
 
   const update = () => {
     const nextScrolledX = node.scrollLeft > 0;
@@ -174,19 +179,39 @@ function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
     }
   };
 
-  update();
+  // A plain table only becomes its own vertical scroll box (so its header
+  // stays pinned) once it is taller than the cap; a shorter table keeps no
+  // inner box at all and scrolls with the page.
+  const updateCap = () => {
+    if (!capHeight) return;
+    const content = node.firstElementChild as HTMLElement | null;
+    const cap = Math.max(SCROLL_CAP_MIN, window.innerHeight - SCROLL_CAP_VIEWPORT_OFFSET);
+    const nextCapped = !!content && content.offsetHeight > cap;
+    if (nextCapped !== isCapped) {
+      isCapped = nextCapped;
+      node.toggleAttribute("data-capped", isCapped);
+    }
+  };
+  const refresh = () => {
+    updateCap();
+    update();
+  };
+
+  refresh();
   node.addEventListener("scroll", update, { passive: true });
-  // The scroll width also changes without a scroll (resizes, new rows).
-  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+  window.addEventListener("resize", refresh);
+  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(refresh);
   observer?.observe(node);
   if (node.firstElementChild) observer?.observe(node.firstElementChild);
 
   return () => {
     node.removeEventListener("scroll", update);
+    window.removeEventListener("resize", refresh);
     observer?.disconnect();
     if (isScrolledX) classTarget.classList.remove("is-scrolled-x");
     if (isScrolledY) classTarget.classList.remove("is-scrolled-y");
     if (hasMoreRight) classTarget.removeAttribute("data-more-right");
+    if (isCapped) node.removeAttribute("data-capped");
   };
 }
 
@@ -469,7 +494,7 @@ export function RecordTable({
       scrollCleanupRef.current = null;
       tableRootRef.current = node;
       if (node) {
-        scrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node);
+        scrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node, { capHeight: true });
       }
     },
     [],
