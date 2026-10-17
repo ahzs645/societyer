@@ -66,7 +66,7 @@ const HANDLER_POLICIES = new Set([
   "http:workspaceCreationAccess", "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
 ]);
 // Public intake/token routes retain their existing narrow, handler-level policy.
-const PUBLIC_HANDLERS = new Set(["http:authCapabilities", "publicPortal:getSocietyBySlug", "publicPortal:volunteerIntakeContext", "publicPortal:grantIntakeContext", "transparency:publicCenter", "partyPortals:center", "volunteers:submitApplication","grants:submitApplication", "publicPortal:getByToken", "publicPortal:submit", "partyPortals:getByToken", "partyPortals:respond"]);
+const PUBLIC_HANDLERS = new Set(["http:authCapabilities", "http:deploymentCapabilities", "publicPortal:getSocietyBySlug", "publicPortal:volunteerIntakeContext", "publicPortal:grantIntakeContext", "transparency:publicCenter", "partyPortals:center", "volunteers:submitApplication","grants:submitApplication", "publicPortal:getByToken", "publicPortal:submit", "partyPortals:getByToken", "partyPortals:respond"]);
 
 // These identifiers are citation keys or provider identifiers, never local row
 // references. Keep the exceptions endpoint-specific: targetId and other row

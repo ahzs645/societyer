@@ -1,4 +1,5 @@
 import { serverActionErrorMessage, serverActionsUnavailable, serverConnectionMessage } from "../lib/serverConnection";
+import { isModuleEnabled } from "../lib/modules";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -93,7 +94,9 @@ export function BylawsHistoryPage() {
   // Online). Other entity types do not file bylaws there.
   const docs = organizationVocabulary(society);
   const registryBylawsApply = docs.societyLaw;
-  const canStageRegistry = loaded && can("settings:manage") && registryBylawsApply;
+  // Staging from BC Registry drives the browser connector, which this deployment may not run.
+  const registryStagingAvailable = registryBylawsApply && isModuleEnabled(society, "browserConnectors");
+  const canStageRegistry = loaded && can("settings:manage") && registryStagingAvailable;
   const toast = useToast();
   const amendments = useQuery(
     api.bylawAmendments.list,
@@ -240,7 +243,7 @@ export function BylawsHistoryPage() {
                 ...(canScanPaperless || canStageRegistry
                   ? [{
                       id: "import",
-                      label: registryBylawsApply ? "Import from Paperless or BC Registry…" : "Import from Paperless…",
+                      label: registryStagingAvailable ? "Import from Paperless or BC Registry…" : "Import from Paperless…",
                       icon: <Bot size={12} />,
                       hint: needsServer ? "Needs a server connection" : undefined,
                       disabled: needsServer,
@@ -284,7 +287,7 @@ export function BylawsHistoryPage() {
         <div className="card__head">
           <h2 className="card__title"><Bot size={14} /> Import bylaw versions</h2>
           <InfoPopover label="About importing bylaw versions">
-            <p>{registryBylawsApply ? "Stage BC Registry and Paperless sources" : "Stage Paperless sources"} as markdown {docs.bylawsNoun} versions, then approve them in Import Sessions before they update this timeline.</p>
+            <p>{registryStagingAvailable ? "Stage BC Registry and Paperless sources" : "Stage Paperless sources"} as markdown {docs.bylawsNoun} versions, then approve them in Import Sessions before they update this timeline.</p>
             <p>Digital OCR is normalized into Markdown automatically. Scan-only PDFs are queued for page-by-page vision transcription and should stay pending until a reviewer confirms the text.</p>
           </InfoPopover>
           <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
@@ -323,7 +326,7 @@ export function BylawsHistoryPage() {
             <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy || needsServer} title={needsServer ? serverConnectionMessage("Scanning Paperless") : undefined} onClick={runPaperlessBot}>
               <Database size={12} /> {paperlessBusy ? "Scanning..." : "Scan Paperless"}
             </button>
-            {registryBylawsApply && (
+            {registryStagingAvailable && (
               <button className="btn-action" disabled={!canStageRegistry || registryBusy || needsServer} title={needsServer ? serverConnectionMessage("Staging BC Registry bylaws") : undefined} onClick={runRegistryBot}>
                 <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
               </button>

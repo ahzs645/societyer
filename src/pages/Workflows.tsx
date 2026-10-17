@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { useDeploymentCapabilities } from "../components/DeploymentCapabilities";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -127,6 +128,7 @@ type TriggerKind = "cron" | "manual" | "date_offset";
  */
 export function WorkflowsPage() {
   const society = useSociety();
+  const capabilities = useDeploymentCapabilities();
   const canManage = usePermissions().can("tasks:write");
   const rawCatalog = useQuery(api.workflows.listCatalog, {});
   // Recipes worded for this entity; Societies Act-only recipes are not offered
@@ -259,7 +261,8 @@ export function WorkflowsPage() {
                   icon: <WorkflowIcon size={14} />,
                   onSelect: () => navigate("/app/workflow-packages"),
                 },
-                {
+                // PDF-filling templates run on n8n, which this deployment may not have.
+                ...(capabilities.n8nWorkflows ? [{
                   id: "unbc-example",
                   label: "UNBC example",
                   icon: <WorkflowIcon size={14} />,
@@ -279,7 +282,7 @@ export function WorkflowsPage() {
                   icon: <WorkflowIcon size={14} />,
                   disabled: !canManage,
                   onSelect: () => openNew("ote_keycard_access_request"),
-                },
+                }] : []),
                 {
                   id: "csj-orientation",
                   label: "CSJ orientation",
@@ -287,7 +290,8 @@ export function WorkflowsPage() {
                   disabled: !canManage,
                   onSelect: () => openNew("csj_remote_worker_orientation"),
                 },
-                {
+                // These recipes run on n8n, which this deployment may not have.
+                ...(capabilities.n8nWorkflows ? [{
                   id: "agm-deadlines",
                   label: `${annualMeetingTitle} deadlines`,
                   icon: <WorkflowIcon size={14} />,
@@ -327,7 +331,7 @@ export function WorkflowsPage() {
                       setSetupBusy(false);
                     }
                   },
-                },
+                }] : []),
               ]}
             />
             <button className="btn-action btn-action--primary" disabled={!canManage} onClick={() => openNew()}>

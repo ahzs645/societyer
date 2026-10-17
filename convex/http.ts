@@ -17,6 +17,7 @@ import { hostedPrincipal } from "./lib/authIdentity";
 import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
 import { workspaceCreationAccessPortable } from "../shared/functions/society";
 import { resolveSessionBroker } from "../shared/authConfiguration";
+import { deploymentCapabilities as resolveDeploymentCapabilities } from "../shared/deploymentCapabilities";
 import { authComponent, createAuth, hostedAuthEmailConfigured } from "./hostedAuth";
 
 const http = httpRouter();
@@ -26,6 +27,13 @@ const http = httpRouter();
 if (resolveSessionBroker(process.env) === "convex") {
   authComponent.registerRoutes(http, createAuth, { cors: true });
 }
+
+/** Optional services this deployment runs, so the app hides features that need a missing one. */
+export const deploymentCapabilities = authorizedQuery("http:deploymentCapabilities", query)({
+  args: {},
+  returns: v.object({ gatewayApi: v.boolean(), browserConnectors: v.boolean(), n8nWorkflows: v.boolean() }),
+  handler: async () => resolveDeploymentCapabilities(process.env),
+});
 
 /** Sign-in page options for the Convex-hosted broker. Deployment settings only, no records. */
 export const authCapabilities = authorizedQuery("http:authCapabilities", query)({

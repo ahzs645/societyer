@@ -32,6 +32,7 @@ import {
   MODULE_CATEGORIES,
   MODULE_DEFINITIONS,
   MODULES_BY_KEY,
+  deploymentUnavailableReason,
   moduleAppliesToEntityKind,
   normalizeModuleSettings,
   settingsToDisabledModules,
@@ -634,7 +635,9 @@ export function SettingsPage() {
                   <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>{t(`moduleCategories.${category}`, category)}</h3>
                 </div>
                 <div className="card__body col" style={{ gap: 12 }}>
-                  {items.map((module) => (
+                  {items.map((module) => {
+                    const unavailable = deploymentUnavailableReason(module.key);
+                    return (
                     <div
                       key={module.key}
                       style={{
@@ -645,18 +648,20 @@ export function SettingsPage() {
                             : "1px solid var(--border)",
                       }}
                     >
+                      {/* Unavailable: shown off and locked; the saved choice is kept for when the service runs. */}
                       <Toggle
-                        checked={moduleSettings[module.key]}
+                        checked={!unavailable && moduleSettings[module.key]}
                         onChange={(checked) => toggleModule(module.key, checked)}
-                        disabled={!canManageModules || savingModule !== null}
+                        disabled={Boolean(unavailable) || !canManageModules || savingModule !== null}
                         label={t(`modules.${module.key}.label`, module.label)}
                         hint={t(`modules.${module.key}.description`, module.description)}
                       />
                       <div className="muted" style={{ fontSize: "var(--fs-sm)", paddingLeft: 42, marginTop: 4 }}>
-                        {t("settings.moduleIncludes", { items: module.includes.map((item) => translateNavLabel(t, item)).join(", ") })}
+                        {unavailable ?? t("settings.moduleIncludes", { items: module.includes.map((item) => translateNavLabel(t, item)).join(", ") })}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

@@ -1,5 +1,5 @@
 import { listPermissionsForRole, type Permission } from "../../shared/functions/permissions";
-import { MODULE_DEFINITIONS, moduleAppliesToEntityKind, normalizeModuleSettings, type ModuleEntityKind, type ModuleKey } from "./modules";
+import { deploymentUnavailableReason, MODULE_DEFINITIONS, moduleAppliesToEntityKind, normalizeModuleSettings, type ModuleEntityKind, type ModuleKey } from "./modules";
 
 /** A read-only projection of the fixed role policy, never an authorization check. */
 export const ACCESS_ACTIONS = ["view", "write", "approve", "submit", "manage"] as const;
@@ -203,12 +203,13 @@ export function getModuleAccess(
       actionCoverage[action] = !mapped.length ? "unmapped"
         : !count ? "none" : count === mapped.length ? "full" : "partial";
     }
-    const enabled = !definition.moduleKey || settings[definition.moduleKey];
+    const unavailable = definition.moduleKey ? deploymentUnavailableReason(definition.moduleKey) : undefined;
+    const enabled = (!definition.moduleKey || settings[definition.moduleKey]) && !unavailable;
     return {
       ...definition, enabled, actions, actionCoverage, actionPermissions,
       notes: [
         ...notes,
-        ...(!enabled ? ["This feature is disabled for the workspace. Its role grants remain unchanged; a feature switch is not an access-control grant."] : []),
+        ...(unavailable ? [unavailable] : !enabled ? ["This feature is disabled for the workspace. Its role grants remain unchanged; a feature switch is not an access-control grant."] : []),
         ...(status && status !== "Active" ? ["This membership is not active. The policy below describes its assigned role; it does not activate account access."] : []),
       ],
     };

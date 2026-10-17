@@ -1,4 +1,5 @@
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDeploymentCapabilities } from "../components/DeploymentCapabilities";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -63,6 +64,7 @@ export function GrantsPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("grants:write");
   const society = useSociety();
+  const capabilities = useDeploymentCapabilities();
   const navigate = useNavigate();
   const gcosInputRef = useRef<HTMLInputElement>(null);
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -282,12 +284,13 @@ export function GrantsPage() {
                   icon: <FileText size={14} />,
                   onSelect: () => navigate("/app/grants/sources"),
                 },
-                { disabled: !canWrite,
+                // The GCOS file import is processed by the API gateway.
+                ...(capabilities.gatewayApi ? [{ disabled: !canWrite,
                   id: "import-gcos",
                   label: "Import GCOS",
                   icon: <Upload size={14} />,
                   onSelect: () => gcosInputRef.current?.click(),
-                },
+                }] : []),
                 { disabled: !canWrite,
                   id: "ledger-entry",
                   label: "Ledger entry",

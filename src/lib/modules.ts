@@ -295,6 +295,27 @@ export function settingsToDisabledModules(settings: ModuleSettings): ModuleKey[]
   return MODULE_KEYS.filter((key) => !settings[key]);
 }
 
+/**
+ * Modules whose backing service this deployment doesn't run, with the reason.
+ * They read as disabled wherever a module is checked, while a workspace's own
+ * saved choices (`normalizeModuleSettings`) stay untouched, so turning the
+ * service on later brings them back as each workspace left them.
+ */
+const unavailableOnDeployment = new Map<ModuleKey, string>();
+
+export function setDeploymentUnavailableModules(entries: Partial<Record<ModuleKey, string>>) {
+  unavailableOnDeployment.clear();
+  for (const [key, reason] of Object.entries(entries)) {
+    if (isModuleKey(key) && reason) unavailableOnDeployment.set(key, reason);
+  }
+}
+
+/** Why this deployment can't offer a module, or undefined when it can. */
+export function deploymentUnavailableReason(key: ModuleKey): string | undefined {
+  return unavailableOnDeployment.get(key);
+}
+
+/** A workspace's saved module choices; see `isModuleEnabled` for what is actually available. */
 export function normalizeModuleSettings(source?: StoredModuleSource): ModuleSettings {
   const disabled = new Set(getDisabledModuleKeys(source));
   return MODULE_KEYS.reduce((acc, key) => {
@@ -312,5 +333,5 @@ export function isModuleEnabled(
     | undefined,
   key: ModuleKey,
 ) {
-  return normalizeModuleSettings(source)[key];
+  return normalizeModuleSettings(source)[key] && !unavailableOnDeployment.has(key);
 }

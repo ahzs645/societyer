@@ -23,6 +23,11 @@ last-Owner safeguard behave exactly as in the other modes.
 | | PowerSync offline meeting preparation |
 
 The gateway refuses to start in this mode, because it can't verify these sessions.
+The app hides what can't work here: Browser apps, the BC Registry imports
+(filing history, bylaws history, governance-document auto-fill), the GCOS file
+import, and the n8n workflow templates. In the other modes the same features
+stay off until the operator runs the service: `SOCIETYER_BROWSER_CONNECTORS=1`
+for connectors, and the n8n webhook base and callback secret for n8n.
 
 Why each needs the Node gateway today, and what moving it into Convex would take:
 

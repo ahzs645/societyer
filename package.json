@@ -59,6 +59,7 @@
     "test:clerk-auth": "tsx scripts/check-clerk-auth.ts",
     "test:clerk-gateway": "tsx scripts/check-clerk-gateway.ts",
     "test:multi-user-pipeline": "tsx scripts/check-multi-user-pipeline.ts",
+    "test:deployment-capabilities": "tsx scripts/check-deployment-capabilities.ts",
     "test:auth-token": "tsx scripts/check-auth-token.ts",
     "test:microsoft-sso": "tsx scripts/check-microsoft-sso.ts",
     "test:outbound-url-policy": "tsx scripts/check-outbound-url-policy.ts",

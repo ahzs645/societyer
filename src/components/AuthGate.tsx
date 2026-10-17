@@ -2,12 +2,13 @@ import { Link, Navigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
+import { DeploymentCapabilitiesGate } from "./DeploymentCapabilities";
 
 export function AuthGate({ children, allowWorkspaceCreation = false }: { children: React.ReactNode; allowWorkspaceCreation?: boolean }) {
   const auth = useAuth();
   const creationAccess = useQuery(api.http.workspaceCreationAccess, auth.mode !== "none" && auth.sessionStatus === "authenticated" && auth.convexAuthStatus === "authenticated" && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
 
-  if (auth.mode === "none") return <>{children}</>;
+  if (auth.mode === "none") return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
 
   if (auth.fatalError) {
     const expired = auth.fatalError.kind === "expired-session";
@@ -55,7 +56,7 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
   if (auth.membershipState !== "ready" || auth.membershipStatus !== "bound") {
     if (auth.membershipStatus === "needs-invitation") {
       if (creationAccess === undefined) return <AuthMessage title="Checking setup access" message="Checking whether this account can create its own workspace…" />;
-      if (allowWorkspaceCreation && creationAccess.allowed) return <>{children}</>;
+      if (allowWorkspaceCreation && creationAccess.allowed) return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
       return (
         <AuthMessage
           title={creationAccess.allowed ? "Set up your workspace" : "Invitation required"}
@@ -98,7 +99,7 @@ export function AuthGate({ children, allowWorkspaceCreation = false }: { childre
     return <AuthMessage title="Workspace unavailable" message="Your workspace membership could not be confirmed." />;
   }
 
-  return <>{children}</>;
+  return <DeploymentCapabilitiesGate>{children}</DeploymentCapabilitiesGate>;
 }
 
 function AuthMessage({
