@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
+import { openRowMenu } from "./helpers/rowActions";
 
 test.setTimeout(100_000);
 async function localWorkspace(page: Page, name: string) {
@@ -62,7 +63,7 @@ test("commitment preparation reaches editable tasks and rejects an invalid event
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(dialog).toBeHidden();
   // The row menu exposes the cross-module "plan a preparation task" callback.
-  await page.getByRole("button", { name: "Actions for this commitment" }).first().click();
+  await openRowMenu(page.locator(".record-table__row").first(), "Actions for this commitment");
   await page.getByRole("menuitem", { name: "Create preparation task", exact: true }).click();
   await expect(page.getByText("Preparation task created", { exact: true })).toBeVisible();
   await page.goto("/app/tasks");

@@ -1,5 +1,6 @@
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { expect, test, type Page, type Locator } from "@playwright/test";
+import { openRowMenu } from "./helpers/rowActions";
 
 // Each scenario provisions a fresh legal workspace before exercising bytes,
 // a saved record, and a cold reload; allow its full lifecycle to complete.
@@ -79,7 +80,7 @@ test("fresh local workspace asset photo persists after save and reload", async (
   if (page.viewportSize()!.width <= 760) {
     await page.locator("button:visible").filter({ hasText: title }).first().click();
   } else {
-    await page.locator(".record-table__row").filter({ hasText: title }).getByRole("button", { name: "Actions for this asset", exact: true }).click();
+    await openRowMenu(page.locator(".record-table__row").filter({ hasText: title }), "Actions for this asset");
     await page.getByRole("menuitem", { name: "Open", exact: true }).click();
   }
   await page.waitForURL(/\/assets\/[^/?]+$/);

@@ -2321,13 +2321,11 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* The actions cells sit BEFORE the fill cell, so on a monitor wider than the
  * table they anchor next to the last data column (short mouse travel) instead
- * of the far screen edge. They stay in the table's flow at every width: a
- * sticky `right: 0` column pinned over a table wider than its frame covered
- * the last data columns (300px+ when a page has text actions like "Schedule
- * meeting"), swallowed header clicks (sort, column menu) and painted the
- * hover background and buttons over values. In the flow they scroll with the
- * row; the record stays one click away through its name and the row's
- * context menu. */
+ * of the far screen edge. While the table fits its frame they stay in the
+ * table's flow as inline buttons. A table wider than its frame pins a narrow
+ * "Row actions" cell instead (see "pinned row actions" below): the wide
+ * sticky group used to cover the last data columns (300px+ with text actions
+ * like "Schedule meeting"), swallow header clicks and paint over values. */
 .record-table__row-actions-head {
   padding: 0;
   /* Empty header cell: never paint over or take clicks from a column label. */
@@ -2380,6 +2378,105 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 .record-table__open-record {
   color: token('text-secondary');
+}
+
+/* ----- pinned row actions (table wider than its frame) -----
+ * RecordTable sets `data-row-actions="pinned"` on the frame when the inline
+ * buttons would make the table scroll sideways (never on touch, which keeps
+ * the inline layout). Each row then pins a 40px opaque cell to the frame's
+ * right edge holding one "Row actions" button; the inline buttons stay in
+ * the cell, hidden, and the menu runs them. Sticky `right: 0` only engages
+ * while columns are out of view on the right; scrolled to the end (or with
+ * no overflow) the cell sits in the flow after the last column and covers
+ * nothing. The divider shows only while columns scroll beneath it
+ * (`data-more-right`). The header cell stays click-through. */
+.record-table__row-actions-more {
+  display: none;
+}
+
+.record-table__row-action-icon {
+  display: inline-flex;
+}
+
+[data-row-actions='pinned'] {
+  .record-table__row-actions-head,
+  .record-table__row-actions-cell {
+    position: sticky;
+    right: 0;
+    box-sizing: border-box;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    padding: 0;
+    text-align: center;
+  }
+
+  .record-table__row-actions-head {
+    z-index: 3;
+    background: token('bg-panel');
+    border-bottom-color: token('border');
+  }
+
+  .record-table__row > .record-table__row-actions-cell {
+    z-index: 1;
+    background: token('bg-panel');
+  }
+
+  .record-table__row:is(:hover, :focus-within) > .record-table__row-actions-cell {
+    background: linear-gradient(token('bg-hover-alpha'), token('bg-hover-alpha')), token('bg-panel');
+  }
+
+  .record-table__row:has(.record-table__cell--focused) > .record-table__row-actions-cell,
+  .record-table__row--selected > .record-table__row-actions-cell,
+  .record-table__row:has(.record-table__checkbox-cell input:checked) > .record-table__row-actions-cell,
+  .record-table__row:has(.record-table__mobile-selection-checkbox input:checked) > .record-table__row-actions-cell {
+    background: token('accent-soft');
+  }
+
+  .record-table__group-row > .record-table__row-actions-cell {
+    z-index: 6;
+    background: token('bg-subtle');
+  }
+
+  .record-table__footer-cell.record-table__row-actions-cell {
+    z-index: 1;
+    background: token('bg-subtle');
+  }
+
+  /* The inline buttons, kept for the menu to run: out of sight, out of the
+   * tab order, and extending leftwards so they add no scroll width. */
+  .record-table__row-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: max-content;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .record-table__row-actions-more {
+    display: inline-flex;
+    color: token('text-tertiary');
+  }
+
+  .record-table__row:is(:hover, :focus-within) .record-table__row-actions-more,
+  .record-table__row-actions-more[aria-expanded='true'] {
+    color: token('text-primary');
+  }
+
+  /* A row with nothing to offer (e.g. a filed filing) shows no button. */
+  .record-table__row-actions-cell:not(:has(.record-table__row-actions :is(button, a[href]))) .record-table__row-actions-more {
+    display: none;
+  }
+}
+
+[data-row-actions='pinned'][data-more-right] {
+  .record-table__row-actions-head,
+  .record-table__row-actions-cell {
+    box-shadow:
+      inset 1px 0 0 token('border-color-light'),
+      -4px 0 6px -4px token('gray-a-5');
+  }
 }
 
 /* Touch has no hover affordance. Keep row actions in the table's own

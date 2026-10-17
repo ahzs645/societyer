@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { assertLiveFits, signInLive } from "./helpers/liveInterface";
+import { openRowMenu } from "./helpers/rowActions";
 
 const image = () => ({
   name: "isolated-pilot.png",
@@ -75,7 +76,7 @@ test("production asset photo uploads and remains bound after saving and reload",
   } else {
     // Desktop title cells support inline editing. Use the explicit record-open
     // action, then wait for navigation before the persistence reload.
-    await page.getByRole("row").filter({ hasText: title }).getByRole("button", { name: "Actions for this asset", exact: true }).click();
+    await openRowMenu(page.getByRole("row").filter({ hasText: title }), "Actions for this asset");
     await page.getByRole("menuitem", { name: "Open", exact: true }).click();
   }
   await expect(page).toHaveURL(/\/app\/assets\/[^/]+$/);

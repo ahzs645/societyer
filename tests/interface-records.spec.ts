@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { chooseViewType } from "./helpers/recordTableToolbar";
+import { openRowMenu } from "./helpers/rowActions";
 
 async function openNavigation(page: Page) {
   const mobileMore = page.locator(".bottom-nav").getByRole("button", { name: "More", exact: true });
@@ -113,7 +114,7 @@ test("document metadata opens its review workbench and validates page comments",
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Document saved", { exact: true })).toBeVisible();
   // Row actions live in the per-document menu (Preview stays inline).
-  await page.locator("tr", { hasText: title }).getByRole("button", { name: "Actions for this document", exact: true }).click();
+  await openRowMenu(page.locator("tr", { hasText: title }), "Actions for this document");
   await page.getByRole("menuitem", { name: "Open review page", exact: true }).click();
   await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
   // A metadata-only record cannot be opened; the page says why instead.
@@ -154,15 +155,14 @@ test("document metadata opens its review workbench and validates page comments",
   await expect(page.locator("tr", { hasText: title })).toHaveCount(0);
   const publicBylaws = page.locator("tr", { hasText: "Current bylaws" });
   // Row actions live in the per-document menu; a Viewer sees the writes disabled.
-  const rowMenu = publicBylaws.getByRole("button", { name: "Actions for this document", exact: true });
-  await rowMenu.click();
+  await openRowMenu(publicBylaws, "Actions for this document");
   await expect(page.getByRole("menuitem", { name: "Flag for purge", exact: true })).toBeDisabled();
   await expect(page.getByRole("menuitem", { name: "Delete…", exact: true })).toBeDisabled();
   await page.getByRole("menuitem", { name: "File history", exact: true }).click();
   const versions = page.getByRole("dialog");
   await expect(versions.getByText("Document editing permission is required to upload or restore versions.", { exact: true })).toBeVisible();
   await versions.getByRole("button", { name: "Close", exact: true }).click();
-  await rowMenu.click();
+  await openRowMenu(publicBylaws, "Actions for this document");
   await page.getByRole("menuitem", { name: "Open review page", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Current bylaws", exact: true })).toBeVisible();
   await expect(page.getByText("Your role can read this document. Document editing permission is required to change review status or comments.", { exact: true })).toBeVisible();

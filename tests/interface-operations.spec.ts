@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { runRowAction } from "./helpers/rowActions";
 
 test.setTimeout(90_000);
 
@@ -276,7 +277,7 @@ test("a synthetic donation receipt can be issued and voided while keeping its or
   const row = page.locator("tr", { hasText: "Synthetic operations receipt audit" });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("000001");
-  await row.getByRole("button", { name: "Void", exact: true }).click();
+  await runRowAction(row, "Void");
   await page.getByPlaceholder("Reason (required)").fill("Synthetic browser audit — no real donation");
   await fits(page);
   await page.getByRole("button", { name: "Void receipt", exact: true }).click();

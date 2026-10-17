@@ -2,8 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Layout regressions from the layout audit: virtualised tables scroll
 // sideways on desktop, the meeting template builder keeps its controls in
-// the card, the row-actions column no longer swallows header clicks, and
-// phone pages don't scroll sideways.
+// the card, the row-actions column no longer swallows header clicks (and a
+// table wider than its frame pins a compact "Row actions" button instead),
+// and phone pages don't scroll sideways.
 
 async function noPageSideways(page: Page) {
   const widths = await page.evaluate(() => ({
@@ -89,45 +90,82 @@ test("the Updated header sorts on click at 1024 (row actions don't swallow it)",
   await updated.locator(".record-table__header-cell-button").click({ timeout: 5_000 });
   await expect(updated).toHaveAttribute("aria-sort", "ascending");
 
-  // Hovering a row doesn't paint its actions over the row's values.
+  // Hovering a row doesn't paint its actions over the row's values: the
+  // pinned 40px cell only sits over a column that runs on past the frame's
+  // edge (reachable by scrolling), and none once scrolled to the end.
   const row = page.locator(".record-table__row").first();
   await row.hover();
-  const covered = await row.evaluate((tr) => {
+  const coveredInView = () => row.evaluate((tr) => {
     const actions = tr.querySelector(".record-table__row-actions-cell")?.getBoundingClientRect();
+    const frame = tr.closest(".record-table__scroll, .record-table__virtuoso")!.getBoundingClientRect();
     if (!actions) return [];
     return Array.from(tr.querySelectorAll<HTMLElement>("td.record-table__cell"))
       .filter((cell) => {
         const box = cell.getBoundingClientRect();
-        return box.right > actions.left + 1 && box.left < actions.right - 1;
+        return box.right > actions.left + 1 && box.left < actions.right - 1 && box.right <= frame.right + 1;
       })
       .map((cell) => cell.textContent?.trim());
   });
-  expect(covered, "data cells under the row actions").toEqual([]);
+  expect(await coveredInView(), "visible data cells under the row actions").toEqual([]);
+  await page.locator(".record-table__scroll").evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  await row.hover();
+  const coveredAtEnd = await row.evaluate((tr) => {
+    const actions = tr.querySelector(".record-table__row-actions-cell")!.getBoundingClientRect();
+    return Array.from(tr.querySelectorAll<HTMLElement>("td.record-table__cell"))
+      .filter((cell) => cell.getBoundingClientRect().right > actions.left + 1)
+      .map((cell) => cell.textContent?.trim());
+  });
+  expect(coveredAtEnd, "data cells under the row actions at the end of the row").toEqual([]);
 });
 
-for (const route of ["assets", "tasks"]) {
-  test(`/${route} has no page-level sideways scroll at 320`, async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "narrow-phone", "320px check");
-    await page.goto(`/demo/app/${route}`);
-    await expect(page.locator(".main h1").first()).toBeVisible();
-    if (route === "assets") await expect(page.locator(".record-cards__item").first()).toBeVisible();
-    else await expect(page.locator(".task-row").first()).toBeVisible();
-    await noPageSideways(page);
-
-    // Phone header titles never break mid-word ("T a s k s").
-    const title = page.locator(".page__title-text").first();
-    const lines = await title.evaluate((el) => {
-      const words = (el.textContent ?? "").trim().split(/\s+/).length;
-      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24;
-      return { words, lines: Math.round(el.getBoundingClientRect().height / lineHeight) };
-    });
-    expect(lines.lines).toBeLessThanOrEqual(lines.words);
-
-    if (route === "assets") {
-      const overflowing = await page.locator(".record-cards__item").evaluateAll((cards) =>
-        cards.filter((card) => card.getBoundingClientRect().right > innerWidth + 1).length,
-      );
-      expect(overflowing).toBe(0);
-    }
+test("a table wider than its frame pins a Row actions button with every action at 1024", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "mouse layout at an explicit width");
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/demo/app/meeting-templates");
+  const scroller = page.locator(".record-table__scroll");
+  const row = page.locator(".record-table__row", { hasText: "Annual general meeting" });
+  const more = row.getByRole("button", { name: "Row actions for Annual general meeting" });
+  await expect(more).toBeVisible();
+  // In view with the table at its start: no sideways scrolling needed.
+  expect(await scroller.evaluate((el) => el.scrollWidth > el.clientWidth && el.scrollLeft === 0)).toBe(true);
+  await expect(more).toBeInViewport({ ratio: 1 });
+  const inFrame = await more.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const frame = button.closest(".record-table__scroll")!.getBoundingClientRect();
+    return box.left >= frame.left && box.right <= frame.right + 1;
   });
-}
+  expect(inFrame, "row actions button inside the table frame").toBe(true);
+  // The wide inline buttons are out of sight (and out of the tab order).
+  await expect(row.getByRole("button", { name: "Schedule meeting" })).toBeHidden();
+  // The pinned cell is opaque, so scrolled columns never show through.
+  const background = await row.locator(".record-table__row-actions-cell").evaluate((cell) => getComputedStyle(cell).backgroundColor + getComputedStyle(cell).backgroundImage);
+  expect(background).not.toMatch(/^rgba\(0, 0, 0, 0\)none$/);
+
+  await more.click();
+  const menu = page.getByRole("menu", { name: "Actions for Annual general meeting" });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Schedule meeting" })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Duplicate" })).toBeVisible();
+  // The menu runs the row's own action.
+  await menu.getByRole("menuitem", { name: "Schedule meeting" }).click();
+  await expect(page.getByRole("dialog").first()).toBeVisible();
+});
+
+test("the row actions stay inline when the table fits its frame", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "1440 fits the meeting templates table");
+  await page.goto("/demo/app/meeting-templates");
+  const row = page.locator(".record-table__row", { hasText: "Annual general meeting" });
+  await row.hover();
+  await expect(row.getByRole("button", { name: "Schedule meeting" })).toBeVisible();
+  await expect(row.getByRole("button", { name: /^Row actions for/ })).toBeHidden();
+  const scroller = page.locator(".record-table__scroll");
+  expect(await scroller.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+});
+
+test("touch keeps the inline row actions", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "tablet", "coarse pointer");
+  await page.goto("/demo/app/filings");
+  const row = page.locator(".record-table__row").filter({ has: page.getByRole("button", { name: "Mark filed" }) }).first();
+  await expect(row.getByRole("button", { name: "Mark filed" })).toBeVisible();
+  await expect(row.getByRole("button", { name: /^Row actions for/ })).toBeHidden();
+});

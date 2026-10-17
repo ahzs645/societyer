@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { chooseViewType, revealSelectRecords } from "./helpers/recordTableToolbar";
+import { openRowMenu, pinnedRowActions, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
 
 // Multi-route and role-switch scenarios include several cold development loads.
 // Keep assertion deadlines strict while allowing the whole lifecycle to finish.
@@ -80,7 +81,7 @@ test("long record titles leave confirmation actions reachable without page overf
   await testInfo.attach("long-title-toast", { body: await page.screenshot(), contentType: "image/png" });
   await page.goto("/demo/app/meetings");
   const row = page.locator(".record-table__row").filter({ hasText: title });
-  await row.getByRole("button", { name: "Actions for this meeting", exact: true }).click();
+  await openRowMenu(row, "Actions for this meeting");
   const actions = page.getByRole("menu");
   await expect(actions).toBeVisible();
   const scroller = page.locator(".record-table__scroll");
@@ -482,6 +483,12 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
       await control.tap();
     } else await control.click();
   };
+  // A mouse layout whose table is wider than its frame folds a row's actions
+  // behind its pinned "Row actions" button; touch keeps them inline.
+  const act = async (row: Locator, name: string) => {
+    if (!touch && await rowActionsArePinned(row)) await runRowAction(row, name);
+    else await activate(row.getByRole("button", { name, exact: true }));
+  };
   await page.goto("/demo/app/receipts");
   await page.getByRole("button", { name: "Issue receipt", exact: true }).click();
   const form = page.getByRole("dialog", { name: "Issue donation receipt", exact: true });
@@ -492,7 +499,7 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await form.getByRole("button", { name: "Issue", exact: true }).click();
   await expect(form).toBeHidden();
   const receipt = page.locator("tr", { hasText: "Synthetic touch row action receipt" });
-  await activate(receipt.getByRole("button", { name: "Void", exact: true }));
+  await act(receipt, "Void");
   await page.getByPlaceholder("Reason (required)").fill("Synthetic interface regression; no real donation");
   await page.getByRole("button", { name: "Void receipt", exact: true }).click();
   await expect(receipt).toContainText("Voided");
@@ -500,17 +507,24 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
   await expect(receipt).toContainText("Voided");
   await page.goto("/demo/app/workflows");
   const workflow = page.locator(".record-table__row").first();
-  const run = workflow.getByRole("button", { name: "Run now", exact: true });
-  await expect(run).toBeVisible();
-  await expect(run).toBeDisabled();
-  const pause = workflow.getByRole("button", { name: /^(Pause|Resume)$/ });
-  const initialLabel = await pause.innerText();
-  await activate(pause);
-  await expect(pause).not.toHaveText(initialLabel);
-  await activate(pause);
+  if (!touch && await rowActionsArePinned(workflow)) {
+    await pinnedRowActions(workflow).click();
+    await expect(page.getByRole("menuitem", { name: "Run now", exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+  } else {
+    const run = workflow.getByRole("button", { name: "Run now", exact: true });
+    await expect(run).toBeVisible();
+    await expect(run).toBeDisabled();
+  }
+  const pause = workflow.locator("button").filter({ hasText: /^\s*(Pause|Resume)\s*$/ });
+  const initialLabel = (await pause.textContent())!.trim();
+  const toggledLabel = initialLabel === "Pause" ? "Resume" : "Pause";
+  await act(workflow, initialLabel);
+  await expect(pause).toHaveText(toggledLabel);
+  await act(workflow, toggledLabel);
   await expect(pause).toHaveText(initialLabel);
   await page.goto("/demo/app/insurance");
-  await activate(page.locator(".record-table__row").first().getByRole("button", { name: "Edit", exact: true }));
+  await act(page.locator(".record-table__row").first(), "Edit");
   const policy = page.getByRole("dialog", { name: "Edit policy", exact: true });
   await expect(policy).toBeVisible();
   await policy.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -519,7 +533,9 @@ test("row actions stay reachable by touch for receipt, workflow, insurance and a
     await page.locator(".asset-mobile-card").first().getByRole("button", { name: /^Actions for / }).tap();
     await page.getByRole("menuitem", { name: "Edit", exact: true }).tap();
   } else {
-    await activate(page.locator(".record-table__row").first().getByRole("button", { name: "Actions for this asset", exact: true }));
+    const assetRow = page.locator(".record-table__row").first();
+    if (touch) await activate(assetRow.getByRole("button", { name: "Actions for this asset", exact: true }));
+    else await openRowMenu(assetRow, "Actions for this asset");
     await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   }
   const asset = page.getByRole("dialog", { name: "Edit asset", exact: true });

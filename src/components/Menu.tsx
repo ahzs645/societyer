@@ -41,9 +41,11 @@ type Props = {
   minWidth?: number;
   /** Align menu to the trigger left or right edge. Default "left". */
   align?: "left" | "right";
+  /** Accessible name of the open menu (e.g. the record it acts on). */
+  label?: string;
 };
 
-export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
+export function Menu({ trigger, sections, minWidth, align = "left", label }: Props) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -273,6 +275,7 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
                 ref={menuRef}
                 className={`menu menu--actions${isBottomSheet ? " menu--sheet" : ""}`}
                 role="menu"
+                aria-label={label}
                 style={
                   isBottomSheet || !pos
                     ? layer.panel
