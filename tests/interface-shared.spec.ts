@@ -213,7 +213,8 @@ test("nested date and selection controls close independently of their record dra
   const joined = drawer.getByLabel("Joined", { exact: true });
   const before = await joined.innerText();
   await joined.click();
-  const calendar = page.getByRole("dialog", { name: "Date picker", exact: true });
+  // A phone sheet is titled with the field it was opened from.
+  const calendar = page.getByRole("dialog", { name: page.viewportSize()!.width <= 560 ? "Joined" : "Date picker", exact: true });
   await expectInViewport(page, calendar);
   await expect(calendar.locator(".calendar__cell.is-active")).toBeFocused();
   const focused = await calendar.locator(".calendar__cell.is-active").getAttribute("aria-label");

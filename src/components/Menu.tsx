@@ -3,6 +3,7 @@ import {
   ReactElement,
   ReactNode,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -10,6 +11,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { MenuRow, MenuSectionLabel } from "./ui";
+import { SheetHeader } from "./SheetHeader";
+import { useSheetTitle } from "../lib/sheetTitle";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
 import { focusAdjacentTo } from "../lib/useDialogFocus";
@@ -41,9 +44,14 @@ type Props = {
   minWidth?: number;
   /** Align menu to the trigger left or right edge. Default "left". */
   align?: "left" | "right";
+  /**
+   * Title of the phone bottom sheet. Defaults to the trigger's label,
+   * `aria-label`, `title` or visible text.
+   */
+  sheetTitle?: string;
 };
 
-export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
+export function Menu({ trigger, sections, minWidth, align = "left", sheetTitle }: Props) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -64,6 +72,13 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   };
   useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
   const layer = useFloatingLayerStack(open);
+  const sheetTitleId = `${useId()}-sheet-title`;
+  const resolvedSheetTitle = useSheetTitle(open && isBottomSheet, () => ({
+    explicit: sheetTitle,
+    trigger: triggerRef.current,
+    useTriggerText: true,
+    fallback: "Actions",
+  }));
 
   const flat = useMemo(() => sections.flatMap((s) => s.items.filter((i) => !i.disabled)), [sections]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -272,7 +287,11 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
               <div
                 ref={menuRef}
                 className={`menu menu--actions${isBottomSheet ? " menu--sheet" : ""}`}
-                role="menu"
+                // Phones: a titled dialog around the menu. Desktop: the
+                // anchored popover is the menu.
+                role={isBottomSheet ? "dialog" : "menu"}
+                aria-modal={isBottomSheet || undefined}
+                aria-labelledby={isBottomSheet ? sheetTitleId : undefined}
                 style={
                   isBottomSheet || !pos
                     ? layer.panel
@@ -286,8 +305,12 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
                       }
                 }
               >
-                {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
-                {renderSections()}
+                {isBottomSheet ? (
+                  <>
+                    <SheetHeader id={sheetTitleId} title={resolvedSheetTitle} onClose={dismiss} />
+                    <div role="menu" aria-labelledby={sheetTitleId}>{renderSections()}</div>
+                  </>
+                ) : renderSections()}
               </div>
             </>,
             document.body,

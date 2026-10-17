@@ -109,7 +109,8 @@ test("a calendar opened from the range picker dims the panel under it", async ({
   await expect(range).toBeVisible();
   const start = range.locator(".date-range-picker__field .select-trigger").first();
   await start.click();
-  const calendar = page.getByRole("dialog", { name: "Date picker", exact: true });
+  // The calendar sheet is titled with the field it was opened from.
+  const calendar = page.getByRole("dialog", { name: "Start date", exact: true });
   await expect(calendar).toBeVisible();
 
   const preset = range.locator(".date-range-picker__preset").first();
