@@ -108,7 +108,9 @@ test("date and time picker closes without losing an unsaved meeting drawer", asy
   await drawer.getByRole("textbox", { name: "Title", exact: true }).fill("Unsaved date and time audit");
   const scheduled = drawer.getByRole("button", { name: "Scheduled", exact: true });
   await scheduled.click();
-  const picker = page.getByRole("dialog", { name: "Date and time picker", exact: true });
+  // A phone sheet is titled with the field it was opened from, and has a close button.
+  const sheet = page.viewportSize()!.width <= 560;
+  const picker = page.getByRole("dialog", { name: sheet ? "Scheduled" : "Date and time picker", exact: true });
   await expectInViewport(page, picker);
   await drawer.locator(".drawer__body").evaluate((element) => { element.scrollTop = 30; });
   await expectInViewport(page, picker);
@@ -119,6 +121,10 @@ test("date and time picker closes without losing an unsaved meeting drawer", asy
   await expect(picker.getByRole("button", { name: "Previous month", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
+  if (sheet) {
+    await expect(picker.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+  }
   await expect(picker.getByRole("button", { name: "Done", exact: true })).toBeFocused();
   await picker.getByLabel("Hour", { exact: true }).selectOption("10");
   await picker.getByLabel("Minute", { exact: true }).selectOption("35");

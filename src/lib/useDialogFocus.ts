@@ -118,9 +118,12 @@ export function useDialogFocus<T extends HTMLElement>(
       // 2. An `autoFocus` child already took focus during the commit; keep it.
       const active = document.activeElement;
       if (active instanceof HTMLElement && active !== root && root.contains(active)) return;
-      // 3. The dialog's own default target, then its first control.
+      // 3. The dialog's own default target, then its first control — past a
+      // phone sheet's header close button, which only follows the content.
       const fallback = initialFocus ? root.querySelector<HTMLElement>(initialFocus) : null;
-      (fallback ?? getDialogFocusables(root)[0] ?? root).focus({ preventScroll: true });
+      const focusables = getDialogFocusables(root);
+      const first = focusables.find((element) => !element.closest(".sheet-head")) ?? focusables[0];
+      (fallback ?? first ?? root).focus({ preventScroll: true });
     }, 0);
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || !ref.current) return;
