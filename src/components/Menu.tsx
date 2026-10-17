@@ -44,6 +44,8 @@ type Props = {
   minWidth?: number;
   /** Align menu to the trigger left or right edge. Default "left". */
   align?: "left" | "right";
+  /** Accessible name of the anchored menu (e.g. the record it acts on). */
+  label?: string;
   /**
    * Title of the phone bottom sheet. Defaults to the trigger's label,
    * `aria-label`, `title` or visible text.
@@ -51,7 +53,7 @@ type Props = {
   sheetTitle?: string;
 };
 
-export function Menu({ trigger, sections, minWidth, align = "left", sheetTitle }: Props) {
+export function Menu({ trigger, sections, minWidth, align = "left", label, sheetTitle }: Props) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -292,6 +294,7 @@ export function Menu({ trigger, sections, minWidth, align = "left", sheetTitle }
                 role={isBottomSheet ? "dialog" : "menu"}
                 aria-modal={isBottomSheet || undefined}
                 aria-labelledby={isBottomSheet ? sheetTitleId : undefined}
+                aria-label={isBottomSheet ? undefined : label}
                 style={
                   isBottomSheet || !pos
                     ? layer.panel

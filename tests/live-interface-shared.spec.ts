@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { assertLiveFits, signInLive } from "./helpers/liveInterface";
+import { openRowMenu } from "./helpers/rowActions";
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
@@ -148,7 +149,7 @@ test("live long meeting title keeps saved feedback and confirmation controls wit
   await testInfo.attach("live-long-title-feedback", { body: await page.screenshot(), contentType: "image/png" });
   await page.goto("/app/meetings");
   const row = page.locator(".record-table__row").filter({ hasText: title });
-  await row.getByRole("button", { name: "Actions for this meeting", exact: true }).click();
+  await openRowMenu(row, "Actions for this meeting");
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   const confirmation = page.getByRole("dialog", { name: `Delete "${title}"?`, exact: true });
   await expectInsideViewport(page, confirmation);
@@ -157,7 +158,7 @@ test("live long meeting title keeps saved feedback and confirmation controls wit
   await testInfo.attach("live-long-title-confirmation", { body: await page.screenshot(), contentType: "image/png" });
   await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(row).toBeVisible();
-  await row.getByRole("button", { name: "Actions for this meeting", exact: true }).click();
+  await openRowMenu(row, "Actions for this meeting");
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(row).toHaveCount(0);

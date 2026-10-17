@@ -146,13 +146,26 @@ function PlainRecordRow({
 const FLASH_MAX_NEW_ROWS = 10;
 const FLASH_DURATION_MS = 2800;
 
-function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
+/** Tablet/desktop long-table cap; keep in step with `[data-capped]` in _record-table.scss. */
+const SCROLL_CAP_MIN = 600;
+const SCROLL_CAP_VIEWPORT_OFFSET = 200;
+
+function trackScrollState(node: HTMLElement, classTarget: HTMLElement, { capHeight = false } = {}) {
   let isScrolledX = false;
   let isScrolledY = false;
+  let hasMoreRight = false;
+  let isCapped = false;
 
   const update = () => {
     const nextScrolledX = node.scrollLeft > 0;
     const nextScrolledY = node.scrollTop > 0;
+    // Columns still out of view on the right scroll under the pinned row
+    // actions, which then show a divider (data-more-right on the frame).
+    const nextMoreRight = node.scrollLeft + node.clientWidth < node.scrollWidth - 1;
+    if (nextMoreRight !== hasMoreRight) {
+      hasMoreRight = nextMoreRight;
+      classTarget.toggleAttribute("data-more-right", hasMoreRight);
+    }
 
     // Sticky layers only need a class mutation when an edge changes state;
     // avoiding writes on every scroll frame keeps the hot path read-only.
@@ -166,14 +179,59 @@ function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
     }
   };
 
-  update();
+  // A plain table only becomes its own vertical scroll box (so its header
+  // stays pinned) once it is taller than the cap; a shorter table keeps no
+  // inner box at all and scrolls with the page.
+  const updateCap = () => {
+    if (!capHeight) return;
+    const content = node.firstElementChild as HTMLElement | null;
+    const cap = Math.max(SCROLL_CAP_MIN, window.innerHeight - SCROLL_CAP_VIEWPORT_OFFSET);
+    const nextCapped = !!content && content.offsetHeight > cap;
+    if (nextCapped !== isCapped) {
+      isCapped = nextCapped;
+      node.toggleAttribute("data-capped", isCapped);
+    }
+  };
+  const refresh = () => {
+    updateCap();
+    update();
+  };
+
+  refresh();
   node.addEventListener("scroll", update, { passive: true });
+  window.addEventListener("resize", refresh);
+  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(refresh);
+  observer?.observe(node);
+  if (node.firstElementChild) observer?.observe(node.firstElementChild);
 
   return () => {
     node.removeEventListener("scroll", update);
+    window.removeEventListener("resize", refresh);
+    observer?.disconnect();
     if (isScrolledX) classTarget.classList.remove("is-scrolled-x");
     if (isScrolledY) classTarget.classList.remove("is-scrolled-y");
+    if (hasMoreRight) classTarget.removeAttribute("data-more-right");
+    if (isCapped) node.removeAttribute("data-capped");
   };
+}
+
+/** Pointers with no hover keep the inline, always-visible row actions. */
+const TOUCH_MEDIA_QUERY = "(hover: none), (pointer: coarse)";
+/** Horizontal padding of `.record-table__row-actions-cell` (inline layout). */
+const ROW_ACTIONS_CELL_PADDING = 12;
+
+/**
+ * Whether the row actions fit inline: the table at its saved column sizes,
+ * plus the widest row's action buttons, plus the fill column's floor, within
+ * the scroller. Independent of the current layout (the buttons keep their
+ * width while hidden in the pinned cell), so switching never oscillates.
+ */
+function rowActionsFitInline(root: HTMLElement, scroller: HTMLElement, fixedWidth: number) {
+  let actionsWidth = 0;
+  root.querySelectorAll<HTMLElement>(".record-table__row .record-table__row-actions").forEach((actions) => {
+    actionsWidth = Math.max(actionsWidth, actions.offsetWidth);
+  });
+  return fixedWidth + actionsWidth + ROW_ACTIONS_CELL_PADDING + FILL_COLUMN_MIN + 2 <= scroller.clientWidth;
 }
 
 /**
@@ -303,27 +361,56 @@ export function RecordTable({
   );
   const [stretchRoot, setStretchRoot] = useState<HTMLElement | null>(null);
   const [columnStretch, setColumnStretch] = useState(1);
-  useEffect(() => {
-    if (!stretchRoot || isMobile || !columnSizeTotal || typeof ResizeObserver === "undefined") {
+  const hasOpenRecordAction = !!onRecordClick;
+  const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
+  // Lays out the row actions and shares spare width among the columns. The
+  // actions show inline while the table fits its frame; once it would scroll
+  // sideways they collapse into a narrow cell pinned to the right edge
+  // (`data-row-actions="pinned"`, see _record-table.scss), so they stay in
+  // reach without covering more than 40px of the scrolling columns.
+  const measureLayoutRef = useRef<() => void>(() => {});
+  useLayoutEffect(() => {
+    if (!stretchRoot || typeof ResizeObserver === "undefined") {
+      measureLayoutRef.current = () => {};
       setColumnStretch(1);
       return;
     }
+    const touch = window.matchMedia(TOUCH_MEDIA_QUERY);
     const measure = () => {
+      const scroller = stretchRoot.querySelector<HTMLElement>(".record-table__scroll, .record-table__virtuoso") ?? stretchRoot;
       const fixed = Array.from(
-        stretchRoot.querySelectorAll<HTMLElement>(".record-table__header-row > :is(.record-table__checkbox-cell, .record-table__drag-head, .record-table__row-actions-head)"),
+        stretchRoot.querySelectorAll<HTMLElement>(".record-table__header-row > :is(.record-table__checkbox-cell, .record-table__drag-head)"),
       ).reduce((sum, cell) => sum + cell.offsetWidth, 0);
+      const actionsLayout = !hasRowActions
+        ? null
+        : !touch.matches && !rowActionsFitInline(stretchRoot, scroller, columnSizeTotal + fixed) ? "pinned" : "inline";
+      if (actionsLayout === null) delete stretchRoot.dataset.rowActions;
+      else if (stretchRoot.dataset.rowActions !== actionsLayout) stretchRoot.dataset.rowActions = actionsLayout;
+      if (isMobile || !columnSizeTotal) {
+        setColumnStretch(1);
+        return;
+      }
+      const actionsHead = stretchRoot.querySelector<HTMLElement>(".record-table__header-row > .record-table__row-actions-head")?.offsetWidth ?? 0;
       // The trailing fill column keeps a 24px floor (see _record-table.scss);
       // leaving it out made a stretched table overflow by exactly that much.
-      const next = Math.min(MAX_COLUMN_STRETCH, Math.max(1, (stretchRoot.clientWidth - fixed - FILL_COLUMN_MIN - 2) / columnSizeTotal));
+      // The scroller's width leaves out a capped table's vertical scrollbar.
+      const next = Math.min(MAX_COLUMN_STRETCH, Math.max(1, (scroller.clientWidth - fixed - actionsHead - FILL_COLUMN_MIN - 2) / columnSizeTotal));
       setColumnStretch((current) => (Math.abs(current - next) < 0.005 ? current : next));
     };
+    measureLayoutRef.current = measure;
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(stretchRoot);
-    return () => observer.disconnect();
-  }, [stretchRoot, isMobile, columnSizeTotal]);
-  const hasOpenRecordAction = !!onRecordClick;
-  const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
+    touch.addEventListener("change", measure);
+    return () => {
+      observer.disconnect();
+      touch.removeEventListener("change", measure);
+    };
+  }, [stretchRoot, isMobile, columnSizeTotal, hasRowActions]);
+  // Rows (and so the widest row's actions) change without the frame resizing.
+  useLayoutEffect(() => {
+    measureLayoutRef.current();
+  }, [rowModel.items, visibleColumns, renderRowActions]);
   const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
     ? (event, record) => {
         event.preventDefault();
@@ -407,7 +494,7 @@ export function RecordTable({
       scrollCleanupRef.current = null;
       tableRootRef.current = node;
       if (node) {
-        scrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node);
+        scrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node, { capHeight: true });
       }
     },
     [],

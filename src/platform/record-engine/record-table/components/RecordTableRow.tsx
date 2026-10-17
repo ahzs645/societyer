@@ -1,6 +1,6 @@
-import { type HTMLAttributes, type MouseEvent as ReactMouseEvent, type ReactNode, useMemo } from "react";
+import { type HTMLAttributes, type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import { GripVertical, MoreHorizontal, PanelRightOpen } from "lucide-react";
-import { Menu, type MenuSection } from "../../../../components/Menu";
+import { Menu, type MenuItem, type MenuSection } from "../../../../components/Menu";
 import { RecordTableRowContext } from "../contexts/RecordTableRowContext";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
@@ -108,6 +108,10 @@ export function RecordTableRow({
       }
     : undefined;
 
+  const actionsSourceRef = useRef<HTMLDivElement>(null);
+  const recordName = recordDisplayName(record, objectMetadata.labelIdentifierFieldName)
+    ?? `this ${objectMetadata.labelSingular?.toLowerCase() ?? "record"}`;
+
   const rowValue = useMemo(
     () => ({ record, recordId, rowIndex }),
     [record, recordId, rowIndex],
@@ -188,20 +192,23 @@ export function RecordTableRow({
       ))}
       {/* Actions come BEFORE the fill cell so they anchor to where the data
         * ends — on a wide monitor they sit next to the last column instead of
-        * a screen-width away. When the table overflows horizontally, their
-        * `position: sticky; right: 0` still pins them to the viewport edge. */}
+        * a screen-width away. While the table fits its frame the buttons show
+        * inline; once it scrolls sideways RecordTable pins a narrow cell to
+        * the right edge (`data-row-actions="pinned"` on the frame) where the
+        * same actions open from one "Row actions" button instead. */}
       {(showOpenRecordAction || renderRowActions || rowMenuSections) && (
         <td
           className="record-table__row-actions-cell"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="record-table__row-actions">
+          <div className="record-table__row-actions" ref={actionsSourceRef}>
             {showOpenRecordAction && onRecordClick && (
               <Tooltip content="Preview in sidebar">
                 <button
                   type="button"
                   className="btn btn--ghost btn--sm btn--icon record-table__open-record"
                   aria-label={`Preview ${objectMetadata.labelSingular ?? "record"} in sidebar`}
+                  data-row-action-label="Preview in sidebar"
                   onClick={() =>
                     onRecordClick(recordId, record, {
                       source: "action",
@@ -218,11 +225,14 @@ export function RecordTableRow({
               <Menu
                 align="right"
                 minWidth={180}
+                label={`Actions for ${recordName}`}
+                sheetTitle={`Actions for ${recordName}`}
                 sections={rowMenuSections(record)}
                 trigger={
                   <button
                     type="button"
                     className="btn btn--ghost btn--sm btn--icon"
+                    data-row-actions-kebab=""
                     aria-label={`Actions for this ${objectMetadata.labelSingular?.toLowerCase() ?? "record"}`}
                     // Focusing this button can nudge the table's scroll
                     // container (focus scroll-into-view), and the menu
@@ -236,9 +246,115 @@ export function RecordTableRow({
               />
             )}
           </div>
+          <PinnedRowActionsMenu
+            recordName={recordName}
+            getSections={() => [
+              { id: "row-actions", items: collectRowActionItems(actionsSourceRef.current, recordName) },
+              ...(rowMenuSections?.(record) ?? []),
+            ].filter((section) => section.items.length > 0)}
+          />
         </td>
       )}
       <td className="record-table__fill-cell" aria-hidden="true" />
     </RecordTableRowContext.Provider>
+  );
+}
+
+/** The record's name (its label identifier field), for labelling its actions. */
+function recordDisplayName(record: any, fieldName: string | undefined): string | null {
+  const value = fieldName ? record?.[fieldName] : undefined;
+  if (value == null) return null;
+  if (typeof value === "string" || typeof value === "number") return String(value).trim() || null;
+  if (typeof value === "object") {
+    const parts = [value.firstName, value.lastName].filter(Boolean).join(" ");
+    const name = value.label ?? value.name ?? value.title ?? (parts || undefined);
+    return name ? String(name) : null;
+  }
+  return null;
+}
+
+/**
+ * The row's inline actions (whatever `renderRowActions` drew, plus the
+ * preview button) as menu items. They stay rendered, hidden, in the pinned
+ * cell, so each item runs the real control's own click handler: pages keep
+ * one definition of their actions and both layouts stay in step.
+ */
+function collectRowActionItems(source: HTMLElement | null, recordName: string): MenuItem[] {
+  if (!source) return [];
+  return Array.from(source.querySelectorAll<HTMLElement>("button, a[href]"))
+    .filter((control) => !control.hasAttribute("data-row-actions-kebab"))
+    .map((control, index) => {
+      const text = control.textContent?.replace(/\s+/g, " ").trim();
+      // Icon buttons are named for their record ("Edit Board template"); the
+      // menu is already labelled with it, so the row reads "Edit".
+      const ariaLabel = control.getAttribute("aria-label")?.trim();
+      const shortAriaLabel = ariaLabel?.endsWith(` ${recordName}`)
+        ? ariaLabel.slice(0, -recordName.length - 1).trim()
+        : ariaLabel;
+      // A page's own menu among its row actions ("Actions for <name>" kebab)
+      // opens from here as a second step.
+      const opensMenu = control.getAttribute("aria-haspopup") === "menu" && !text;
+      const label = control.getAttribute("data-row-action-label")
+        || (opensMenu ? "More actions…" : "")
+        || text || shortAriaLabel || control.getAttribute("title") || "Action";
+      const icon = control.querySelector("svg");
+      return {
+        id: `inline-${index}`,
+        label,
+        icon: icon ? <ClonedIcon icon={icon} /> : undefined,
+        disabled: (control as HTMLButtonElement).disabled || control.getAttribute("aria-disabled") === "true",
+        destructive: /^(delete|remove)\b/i.test(label),
+        onSelect: () => control.click(),
+      };
+    });
+}
+
+/** A copy of an action button's icon for its menu row. */
+function ClonedIcon({ icon }: { icon: SVGElement }) {
+  return (
+    <span
+      className="record-table__row-action-icon"
+      aria-hidden="true"
+      ref={(node) => {
+        if (node && !node.firstChild) node.appendChild(icon.cloneNode(true));
+      }}
+    />
+  );
+}
+
+/**
+ * The pinned cell's single "Row actions" button. Hidden by CSS until the
+ * table is wider than its frame; then it is the way to every action of the
+ * row, read from the hidden inline buttons each time it opens.
+ */
+function PinnedRowActionsMenu({
+  recordName,
+  getSections,
+}: {
+  recordName: string;
+  getSections: () => MenuSection[];
+}) {
+  const [sections, setSections] = useState<MenuSection[]>([]);
+  return (
+    <Menu
+      align="right"
+      minWidth={200}
+      label={`Actions for ${recordName}`}
+      sheetTitle={`Actions for ${recordName}`}
+      sections={sections}
+      trigger={
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm btn--icon record-table__row-actions-more"
+          aria-label={`Row actions for ${recordName}`}
+          // Same as the kebab above: no focus scroll on press, which would
+          // dismiss the menu that this click opens.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setSections(getSections())}
+        >
+          <MoreHorizontal size={14} />
+        </button>
+      }
+    />
   );
 }

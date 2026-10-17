@@ -1,4 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { pinnedRowActions, rowActionsArePinned, runRowAction } from "./helpers/rowActions";
+
+/** The first filing row that still offers "Mark filed". */
+function unfiledRow(page: Page) {
+  return page.locator(".record-table__row").filter({ has: page.locator("button", { hasText: "Mark filed" }) }).first();
+}
 
 // Layering, focus return, outside taps and the on-screen keyboard for the
 // shared overlay components (dock, drawers, modals, menus, pickers, AI panel).
@@ -131,7 +137,7 @@ test("a calendar opened from the range picker dims the panel under it", async ({
 
 test("an outside tap closes an anchored select inside a modal but keeps the modal", async ({ page }) => {
   await page.goto("/demo/app/filings");
-  await page.getByRole("button", { name: "Mark filed" }).first().click();
+  await runRowAction(unfiledRow(page), "Mark filed");
   const modal = page.getByRole("dialog", { name: "Mark filing as filed" });
   await expect(modal).toBeVisible();
   const method = modal.getByRole("button", { name: "Submission method", exact: true });
@@ -157,8 +163,11 @@ test("an outside tap closes an anchored select inside a modal but keeps the moda
 
 test("closing a confirm by Esc or Cancel returns focus to the control that opened it", async ({ page }) => {
   await page.goto("/demo/app/filings");
-  const del = page.getByRole("button", { name: "Delete filing" }).first();
-  await del.click();
+  const row = page.locator(".record-table__row").filter({ has: page.locator('button[aria-label="Delete filing"]') }).first();
+  // A table wider than its frame runs the delete from the pinned "Row
+  // actions" menu, which hands focus back to that button.
+  const del = await rowActionsArePinned(row) ? pinnedRowActions(row) : row.getByRole("button", { name: "Delete filing" });
+  await runRowAction(row, "Delete filing");
   const confirm = page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Cancel" }) }).last();
   await expect(confirm).toBeVisible();
   // The confirm opens on its action, not on the header Close button.
@@ -167,7 +176,7 @@ test("closing a confirm by Esc or Cancel returns focus to the control that opene
   await expect(confirm).toBeHidden();
   await expect(del).toBeFocused();
 
-  await del.click();
+  await runRowAction(row, "Delete filing");
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(confirm).toBeHidden();
@@ -238,7 +247,7 @@ test("a drawer keeps its footer above the on-screen keyboard", async ({ page }) 
 test("a modal keeps the focused field and its footer above the on-screen keyboard", async ({ page }) => {
   test.skip(!isTouch(page), "Only touch screens raise an on-screen keyboard");
   await page.goto("/demo/app/filings");
-  await page.getByRole("button", { name: "Mark filed" }).first().click();
+  await runRowAction(unfiledRow(page), "Mark filed");
   const modal = page.getByRole("dialog", { name: "Mark filing as filed" });
   await expect(modal).toBeVisible();
   const field = modal.locator(".modal__body input:visible").last();
@@ -259,7 +268,7 @@ test("a modal keeps the focused field and its footer above the on-screen keyboar
 
 test("a prompt opened from a modal focuses its input and Esc closes only the prompt", async ({ page }) => {
   await page.goto("/demo/app/filings");
-  await page.getByRole("button", { name: "Mark filed" }).first().click();
+  await runRowAction(unfiledRow(page), "Mark filed");
   const modal = page.getByRole("dialog", { name: "Mark filing as filed" });
   await expect(modal).toBeVisible();
   const link = modal.getByRole("button", { name: "Link", exact: true });
@@ -314,7 +323,7 @@ async function touchDrag(page: Page, x: number, y: number, distance: number) {
 test("a phone form sheet swipes away only from its grabber or header", async ({ page }) => {
   test.skip(!usesSheets(page), "Phones show modals as swipeable sheets");
   await page.goto("/demo/app/filings");
-  await page.getByRole("button", { name: "Mark filed" }).first().click();
+  await runRowAction(unfiledRow(page), "Mark filed");
   const modal = page.getByRole("dialog", { name: "Mark filing as filed" });
   await expect(modal).toBeVisible();
   await page.waitForTimeout(400);

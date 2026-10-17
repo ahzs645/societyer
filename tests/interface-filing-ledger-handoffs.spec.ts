@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { completeGuidedOrganizationSetup } from './helpers/guidedSetup';
+import { runRowAction } from './helpers/rowActions';
 test.setTimeout(140_000);
 
 test('detailed annual filing links into the annual ledger, records manual evidence and persists without duplicate rows', async ({ page }, testInfo) => {
@@ -12,7 +13,8 @@ test('detailed annual filing links into the annual ledger, records manual eviden
   await page.getByLabel('Period / label', { exact: true }).fill('2026');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Mark filed', exact: true })).toBeVisible();
+  const filing = page.locator('.record-table__row').first();
+  await expect(filing.locator('button', { hasText: 'Mark filed' })).toHaveCount(1);
   await page.goto('/app/annual-filings');
   await page.getByRole('button', { name: 'Add filing', exact: true }).click();
   // The source picker is the app's Select (G-27 replaced the native select).
@@ -31,7 +33,7 @@ test('detailed annual filing links into the annual ledger, records manual eviden
   await expect(region.locator('tbody tr')).toHaveCount(1);
   await expect(region).toContainText('✗');
   await page.goto('/app/filings');
-  await page.getByRole('button', { name: 'Mark filed', exact: true }).click();
+  await runRowAction(filing, 'Mark filed');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('Add filed date, method, and at least one evidence item before marking filed')).toBeVisible();
   await expect(page.getByRole('dialog')).toBeVisible();

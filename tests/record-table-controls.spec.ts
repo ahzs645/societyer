@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { MembersPage } from "./pom/membersPage";
 import { RecordTablePage } from "./pom/recordTablePage";
+import { pinnedRowActions, rowActionsArePinned } from "./helpers/rowActions";
 
 test.describe("record table controls", () => {
   test("members table exposes Twenty-style search, sort, filter, and column controls", async ({ page }) => {
@@ -55,7 +56,14 @@ test.describe("record table controls", () => {
     await firstRow.hover();
     // The row action previews the record in the side panel; the panel's Open
     // button is what escalates to the editable drawer.
-    await firstRow.getByRole("button", { name: /preview member in sidebar/i }).click();
+    // A register wider than its frame folds the row actions behind its
+    // pinned "Row actions" button.
+    if (await rowActionsArePinned(firstRow)) {
+      await pinnedRowActions(firstRow).click();
+      await page.getByRole("menuitem", { name: "Preview in sidebar", exact: true }).click();
+    } else {
+      await firstRow.getByRole("button", { name: /preview member in sidebar/i }).click();
+    }
     const panel = page.locator(".record-side-panel");
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("heading", { name: "Fields" })).toBeVisible();
