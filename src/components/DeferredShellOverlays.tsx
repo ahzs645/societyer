@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePermissions } from "../hooks/usePermissions";
-import { OPEN_AI_ASSISTANT_EVENT } from "../features/ai/aiAssistantEvents";
+import { OPEN_AI_ASSISTANT_EVENT, takePendingAiAssistantOpen } from "../features/ai/aiAssistantEvents";
 
 const loadCommandPalette = () => import("./CommandPalette");
 const CommandPalette = lazy(() => loadCommandPalette().then((module) => ({ default: module.CommandPalette })));
@@ -97,7 +97,17 @@ export function DeferredAiAssistant() {
   const [activated, setActivated] = useState(false);
   useEffect(() => {
     if (activated) return;
-    const activate = () => { if (canRead) setActivated(true); };
+    // A click made before the viewer's permissions loaded still opens the
+    // assistant once they do, instead of being lost.
+    if (canRead && takePendingAiAssistantOpen()) {
+      setActivated(true);
+      return;
+    }
+    const activate = () => {
+      if (!canRead) return;
+      takePendingAiAssistantOpen();
+      setActivated(true);
+    };
     window.addEventListener(OPEN_AI_ASSISTANT_EVENT, activate);
     return () => window.removeEventListener(OPEN_AI_ASSISTANT_EVENT, activate);
   }, [activated, canRead]);

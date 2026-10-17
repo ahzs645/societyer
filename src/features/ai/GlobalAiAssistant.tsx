@@ -50,7 +50,7 @@ import { useSociety } from "../../hooks/useSociety";
 import { Skeleton } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 
-import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT } from "./aiAssistantEvents";
+import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT, takePendingAiAssistantOpen } from "./aiAssistantEvents";
 import { Tooltip } from "../../components/Tooltip";
 import { useDialogFocus } from "../../lib/useDialogFocus";
 import { useKeyboardInsetTracking } from "../../lib/useVisualViewportBottomInset";
@@ -236,7 +236,14 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   }, [canRead, canListModels, open, catalogLoaded, effectiveProvider?.provider, society?._id, actingUserId, listProviderModels]);
 
   useEffect(() => {
-    const onOpen = () => { if (canRead) setOpen(true); };
+    const onOpen = () => {
+      if (!canRead) return;
+      takePendingAiAssistantOpen();
+      setOpen(true);
+    };
+    // A click made while this component was still loading (or before the
+    // viewer's permissions resolved) opens it now instead of being lost.
+    if (canRead && takePendingAiAssistantOpen()) setOpen(true);
     window.addEventListener(OPEN_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, [canRead]);
