@@ -1,5 +1,10 @@
 # Authentication hosted in Convex
 
+> **Update:** the "Better Auth inside Convex" pathway below is implemented as
+> `AUTH_MODE=convex`. See [Sign-in hosted in Convex](convex-hosted-auth-setup.md).
+> It keeps the existing `users` membership table, as this evaluation proposed.
+> Native Convex Auth remains unimplemented.
+
 Evaluated on 2026-10-04 against Societyer `31c185b`. This is a source-backed
 migration plan. No broker, production schema, login screen or existing account
 binding has been changed by this evaluation.

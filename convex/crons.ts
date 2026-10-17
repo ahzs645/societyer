@@ -3,6 +3,14 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+// Clear sign-in throttle buckets that have long since refilled.
+crons.daily(
+  "purge idle sign-in throttles",
+  { hourUTC: 9, minuteUTC: 30 },
+  internal.authThrottle.purgeIdle,
+  {},
+);
+
 // Daily 7am UTC (midnight Pacific-ish) — scan for deadlines/filings due within
 // the next 14 days and drop notifications into the in-app center.
 crons.daily(

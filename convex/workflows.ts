@@ -124,12 +124,14 @@ import type {
   SetupCheck,
 } from "./workflowCatalog";
 import { assertConvexOutboundUrl, fetchConvexOutbound } from "./lib/outboundUrlPolicy";
+import { deploymentCapabilities, N8N_UNAVAILABLE_MESSAGE } from "../shared/deploymentCapabilities";
 
 export const listCatalog = authorizedQuery("workflows:listCatalog", query)({
   args: {},
   returns: v.any(),
   handler: async () =>
-    RECIPE_CATALOG.map((entry) => ({
+    // n8n recipes can't run without n8n and the gateway's callback, so they aren't offered.
+    RECIPE_CATALOG.filter((entry) => entry.provider !== "n8n" || deploymentCapabilities(process.env).n8nWorkflows).map((entry) => ({
       ...entry,
       // Recompute node statuses at read time so the preview reflects the
       // current server env (e.g. whether UNBC_AFFILIATE_TEMPLATE_PATH is set).
@@ -352,6 +354,7 @@ export const create = authorizedMutation("workflows:create", mutation)({
     const recipe = args.recipe as RecipeKey;
     const trigger = parseWorkflowTrigger(args.trigger);
     const provider = workflowProviderSchema.parse(args.provider ?? RECIPE_PROVIDERS[recipe] ?? "internal");
+    if (provider === "n8n" && !deploymentCapabilities(process.env).n8nWorkflows) throw new Error(N8N_UNAVAILABLE_MESSAGE);
     const providerConfig =
       provider === "n8n"
         ? { ...providerConfigForRecipe(recipe), ...(args.providerConfig ?? {}) }
@@ -395,6 +398,7 @@ export const setupGovernanceN8nRecipes = authorizedMutation("workflows:setupGove
       societyId,
       required: "Director",
     });
+    if (!deploymentCapabilities(process.env).n8nWorkflows) throw new Error(N8N_UNAVAILABLE_MESSAGE);
     const createdByUserId = await principalUserId(portableCtx, societyId);
     const recipes: RecipeKey[] = [
       "agm_date_deadlines",

@@ -1,4 +1,5 @@
 import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
+import { isModuleEnabled } from "../lib/modules";
 import { MonthDayPicker } from "../components/MonthDayPicker";
 import { formatAddressText } from "../../shared/structuredAddress";
 import { EntitySetupFields } from "../components/EntitySetupFields";
@@ -772,7 +773,7 @@ export function SocietyPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Governance documents</h2>
-              {jurisdictionModule.registryImportSupported && (
+              {jurisdictionModule.registryImportSupported && isModuleEnabled(society, "browserConnectors") && (
                 <button
                   className="btn btn--sm"
                   onClick={importGovernanceDocuments}

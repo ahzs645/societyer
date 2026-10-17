@@ -1,4 +1,5 @@
 import { statedReportingYear } from "../../shared/agmEvidence";
+import { isModuleEnabled } from "../lib/modules";
 import { serverActionErrorMessage, serverActionsUnavailable, serverConnectionMessage } from "../lib/serverConnection";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -286,7 +287,7 @@ export function FilingsPage() {
         }
         actions={
           <>
-            {jurisdictionModule.registryImportSupported && (
+            {jurisdictionModule.registryImportSupported && isModuleEnabled(society, "browserConnectors") && (
               <button
                 className="btn-action"
                 onClick={importRegistryHistory}

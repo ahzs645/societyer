@@ -10,10 +10,26 @@ const find = (role: string, key: string, source?: Parameters<typeof getModuleAcc
   return row;
 };
 
-// Missing/duplicated grants would make the admin projection silently incomplete.
+// Every permission must appear in the admin projection, and only real ones.
 const mapped = MODULE_ACCESS_DEFINITIONS.flatMap((row) =>
   ACCESS_ACTIONS.flatMap((action) => row.permissions[action] ?? []));
-assert.deepEqual([...mapped].sort(), [...PERMISSIONS].sort());
+assert.deepEqual([...new Set(mapped)].sort(), [...PERMISSIONS].sort());
+// A grant may cover several areas only when the action policy gates them with
+// it: payroll, corporate cards and investments are in the financials resource
+// group. Any other repeat is likely a copy-paste mistake in the projection.
+const SHARED_GRANTS: Record<string, readonly string[]> = {
+  "financials:read": ["financials", "payroll", "cards", "investments"],
+  "financials:write": ["financials", "payroll", "cards", "investments"],
+};
+const areasByGrant = new Map<string, string[]>();
+for (const row of MODULE_ACCESS_DEFINITIONS) {
+  for (const permission of new Set(ACCESS_ACTIONS.flatMap((action) => row.permissions[action] ?? []))) {
+    areasByGrant.set(permission, [...(areasByGrant.get(permission) ?? []), row.key]);
+  }
+}
+const shared = Object.fromEntries([...areasByGrant].filter(([, areas]) => areas.length > 1).map(([grant, areas]) => [grant, [...areas].sort()]));
+assert.deepEqual(shared, Object.fromEntries(Object.entries(SHARED_GRANTS).map(([grant, areas]) => [grant, [...areas].sort()])),
+  "A permission is mapped to more than one access area; list it in SHARED_GRANTS only if the action policy gates those areas with it.");
 assert.equal(new Set(MODULE_ACCESS_DEFINITIONS.map((row) => row.key)).size, MODULE_ACCESS_DEFINITIONS.length);
 assert.deepEqual(MODULE_ACCESS_DEFINITIONS.flatMap((row) => row.moduleKey ?? []).sort(), [...MODULE_KEYS].sort());
 

@@ -8,3 +8,9 @@ export const authClient = createAuthClient(
 );
 
 export type BetterAuthSession = typeof authClient.$Infer.Session;
+
+/** Convex token from the gateway's JWT plugin. */
+export async function fetchConvexToken(): Promise<string | null> {
+  const result = await authClient.token();
+  return result.data?.token ?? null;
+}

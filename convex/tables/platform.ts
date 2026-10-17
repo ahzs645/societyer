@@ -12,6 +12,13 @@ export const platformTables = {
     status: v.string(), // Active | Disabled; operator-controlled, not profile input
     createdAtISO: v.string(),
   }).index("by_issuer_subject", ["issuer", "subject"]),
+  // Sign-in throttling for the Convex-hosted broker: token buckets keyed by
+  // account email or client IP (see convex/authThrottle.ts). Not workspace data.
+  authRateLimits: defineTable({
+    key: v.string(),
+    tokens: v.number(),
+    updatedAtMs: v.number(),
+  }).index("by_key", ["key"]).index("by_updated", ["updatedAtMs"]),
   users: defineTable({
     societyId: v.id("societies"),
     email: v.string(),

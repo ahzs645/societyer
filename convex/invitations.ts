@@ -19,9 +19,11 @@ export const list = authorizedQuery("invitations:list", query)({
 export const create = authorizedMutation("invitations:create", mutation)({
   args: {
     societyId: v.id("societies"),
-    email: v.string(),
+    email: v.optional(v.string()),
     role: v.string(),
     expiresInDays: v.optional(v.number()),
+    kind: v.optional(v.union(v.literal("email"), v.literal("link"))),
+    label: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),

@@ -123,6 +123,11 @@ export const governanceTables = {
     acceptedAtISO: v.optional(v.string()),
     acceptedByUserId: v.optional(v.id("users")),
     revokedAtISO: v.optional(v.string()),
+    // "link" invitations are bound to no email: whoever signs in with the link
+    // joins, so they're limited to non-administrative roles. Absent = "email".
+    kind: v.optional(v.union(v.literal("email"), v.literal("link"))),
+    // Who a share link is meant for, shown to administrators only.
+    label: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_token", ["token"])

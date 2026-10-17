@@ -1,15 +1,16 @@
 import { useMemo } from "react";
 import {
   isModuleEnabled,
-  normalizeModuleSettings,
+  MODULE_KEYS,
   type ModuleKey,
+  type ModuleSettings,
 } from "../lib/modules";
 import { useSociety } from "./useSociety";
 
 export function useModuleSettings() {
   const society = useSociety();
   return useMemo(
-    () => normalizeModuleSettings(society),
+    () => Object.fromEntries(MODULE_KEYS.map((key) => [key, isModuleEnabled(society, key)])) as ModuleSettings,
     [society],
   );
 }

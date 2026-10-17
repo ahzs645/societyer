@@ -14,6 +14,7 @@ import { api } from "@/lib/convexApi";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import type { MembershipResolution } from "../../shared/functions/users";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
+import { loadSessionAuthClient, type SessionAuthModule } from "../lib/sessionAuthClient";
 import { registerAuthTokenGetter, type AuthTokenGetter } from "../lib/authToken";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { setPrincipalUsers, setStoredUserId } from "../hooks/useCurrentUser";
@@ -23,7 +24,6 @@ import {
   setStoredSocietyId,
 } from "../hooks/useSociety";
 
-type AuthClient = typeof import("../lib/authClient").authClient;
 export type AuthSession = {
   user: { id: string; name: string; email: string };
 };
@@ -137,17 +137,17 @@ function BetterAuthProvider({
   children: React.ReactNode;
   mode: AuthMode;
 }) {
-  const [authClient, setAuthClient] = useState<AuthClient | null>(null);
+  const [authModule, setAuthModule] = useState<SessionAuthModule | null>(null);
   const [loadError, setLoadError] = useState<AuthFailure | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    setAuthClient(null);
+    setAuthModule(null);
     setLoadError(null);
-    import("../lib/authClient")
+    loadSessionAuthClient()
       .then((module) => {
-        if (active) setAuthClient(() => module.authClient);
+        if (active) setAuthModule(module);
       })
       .catch((error: unknown) => {
         console.error("[societyer-auth] failed to load auth client", error);
@@ -158,7 +158,7 @@ function BetterAuthProvider({
     };
   }, [loadAttempt]);
 
-  if (!authClient) {
+  if (!authModule) {
     if (loadError) {
       return (
         <AuthState title="Authentication unavailable" message={loadError.message}>
@@ -172,27 +172,25 @@ function BetterAuthProvider({
   }
 
   return (
-    <BetterAuthProviderReady authClient={authClient} mode={mode}>
+    <BetterAuthProviderReady authModule={authModule} mode={mode}>
       {children}
     </BetterAuthProviderReady>
   );
 }
 
 function BetterAuthProviderReady({
-  authClient,
+  authModule,
   children,
   mode,
 }: {
-  authClient: AuthClient;
+  authModule: SessionAuthModule;
   children: React.ReactNode;
   mode: AuthMode;
 }) {
+  const { authClient, fetchConvexToken } = authModule;
   const sessionResult = authClient.useSession();
   const session = sessionResult.data ?? null;
-  const getToken = useCallback(async () => {
-    const result = await authClient.token();
-    return result.data?.token ?? null;
-  }, [authClient]);
+  const getToken = useCallback(() => fetchConvexToken(), [fetchConvexToken]);
   const signOut = useCallback(async () => { await authClient.signOut(); }, [authClient]);
   return (
     <AuthenticatedProviderReady

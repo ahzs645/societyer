@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
-import { isModuleEnabled, MODULES_BY_KEY, type ModuleKey } from "../lib/modules";
+import { deploymentUnavailableReason, isModuleEnabled, MODULES_BY_KEY, type ModuleKey } from "../lib/modules";
 
 export function ModuleGate({
   moduleKey,
@@ -38,6 +38,26 @@ export function ModuleGate({
   if (isModuleEnabled(society, moduleKey)) return <>{children}</>;
 
   const module = MODULES_BY_KEY[moduleKey];
+  const unavailable = deploymentUnavailableReason(moduleKey);
+  if (unavailable) {
+    return (
+      <div className="page">
+        <div className="card" style={{ maxWidth: 720 }}>
+          <div className="card__head">
+            <h2 className="card__title">{module.label} isn't available</h2>
+            <span className="card__subtitle">This deployment doesn't run the service it needs.</span>
+          </div>
+          <div className="card__body col">
+            <div className="muted">{module.description}</div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{unavailable}</div>
+            <div className="row" style={{ gap: 8 }}>
+              <Link to="/app" className="btn">Back to dashboard</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">

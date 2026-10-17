@@ -58,6 +58,8 @@
     "test:incorporation-preparation": "tsx scripts/check-incorporation-preparation.ts",
     "test:clerk-auth": "tsx scripts/check-clerk-auth.ts",
     "test:clerk-gateway": "tsx scripts/check-clerk-gateway.ts",
+    "test:multi-user-pipeline": "tsx scripts/check-multi-user-pipeline.ts",
+    "test:deployment-capabilities": "tsx scripts/check-deployment-capabilities.ts",
     "test:auth-token": "tsx scripts/check-auth-token.ts",
     "test:microsoft-sso": "tsx scripts/check-microsoft-sso.ts",
     "test:outbound-url-policy": "tsx scripts/check-outbound-url-policy.ts",
@@ -336,6 +338,7 @@
     "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@clerk/backend": "^3.22.0",
     "@clerk/react": "^6.17.5",
+    "@convex-dev/better-auth": "^0.12.5",
     "@kenjiuno/msgreader": "^1.28.0",
     "@milkdown/core": "^7.21.1",
     "@milkdown/crepe": "^7.21.2",
@@ -410,5 +413,10 @@
     "typescript-eslint": "^8.59.0",
     "vite": "^5.4.11",
     "wait-on": "^9.0.10"
+  },
+  "overrides": {
+    "@convex-dev/better-auth": {
+      "convex-helpers": "0.1.120"
+    }
   }
 }

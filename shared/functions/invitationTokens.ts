@@ -11,7 +11,19 @@ export type InvitationRow = PortableDoc & {
   expiresAtISO?: string;
   acceptedAtISO?: string;
   revokedAtISO?: string;
+  kind?: "email" | "link";
+  label?: string;
 };
+
+/**
+ * A share link admits whoever opens it while signed in, so it can't grant
+ * authority over people or settings; an Owner promotes after seeing who joined.
+ */
+export const LINK_INVITATION_ROLES = ["Director", "Member", "Viewer"] as const;
+
+export function isShareLinkInvitation(invitation: Pick<InvitationRow, "kind">): boolean {
+  return invitation.kind === "link";
+}
 
 export async function hashInvitationToken(token: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));

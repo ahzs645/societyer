@@ -6,7 +6,7 @@ import { Badge } from "./ui";
 export function IdentitySessionSettingsCard() {
   const auth = useAuth();
   const signedIn = auth.mode !== "none" && auth.sessionStatus === "authenticated";
-  const brokerName = auth.mode === "clerk" ? "Clerk" : auth.mode === "better-auth" ? "Better Auth" : "No sign-in (trusted workspace)";
+  const brokerName = auth.mode === "clerk" ? "Clerk" : auth.mode === "better-auth" ? "Better Auth" : auth.mode === "convex" ? "Societyer sign-in (hosted in Convex)" : "No sign-in (trusted workspace)";
   return <div className="card">
     <div className="card__head">
       <h2 className="card__title">Authentication &amp; session</h2>

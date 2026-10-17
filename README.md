@@ -178,13 +178,14 @@ against `http://societyer.k8s.home:3220`.
 
 ## Auth modes
 
-Societyer supports three identity modes:
+Societyer supports four identity modes:
 
 - **`VITE_AUTH_MODE=none` / `AUTH_MODE=none`** — keep the current local/demo workflow. The user picker remains available and no auth server is required.
+- **`VITE_AUTH_MODE=convex` / `AUTH_MODE=convex`** — the simplest hosted setup: sign-up, sign-in, email verification and password reset run inside your Convex deployment, so you deploy only the frontend and Convex. Gateway features (API tokens, webhooks, connectors, n8n documents) aren't available. See [Sign-in hosted in Convex](docs/convex-hosted-auth-setup.md).
 - **`VITE_AUTH_MODE=better-auth` / `AUTH_MODE=better-auth`** — enable Better Auth for real login/session handling.
 - **`VITE_AUTH_MODE=clerk` / `AUTH_MODE=clerk`** — use Clerk for sign-in and account profiles while Societyer retains workspace roles and invitations. See [Clerk setup](docs/clerk-setup.md) for frontend, Convex, gateway, and container configuration.
 
-For either hosted sign-in mode, start the API sidecar alongside Vite:
+For the `better-auth` and `clerk` modes, start the API sidecar alongside Vite:
 
 ```bash
 npm run dev:full
@@ -248,8 +249,8 @@ consolidation currency, and the specific Ontario/Alberta retrieval limitations.
 - **Paperless-ngx**: set `PAPERLESS_NGX_URL` and `PAPERLESS_NGX_TOKEN`, then enable the Paperless-ngx module at `/app/paperless`. Documents can be sent to Paperless from `/app/documents`; Societyer creates contextual tags such as document category, filing kind, grant report, PIPA training, election evidence, and volunteer screening.
 - **RustFS / S3-compatible storage**: set `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, `RUSTFS_ACCESS_KEY`, and `RUSTFS_SECRET_KEY` for storage-backed document versions. The bundled Docker stack includes RustFS for local development.
 - **OpenAI / Anthropic / Whisper-compatible transcription**: set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `WHISPER_API_KEY`, or `WHISPER_ENDPOINT` to move meeting transcription and minute drafting out of deterministic demo mode.
-- **n8n**: set the `N8N_*` and `SOCIETYER_WORKFLOW_*` values to run workflow bridge recipes, including the committed UNBC and Over the Edge examples in [integrations/n8n](/Users/ahmadjalil/github/societyer/integrations/n8n).
-- **Browser connectors**: run `npm run docker:connectors` and set `CONNECTOR_RUNNER_SECRET` to enable saved browser sessions, connector actions, and exports through BlitzBrowser.
+- **n8n**: set the `N8N_*` and `SOCIETYER_WORKFLOW_*` values to run workflow bridge recipes, including the committed UNBC and Over the Edge examples in [integrations/n8n](/Users/ahmadjalil/github/societyer/integrations/n8n). n8n recipes (governance automations and the PDF-filling templates) only appear once `N8N_WEBHOOK_BASE_URL` and `SOCIETYER_WORKFLOW_CALLBACK_SECRET` are set **on the Convex deployment** (`npx convex env set …`).
+- **Browser connectors**: run `npm run docker:connectors`, set `CONNECTOR_RUNNER_SECRET`, and turn the feature on with `npx convex env set SOCIETYER_BROWSER_CONNECTORS 1`. Until then the Browser apps module and the BC Registry imports (filing history, bylaws history, governance-document auto-fill) stay hidden, since they can't work without the runner. The desktop app runs its own and is unaffected.
 - **Access custody vault**: set `SECRET_VAULT_ENCRYPTION_KEY` before storing client credentials in production. `/app/access-custody` encrypts stored values, keeps them hidden by default, and logs explicit reveals to the activity trail.
 - **Filing evidence**: BC still has no public Societies Online filing API. This build improves the manual path by storing submission method, confirmation number, fee paid, and linked receipt/evidence documents when a filing is marked filed.
 
@@ -373,7 +374,7 @@ backup JSON does not embed originals, and local restore replaces the workspace.
 
 - BC society workspace records: society profile, members, directors, meetings, minutes, conflicts, filings, deadlines, documents, bylaws, privacy, financials, elections, grants, volunteers, transparency, and module settings.
 - Public/static demo and backend-backed app modes: `/demo` runs without Convex or auth; `/app` runs against hosted or self-hosted Convex.
-- Identity modes: `none` keeps the local/demo user picker; `better-auth` enables real login/session handling through the auth sidecar.
+- Identity modes: `none` keeps the local/demo user picker; `better-auth` enables real login/session handling through the auth sidecar; `clerk` delegates sign-in to Clerk; `convex` hosts sign-in inside the Convex deployment with no sidecar.
 - Multi-society data model and workspace selection: the app can list society records and persists the selected society locally.
 - Document files and versions: Convex storage uploads plus RustFS-backed document version uploads are wired into the document workflows.
 - Filing support: Societies Online and CRA pre-fill payloads can be reviewed, copied, and exported for manual filing; filed records store submission method, confirmation number, fee, and evidence.

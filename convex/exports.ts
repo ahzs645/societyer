@@ -85,6 +85,7 @@ export const EXPORTABLE_TABLES = [
   "reconciliationRunLines",
   "reconciliationPeriods",
   "transactionRules",
+  "payeeAliases",
   "expenseApprovalRules",
   "expenseApprovalSettings",
   "expenseClaimPolicy",
