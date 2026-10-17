@@ -4,7 +4,9 @@ import { expect, type Locator } from "@playwright/test";
  * A record table row's actions come in two layouts. While the table fits its
  * frame they are inline buttons, with any overflow items behind the row's
  * "Actions for this …" kebab. A table wider than its frame (mouse layouts)
- * folds all of them behind one pinned "Row actions for <record>" button.
+ * folds all of them behind one pinned "Row actions for <record>" button
+ * (icon buttons named after their record drop the name there: "Edit Board
+ * template" reads "Edit", and a page's own kebab reads "More actions…").
  * These helpers reach an action in either layout.
  */
 export function pinnedRowActions(row: Locator) {
@@ -26,12 +28,25 @@ export async function openRowMenu(row: Locator, kebabName: string) {
   else await kebab.click();
 }
 
-/** Runs one of the row's inline actions, through the pinned menu when the table pins them. */
-export async function runRowAction(row: Locator, name: string) {
+/**
+ * Runs one of the row's inline actions (a button or link named `name`),
+ * through the pinned menu, where it may read `menuName`, when the table
+ * pins them.
+ */
+export async function runRowAction(row: Locator, name: string, menuName = name) {
   if (await rowActionsArePinned(row)) {
     await pinnedRowActions(row).click();
-    await row.page().getByRole("menuitem", { name, exact: true }).click();
+    await row.page().getByRole("menuitem", { name: menuName, exact: true }).click();
   } else {
-    await row.getByRole("button", { name, exact: true }).click();
+    await row.getByRole("button", { name, exact: true }).or(row.getByRole("link", { name, exact: true })).first().click();
   }
+}
+
+/**
+ * Opens a page's own row menu (an "Actions for <name>" kebab drawn by the
+ * page among its row actions): directly, or as "More actions…" from the
+ * pinned menu.
+ */
+export async function openPageRowMenu(row: Locator, kebabName: string) {
+  await runRowAction(row, kebabName, "More actions…");
 }

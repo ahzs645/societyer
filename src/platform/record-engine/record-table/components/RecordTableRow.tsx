@@ -291,7 +291,12 @@ function collectRowActionItems(source: HTMLElement | null, recordName: string): 
       const shortAriaLabel = ariaLabel?.endsWith(` ${recordName}`)
         ? ariaLabel.slice(0, -recordName.length - 1).trim()
         : ariaLabel;
-      const label = control.getAttribute("data-row-action-label") || text || shortAriaLabel || control.getAttribute("title") || "Action";
+      // A page's own menu among its row actions ("Actions for <name>" kebab)
+      // opens from here as a second step.
+      const opensMenu = control.getAttribute("aria-haspopup") === "menu" && !text;
+      const label = control.getAttribute("data-row-action-label")
+        || (opensMenu ? "More actions…" : "")
+        || text || shortAriaLabel || control.getAttribute("title") || "Action";
       const icon = control.querySelector("svg");
       return {
         id: `inline-${index}`,

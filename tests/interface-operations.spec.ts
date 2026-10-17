@@ -120,7 +120,7 @@ test("stock intake updates the asset and the camera fallback resolves an existin
   await expect(page).toHaveURL(/assets\/verification\//);
   await expect(page.locator("tr", { hasText: "pending" })).toHaveCount(3);
   for (let index = 0; index < 3; index++) {
-    await page.locator("tr", { hasText: "pending" }).first().getByRole("button", { name: "Verified", exact: true }).click();
+    await runRowAction(page.locator("tr", { hasText: "pending" }).first(), "Verified");
     await expect(page.locator("tr", { hasText: "pending" })).toHaveCount(2 - index);
   }
   await page.getByRole("button", { name: "Complete run", exact: true }).click();
@@ -248,7 +248,7 @@ test("disconnecting Wave preserves the cache while disabling refresh and showing
   await page.getByRole("button", { name: /^Categories/ }).click();
   await fits(page);
   await page.getByRole("button", { name: /^Money accounts/ }).click();
-  await page.getByRole("link", { name: "Details", exact: true }).last().click();
+  await runRowAction(page.locator("tr").filter({ has: page.getByRole("link", { name: "Details", exact: true, includeHidden: true }) }).last(), "Details");
   await expect(page.getByText("Money account details", { exact: true })).toBeVisible();
   await fits(page);
   await visit(page, "financials");
@@ -301,7 +301,7 @@ test("a manual bank transaction can be reconciled with its note and a quick entr
   await page.getByRole("button", { name: "Add transaction", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   // Selecting a row opens its match panel directly (no generic side panel).
-  await page.getByRole("button", { name: "Match Synthetic operations bank fee", exact: true }).click();
+  await runRowAction(page.locator("tr", { hasText: "Synthetic operations bank fee" }).first(), "Match Synthetic operations bank fee", "Match");
   await page.getByRole("button", { name: "Mark manually reconciled…", exact: true }).click();
   await page.getByPlaceholder("Reason", { exact: true }).fill("Synthetic account fee for browser audit");
   await page.getByRole("button", { name: "OK", exact: true }).click();

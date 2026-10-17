@@ -1,6 +1,6 @@
 import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { expect, test, type Page, type Locator } from "@playwright/test";
-import { openRowMenu } from "./helpers/rowActions";
+import { openPageRowMenu, openRowMenu } from "./helpers/rowActions";
 
 // Each scenario provisions a fresh legal workspace before exercising bytes,
 // a saved record, and a cold reload; allow its full lifecycle to complete.
@@ -55,7 +55,7 @@ test("fresh local workspace inventory photo persists with its saved item", async
   await dialog.getByRole("button", { name: "Create item", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await page.reload();
-  await page.locator("tr", { hasText: title }).getByRole("button", { name: `Actions for ${title}`, exact: true }).click();
+  await openPageRowMenu(page.locator("tr", { hasText: title }), `Actions for ${title}`);
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await expectPersistedInlineImage(page.getByRole("dialog").locator("img").first());
   await expectFits(page);
