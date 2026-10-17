@@ -226,6 +226,7 @@ export function RecordTableRow({
                 align="right"
                 minWidth={180}
                 label={`Actions for ${recordName}`}
+                sheetTitle={`Actions for ${recordName}`}
                 sections={rowMenuSections(record)}
                 trigger={
                   <button
@@ -334,6 +335,7 @@ function PinnedRowActionsMenu({
       align="right"
       minWidth={200}
       label={`Actions for ${recordName}`}
+      sheetTitle={`Actions for ${recordName}`}
       sections={sections}
       trigger={
         <button
