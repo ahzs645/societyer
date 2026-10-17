@@ -56,6 +56,25 @@ export function InvitationAcceptPage() {
 
   if (auth.mode === "none") return <Navigate to="/app" replace />;
   if (!token) return <InvitationState message="This invitation link is invalid." />;
+  if (auth.sessionStatus === "loading") return <InvitationState message="Checking your sign-in…" />;
+  // Without this, a rejected Convex token (e.g. a missing Clerk JWT template)
+  // or a failed membership lookup leaves the page on "Accepting invitation…".
+  const authProblem = auth.fatalError?.message
+    ?? (auth.session && auth.convexAuthStatus === "unauthenticated"
+      ? "Your sign-in could not be verified by the workspace server. Sign out and sign in again, or contact an administrator."
+      : null);
+  if (authProblem) {
+    return (
+      <InvitationState message={authProblem}>
+        <div style={{ display: "flex", gap: 8 }}>
+          {auth.fatalError?.retryable && (
+            <button className="btn" type="button" onClick={auth.retryAuthentication}>Retry</button>
+          )}
+          <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
+        </div>
+      </InvitationState>
+    );
+  }
   if (!auth.session) {
     const redirect = `/invite/${encodeURIComponent(token)}`;
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
