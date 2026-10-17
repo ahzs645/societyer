@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useSheetTitle } from "../lib/sheetTitle";
+import { SheetHeader } from "./SheetHeader";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
 import { useFloatingLayerStack } from "../lib/overlayStack";
@@ -27,6 +29,12 @@ type Props = {
   onClose?: () => void;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
+  /**
+   * Title of the phone bottom sheet. Defaults to the field's label (its
+   * `<label for>`, `aria-labelledby` or enclosing `<Field>`), then a
+   * page-supplied `placeholder`.
+   */
+  sheetTitle?: string;
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -81,7 +89,7 @@ function textWidth(text: string, font: string): number | null {
 export function DatePicker({
   value,
   onChange,
-  placeholder = "Pick a date",
+  placeholder: placeholderProp,
   min,
   max,
   disabled,
@@ -94,7 +102,9 @@ export function DatePicker({
   onClose,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
+  sheetTitle,
 }: Props) {
+  const placeholder = placeholderProp ?? "Pick a date";
   const selected = parseISO(value);
   const today = new Date();
   const [open, setOpen] = useState(defaultOpen);
@@ -129,6 +139,13 @@ export function DatePicker({
   };
   useSheetDrag(popRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
   const layer = useFloatingLayerStack(open);
+  const sheetTitleId = `${typedInputId}-sheet-title`;
+  const resolvedSheetTitle = useSheetTitle(open && isBottomSheet, () => ({
+    explicit: sheetTitle,
+    trigger: triggerRef.current,
+    placeholder: placeholderProp,
+    fallback: "Choose a date",
+  }));
   // The typed-date field raises the keyboard; the sheet rides above it.
   useKeyboardInsetTracking(open && isBottomSheet);
 
@@ -462,13 +479,15 @@ export function DatePicker({
               ref={popRef}
               className={`calendar${isBottomSheet ? " calendar--sheet" : ""}`}
               role="dialog"
-              aria-label="Date picker"
+              // Phones title the sheet with the field it was opened from.
+              aria-label={isBottomSheet ? undefined : "Date picker"}
+              aria-labelledby={isBottomSheet ? sheetTitleId : undefined}
               aria-modal={isBottomSheet || undefined}
               tabIndex={-1}
               onKeyDown={onPopoverKey}
               style={isBottomSheet || !pos ? layer.panel : { ...layer.panel, top: pos.top, left: pos.left }}
             >
-              {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
+              {isBottomSheet && <SheetHeader id={sheetTitleId} title={resolvedSheetTitle} onClose={dismiss} />}
               <div className="calendar__typed">
                 <label htmlFor={typedInputId} className="sr-only">Type a date</label>
                 <input

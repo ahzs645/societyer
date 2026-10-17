@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
+import { SheetHeader } from "./SheetHeader";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
-import { SHEET_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
+import { SHEET_MIN_ITEMS, SHEET_SEARCH_MIN_ITEMS, useSheetDrag } from "../lib/useSheetDrag";
+import { useSheetTitle } from "../lib/sheetTitle";
 import { focusAdjacentTo } from "../lib/useDialogFocus";
 import { keyboardSheetStyle, useVisualViewportFrame } from "../lib/useVisualViewportBottomInset";
 import { useFloatingLayerStack } from "../lib/overlayStack";
@@ -33,7 +35,18 @@ type SelectProps<T extends string> = {
   size?: "md" | "sm";
   className?: string;
   disabled?: boolean;
+  /**
+   * Show a search field over the options. Defaults on for tagged options,
+   * and for phone sheets of more than SHEET_SEARCH_MIN_ITEMS options; pass
+   * `false` to opt out.
+   */
   searchable?: boolean;
+  /**
+   * Title of the phone bottom sheet. Defaults to the field's label (its
+   * `<label for>`, `aria-labelledby` or enclosing `<Field>`), then
+   * `aria-label`, then a page-supplied `placeholder`.
+   */
+  sheetTitle?: string;
   /** Allow an empty selection rendered as `clearLabel`. */
   clearable?: boolean;
   clearLabel?: string;
@@ -67,11 +80,12 @@ export function Select<T extends string>({
   value,
   onChange,
   options,
-  placeholder = "Select…",
+  placeholder: placeholderProp,
   size = "md",
   className,
   disabled,
   searchable,
+  sheetTitle,
   clearable,
   clearLabel = "— none —",
   menuMinWidth,
@@ -85,13 +99,16 @@ export function Select<T extends string>({
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: SelectProps<T>) {
+  const placeholder = placeholderProp ?? "Select…";
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const generatedId = useId();
   const controlId = id ?? generatedId;
+  const sheetTitleId = `${generatedId}-sheet-title`;
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [isPhone, setIsPhone] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
@@ -117,6 +134,14 @@ export function Select<T extends string>({
   };
   useSheetDrag(menuRef, { enabled: open && isBottomSheet, onDismiss: dismiss });
   const layer = useFloatingLayerStack(open);
+  // The sheet is titled with the field it was opened from.
+  const resolvedSheetTitle = useSheetTitle(open && isBottomSheet, () => ({
+    explicit: sheetTitle,
+    trigger: triggerRef.current,
+    ariaLabel,
+    placeholder: placeholderProp,
+    fallback: "Choose an option",
+  }));
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
   const wasOpenRef = useRef(defaultOpen);
@@ -131,9 +156,10 @@ export function Select<T extends string>({
   const selected = options.find((o) => o.value === value);
 
   // Any option with a `color` becomes a tagged menu — we default
-  // `searchable` on in that case so large enums stay usable.
+  // `searchable` on in that case so large enums stay usable. A long list on
+  // a phone sheet (provinces, categories) gets a search field too.
   const anyTagged = useMemo(() => options.some((o) => o.color), [options]);
-  const renderedSearchable = searchable ?? anyTagged;
+  const renderedSearchable = searchable ?? (anyTagged || (isBottomSheet && options.length > SHEET_SEARCH_MIN_ITEMS));
 
   const filtered = useMemo(() => {
     if (!renderedSearchable || !query.trim()) return options;
@@ -270,9 +296,11 @@ export function Select<T extends string>({
     const currentIdx = visibleItems.findIndex((o) => o.value === value);
     setActiveIdx(currentIdx >= 0 ? currentIdx : 0);
     if (renderedSearchable && !isBottomSheet) return;
+    // A sheet is a dialog around the listbox; focus goes to the list itself.
     const focusList = () => {
       const menu = menuRef.current;
-      if (menu && !menu.contains(document.activeElement)) menu.focus({ preventScroll: true });
+      const list = isBottomSheet ? listRef.current : menu;
+      if (menu && list && !menu.contains(document.activeElement)) list.focus({ preventScroll: true });
     };
     focusList();
     const timer = window.setTimeout(focusList, 0);
@@ -339,6 +367,26 @@ export function Select<T extends string>({
     }
   };
 
+  const searchField = renderedSearchable ? (
+    <div className="menu__search">
+      <Search size={12} />
+      <input
+        // Auto-focusing in sheet mode pops the keyboard over
+        // the sheet before the user has seen a single option.
+        // Researcher shows options first; search is a tap away.
+        autoFocus={!isBottomSheet}
+        className="menu__search-input"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActiveIdx(0);
+        }}
+        placeholder="Search…"
+        onKeyDown={onMenuKey}
+      />
+    </div>
+  ) : null;
+
   const triggerClass = [
     "select-trigger",
     size === "sm" ? "select-trigger--sm" : "",
@@ -393,9 +441,13 @@ export function Select<T extends string>({
               <div
                 ref={menuRef}
                 data-floating-layer=""
-                id={`${controlId}-menu`}
+                id={isBottomSheet ? `${controlId}-sheet` : `${controlId}-menu`}
                 className={`menu${isBottomSheet ? " menu--sheet" : ""}${described ? " menu--described" : ""}`}
-                role="listbox"
+                // Phones: a titled dialog holding the search field and the
+                // listbox. Desktop: the anchored popover is the listbox.
+                role={isBottomSheet ? "dialog" : "listbox"}
+                aria-modal={isBottomSheet || undefined}
+                aria-labelledby={isBottomSheet ? sheetTitleId : undefined}
                 tabIndex={-1}
                 onKeyDown={onMenuKey}
                 style={
@@ -412,27 +464,18 @@ export function Select<T extends string>({
                         }
                 }
               >
-                {isBottomSheet && <div className="sheet-grabber" aria-hidden="true" />}
-                {renderedSearchable && (
-                  <div className="menu__search">
-                    <Search size={12} />
-                    <input
-                      // Auto-focusing in sheet mode pops the keyboard over
-                      // the sheet before the user has seen a single option.
-                      // Researcher shows options first; search is a tap away.
-                      autoFocus={!isBottomSheet}
-                      className="menu__search-input"
-                      value={query}
-                      onChange={(e) => {
-                        setQuery(e.target.value);
-                        setActiveIdx(0);
-                      }}
-                      placeholder="Search…"
-                      onKeyDown={onMenuKey}
-                    />
-                  </div>
-                )}
-                <div className="menu__list">
+                {isBottomSheet ? (
+                  <SheetHeader id={sheetTitleId} title={resolvedSheetTitle} onClose={dismiss}>
+                    {searchField}
+                  </SheetHeader>
+                ) : searchField}
+                <div
+                  ref={listRef}
+                  className="menu__list"
+                  {...(isBottomSheet
+                    ? { role: "listbox", id: `${controlId}-menu`, "aria-labelledby": sheetTitleId, tabIndex: -1 }
+                    : null)}
+                >
                   {visibleItems.length === 0 && <div className="menu__empty">No results</div>}
                   {visibleItems.map((o, i) => {
                     const isActive = i === activeIdx;

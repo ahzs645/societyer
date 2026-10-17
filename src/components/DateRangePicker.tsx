@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useState, useRef, useId } from "re
 import { createPortal } from "react-dom";
 import { CalendarRange, Check, X } from "lucide-react";
 import { DatePicker } from "./DatePicker";
+import { SheetHeader } from "./SheetHeader";
+import { useSheetTitle } from "../lib/sheetTitle";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
 import { useSheetDrag } from "../lib/useSheetDrag";
 import { useDialogFocus } from "../lib/useDialogFocus";
@@ -82,6 +84,12 @@ export function DateRangePicker({
   };
   useSheetDrag(panelRef, { enabled: open && isSheet, onDismiss: dismiss });
   const layer = useFloatingLayerStack(open);
+  // Phones title the sheet with the field it was opened from.
+  const sheetTitle = useSheetTitle(open && isSheet, () => ({
+    trigger: triggerRef.current,
+    ariaLabel,
+    fallback: "Date range",
+  }));
 
   useEffect(() => {
     const media = window.matchMedia(bottomSheetMediaQuery);
@@ -194,8 +202,9 @@ export function DateRangePicker({
                 tabIndex={-1}
                 style={{ ...layer.panel, ...(isSheet ? null : pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }) }}
               >
-                {isSheet && <div className="sheet-grabber" aria-hidden="true" />}
-                <div className="date-range-picker__head" id={headingId}>Date range</div>
+                {isSheet
+                  ? <SheetHeader id={headingId} title={sheetTitle} onClose={dismiss} />
+                  : <div className="date-range-picker__head" id={headingId}>Date range</div>}
                 <div className="date-range-picker__body">
                   <div className="date-range-picker__presets" role="group" aria-label="Presets">
                     {presets.map((preset) => {
@@ -222,11 +231,11 @@ export function DateRangePicker({
                     <div className="date-range-picker__custom-title">Custom range</div>
                     <div className="date-range-picker__field">
                       <span id={`${headingId}-start`}>Start</span>
-                      <DatePicker value={customStart} onChange={setCustomStart} placeholder="Any start" size="sm" max={customEnd || undefined} aria-describedby={`${headingId}-start`} />
+                      <DatePicker value={customStart} onChange={setCustomStart} placeholder="Any start" sheetTitle="Start date" size="sm" max={customEnd || undefined} aria-describedby={`${headingId}-start`} />
                     </div>
                     <div className="date-range-picker__field">
                       <span id={`${headingId}-end`}>End</span>
-                      <DatePicker value={customEnd} onChange={setCustomEnd} placeholder="Any end" size="sm" min={customStart || undefined} aria-describedby={`${headingId}-end`} />
+                      <DatePicker value={customEnd} onChange={setCustomEnd} placeholder="Any end" sheetTitle="End date" size="sm" min={customStart || undefined} aria-describedby={`${headingId}-end`} />
                     </div>
                     <button
                       type="button"

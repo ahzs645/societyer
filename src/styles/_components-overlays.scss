@@ -770,6 +770,76 @@ body.modal-resizing {
   user-select: none;
 }
 
+/* Sheet header (SheetHeader.tsx): the grabber, the label of the field the
+ * sheet was opened from, a close button, and — for a searchable Select — the
+ * search field, all stuck together at the top while the list scrolls. */
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: none;
+  @include flex-column;
+  background: token('bg-panel');
+}
+.sheet-head__bar {
+  @include flex-center;
+  gap: token('s-2');
+  min-height: 44px;
+  /* Lines the title up with the option labels below it. */
+  padding-left: 12px;
+}
+.sheet-head__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: token('fs-lg');
+  font-weight: token('fw-semibold');
+  line-height: 1.3;
+  color: token('text-primary');
+  overflow-wrap: anywhere;
+}
+.sheet-head__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-md');
+  background: transparent;
+  color: token('text-secondary');
+  cursor: pointer;
+}
+.sheet-head__close:hover {
+  background: token('bg-hover-alpha');
+  color: token('text-primary');
+}
+.sheet-head__close:focus-visible {
+  outline: token('focus-ring-width') solid token('focus-ring-color');
+  outline-offset: -2px;
+}
+/* The header block is what sticks; the search field rides inside it. */
+.menu.menu--sheet .sheet-head .menu__search {
+  position: static;
+}
+/* Calendar sheets already inset their content by 12px; range presets add
+ * 8px of their own. */
+.calendar.calendar--sheet .sheet-head__bar {
+  padding-left: 0;
+}
+.date-range-picker__panel--sheet .sheet-head__bar {
+  padding-left: 8px;
+}
+.calendar.calendar--sheet .sheet-head {
+  margin-bottom: 4px;
+}
+/* A sheet's listbox takes focus so the arrow keys work; the active row is
+ * already highlighted, so the list needs no ring of its own. */
+.menu.menu--sheet .menu__list:focus {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .modal,
   .menu.menu--sheet,
