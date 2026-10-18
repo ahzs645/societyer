@@ -4,10 +4,19 @@
  * These are not the annual line budgets in `budgets` (budget vs actual); they
  * cap what a group may spend and show how much of the current cycle is used.
  *
- * Spend is computed from spend entries, so more sources can feed a budget
- * later: today only expense claims assigned to the budget count
- * (`claimSpendEntries`); bank transactions can join through another source
- * that returns the same `SpendEntry` shape, passed to `budgetSpend`.
+ * Spend is computed from spend entries, so more sources can feed a budget:
+ * expense claims assigned to the budget (`claimSpendEntries`) and money-out
+ * bank transactions assigned to it (`transactionSpendEntries`), both passed
+ * to `budgetSpend`.
+ *
+ * Double counting: a claim's reimbursement is not linked to the bank line
+ * that paid it today, so nothing can tell a payout line from other spending.
+ * The rule is that a bank line counts whenever it is money out and assigned
+ * to a budget, except when it is matched to a claim (`matchedKind:
+ * "expenseReport"`, `matchedId` the claim) that is itself charged to the same
+ * budget: then the claim already counts and the line is its payout. Until
+ * reconciliation can make that match, don't assign a reimbursement payout to
+ * the budget its claim charges (assigning one that is matched is refused).
  *
  * Pure TypeScript: no Convex, DOM or Node imports.
  */
@@ -162,6 +171,43 @@ export function claimSpendEntries(claims: readonly ClaimForSpend[]): SpendEntry[
       amountCents: Math.abs(Math.round(claim.amountCents || 0)),
       date: String(claim.incurredAtISO).slice(0, 10),
     }));
+}
+
+/** The kind a bank line matched to an expense claim's payout carries. */
+export const CLAIM_PAYOUT_MATCH_KIND = "expenseReport";
+
+export type TransactionForSpend = {
+  _id: string;
+  spendBudgetId?: string | null;
+  amountCents: number;
+  date: string;
+  matchedKind?: string | null;
+  matchedId?: string | null;
+};
+
+/**
+ * Money-out bank transactions assigned to a budget, as spend entries. Money in
+ * never counts, and a line matched to a claim charged to the same budget is
+ * that claim's payout and is left out (the claim counts instead).
+ */
+export function transactionSpendEntries(transactions: readonly TransactionForSpend[], claims: readonly Pick<ClaimForSpend, "_id" | "spendBudgetId">[] = []): SpendEntry[] {
+  const claimBudget = new Map(claims.map((claim) => [String(claim._id), String(claim.spendBudgetId ?? "")]));
+  return transactions
+    .filter((txn) => txn.spendBudgetId && Number(txn.amountCents) < 0)
+    .filter((txn) => !isClaimPayoutOnBudget(txn, claimBudget))
+    .map((txn) => ({
+      source: "transaction" as const,
+      sourceId: String(txn._id),
+      budgetId: String(txn.spendBudgetId),
+      amountCents: Math.abs(Math.round(Number(txn.amountCents) || 0)),
+      date: String(txn.date).slice(0, 10),
+    }));
+}
+
+/** Whether a bank line is the payout of a claim already charged to the budget it is assigned to. */
+export function isClaimPayoutOnBudget(txn: Pick<TransactionForSpend, "spendBudgetId" | "matchedKind" | "matchedId">, claimBudget: ReadonlyMap<string, string>, budgetId = txn.spendBudgetId): boolean {
+  if (txn.matchedKind !== CLAIM_PAYOUT_MATCH_KIND || !txn.matchedId || !budgetId) return false;
+  return claimBudget.get(String(txn.matchedId)) === String(budgetId);
 }
 
 export type CommitteeMemberLike = { committeeId: string; name?: string | null; email?: string | null; leftAt?: string | null };

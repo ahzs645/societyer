@@ -162,7 +162,7 @@ export function SpendBudgetsPage() {
                             row.archived
                               ? { id: "restore", label: "Restore", icon: <ArchiveRestore size={14} />, disabled: !canWrite, onSelect: () => void archive(row, false) }
                               : { id: "archive", label: "Archive", icon: <Archive size={14} />, disabled: !canWrite, onSelect: () => void archive(row, true) },
-                            { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite || row.claims.length > 0, hint: row.claims.length ? "Has claims" : undefined, onSelect: () => void del(row) },
+                            { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, disabled: !canWrite || row.claims.length > 0 || row.transactions.length > 0, hint: row.claims.length ? "Has claims" : row.transactions.length ? "Has bank transactions" : undefined, onSelect: () => void del(row) },
                           ],
                         },
                       ]}

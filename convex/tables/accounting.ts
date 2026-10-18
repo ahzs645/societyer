@@ -241,6 +241,8 @@ export const accountingTables = {
     lines: v.optional(v.array(transactionLineValidator)),
     // Reporting tags of a single-line transaction (split lines carry their own).
     tagIds: v.optional(v.array(v.id("financeTags"))),
+    // The spend budget a money-out line counts against (shared/spendBudgets.ts).
+    spendBudgetId: v.optional(v.id("spendBudgets")),
   })
     .index("by_society", ["societyId"])
     .index("by_account", ["accountId"])

@@ -72,6 +72,23 @@ export function SpendBudgetDetail({ budget, canWrite, onClose, onEdit }: { budge
         )}
         <p className="muted spend-budget-detail__note">Submitted, approved and paid claims count; drafts, declined and recalled claims don't.</p>
       </section>
+      <section className="claim-drawer__section" aria-labelledby="spend-budget-transactions">
+        <h3 id="spend-budget-transactions" className="claim-drawer__section-title">Bank transactions this cycle</h3>
+        {budget.transactions.length === 0 ? (
+          <p className="muted">No bank transactions charged to this budget in the current cycle. Charge money-out lines from the transaction panel or the bulk bar.</p>
+        ) : (
+          <ul className="spend-budget-detail__claims">
+            {budget.transactions.map((txn) => (
+              <li key={txn._id}>
+                <Link to={`/app/financials?tab=transactions&transactionId=${encodeURIComponent(txn._id)}`}>{txn.description}</Link>
+                <span className="muted">{formatDate(txn.date)}</span>
+                <Money cents={txn.amountCents} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="muted spend-budget-detail__note">A bank line that pays a claim already charged to this budget is not counted again.</p>
+      </section>
     </Drawer>
   );
 }

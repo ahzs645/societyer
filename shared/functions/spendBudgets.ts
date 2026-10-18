@@ -4,9 +4,9 @@
  * A spend budget caps what a committee and/or named people may spend per
  * cycle (weekly, monthly, quarterly) or once. "% spent" comes from spend
  * entries (shared/spendBudgets.ts); `loadSpendSources` is the one place that
- * decides which records count. Today that is expense claims assigned to a
- * budget; bank transactions can be added there later without touching the
- * queries below. Each handler runs unchanged on hosted Convex, the local
+ * decides which records count: expense claims and money-out bank
+ * transactions assigned to a budget (a claim's matched payout line is not
+ * counted twice; see shared/spendBudgets.ts). Each handler runs unchanged on hosted Convex, the local
  * Dexie runtime, and the convex-test oracle.
  */
 
@@ -21,14 +21,17 @@ import {
   claimBudgetImpact,
   claimSpendEntries,
   cycleWindow,
+  isClaimPayoutOnBudget,
   isAssignedToBudget,
   spendBudgetStatus,
+  transactionSpendEntries,
   validateSpendBudget,
   type ClaimForSpend,
   type CommitteeMemberLike,
   type SpendBudgetCycle,
   type SpendBudgetLike,
   type SpendSource,
+  type TransactionForSpend,
   type UserLike,
 } from "../spendBudgets";
 
@@ -42,16 +45,42 @@ export type SpendBudgetRow = PortableDoc & SpendBudgetLike & {
 
 type ClaimRow = PortableDoc & ClaimForSpend & { title: string; claimantName: string; claimantUserId?: string; claimType?: string };
 type MemberRow = PortableDoc & CommitteeMemberLike;
+type TransactionRow = PortableDoc & TransactionForSpend & { societyId: string; description?: string; counterparty?: string };
 type UserRow = PortableDoc & UserLike;
 
 /**
- * Where spend comes from. Add a source here (bank transactions assigned to a
- * budget, card spend) and every budget figure picks it up.
+ * Where spend comes from: claims and money-out bank transactions assigned to
+ * a budget. Add a source here (card spend) and every budget figure picks it up.
  */
-export async function loadSpendSources(ctx: PortableQueryCtx, societyId: string): Promise<{ sources: SpendSource[]; claims: ClaimRow[] }> {
-  const claims = await ctx.db.query<ClaimRow>("expenseReports").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+export async function loadSpendSources(ctx: PortableQueryCtx, societyId: string): Promise<{ sources: SpendSource[]; claims: ClaimRow[]; transactions: TransactionRow[] }> {
+  const [claims, allTransactions] = await Promise.all([
+    ctx.db.query<ClaimRow>("expenseReports").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query<TransactionRow>("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+  ]);
   const claimEntries = claimSpendEntries(claims);
-  return { sources: [() => claimEntries], claims };
+  const transactionEntries = transactionSpendEntries(allTransactions, claims);
+  const counted = new Set(transactionEntries.map((entry) => entry.sourceId));
+  return { sources: [() => claimEntries, () => transactionEntries], claims, transactions: allTransactions.filter((txn) => counted.has(String(txn._id))) };
+}
+
+/**
+ * Checks a budget for a bank transaction before it is assigned: the budget
+ * belongs to this organization, is not archived and is active on the
+ * transaction's date; the transaction is money out and is not the payout of
+ * a claim already charged to that budget. Returns the budget.
+ */
+export async function requireBudgetForTransaction(ctx: PortableQueryCtx, societyId: string, budgetId: string, txn: Pick<TransactionRow, "amountCents" | "date" | "matchedKind" | "matchedId">) {
+  const budget = await getOwned<SpendBudgetRow>(ctx, "spendBudgets", budgetId, societyId);
+  if (budget.archivedAtISO) throw new Error("That spend budget is archived.");
+  if (!(Number(txn.amountCents) < 0)) throw new Error("Only money-out transactions count against a spend budget.");
+  const on = String(txn.date).slice(0, 10);
+  if (budget.startDate > on || (budget.endDate && budget.endDate < on)) throw new Error(`“${budget.name}” isn't active on the date of this transaction.`);
+  if (txn.matchedKind && txn.matchedId) {
+    const claims = await ctx.db.query<ClaimRow>("expenseReports").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+    const claimBudget = new Map(claims.map((claim) => [String(claim._id), String(claim.spendBudgetId ?? "")]));
+    if (isClaimPayoutOnBudget(txn, claimBudget, budgetId)) throw new Error(`This transaction pays a claim already charged to “${budget.name}”, so it would count twice.`);
+  }
+  return budget;
 }
 
 async function loadPeople(ctx: PortableQueryCtx, societyId: string) {
@@ -69,7 +98,7 @@ const userName = (user: UserLike) => String(user.displayName ?? user.name ?? use
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   const viewer = await requireSocietyMembership(ctx, societyId);
   const today = todayDateOnly();
-  const [budgets, { sources, claims }, people] = await Promise.all([
+  const [budgets, { sources, claims, transactions }, people] = await Promise.all([
     ctx.db.query<SpendBudgetRow>("spendBudgets").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     loadSpendSources(ctx, societyId),
     loadPeople(ctx, societyId),
@@ -84,6 +113,11 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
       .filter((claim) => String(claim.incurredAtISO).slice(0, 10) >= spend.window.start && String(claim.incurredAtISO).slice(0, 10) <= spend.window.end)
       .sort((a, b) => String(b.incurredAtISO).localeCompare(String(a.incurredAtISO)))
       .map((claim) => ({ _id: String(claim._id), title: claim.title, claimantName: claim.claimantName, amountCents: claim.amountCents, status: claim.status, incurredAtISO: claim.incurredAtISO, claimType: claim.claimType }));
+    const windowTransactions = transactions
+      .filter((txn) => String(txn.spendBudgetId ?? "") === String(budget._id))
+      .filter((txn) => String(txn.date).slice(0, 10) >= spend.window.start && String(txn.date).slice(0, 10) <= spend.window.end)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .map((txn) => ({ _id: String(txn._id), date: String(txn.date), description: String(txn.counterparty || txn.description || "Bank transaction"), amountCents: Math.abs(Number(txn.amountCents) || 0) }));
     const committee = budget.committeeId ? committeeById.get(String(budget.committeeId)) : undefined;
     return {
       _id: String(budget._id),
@@ -104,6 +138,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
       notes: budget.notes,
       spend,
       claims: windowClaims,
+      transactions: windowTransactions,
       canCharge: status !== "ended" && isAssignedToBudget(budget, userById.get(String(viewer._id)) ?? null, people.members, today),
     };
   });
@@ -230,13 +265,17 @@ export async function setArchivedPortable(ctx: PortableMutationCtx, { id, archiv
   return id;
 }
 
-/** Delete a budget no claim uses; otherwise archive it instead. */
+/** Delete a budget no claim or bank transaction uses; otherwise archive it instead. */
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const budget = await requireOwnedRow<SpendBudgetRow>(ctx, "spendBudgets", id);
   await requirePermissionPortable(ctx, budget.societyId, "financials:write");
   const claims = await ctx.db.query<ClaimRow>("expenseReports").withIndex("by_society", (q) => q.eq("societyId", budget.societyId)).collect();
   if (claims.some((claim) => String(claim.spendBudgetId ?? "") === String(id))) {
     throw new Error("Claims are charged to this budget. Archive it instead so their history stays.");
+  }
+  const transactions = await ctx.db.query<TransactionRow>("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", budget.societyId)).collect();
+  if (transactions.some((txn) => String(txn.spendBudgetId ?? "") === String(id))) {
+    throw new Error("Bank transactions are charged to this budget. Archive it instead so their history stays.");
   }
   await ctx.db.delete(id);
 }

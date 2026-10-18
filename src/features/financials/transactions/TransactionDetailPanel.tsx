@@ -28,6 +28,8 @@ import { splitLabel, type TransactionLine } from "../../../../shared/transaction
 import { TransactionLinesEditor } from "./TransactionLinesEditor";
 import { TransactionJournalView } from "./TransactionJournalView";
 import type { FinanceTagsApi } from "./useFinanceTags";
+import { useSpendBudgetOptions } from "./useSpendBudgetOptions";
+import { Select } from "../../../components/Select";
 import type { ReviewSegment } from "./transactionFilters";
 
 /** A transactions-table row as the Financials page maps it. */
@@ -58,6 +60,7 @@ export type PanelTransaction = {
   fundRestrictionId?: string;
   accountingAccountId?: string;
   tagIds?: string[];
+  spendBudgetId?: string;
   lines?: TransactionLine[];
 };
 
@@ -128,6 +131,7 @@ export function TransactionDetailPanel({
 }) {
   const toast = useToast();
   const drawer = useRuleDrawer();
+  const budgets = useSpendBudgetOptions(societyId);
   const [memo, setMemo] = useState(record.memo ?? "");
   const [renameTarget, setRenameTarget] = useState<PayeeRenameTarget | null>(null);
   const [tab, setTab] = useState<PanelTab>("transaction");
@@ -323,6 +327,29 @@ export function TransactionDetailPanel({
               <div><dt>Method</dt><dd>{record.method || "—"}</dd></div>
               <div><dt>Status</dt><dd>{record.status === "pending" ? <span className="transaction-panel__status is-pending">Pending</span> : "Posted"}</dd></div>
               {fundName && !splitLabel(record) && <div><dt>Fund</dt><dd>{fundName}</dd></div>}
+              {record.amountCents < 0 && (budgets.options.length > 0 || record.spendBudgetId) && (
+                <div>
+                  <dt id="txn-panel-budget">Spend budget</dt>
+                  <dd>
+                    {canWrite ? (
+                      <Select
+                        size="sm"
+                        value={record.spendBudgetId ?? ""}
+                        onChange={(value) => void onUpdate("spendBudgetId", value || null)}
+                        options={record.spendBudgetId && !budgets.options.some((option) => option.value === record.spendBudgetId)
+                          ? [...budgets.options, { value: record.spendBudgetId, label: `${budgets.nameOf(record.spendBudgetId) ?? "Removed budget"} (not active)`, disabled: true }]
+                          : budgets.options}
+                        placeholder="No budget"
+                        clearable
+                        clearLabel="No budget"
+                        aria-labelledby="txn-panel-budget"
+                      />
+                    ) : (
+                      budgets.nameOf(record.spendBudgetId) ?? "—"
+                    )}
+                  </dd>
+                </div>
+              )}
               {normalizeRuleText(record.description) !== normalizeRuleText(displayPayee) && (
                 <div><dt>Bank description</dt><dd className="transaction-panel__raw">{record.description}</dd></div>
               )}

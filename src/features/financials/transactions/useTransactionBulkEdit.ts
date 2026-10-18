@@ -5,9 +5,9 @@ import { useToast } from "../../../components/Toast";
 import { pluralize } from "../../../lib/format";
 import { booksLockedNote, joinNotes, restoredMessage } from "./booksLockNote";
 
-export type BulkTransactionPatch = { category?: string; fundRestrictionId?: string | null; reviewed?: boolean };
+export type BulkTransactionPatch = { category?: string; fundRestrictionId?: string | null; reviewed?: boolean; spendBudgetId?: string | null };
 
-type BulkResult = { updated: number; skipped: number; splitSkipped?: number; skippedLocked?: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
+type BulkResult = { updated: number; skipped: number; splitSkipped?: number; skippedLocked?: number; budgetSkipped?: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
 
 /**
  * Runs one bulk change on transactions and shows a toast with Undo. The
@@ -27,7 +27,8 @@ export function useTransactionBulkEdit(societyId: string | undefined) {
         // A category is never forced onto a split; say so rather than skip it silently.
         const splitNote = result.splitSkipped ? `${pluralize(result.splitSkipped, "split transaction")} kept ${result.splitSkipped === 1 ? "its" : "their"} lines.` : undefined;
         // Lines inside the books close date are skipped too; say how many.
-        const notes = joinNotes(splitNote, booksLockedNote(result.skippedLocked));
+        const budgetNote = result.budgetSkipped ? `${pluralize(result.budgetSkipped, "transaction")} can't count against the budget (money in, or outside its dates).` : undefined;
+        const notes = joinNotes(splitNote, booksLockedNote(result.skippedLocked), budgetNote);
         if (result.updated === 0) {
           toast.info("Nothing changed", notes ?? `The selected ${ids.length === 1 ? "transaction already has" : "transactions already have"} that value.`);
           return;

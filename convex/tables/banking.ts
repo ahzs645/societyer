@@ -15,8 +15,9 @@ import { v } from "convex/values";
  *   transaction's receipt through financialHub.updateTransaction's logic.
  * - `spendBudgets`: spending limits for a committee and/or named people that
  *   reset weekly, monthly or quarterly, or run once. Not the annual line
- *   budgets in `budgets`; expense claims count against them
- *   (expenseReports.spendBudgetId).
+ *   budgets in `budgets`; expense claims and money-out bank transactions
+ *   count against them (expenseReports.spendBudgetId,
+ *   financialTransactions.spendBudgetId).
  */
 export const bankingTables = {
   bankAccountProfiles: defineTable({

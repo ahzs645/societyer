@@ -27,6 +27,8 @@ export type SpendBudgetRow = {
     bySource: { claim: number; transaction: number };
   };
   claims: Array<{ _id: string; title: string; claimantName: string; amountCents: number; status: string; incurredAtISO: string; claimType?: string }>;
+  /** Money-out bank transactions charged to the budget this cycle. */
+  transactions: Array<{ _id: string; date: string; description: string; amountCents: number }>;
   canCharge: boolean;
 };
 

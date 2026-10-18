@@ -12,13 +12,14 @@ import { makeCapabilities } from "../shared/portable/capabilities";
 import { highConfidencePairs, merchantSimilarity, parseReceiptFilename, rankReceiptCandidates, scoreReceiptMatch } from "../shared/receiptMatching";
 import { autoReconcileReadiness, balanceBefore, monthStatus, monthStatusesForYear, withRunningBalance } from "../shared/reconciliationMonths";
 import { evaluateClaimPolicy, mileageAmountCents, normalizeClaimPolicy, validateClaimPolicy, validateMileage, describeClaimPolicy } from "../shared/expensePolicy";
-import { budgetSpend, claimSpendEntries, cycleWindow, isAssignedToBudget, spendBudgetStatus, validateSpendBudget, type SpendEntry } from "../shared/spendBudgets";
+import { budgetSpend, claimSpendEntries, cycleWindow, isAssignedToBudget, spendBudgetStatus, transactionSpendEntries, validateSpendBudget, type SpendEntry } from "../shared/spendBudgets";
 import { bankAccountBalanceCents, bankAccountHealth, bankAccountKind, bankAccountSource, nextLedgerCode } from "../shared/bankAccounts";
 import * as recon from "../shared/functions/reconciliation";
 import * as inbox from "../shared/functions/receiptInbox";
 import * as accounts from "../shared/functions/bankAccounts";
 import * as budgets from "../shared/functions/spendBudgets";
 import * as exp from "../shared/functions/expenseReports";
+import * as hub from "../shared/functions/financialHub";
 import { DEMO_MILEAGE_RATE_CENTS } from "../shared/demoData/banking";
 import { todayDateOnly } from "../shared/dateOnly";
 
@@ -163,6 +164,20 @@ assert.deepEqual([spend.spentCents, spend.remainingCents, spend.percentSpent, sp
 const bankEntries: SpendEntry[] = [{ source: "transaction", sourceId: "t9", budgetId: "m", amountCents: 12_000, date: "2026-04-12" }];
 const withBank = budgetSpend(monthly, [() => claimEntries, () => bankEntries], "2026-04-15");
 assert.deepEqual([withBank.spentCents, withBank.overLimit, withBank.bySource.transaction, withBank.bySource.claim], [33_000, true, 12_000, 21_000]);
+// Bank transactions as a source: money out only, and a claim's payout line isn't counted twice.
+{
+  const lines = [
+    { _id: "b1", spendBudgetId: "m", amountCents: -4_000, date: "2026-04-05" },
+    { _id: "b2", spendBudgetId: "m", amountCents: 6_000, date: "2026-04-06" },
+    { _id: "b3", spendBudgetId: "m", amountCents: -12_000, date: "2026-04-07", matchedKind: "expenseReport", matchedId: "c1" },
+    { _id: "b4", spendBudgetId: "m", amountCents: -1_000, date: "2026-04-08", matchedKind: "expenseReport", matchedId: "c5" },
+    { _id: "b5", amountCents: -9_999, date: "2026-04-09" },
+  ];
+  const entries = transactionSpendEntries(lines, claims);
+  assert.deepEqual(entries.map((entry) => [entry.sourceId, entry.amountCents]), [["b1", 4_000], ["b4", 1_000]], "money in, unassigned lines and the payout of a claim on the same budget don't count");
+  const both = budgetSpend(monthly, [() => claimEntries, () => entries], "2026-04-15");
+  assert.deepEqual([both.bySource.claim, both.bySource.transaction, both.spentCents], [21_000, 5_000, 26_000], "c1 counts once, as the claim");
+}
 const members = [
   { committeeId: "finance", name: "Jordan Lee", email: "jordan@riverside.example" },
   { committeeId: "finance", name: "Old Member", leftAt: "2025-01-01" },
@@ -315,4 +330,41 @@ assert.equal(mileageBudget.spend.spentCents, 2_940 + 1_750 + 150 * DEMO_MILEAGE_
 assert.deepEqual(list.rows.map((row) => row.status).sort(), ["active", "active", "active", "ended", "upcoming"]);
 await assert.rejects(budgets.removePortable(mina, { id: "static_spend_budget_finance_committee" }), /Archive it instead/);
 
-console.log("Banking workflow checks passed: receipt prefill and matching, month strip, running balance and auto-reconcile, Add account, mileage claims and spend budgets.");
+// Bank transactions charged to a spend budget, from the transaction panel and the bulk bar.
+{
+  const youthId = "static_spend_budget_youth_supplies";
+  const before = (await budgets.listPortable(mina, { societyId: S })).rows.find((row) => row._id === youthId)!;
+  const window = before.spend.window;
+  const allTxns = (await db.query("financialTransactions").collect()).filter((row) => row.societyId === S && !row.spendBudgetId);
+  const out = allTxns.filter((row) => Number(row.amountCents) < 0 && row.date >= window.start && row.date <= window.end && !row.matchedKind).slice(0, 2);
+  const moneyIn = allTxns.find((row) => Number(row.amountCents) > 0 && row.date >= window.start)!;
+  const early = allTxns.find((row) => Number(row.amountCents) < 0 && row.date < "2026-01-01")!;
+  assert.ok(out.length === 2 && moneyIn && early, "demo lines to charge");
+  await hub.updateTransactionPortable(mina, { id: out[0]._id, patch: { spendBudgetId: youthId } });
+  let after = (await budgets.listPortable(mina, { societyId: S })).rows.find((row) => row._id === youthId)!;
+  assert.equal(after.spend.spentCents - before.spend.spentCents, -Number(out[0].amountCents), "a charged money-out line adds its amount");
+  assert.equal(after.spend.bySource.transaction, -Number(out[0].amountCents));
+  assert.deepEqual(after.transactions.map((row) => row._id), [out[0]._id], "and is listed on the budget");
+  await assert.rejects(hub.updateTransactionPortable(mina, { id: moneyIn._id, patch: { spendBudgetId: youthId } }), /money-out/);
+  await assert.rejects(hub.updateTransactionPortable(mina, { id: early._id, patch: { spendBudgetId: youthId } }), /isn't active on the date/);
+  await assert.rejects(hub.updateTransactionPortable(mina, { id: out[1]._id, patch: { spendBudgetId: "static_spend_budget_plant_sale" } }), /isn't active on the date/, "an ended budget can't take new spend");
+  const bulkCharge = await hub.bulkUpdateTransactionsPortable(mina, { societyId: S, ids: [out[1]._id, moneyIn._id], patch: { spendBudgetId: youthId } });
+  assert.deepEqual([bulkCharge.updated, bulkCharge.budgetSkipped], [1, 1], "the bulk bar charges what it can and counts the rest");
+  after = (await budgets.listPortable(mina, { societyId: S })).rows.find((row) => row._id === youthId)!;
+  assert.equal(after.spend.bySource.transaction, -Number(out[0].amountCents) - Number(out[1].amountCents));
+  await hub.restoreTransactionsPortable(mina, { societyId: S, rows: bulkCharge.previous });
+  assert.equal((await db.get(out[1]._id))?.spendBudgetId, undefined, "Undo takes the line off the budget");
+  await assert.rejects(budgets.removePortable(mina, { id: youthId }), /Archive it instead/, "a budget with bank spend can't be deleted");
+  // A claim's payout line, matched to the claim, can't be charged to the claim's budget too.
+  const claim = (await db.query("expenseReports").collect()).find((row) => row.spendBudgetId === youthId && ["Submitted", "Approved", "Paid"].includes(String(row.status)))!;
+  assert.ok(claim, "a demo claim on the youth budget");
+  await db.patch(out[1]._id, { matchedKind: "expenseReport", matchedId: claim._id });
+  await assert.rejects(hub.updateTransactionPortable(mina, { id: out[1]._id, patch: { spendBudgetId: youthId } }), /count twice/);
+  await db.patch(out[1]._id, { spendBudgetId: youthId });
+  after = (await budgets.listPortable(mina, { societyId: S })).rows.find((row) => row._id === youthId)!;
+  assert.equal(after.spend.bySource.transaction, -Number(out[0].amountCents), "even when set, the payout line doesn't count again");
+  await hub.updateTransactionPortable(mina, { id: out[0]._id, patch: { spendBudgetId: null } });
+  assert.equal((await db.get(out[0]._id))?.spendBudgetId, undefined, "null clears the budget");
+}
+
+console.log("Banking workflow checks passed: receipt prefill and matching, month strip, running balance and auto-reconcile, Add account, mileage claims and spend budgets (claims and bank transactions).");

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { CheckCheck, Download, Landmark, RotateCcw, Tag, Tags, Zap } from "lucide-react";
+import { CheckCheck, Download, Landmark, PiggyBank, RotateCcw, Tag, Tags, Zap } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { RecordTableBulkBar, useRecordTableStoreHandle } from "@/platform/record-engine";
 import { Modal } from "../../../components/Modal";
@@ -14,6 +14,7 @@ import { useRuleDrawer } from "./RuleDrawerHost";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
 import type { FinanceTagsApi } from "./useFinanceTags";
 import { booksLockedNote, restoredMessage } from "./booksLockNote";
+import { useSpendBudgetOptions } from "./useSpendBudgetOptions";
 
 type BulkRow = {
   _id: string;
@@ -28,7 +29,7 @@ type BulkRow = {
   receiptStatus?: string;
 };
 
-type Pending = { kind: "category" | "fund" | "tag"; ids: string[] } | null;
+type Pending = { kind: "category" | "fund" | "tag" | "budget"; ids: string[] } | null;
 
 type TagResult = { updated: number; skipped: number; skippedLocked?: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
 
@@ -48,6 +49,8 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: {
   const [pending, setPending] = useState<Pending>(null);
   const [category, setCategory] = useState("");
   const [fundId, setFundId] = useState("");
+  const [budgetId, setBudgetId] = useState("");
+  const budgets = useSpendBudgetOptions(societyId);
   const [tagChoice, setTagChoice] = useState("");
   const assignTag = useMutation(api.transactionLines.assignTag);
   const restore = useMutation(api.financialHub.restoreTransactions);
@@ -58,6 +61,7 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: {
     setPending(null);
     setCategory("");
     setFundId("");
+    setBudgetId("");
     setTagChoice("");
   };
 
@@ -154,6 +158,17 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: {
                   icon: <Landmark size={12} aria-hidden="true" />,
                   keepSelection: true,
                   onRun: (ids: string[]) => setPending({ kind: "fund", ids }),
+                },
+              ]
+            : []),
+          ...(budgets.options.length > 0
+            ? [
+                {
+                  id: "bulk-budget",
+                  label: "Charge to budget…",
+                  icon: <PiggyBank size={12} aria-hidden="true" />,
+                  keepSelection: true,
+                  onRun: (ids: string[]) => setPending({ kind: "budget", ids }),
                 },
               ]
             : []),
@@ -301,6 +316,42 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: {
               ...funds.map((fund) => ({ value: fund._id, label: fund.name, hint: fund.purpose })),
               { value: "none", label: "No fund (unrestricted)" },
             ]}
+          />
+        </Field>
+      </Modal>
+      <Modal
+        open={pending?.kind === "budget"}
+        onClose={close}
+        size="sm"
+        title={`Charge ${pluralize(count, "transaction")} to a spend budget`}
+        footer={
+          <>
+            <button type="button" className="btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="btn btn--accent"
+              disabled={!budgetId}
+              onClick={() => {
+                const ids = pending?.ids ?? [];
+                const value = budgetId === "none" ? null : budgetId;
+                const name = budgets.nameOf(budgetId);
+                finish();
+                void runBulk(ids, { spendBudgetId: value }, (n) =>
+                  value ? `Charged ${pluralize(n, "transaction")} to ${name ?? "the budget"}` : `Took ${pluralize(n, "transaction")} off their budget`,
+                );
+              }}
+            >
+              Charge to budget
+            </button>
+          </>
+        }
+      >
+        <Field label="Spend budget" hint="Only money-out lines dated within the budget count against it.">
+          <Select
+            value={budgetId}
+            onChange={setBudgetId}
+            placeholder="Choose a budget"
+            options={[...budgets.options, { value: "none", label: "No budget" }]}
           />
         </Field>
       </Modal>
