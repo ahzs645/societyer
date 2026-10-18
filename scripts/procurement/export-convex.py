@@ -2,19 +2,66 @@
 """Operator-only: verify SharePoint snapshot, export metadata for Convex import.
 No file bytes or extracted document text are copied to Convex. See the runbook.
 """
-import argparse, concurrent.futures, gzip, hashlib, json, os, pathlib, sqlite3, urllib.parse, urllib.request, zipfile
+import argparse, concurrent.futures, datetime, gzip, hashlib, json, os, pathlib, re, sqlite3, urllib.parse, urllib.request, zipfile
+from zoneinfo import ZoneInfo
 
 EVIDENCE_TABLES = ('reviews', 'procurement_stage_runs', 'procurement_requirements', 'procurement_facts', 'procurement_assessments', 'procurement_decisions', 'procurement_tasks', 'procurement_changes', 'procurement_matches', 'procurement_judgements')
 
+SOURCE_ZONE = ZoneInfo('America/Vancouver')
+MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+ISO = re.compile(r'^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*([AaPp]\.?[Mm]\.?)?\s*(Z|[+-]\d{2}:?\d{2})?)?')
+WORDY = re.compile(r'(?:^|\b)([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?:,?\s*(?:at\s+)?(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp]\.?[Mm]\.?)?)?')
+SLASHED = re.compile(r'^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?:,?\s+(\d{1,2}):(\d{2})\s*([AaPp]\.?[Mm]\.?)?)?')
+
+def _clock(hour, minute, meridiem):
+    if hour is None or minute is None: return ''
+    h, m = int(hour), int(minute)
+    if meridiem:
+        if not 1 <= h <= 12: return ''
+        h = h % 12 + (12 if meridiem[0] in 'Pp' else 0)
+    return f'T{h:02d}:{m:02d}' if h <= 23 and m <= 59 else ''
+
+def _day(y, m, d, time=''):
+    try: return datetime.date(int(y), int(m), int(d)).isoformat() + time
+    except ValueError: return ''
+
+def sortable_date(value):
+    """The source's date as YYYY-MM-DD[THH:MM] in the source zone, or '' when it isn't a date.
+    Matches parseSourceDate in src/features/procurementReview/lib/notice.ts."""
+    value = (value or '').strip() if isinstance(value, str) else ''
+    if not value: return ''
+    m = ISO.match(value)
+    if m:
+        y, mo, d, h, mi, meridiem, offset = m.groups()
+        if offset and h is not None and not meridiem:
+            try: at = datetime.datetime.fromisoformat(value[:m.end()].replace(' ', 'T').replace('Z', '+00:00'))
+            except ValueError: return ''
+            return at.astimezone(SOURCE_ZONE).strftime('%Y-%m-%dT%H:%M')
+        return _day(y, mo, d, _clock(h, mi, meridiem))
+    m = WORDY.search(value)
+    if m and m.group(1)[:3].lower() in MONTHS:
+        return _day(m.group(3), MONTHS.index(m.group(1)[:3].lower()) + 1, m.group(2), _clock(m.group(4), m.group(5), m.group(6)))
+    m = SLASHED.match(value)
+    if m:
+        year = 2000 + int(m.group(3)) if len(m.group(3)) == 2 else int(m.group(3))
+        return _day(year, m.group(1), m.group(2), _clock(m.group(4), m.group(5), m.group(6)))
+    return ''
+
 def project_record(row, society, generation):
     data = json.loads(row['data'])
-    text = lambda *keys: next((str(data[k]) for k in keys if data.get(k) is not None), '')
-    item = dict(societyId=society, generation=generation, recordKey=row['id'], kind=row['kind'], title=row['title'], organization=text('issuedBy', 'issuingOrganization'), status=text('status'), date=text('closingDate', 'awardDate', 'issueDate'), updatedAt=row['updated_at'])
+    text = lambda *keys: next((str(data[k]) for k in keys if data.get(k) is not None and str(data[k]).strip()), '')
+    # Opportunities sort by closing, awards by award date; `closingAt` is the connector's own instant when the source stated a zone.
+    keys = ('awardDate', 'issueDate') if row['kind'] == 'award' else ('closingAt', 'closingDate', 'issueDate')
+    date_text = text('closingDate', 'awardDate', 'issueDate')
+    date = next((parsed for parsed in (sortable_date(data.get(key)) for key in keys) if parsed), '')
+    item = dict(societyId=society, generation=generation, recordKey=row['id'], kind=row['kind'], title=row['title'], organization=text('issuedBy', 'issuingOrganization'), status=text('status'), date=date, dateText=date_text, updatedAt=row['updated_at'])
     item['searchText'] = ' '.join([item['title'], item['organization'], text('searchText', 'description'), text('successfulSupplier', 'mainCommodity'), row['id']])[:16000]
     return item, dict(societyId=society, generation=generation, recordKey=row['id'], dataJson=row['data'])
 
-def export(db_path, manifest, society, folder, output):
-    generation = manifest['snapshotId']
+def export(db_path, manifest, society, folder, output, generation_suffix=None):
+    if generation_suffix and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', generation_suffix):
+        raise ValueError('Generation suffix must contain 1-64 letters, digits, underscores or hyphens')
+    generation = manifest['snapshotId'] + ('-' + generation_suffix if generation_suffix else '')
     db = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True); db.row_factory = sqlite3.Row
     handles = {}; counts = {}
     def emit(table, item):
@@ -78,6 +125,7 @@ def download(config, folder, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--generation-suffix', help='Reproject an existing snapshot into a fresh immutable generation without appending duplicate rows');
     parser.add_argument('--config', required=True); parser.add_argument('--society-id', required=True); parser.add_argument('--folder'); parser.add_argument('--output', required=True)
     args = parser.parse_args(); os.umask(0o077)
     folder = args.folder or f'Zoer/bc-bid-monitor/{args.society_id}'
@@ -85,7 +133,7 @@ def main():
     output = pathlib.Path(args.output); output.mkdir(parents=True, exist_ok=False, mode=0o700)
     config = json.loads(pathlib.Path(args.config).expanduser().read_text())
     catalog, manifest = download(config, folder, output)
-    try: counts = export(catalog, manifest, args.society_id, folder, output)
+    try: counts = export(catalog, manifest, args.society_id, folder, output, args.generation_suffix)
     finally: catalog.unlink(missing_ok=True)
     print(json.dumps(dict(snapshot=manifest['snapshotId'], counts=counts, output=str(output))))
 

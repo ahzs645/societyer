@@ -24,6 +24,7 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "procurementReview:record",
   "procurementReview:documents",
   "procurementReview:evidence",
+  "procurementReview:review",
 
   "procurementReview:setFolder",
 ]);

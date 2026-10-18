@@ -2893,3 +2893,15 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     gap: token('s-2');
   }
 }
+
+/* Previous / Next under a table whose page owns the query (RecordTablePager). */
+.record-table__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+  padding: token('s-3') token('s-4');
+  border-top: 1px solid token('border');
+  font-size: token('fs-sm');
+}
+.record-table__pager-page { color: token('text-tertiary'); font-variant-numeric: tabular-nums; }

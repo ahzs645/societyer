@@ -58,7 +58,13 @@ The backend refuses to delete the active generation and deletes bounded batches.
 
 ## Updating the UI
 
-Hosted list/detail code is in `src/features/procurementReview/pages/ProcurementReviewPage.tsx`; backend queries in `convex/procurementReview.ts`. Updating these uses the normal Societyer build + Cloudflare Pages deploy and Convex deploy. Rebuilding the `files` plugin bundle does not change this hosted reader. Its bundle is still used by the snapshot/demo page, updated with the plugin build/sync procedure in the operations guide. Future richer hosted controls should call typed, bounded Convex queries, not reintroduce whole-catalog browser SQLite.
+The hosted reader is `src/features/procurementReview/reader/` (list, notice page, documents, review), mounted by `pages/ProcurementReviewPage.tsx`; backend queries are in `convex/procurementReview.ts`. The pages read through a small data-source contract (`reader/source.ts`): Convex for hosted workspaces, the bundled snapshot for the no-login demo. Open the demo's copy at `/demo/app/procurement-review?view=reader` to see exactly what a signed-in reviewer sees, on desktop and phone widths, without a deployment. What a notice shows is decided in `lib/notice.ts` (facts, deadline, status, and only those BC Bid page fields that don't repeat them) and `lib/review.ts` (Zoer's decision, AI suggestion, requirements, facts, tasks and changes); `scripts/check-procurement-notice.ts` covers both.
+
+Updating these uses the normal Societyer build + Cloudflare Pages deploy and Convex deploy. Rebuilding the `files` plugin bundle does not change this hosted reader. Its bundle is still used by the snapshot/demo page, updated with the plugin build/sync procedure in the operations guide. Future richer hosted controls should call typed, bounded Convex queries, not reintroduce whole-catalog browser SQLite.
+
+### Sortable dates (October 18, 2026)
+
+The list orders by `procurementRecords.date`. The first imports stored each source's own date text there ("Wed Oct 7, 2026 3:00 PM (PDT)", "10/05/26 2:00pm", "submissions can be received at any time"), so the newest-first order was alphabetical by weekday. The exporter now writes `date` as `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM` in the source zone (from the connector's `closingAt` when it has one) and keeps the source's words in `dateText`; an unreadable date is empty and sorts last. The reader's default view, "Open, closing soonest", asks for `date >= today` in ascending order. Re-export and import existing snapshots before enabling upcoming-first sorting. Use `--generation-suffix dates-v2` on the export command to create a fresh immutable generation from an already imported SharePoint snapshot. The apply command still refuses duplicate appends, validates every count before activation, and retains the prior generation for rollback. File objects and SharePoint permissions are unchanged.
 
 ## Authentication regression and checks
 

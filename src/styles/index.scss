@@ -26,6 +26,7 @@
 @use "chrome-society"; // society onboarding/create, address fields, doc tables
 @use "chrome-tables"; // wave cache + data table: toolbar, options, bulkbar, pagination
 @use "chrome-misc"; // card list, page header, empty state, inspector note
+@use "expandable-text"; // clamped text with a trailing "… more" (components/ExpandableText)
 
 // Forms & misc overlays: drawer, input/select/textarea/field/lock,
 // command palette (kbar), demo banner, notifications, user picker, bot run.

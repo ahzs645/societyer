@@ -74,13 +74,16 @@ export const catalog = authorizedQuery("procurementReview:catalog", query)({
 });
 
 export const records = authorizedQuery("procurementReview:records", query)({
-  args: { societyId: v.id("societies"), generation: v.string(), kind: v.string(), search: v.optional(v.string()), status: v.optional(v.string()), paginationOpts: paginationOptsValidator },
+  // `from` (YYYY-MM-DD) lists dates on or after that day, soonest first; without it the newest dates come first.
+  args: { societyId: v.id("societies"), generation: v.string(), kind: v.string(), search: v.optional(v.string()), status: v.optional(v.string()), from: v.optional(v.string()), paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(v.object(summaryFields)),
   handler: async (ctx, args) => {
     const active = await activeCatalog(ctx, args.societyId);
     if (!active || active.generation !== args.generation) return { page: [], isDone: true, continueCursor: "" };
     const opts = { ...args.paginationOpts, numItems: Math.min(50, Math.max(1, args.paginationOpts.numItems)), maximumRowsRead: 200, maximumBytesRead: 1_000_000 };
     if ((args.search?.length ?? 0) > 200) throw new Error("Search is too long.");
+    if (args.from !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(args.from)) throw new Error("Use a YYYY-MM-DD day for upcoming dates.");
+    const from = args.from;
     const base = ctx.db.query("procurementRecords");
     const query = args.search?.trim()
       ? base.withSearchIndex("search_records", q => {
@@ -88,8 +91,8 @@ export const records = authorizedQuery("procurementReview:records", query)({
           return args.status ? search.eq("status", args.status) : search;
         })
       : args.status
-        ? base.withIndex("by_kind_status_date", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind).eq("status", args.status!)).order("desc")
-        : base.withIndex("by_kind_date", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind)).order("desc");
+        ? base.withIndex("by_kind_status_date", q => { const scoped = q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind).eq("status", args.status!); return from ? scoped.gte("date", from) : scoped; }).order(from ? "asc" : "desc")
+        : base.withIndex("by_kind_date", q => { const scoped = q.eq("societyId", args.societyId).eq("generation", active.generation).eq("kind", args.kind); return from ? scoped.gte("date", from) : scoped; }).order(from ? "asc" : "desc");
     const result = await query.paginate(opts);
     return { ...result, page: result.page.map(summaryFor) };
   },
@@ -129,5 +132,22 @@ export const evidence = authorizedQuery("procurementReview:evidence", query)({
     const result = await ctx.db.query("procurementEvidence").withIndex("by_record_source", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("recordKey", args.recordKey).eq("source", args.source))
       .paginate({ ...args.paginationOpts, numItems: Math.min(10, Math.max(1, args.paginationOpts.numItems)), maximumRowsRead: 20, maximumBytesRead: 1_000_000 });
     return { ...result, page: result.page.map(row => ({ dataJson: row.dataJson })) };
+  },
+});
+
+/**
+ * Every published review row for one record (decisions, AI suggestion and
+ * summary, requirements, facts, tasks, changes), in one bounded read so the
+ * notice page can lay them out together. `truncated` when there were more.
+ */
+export const review = authorizedQuery("procurementReview:review", query)({
+  args: { societyId: v.id("societies"), generation: v.string(), recordKey: v.string() },
+  returns: v.object({ rows: v.array(v.object({ source: v.string(), dataJson: v.string() })), truncated: v.boolean() }),
+  handler: async (ctx, args) => {
+    const active = await activeCatalog(ctx, args.societyId);
+    if (!active || active.generation !== args.generation) return { rows: [], truncated: false };
+    const result = await ctx.db.query("procurementEvidence").withIndex("by_record_source", q => q.eq("societyId", args.societyId).eq("generation", active.generation).eq("recordKey", args.recordKey))
+      .paginate({ numItems: 120, cursor: null, maximumRowsRead: 120, maximumBytesRead: 2_000_000 });
+    return { rows: result.page.map(row => ({ source: row.source, dataJson: row.dataJson })), truncated: !result.isDone };
   },
 });

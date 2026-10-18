@@ -1,4 +1,4 @@
-import { createBlobReader } from "./blobs";
+import { createBlobReader, type BlobReader } from "./blobs";
 import { snapshotFilePaths } from "../../../../shared/procurementReview/manifest";
 import { concatBytes, sha256Hex } from "./digest";
 
@@ -8,8 +8,12 @@ export type StoredProcurementDocument = {
 };
 /** Fetch only the selected document, through authenticated workspace access, then verify it. */
 export async function readProcurementDocument(societyId: string, document: StoredProcurementDocument, signal?: AbortSignal): Promise<ArrayBuffer> {
+  return readVerifiedDocument(createBlobReader(societyId), document, signal);
+}
+
+/** The same, through any snapshot reader (the no-login demo reads its bundled snapshot). */
+export async function readVerifiedDocument(read: BlobReader, document: StoredProcurementDocument, signal?: AbortSignal): Promise<ArrayBuffer> {
   if (!document.available) throw new Error("This document has not been published.");
-  const read = createBlobReader(societyId);
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (const path of snapshotFilePaths(document.sha256, document)) {

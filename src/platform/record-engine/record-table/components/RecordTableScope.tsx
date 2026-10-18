@@ -49,6 +49,7 @@ export function RecordTableScope({
   recordPreview = false,
   renderSidePanel,
   cellPreviews = true,
+  serverQuery,
   children,
 }: {
   tableId: string;
@@ -76,6 +77,11 @@ export function RecordTableScope({
    * Pass false for a table where the preview would repeat the row.
    */
   cellPreviews?: boolean;
+  /**
+   * The page searches, sorts and pages `records` itself (a server-side
+   * catalog). See RecordTableServerQuery.
+   */
+  serverQuery?: RecordTableContextValue["serverQuery"];
   children: ReactNode;
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
@@ -232,8 +238,9 @@ export function RecordTableScope({
       onCreate,
       onReorder,
       cellPreview: cellPreviews ? cellPreview : undefined,
+      serverQuery,
     }),
-    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder, cellPreviews, cellPreview],
+    [tableId, objectMetadata, onRecordClick, recordPreview, handleRecordClick, onUpdate, onCreate, onReorder, cellPreviews, cellPreview, serverQuery],
   );
 
   const currentSidePanelRecord = activeSidePanelRecord

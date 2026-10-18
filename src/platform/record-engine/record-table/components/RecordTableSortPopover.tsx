@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { ViewportPopover } from "@/components/ViewportPopover";
 import { Select } from "@/components/Select";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import type { ViewSortDirection } from "../../types";
 
 export function RecordTableSortPopover({
@@ -34,7 +35,11 @@ export function RecordTableSortPopover({
  * Sort section in the phone "View options" sheet.
  */
 export function RecordTableSortEditor() {
-  const columns = useRecordTableState((state) => state.columns);
+  const allColumns = useRecordTableState((state) => state.columns);
+  // A page-owned query sorts on the server, by the fields it supports only.
+  const { serverQuery } = useRecordTableContextOrThrow();
+  const sortable = serverQuery?.sortableFieldNames;
+  const columns = sortable ? allColumns.filter((column) => sortable.includes(column.field.name)) : allColumns;
   const sorts = useRecordTableState((state) => state.sorts);
   const handle = useRecordTableStoreHandle();
 

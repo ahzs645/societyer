@@ -14,6 +14,10 @@ export type { BulkAction } from "./components/RecordTableBulkBar";
 export { RecordTableEmpty } from "./components/RecordTableEmpty";
 export { ObjectRecordTable } from "./components/ObjectRecordTable";
 export { RecordTablePhoneCard } from "./components/RecordTablePhoneCard";
+export { RecordTablePager } from "./components/RecordTablePager";
+export type { RecordTablePagination, RecordTableServerQuery } from "./contexts/RecordTableContext";
+export { staticRecordTable } from "./utils/staticRecordTable";
+export type { StaticFieldDefinition } from "./utils/staticRecordTable";
 export type { RecordTableCardHelpers, RecordTableCardRecord, RecordTableCardRenderer } from "./components/RecordTableCardList";
 export { recordPersonName, recordText, recordTitleText } from "./utils/recordTitle";
 

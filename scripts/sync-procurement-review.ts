@@ -7,12 +7,14 @@
  *   tsx scripts/sync-procurement-review.ts [--from <dist/societyer-review>]
  *   tsx scripts/sync-procurement-review.ts --check   # installed files match the pin
  *
- * --from defaults to $ZOER_REVIEW_DIST, else ../files/dist/societyer-review
+ * --from defaults to $ZOER_REVIEW_DIST, else files/dist/societyer-review beside the main Societyer
+ * checkout (found through git, so it also works from a linked worktree)
  * beside this repository (the Zoer plugin checkout's `bun run societyer:build`).
  */
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { dirname, join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const target = join(root, "public", "plugins", "bc-bid-monitor");
@@ -84,7 +86,16 @@ if (process.argv.includes("--check")) {
   process.exit(0);
 }
 
-const from = resolve(argument("from") ?? process.env.ZOER_REVIEW_DIST ?? join(root, "..", "files", "dist", "societyer-review"));
+/** The main checkout's directory: a linked worktree shares its `.git`, so `../files` resolves the same from either. */
+function mainCheckout(): string {
+  try {
+    return dirname(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, encoding: "utf8" }).trim());
+  } catch {
+    return root;
+  }
+}
+
+const from = resolve(argument("from") ?? process.env.ZOER_REVIEW_DIST ?? join(mainCheckout(), "..", "files", "dist", "societyer-review"));
 const source = readSource(from);
 verify(from, source);
 if (source.dirty) console.warn("sync-procurement-review: the bundle was built from a dirty Zoer checkout.");

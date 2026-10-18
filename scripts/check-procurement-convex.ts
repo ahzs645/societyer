@@ -26,6 +26,13 @@ const ids = await t.run(async ctx => {
     await ctx.db.insert("procurementRecords", { societyId, generation, recordKey, kind: "opportunity", title: `Bridge ${i}`, organization: "Test City", status: i % 2 ? "Open" : "Closed", date: `2026-${String(i).padStart(3, "0")}`, updatedAt: "2026-10-18", searchText: `Bridge ${i} Test City` });
     await ctx.db.insert("procurementDetails", { societyId, generation, recordKey, dataJson: JSON.stringify({ descriptionText: "Notice body only fetched on demand" }) });
   }
+  for (const [key, date] of [["award:a", "2026-10-01"], ["award:b", "2026-10-20T14:00"], ["award:c", "2026-11-05"]]) {
+    await ctx.db.insert("procurementRecords", { societyId, generation, recordKey: key, kind: "award", title: `Award ${key}`, organization: "Test City", status: "Awarded", date, dateText: date, updatedAt: "2026-10-18", searchText: key });
+    await ctx.db.insert("procurementDetails", { societyId, generation, recordKey: key, dataJson: "{}" });
+  }
+  for (const [recordKey, source] of [["opportunity:0", "procurement_decisions"], ["opportunity:0", "procurement_requirements"], ["opportunity:1", "procurement_decisions"]]) {
+    await ctx.db.insert("procurementEvidence", { societyId, generation, recordKey, source, dataJson: JSON.stringify({ record_id: recordKey, source }) });
+  }
   // Another workspace deliberately reuses the same generation and source key.
   await ctx.db.insert("procurementRecords", { societyId: foreign, generation, recordKey: "opportunity:0", kind: "opportunity", title: "Private foreign record", organization: "Secret", status: "Open", date: "2099", updatedAt: "", searchText: "Secret" });
   await ctx.db.insert("procurementDocuments", { societyId, generation, recordKey: "opportunity:0", documentKey: "doc", name: "test.pdf", mediaType: "application/pdf", sha256: "a".repeat(64), sourceUrl: "https://example.invalid", status: "ready", bytes: 10, parts: 0, available: true });
@@ -34,8 +41,8 @@ const ids = await t.run(async ctx => {
 const reader = t.withIdentity({ subject: "reader", issuer });
 const args = { societyId: ids.societyId, generation: ids.generation, kind: "opportunity", paginationOpts: { numItems: 25, cursor: null } };
 assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), null, "Unactivated imports are invisible");
-const activation = { societyId: ids.societyId, generation: ids.generation, folder: ids.folder, publishedAt: "2026-10-18T17:02:58Z", counts: { opportunity: 61 }, expected: { procurementRecords: 61, procurementDetails: 61, procurementDocuments: 1 } };
-await assert.rejects(t.action(api.procurementImport.activate, { ...activation, counts: { opportunity: 62 }, expected: { ...activation.expected, procurementRecords: 62, procurementDetails: 62 } }), /incomplete/);
+const activation = { societyId: ids.societyId, generation: ids.generation, folder: ids.folder, publishedAt: "2026-10-18T17:02:58Z", counts: { opportunity: 61, award: 3 }, expected: { procurementRecords: 64, procurementDetails: 64, procurementDocuments: 1, procurementEvidence: 3 } };
+await assert.rejects(t.action(api.procurementImport.activate, { ...activation, counts: { opportunity: 62, award: 3 }, expected: { ...activation.expected, procurementRecords: 65, procurementDetails: 65 } }), /incomplete/);
 assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), null);
 await t.action(api.procurementImport.activate, activation);
 await assert.rejects(t.action(api.procurementImport.purgeGeneration, { societyId: ids.societyId, generation: ids.generation }), /active generation/);
@@ -54,6 +61,16 @@ assert.ok(filtered.page.length); assert.ok(filtered.page.every((row: any) => row
 assert.ok(JSON.stringify(filtered).length < 25000, "List results remain small");
 assert.equal((await reader.query(api.procurementReview.record, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0" })).summary.title, "Bridge 0");
 assert.equal((await reader.query(api.procurementReview.documents, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0", paginationOpts: { numItems: 10, cursor: null } })).page[0].name, "test.pdf");
+const awards = { ...args, kind: "award" };
+assert.deepEqual((await reader.query(api.procurementReview.records, awards)).page.map((row: { recordKey: string }) => row.recordKey), ["award:c", "award:b", "award:a"], "Newest dates first by default");
+assert.deepEqual((await reader.query(api.procurementReview.records, { ...awards, from: "2026-10-15" })).page.map((row: { recordKey: string }) => row.recordKey), ["award:b", "award:c"], "`from` lists upcoming dates, soonest first");
+assert.deepEqual((await reader.query(api.procurementReview.records, { ...awards, status: "Awarded", from: "2026-10-15" })).page.map((row: { recordKey: string }) => row.recordKey), ["award:b", "award:c"]);
+await assert.rejects(reader.query(api.procurementReview.records, { ...awards, from: "Oct 15" }), /YYYY-MM-DD/);
+const review = await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0" });
+assert.deepEqual(review.rows.map((row: { source: string }) => row.source).sort(), ["procurement_decisions", "procurement_requirements"], "One read returns every review row for the record, and only that record's");
+assert.equal(review.truncated, false);
+assert.deepEqual(await reader.query(api.procurementReview.review, { societyId: ids.societyId, generation: "another", recordKey: "opportunity:0" }), { rows: [], truncated: false });
+await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).query(api.procurementReview.review, { societyId: ids.societyId, generation: ids.generation, recordKey: "opportunity:0" }), /membership|access|workspace|bound/i);
 await assert.rejects(t.query(api.procurementReview.records, args), /auth|sign|identity|access/i);
 await assert.rejects(t.withIdentity({ subject: "foreign", issuer }).query(api.procurementReview.records, args), /membership|access|workspace|bound/i);
 await assert.rejects(reader.mutation(api.procurementReview.setFolder, { societyId: ids.societyId, folder: ids.folder }), /Permission/);
@@ -62,4 +79,4 @@ assert.equal(await reader.query(api.procurementReview.catalog, { societyId: ids.
 assert.equal((await reader.query(api.procurementReview.records, args)).page.length, 0);
 await t.run(async ctx => { await ctx.db.patch(ids.societyId, { disabledModules: [] }); });
 await assert.rejects(reader.query(api.procurementReview.catalog, { societyId: ids.societyId }), /module|enabled|disabled/i);
-console.log("OK: authenticated indexed pages, full-text search, bounded payload, workspace isolation, read-only permissions, incomplete-import refusal, atomic activation, folder and module gates.");
+console.log("OK: authenticated indexed pages, upcoming-first ordering, one-read review rows, full-text search, bounded payload, workspace isolation, read-only permissions, incomplete-import refusal, atomic activation, folder and module gates.");

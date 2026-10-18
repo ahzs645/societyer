@@ -28,6 +28,7 @@ export function RecordTableViewOptionsSheet<Id extends string>({
   viewTypeOptions,
   onChooseViewType,
   showGroup,
+  showSort = true,
   kanbanFields,
   calendarFields,
   onSearch,
@@ -41,12 +42,15 @@ export function RecordTableViewOptionsSheet<Id extends string>({
   onChooseViewType: (id: Id) => void;
   /** Grouping applies to the table view only. */
   showGroup: boolean;
+  /** False when nothing can be sorted (a page-owned query with no sortable fields). */
+  showSort?: boolean;
   kanbanFields: RecordField[];
   calendarFields: RecordField[];
   onSearch: () => void;
   /** Present while the table offers "Select records" on phones. */
   onToggleSelection?: () => void;
-  onExport: () => void;
+  /** Absent when the table can't export (a page-owned query holds one page at a time). */
+  onExport?: () => void;
   /** The page's own toolbar actions, if any. */
   actions?: ReactNode;
 }) {
@@ -73,23 +77,29 @@ export function RecordTableViewOptionsSheet<Id extends string>({
               <span>{mobileSelectionMode ? "Exit selection" : "Select records"}</span>
             </button>
           )}
-          <button type="button" className="record-view-sheet__action" onClick={onExport}>
-            <Download size={16} aria-hidden="true" />
-            <span>Export…</span>
-          </button>
+          {onExport && (
+            <button type="button" className="record-view-sheet__action" onClick={onExport}>
+              <Download size={16} aria-hidden="true" />
+              <span>Export…</span>
+            </button>
+          )}
         </div>
 
-        <LayoutSection
-          viewTypeOptions={viewTypeOptions}
-          onChooseViewType={onChooseViewType}
-          kanbanFields={kanbanFields}
-          calendarFields={calendarFields}
-        />
+        {viewTypeOptions.length > 1 && (
+          <LayoutSection
+            viewTypeOptions={viewTypeOptions}
+            onChooseViewType={onChooseViewType}
+            kanbanFields={kanbanFields}
+            calendarFields={calendarFields}
+          />
+        )}
 
-        <section className="record-view-sheet__section record-view-sheet__sort" aria-labelledby="record-view-sheet-sort">
-          <h3 className="record-view-sheet__label" id="record-view-sheet-sort">Sort</h3>
-          <RecordTableSortEditor />
-        </section>
+        {showSort && (
+          <section className="record-view-sheet__section record-view-sheet__sort" aria-labelledby="record-view-sheet-sort">
+            <h3 className="record-view-sheet__label" id="record-view-sheet-sort">Sort</h3>
+            <RecordTableSortEditor />
+          </section>
+        )}
 
         {showGroup && (
           <section className="record-view-sheet__section record-view-sheet__group" aria-label="Group">

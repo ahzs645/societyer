@@ -3,7 +3,7 @@
   "formatVersion": 1,
   "pluginId": "bc-bid-monitor",
   "pluginVersion": "0.35.3",
-  "snapshotId": "20261018T150000Z-0257598f0476",
+  "snapshotId": "20261018T150000Z-4f6310bbba5e",
   "publishedAt": "2026-10-18T15:00:00.000Z",
   "publisher": {
     "zoerVersion": "demo",
@@ -11,13 +11,13 @@
   },
   "catalog": {
     "encoding": "gzip",
-    "sha256": "0257598f0476fc017e3c41d665fad078266898e750a0551a5a6ce23bfda1ec1c",
-    "bytes": 868352,
+    "sha256": "4f6310bbba5ee274ca859b7e5d8209b56be35c40c9e64809b652093d1d80d92b",
+    "bytes": 929792,
     "parts": [
       {
-        "path": "snapshots/20261018T150000Z-0257598f0476/catalog.part-000",
-        "bytes": 92898,
-        "sha256": "164e20774826ddb1914f4522acb0257f6b5b54362c811296660c472f7a7b34b3"
+        "path": "snapshots/20261018T150000Z-4f6310bbba5e/catalog.part-000",
+        "bytes": 96638,
+        "sha256": "7c1719d7404d6c77b4044b94219a68a1df4c0af961b3607c3571b73cdab8833b"
       }
     ]
   },
@@ -57,6 +57,6 @@
   },
   "counts": {
     "award": 15,
-    "opportunity": 41
+    "opportunity": 42
   }
 }

@@ -4,7 +4,9 @@ import { v } from "convex/values";
 const scope = { societyId: v.id("societies"), generation: v.string() };
 export const procurementRecordFields = {
   ...scope, recordKey: v.string(), kind: v.string(), title: v.string(), organization: v.string(),
-  status: v.string(), date: v.string(), updatedAt: v.string(), searchText: v.string(),
+  // `date` is sortable (YYYY-MM-DD, or YYYY-MM-DDTHH:MM in the source zone) when the source's date could be read;
+  // `dateText` keeps the source's own words. Imports before October 18, 2026 stored the source text in `date`.
+  status: v.string(), date: v.string(), dateText: v.optional(v.string()), updatedAt: v.string(), searchText: v.string(),
 };
 export const procurementDocumentFields = {
   ...scope, recordKey: v.string(), documentKey: v.string(), name: v.string(), mediaType: v.string(),

@@ -118,7 +118,10 @@ export function RecordTableToolbar({
   const handle = useRecordTableStoreHandle();
   const filteredRecords = useFilteredRecords();
   const isDirty = useRecordTableIsDirty();
-  const { objectMetadata } = useRecordTableContextOrThrow();
+  const { objectMetadata, serverQuery } = useRecordTableContextOrThrow();
+  // A page-owned query (a server-side catalog): no controls that need every record.
+  const serverDriven = Boolean(serverQuery);
+  const canSort = !serverDriven || (serverQuery?.sortableFieldNames?.length ?? 0) > 0;
   const toast = useToast();
   const prompt = usePrompt();
   const { t } = useTranslation();
@@ -195,7 +198,7 @@ export function RecordTableToolbar({
   const activeViewName =
     (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
   // One "Export …" command per mounted table, alongside page-specific exports.
-  useRegisterCommand({
+  useRegisterCommand(serverDriven ? null : {
     id: `record-table-export:${tableId}`,
     label: `Export ${lowerLabel(objectMetadata.labelPlural)} table…`,
     icon: Download,
@@ -245,7 +248,8 @@ export function RecordTableToolbar({
     { id: "kanban" as const, Icon: Kanban, label: t("recordTable.kanbanView", "Kanban view"), short: t("recordTable.kanbanShort", "Board"), active: !listActive && isKanban },
     { id: "calendar" as const, Icon: CalendarDays, label: t("recordTable.calendarView", "Calendar view"), short: t("recordTable.calendarShort", "Calendar"), active: !listActive && viewType === "calendar" },
   ];
-  const viewCount = filteredRecords.length;
+  // A page-owned query counts across its pages only when the server knows the total.
+  const viewCount: number | null = serverDriven ? serverQuery?.total ?? null : filteredRecords.length;
   // Sorts and grouping live in the phone options sheet; its button counts them.
   const viewOptionsActive = sorts.length + (groupByLabel && !listActive && viewType === "table" ? 1 : 0);
 
@@ -292,7 +296,7 @@ export function RecordTableToolbar({
         {isPhone && hideViewPickerOnPhone ? (
           <div className="record-table__title record-table__title--count" aria-live="polite">
             {resolvedIcon}
-            <span>{viewCount} {lowerLabel(viewCount === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)}</span>
+            <span>{viewCount ?? ""} {lowerLabel(viewCount === 1 ? objectMetadata.labelSingular : objectMetadata.labelPlural)}</span>
           </div>
         ) : views && views.length > 0 ? (
           <div className="record-table__view-switcher" ref={viewMenuRef}>
@@ -301,12 +305,12 @@ export function RecordTableToolbar({
               className="record-table__view-button"
               // The count chip can be visually hidden on phones (is-tight);
               // the name keeps it either way.
-              aria-label={`${activeViewName} ${viewCount}`}
+              aria-label={viewCount === null ? activeViewName : `${activeViewName} ${viewCount}`}
               onClick={() => setViewMenuOpen((x) => !x)}
             >
               {resolvedIcon}
               <span className="record-table__view-name">{activeViewName}</span>
-              <span className="record-table__view-count">{filteredRecords.length}</span>
+              {viewCount !== null && <span className="record-table__view-count">{viewCount}</span>}
               <ChevronDown size={12} />
             </button>
             {viewMenuOpen && (
@@ -335,7 +339,7 @@ export function RecordTableToolbar({
           <div className="record-table__title">
             {resolvedIcon}
             <span>{label}</span>
-            <span className="record-table__view-count">{filteredRecords.length}</span>
+            {viewCount !== null && <span className="record-table__view-count">{viewCount}</span>}
           </div>
         )}
         {isMobile && !isPhone && (
@@ -476,7 +480,7 @@ export function RecordTableToolbar({
         )}
         </div>
 
-        {!isPhone && (
+        {!isPhone && !serverDriven && (
         <div className="record-table__segmented" aria-label="View type">
           {listView && (
             <button
@@ -535,7 +539,7 @@ export function RecordTableToolbar({
         </div>
         )}
 
-        {onOpenFilter && <RecordTableAskFilterButton />}
+        {onOpenFilter && !serverDriven && <RecordTableAskFilterButton />}
         {onOpenFilter && filterButton}
 
         {isPhone && (mobileSelectable && mobileSelectionMode ? (
@@ -572,9 +576,10 @@ export function RecordTableToolbar({
           <RecordTableViewOptionsSheet
             open={viewOptionsOpen}
             onClose={() => setViewOptionsOpen(false)}
-            viewTypeOptions={viewTypeOptions}
+            viewTypeOptions={serverDriven ? [] : viewTypeOptions}
             onChooseViewType={chooseViewType}
-            showGroup={!listActive && viewType === "table"}
+            showGroup={!serverDriven && !listActive && viewType === "table"}
+            showSort={canSort}
             kanbanFields={selectableKanbanFields}
             calendarFields={selectableCalendarFields}
             onSearch={openSearchFromSheet}
@@ -582,7 +587,7 @@ export function RecordTableToolbar({
               setViewOptionsOpen(false);
               toggleSelectionMode();
             } : undefined}
-            onExport={() => {
+            onExport={serverDriven ? undefined : () => {
               setViewOptionsOpen(false);
               setExportOpen(true);
             }}
@@ -591,6 +596,8 @@ export function RecordTableToolbar({
         )}
 
         {!isPhone && (
+        <>
+        {canSort && (
         <>
         <button
           type="button"
@@ -608,8 +615,10 @@ export function RecordTableToolbar({
           <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
+        </>
+        )}
 
-        {!listView?.active && viewType === "table" && (
+        {!serverDriven && !listView?.active && viewType === "table" && (
           <>
             <button
               type="button"
@@ -714,6 +723,7 @@ export function RecordTableToolbar({
                   </button>
                 </div>
               </div>
+              {!serverDriven && (
               <div className="record-table__menu-section">
                 <button
                   type="button"
@@ -726,6 +736,7 @@ export function RecordTableToolbar({
                   <Download size={13} aria-hidden="true" /> Export…
                 </button>
               </div>
+              )}
               <div className="record-table__menu-section">
                 <span className="record-table__menu-label record-table__menu-label--icon">
                   <Columns size={12} /> Columns
@@ -750,11 +761,13 @@ export function RecordTableToolbar({
         </>
         )}
       </div>
-      <RecordTableExportDialog
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        viewName={views && views.length > 0 ? activeViewName : label}
-      />
+      {!serverDriven && (
+        <RecordTableExportDialog
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          viewName={views && views.length > 0 ? activeViewName : label}
+        />
+      )}
     </div>
   );
 }

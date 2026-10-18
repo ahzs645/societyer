@@ -1,4 +1,6 @@
+import { useContext } from "react";
 import { useStore } from "zustand";
+import { RecordTableContext } from "../contexts/RecordTableContext";
 import { applyPendingEdits, useRecordTableStoreOrThrow, type RecordTableStore } from "../state/recordTableStore";
 import { filterAndSortRecords } from "../utils/filterAndSortRecords";
 import { applyStagedEdits } from "../utils/stagedEdits";
@@ -31,6 +33,7 @@ const filteredCache = new WeakMap<RecordTableStore, CacheEntry<any[]>>();
  * Takes the records from the store plus the active view's filter/sort/search
  * state and returns a derived list. All in-memory — good enough for a few
  * thousand rows, which is where RecordTable's virtualization kicks in anyway.
+ * Larger catalogs pass `serverQuery` to the scope and arrive already derived.
  */
 export function useFilteredRecords() {
   const store = useRecordTableStoreOrThrow();
@@ -45,11 +48,16 @@ export function useFilteredRecords() {
   const pendingEdits = useStore(store, (s) => s.pendingEdits);
   // So do a grid's batch edits that are not saved yet.
   const stagedEdits = useStore(store, (s) => s.stagedEdits);
+  // A page-owned query has already searched, filtered and sorted the records.
+  const serverDriven = Boolean(useContext(RecordTableContext)?.serverQuery);
 
   return memoForStore(
     filteredCache,
     store,
-    [records, pendingEdits, stagedEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext],
-    () => filterAndSortRecords({ records: applyStagedEdits(applyPendingEdits(records, pendingEdits), stagedEdits), columns, filters, filterGroups, sorts, searchTerm, dateContext }),
+    [records, pendingEdits, stagedEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext, serverDriven],
+    () => {
+      const edited = applyStagedEdits(applyPendingEdits(records, pendingEdits), stagedEdits);
+      return serverDriven ? edited : filterAndSortRecords({ records: edited, columns, filters, filterGroups, sorts, searchTerm, dateContext });
+    },
   );
 }

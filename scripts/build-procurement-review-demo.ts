@@ -129,6 +129,11 @@ const PORTALS: Record<string, { label: string; host: string; url: string; place:
 
 const NOTICES: NoticeSpec[] = [
   // BC Bid: provincial ministries, Crown corporations and agencies.
+  // A BC Bid notice of intent: a long description, and the source still says Open weeks after it closed.
+  { key: "scrd-dam-noi", source: "bc-bid", number: "SCRD-2026-NOI-0114", title: "NOI - Chapman Lake Dam Safety Engineering (Coastline Engineering Ltd)", buyer: "Sunshine Coast Regional District", type: "Notice of Intent (BPS)", closesIn: -34, closingTime: "15:00", category: "Engineering Services - Dam Safety", publishedDaysAgo: 45,
+    place: place(null, "Sunshine Coast Regional District", "description"),
+    summary: "The Sunshine Coast Regional District (Regional District) gives notice of its intent to directly award Coastline Engineering Ltd. a contract for the following services. Operation, Maintenance and Surveillance (OMS) and Dam Emergency Plan (DEP) revisions: comprehensive updates and resubmission of core regulatory documentation, including emergency contacts, access and inundation mapping, and surveillance protocols that respond to the 2026 Dam Safety Audit. Dam instrumentation plan: an instrumentation plan within the OMS manual that sets monitoring protocols, alarm thresholds, baseline data management and operational roles for reservoir level monitoring. Physical deficiencies assessment and remediation plan: review and written remediation planning for identified site deficiencies, including abutment seepage, concrete and bedrock interface leakage, downstream slab cracking and concrete surface deterioration. Saddle dam decommissioning plan: scoping, regulatory coordination with the Dam Safety Officer and a formal decommissioning plan for the saddle dam. Suppliers who believe they can meet these requirements may submit a statement of capabilities before the closing date.",
+    contact: { name: "Morgan Ellis", email: "purchasing@example.scrd.ca", role: "Purchasing Officer" } },
   { key: "sdpr-engagement", source: "bc-bid", number: "SDPR-2026-RFP-0147", title: "Community Engagement and Facilitation Services for Poverty Reduction Strategy Renewal", buyer: "Ministry of Social Development and Poverty Reduction", type: "Request for Proposals", closesIn: 12, closingTime: "14:00", category: "Consulting Services - Public Engagement", publishedDaysAgo: 16, starred: true,
     summary: "The Ministry is seeking a qualified proponent to design and deliver in-person and online engagement sessions with people with lived experience of poverty, community organizations and local governments across four regions. Work includes accessible session design, facilitation, honoraria administration and a what-we-heard report.",
     contact: { name: "Priya Natarajan", email: "procurement.sdpr@example.gov.bc.ca", role: "Procurement Specialist" }, attachments: ["RFP SDPR-2026-RFP-0147.pdf", "Appendix C - Pricing Form.pdf"] },
@@ -266,13 +271,19 @@ function noticeData(spec: NoticeSpec): { sourceKey: string; data: JsonObject; up
   if (spec.source === "bc-bid") {
     const processId = String(210000 + Number.parseInt(sha256(spec.number).slice(0, 6), 16) % 40000);
     const detailUrl = `https://bcbid.gov.bc.ca/page.aspx/en/bpm/process_manage_extranet/${processId}`;
+    // BC Bid's opportunity page, label by label: it repeats the title, number, status, dates and description.
     const detailFields: Json[] = [
+      { label: "Opportunity Type", value: spec.type },
+      { label: "Opportunity Description", value: spec.title },
       { label: "Opportunity ID", value: spec.number },
       { label: "Status", value: status },
-      { label: "Opportunity Type", value: spec.type },
+      { label: "Lot #", value: "1" },
+      { label: "Amendment #", value: spec.key === "bch-tenant-support" ? "1" : "0" },
       { label: "Issued by", value: spec.buyer },
       { label: "Issue Date", value: `${publishedDay} 9:00:00 AM (Pacific)` },
-      { label: "Closing Date", value: `${closingDay} ${clock(time).replace(" ", ":00 ")} (Pacific)` },
+      { label: "Closing Date and Time", value: `${closingDay} ${clock(time).replace(" ", ":00 ")} (Pacific)` },
+      { label: "Delivery of Submissions", value: spec.type.startsWith("Notice of Intent") ? "Statements of capabilities must be emailed to the contact below before the closing date." : "Submissions must be made electronically through BC Bid. Paper, email and fax submissions will not be accepted." },
+      { label: "Summary Details", value: spec.summary },
       { label: "Commodities", value: spec.category },
     ];
     return {

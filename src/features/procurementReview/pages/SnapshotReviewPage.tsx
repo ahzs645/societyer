@@ -1,4 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { format, isThisYear, isToday, isYesterday } from "date-fns";
 import { RefreshCw, Settings2 } from "lucide-react";
 import { PageHeader, PageLoading } from "../../../pages/_helpers";
@@ -15,6 +16,10 @@ import { ReviewWorkspace, sourceLabel } from "../components/ReviewWorkspace";
 import { fetchSnapshotManifest, type SnapshotProgress } from "../lib/snapshot";
 import { useProcurementSnapshot, type SnapshotFailure } from "../lib/useProcurementSnapshot";
 import { useReviewArtifact } from "../lib/useReviewArtifact";
+import type { BlobReader } from "../lib/blobs";
+import type { CatalogClient } from "../lib/catalogClient";
+import { ProcurementReader } from "../reader/ProcurementReader";
+import { useSnapshotReaderSource } from "../reader/snapshotSource";
 
 const STAGE_LABELS: Record<SnapshotProgress["stage"], string> = {
   manifest: "Reading the snapshot manifest",
@@ -115,6 +120,9 @@ export function SnapshotReviewPage() {
   const artifact = useReviewArtifact(Boolean(folder));
   const snapshot = useProcurementSnapshot(society?._id, artifact.status === "not-installed" ? "" : folder, reloadKey);
   const onMountError = useCallback((message: string) => setMountError(message), []);
+  // `?view=reader` shows the hosted workspaces' reader over the same snapshot.
+  const [params] = useSearchParams();
+  const readerView = params.get("view") === "reader";
 
   const refresh = async () => {
     if (snapshot.status !== "ready") {
@@ -209,6 +217,12 @@ export function SnapshotReviewPage() {
         <p className="procurement-review__details">Folder: {folder}</p>
       </StateCard>
     );
+  } else if (readerView && snapshot.status === "ready") {
+    return (
+      <div className="page procurement-review">
+        <SnapshotReader key={snapshot.manifest.snapshotId} manifest={snapshot.manifest} catalog={snapshot.catalog} read={snapshot.read} header={<PageHeader title="Procurement review" subtitle={subtitle} actions={actions} />} />
+      </div>
+    );
   } else if (mountError) {
     body = (
       <StateCard title="The review plugin couldn't start" tone="danger">
@@ -237,4 +251,9 @@ export function SnapshotReviewPage() {
       {body}
     </div>
   );
+}
+
+function SnapshotReader({ manifest, catalog, read, header }: { manifest: SnapshotManifest; catalog: CatalogClient; read: BlobReader; header: ReactNode }) {
+  const source = useSnapshotReaderSource(manifest, catalog, read);
+  return <ProcurementReader source={source} header={header} />;
 }

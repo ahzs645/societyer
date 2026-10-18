@@ -28,6 +28,8 @@ const meetingsSource = readFileSync(join(ROOT, "pages/Meetings.tsx"), "utf8");
 
 const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/features/financials/pages/WavePages.tsx": 2,
+  // Server-query mode: a code-defined read-only table paged by Convex (staticRecordTable + serverQuery).
+  "src/features/procurementReview/reader/CatalogBrowser.tsx": 1,
   "src/pages/Agreements.tsx": 1,
   "src/pages/ApiKeysPage.tsx": 2,
   "src/pages/Attestations.tsx": 1,
@@ -202,6 +204,15 @@ assert.equal(editedRecord.relationLabel, "Morgan Patel", "relation edit refreshe
 
 const recordTableCount = Object.values(REVIEWED_RECORD_TABLE_FILES).reduce((sum, count) => sum + count, 0);
 const objectTableCount = Object.values(REVIEWED_OBJECT_RECORD_TABLE_FILES).reduce((sum, count) => sum + count, 0);
+// A page-owned query (serverQuery) is shown as given: no second in-memory
+// filter/sort, and no controls that need every record.
+const filteredRecordsSource = readFileSync(join(ROOT, "platform/record-engine/record-table/hooks/useFilteredRecords.ts"), "utf8");
+assert.match(filteredRecordsSource, /serverDriven\s*\?\s*edited/, "server-query tables keep the page's order and results");
+const toolbarSource = readFileSync(join(ROOT, "platform/record-engine/record-table/components/RecordTableToolbar.tsx"), "utf8");
+assert.match(toolbarSource, /!isPhone && !serverDriven &&/, "server-query tables hide the board and calendar switch");
+assert.match(toolbarSource, /!serverDriven && !listView\?\.active && viewType === "table"/, "server-query tables hide group by");
+assert.match(toolbarSource, /useRegisterCommand\(serverDriven \? null/, "server-query tables don't offer exporting one page as the table");
+
 console.log(
   `record table acceptance checks passed: ${recordTableCount} RecordTable instances, ${objectTableCount} ObjectRecordTable registers, no legacy DataTable, ${LAB_FIELDS.length} field types`,
 );
