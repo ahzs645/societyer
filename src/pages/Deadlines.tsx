@@ -27,6 +27,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
+  type RecordTableInlineEdit,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
@@ -39,6 +40,21 @@ const STATUS_FILTER_ITEMS: { id: StatusFilter; label: string }[] = [
   { id: "closed", label: "Closed" },
   { id: "all", label: "All" },
 ];
+
+/**
+ * Spreadsheet editing for the deadline list (RecordTable grid mode). Each
+ * edit saves through the scope's `onUpdate` (deadlines.update); status keeps
+ * its checkbox and completion workflow, so it is not a grid column.
+ */
+const DEADLINE_INLINE_EDIT: RecordTableInlineEdit = {
+  columns: {
+    title: { editor: "text", required: true },
+    description: { editor: "text" },
+    dueDate: { editor: "date", required: true },
+    category: { editor: "select", required: true },
+    recurrence: { editor: "select", required: true },
+  },
+};
 
 function statusLabel(status: StatusFilter) {
   return STATUS_FILTER_ITEMS.find((item) => item.id === status)?.label ?? status;
@@ -300,6 +316,7 @@ export function DeadlinesPage() {
             <RecordTableFilterChips />
             <RecordTable
               loading={tableData.loading || items === undefined}
+              inlineEdit={canWrite ? DEADLINE_INLINE_EDIT : undefined}
               renderCell={({ record, field }) => {
                 if (field.name === "status") {
                   const s = statusOf(record);

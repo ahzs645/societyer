@@ -1,6 +1,7 @@
 import { useStore } from "zustand";
 import { applyPendingEdits, useRecordTableStoreOrThrow, type RecordTableStore } from "../state/recordTableStore";
 import { filterAndSortRecords } from "../utils/filterAndSortRecords";
+import { applyStagedEdits } from "../utils/stagedEdits";
 
 type CacheEntry<T> = { deps: readonly unknown[]; value: T };
 
@@ -42,11 +43,13 @@ export function useFilteredRecords() {
   const dateContext = useStore(store, (s) => s.dateContext);
   // Inline edits show (and sort/filter) as soon as they are made.
   const pendingEdits = useStore(store, (s) => s.pendingEdits);
+  // So do a grid's batch edits that are not saved yet.
+  const stagedEdits = useStore(store, (s) => s.stagedEdits);
 
   return memoForStore(
     filteredCache,
     store,
-    [records, pendingEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext],
-    () => filterAndSortRecords({ records: applyPendingEdits(records, pendingEdits), columns, filters, filterGroups, sorts, searchTerm, dateContext }),
+    [records, pendingEdits, stagedEdits, columns, filters, filterGroups, sorts, searchTerm, dateContext],
+    () => filterAndSortRecords({ records: applyStagedEdits(applyPendingEdits(records, pendingEdits), stagedEdits), columns, filters, filterGroups, sorts, searchTerm, dateContext }),
   );
 }

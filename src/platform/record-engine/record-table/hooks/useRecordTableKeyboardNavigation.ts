@@ -9,6 +9,10 @@ import { recordCellText } from "../utils/recordCellText";
 import { copyAsTsv } from "../../../../lib/clipboard";
 import { useToast } from "../../../../components/Toast";
 import { useRecordTableUpdate } from "./useRecordTableUpdate";
+import type { RecordTableInlineEditController } from "../contexts/RecordTableInlineEditContext";
+import { navigateGrid } from "../utils/gridNavigation";
+
+const GRID_NAVIGATION_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End", "Tab"]);
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -56,9 +60,12 @@ export function buildCopyMatrix({
 export function useRecordTableKeyboardNavigation({
   enabled,
   selectable,
+  inlineEdit = null,
 }: {
   enabled: boolean;
   selectable: boolean;
+  /** Grid mode (RecordTable `inlineEdit`): spreadsheet keys on top of the ones below. */
+  inlineEdit?: RecordTableInlineEditController | null;
 }) {
   const { records: rows, ordered } = useRecordTableRowModel();
   const { objectMetadata, onRecordClick, onUpdate } = useRecordTableContextOrThrow();
@@ -130,6 +137,105 @@ export function useRecordTableKeyboardNavigation({
     return true;
   }, [handle, navigable, ordered, rows, toast, visibleColumns]);
 
+  /**
+   * Grid-mode keys. Returns true when the key was handled (or must be left to
+   * the browser, as ⌘C/X/V are for the table's clipboard events).
+   */
+  const handleGridKey = useCallback(
+    (event: ReactKeyboardEvent<HTMLElement>): boolean => {
+      if (!inlineEdit || event.altKey || isTypingTarget(event.target)) return false;
+      const mod = event.metaKey || event.ctrlKey;
+      const lower = event.key.toLowerCase();
+      const handled = () => {
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      };
+      if (mod) {
+        // The copy/cut/paste events carry the clipboard; see RecordTable.
+        if (lower === "c" || lower === "x" || lower === "v") return true;
+        if (lower === "z") {
+          handled();
+          if (event.shiftKey) inlineEdit.redo();
+          else inlineEdit.undo();
+          return true;
+        }
+        if (lower === "y") {
+          handled();
+          inlineEdit.redo();
+          return true;
+        }
+        if (lower === "a") {
+          handled();
+          inlineEdit.selectAll(selectable);
+          return true;
+        }
+      }
+      if (isControlTarget(event.target) || rows.length === 0 || navigable.length === 0) return false;
+      const state = handle.get();
+      const current = state.focusedCell ?? focusedCell ?? { rowIndex: 0, columnIndex: navigable[0] };
+      if (mod && lower === "e") {
+        const record = rows[current.rowIndex];
+        if (!record || !onRecordClick) return false;
+        handled();
+        onRecordClick(String(record._id), record, { source: "action", openRecordIn: "drawer" });
+        return true;
+      }
+      if (GRID_NAVIGATION_KEYS.has(event.key)) {
+        const next = navigateGrid(
+          { focus: current, anchor: state.rangeAnchor },
+          { key: event.key, shiftKey: event.shiftKey, mod },
+          { rowCount: rows.length, navigable, pageSize: inlineEdit.pageSize() },
+        );
+        // Tab at either end of the grid lets focus leave the table.
+        if (!next) return event.key === "Tab";
+        handled();
+        handle.set({ focusedCell: next.focus, rangeAnchor: next.anchor });
+        return true;
+      }
+      if (mod) return false;
+      const record = rows[current.rowIndex];
+      const field = visibleColumns[current.columnIndex]?.field;
+      const declared = !!field && !!inlineEdit.columnFor(field.name);
+      const editable = declared && !!record && !!field && inlineEdit.canEditCell(record, field);
+      if (event.key === "Backspace" || event.key === "Delete") {
+        if (!inlineEdit.clearSelection()) return false;
+        handled();
+        handle.get().setFocusedCell(current);
+        return true;
+      }
+      if (!declared) return false;
+      const startEdit = (seed?: string) => {
+        handle.get().setRangeAnchor(null);
+        handle.get().setFocusedCell(current);
+        handle.get().setEditingInitialValue(seed);
+        handle.get().setEditingCell(current);
+      };
+      // Space edits an editable cell; elsewhere (and with Shift) it keeps
+      // selecting rows. Enter on a locked cell says why it won't open.
+      if (event.key === " " && (!editable || event.shiftKey)) return selectable ? false : handled();
+      if (event.key === "Enter" || event.key === " " || event.key === "F2") {
+        handled();
+        if (editable) startEdit();
+        else inlineEdit.announce(`${field.label} is read-only here`);
+        return true;
+      }
+      if (isPrintableEditKey(event)) {
+        if (editable) {
+          handled();
+          startEdit(event.key);
+          return true;
+        }
+        // A locked grid cell never falls through to the metadata editor; the
+        // row keys (j/k to move, x to select) still work on it.
+        if (lower === "j" || lower === "k" || (lower === "x" && selectable)) return false;
+        return handled();
+      }
+      return false;
+    },
+    [focusedCell, handle, inlineEdit, navigable, onRecordClick, rows, selectable, visibleColumns],
+  );
+
   return useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
       if (!enabled) return;
@@ -151,6 +257,7 @@ export function useRecordTableKeyboardNavigation({
         if (!wasEditing) state.setFocusedCell(null);
         return;
       }
+      if (inlineEdit && handleGridKey(event)) return;
       // ⌘/Ctrl+C copies the selected cells (or rows, or the focused cell).
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "c") {
         if (isTypingTarget(event.target)) return;
@@ -272,7 +379,9 @@ export function useRecordTableKeyboardNavigation({
       copy,
       enabled,
       focusedCell,
+      handleGridKey,
       handle,
+      inlineEdit,
       navigable,
       onRecordClick,
       onUpdate,

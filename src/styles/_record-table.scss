@@ -1734,6 +1734,44 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   box-shadow: 0 14px 36px rgba(15, 23, 42, 0.2);
 }
 
+/* Grid mode (RecordTable `inlineEdit`): the EditableGrid's editors in the
+   floating frame, the inline reason a value was rejected, and cells edited
+   in a batch that is not saved yet. */
+.record-table__cell-editor-popover--grid {
+  padding: 0;
+
+  .egrid__editor {
+    outline: 0;
+    border-radius: 4px;
+  }
+
+  .egrid__date-editor {
+    border-radius: 4px;
+  }
+}
+
+.record-table__cell-editor-error {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: -2px;
+  width: max-content;
+  max-width: 320px;
+  padding: token('s-1') token('s-2');
+  background: token('bg-panel');
+  border: 1px solid token('danger');
+  border-radius: token('r-sm');
+  box-shadow: token('elevation-2');
+  color: token('danger');
+  font-size: token('fs-xs');
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.record-table__cell--staged {
+  background: token('accent-soft');
+  box-shadow: inset 2px 0 0 token('accent');
+}
+
 .record-cell__structured-editor {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

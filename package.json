@@ -115,6 +115,7 @@
     "test:record-table-utils": "tsx scripts/check-record-table-utils.ts",
     "test:role-holder-inline-edit": "tsx scripts/check-role-holder-inline-edit.ts",
     "test:record-table-acceptance": "tsx scripts/check-record-table-acceptance.ts",
+    "test:record-table-inline-edit": "tsx scripts/check-record-table-inline-edit.ts",
     "test:mobile-table-layout": "tsx scripts/check-mobile-table-layout.ts",
     "test:timed-transcript": "tsx scripts/check-timed-transcript.ts",
     "test:meeting-governance": "tsx scripts/check-meeting-governance.ts",

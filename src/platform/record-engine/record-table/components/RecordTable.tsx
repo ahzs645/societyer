@@ -33,6 +33,9 @@ import type { MenuSection } from "../../../../components/Menu";
 import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 import { isEmptyValue } from "../utils/filterRecords";
 import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
+import { RecordTableInlineEditContext, type RecordTableInlineEdit } from "../contexts/RecordTableInlineEditContext";
+import { useRecordTableInlineEditController } from "../hooks/useRecordTableInlineEditController";
+import { RecordTableGridChrome } from "./RecordTableGridChrome";
 
 const INTERACTIVE_BOARD_FIELD_TYPES: ReadonlySet<FieldMetadata["fieldType"]> = new Set([
   FIELD_TYPES.EMAIL,
@@ -273,6 +276,7 @@ export function RecordTable({
   showAggregateFooter = true,
   renderPhoneCard,
   autoPhoneCard = true,
+  inlineEdit,
 }: {
   selectable?: boolean;
   emptyState?: ReactNode;
@@ -314,6 +318,12 @@ export function RecordTable({
   renderPhoneCard?: RecordTableCardRenderer;
   /** Set false to keep the phone column table instead of the automatic card. */
   autoPhoneCard?: boolean;
+  /**
+   * Opt-in spreadsheet editing ("grid mode") for the columns it declares:
+   * typed editors, range selection, clipboard, undo/redo and optional batch
+   * saving. See RecordTableInlineEdit. Pass a stable (memoised) object.
+   */
+  inlineEdit?: RecordTableInlineEdit;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
@@ -558,10 +568,22 @@ export function RecordTable({
     },
     [],
   );
+  const gridController = useRecordTableInlineEditController(inlineEdit, tableRootRef);
   const handleTableKeyDown = useRecordTableKeyboardNavigation({
     enabled: keyboardNavigation,
     selectable: effectiveSelectable || inlineSelection,
+    inlineEdit: gridController,
   });
+  // Grid mode reads and writes the clipboard through these events (they
+  // carry the data synchronously and need no permission prompt).
+  const clipboardHandlers = gridController
+    ? { onCopy: gridController.onCopy, onCut: gridController.onCut, onPaste: gridController.onPaste }
+    : undefined;
+  // Rows and cells read the grid controller (null when not opted in). Both
+  // table bodies are always wrapped, so turning grid mode on never remounts.
+  const withGridMode = (table: ReactNode) => (
+    <RecordTableInlineEditContext.Provider value={gridController}>{table}</RecordTableInlineEditContext.Provider>
+  );
 
   // The focused/editing cell follows its record, not its row number: when an
   // edit (or anyone's change) re-sorts the rows, the ring moves with the
@@ -883,12 +905,13 @@ export function RecordTable({
   };
 
   if (rowModel.items.length <= virtualizeAbove) {
-    return (
+    return withGridMode(
       <div
         role="region"
         aria-label={`${objectMetadata.labelPlural} table`}
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
+        {...clipboardHandlers}
         ref={setStretchRoot}
         className={`record-table__scroll-frame${frameModifiers}`}
         style={{
@@ -898,7 +921,7 @@ export function RecordTable({
       >
         {mobileSelectionControls}
         <div ref={setScrollNode} className={`record-table__scroll ${densityClass}`}>
-          <table className="record-table" role="grid">
+          <table className="record-table" role="grid" aria-multiselectable={gridController ? true : undefined}>
             <thead className="record-table__thead">
               <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
             </thead>
@@ -939,7 +962,8 @@ export function RecordTable({
           </table>
         </div>
         {rowContextMenuElement}
-      </div>
+        {gridController && <RecordTableGridChrome controller={gridController} />}
+      </div>,
     );
   }
 
@@ -947,7 +971,7 @@ export function RecordTable({
   // the 600px from `.record-table__virtuoso` in CSS (inline > class). If the
   // parent card has no explicit height, 100% collapses to 0 and virtuoso
   // renders an empty tbody. Pass height inline so our value wins.
-  return (
+  return withGridMode(
     <div
       ref={(node) => {
         tableRootRef.current = node;
@@ -958,6 +982,7 @@ export function RecordTable({
       aria-label={`${objectMetadata.labelPlural} table`}
       tabIndex={0}
       onKeyDown={handleTableKeyDown}
+      {...clipboardHandlers}
       style={{
         "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
         "--rt-stretch": columnStretch,
@@ -1013,7 +1038,8 @@ export function RecordTable({
         }
       />
       {rowContextMenuElement}
-    </div>
+      {gridController && <RecordTableGridChrome controller={gridController} />}
+    </div>,
   );
 }
 
