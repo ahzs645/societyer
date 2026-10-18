@@ -2080,6 +2080,7 @@ export async function voidJournalEntryPortable(
   if (!EDITABLE_JOURNAL_SOURCES.includes(String(entry.source))) {
     throw new Error("Only manual journal entries can be voided here. Undo an imported or posted-from-source entry where it came from.");
   }
+  await assertPeriodOpen(ctx, { societyId, date: String(entry.date) });
   await assertBooksOpen(ctx, societyId, [entry.date], "voided");
   const now = new Date().toISOString();
   await ctx.db.patch(id, {

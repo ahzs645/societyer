@@ -419,6 +419,18 @@ await checkAsync("the bank backfill skips transactions in the closed books", asy
   assert.equal(result.posted, 1);
 });
 
+await checkAsync("voiding refuses an entry in a closed fiscal period", async () => {
+  const q2 = await mutate((ctx) => ctx.db.insert("accountingFiscalPeriods", { societyId: ids.societyId, fiscalYear: "2026", periodLabel: "Q2 2026", startDate: "2026-04-01", endDate: "2026-06-30", status: "open", createdAtISO: "2026-04-01T00:00:00.000Z", updatedAtISO: "2026-04-01T00:00:00.000Z" }));
+  const june = await journal("2026-06-10");
+  await mutate((ctx) => ctx.db.patch(q2, { status: "closed" }));
+  await refused("void inside a closed period", /Fiscal period Q2 2026 is closed/, () => mutate((ctx) => voidJournalEntryPortable(ctx, { id: june })));
+  await mutate(async (ctx) => {
+    for (const line of (await ctx.db.query("journalLines").collect()).filter((row) => row.journalEntryId === june)) await ctx.db.delete(line._id);
+    await ctx.db.delete(june);
+    await ctx.db.delete(q2);
+  });
+});
+
 await checkAsync("moving the close date back reopens the books; closing a period can lock them", async () => {
   await mutate((ctx) => updateBooksSettingsPortable(ctx, { societyId: ids.societyId, closeDate: null }));
   await journal("2026-03-15");

@@ -340,9 +340,9 @@ async function postEntry(
 ): Promise<string> {
   const existing = await ctx.db
     .query<JournalEntryRow>("journalEntries")
-    .withIndex("by_society_source", (q) => q.eq("societyId", args.societyId).eq("source", args.source))
+    .withIndex("by_society_source_external", (q) => q.eq("societyId", args.societyId).eq("source", args.source).eq("sourceExternalId", args.sourceExternalId))
     .collect();
-  const already = existing.find((entry) => entry.sourceExternalId === args.sourceExternalId && entry.status === "posted");
+  const already = existing.find((entry) => entry.status === "posted");
   if (already) return already._id;
   validateBalancedJournalLines(args.lines);
   const period = (await assertPeriodOpen(ctx, { societyId: args.societyId, date: args.date })) as { _id: string; fiscalYear?: string } | null;
