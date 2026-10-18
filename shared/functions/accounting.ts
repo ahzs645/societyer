@@ -1658,8 +1658,9 @@ export async function assertTransactionBooksOpen(ctx: PortableQueryCtx, societyI
  * date is a hard lock: an entry dated on or before it (or moving there) is
  * never touched, not even its tags. With `onLocked: "skip"` a closed period
  * or the close date leaves the entry as it is instead of failing (rule runs
- * and bulk edits; they also check createTransactionBooksLock first so the
- * transaction itself is left alone and counted).
+ * and bulk edits; they check createTransactionBooksLock first and write
+ * through patchTransactionWithJournal, so a skipped transaction is left as
+ * it was and counted).
  */
 export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId: string) {
   let context: JournalPlanContext | null = null;
@@ -1745,6 +1746,34 @@ export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId
     });
     return "reposted";
   };
+}
+
+/**
+ * Patch a bank transaction and keep its posted journal entry in step, or do
+ * neither: when the sync can't follow (the entry is inside the books close
+ * date or a closed fiscal period) the patched fields are put back to `row`'s
+ * values, so the register and the ledger never disagree. `row` is the
+ * transaction as read before the patch. Bulk edits, rule runs and Undo skip
+ * (false is returned; count it in `skippedLocked`); with `onLocked: "throw"`
+ * a single edit gets the refusal instead.
+ */
+export async function patchTransactionWithJournal(
+  ctx: PortableMutationCtx,
+  sync: ReturnType<typeof createTransactionJournalSync>,
+  row: PortableDoc,
+  patch: Record<string, unknown>,
+  options: { onLocked?: "throw" | "skip" } = {},
+): Promise<boolean> {
+  const revert = () => ctx.db.patch(row._id, Object.fromEntries(Object.keys(patch).map((field) => [field, row[field] ?? undefined])));
+  await ctx.db.patch(row._id, patch);
+  try {
+    if ((await sync(String(row._id), { onLocked: options.onLocked ?? "skip" })) !== "locked") return true;
+  } catch (error) {
+    await revert();
+    throw error;
+  }
+  await revert();
+  return false;
 }
 
 /* ------------------------------------------------------------------------

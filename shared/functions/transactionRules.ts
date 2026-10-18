@@ -11,7 +11,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
-import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync } from "./accounting";
+import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync, patchTransactionWithJournal } from "./accounting";
 import {
   autoRuleName,
   findApplicableRule,
@@ -286,8 +286,10 @@ export async function applyToUncategorizedPortable(
       skippedLocked += 1;
       continue;
     }
-    await ctx.db.patch(txn._id, result.patch);
-    await sync(String(txn._id), { onLocked: "skip" });
+    if (!(await patchTransactionWithJournal(ctx, sync, txn, result.patch))) {
+      skippedLocked += 1;
+      continue;
+    }
     applied += 1;
     const entry = byRule.get(result.rule._id) ?? { ruleId: result.rule._id, name: result.rule.name, count: 0 };
     entry.count += 1;
@@ -299,8 +301,8 @@ export async function applyToUncategorizedPortable(
 
 /**
  * Undo every application from one batch, restoring the previous values.
- * Lines whose journal entry is now inside the books close date keep the rule's
- * values and are counted in `skippedLocked`.
+ * Lines whose journal entry is now inside the books close date (or a closed
+ * fiscal period) keep the rule's values and are counted in `skippedLocked`.
  */
 // The batch key is named `batch` (not `batchId`): it is an opaque key, not a row reference.
 export async function undoBatchPortable(ctx: PortableMutationCtx, { societyId, batch }: { societyId: string; batch: string }) {
@@ -318,19 +320,21 @@ export async function undoBatchPortable(ctx: PortableMutationCtx, { societyId, b
       skippedLocked += 1;
       continue;
     }
-    await ctx.db.patch(txn._id, restoreRuleFieldsPatch(txn.ruleApplication.previous));
-    await sync(String(txn._id), { onLocked: "skip" });
+    if (!(await patchTransactionWithJournal(ctx, sync, txn, restoreRuleFieldsPatch(txn.ruleApplication.previous)))) {
+      skippedLocked += 1;
+      continue;
+    }
     restored += 1;
   }
   return { restored, skippedLocked };
 }
 
-/** Remove a rule's application from one transaction (refused inside the books close date). */
+/** Remove a rule's application from one transaction (refused inside the books close date or a closed fiscal period). */
 export async function removeApplicationPortable(ctx: PortableMutationCtx, { txnId }: { txnId: string }) {
   const txn = await requireOwnedRow<any>(ctx, "financialTransactions", txnId);
   if (txn.categorizedBy !== "rule") throw new Error("This transaction was not categorised by a rule.");
   await assertTransactionBooksOpen(ctx, String(txn.societyId), txnId);
-  await ctx.db.patch(txnId, restoreRuleFieldsPatch(txn.ruleApplication?.previous));
-  await createTransactionJournalSync(ctx, String(txn.societyId))(txnId, { onLocked: "skip" });
+  // A single edit: a closed fiscal period refuses it (and leaves the transaction as it was).
+  await patchTransactionWithJournal(ctx, createTransactionJournalSync(ctx, String(txn.societyId)), txn, restoreRuleFieldsPatch(txn.ruleApplication?.previous), { onLocked: "throw" });
   return txnId;
 }

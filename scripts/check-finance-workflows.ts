@@ -235,6 +235,28 @@ await rules.removePortable(mina, { id: recodeId });
   assert.equal((await db.get(latestHydro._id)).category, undefined, "once the date moves, Undo restores it");
 }
 
+// A closed fiscal period: the rule run and Undo leave the transaction as it was (its journal entry can't follow).
+{
+  const period = (await db.query("accountingFiscalPeriods").collect()).find((row: any) => row.societyId === S && row.startDate <= latestHydro.date && row.endDate >= latestHydro.date);
+  assert.ok(period, "a fiscal period covers the posted line");
+  await db.patch(period._id, { status: "closed" });
+  const closedRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.ok(closedRun.skippedLocked >= 1, "the posted line in the closed period is counted");
+  assert.equal((await db.get(latestHydro._id)).category, undefined, "and left as it was, so the register matches its journal entry");
+  await rules.undoBatchPortable(mina, { societyId: S, batch: closedRun.batchId });
+  await db.patch(period._id, { status: "open" });
+  const openRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.equal((await db.get(latestHydro._id)).category, "Facilities");
+  await db.patch(period._id, { status: "closed" });
+  await assert.rejects(() => rules.removeApplicationPortable(mina, { txnId: latestHydro._id }), /Fiscal period .* is closed/, "removing a rule's application refuses in a closed period");
+  const closedUndo = await rules.undoBatchPortable(mina, { societyId: S, batch: openRun.batchId });
+  assert.ok(closedUndo.skippedLocked >= 1, "Undo skips it too");
+  assert.deepEqual([(await db.get(latestHydro._id)).category, (await db.get(latestHydro._id)).categorizedBy], ["Facilities", "rule"], "it keeps the rule's category and provenance");
+  await db.patch(period._id, { status: "open" });
+  await rules.undoBatchPortable(mina, { societyId: S, batch: openRun.batchId });
+  assert.equal((await db.get(latestHydro._id)).category, undefined);
+}
+
 // ---- approvals (default approver access: finance edit access required)
 // Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with
 // read-only finance access; a Viewer is added below.

@@ -20,7 +20,7 @@ import { fiscalWindow } from "./treasury";
 import { todayDateOnly } from "../dateOnly";
 import { RULE_TOUCHED_FIELDS, snapshotRuleFields } from "../transactionRules";
 import { categoryAmounts, isSplitTransaction } from "../transactionLines";
-import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync } from "./accounting";
+import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync, patchTransactionWithJournal } from "./accounting";
 import { requireBudgetForTransaction } from "./spendBudgets";
 
 function normalizeCategoryLabel(value: unknown) {
@@ -622,7 +622,8 @@ export function snapshotBulkFields(row: Record<string, unknown>): Record<string,
  * skipped, never named. A category is not forced onto a split transaction
  * (its lines keep their categories); those are counted in `splitSkipped`.
  * A category or fund change to a transaction whose journal entry is dated on
- * or before the books close date is skipped and counted in `skippedLocked`.
+ * or before the books close date (or in a closed fiscal period) is skipped
+ * and counted in `skippedLocked`; the transaction is left as it was.
  * `spendBudgetId` charges money-out lines to an active spend budget (null
  * clears it); lines the budget can't take (money in, outside its dates, a
  * claim payout it already counts) are counted in `budgetSkipped`.
@@ -700,9 +701,15 @@ export async function bulkUpdateTransactionsPortable(
       skippedLocked += 1;
       continue;
     }
-    await ctx.db.patch(row._id, next);
+    if (reposts) {
+      if (!(await patchTransactionWithJournal(ctx, sync, row, next))) {
+        skippedLocked += 1;
+        continue;
+      }
+    } else {
+      await ctx.db.patch(row._id, next);
+    }
     previous.push({ id: String(row._id), values });
-    if (reposts) await sync(String(row._id), { onLocked: "skip" });
   }
   return { updated: previous.length, skipped, splitSkipped, skippedLocked, budgetSkipped, previous };
 }
@@ -710,7 +717,8 @@ export async function bulkUpdateTransactionsPortable(
 /**
  * Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned.
  * Transactions whose journal entry is now on or before the books close date
- * are left as they are and counted in `skippedLocked`.
+ * (or in a closed fiscal period) are left as they are and counted in
+ * `skippedLocked`.
  */
 export async function restoreTransactionsPortable(
   ctx: PortableMutationCtx,
@@ -759,8 +767,10 @@ export async function restoreTransactionsPortable(
     for (const tagId of new Set(restoredTags.map(String))) await getOwned(ctx, "financeTags", tagId, societyId);
     const patch: Record<string, unknown> = {};
     for (const field of BULK_SNAPSHOT_FIELDS) patch[field] = values[field] ?? undefined;
-    await ctx.db.patch(row._id, patch);
-    await sync(String(row._id), { onLocked: "skip" });
+    if (!(await patchTransactionWithJournal(ctx, sync, row, patch))) {
+      skippedLocked += 1;
+      continue;
+    }
     restored += 1;
   }
   return { restored, skipped, skippedLocked };

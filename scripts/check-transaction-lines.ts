@@ -233,6 +233,33 @@ await assert.rejects(linesFns.assignTagPortable(owner, { societyId: S, ids: plai
   assert.equal((await get(locked.id)).category, before.category, "once the date moves, Undo works again");
 }
 
+// ---- a closed fiscal period: bulk edits, rule runs and Undo leave the transaction as it was, so register and ledger agree
+{
+  const row = seed.financialTransactions.find((txn) => !txn.lines && txn.category && txn.status !== "pending" && String(txn._id).startsWith("static_tx_feed_") && txn.date > "2026-01-01")!;
+  const id = String(row._id);
+  const entry = (await accounting.postedJournalForTransaction(owner, id)).entries.find((item) => item.source === accounting.TRANSACTION_BACKFILL_SOURCE && item.status === "posted");
+  assert.ok(entry, "a posted feed line");
+  const entryLines = async () => JSON.stringify((await accounting.postedJournalForTransaction(owner, id)).lines.map((line) => [line.accountId, line.side, line.amountCents]).sort());
+  const ledgerBefore = await entryLines();
+  const periods = (await db.query<Row>("accountingFiscalPeriods").collect()).filter((period) => period.societyId === S && period.startDate <= entry!.date && period.endDate >= entry!.date);
+  const periodId = periods[0]?._id ?? (await db.insert("accountingFiscalPeriods", { societyId: S, fiscalYear: "gate", periodLabel: "Gate period", startDate: String(entry!.date), endDate: String(entry!.date), status: "open", createdAtISO: "", updatedAtISO: "" }));
+  const priorStatus = (await get(String(periodId))).status;
+  await db.patch(String(periodId), { status: "closed" });
+  const current = await get(id);
+  const recategorised = current.category === "Program supplies" ? "Office & technology" : "Program supplies";
+  const bulk = await hub.bulkUpdateTransactionsPortable(owner, { societyId: S, ids: [id], patch: { category: recategorised } });
+  assert.deepEqual([bulk.updated, bulk.skippedLocked], [0, 1], "a bulk category in a closed period is skipped and counted");
+  assert.deepEqual(await get(id), current, "and the transaction is left exactly as it was");
+  assert.equal(await entryLines(), ledgerBefore, "while its journal entry is untouched");
+  const tagged = await linesFns.assignTagPortable(owner, { societyId: S, ids: [id], tagId: tagId("fall_gala") });
+  assert.deepEqual([tagged.updated, tagged.skippedLocked], [1, 0], "tags still update in place in a closed period");
+  const undone = await hub.restoreTransactionsPortable(owner, { societyId: S, rows: [{ id, values: { ...tagged.previous[0].values, category: recategorised } }] });
+  assert.deepEqual([undone.restored, undone.skippedLocked], [0, 1], "an Undo that would re-post is skipped in a closed period");
+  assert.deepEqual((await get(id)).tagIds, [tagId("fall_gala")], "and leaves the transaction as it was");
+  await db.patch(String(periodId), { status: priorStatus });
+  await hub.restoreTransactionsPortable(owner, { societyId: S, rows: tagged.previous });
+}
+
 // ---- tag management
 await assert.rejects(tagsFns.upsertGroupPortable(owner, { societyId: S, name: " program " }), /already/, "group names are unique, ignoring case and spaces");
 const groupId = await tagsFns.upsertGroupPortable(owner, { societyId: S, name: "Location", color: "blue" });

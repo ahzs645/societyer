@@ -29,6 +29,7 @@ import {
   assertTransactionBooksOpen,
   createTransactionBooksLock,
   createTransactionJournalSync,
+  patchTransactionWithJournal,
   PENDING_SUSPENSE_ACCOUNT,
   postedJournalForTransaction,
   previewTransactionJournal,
@@ -208,9 +209,11 @@ export async function assignTagPortable(
       skippedLocked += 1;
       continue;
     }
+    if (!(await patchTransactionWithJournal(ctx, sync, row, patch))) {
+      skippedLocked += 1;
+      continue;
+    }
     previous.push({ id: String(row._id), values: snapshotBulkFields(row) });
-    await ctx.db.patch(id, patch);
-    await sync(id, { onLocked: "skip" });
   }
   return { updated: previous.length, skipped, skippedLocked, previous };
 }
