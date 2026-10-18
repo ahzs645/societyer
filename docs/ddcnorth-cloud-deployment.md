@@ -30,6 +30,11 @@ The deploy command publishes the current checkout to the Pages production
 branch. Backend deployment is separate: `npx convex deploy` targets this
 project's default production deployment. Development uses `npx convex dev`.
 
+Procurement has a separate reader connection and pinned plugin artifact. Use
+the [procurement operations guide](procurement-review-operations.md) for its
+setup and release commands. A plugin UI release requires a new Pages deployment;
+a data refresh only requires publishing the existing Zoer catalog to SharePoint.
+
 ## Access and email readiness
 
 Both Convex deployments have:

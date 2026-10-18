@@ -1,5 +1,10 @@
 # Procurement review: Zoer → SharePoint → Societyer
 
+For repeatable setup, workspace onboarding, live plugin updates, data refreshes,
+credential rotation and rollback, start with the
+[operations guide](procurement-review-operations.md). This file retains the
+dated rollout evidence and concrete DDC North resource IDs.
+
 This module reads published BC Bid Monitor snapshots. Collection, AI calls,
 starring, pursuit edits and other writes remain in Zoer. Societyer provides
 read-only views using the plugin's own bundled React 19 and Societyer-styled

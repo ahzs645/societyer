@@ -8,6 +8,17 @@ For corporations it keeps the securities ledger and certificates, share-class ri
 
 ---
 
+## Procurement review
+
+The optional hosted Procurement review module reads Zoer snapshots from a
+private SharePoint site, with one folder per workspace and a separate read-only
+application connection. See the [operator and release guide](docs/procurement-review-operations.md)
+for tenant setup, updating the live plugin, publishing fresh data and rollback;
+the [DDC North setup record](docs/procurement-review-setup.md) records the actual
+resources and qualified checks.
+
+---
+
 ## WebMCP challenge demo
 
 Open the credential-free [Societyer demo](https://society.ahmadjalil.com/demo/app) in ChatGPT's in-app browser. When a workspace is active, Societyer registers three imperative [WebMCP](https://webmachinelearning.github.io/webmcp/) tools:
