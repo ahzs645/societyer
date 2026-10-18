@@ -90,6 +90,8 @@ export const EXPORTABLE_TABLES = [
   "reconciliationPeriods",
   "transactionRules",
   "payeeAliases",
+  "financeTagGroups",
+  "financeTags",
   "expenseApprovalRules",
   "expenseApprovalSettings",
   "expenseClaimPolicy",

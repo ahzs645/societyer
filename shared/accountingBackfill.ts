@@ -15,9 +15,18 @@
  *    unless the caller explicitly includes them, in which case they are
  *    flagged on the journal entry.
  *
+ * Line items: a transaction posts one offset line per line item
+ * (shared/transactionLines.ts). A line coded to a ledger account
+ * (`accountingAccountId`) posts there; otherwise its category goes through
+ * the review choice, then the saved mapping, then suspense, as above. Funds
+ * and tags travel with each line onto the journal.
+ *
  * Pure and dependency-free so the preview query, the posting mutation and the
  * gate script (scripts/check-accounting-backfill.ts) share one rule.
  */
+
+import { transactionLines, type TransactionLine } from "./transactionLines";
+import { transactionBackfillSides } from "./accountingCore";
 
 export const SUSPENSE_ACCOUNT_TEMPLATE = {
   code: "2999",
@@ -38,6 +47,10 @@ export type BackfillTransaction = {
   accountId: string;
   category?: string;
   categoryAccountExternalId?: string;
+  accountingAccountId?: string;
+  fundRestrictionId?: string;
+  tagIds?: string[];
+  lines?: TransactionLine[];
 };
 
 export type BackfillAccount = {
@@ -60,6 +73,22 @@ export type BackfillMapping = {
 
 export type CategoryChoice = { category: string; accountId: string };
 
+export type BackfillOffsetSource = "account" | "mapping" | "choice" | "suspense";
+
+/** One offset line a transaction posts (one per line item). */
+export type BackfillPlanLine = {
+  lineId: string;
+  /** Signed like the transaction. */
+  amountCents: number;
+  category: string;
+  offsetAccountId?: string;
+  offsetSource?: BackfillOffsetSource;
+  mappingId?: string;
+  fundRestrictionId?: string;
+  tagIds?: string[];
+  memo?: string;
+};
+
 export type BackfillRowStatus =
   | "post"
   | "already_posted"
@@ -76,12 +105,15 @@ export type BackfillPlanRow = {
   category: string;
   direction: "income" | "expense";
   cashAccountId: string;
+  /** The first line's offset account (the only one unless split). */
   offsetAccountId?: string;
-  /** Where the offset account came from. */
-  offsetSource?: "mapping" | "choice" | "suspense";
+  /** Where the offset account came from; "suspense" when any line goes there. */
+  offsetSource?: BackfillOffsetSource;
   status: BackfillRowStatus;
   beforeOpening: boolean;
   mappingId?: string;
+  /** Offset lines, one per line item (empty for rows that will not post). */
+  lines: BackfillPlanLine[];
 };
 
 export type BackfillCategorySummary = {
@@ -90,7 +122,7 @@ export type BackfillCategorySummary = {
   count: number;
   totalCents: number;
   offsetAccountId?: string;
-  offsetSource?: "mapping" | "choice" | "suspense";
+  offsetSource?: BackfillOffsetSource;
 };
 
 export type BackfillPlan = {
@@ -133,7 +165,7 @@ export function openingBalanceDate(entries: Array<{ source?: string; status?: st
   return dates[0] ?? null;
 }
 
-function matchMapping(transaction: BackfillTransaction, mappings: BackfillMapping[]): BackfillMapping | undefined {
+function matchMapping(transaction: Pick<BackfillTransaction, "category" | "categoryAccountExternalId">, mappings: BackfillMapping[]): BackfillMapping | undefined {
   const category = normalizeCategory(transaction.category);
   const external = transaction.categoryAccountExternalId;
   return mappings.find((mapping) =>
@@ -192,57 +224,83 @@ export function planTransactionBackfill(input: {
       beforeOpening,
     };
     if (posted.has(String(transaction._id))) {
-      rows.push({ ...base, status: "already_posted" });
+      rows.push({ ...base, status: "already_posted", lines: [] });
       continue;
     }
     if (amountCents === 0) {
-      rows.push({ ...base, status: "zero_amount" });
+      rows.push({ ...base, status: "zero_amount", lines: [] });
       continue;
     }
     if (!accountsById.has(String(transaction.accountId))) {
-      rows.push({ ...base, status: "no_cash_account" });
+      rows.push({ ...base, status: "no_cash_account", lines: [] });
       continue;
     }
-    const mapping = matchMapping(transaction, input.mappings);
-    const mappedAccount = mapping && accountsById.has(String(mapping.financialAccountId)) ? String(mapping.financialAccountId) : undefined;
-    const choice = choices.get(normalizeCategory(transaction.category));
-    let offsetAccountId: string | undefined;
-    let offsetSource: BackfillPlanRow["offsetSource"];
-    if (choice) {
-      offsetAccountId = choice;
-      offsetSource = "choice";
-    } else if (mappedAccount) {
-      offsetAccountId = mappedAccount;
-      offsetSource = "mapping";
-    } else if (useSuspense) {
-      offsetAccountId = suspense ? String(suspense._id) : undefined;
-      offsetSource = "suspense";
-    }
+    const split = Boolean(transaction.lines && transaction.lines.length > 1);
+    const lines: BackfillPlanLine[] = transactionLines(transaction).map((line) => {
+      const category = String(line.category ?? "").trim();
+      const out: BackfillPlanLine = {
+        lineId: line.id,
+        amountCents: line.amountCents,
+        category,
+        ...(line.fundRestrictionId ? { fundRestrictionId: String(line.fundRestrictionId) } : {}),
+        ...(line.tagIds?.length ? { tagIds: line.tagIds.map(String) } : {}),
+        ...(line.memo ? { memo: line.memo } : {}),
+      };
+      if (line.accountingAccountId && accountsById.has(String(line.accountingAccountId))) {
+        return { ...out, offsetAccountId: String(line.accountingAccountId), offsetSource: "account" };
+      }
+      // The external category account only describes the unsplit transaction.
+      const mapping = matchMapping({ category, categoryAccountExternalId: split ? undefined : transaction.categoryAccountExternalId }, input.mappings);
+      const mappedAccount = mapping && accountsById.has(String(mapping.financialAccountId)) ? String(mapping.financialAccountId) : undefined;
+      const choice = choices.get(normalizeCategory(category));
+      if (choice) return { ...out, offsetAccountId: choice, offsetSource: "choice" };
+      if (mappedAccount) return { ...out, offsetAccountId: mappedAccount, offsetSource: "mapping", mappingId: mapping?._id };
+      if (useSuspense) return { ...out, offsetAccountId: suspense ? String(suspense._id) : undefined, offsetSource: "suspense" };
+      return out;
+    });
+    const first = lines[0];
+    const offsetSource: BackfillOffsetSource | undefined = lines.some((line) => !line.offsetSource)
+      ? undefined
+      : lines.some((line) => line.offsetSource === "suspense")
+        ? "suspense"
+        : first?.offsetSource;
     const status: BackfillRowStatus = beforeOpening && !input.includeBeforeOpening
       ? "before_opening"
       : offsetSource
         ? "post"
         : "needs_mapping";
-    rows.push({ ...base, status, offsetAccountId, offsetSource, mappingId: offsetSource === "mapping" ? mapping?._id : undefined });
+    rows.push({
+      ...base,
+      status,
+      offsetAccountId: first?.offsetAccountId,
+      offsetSource,
+      mappingId: first?.offsetSource === "mapping" ? first.mappingId : undefined,
+      lines,
+    });
   }
 
   const categories = new Map<string, BackfillCategorySummary>();
   for (const row of rows) {
     // Only rows that would post (or need a mapping to post) are mapped; rows
     // held back before the opening balances join once they are included.
+    // Lines coded to a ledger account need no category mapping.
     if (row.status !== "post" && row.status !== "needs_mapping") continue;
-    const key = `${row.direction}|${normalizeCategory(row.category)}`;
-    const existing = categories.get(key) ?? {
-      category: row.category || "(uncategorized)",
-      direction: row.direction,
-      count: 0,
-      totalCents: 0,
-      offsetAccountId: row.offsetAccountId,
-      offsetSource: row.offsetSource,
-    };
-    existing.count += 1;
-    existing.totalCents += row.amountCents;
-    categories.set(key, existing);
+    for (const line of row.lines) {
+      if (line.offsetSource === "account") continue;
+      const direction: "income" | "expense" = line.amountCents >= 0 ? "income" : "expense";
+      const key = `${direction}|${normalizeCategory(line.category)}`;
+      const existing = categories.get(key) ?? {
+        category: line.category || "(uncategorized)",
+        direction,
+        count: 0,
+        totalCents: 0,
+        offsetAccountId: line.offsetAccountId,
+        offsetSource: line.offsetSource,
+      };
+      existing.count += 1;
+      existing.totalCents += line.amountCents;
+      categories.set(key, existing);
+    }
   }
 
   const toPost = rows.filter((row) => row.status === "post");
@@ -264,4 +322,63 @@ export function planTransactionBackfill(input: {
       netCents: toPost.reduce((sum, row) => sum + row.amountCents, 0),
     },
   };
+}
+
+/** A journal line a bank transaction posts, ready to insert. */
+export type TransactionJournalLine = {
+  accountId: string;
+  lineOrder: number;
+  amountCents: number;
+  side: "debit" | "credit";
+  description: string;
+  fundRestrictionId?: string;
+  tagIds?: string[];
+  sourceExternalId?: string;
+  rawJson: string;
+};
+
+/**
+ * The balanced journal lines for one planned row: the bank (cash) line for
+ * the whole amount, then one offset line per line item on the side its own
+ * sign calls for, so a split with a negative line (a deposit net of a fee)
+ * still balances. `suspenseAccountId` stands in for suspense lines whose
+ * account did not exist when the plan was made.
+ */
+export function journalLinesForPlanRow(
+  transaction: Pick<BackfillTransaction, "amountCents" | "accountId" | "description" | "category" | "categoryAccountExternalId"> & { externalId?: string },
+  row: Pick<BackfillPlanRow, "lines">,
+  suspenseAccountId?: string | null,
+): TransactionJournalLine[] {
+  const { cashSide, absoluteAmountCents } = transactionBackfillSides(transaction.amountCents);
+  const description = String(transaction.description ?? "");
+  const out: TransactionJournalLine[] = [
+    {
+      accountId: String(transaction.accountId),
+      lineOrder: 0,
+      amountCents: absoluteAmountCents,
+      side: cashSide,
+      description,
+      ...(transaction.externalId ? { sourceExternalId: transaction.externalId } : {}),
+      rawJson: JSON.stringify({ backfillRole: "cash" }),
+    },
+  ];
+  const split = row.lines.length > 1;
+  const offsetExternalId = split ? undefined : transaction.categoryAccountExternalId ?? transaction.externalId;
+  row.lines.forEach((line, index) => {
+    const accountId = line.offsetSource === "suspense" ? line.offsetAccountId ?? suspenseAccountId ?? undefined : line.offsetAccountId;
+    if (!accountId) throw new Error("Every line needs an account before the transaction can post.");
+    const label = line.memo || line.category || (split ? description : transaction.category ?? description);
+    out.push({
+      accountId: String(accountId),
+      lineOrder: index + 1,
+      amountCents: Math.abs(line.amountCents),
+      side: line.amountCents >= 0 ? "credit" : "debit",
+      description: line.offsetSource === "suspense" ? `Unmapped: ${line.category || description}` : label,
+      ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
+      ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
+      ...(offsetExternalId ? { sourceExternalId: offsetExternalId } : {}),
+      rawJson: JSON.stringify({ backfillRole: "offset", lineId: line.lineId, mappingId: line.mappingId, offsetSource: line.offsetSource }),
+    });
+  });
+  return out;
 }

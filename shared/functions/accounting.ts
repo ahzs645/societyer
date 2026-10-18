@@ -3,9 +3,15 @@ import {
   SUSPENSE_ACCOUNT_TEMPLATE,
   SUSPENSE_FLAG,
   findSuspenseAccount,
+  journalLinesForPlanRow,
   normalizeCategory,
   openingBalanceDate,
   planTransactionBackfill,
+  type BackfillAccount,
+  type BackfillMapping,
+  type BackfillPlanRow,
+  type BackfillTransaction,
+  type TransactionJournalLine,
 } from "../accountingBackfill";
 import { assertValid, validateCounterpartyInput, validateFiscalPeriodInput } from "../recordValidation";
 import { getPortable as getAccessibleDocument } from "./documents";
@@ -22,9 +28,9 @@ import { getPortable as getAccessibleDocument } from "./documents";
  * pure money/journal helpers come from `shared/accountingCore`.
  */
 
-import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
-import { transactionBackfillSides, validateBalancedJournalLines } from "../accountingCore";
+import { validateBalancedJournalLines } from "../accountingCore";
 import { accountParentError } from "../accountHierarchy";
 import { requirePermissionPortable } from "./permissions";
 
@@ -1028,6 +1034,9 @@ export async function postTransactionCandidateAllocationPortable(
   return entryId;
 }
 
+/** Journal entries a bank transaction posts (backfill, and re-posting after an edit). */
+export const TRANSACTION_BACKFILL_SOURCE = "financialTransactionBackfill";
+
 type BackfillOptions = {
   categoryChoices?: Array<{ category: string; accountId: string }>;
   includeBeforeOpening?: boolean;
@@ -1036,13 +1045,17 @@ type BackfillOptions = {
 };
 
 async function loadBackfillPlan(ctx: PortableQueryCtx, societyId: string, options: BackfillOptions) {
-  const [transactions, existingLines, accounts, mappings, openingEntries] = await Promise.all([
+  const [transactions, allLines, accounts, mappings, openingEntries, voidEntries] = await Promise.all([
     ctx.db.query("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalEntries").withIndex("by_society_source", (q) => q.eq("societyId", societyId).eq("source", "opening_balance")).collect(),
+    ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "void")).collect(),
   ]);
+  // Lines of a voided entry no longer count as posting their transaction.
+  const voided = new Set(voidEntries.map((entry: any) => String(entry._id)));
+  const existingLines = allLines.filter((line: any) => !voided.has(String(line.journalEntryId)));
   const accountIds = new Set(accounts.map((account: any) => String(account._id)));
   for (const choice of options.categoryChoices ?? []) {
     if (!accountIds.has(String(choice.accountId))) throw new Error("Record not found.");
@@ -1161,9 +1174,7 @@ export async function backfillFinancialTransactionsToJournalPortable(
   let flaggedBeforeOpening = 0;
   for (const row of toPost) {
     const transaction: any = transactionsById.get(row.transactionId);
-    const offsetAccountId = row.offsetSource === "suspense" ? suspenseAccountId : row.offsetAccountId;
-    if (!transaction || !offsetAccountId) continue;
-    const { cashSide, offsetSide, absoluteAmountCents } = transactionBackfillSides(transaction.amountCents);
+    if (!transaction || (row.offsetSource === "suspense" && !suspenseAccountId)) continue;
     const period = await assertPeriodOpen(ctx, { societyId, date: transaction.date });
     const flags = [
       ...(row.beforeOpening ? [BEFORE_OPENING_FLAG] : []),
@@ -1177,7 +1188,7 @@ export async function backfillFinancialTransactionsToJournalPortable(
       memo: row.beforeOpening
         ? `[Before opening balances ${plan.openingBalanceDate}] ${transaction.description}`
         : transaction.description,
-      source: "financialTransactionBackfill",
+      source: TRANSACTION_BACKFILL_SOURCE,
       sourceExternalId: transaction.externalId,
       status: "posted",
       fiscalYear: fiscalYear ?? period?.fiscalYear,
@@ -1188,36 +1199,16 @@ export async function backfillFinancialTransactionsToJournalPortable(
       createdAtISO: now,
       updatedAtISO: now,
     });
-    await ctx.db.insert("journalLines", {
-      societyId,
-      journalEntryId: entryId,
-      accountId: transaction.accountId,
-      lineOrder: 0,
-      amountCents: absoluteAmountCents,
-      side: cashSide,
-      description: transaction.description,
-      financialTransactionId: transaction._id,
-      sourceExternalId: transaction.externalId,
-      rawJson: JSON.stringify({ backfillRole: "cash" }),
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    await ctx.db.insert("journalLines", {
-      societyId,
-      journalEntryId: entryId,
-      accountId: offsetAccountId,
-      lineOrder: 1,
-      amountCents: absoluteAmountCents,
-      side: offsetSide,
-      description: row.offsetSource === "suspense"
-        ? `Unmapped: ${transaction.category ?? transaction.description}`
-        : transaction.category ?? transaction.description,
-      financialTransactionId: transaction._id,
-      sourceExternalId: transaction.categoryAccountExternalId ?? transaction.externalId,
-      rawJson: JSON.stringify({ backfillRole: "offset", mappingId: row.mappingId, offsetSource: row.offsetSource }),
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
+    for (const line of journalLinesForPlanRow(transaction, row, suspenseAccountId)) {
+      await ctx.db.insert("journalLines", {
+        societyId,
+        journalEntryId: entryId,
+        ...line,
+        financialTransactionId: transaction._id,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
     posted += 1;
     if (row.offsetSource === "suspense") postedToSuspense += 1;
     if (row.beforeOpening) flaggedBeforeOpening += 1;
@@ -1454,4 +1445,176 @@ function reconciliationLedgerFingerprint(lines: any[], entries: Map<string, any>
     return [String(line._id), String(line.journalEntryId), line.side, line.amountCents,
       line.currency, line.programCode, entry?.date, entry?.updatedAtISO];
   }).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+}
+
+// ---------------------------------------------------------------------------
+// One bank transaction's journal entry: the preview the transaction panel
+// shows, and keeping a posted entry in step with later edits.
+
+type JournalPlanContext = { accounts: BackfillAccount[]; mappings: BackfillMapping[] };
+
+async function loadJournalPlanContext(ctx: PortableQueryCtx, societyId: string): Promise<JournalPlanContext> {
+  const [accounts, mappings] = await Promise.all([
+    ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+  ]);
+  return {
+    accounts: accounts.map((row) => ({ _id: String(row._id), code: row.code, name: String(row.name ?? ""), accountType: String(row.accountType ?? ""), subtype: row.subtype })),
+    mappings: mappings.map((row) => ({
+      _id: String(row._id),
+      status: String(row.status ?? ""),
+      externalAccountId: row.externalAccountId,
+      externalAccountCode: row.externalAccountCode,
+      externalAccountName: row.externalAccountName,
+      externalCategory: row.externalCategory,
+      financialAccountId: String(row.financialAccountId),
+    })),
+  };
+}
+
+/** The fields of a stored transaction the posting planner reads. */
+export function backfillTransactionOf(row: PortableDoc): BackfillTransaction & { externalId?: string } {
+  return {
+    _id: String(row._id),
+    date: String(row.date ?? ""),
+    description: row.description,
+    amountCents: Number(row.amountCents) || 0,
+    accountId: String(row.accountId ?? ""),
+    category: row.category,
+    categoryAccountExternalId: row.categoryAccountExternalId,
+    accountingAccountId: row.accountingAccountId ? String(row.accountingAccountId) : undefined,
+    fundRestrictionId: row.fundRestrictionId ? String(row.fundRestrictionId) : undefined,
+    tagIds: Array.isArray(row.tagIds) ? row.tagIds.map(String) : undefined,
+    lines: Array.isArray(row.lines) ? row.lines : undefined,
+    externalId: row.externalId,
+  };
+}
+
+/** The plan row for one transaction as if it were posted now (review choices aside). */
+function planOneTransaction(context: JournalPlanContext, transaction: BackfillTransaction): { row: BackfillPlanRow; suspenseAccountId: string | null } {
+  const plan = planTransactionBackfill({
+    transactions: [transaction],
+    accounts: context.accounts,
+    mappings: context.mappings,
+    postedTransactionIds: [],
+    openingBalanceDate: null,
+    includeBeforeOpening: true,
+  });
+  return { row: plan.rows[0], suspenseAccountId: plan.suspenseAccountId };
+}
+
+/** The live (not void) entries that posted this transaction, and their lines. */
+export async function postedJournalForTransaction(ctx: PortableQueryCtx, transactionId: string) {
+  const lines = await ctx.db
+    .query("journalLines")
+    .withIndex("by_financial_transaction", (q) => q.eq("financialTransactionId", transactionId))
+    .collect();
+  const entryIds = [...new Set(lines.map((line) => String(line.journalEntryId)))];
+  const found = await Promise.all(entryIds.map((id) => ctx.db.get(id, "journalEntries")));
+  const entries = found.filter((entry): entry is PortableDoc => Boolean(entry) && entry?.status !== "void");
+  const live = new Set(entries.map((entry) => String(entry._id)));
+  return { entries, lines: lines.filter((line) => live.has(String(line.journalEntryId))) };
+}
+
+/** Suspense account stand-in for a preview made before the account exists. */
+export const PENDING_SUSPENSE_ACCOUNT = "__suspense__";
+
+/**
+ * What posting this transaction would write (the bank line plus one line
+ * per line item). Suspense lines name `PENDING_SUSPENSE_ACCOUNT` until the
+ * suspense account exists.
+ */
+export async function previewTransactionJournal(ctx: PortableQueryCtx, transaction: PortableDoc) {
+  const context = await loadJournalPlanContext(ctx, String(transaction.societyId));
+  const planned = backfillTransactionOf(transaction);
+  const { row, suspenseAccountId } = planOneTransaction(context, planned);
+  if (row.status !== "post") return { status: row.status, lines: [] as TransactionJournalLine[] };
+  return { status: row.status, lines: journalLinesForPlanRow(planned, row, suspenseAccountId ?? PENDING_SUSPENSE_ACCOUNT) };
+}
+
+export type TransactionJournalSyncResult = "unposted" | "external" | "unchanged" | "updated" | "reposted" | "locked";
+
+/**
+ * Keeps a posted bank transaction's journal entry in step with its current
+ * category, line items, fund and tags. Idempotent, and never posts twice: a
+ * transaction nobody posted stays unposted (Backfill imports posts it), an
+ * entry written elsewhere (a sync, a manual journal) is left alone, and the
+ * transaction's own entry has its lines replaced in place. Changes to
+ * accounts, amounts, funds or the date need the fiscal period to be open;
+ * tags and descriptions are updated in place either way. With
+ * `onLocked: "skip"` a closed period leaves the entry as it is instead of
+ * failing (rule runs and bulk edits).
+ */
+export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId: string) {
+  let context: JournalPlanContext | null = null;
+  return async (transactionId: string, options: { onLocked?: "throw" | "skip" } = {}): Promise<TransactionJournalSyncResult> => {
+    const { entries, lines } = await postedJournalForTransaction(ctx, transactionId);
+    if (entries.length === 0) return "unposted";
+    const entry = entries.find((row) => row.source === TRANSACTION_BACKFILL_SOURCE && row.status === "posted");
+    if (!entry) return "external";
+    const stored = await ctx.db.get(transactionId, "financialTransactions");
+    if (!stored || String(stored.societyId) !== String(societyId)) return "unchanged";
+    const transaction = backfillTransactionOf(stored);
+    context ??= await loadJournalPlanContext(ctx, societyId);
+    let { row, suspenseAccountId } = planOneTransaction(context, transaction);
+    if (row.status !== "post") return "unchanged";
+    if (!suspenseAccountId && row.lines.some((line) => line.offsetSource === "suspense")) {
+      await ensureSuspenseAccount(ctx, societyId, context.accounts);
+      context = await loadJournalPlanContext(ctx, societyId);
+      ({ row, suspenseAccountId } = planOneTransaction(context, transaction));
+    }
+    const desired = journalLinesForPlanRow(transaction, row, suspenseAccountId);
+    const current = lines
+      .filter((line) => String(line.journalEntryId) === String(entry._id))
+      .sort((a, b) => Number(a.lineOrder) - Number(b.lineOrder));
+    const sameShape =
+      entry.date === transaction.date &&
+      current.length === desired.length &&
+      desired.every((line, index) =>
+        String(current[index].accountId) === line.accountId &&
+        current[index].amountCents === line.amountCents &&
+        current[index].side === line.side &&
+        String(current[index].fundRestrictionId ?? "") === String(line.fundRestrictionId ?? ""));
+    const now = new Date().toISOString();
+    if (sameShape) {
+      let changed = false;
+      for (const [index, line] of desired.entries()) {
+        const existing = current[index];
+        const tagsBefore = JSON.stringify((Array.isArray(existing.tagIds) ? existing.tagIds : []).map(String).sort());
+        const tagsAfter = JSON.stringify([...(line.tagIds ?? [])].sort());
+        if (existing.description === line.description && tagsBefore === tagsAfter) continue;
+        await ctx.db.patch(existing._id, { description: line.description, tagIds: line.tagIds, updatedAtISO: now });
+        changed = true;
+      }
+      return changed ? "updated" : "unchanged";
+    }
+    let period: PortableDoc | null = null;
+    try {
+      await assertPeriodOpen(ctx, { societyId, date: String(entry.date) });
+      period = await assertPeriodOpen(ctx, { societyId, date: transaction.date });
+    } catch (error) {
+      if (options.onLocked === "skip") return "locked";
+      throw error;
+    }
+    for (const line of current) await ctx.db.delete(line._id);
+    for (const line of desired) {
+      await ctx.db.insert("journalLines", {
+        societyId,
+        journalEntryId: entry._id,
+        ...line,
+        financialTransactionId: transactionId,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    const keptFlags = (Array.isArray(entry.reviewFlags) ? entry.reviewFlags.map(String) : []).filter((flag) => flag !== SUSPENSE_FLAG);
+    const flags = [...keptFlags, ...(row.lines.some((line) => line.offsetSource === "suspense") ? [SUSPENSE_FLAG] : [])];
+    await ctx.db.patch(entry._id, {
+      date: transaction.date,
+      ...(period?._id ? { fiscalPeriodId: period._id } : {}),
+      reviewFlags: flags.length ? flags : undefined,
+      updatedAtISO: now,
+    });
+    return "reposted";
+  };
 }

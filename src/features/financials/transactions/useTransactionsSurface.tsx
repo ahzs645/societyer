@@ -10,9 +10,15 @@ import { TransactionDetailPanel, type PanelTransaction } from "./TransactionDeta
 import { attentionReasons, categorizedByValue } from "../../../../shared/transactionAttention";
 import { usePayeeAliases } from "./usePayeeAliases";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
+import { useToast } from "../../../components/Toast";
+import { isSplitTransaction } from "../../../../shared/transactionLines";
+import type { FinanceTagsApi } from "./useFinanceTags";
+import type { ReviewSegment } from "./transactionFilters";
 
-/** `?txn=<id>` (the panel's "Copy link") opens that transaction's panel. */
-export const TRANSACTION_DEEP_LINK_PARAM = "txn";
+/** `?transactionId=<id>` (the panel's "Copy link") opens that transaction's panel. */
+export const TRANSACTION_DEEP_LINK_PARAM = "transactionId";
+/** Links copied before `transactionId` used `?txn=`; they still open. */
+const LEGACY_DEEP_LINK_PARAM = "txn";
 
 /**
  * Everything the Financials transactions tab adds around its record table:
@@ -24,12 +30,17 @@ export function useTransactionsSurface({
   societyId,
   canWrite,
   transactions,
+  tags,
+  reviewSegment,
 }: {
   societyId: string | undefined;
   canWrite: boolean;
   /** Raw rows from `financialHub.transactions`. */
   transactions: any[] | undefined;
+  tags: FinanceTagsApi;
+  reviewSegment: ReviewSegment;
 }) {
+  const toast = useToast();
   const ruleDrawer = useRuleDrawerHost(societyId, canWrite);
   const { aliases } = usePayeeAliases(societyId);
   const updateTransaction = useMutation(api.financialHub.updateTransaction);
@@ -42,17 +53,26 @@ export function useTransactionsSurface({
     canWrite,
   });
 
-  // Copied links use `?txn=`; the record table opens panels from `?record=`.
+  // Copied links use `?transactionId=`; the record table opens panels from
+  // `?record=`. The review queue follows the linked row so it is in the table.
   const [searchParams, setSearchParams] = useSearchParams();
-  const linkedTxn = searchParams.get(TRANSACTION_DEEP_LINK_PARAM);
+  const linkedTxn = searchParams.get(TRANSACTION_DEEP_LINK_PARAM) ?? searchParams.get(LEGACY_DEEP_LINK_PARAM);
   useEffect(() => {
-    if (!linkedTxn) return;
+    if (!linkedTxn || transactions === undefined) return;
     const next = new URLSearchParams(searchParams);
     next.delete(TRANSACTION_DEEP_LINK_PARAM);
+    next.delete(LEGACY_DEEP_LINK_PARAM);
     next.set("tab", "transactions");
     next.set("record", linkedTxn);
+    const linked = transactions.find((row) => String(row._id) === linkedTxn);
+    if (linked) {
+      next.delete("method");
+      next.delete("tag");
+      if (linked.reviewedAtISO) next.set("review", "reviewed");
+      else next.delete("review");
+    }
     setSearchParams(next, { replace: true });
-  }, [linkedTxn, searchParams, setSearchParams]);
+  }, [linkedTxn, searchParams, setSearchParams, transactions]);
 
   /** Adds `payeeName`, `categorizedBy` (with "imported") and `attention` to table rows. */
   const decorate = useCallback(
@@ -74,10 +94,14 @@ export function useTransactionsSurface({
   const handleUpdate = useCallback(
     async ({ recordId, fieldName, value }: { recordId: string; fieldName: string; value: unknown }) => {
       const previous = (transactions ?? []).find((row) => String(row._id) === String(recordId));
+      if (fieldName === "category" && previous && isSplitTransaction(previous)) {
+        toast.info("This transaction is split", "Change the categories on its lines in the transaction panel.");
+        return;
+      }
       await updateTransaction({ id: recordId as any, patch: { [fieldName]: value } as any });
       if (fieldName === "category" && previous) promptAfterCategorise(previous, value);
     },
-    [promptAfterCategorise, transactions, updateTransaction],
+    [promptAfterCategorise, toast, transactions, updateTransaction],
   );
 
   const fundNames = useMemo(
@@ -102,10 +126,12 @@ export function useTransactionsSurface({
             onClose={onClose}
             onNavigate={onNavigate}
             onUpdate={(fieldName, value) => handleUpdate({ recordId: String(record._id), fieldName, value })}
-            onMarkReviewed={() => runBulk([String(record._id)], { reviewed: true }, () => "Marked as reviewed")}
+            onSetReviewed={(reviewed) => runBulk([String(record._id)], { reviewed }, () => (reviewed ? "Marked as reviewed" : "Moved back to To review"))}
+            tags={tags}
+            reviewSegment={reviewSegment}
           />
         ) : null,
-    [aliases, canWrite, fundNames, handleUpdate, runBulk, ruleEditorOpen, societyId],
+    [aliases, canWrite, fundNames, handleUpdate, reviewSegment, runBulk, ruleEditorOpen, societyId, tags],
   );
 
   return { ruleDrawer, aliases, decorate, handleUpdate, renderSidePanel };

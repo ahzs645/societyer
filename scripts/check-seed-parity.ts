@@ -122,6 +122,12 @@ const subsets: Record<string, { static: (row: any) => boolean; server: (row: any
   memberSubscriptions: { static: (row) => String(row._id).startsWith("static_member_subscription_renewal_"), server: isRenewal },
   "financialTransactions (invoice deposits)": { static: (row) => String(row.externalId).startsWith("csv-invoice-"), server: (row) => String(row.externalId).startsWith("csv-invoice-") },
   "financialTransactions (rule provenance)": { static: (row) => row.categorizedBy === "rule", server: (row) => row.categorizedBy === "rule" },
+  // Line items and tags (shared/demoData/booksTags.ts).
+  financeTagGroups: { static: () => true, server: () => true },
+  financeTags: { static: () => true, server: () => true },
+  "financialTransactions (split lines)": { static: (row) => Array.isArray(row.lines) && row.lines.length > 1, server: (row) => Array.isArray(row.lines) && row.lines.length > 1 },
+  "financialTransactions (tagged)": { static: (row) => Boolean(row.tagIds?.length), server: (row) => Boolean(row.tagIds?.length) },
+  "financialTransactions (reviewed)": { static: (row) => Boolean(row.reviewedAtISO), server: (row) => Boolean(row.reviewedAtISO) },
   // Business registers (shared/demoData/businessRegisters.ts).
   payrollSettings: { static: () => true, server: () => true },
   payRuns: { static: () => true, server: () => true },
@@ -147,7 +153,8 @@ countRows.push({ table: "financialTransactions (all)", static: staticDump.financ
 
 const refFields: Record<string, Array<[string, string]>> = {
   transactionRules: [["createdByUserId", "users"], ["conditions[].accountId", "financialAccounts"], ["actions.accountingAccountId", "financialAccounts"], ["actions.fundRestrictionId", "fundRestrictions"]],
-  financialTransactions: [["accountId", "financialAccounts"], ["connectionId", "financialConnections"], ["ruleId", "transactionRules"], ["accountingAccountId", "financialAccounts"], ["fundRestrictionId", "fundRestrictions"]],
+  financialTransactions: [["accountId", "financialAccounts"], ["connectionId", "financialConnections"], ["ruleId", "transactionRules"], ["accountingAccountId", "financialAccounts"], ["fundRestrictionId", "fundRestrictions"], ["tagIds[]", "financeTags"], ["lines[].tagIds[]", "financeTags"], ["lines[].fundRestrictionId", "fundRestrictions"], ["lines[].accountingAccountId", "financialAccounts"]],
+  financeTags: [["groupId", "financeTagGroups"]],
   reconciliationPeriods: [["accountId", "financialAccounts"], ["createdByUserId", "users"], ["completedByUserId", "users"]],
   expenseApprovalRules: [["approverUserIds[]", "users"]],
   expenseClaimPolicy: [["updatedByUserId", "users"]],

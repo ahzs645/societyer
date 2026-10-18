@@ -29,6 +29,7 @@ import {
   demoTransactionRules,
   type DemoFinancePerson,
 } from "../demoData/financeWorkflows";
+import { applyDemoLinesAndTags, demoFinanceTagGroups, demoFinanceTags } from "../demoData/booksTags";
 import { invoiceDemoRows, type DemoInvoiceMember, type DemoInvoiceMemberKey } from "../demoData/invoicing";
 import { billDemoRows } from "../demoData/bills";
 import { businessRegisterDemoRows } from "../demoData/businessRegisters";
@@ -2241,6 +2242,12 @@ async function seedFinanceDemo(ctx: PortableMutationCtx, args: SeedFinanceDemoAr
   // period fingerprints cover their real ids), then written back as patches.
   const before = new Map(args.feedTransactions.map((row) => [row._id, JSON.parse(JSON.stringify(row))]));
   const periods = applyDemoFinanceWorkflows(refs, args.feedTransactions, rules, args.accountBalances);
+  // Tags before the feed rows that carry them: split lines, tags and review state.
+  const tagRefs = { societyId: args.societyId, idFor: seedRef };
+  await writer.insert("financeTagGroups", demoFinanceTagGroups(tagRefs));
+  const tagIds = await writer.insert("financeTags", demoFinanceTags(tagRefs));
+  const tagIdByRef = new Map(demoFinanceTags(tagRefs).map((tag, index) => [tag._id, tagIds[index]]));
+  applyDemoLinesAndTags(args.feedTransactions, (key) => tagIdByRef.get(seedRef("tag", key))!);
   for (const row of args.feedTransactions) {
     const patch = changedFields(before.get(row._id), row);
     if (Object.keys(patch).length) await ctx.db.patch(row._id, patch);
@@ -2391,6 +2398,8 @@ async function wipe(ctx: PortableMutationCtx) {
     "approvalPolicyChanges",
     "reconciliationPeriods",
     "transactionRules",
+    "financeTags",
+    "financeTagGroups",
     "fundRestrictions",
     // Seeded since the wipe list was written; without them a re-run duplicated them.
     "programStatements",

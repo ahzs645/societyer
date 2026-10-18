@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, CheckCheck, ChevronDown, ChevronUp, CircleCheck, CircleDashed, Link2, PenLine, Zap } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, CheckCheck, ChevronDown, ChevronUp, CircleCheck, CircleDashed, Link2, Maximize2, MessageSquare, Minimize2, PenLine, RotateCcw, Zap } from "lucide-react";
 import { Drawer } from "../../../components/ui";
+import { Tabs } from "../../../components/primitives";
+import { NotesPanel } from "../../../components/NotesPanel";
 import { Money } from "../../../components/Money";
 import { ShortcutHint } from "../../../components/ShortcutHint";
 import { useToast } from "../../../components/Toast";
@@ -21,6 +23,12 @@ import {
 import type { PayeeAliasRow } from "./usePayeeAliases";
 import { useRecordTableRowModel } from "../../../platform/record-engine/record-table/hooks/useRecordTableRowModel";
 import { useRecordTableStoreHandle } from "../../../platform/record-engine/record-table/state/recordTableStore";
+import { isTypingTarget } from "../../../lib/shortcutsRegistry";
+import { splitLabel, type TransactionLine } from "../../../../shared/transactionLines";
+import { TransactionLinesEditor } from "./TransactionLinesEditor";
+import { TransactionJournalView } from "./TransactionJournalView";
+import type { FinanceTagsApi } from "./useFinanceTags";
+import type { ReviewSegment } from "./transactionFilters";
 
 /** A transactions-table row as the Financials page maps it. */
 export type PanelTransaction = {
@@ -48,6 +56,9 @@ export type PanelTransaction = {
   matchedKind?: string;
   reconciliationNote?: string;
   fundRestrictionId?: string;
+  accountingAccountId?: string;
+  tagIds?: string[];
+  lines?: TransactionLine[];
 };
 
 const MATCH_LABELS: Record<string, string> = {
@@ -65,21 +76,26 @@ function rawPayeeOf(txn: PanelTransaction): string {
   return transactionPayee(txn);
 }
 
-/** `/app/financials?tab=transactions&txn=<id>` on the current origin (keeps the /demo prefix). */
+/** `/app/financials?tab=transactions&transactionId=<id>` on the current origin (keeps the /demo prefix). */
 export function transactionDeepLink(id: string): string {
   const url = new URL(window.location.href);
   url.search = "";
   url.hash = "";
   url.searchParams.set("tab", "transactions");
-  url.searchParams.set("txn", id);
+  url.searchParams.set("transactionId", id);
   return url.toString();
 }
 
+type PanelTab = "transaction" | "journal";
+
 /**
- * The transaction side panel on Financials → Transactions: amount, details,
- * editable category and notes, receipt, how it was categorised, its
- * reconciliation match and the payee's other transactions. ↑/↓ step through
- * the table (handled by the record table's panel bridge).
+ * The transaction side panel on Financials → Transactions. "Transaction"
+ * shows the amount, details, line items (category, or a split with ledger
+ * accounts, funds, memos and tags), notes, receipt, comments, how it was
+ * categorised, its reconciliation match and the payee's other transactions;
+ * "Journal entry" shows the debit and credit lines it posts. ↑/↓ step
+ * through the table (the record table's panel bridge); R and U mark it
+ * reviewed or not (moving on when it leaves the current queue).
  */
 export function TransactionDetailPanel({
   record,
@@ -91,7 +107,9 @@ export function TransactionDetailPanel({
   onClose,
   onNavigate,
   onUpdate,
-  onMarkReviewed,
+  onSetReviewed,
+  tags,
+  reviewSegment,
 }: {
   record: PanelTransaction;
   /** Every row in the table (for "Other transactions with …"). */
@@ -103,15 +121,19 @@ export function TransactionDetailPanel({
   onClose: () => void;
   onNavigate: (record: PanelTransaction) => void;
   onUpdate: (fieldName: string, value: unknown) => Promise<void>;
-  onMarkReviewed: () => Promise<void>;
+  onSetReviewed: (reviewed: boolean) => Promise<void>;
+  tags: FinanceTagsApi;
+  /** The queue the table shows; marking a row out of it moves to the next row. */
+  reviewSegment: ReviewSegment;
 }) {
   const toast = useToast();
   const drawer = useRuleDrawer();
-  const [category, setCategory] = useState(record.category ?? "");
   const [memo, setMemo] = useState(record.memo ?? "");
   const [renameTarget, setRenameTarget] = useState<PayeeRenameTarget | null>(null);
+  const [tab, setTab] = useState<PanelTab>("transaction");
+  const [expanded, setExpanded] = useState(false);
+  const commentsRef = useRef<HTMLElement>(null);
 
-  useEffect(() => setCategory(record.category ?? ""), [record._id, record.category]);
   useEffect(() => setMemo(record.memo ?? ""), [record._id, record.memo]);
 
   const rawPayee = rawPayeeOf(record);
@@ -130,11 +152,6 @@ export function TransactionDetailPanel({
     [payeeNorm, record._id, records],
   );
 
-  const commitCategory = () => {
-    const next = category.trim();
-    if (next === (record.category ?? "")) return;
-    void onUpdate("category", next);
-  };
   const commitMemo = () => {
     if (memo.trim() === (record.memo ?? "").trim()) return;
     void onUpdate("memo", memo);
@@ -155,6 +172,51 @@ export function TransactionDetailPanel({
     tableHandle.get().setFocusedCell({ rowIndex: nextIndex, columnIndex });
   };
 
+  // Marking the row out of the queue the table shows (reviewed while in "To
+  // review", or back while in "Reviewed") moves on to the next row first, so
+  // the panel never shows a row that has left the table.
+  const setReviewed = async (reviewed: boolean) => {
+    if (Boolean(record.reviewedAtISO) === reviewed) return;
+    const leavesQueue = reviewed ? reviewSegment === "to_review" : reviewSegment === "reviewed";
+    if (leavesQueue && position >= 0) {
+      const next = tableOrder[position + 1] ?? tableOrder[position - 1];
+      tableHandle.get().setRangeAnchor(null);
+      tableHandle.get().setFocusedCell(null);
+      if (next) onNavigate(next as PanelTransaction);
+      else onClose();
+    }
+    await onSetReviewed(reviewed);
+  };
+  const setReviewedRef = useRef(setReviewed);
+  setReviewedRef.current = setReviewed;
+
+  // R / U: reviewed / not reviewed, unless rows are selected (the table's
+  // shortcut then marks the selection). Capture phase, so a focused grid
+  // cell does not start editing with the letter.
+  useEffect(() => {
+    if (!canWrite) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== "r" && key !== "u") return;
+      if (isTypingTarget(event.target) || tableHandle.get().selectedRecordIds.size > 0) return;
+      if (event.target instanceof Element && event.target.closest('[role="dialog"]:not(.record-side-panel):not(.inspector-panel)')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void setReviewedRef.current(key === "r");
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [canWrite, tableHandle]);
+
+  const showComments = () => {
+    setTab("transaction");
+    window.requestAnimationFrame(() => {
+      commentsRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      commentsRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    });
+  };
+
   const copyLink = async () => {
     const link = transactionDeepLink(record._id);
     try {
@@ -170,7 +232,8 @@ export function TransactionDetailPanel({
       open
       onClose={onClose}
       title={displayPayee}
-      className="record-side-panel transaction-panel"
+      size={expanded ? "wide" : "default"}
+      className={`record-side-panel transaction-panel${expanded ? " transaction-panel--expanded" : ""}`}
       bodyClassName="transaction-panel__body"
       footerClassName="transaction-panel__footer"
       header={
@@ -186,6 +249,19 @@ export function TransactionDetailPanel({
         <>
           <button type="button" className="btn btn--sm" onClick={() => void copyLink()}>
             <Link2 size={14} aria-hidden="true" /> Copy link
+          </button>
+          <button type="button" className="btn btn--sm btn--icon" aria-label="Comment" title="Comment" onClick={showComments}>
+            <MessageSquare size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm btn--icon"
+            aria-label={expanded ? "Narrow the panel" : "Widen the panel"}
+            title={expanded ? "Narrow the panel" : "Widen the panel"}
+            aria-pressed={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
           </button>
           <span className="transaction-panel__nav-hint" aria-hidden="true">
             <ShortcutHint keys={["↑"]} /> <ShortcutHint keys={["↓"]} /> next and previous
@@ -216,119 +292,148 @@ export function TransactionDetailPanel({
         )}
       </section>
 
-      <section className="transaction-panel__section" aria-labelledby="txn-panel-details">
-        <h3 className="transaction-panel__heading" id="txn-panel-details">Details</h3>
-        <dl className="transaction-panel__facts">
-          <div><dt>Date</dt><dd>{formatDate(record.date)}</dd></div>
-          <div><dt>Account</dt><dd>{record.account || "—"}</dd></div>
-          <div><dt>Method</dt><dd>{record.method || "—"}</dd></div>
-          <div><dt>Status</dt><dd>{record.status === "pending" ? <span className="transaction-panel__status is-pending">Pending</span> : "Posted"}</dd></div>
-          {fundName && <div><dt>Fund</dt><dd>{fundName}</dd></div>}
-          {normalizeRuleText(record.description) !== normalizeRuleText(displayPayee) && (
-            <div><dt>Bank description</dt><dd className="transaction-panel__raw">{record.description}</dd></div>
-          )}
-        </dl>
-        {canWrite && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm transaction-panel__rename"
-            onClick={() => setRenameTarget(existingAlias ? { rawPayee, alias: existingAlias } : { rawPayee })}
-          >
-            <PenLine size={12} aria-hidden="true" /> Rename payee for all past and future transactions…
-          </button>
-        )}
-      </section>
+      <div className="transaction-panel__tabs">
+        <Tabs<PanelTab>
+          value={tab}
+          onChange={setTab}
+          tabRoles
+          ariaLabel="Transaction views"
+          items={[
+            { id: "transaction", label: "Transaction" },
+            { id: "journal", label: "Journal entry" },
+          ]}
+        />
+      </div>
 
-      <section className="transaction-panel__section" aria-labelledby="txn-panel-category">
-        <h3 className="transaction-panel__heading" id="txn-panel-category">Category</h3>
-        <div className="transaction-panel__category">
-          <input
-            className="input"
-            aria-label="Category"
-            list="txn-panel-category-options"
-            value={category}
-            placeholder="Uncategorised"
-            disabled={!canWrite}
-            onChange={(event) => setCategory(event.target.value)}
-            onBlur={commitCategory}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commitCategory();
-              }
-              if (event.key === "Escape") setCategory(record.category ?? "");
-            }}
+      {tab === "journal" ? (
+        <section className="transaction-panel__section" aria-label="Journal entry">
+          <TransactionJournalView
+            transactionId={record._id}
+            tags={tags}
+            fundName={(id) => drawer?.workspace?.fundRestrictions.find((fund) => fund._id === id)?.name ?? drawer?.workspace?.archivedFunds?.find((fund) => fund._id === id)?.name}
           />
-          <datalist id="txn-panel-category-options">
-            {(drawer?.workspace?.categories ?? []).map((option) => <option key={option} value={option} />)}
-          </datalist>
-          <CategorizationProvenance txn={record} />
-        </div>
-        <p className="transaction-panel__meta">
-          {method ? (
-            <>
-              Categorised by <strong>{CATEGORIZED_BY_LABELS[method].toLowerCase()}</strong>
-              {method === "rule" && record.ruleApplication?.ruleName ? <> · {record.ruleApplication.ruleName}</> : null}
-            </>
-          ) : (
-            "Not categorised yet."
-          )}
-          {record.reviewedAtISO ? <> · Reviewed {formatDate(record.reviewedAtISO)}</> : null}
-        </p>
-        {canWrite && (
-          <div className="transaction-panel__inline-actions">
-            {!record.reviewedAtISO && (
-              <button type="button" className="btn btn--sm" onClick={() => void onMarkReviewed()}>
-                <CheckCheck size={12} aria-hidden="true" /> Mark reviewed
-              </button>
-            )}
-            {drawer && (
+        </section>
+      ) : (
+        <>
+          <section className="transaction-panel__section" aria-labelledby="txn-panel-details">
+            <h3 className="transaction-panel__heading" id="txn-panel-details">Details</h3>
+            <dl className="transaction-panel__facts">
+              <div><dt>Date</dt><dd>{formatDate(record.date)}</dd></div>
+              <div><dt>Account</dt><dd>{record.account || "—"}</dd></div>
+              <div><dt>Method</dt><dd>{record.method || "—"}</dd></div>
+              <div><dt>Status</dt><dd>{record.status === "pending" ? <span className="transaction-panel__status is-pending">Pending</span> : "Posted"}</dd></div>
+              {fundName && !splitLabel(record) && <div><dt>Fund</dt><dd>{fundName}</dd></div>}
+              {normalizeRuleText(record.description) !== normalizeRuleText(displayPayee) && (
+                <div><dt>Bank description</dt><dd className="transaction-panel__raw">{record.description}</dd></div>
+              )}
+            </dl>
+            {canWrite && (
               <button
                 type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => drawer.openDraft(draftFromTransaction(record, record.category))}
+                className="btn btn--ghost btn--sm transaction-panel__rename"
+                onClick={() => setRenameTarget(existingAlias ? { rawPayee, alias: existingAlias } : { rawPayee })}
               >
-                <Zap size={12} aria-hidden="true" /> Create a rule for {displayPayee}
+                <PenLine size={12} aria-hidden="true" /> Rename payee for all past and future transactions…
               </button>
             )}
-          </div>
-        )}
-      </section>
+          </section>
 
-      <section className="transaction-panel__section" aria-labelledby="txn-panel-notes">
-        <h3 className="transaction-panel__heading" id="txn-panel-notes">Notes</h3>
-        <textarea
-          className="input transaction-panel__notes"
-          aria-labelledby="txn-panel-notes"
-          rows={3}
-          value={memo}
-          placeholder={canWrite ? "Add a note, e.g. what this was for" : "No notes"}
-          disabled={!canWrite}
-          onChange={(event) => setMemo(event.target.value)}
-          onBlur={commitMemo}
-        />
-      </section>
+          <section className="transaction-panel__section" aria-labelledby="txn-panel-category">
+            <h3 className="transaction-panel__heading" id="txn-panel-category">
+              {splitLabel(record) ? `Line items · ${record.lines!.length}` : "Category"}
+              <CategorizationProvenance txn={record} />
+            </h3>
+            <TransactionLinesEditor
+              record={record}
+              canWrite={canWrite}
+              categories={drawer?.workspace?.categories ?? []}
+              accounts={drawer?.workspace?.accounts ?? []}
+              funds={drawer?.workspace?.fundRestrictions ?? []}
+              tags={tags}
+              societyId={societyId}
+              onCommitCategory={(next) => void onUpdate("category", next)}
+            />
+            <p className="transaction-panel__meta">
+              {method ? (
+                <>
+                  Categorised by <strong>{CATEGORIZED_BY_LABELS[method].toLowerCase()}</strong>
+                  {method === "rule" && record.ruleApplication?.ruleName ? <> · {record.ruleApplication.ruleName}</> : null}
+                </>
+              ) : (
+                "Not categorised yet."
+              )}
+              {record.reviewedAtISO ? <> · Reviewed {formatDate(record.reviewedAtISO)}</> : null}
+            </p>
+            {canWrite && (
+              <div className="transaction-panel__inline-actions">
+                {record.reviewedAtISO ? (
+                  <button type="button" className="btn btn--ghost btn--sm" aria-keyshortcuts="U" onClick={() => void setReviewed(false)}>
+                    <RotateCcw size={12} aria-hidden="true" /> Mark unreviewed <ShortcutHint keys={["U"]} />
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn--sm" aria-keyshortcuts="R" onClick={() => void setReviewed(true)}>
+                    <CheckCheck size={12} aria-hidden="true" /> Mark reviewed <ShortcutHint keys={["R"]} />
+                  </button>
+                )}
+                {drawer && !splitLabel(record) && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => drawer.openDraft(draftFromTransaction(record, record.category))}
+                  >
+                    <Zap size={12} aria-hidden="true" /> Create a rule for {displayPayee}
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
 
-      <section className="transaction-panel__section" aria-labelledby="txn-panel-receipt">
-        <h3 className="transaction-panel__heading" id="txn-panel-receipt">
-          Receipt
-          {record.receiptStatus && (
-            <span className={`transaction-panel__status ${record.receiptStatus === "attached" ? "is-ok" : "is-missing"}`}>
-              {record.receiptStatus === "attached" ? "Attached" : "Missing"}
-            </span>
-          )}
-        </h3>
-        <TransactionReceipt
-          societyId={societyId}
-          txn={record}
-          payee={displayPayee}
-          canWrite={canWrite}
-          onAttach={(documentId) => onUpdate("receiptDocumentId", documentId)}
-        />
-      </section>
+          <section className="transaction-panel__section" aria-labelledby="txn-panel-notes">
+            <h3 className="transaction-panel__heading" id="txn-panel-notes">Notes</h3>
+            <textarea
+              className="input transaction-panel__notes"
+              aria-labelledby="txn-panel-notes"
+              rows={3}
+              value={memo}
+              placeholder={canWrite ? "Add a note, e.g. what this was for" : "No notes"}
+              disabled={!canWrite}
+              onChange={(event) => setMemo(event.target.value)}
+              onBlur={commitMemo}
+            />
+          </section>
 
-      <ReconciliationSection record={record} />
-      <OtherTransactionsSection payee={displayPayee} others={others} onNavigate={onNavigate} />
+          <section className="transaction-panel__section" aria-labelledby="txn-panel-receipt">
+            <h3 className="transaction-panel__heading" id="txn-panel-receipt">
+              Receipt
+              {record.receiptStatus && (
+                <span className={`transaction-panel__status ${record.receiptStatus === "attached" ? "is-ok" : "is-missing"}`}>
+                  {record.receiptStatus === "attached" ? "Attached" : "Missing"}
+                </span>
+              )}
+            </h3>
+            <TransactionReceipt
+              societyId={societyId}
+              txn={record}
+              payee={displayPayee}
+              canWrite={canWrite}
+              onAttach={(documentId) => onUpdate("receiptDocumentId", documentId)}
+            />
+          </section>
+
+          <section className="transaction-panel__section" aria-labelledby="txn-panel-comments" ref={commentsRef}>
+            <h3 className="transaction-panel__heading" id="txn-panel-comments">Comments</h3>
+            <NotesPanel
+              entityType="financialTransaction"
+              entityId={record._id}
+              noun="comment"
+              emptyDescription="Ask about this transaction or leave context for the treasurer. Use @ to mention someone."
+            />
+          </section>
+
+          <ReconciliationSection record={record} />
+          <OtherTransactionsSection payee={displayPayee} others={others} onNavigate={onNavigate} />
+        </>
+      )}
 
       <PayeeRenameDialog
         target={renameTarget}
@@ -391,7 +496,7 @@ function OtherTransactionsSection({
               <li key={row._id}>
                 <button type="button" className="transaction-panel__other" onClick={() => onNavigate(row)}>
                   <span className="transaction-panel__other-date">{formatDate(row.date)}</span>
-                  <span className="transaction-panel__other-category">{row.category || "Uncategorised"}</span>
+                  <span className="transaction-panel__other-category">{splitLabel(row) ?? (row.category || "Uncategorised")}</span>
                   <Money cents={row.amountCents} tone={row.amountCents > 0 ? "in" : "out"} signDisplay="exceptZero" />
                 </button>
               </li>

@@ -142,6 +142,7 @@
 
 // Transactions surface: detail panel, receipt drop zone, payee names.
 @use "transaction-panel";
+@use "books-transactions"; // review queue, money summary, line items, journal entry, tags page
 
 @use "panels-hovercards"; // hover cards, stacked record panels, minimise dock
 

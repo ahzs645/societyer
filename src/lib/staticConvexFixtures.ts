@@ -27,6 +27,8 @@ import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from 
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 import {
   applyFinanceWorkflowsToFeed,
+  applyLinesAndTagsToFeed,
+  financeTagFixtures,
   financeWorkflowApprovalRules,
   financeWorkflowClaimPolicy,
   financeWorkflowExpenseReports,
@@ -2498,6 +2500,9 @@ const reconciliationPeriods = applyFinanceWorkflowsToFeed(FINANCE_WORKFLOW_IDS, 
   [GRANT_ACCOUNT_ID]: staticBankFeed.balances.restricted,
   [CARD_ACCOUNT_ID]: staticBankFeed.balances.card,
 });
+// Line items and tags: tag groups, a few split lines and tagged lines.
+const { financeTagGroups, financeTags } = financeTagFixtures(SOCIETY_ID);
+applyLinesAndTagsToFeed(SOCIETY_ID, financialTransactions);
 const expenseApprovalRules = financeWorkflowApprovalRules(FINANCE_WORKFLOW_IDS);
 const expenseClaimPolicy = financeWorkflowClaimPolicy(FINANCE_WORKFLOW_IDS);
 expenseReports.push(...(financeWorkflowExpenseReports(FINANCE_WORKFLOW_IDS) as any[]));
@@ -2980,6 +2985,8 @@ const tables: Record<string, any[]> = {
   reconciliationRuns,
   reconciliationPeriods,
   transactionRules,
+  financeTagGroups,
+  financeTags,
   expenseApprovalRules,
   expenseClaimPolicy,
   reconciliationRunLines,
