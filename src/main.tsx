@@ -295,6 +295,11 @@ function RootErrorFallback() {
 }
 
 function LandingEntry() {
+  // Dedicated organization instances enter the authenticated app at the root.
+  // AuthGate sends signed-out visitors to login and keeps returning sessions.
+  if (import.meta.env.VITE_APP_ONLY === "1") {
+    return <Navigate to="/app" replace />;
+  }
   // An installed app should open the workspace, not the marketing page. Where
   // it lands depends on whether this device has been set up yet.
   if (isStandalonePwa()) {

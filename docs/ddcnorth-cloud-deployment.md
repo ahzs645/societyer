@@ -16,6 +16,11 @@ The new instance has an empty database; existing local records were not copied.
 
 Public production build settings are in `.env.ddcnorth`:
 
+`VITE_APP_ONLY=1` makes the root URL enter `/app`: visitors without a session
+reach login, and signed-in users reach their workspace. It is also enabled in
+the DDC North development profile. Builds without this flag keep the public
+landing page at `/`.
+
 ```sh
 npm run build:ddcnorth
 npm run deploy:ddcnorth
