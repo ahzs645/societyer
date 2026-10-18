@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Drawer, Field } from "../../../components/ui";
@@ -14,22 +14,36 @@ export function AddBankTransactionDrawer({ open, societyId, canWrite, onClose }:
   const addManualTxn = useMutation(api.reconciliation.addManualTransaction);
   const toast = useToast();
   const [txnForm, setTxnForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const saveManualTxn = async () => {
+    // A second click while the first save runs would add the line twice.
+    if (savingRef.current) return;
     const dollars = Number(txnForm.amountDollars);
     if (!txnForm.description.trim() || !Number.isFinite(dollars) || dollars <= 0) {
       toast.warn("Enter a description and a positive amount");
       return;
     }
     const cents = Math.round(dollars * 100) * (txnForm.direction === "out" ? -1 : 1);
-    await addManualTxn({
-      societyId,
-      date: txnForm.date,
-      description: txnForm.description.trim(),
-      amountCents: cents,
-      counterparty: txnForm.counterparty.trim() || undefined,
-      category: txnForm.category.trim() || undefined,
-    });
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await addManualTxn({
+        societyId,
+        date: txnForm.date,
+        description: txnForm.description.trim(),
+        amountCents: cents,
+        counterparty: txnForm.counterparty.trim() || undefined,
+        category: txnForm.category.trim() || undefined,
+      });
+    } catch (error) {
+      toast.error("Could not add the transaction", error instanceof Error ? error.message : undefined);
+      return;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
     toast.success("Transaction added");
     onClose();
     setTxnForm(emptyForm());
@@ -43,7 +57,9 @@ export function AddBankTransactionDrawer({ open, societyId, canWrite, onClose }:
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn--accent" onClick={saveManualTxn} disabled={!canWrite}>Add transaction</button>
+          <button className="btn btn--accent" onClick={() => void saveManualTxn()} disabled={!canWrite || saving} aria-busy={saving || undefined}>
+            {saving ? "Adding…" : "Add transaction"}
+          </button>
         </>
       }
     >
