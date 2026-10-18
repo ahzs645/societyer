@@ -1861,10 +1861,11 @@ export async function booksReportLinesPortable(
   args: { societyId: string; accountIds: string[]; scope: string; from?: string; to: string; basis?: string; currency?: string; filter?: ReportFilterArg },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  // Ownership before argument checks, so another organization's account ids
+  // read as not found whatever else the call gets wrong.
+  for (const id of args.accountIds) await getOwned(ctx, "financialAccounts", id, args.societyId);
   if (!["balance", "period", "cash"].includes(args.scope)) throw new Error("Unsupported drilldown.");
   const [books, defaultBasis] = await Promise.all([loadBooks(ctx, args.societyId), booksAccountingBasis(ctx, args.societyId)]);
-  const owned = new Set(books.accounts.map((account) => String(account._id)));
-  if (args.accountIds.some((id) => !owned.has(String(id)))) throw new Error("Record not found.");
   return reportDrillLines({
     ...books,
     basis: requireBasis(args.basis, defaultBasis),
