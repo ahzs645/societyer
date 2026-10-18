@@ -28,7 +28,7 @@ async function meetingAccess(ctx: QueryCtx | MutationCtx, meetingId: Id<"meeting
   return { meeting, actor };
 }
 const publicConnection = (c: Doc<"meetingTranscriptionConnections"> | null) => c ? { id: c._id, name: c.name, enabled: c.enabled, settings: c.settings, heartbeatAt: c.heartbeatAt ?? null, capabilities: c.capabilities ? JSON.parse(c.capabilities) : null } : null;
-export const publicJob = (j: Doc<"meetingTranscriptionJobs">) => ({ id: j._id, sourceId: j.sourceId, meetingId: j.meetingId, status: j.status, settings: j.settings, phase: j.phase ?? null, progress: j.progress ?? null, error: j.error ?? null, pageCount: j.pageCount, segmentCount: j.segmentCount, createdAt: j.createdAt, updatedAt: j.updatedAt });
+export const publicJob = (j: Doc<"meetingTranscriptionJobs">) => ({ id: j._id, sourceId: j.sourceId, meetingId: j.meetingId, status: j.status, settings: j.settings, phase: j.status === "applied" ? "Transcript applied" : j.phase ?? null, progress: j.progress ?? null, error: j.error ?? null, pageCount: j.pageCount, segmentCount: j.segmentCount, createdAt: j.createdAt, updatedAt: j.updatedAt });
 export const settings = query({ args: { societyId: v.id("societies") }, returns: v.any(), handler: async (ctx, a) => {
   await human(ctx, a.societyId);
   return publicConnection(await ctx.db.query("meetingTranscriptionConnections").withIndex("by_society", q => q.eq("societyId", a.societyId)).unique());
