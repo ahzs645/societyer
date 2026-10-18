@@ -43,6 +43,7 @@ import { intakeTables } from "./tables/intake";
 import { agreementTables } from "./tables/agreements";
 import { financeWorkflowTables } from "./tables/financeWorkflows";
 import { invoiceTables } from "./tables/invoices";
+import { billTables } from "./tables/bills";
 import { businessRegisterTables } from "./tables/businessRegisters";
 import { expensePolicyTables } from "./tables/expensePolicies";
 import { agentConnectorTables } from "./tables/agentConnectors";
@@ -62,6 +63,7 @@ export default defineSchema({
   ...intakeTables,
   ...financeWorkflowTables,
   ...invoiceTables,
+  ...billTables,
   ...businessRegisterTables,
   ...expensePolicyTables,
   ...agentConnectorTables,

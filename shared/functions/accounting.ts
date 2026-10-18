@@ -74,7 +74,8 @@ function signedAmountFromDebitCredit(debitCents?: number, creditCents?: number) 
   return 0;
 }
 
-async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPeriodId?: string; date: string; allowClosed?: boolean }) {
+/** Refuses a posting dated inside a closed or archived fiscal period (bills post through this too). */
+export async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPeriodId?: string; date: string; allowClosed?: boolean }) {
   if (args.allowClosed) return null;
   let period: any = null;
   if (args.fiscalPeriodId) {

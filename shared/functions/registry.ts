@@ -85,6 +85,7 @@ import * as motionTemplatesFns from "./motionTemplates";
 const reconciliationFns = lazyHandlers(() => import("./reconciliation"), "reconciliation");
 const transactionRulesFns = lazyHandlers(() => import("./transactionRules"), "transactionRules");
 const invoicesFns = lazyHandlers(() => import("./invoices"), "invoices");
+const billsFns = lazyHandlers(() => import("./bills"), "bills");
 const businessRegistersFns = lazyHandlers(() => import("./businessRegisters"), "businessRegisters");
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
@@ -646,6 +647,22 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "invoices:setSeriesStatus", handler: invoicesFns.setSeriesStatusPortable }),
   definePortableMutation({ name: "invoices:issueFromSeries", handler: invoicesFns.issueFromSeriesPortable }),
   definePortableMutation({ name: "invoices:saveSettings", handler: invoicesFns.saveSettingsPortable }),
+
+  // bills
+  definePortableQuery({ name: "bills:workspace", handler: billsFns.workspacePortable }),
+  definePortableMutation({ name: "bills:upsert", handler: billsFns.upsertPortable }),
+  definePortableMutation({ name: "bills:submit", handler: billsFns.submitPortable }),
+  definePortableMutation({ name: "bills:recall", handler: billsFns.recallPortable }),
+  definePortableMutation({ name: "bills:decide", handler: billsFns.decidePortable }),
+  definePortableMutation({ name: "bills:bulkApprove", handler: billsFns.bulkApprovePortable }),
+  definePortableMutation({ name: "bills:setSchedule", handler: billsFns.setSchedulePortable }),
+  definePortableMutation({ name: "bills:recordPayment", handler: billsFns.recordPaymentPortable }),
+  definePortableMutation({ name: "bills:removePayment", handler: billsFns.removePaymentPortable }),
+  definePortableMutation({ name: "bills:markPaid", handler: billsFns.markPaidPortable }),
+  definePortableMutation({ name: "bills:cancel", handler: billsFns.cancelPortable }),
+  definePortableMutation({ name: "bills:remove", handler: billsFns.removePortable }),
+  definePortableMutation({ name: "bills:attachDocument", handler: billsFns.attachDocumentPortable }),
+  definePortableMutation({ name: "bills:upsertVendor", handler: billsFns.upsertVendorPortable }),
 
   // business registers: payroll records, corporate cards, invested reserves
   definePortableQuery({ name: "payroll:workspace", handler: businessRegistersFns.payrollWorkspacePortable }),

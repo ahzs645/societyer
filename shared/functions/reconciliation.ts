@@ -528,7 +528,7 @@ export async function removePeriodPortable(ctx: PortableMutationCtx, { id }: { i
  * The periods query derives the same state for changes made elsewhere (CSV
  * import, sync, edits); this stamps when it was first detected.
  */
-async function flagChangedPeriods(ctx: PortableMutationCtx, accountId: string | undefined, date: string | undefined) {
+export async function flagChangedPeriods(ctx: PortableMutationCtx, accountId: string | undefined, date: string | undefined) {
   if (!accountId || !date) return;
   const ordered = await accountPeriods(ctx, accountId);
   const covering = ordered.filter((p) => isClosedStatus(p.status) && p.startDate <= date && p.endDate >= date);
