@@ -2,9 +2,10 @@
 // portable engine seeded with the demo workspace: split-sum validation, rules
 // never clobbering a split, split journal posting with one offset line per
 // line item (re-posting an edit replaces the entry's lines instead of posting
-// twice), one tag per group, bulk tag assignment with Undo, the tag / method /
-// review filters and money summary of the transactions tab, and the export's
-// formula guard.
+// twice), one tag per group, bulk tag assignment with Undo, the books close
+// date on every re-posting path (single edits refuse, bulk edits, tags and
+// Undo skip and count), the tag / method / review filters and money summary
+// of the transactions tab, and the export's formula guard.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
 import { MemoryDb } from "../shared/portable/memoryDb";
@@ -176,6 +177,52 @@ await hub.restoreTransactionsPortable(owner, { societyId: S, rows: assigned.prev
 assert.equal((await get(plain[0])).tagIds, undefined, "Undo takes the tag off again");
 assert.deepEqual((await get(splitRows[0]._id)).lines, splitRows[0].lines, "Undo restores the split's lines exactly");
 await assert.rejects(linesFns.assignTagPortable(owner, { societyId: S, ids: plain, tagId: null }), /group/, "clearing needs the group");
+
+// ---- the books close date: single edits refuse; bulk edits, tags, Undo skip and count
+{
+  const ownEntryDate = async (id: string) =>
+    (await accounting.postedJournalForTransaction(owner, id)).entries.find((entry) => entry.source === accounting.TRANSACTION_BACKFILL_SOURCE && entry.status === "posted")?.date as string | undefined;
+  const candidates: Array<{ id: string; date: string }> = [];
+  for (const row of seed.financialTransactions.filter((txn) => !txn.lines && txn.category && txn.status !== "pending" && String(txn._id).startsWith("static_tx_feed_"))) {
+    const date = await ownEntryDate(String(row._id));
+    if (date) candidates.push({ id: String(row._id), date });
+    if (candidates.length > 40) break;
+  }
+  candidates.sort((a, b) => a.date.localeCompare(b.date));
+  const locked = candidates[0];
+  const open = candidates.find((row) => row.date > locked.date)!;
+  assert.ok(locked && open, "two posted feed lines on different dates");
+  const closeDate = locked.date;
+  const before = await get(locked.id);
+  const earlier = await hub.bulkUpdateTransactionsPortable(owner, { societyId: S, ids: [locked.id], patch: { category: "Before the lock" } });
+  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
+  const refusal = new RegExp(`books are closed through ${closeDate}, so entries dated ${closeDate} can't be edited`);
+  await assert.rejects(linesFns.savePortable(owner, { id: locked.id, lines: [{ id: "x", amountCents: before.amountCents, category: "Office & technology" }] }), refusal, "saving lines refuses a locked transaction");
+  await assert.rejects(hub.updateTransactionPortable(owner, { id: locked.id, patch: { category: "Office & technology" } }), refusal, "a single category edit refuses");
+  await assert.rejects(hub.updateTransactionPortable(owner, { id: open.id, patch: { date: closeDate } }), refusal, "moving a posted line into the locked period refuses");
+  await hub.updateTransactionPortable(owner, { id: locked.id, patch: { memo: "Notes never touch the journal" } });
+  assert.equal((await get(locked.id)).memo, "Notes never touch the journal", "a notes edit is not a journal write");
+  const lockedBulk = await hub.bulkUpdateTransactionsPortable(owner, { societyId: S, ids: [locked.id, open.id], patch: { category: "Bulk after lock" } });
+  assert.deepEqual([lockedBulk.updated, lockedBulk.skippedLocked], [1, 1], "a bulk category skips the locked line and counts it");
+  assert.equal((await get(locked.id)).category, "Before the lock");
+  assert.equal((await get(open.id)).category, "Bulk after lock");
+  const reviewed = await hub.bulkUpdateTransactionsPortable(owner, { societyId: S, ids: [locked.id], patch: { reviewed: !(await get(locked.id)).reviewedAtISO } });
+  assert.deepEqual([reviewed.updated, reviewed.skippedLocked], [1, 0], "marking reviewed (or not) is not a journal write");
+  const tagged = await linesFns.assignTagPortable(owner, { societyId: S, ids: [locked.id, open.id], tagId: tagId("fall_gala") });
+  assert.deepEqual([tagged.updated, tagged.skippedLocked], [1, 1], "assigning a tag skips the locked line");
+  assert.equal((await get(locked.id)).tagIds, undefined);
+  const undone = await hub.restoreTransactionsPortable(owner, { societyId: S, rows: [...earlier.previous, ...lockedBulk.previous] });
+  assert.deepEqual([undone.restored, undone.skippedLocked], [1, 1], "Undo restores the open line and skips the locked one");
+  assert.equal((await get(locked.id)).category, "Before the lock", "the locked line keeps its value");
+  const sync = accounting.createTransactionJournalSync(owner, S);
+  await db.patch(locked.id, { category: "Patched underneath" });
+  assert.equal(await sync(locked.id, { onLocked: "skip" }), "locked", "the journal sync never re-posts a locked entry");
+  await assert.rejects(sync(locked.id), refusal);
+  await db.patch(locked.id, { category: "Before the lock" });
+  await db.delete(settingsId);
+  await hub.restoreTransactionsPortable(owner, { societyId: S, rows: [...earlier.previous, ...tagged.previous] });
+  assert.equal((await get(locked.id)).category, before.category, "once the date moves, Undo works again");
+}
 
 // ---- tag management
 await assert.rejects(tagsFns.upsertGroupPortable(owner, { societyId: S, name: " program " }), /already/, "group names are unique, ignoring case and spaces");

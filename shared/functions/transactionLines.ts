@@ -8,7 +8,9 @@
  * split, and keeps an already posted journal entry in step without posting
  * twice (`createTransactionJournalSync`). Every write returns the previous
  * values in the shape `financialHub.restoreTransactions` puts back, so the
- * client can offer Undo.
+ * client can offer Undo. A transaction whose journal entry is dated on or
+ * before the books close date can't change: saving lines refuses, and
+ * assigning a tag skips it and counts it in `skippedLocked`.
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
@@ -24,6 +26,8 @@ import {
 } from "../transactionLines";
 import { tagGroupLookup } from "../financeTags";
 import {
+  assertTransactionBooksOpen,
+  createTransactionBooksLock,
   createTransactionJournalSync,
   PENDING_SUSPENSE_ACCOUNT,
   postedJournalForTransaction,
@@ -80,6 +84,7 @@ export async function savePortable(
   }));
   const errors = validateTransactionLines(Number(row.amountCents) || 0, cleaned, { groupOf });
   if (errors.length) throw new Error(errors[0]);
+  await assertTransactionBooksOpen(ctx, societyId, id);
   for (const line of cleaned) {
     if (line.accountingAccountId) await getOwned(ctx, "financialAccounts", line.accountingAccountId, societyId);
     if (line.fundRestrictionId) await getOwned(ctx, "fundRestrictions", line.fundRestrictionId, societyId);
@@ -177,8 +182,10 @@ export async function assignTagPortable(
   const next = (tagIds: readonly string[] | undefined) => (tagId ? withTagAssigned(tagIds, tagId, groupOf) : withoutTagGroup(tagIds, removeGroup!, groupOf));
   const sameTags = (a: readonly string[] | undefined, b: readonly string[]) => JSON.stringify([...(a ?? [])].sort()) === JSON.stringify([...b].sort());
   const sync = createTransactionJournalSync(ctx, societyId);
+  const lockedByBooks = createTransactionBooksLock(ctx, societyId);
   const previous: Array<{ id: string; values: Record<string, unknown> }> = [];
   let skipped = 0;
+  let skippedLocked = 0;
   for (const id of unique) {
     const row = await ctx.db.get(id, "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
@@ -197,9 +204,13 @@ export async function assignTagPortable(
       if (!sameTags(txn.tagIds, tagIds)) patch = { tagIds: tagIds.length ? tagIds : undefined };
     }
     if (!patch) continue;
+    if (await lockedByBooks(id)) {
+      skippedLocked += 1;
+      continue;
+    }
     previous.push({ id: String(row._id), values: snapshotBulkFields(row) });
     await ctx.db.patch(id, patch);
     await sync(id, { onLocked: "skip" });
   }
-  return { updated: previous.length, skipped, previous };
+  return { updated: previous.length, skipped, skippedLocked, previous };
 }

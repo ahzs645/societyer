@@ -20,7 +20,7 @@ import { fiscalWindow } from "./treasury";
 import { todayDateOnly } from "../dateOnly";
 import { RULE_TOUCHED_FIELDS, snapshotRuleFields } from "../transactionRules";
 import { categoryAmounts, isSplitTransaction } from "../transactionLines";
-import { createTransactionJournalSync } from "./accounting";
+import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync } from "./accounting";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -522,6 +522,8 @@ export async function getConnectionPortable(ctx: PortableQueryCtx, { id }: { id:
 // (date, description, category, counterparty, amount, notes and the receipt
 // document) are patchable; the account binding and external/source
 // identifiers stay immutable. The receipt status follows the receipt document.
+// A change that re-posts the journal entry (category, amount, date) is refused
+// when that entry is dated on or before the books close date, or would move there.
 export async function updateTransactionPortable(
   ctx: PortableMutationCtx,
   {
@@ -551,6 +553,9 @@ export async function updateTransactionPortable(
   const { receiptDocumentId, memo, ...rest } = patch;
   if (patch.category !== undefined && patch.category !== row.category && isSplitTransaction({ lines: row.lines })) {
     throw new Error("This transaction is split into lines. Change the categories on its lines in the transaction panel.");
+  }
+  if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
+    await assertTransactionBooksOpen(ctx, String(row.societyId), id, patch.date);
   }
   const next: Record<string, unknown> = { ...rest };
   if (memo !== undefined) {
@@ -602,6 +607,8 @@ export function snapshotBulkFields(row: Record<string, unknown>): Record<string,
  * `restoreTransactions`. Lines from another organization are only counted as
  * skipped, never named. A category is not forced onto a split transaction
  * (its lines keep their categories); those are counted in `splitSkipped`.
+ * A category or fund change to a transaction whose journal entry is dated on
+ * or before the books close date is skipped and counted in `skippedLocked`.
  */
 export async function bulkUpdateTransactionsPortable(
   ctx: PortableMutationCtx,
@@ -629,8 +636,10 @@ export async function bulkUpdateTransactionsPortable(
   const nowISO = new Date().toISOString();
   const previous: Array<{ id: string; values: Record<string, unknown> }> = [];
   const sync = createTransactionJournalSync(ctx, societyId);
+  const lockedByBooks = createTransactionBooksLock(ctx, societyId);
   let skipped = 0;
   let splitSkipped = 0;
+  let skippedLocked = 0;
   for (const id of unique) {
     const row: any = await ctx.db.get(id, "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
@@ -656,14 +665,23 @@ export async function bulkUpdateTransactionsPortable(
     if (patch.reviewed && !row.reviewedAtISO) next.reviewedAtISO = nowISO;
     if (patch.reviewed === false && row.reviewedAtISO) next.reviewedAtISO = undefined;
     if (Object.keys(next).length === 0) continue;
+    const reposts = "category" in next || "fundRestrictionId" in next;
+    if (reposts && (await lockedByBooks(String(row._id)))) {
+      skippedLocked += 1;
+      continue;
+    }
     await ctx.db.patch(row._id, next);
     previous.push({ id: String(row._id), values });
-    if ("category" in next || "fundRestrictionId" in next) await sync(String(row._id), { onLocked: "skip" });
+    if (reposts) await sync(String(row._id), { onLocked: "skip" });
   }
-  return { updated: previous.length, skipped, splitSkipped, previous };
+  return { updated: previous.length, skipped, splitSkipped, skippedLocked, previous };
 }
 
-/** Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned. */
+/**
+ * Undo a bulk edit: put back the snapshot `bulkUpdateTransactions` returned.
+ * Transactions whose journal entry is now on or before the books close date
+ * are left as they are and counted in `skippedLocked`.
+ */
 export async function restoreTransactionsPortable(
   ctx: PortableMutationCtx,
   {
@@ -681,11 +699,17 @@ export async function restoreTransactionsPortable(
   if (rows.length > BULK_TRANSACTION_LIMIT) throw new Error(`Restore at most ${BULK_TRANSACTION_LIMIT} transactions at once.`);
   let restored = 0;
   let skipped = 0;
+  let skippedLocked = 0;
   const sync = createTransactionJournalSync(ctx, societyId);
+  const lockedByBooks = createTransactionBooksLock(ctx, societyId);
   for (const entry of rows) {
     const row: any = await ctx.db.get(String(entry.id), "financialTransactions");
     if (!row || String(row.societyId) !== String(societyId)) {
       skipped += 1;
+      continue;
+    }
+    if (await lockedByBooks(String(row._id))) {
+      skippedLocked += 1;
       continue;
     }
     const values = entry.values ?? {};
@@ -708,7 +732,7 @@ export async function restoreTransactionsPortable(
     await sync(String(row._id), { onLocked: "skip" });
     restored += 1;
   }
-  return { restored, skipped };
+  return { restored, skipped, skippedLocked };
 }
 
 // A small derived query for the dashboard — balances by purpose/category.

@@ -13,6 +13,7 @@ import { draftFromSelection, selectionPayees, SELECTION_RULE_MAX_PAYEES } from "
 import { useRuleDrawer } from "./RuleDrawerHost";
 import { useTransactionBulkEdit } from "./useTransactionBulkEdit";
 import type { FinanceTagsApi } from "./useFinanceTags";
+import { booksLockedNote, restoredMessage } from "./booksLockNote";
 
 type BulkRow = {
   _id: string;
@@ -29,7 +30,7 @@ type BulkRow = {
 
 type Pending = { kind: "category" | "fund" | "tag"; ids: string[] } | null;
 
-type TagResult = { updated: number; skipped: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
+type TagResult = { updated: number; skipped: number; skippedLocked?: number; previous: Array<{ id: string; values: Record<string, unknown> }> };
 
 /** "remove:<groupId>" in the tag picker clears that group's tag. */
 const REMOVE_PREFIX = "remove:";
@@ -66,19 +67,21 @@ export function TransactionsBulkBar({ societyId, canWrite, exportName, tags }: {
     const tag = removing ? undefined : tags.tag(choice);
     try {
       const result = (await assignTag({ societyId, ids, tagId: removing ? null : choice, ...(groupId ? { groupId } : {}) })) as TagResult;
+      const lockedNote = booksLockedNote(result.skippedLocked);
       if (result.updated === 0) {
-        toast.info("Nothing changed", removing ? "None of the selected transactions had a tag from that group." : `The selected transactions already have ${tag?.name ?? "that tag"}.`);
+        toast.info("Nothing changed", lockedNote ?? (removing ? "None of the selected transactions had a tag from that group." : `The selected transactions already have ${tag?.name ?? "that tag"}.`));
         return;
       }
       toast.success(
         removing ? `Removed the ${tags.group(groupId!)?.name ?? "group"} tag from ${pluralize(result.updated, "transaction")}` : `Tagged ${pluralize(result.updated, "transaction")} ${tag?.name ?? ""}`.trim(),
         {
+          description: lockedNote,
           duration: 10_000,
           action: {
             label: "Undo",
             onClick: () => {
               void restore({ societyId, rows: result.previous })
-                .then(() => toast.info(`Restored ${pluralize(result.updated, "transaction")}`))
+                .then((undone) => toast.info(...restoredMessage(undone)))
                 .catch((error: unknown) => toast.error("Could not undo", error instanceof Error ? error.message : undefined));
             },
           },

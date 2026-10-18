@@ -1,6 +1,7 @@
 // Finance workflows end-to-end on the portable engine, seeded with the demo
 // workspace: statement periods (complete, out of balance, reopen), rule
-// application + undo, and server-side approval-rule and approver-access enforcement.
+// application + undo (and the books close date on both), and server-side
+// approval-rule and approver-access enforcement.
 import assert from "node:assert/strict";
 import { tables } from "../src/lib/staticConvexFixtures";
 import { DEMO_RECONCILIATION, feedTransactionId } from "../src/lib/staticFinanceWorkflowFixtures";
@@ -8,6 +9,7 @@ import { MemoryDb } from "../shared/portable/memoryDb";
 import { makeCapabilities } from "../shared/portable/capabilities";
 import * as recon from "../shared/functions/reconciliation";
 import * as rules from "../shared/functions/transactionRules";
+import * as accounting from "../shared/functions/accounting";
 import * as exp from "../shared/functions/expenseReports";
 import { requireFunctionAction } from "../shared/functions/actionPolicy";
 import { DEFAULT_APPROVAL_RULES, FINANCE_EDIT_REQUIRED_REASON, approvalRuleWarnings, diffApprovalRules, financeControlFindings } from "../shared/expenseApprovals";
@@ -208,6 +210,30 @@ const again = await rules.applyToUncategorizedPortable(mina, { societyId: S, rul
 assert.equal(again.applied, 0, "a re-code rule applies once");
 await rules.undoBatchPortable(mina, { societyId: S, batch: recodeRun.batchId });
 await rules.removePortable(mina, { id: recodeId });
+
+// The books close date: a rule run leaves a line whose journal entry is inside
+// it alone and counts it; Undo of a batch skips it too; removing a rule's
+// application from it refuses.
+{
+  await accounting.backfillFinancialTransactionsToJournalPortable(mina, { societyId: S, transactionIds: [latestHydro._id], includeBeforeOpening: true });
+  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate: latestHydro.date, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
+  const lockedRun = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.ok(lockedRun.skippedLocked >= 1, "the posted line inside the close date is counted");
+  assert.equal((await db.get(latestHydro._id)).category, undefined, "and left uncategorised");
+  await rules.undoBatchPortable(mina, { societyId: S, batch: lockedRun.batchId });
+  await db.patch(settingsId, { closeDate: "2000-01-01" });
+  const run = await rules.applyToUncategorizedPortable(mina, { societyId: S });
+  assert.equal(run.skippedLocked, 0);
+  assert.equal((await db.get(latestHydro._id)).category, "Facilities");
+  await db.patch(settingsId, { closeDate: latestHydro.date });
+  await assert.rejects(() => rules.removeApplicationPortable(mina, { txnId: latestHydro._id }), /books are closed through/);
+  const lockedUndo = await rules.undoBatchPortable(mina, { societyId: S, batch: run.batchId });
+  assert.ok(lockedUndo.skippedLocked >= 1, "Undo skips the locked line and counts it");
+  assert.equal((await db.get(latestHydro._id)).category, "Facilities", "the locked line keeps the rule's category");
+  await db.delete(settingsId);
+  await rules.undoBatchPortable(mina, { societyId: S, batch: run.batchId });
+  assert.equal((await db.get(latestHydro._id)).category, undefined, "once the date moves, Undo restores it");
+}
 
 // ---- approvals (default approver access: finance edit access required)
 // Mina = Owner, Avery = Admin (both finance writers); Jordan = Director with

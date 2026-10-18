@@ -1604,18 +1604,50 @@ export async function previewTransactionJournal(ctx: PortableQueryCtx, transacti
 export type TransactionJournalSyncResult = "unposted" | "external" | "unchanged" | "updated" | "reposted" | "locked";
 
 /**
+ * The books close date's refusal for changing a bank transaction whose own
+ * journal entry (the one Backfill imports posted) is dated on or before the
+ * close date, or would move there (`nextDate`); null when it may change.
+ * Transactions nobody posted, or posted by another workflow (a bill payment,
+ * a manual journal), never touch a journal entry here, so they are not
+ * locked. Single edits throw this message; bulk edits, rule runs and Undo
+ * skip the transaction and count it (`skippedLocked`). The close date is
+ * read once per check function.
+ */
+export function createTransactionBooksLock(ctx: PortableQueryCtx, societyId: string) {
+  let closeDate: string | null | undefined;
+  return async (transactionId: string, nextDate?: string | null): Promise<string | null> => {
+    if (closeDate === undefined) closeDate = await booksCloseDate(ctx, societyId);
+    if (!closeDate) return null;
+    const { entries } = await postedJournalForTransaction(ctx, transactionId);
+    const entry = entries.find((row) => row.source === TRANSACTION_BACKFILL_SOURCE && row.status === "posted");
+    if (!entry) return null;
+    return closedBooksError(closeDate, [String(entry.date), nextDate], "edited");
+  };
+}
+
+/** Throws the close-date refusal for a single edit of a posted bank transaction (see createTransactionBooksLock). */
+export async function assertTransactionBooksOpen(ctx: PortableQueryCtx, societyId: string, transactionId: string, nextDate?: string | null) {
+  const error = await createTransactionBooksLock(ctx, societyId)(transactionId, nextDate);
+  if (error) throw new Error(error);
+}
+
+/**
  * Keeps a posted bank transaction's journal entry in step with its current
  * category, line items, fund and tags. Idempotent, and never posts twice: a
  * transaction nobody posted stays unposted (Backfill imports posts it), an
  * entry written elsewhere (a sync, a manual journal) is left alone, and the
  * transaction's own entry has its lines replaced in place. Changes to
  * accounts, amounts, funds or the date need the fiscal period to be open;
- * tags and descriptions are updated in place either way. With
- * `onLocked: "skip"` a closed period leaves the entry as it is instead of
- * failing (rule runs and bulk edits).
+ * tags and descriptions are updated in place either way. The books close
+ * date is a hard lock: an entry dated on or before it (or moving there) is
+ * never touched, not even its tags. With `onLocked: "skip"` a closed period
+ * or the close date leaves the entry as it is instead of failing (rule runs
+ * and bulk edits; they also check createTransactionBooksLock first so the
+ * transaction itself is left alone and counted).
  */
 export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId: string) {
   let context: JournalPlanContext | null = null;
+  let closeDate: string | null | undefined;
   return async (transactionId: string, options: { onLocked?: "throw" | "skip" } = {}): Promise<TransactionJournalSyncResult> => {
     const { entries, lines } = await postedJournalForTransaction(ctx, transactionId);
     if (entries.length === 0) return "unposted";
@@ -1624,6 +1656,13 @@ export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId
     const stored = await ctx.db.get(transactionId, "financialTransactions");
     if (!stored || String(stored.societyId) !== String(societyId)) return "unchanged";
     const transaction = backfillTransactionOf(stored);
+    // Refuses (or skips) only when the entry would actually change.
+    const lockedByBooks = async () => {
+      if (closeDate === undefined) closeDate = await booksCloseDate(ctx, societyId);
+      const error = closedBooksError(closeDate, [String(entry.date), transaction.date], "edited");
+      if (error && options.onLocked !== "skip") throw new Error(error);
+      return Boolean(error);
+    };
     context ??= await loadJournalPlanContext(ctx, societyId);
     let { row, suspenseAccountId } = planOneTransaction(context, transaction);
     if (row.status !== "post") return "unchanged";
@@ -1646,17 +1685,19 @@ export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId
         String(current[index].fundRestrictionId ?? "") === String(line.fundRestrictionId ?? ""));
     const now = new Date().toISOString();
     if (sameShape) {
-      let changed = false;
-      for (const [index, line] of desired.entries()) {
-        const existing = current[index];
-        const tagsBefore = JSON.stringify((Array.isArray(existing.tagIds) ? existing.tagIds : []).map(String).sort());
-        const tagsAfter = JSON.stringify([...(line.tagIds ?? [])].sort());
-        if (existing.description === line.description && tagsBefore === tagsAfter) continue;
-        await ctx.db.patch(existing._id, { description: line.description, tagIds: line.tagIds, updatedAtISO: now });
-        changed = true;
-      }
-      return changed ? "updated" : "unchanged";
+      const changes = desired
+        .map((line, index) => ({ line, existing: current[index] }))
+        .filter(({ line, existing }) => {
+          const tagsBefore = JSON.stringify((Array.isArray(existing.tagIds) ? existing.tagIds : []).map(String).sort());
+          const tagsAfter = JSON.stringify([...(line.tagIds ?? [])].sort());
+          return existing.description !== line.description || tagsBefore !== tagsAfter;
+        });
+      if (changes.length === 0) return "unchanged";
+      if (await lockedByBooks()) return "locked";
+      for (const { line, existing } of changes) await ctx.db.patch(existing._id, { description: line.description, tagIds: line.tagIds, updatedAtISO: now });
+      return "updated";
     }
+    if (await lockedByBooks()) return "locked";
     let period: PortableDoc | null = null;
     try {
       await assertPeriodOpen(ctx, { societyId, date: String(entry.date) });

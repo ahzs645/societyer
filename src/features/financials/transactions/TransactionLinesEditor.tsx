@@ -16,6 +16,7 @@ import {
 } from "../../../../shared/transactionLines";
 import { TagChips, TagPicker } from "./TagPicker";
 import type { FinanceTagsApi } from "./useFinanceTags";
+import { booksLockedNote } from "./booksLockNote";
 
 export type LineEditorTransaction = {
   _id: string;
@@ -147,7 +148,7 @@ export function TransactionLinesEditor({
           label: "Undo",
           onClick: () => {
             void restore({ societyId, rows: result.previous })
-              .then(() => toast.info("Restored the previous lines"))
+              .then((undone) => (undone?.skippedLocked ? toast.warn("Not restored", booksLockedNote(undone.skippedLocked)) : toast.info("Restored the previous lines")))
               .catch((error: unknown) => toast.error("Could not undo", error instanceof Error ? error.message : undefined));
           },
         },

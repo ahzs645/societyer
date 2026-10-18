@@ -39,6 +39,8 @@ export type ApplyRulesResult = {
   byRule: { ruleId: string; name: string; count: number }[];
   /** Rules passed over because they need attention. */
   skippedRules?: { name: string; problem: string }[];
+  /** Matching lines left alone because they are posted inside the books close date. */
+  skippedLocked?: number;
 };
 
 /** Shape returned by `transactionRules:workspace`. */
