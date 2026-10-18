@@ -19,12 +19,13 @@ import {
   isSplitTransaction,
   storedLineFields,
   transactionLines,
+  transactionTagIds,
   validateTransactionLines,
   withTagAssigned,
   withoutTagGroup,
   type TransactionLine,
 } from "../transactionLines";
-import { tagGroupLookup } from "../financeTags";
+import { tagRulesFor } from "./financeTags";
 import { paymentLinkRefusal } from "../reconciliationPeriods";
 import {
   assertTransactionBooksOpen,
@@ -35,11 +36,6 @@ import {
   previewTransactionJournal,
 } from "./accounting";
 import { BULK_TRANSACTION_LIMIT, snapshotBulkFields } from "./financialHub";
-
-async function loadTagLookup(ctx: PortableQueryCtx, societyId: string) {
-  const tags = await ctx.db.query("financeTags").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-  return tagGroupLookup(tags.map((tag) => ({ _id: String(tag._id), groupId: String(tag.groupId) })));
-}
 
 function lineTransactionOf(row: PortableDoc) {
   return {
@@ -73,7 +69,7 @@ export async function savePortable(
   await requireSocietyMembership(ctx, societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
   await getOwned(ctx, "financialTransactions", id, societyId);
-  const groupOf = await loadTagLookup(ctx, societyId);
+  const { groupOf, newTagProblem } = await tagRulesFor(ctx, societyId);
   const cleaned: TransactionLine[] = lines.map((line) => ({
     id: String(line.id ?? "").trim(),
     amountCents: Number(line.amountCents),
@@ -85,6 +81,9 @@ export async function savePortable(
   }));
   const errors = validateTransactionLines(Number(row.amountCents) || 0, cleaned, { groupOf });
   if (errors.length) throw new Error(errors[0]);
+  // Tags already on the transaction stay even if archived since; new ones must be usable.
+  const tagProblem = newTagProblem(cleaned.flatMap((line) => line.tagIds ?? []), transactionTagIds(lineTransactionOf(row)));
+  if (tagProblem) throw new Error(tagProblem);
   await assertTransactionBooksOpen(ctx, societyId, id);
   for (const line of cleaned) {
     if (line.accountingAccountId) await getOwned(ctx, "financialAccounts", line.accountingAccountId, societyId);
@@ -177,12 +176,14 @@ export async function assignTagPortable(
   if (tagId) {
     const tag = await getOwned(ctx, "financeTags", tagId, societyId);
     if (tag.archivedAtISO) throw new Error("This tag is archived. Restore it on the Tags page to use it again.");
+    const group = await ctx.db.get(String(tag.groupId), "financeTagGroups");
+    if (group?.archivedAtISO) throw new Error("This tag's group is archived. Restore the group on the Tags page to use its tags again.");
   } else {
     if (!groupId) throw new Error("Choose a tag, or the group to clear.");
     await getOwned(ctx, "financeTagGroups", groupId, societyId);
     removeGroup = groupId;
   }
-  const groupOf = await loadTagLookup(ctx, societyId);
+  const { groupOf } = await tagRulesFor(ctx, societyId);
   const next = (tagIds: readonly string[] | undefined) => (tagId ? withTagAssigned(tagIds, tagId, groupOf) : withoutTagGroup(tagIds, removeGroup!, groupOf));
   const sameTags = (a: readonly string[] | undefined, b: readonly string[]) => JSON.stringify([...(a ?? [])].sort()) === JSON.stringify([...b].sort());
   const sync = createTransactionJournalSync(ctx, societyId);

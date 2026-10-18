@@ -251,6 +251,23 @@ await assert.rejects(tagsFns.upsertTagPortable(owner, { societyId: S, groupId, n
 await assert.rejects(tagsFns.upsertGroupPortable(owner, { societyId: S, name: "Colourful", color: "chartreuse" }), /colour/);
 await tagsFns.setTagArchivedPortable(owner, { id: String(tagIdNew), archived: true });
 await assert.rejects(linesFns.assignTagPortable(owner, { societyId: S, ids: plain, tagId: String(tagIdNew) }), /archived/, "an archived tag cannot be assigned");
+// Saving lines refuses newly added archived tags, and tags in an archived group, but keeps tags a line already had.
+{
+  const line = await get(plain[0]);
+  const save = (tagIds: string[], memo?: string) => linesFns.savePortable(owner, { id: line._id, lines: [{ id: "only", amountCents: line.amountCents, category: line.category, accountingAccountId: line.accountingAccountId, memo, tagIds }] });
+  await assert.rejects(save([String(tagIdNew)]), /This tag is archived/, "saving lines can't add an archived tag either");
+  const stage = await tagsFns.upsertTagPortable(owner, { societyId: S, groupId, name: "Stage" });
+  await tagsFns.setGroupArchivedPortable(owner, { id: String(groupId), archived: true });
+  await assert.rejects(save([String(stage)]), /group is archived/);
+  await assert.rejects(linesFns.assignTagPortable(owner, { societyId: S, ids: plain, tagId: String(stage) }), /group is archived/, "nor can assigning");
+  await tagsFns.setGroupArchivedPortable(owner, { id: String(groupId), archived: false });
+  await save([String(stage)]);
+  await tagsFns.setTagArchivedPortable(owner, { id: String(stage), archived: true });
+  await save([String(stage)], "Kept after archiving");
+  assert.deepEqual((await get(line._id)).tagIds, [String(stage)], "a tag the line already had stays on later saves");
+  await tagsFns.setTagArchivedPortable(owner, { id: String(stage), archived: false });
+  await save([]);
+}
 const workspace = await tagsFns.workspacePortable(owner, { societyId: S });
 assert.ok(workspace.groups.find((group) => group.name === "Location")?.tags[0].archived, "archived tags stay listed, flagged");
 assert.ok((workspace.groups.find((group) => group.name === "Event")?.tags[0].transactionCount ?? 0) > 0, "tags count their transactions");

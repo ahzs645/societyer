@@ -466,6 +466,18 @@ await assert.rejects(() => bills.upsertPortable(ctx, { id: created.id, societyId
 await bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billNumber: "GP-0001", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds: ["static_tag_community_garden", "static_tag_city_neighbourhood"] }] });
 assert.deepEqual((await get(created.id)).lines[0].tagIds, ["static_tag_community_garden", "static_tag_city_neighbourhood"], "valid tags are kept on the line");
 {
+  // A newly added archived tag is refused; a tag the bill already had stays after it's archived.
+  const tagsFns = await import("../shared/functions/financeTags");
+  const save = (tagIds: string[]) => bills.upsertPortable(ctx, { id: created.id, societyId: S, vendorId, billNumber: "GP-0001", billDate: today, lines: [{ accountId: "static_financial_facilities_expense", amountCents: 21000, tagIds }] });
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_arts_nights", archived: true });
+  await assert.rejects(() => save(["static_tag_arts_nights", "static_tag_city_neighbourhood"]), /This tag is archived/);
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_arts_nights", archived: false });
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_community_garden", archived: true });
+  await save(["static_tag_community_garden", "static_tag_city_neighbourhood"]);
+  assert.deepEqual((await get(created.id)).lines[0].tagIds, ["static_tag_community_garden", "static_tag_city_neighbourhood"], "the archived tag the line already had is kept");
+  await tagsFns.setTagArchivedPortable(ctx, { id: "static_tag_community_garden", archived: false });
+}
+{
   const demoTagged = (await db.query("journalLines").collect()).filter((line) => String(line._id).startsWith("static_jline_") && (line.tagIds ?? []).includes("static_tag_youth_mentoring"));
   assert.ok(demoTagged.some((line) => String(line.journalEntryId).startsWith("static_journal_bill_")) && demoTagged.some((line) => String(line.journalEntryId).startsWith("static_journal_cash_")), "demo bill postings carry their lines' tags, on the accrual and the cash-only entries");
 }

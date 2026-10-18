@@ -42,6 +42,32 @@ export function tagGroupLookup(tags: readonly Pick<FinanceTagRef, "_id" | "group
   return (tagId) => byId.get(String(tagId));
 }
 
+/**
+ * The problem with tags newly put on a record (a transaction or a bill): an
+ * archived tag, or one in an archived group, can't be added until it's
+ * restored. Tags the record already carried (`keptTagIds`) stay allowed, so
+ * editing an old record never strips its history. Unknown ids are left to the
+ * caller's own "no longer exists" check. Null when every new tag is usable.
+ */
+export function newTagProblem(
+  tagIds: Iterable<string>,
+  keptTagIds: Iterable<string>,
+  tags: readonly Pick<FinanceTagRef, "_id" | "groupId" | "archivedAtISO">[],
+  groups: readonly Pick<FinanceTagGroupRef, "_id" | "archivedAtISO">[],
+): string | null {
+  const kept = new Set([...keptTagIds].map(String));
+  const tagById = new Map(tags.map((tag) => [String(tag._id), tag]));
+  const archivedGroups = new Set(groups.filter((group) => group.archivedAtISO).map((group) => String(group._id)));
+  for (const id of new Set([...tagIds].map(String))) {
+    if (kept.has(id)) continue;
+    const tag = tagById.get(id);
+    if (!tag) continue;
+    if (tag.archivedAtISO) return "This tag is archived. Restore it on the Tags page to use it again.";
+    if (archivedGroups.has(String(tag.groupId))) return "This tag's group is archived. Restore the group on the Tags page to use its tags again.";
+  }
+  return null;
+}
+
 /** The colour a tag shows in: its own, else its group's, else gray. */
 export function tagColor(tag: Pick<FinanceTagRef, "color"> | undefined, group: Pick<FinanceTagGroupRef, "color"> | undefined): FinanceTagColor {
   if (isFinanceTagColor(tag?.color)) return tag.color;

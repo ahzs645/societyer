@@ -43,7 +43,7 @@ import { flagChangedPeriods } from "./reconciliation";
 import { validateBalancedJournalLines } from "../accountingCore";
 import type { JournalBasis } from "../booksReports";
 import { approverEligibility, FINANCE_EDIT_REQUIRED_REASON, type ApprovalRule, type ApproverAccessContext } from "../expenseApprovals";
-import { tagGroupLookup } from "../financeTags";
+import { tagRulesFor } from "./financeTags";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import {
   addDays,
@@ -602,12 +602,6 @@ function cleanLines(lines: readonly ClientLine[] | undefined): BillLine[] {
   });
 }
 
-/** Tag id → group id for this organization's tags (another organization's tags are unknown). */
-async function loadTagLookup(ctx: PortableQueryCtx, societyId: string) {
-  const tags = await ctx.db.query("financeTags").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-  return tagGroupLookup(tags.map((tag) => ({ _id: String(tag._id), groupId: String(tag.groupId) })));
-}
-
 async function assertLineRefs(ctx: PortableQueryCtx, societyId: string, lines: readonly BillLine[]) {
   for (const id of new Set(lines.map((line) => line.accountId).filter((value): value is string => Boolean(value)))) {
     const account = await getOwned<AccountRow>(ctx, "financialAccounts", id, societyId);
@@ -654,9 +648,15 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: UpsertArgs)
   const dueDate = dueDateForTerms(args.billDate, terms, args.dueDate);
   if (dueDate < args.billDate) throw new Error("The due date can't be before the bill date.");
   const lines = cleanLines(args.lines);
-  const groupOf = lines.some((line) => line.tagIds?.length) ? await loadTagLookup(ctx, args.societyId) : undefined;
-  const problem = validateBillLines(lines, { complete: false, groupOf });
+  const tagRules = lines.some((line) => line.tagIds?.length) ? await tagRulesFor(ctx, args.societyId) : undefined;
+  const problem = validateBillLines(lines, { complete: false, groupOf: tagRules?.groupOf });
   if (problem) throw new Error(problem);
+  if (tagRules) {
+    // Tags already on the bill stay even if archived since; new ones must be usable.
+    const kept = args.id ? (await getOwned<BillRow>(ctx, "bills", args.id, args.societyId)).lines.flatMap((line) => line.tagIds ?? []) : [];
+    const tagProblem = tagRules.newTagProblem(lines.flatMap((line) => line.tagIds ?? []), kept);
+    if (tagProblem) throw new Error(tagProblem);
+  }
   await assertLineRefs(ctx, args.societyId, lines);
   if (args.documentId) await requireDocumentAccess(ctx, args.documentId);
   const fields = {
