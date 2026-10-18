@@ -34,6 +34,7 @@ import { validateBalancedJournalLines } from "../accountingCore";
 import { accountParentError } from "../accountHierarchy";
 import { requirePermissionPortable } from "./permissions";
 import { assertBooksOpen, booksAccountingBasis, booksCloseDate, booksSettingsRow } from "./booksLock";
+import { cashLedgerAccounts } from "./bankAccounts";
 import {
   ACCOUNTING_BASES,
   BOOKS_REPORT_KINDS,
@@ -1108,13 +1109,14 @@ type BackfillOptions = {
 };
 
 async function loadBackfillPlan(ctx: PortableQueryCtx, societyId: string, options: BackfillOptions) {
-  const [transactions, allLines, accounts, mappings, openingEntries, voidEntries] = await Promise.all([
+  const [transactions, allLines, accounts, mappings, openingEntries, voidEntries, cashAccountByFeed] = await Promise.all([
     ctx.db.query("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalEntries").withIndex("by_society_source", (q) => q.eq("societyId", societyId).eq("source", "opening_balance")).collect(),
     ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "void")).collect(),
+    cashLedgerAccounts(ctx, societyId),
   ]);
   // Lines of a voided entry no longer count as posting their transaction.
   const voided = new Set(voidEntries.map((entry: any) => String(entry._id)));
@@ -1133,6 +1135,7 @@ async function loadBackfillPlan(ctx: PortableQueryCtx, societyId: string, option
     includeBeforeOpening: options.includeBeforeOpening,
     useSuspense: options.useSuspense,
     transactionIds: options.transactionIds,
+    cashAccountByFeed,
   });
   return { plan, transactions, accounts };
 }
@@ -1522,14 +1525,16 @@ function reconciliationLedgerFingerprint(lines: any[], entries: Map<string, any>
 // One bank transaction's journal entry: the preview the transaction panel
 // shows, and keeping a posted entry in step with later edits.
 
-type JournalPlanContext = { accounts: BackfillAccount[]; mappings: BackfillMapping[] };
+type JournalPlanContext = { accounts: BackfillAccount[]; mappings: BackfillMapping[]; cashAccountByFeed: Map<string, string> };
 
 async function loadJournalPlanContext(ctx: PortableQueryCtx, societyId: string): Promise<JournalPlanContext> {
-  const [accounts, mappings] = await Promise.all([
+  const [accounts, mappings, cashAccountByFeed] = await Promise.all([
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("accountingAccountMappings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    cashLedgerAccounts(ctx, societyId),
   ]);
   return {
+    cashAccountByFeed,
     accounts: accounts.map((row) => ({ _id: String(row._id), code: row.code, name: String(row.name ?? ""), accountType: String(row.accountType ?? ""), subtype: row.subtype })),
     mappings: mappings.map((row) => ({
       _id: String(row._id),
@@ -1570,6 +1575,7 @@ function planOneTransaction(context: JournalPlanContext, transaction: BackfillTr
     postedTransactionIds: [],
     openingBalanceDate: null,
     includeBeforeOpening: true,
+    cashAccountByFeed: context.cashAccountByFeed,
   });
   return { row: plan.rows[0], suspenseAccountId: plan.suspenseAccountId };
 }

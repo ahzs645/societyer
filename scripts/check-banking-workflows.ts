@@ -122,6 +122,9 @@ assert.equal(autoReconcileReadiness(0, 0, []).ready, false, "an empty statement"
 assert.equal(mileageAmountCents(42, 70), 2940);
 assert.equal(mileageAmountCents(18.5, 70), 1295);
 assert.equal(mileageAmountCents(25, 67), 1675, "rounds to the cent");
+assert.equal(mileageAmountCents(1.15, 50), 58, "a half cent rounds up although 1.15 × 50 is 57.4999… in floating point");
+assert.equal(mileageAmountCents(2.05, 70), 144, "and 2.05 × 70 (143.4999…)");
+assert.equal(mileageAmountCents(0.01, 49), 0, "under half a cent rounds down");
 assert.match(validateMileage({ distanceKm: 10, tripDescription: "x" }, null)[0], /mileage rate/, "mileage needs the organisation's rate");
 assert.deepEqual(validateMileage({ distanceKm: 42.35, tripDescription: "Site visit" }, 70), []);
 assert.deepEqual(validateMileage({ distanceKm: 12, fromLocation: "Hall", toLocation: "Library" }, 70), [], "from and to describe the trip");
@@ -253,6 +256,22 @@ await assert.rejects(inbox.confirmMatchPortable(mina, { id: photo._id, transacti
 await inbox.setDiscardedPortable(mina, { id: photo._id, discarded: true });
 box = await inbox.listPortable(mina, { societyId: S });
 assert.deepEqual(box.counts, { unmatched: 1, matched: 2, discarded: 1 });
+// Removing the receipt from the transaction panel puts its inbox item back; the inbox won't take a document already used as a receipt.
+{
+  const hydroTxn = hydroAfter.candidates[0].transactionId;
+  await hub.updateTransactionPortable(mina, { id: hydroTxn, patch: { receiptDocumentId: null } });
+  const item = await db.get(hydro._id);
+  assert.deepEqual([item?.status, item?.matchedTransactionId], ["unmatched", undefined], "the inbox item is unmatched again, not left pointing at the line");
+  await inbox.confirmMatchPortable(mina, { id: hydro._id, transactionId: hydroTxn });
+  const inInbox = new Set((await db.query("receiptInboxItems").collect()).map((row) => String(row.documentId)));
+  const document = seed.documents.find((row) => row.societyId === S && !inInbox.has(row._id))!;
+  const line = (await db.query("financialTransactions").collect()).find((row) => row.societyId === S && Number(row.amountCents) < 0 && !row.receiptDocumentId)!;
+  await hub.updateTransactionPortable(mina, { id: line._id, patch: { receiptDocumentId: document._id } });
+  const added = await inbox.addPortable(mina, { societyId: S, items: [{ documentId: document._id, fileName: "already-attached.pdf" }] });
+  assert.deepEqual([added.added, added.skipped, added.alreadyAttached], [0, 1, 1], "a document that is already a transaction's receipt is skipped");
+  assert.deepEqual((await inbox.listPortable(mina, { societyId: S })).counts, { unmatched: 1, matched: 2, discarded: 1 });
+  await hub.updateTransactionPortable(mina, { id: line._id, patch: { receiptDocumentId: null } });
+}
 
 // Reconciliation by month: March is open with a difference but every line is
 // matched or categorised, so it auto-reconciles in one step.
@@ -288,11 +307,27 @@ await accounts.linkLedgerAccountPortable(mina, { id: created.accountId, ledgerAc
 overview = await accounts.overviewPortable(mina, { societyId: S });
 assert.equal(overview.rows.find((row) => row._id === created.accountId)?.ledgerAccount?.isSelf, false);
 await assert.rejects(accounts.linkLedgerAccountPortable(mina, { id: created.accountId, ledgerAccountId: "static_financial_facilities_expense" }), /bank, credit, asset or liability/, "an expense account is not a ledger account for money");
+// Linking moves postings: the account's lines post their cash side to the linked ledger account.
+{
+  const accounting = await import("../shared/functions/accounting");
+  const stripeAccount = (await db.get(created.accountId))!;
+  const fee = await db.insert("financialTransactions", { societyId: S, connectionId: stripeAccount.connectionId, accountId: created.accountId, externalId: "stripe-fee-1", date: "2026-04-02", description: "Stripe fee", amountCents: -1_500, category: "Bank fees", accountingAccountId: "static_financial_facilities_expense" });
+  await accounting.backfillFinancialTransactionsToJournalPortable(mina, { societyId: S, transactionIds: [fee], includeBeforeOpening: true });
+  const posted = await accounting.postedJournalForTransaction(mina, fee);
+  const cashLine = posted.lines.find((line) => line.lineOrder === 0)!;
+  assert.deepEqual([cashLine.accountId, cashLine.side, cashLine.amountCents], ["static_financial_cash", "credit", 1_500], "the bank line posts to the linked ledger account, not the feed account");
+  assert.equal(await accounts.cashLedgerAccountId(mina, S, created.accountId), "static_financial_cash", "bill and invoice payments resolve the same account");
+  // One feed per ledger account, and no chains.
+  const square = await accounts.createManualAccountPortable(mina, { societyId: S, name: "Square balance", kind: "payments", openingBalanceCents: 0, openingDate: "2026-04-01" });
+  await assert.rejects(accounts.linkLedgerAccountPortable(mina, { id: square.accountId, ledgerAccountId: "static_financial_cash" }), /already the ledger account for Stripe balance/);
+  await assert.rejects(accounts.linkLedgerAccountPortable(mina, { id: "static_financial_cash", ledgerAccountId: square.accountId }), /Stripe balance posts to this account/);
+  await accounts.setArchivedPortable(mina, { id: square.accountId, archived: true });
+}
 await accounts.updateAccountPortable(mina, { id: created.accountId, name: "Stripe payouts" });
 await accounts.setArchivedPortable(mina, { id: created.accountId, archived: true });
 overview = await accounts.overviewPortable(mina, { societyId: S });
 assert.equal(overview.counts.payments, 0, "archived accounts leave the tabs");
-assert.equal(overview.archivedCount, 1);
+assert.equal(overview.archivedCount, 2, "Stripe, and Square from the link checks");
 await assert.rejects(accounts.createManualAccountPortable(jordan, { societyId: S, name: "Nope", kind: "bank", openingBalanceCents: 0, openingDate: "2026-04-01" }), /financials:write/, "read-only finance access can't add accounts");
 
 // Mileage claims are priced at the organisation's rate and need no receipt.
@@ -329,6 +364,22 @@ const mileageBudget = list.rows.find((row) => row.name === "Volunteer mileage")!
 assert.equal(mileageBudget.spend.spentCents, 2_940 + 1_750 + 150 * DEMO_MILEAGE_RATE_CENTS, "submitted and approved mileage this month; the draft doesn't count");
 assert.deepEqual(list.rows.map((row) => row.status).sort(), ["active", "active", "active", "ended", "upcoming"]);
 await assert.rejects(budgets.removePortable(mina, { id: "static_spend_budget_finance_committee" }), /Archive it instead/);
+// The budget is checked when it (or the claimant) changes, against membership on the day of the expense.
+{
+  const financeBudget = "static_spend_budget_finance_committee";
+  await db.patch("static_committee_member_finance_jordan", { leftAt: "2026-04-01" });
+  const claim = { societyId: S, claimantName: "Jordan Lee", claimantUserId: "static_user_treasurer", title: "Statement paper", category: "Supplies", amountCents: 1_200, currency: "CAD", status: "Draft", spendBudgetId: financeBudget };
+  const march = await exp.upsertPortable(jordan, { ...claim, incurredAtISO: "2026-03-20" });
+  assert.equal((await db.get(String(march)))?.spendBudgetId, financeBudget, "on the committee in March, so March spend may go to its budget");
+  await assert.rejects(exp.upsertPortable(jordan, { ...claim, incurredAtISO: todayDateOnly() }), /isn't assigned/, "not after leaving");
+  await budgets.setArchivedPortable(mina, { id: financeBudget, archived: true });
+  await exp.upsertPortable(jordan, { ...claim, id: String(march), incurredAtISO: "2026-03-20", title: "Statement paper (2 reams)" });
+  assert.equal((await db.get(String(march)))?.title, "Statement paper (2 reams)", "an old claim stays editable after its budget is archived and the claimant has left");
+  await assert.rejects(exp.upsertPortable(jordan, { ...claim, incurredAtISO: "2026-03-21", spendBudgetId: undefined }).then((id) => exp.upsertPortable(jordan, { ...claim, id: String(id), incurredAtISO: "2026-03-21" })), /archived/, "choosing an archived budget is still refused");
+  await budgets.setArchivedPortable(mina, { id: financeBudget, archived: false });
+  await db.patch("static_committee_member_finance_jordan", { leftAt: undefined });
+  for (const row of (await db.query("expenseReports").collect()).filter((report) => String(report.title).startsWith("Statement paper"))) await db.delete(row._id);
+}
 
 // Bank transactions charged to a spend budget, from the transaction panel and the bulk bar.
 {

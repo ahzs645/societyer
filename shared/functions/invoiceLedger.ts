@@ -16,6 +16,7 @@
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { assertPeriodOpen, postedJournalForTransaction, TRANSACTION_BACKFILL_SOURCE } from "./accounting";
 import { assertBooksOpen, booksSettingsRow } from "./booksLock";
+import { cashLedgerAccountId } from "./bankAccounts";
 import { validateBalancedJournalLines } from "../accountingCore";
 import { openingBalanceDate } from "../accountingBackfill";
 import { computeInvoiceTotals, paidCents as sumPaid, type InvoiceDiscount, type InvoiceLine, type InvoicePayment } from "../invoicing";
@@ -537,7 +538,7 @@ export type PaymentPosting = {
  * Post one payment: Dr the deposit account / Cr receivable, then the
  * cash-basis recognition of the share it pays. Needs the accrual posted
  * (otherwise skipped; "Post existing invoices" posts both later). The
- * deposit account is the linked bank line's account, else the one chosen
+ * deposit account is the linked bank line's (ledger) account, else the one chosen
  * for this payment, else the mapping's, else Undeposited funds.
  */
 export async function postPayment(
@@ -559,7 +560,7 @@ export async function postPayment(
   if (payment.financialTransactionId) {
     const txn = await ctx.db.get(payment.financialTransactionId, "financialTransactions");
     if (!txn || txn.societyId !== invoice.societyId) return { skipped: "The linked deposit is missing." };
-    depositAccountId = String(txn.accountId);
+    depositAccountId = await cashLedgerAccountId(ctx, invoice.societyId, String(txn.accountId));
     voidedTransactionEntryId = (await claimDeposit(ctx, invoice.societyId, String(txn._id))) ?? voidedTransactionEntryId;
   } else {
     const chosen = [payment.depositAccountId, lctx.mapping.depositAccountId].find((id): id is string => Boolean(id && lctx.accountIds.has(id)));

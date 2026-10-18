@@ -134,7 +134,10 @@ export async function upsertPortable(
   const existing: any = args.id ? await ctx.db.get(args.id, "expenseReports") : null;
   const pricing = await mileagePricing(ctx, args, existing);
   if (pricing) args = { ...args, amountCents: pricing.amountCents };
-  if (args.spendBudgetId) await requireBudgetForClaimant(ctx, args.societyId, args.spendBudgetId, args.claimantUserId, args.incurredAtISO);
+  // Checked when the budget (or who it's charged for) changes, not on every save: an old
+  // claim stays editable after its budget is archived or the claimant leaves the committee.
+  const budgetChanged = String(args.spendBudgetId ?? "") !== String(existing?.spendBudgetId ?? "") || String(args.claimantUserId ?? "") !== String(existing?.claimantUserId ?? "");
+  if (args.spendBudgetId && budgetChanged) await requireBudgetForClaimant(ctx, args.societyId, args.spendBudgetId, args.claimantUserId, args.incurredAtISO);
   let status = args.status;
   if (WORKFLOW_ONLY_STATUSES.has(status) && existing?.status !== status) {
     throw new Error("Approve, decline or pay claims from the approvals queue so the approval rules are applied.");

@@ -26,6 +26,13 @@ export const billLinkedTransactionSnapshotValidator = v.object({
   accountingAccountId: v.optional(v.id("financialAccounts")),
   categorizedBy: v.optional(v.string()),
   ruleId: v.optional(v.id("transactionRules")),
+  // The rule run that categorised it (financialTransactions.ruleApplication), so Undo still works after the link goes.
+  ruleApplication: v.optional(v.object({
+    ruleName: v.string(),
+    batchId: v.string(),
+    appliedAtISO: v.string(),
+    previous: v.optional(v.any()),
+  })),
   reconciledAtISO: v.optional(v.string()),
   reconciledByName: v.optional(v.string()),
   matchedKind: v.optional(v.string()),
@@ -48,6 +55,9 @@ export const billPaymentValidator = v.object({
   // lines on the payment date, and that share per bill line (by line key).
   cashBasisJournalEntryId: v.optional(v.id("journalEntries")),
   cashBasisShares: v.optional(v.array(v.object({ key: v.string(), amountCents: v.number() }))),
+  // The bank line's own "Backfill imports" entry, voided while this payment
+  // holds the line so it isn't in the books twice; posted again on removal.
+  voidedTransactionEntryId: v.optional(v.id("journalEntries")),
   note: v.optional(v.string()),
   recordedAtISO: v.string(),
   recordedByName: v.optional(v.string()),
@@ -94,6 +104,9 @@ export const billTables = {
     timeline: v.array(billTimelineEventValidator),
     submittedByUserId: v.optional(v.id("users")),
     submittedAtISO: v.optional(v.string()),
+    // Whoever edited it while it waited for approval (this round); like the
+    // submitter, they can't approve it where the rule blocks self-approval.
+    editedByUserIds: v.optional(v.array(v.id("users"))),
     approvedAtISO: v.optional(v.string()),
     declinedReason: v.optional(v.string()),
     declinedAtISO: v.optional(v.string()),

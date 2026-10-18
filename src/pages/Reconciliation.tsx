@@ -33,6 +33,7 @@ import { MonthTransactionsTable } from "../features/financials/reconciliation/Mo
 import { useReconciliationMonthView } from "../features/financials/reconciliation/useReconciliationMonthView";
 import { AddBankTransactionDrawer } from "../features/financials/reconciliation/AddBankTransactionDrawer";
 import type { ReconPeriodsData } from "../features/financials/reconciliation/types";
+import { isPaymentLinkKind } from "../../shared/reconciliationPeriods";
 
 /**
  * Bank reconciliation page. The record table on the left is purely
@@ -386,18 +387,29 @@ export function ReconciliationPage() {
                       </span>
                     </div>
                     <div className="muted">
-                      Matched to <strong>{selectedRow.txn.matchedKind}</strong>
+                      {isPaymentLinkKind(selectedRow.txn.matchedKind) ? "Linked to " : "Matched to "}
+                      <strong>{isPaymentLinkKind(selectedRow.txn.matchedKind) ? `${selectedRow.txn.matchedKind} payment` : selectedRow.txn.matchedKind}</strong>
                       {selectedRow.txn.reconciliationNote && ` · ${selectedRow.txn.reconciliationNote}`}
                     </div>
-                    <button
-                      className="btn-action"
-                      onClick={async () => {
-                        await unmatchM({ txnId: selectedRow.txn._id });
-                        toast.info("Reconciliation removed");
-                      }} disabled={!canWrite}
-                    >
-                      <Undo2 size={12} /> Unmatch
-                    </button>
+                    {isPaymentLinkKind(selectedRow.txn.matchedKind) ? (
+                      // The payment owns this line; removing it on the bill or invoice puts the line back as it was.
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                        To unlink it, remove the payment on the {selectedRow.txn.matchedKind}.{" "}
+                        <Link to={selectedRow.txn.matchedKind === "bill" ? `/app/bills?bill=${encodeURIComponent(String(selectedRow.txn.matchedId))}` : `/app/invoices?invoice=${encodeURIComponent(String(selectedRow.txn.matchedId))}`}>
+                          Open the {selectedRow.txn.matchedKind}
+                        </Link>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn-action"
+                        onClick={async () => {
+                          await unmatchM({ txnId: selectedRow.txn._id });
+                          toast.info("Reconciliation removed");
+                        }} disabled={!canWrite}
+                      >
+                        <Undo2 size={12} /> Unmatch
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>

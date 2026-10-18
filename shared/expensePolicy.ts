@@ -163,10 +163,15 @@ export function isMileageClaim(claim: { claimType?: string | null }): boolean {
   return claim.claimType === "mileage";
 }
 
-/** Distance × rate, to the nearest cent. */
+/**
+ * Distance × rate, to the nearest cent (halves up). Worked in hundredths of a
+ * kilometre so float error can't tip a half cent down (1.15 km × 50¢ is 58¢,
+ * not the 57¢ `Math.round(1.15 * 50)` gives).
+ */
 export function mileageAmountCents(distanceKm: number, rateCentsPerKm: number): number {
   if (!Number.isFinite(distanceKm) || !Number.isFinite(rateCentsPerKm)) return 0;
-  return Math.round(distanceKm * rateCentsPerKm);
+  const hundredthsKm = Math.round(distanceKm * 100);
+  return Math.floor((hundredthsKm * rateCentsPerKm + 50) / 100);
 }
 
 /** "$0.68/km" */
