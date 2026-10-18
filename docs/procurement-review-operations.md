@@ -16,13 +16,18 @@ North resource IDs, credential expiry dates, deployed versions and test results.
 
 There are two independent release flows:
 
-- **Update the interface:** build in `files`, copy and pin in Societyer, commit,
-  then deploy Societyer to Cloudflare Pages. A Git push alone does not run this
-  manual deployment workflow. Updating Zoer's installed plugin does not update
-  Societyer's copy automatically.
-- **Update the data:** run Zoer's publisher against its existing catalog. It
-  writes SharePoint; no frontend build or Convex deployment is needed. Users
-  click **Refresh** in Procurement review to load the new manifest.
+- **Update the interface:** the hosted Convex reader is in Societyer's
+  `src/features/procurementReview/reader/`. Release its changes and any new
+  bounded Convex queries together. The plugin UI in `files` is a separate
+  build used by Zoer and the legacy/demo snapshot view: build, sync and pin
+  that bundle too when releasing plugin updates. A Git push alone does not
+  run the manual Cloudflare Pages deployment. Updating Zoer's installed
+  plugin does not update Societyer's copy automatically.
+- **Update the data:** publish Zoer's existing catalog to SharePoint, then
+  export and activate verified metadata in Convex using the
+  [metadata runbook](procurement-convex-catalog.md). Publishing SharePoint alone
+  does not change hosted records. Document bytes remain on SharePoint. No
+  frontend build is needed for a data-only update.
 
 The current integration is read-only in Societyer. Collection, edits and AI
 execution happen in Zoer. No additional collector server or container is needed.
@@ -145,6 +150,15 @@ same approved procurement site and deployment. Folder isolation is enforced by
 Societyer, while the runtime Graph grants are scoped to the procurement site.
 
 ## Release a new plugin interface to the live site
+
+For the hosted site, first include the corresponding native reader changes in
+`src/features/procurementReview/reader/` and run `npm run test:procurement-convex`.
+Rebuilding the plugin alone only changes Zoer and the legacy/demo snapshot view.
+Keep hosted lists paged through Convex; never restore a whole-catalog download.
+If new sorting requires normalized metadata, activate a fresh metadata generation
+before considering that behavior qualified. Old `?record=<key>` notice links
+remain supported alongside the reader's `?notice=<key>` links.
+
 
 1. Make the plugin change in `files`. Follow the
    [shared contract](https://github.com/ahzs645/files/blob/main/zoer/docs/societyer-review-contract.md).

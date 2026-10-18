@@ -147,7 +147,7 @@ const renderPhoneCard: RecordTableCardRenderer = (record, { open, field, selecti
 export function CatalogBrowser() {
   const source = useReaderSource();
   const [params, setParams] = useSearchParams();
-  const noticeKey = params.get(NOTICE_PARAM);
+  const noticeKey = params.get(NOTICE_PARAM) ?? params.get("record");
   const kinds = KINDS.filter((kind) => (source.catalog.counts[kind.id] ?? 0) > 0);
   const kind: Kind = kinds.find((item) => item.id === params.get("kind"))?.id ?? kinds[0]?.id ?? "opportunity";
 
@@ -159,9 +159,10 @@ export function CatalogBrowser() {
 
   const listParams = new URLSearchParams(params);
   listParams.delete(NOTICE_PARAM);
+  listParams.delete("record");
   listParams.delete("tab");
   const listHref = `?${listParams.toString()}`;
-  if (noticeKey) return <NoticePage recordKey={noticeKey} listHref={listHref} onBack={() => update({ [NOTICE_PARAM]: null, tab: null })} />;
+  if (noticeKey) return <NoticePage recordKey={noticeKey} listHref={listHref} onBack={() => update({ [NOTICE_PARAM]: null, record: null, tab: null })} />;
 
   return (
     <>
@@ -223,7 +224,7 @@ function CatalogTable({ kind, params, update }: { kind: Kind; params: URLSearchP
         records={records}
         serverQuery={serverQuery}
         cellPreviews={false}
-        onRecordClick={(recordId) => update({ [NOTICE_PARAM]: recordId })}
+        onRecordClick={(recordId) => update({ [NOTICE_PARAM]: recordId, record: null })}
       >
         <SearchSync search={search} onSearch={(value) => update({ q: value || null })} />
         <RecordTableToolbar

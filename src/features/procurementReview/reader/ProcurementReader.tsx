@@ -8,7 +8,7 @@ export function ProcurementReader({ source, header }: { source: ReaderSource; he
   const [params] = useSearchParams();
   return (
     <ReaderSourceContext.Provider value={source}>
-      {!params.get(NOTICE_PARAM) && header}
+      {!params.get(NOTICE_PARAM) && !params.get("record") && header}
       <CatalogBrowser />
     </ReaderSourceContext.Provider>
   );
