@@ -44,8 +44,8 @@ export class SharePointAdapter {
     this.request = dependencies.fetch ?? fetch;
     this.wait = dependencies.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
-  private fetchBound(url: string, init: RequestInit = {}): Promise<Response> {
-    return this.request(url, { ...init, signal: AbortSignal.timeout(15_000) });
+  private fetchBound(url: string, init: RequestInit = {}, timeoutMs = 15_000): Promise<Response> {
+    return this.request(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   }
   private locator(itemId: string, versionId?: string): SharePointLocator {
     if (!/^[a-z\d!._-]+$/i.test(itemId)) throw new Error("Invalid SharePoint item identifier.");
@@ -181,7 +181,9 @@ export class SharePointAdapter {
     let response = initial;
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const url = this.transferUrl(response.headers.get("Location"));
-      try { response = await this.fetchBound(url, { redirect: "manual" }); } catch { throw new Error("SharePoint content transfer failed."); }
+      // The signal also covers body reads. A valid 7–8 MiB part can take more
+      // than the metadata timeout; keep downloads bounded by both time and size.
+      try { response = await this.fetchBound(url, { redirect: "manual" }, 120_000); } catch { throw new Error("SharePoint content transfer failed."); }
       if (!response.ok) throw new Error("SharePoint content transfer rejected.");
     }
     const declared = response.headers.get("Content-Length");

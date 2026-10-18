@@ -87,6 +87,11 @@ The running Zoer backend stores it under:
 Run the publisher where that existing data directory is accessible. It makes
 a consistent temporary SQLite copy; it does not stop or modify the live catalog.
 Use the publisher's own `ZOER_SHAREPOINT_*` credentials, never the reader's.
+The protected publisher configuration on this operator's Mac is
+`~/.config/zoer/sharepoint-procurement.json` (mode `0600`). Keep it outside Git.
+The first publish runs in the existing Zoer backend pod against `/data`; only
+the publisher code is copied into its temporary directory, and credentials
+are passed over standard input to that process. No new service is installed.
 
 ```sh
 bun packages/plugin-site/bin/publish-sharepoint.ts \
@@ -100,6 +105,8 @@ verification; the previous snapshot stays readable if publishing fails.
 The reader verifies each part and the assembled file before opening it.
 The first pass accepts uncompressed catalogs up to 1 GiB and downloads
 documents on demand; it does not promise unlimited browser memory or storage.
+Publishing is an explicit command. This rollout does not schedule automatic
+collection or publishing; rerun the publisher to expose a newer Zoer snapshot.
 
 ## Verification record, October 18, 2026
 
@@ -133,5 +140,47 @@ documents on demand; it does not promise unlimited browser memory or storage.
 - Plugin bundle provenance: clean commit `940f0e37155ceba807e8310ac41647c47c19cc38`.
   The market type check and 15 additional link/gating/deadline tests pass.
 
-The first real publish, production deployment and authenticated live browser
-readback are separate verification steps; record their results after completion.
+### Production deployment completed
+
+- Societyer release commit: `ec0314cb`, on `codex/procurement-review`.
+- Cloudflare Pages production deployment: `74b4977c` at
+  `https://societyer-ddcnorth.pages.dev`; the root still leads to sign-in.
+- Convex functions deployed to `industrious-cricket-610` with the six dedicated
+  procurement reader settings. The meeting writer connection is separate.
+- Procurement review is enabled only for the existing DDC North live test
+  workspace and points to its own ID-derived folder. Existing module choices
+  were preserved. The authorized folder query returns that exact path.
+- Production endpoint checks: unsigned GET `401`, approved-origin OPTIONS
+  `204`, unapproved-origin OPTIONS `403`.
+- The deleted provisioner can no longer obtain a token (`unauthorized_client`).
+
+### First real publish and readback completed
+
+- Snapshot: `20261018T170258Z-1138c2082de4`, published from the existing live
+  catalog without changing it. All 1,806 document blobs and 11 catalog parts
+  uploaded; the manifest was written last.
+- Catalog: 76,304,856 compressed bytes; 481,095,680 uncompressed bytes. The
+  dedicated reader downloaded every catalog part, verified all part hashes and
+  the complete catalog checksum, and recovered the expected record counts.
+- The app's wa-sqlite reader opened this real published catalog under Node,
+  returned an opportunity and the expected counts, and rejected a write query.
+  This verifies the engine with real data; the local browser demo separately
+  verifies the compiled plugin's mounting and navigation.
+- The reader reconstructed and verified the 7,388,514-byte PDF
+  `Park Management Plan - Ta chila Boya Lake Management Plan.pdf` from multiple
+  SharePoint parts, including its final checksum and PDF header.
+- Live transfer testing found that a valid 7 MiB part took 26.7 seconds. The
+  previous 15-second transfer deadline aborted it; content downloads now allow
+  120 seconds while retaining the 8 MiB byte cap and approved-host checks.
+  The same server adapter then downloaded the part and verified its checksum.
+  Graph metadata requests retain their shorter timeout.
+- The production plugin JavaScript and CSS were downloaded and their hashes
+  matched the clean pinned release artifact.
+- No publisher service or container was added. Temporary publisher code in the
+  existing Zoer pod was removed after the successful publish.
+
+**Remaining manual check:** the live browser session is signed out. Sign in as
+`Ahmad@ddcnorth.com`, open `/app/procurement-review/home`, and verify the loaded
+catalog and a document in that authenticated session. The authenticated browser
+flow has not yet been certified by this rollout; server, storage, engine and
+artifact checks above are complete.
