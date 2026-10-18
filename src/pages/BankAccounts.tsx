@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Archive, Landmark, Plus, Scale, Unplug } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
+import { useCreateIntent } from "../hooks/useCreateIntent";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { EmptyState } from "../components/ui";
@@ -40,6 +41,8 @@ export function BankAccountsPage() {
   const [importing, setImporting] = useState<BankAccountRow | null>(null);
   const [linking, setLinking] = useState<BankAccountRow | null>(null);
   const menuFor = useAccountMenu({ canWrite, onLink: setLinking, onImport: setImporting });
+  // The finance Create menu's "Add → Bank account".
+  useCreateIntent("new-account", "financials:write", () => setAdding(true));
 
   const rows = useMemo(
     () => (data?.rows ?? []).filter((row) => (showArchived ? row.archived : !row.archived) && (showArchived || bankAccountMatchesTab(row, tab))),
