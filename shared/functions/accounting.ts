@@ -110,6 +110,9 @@ function signedAmountFromDebitCredit(debitCents?: number, creditCents?: number) 
   return 0;
 }
 
+/** Journal sources edited and voided on the Journal entries page; every other source is changed where it came from. */
+const EDITABLE_JOURNAL_SOURCES: readonly string[] = ["manual", "adjustment"];
+
 /** Refuses a posting dated inside a closed or archived fiscal period (bills post through this too). */
 export async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPeriodId?: string; date: string; allowClosed?: boolean }) {
   if (args.allowClosed) return null;
@@ -605,6 +608,10 @@ export async function closeFiscalPeriodPortable(
   const period = await requireOwnedRow(ctx, "accountingFiscalPeriods", id);
   const societyId = String(period.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  // Same rule as Books settings: the books can't be locked through a date that hasn't happened yet.
+  if (lockBooks && String(period.endDate) > todayDateOnly()) {
+    throw new Error(`${period.periodLabel} hasn't ended yet, so the books can't be locked through ${period.endDate}. Close it without locking the books, or lock them once it ends.`);
+  }
   const now = new Date().toISOString();
   const userId = await principalUserId(ctx, societyId);
   await ctx.db.patch(id, {
@@ -829,12 +836,19 @@ export async function upsertJournalEntryPortable(
   validateJournalLines(args.lines);
   // Editing moves an entry from its old date too, so both dates must be open.
   const existing = args.id ? await ctx.db.get(args.id, "journalEntries") : null;
+  if (existing && !EDITABLE_JOURNAL_SOURCES.includes(String(existing.source))) {
+    throw new Error("Only manual journal entries and adjustments can be edited here. Change an imported or posted-from-source entry where it came from (the bank transaction, bill, invoice or expense claim).");
+  }
   await assertBooksOpen(ctx, args.societyId, [args.date, existing?.date], existing ? "posted or edited" : "posted");
+  const allowClosed = args.allowClosedPeriodAdjustment === true;
+  if (existing) {
+    await assertPeriodOpen(ctx, { societyId: args.societyId, date: String(existing.date), allowClosed });
+  }
   await assertPeriodOpen(ctx, {
     societyId: args.societyId,
     fiscalPeriodId: args.fiscalPeriodId,
     date: args.date,
-    allowClosed: args.allowClosedPeriodAdjustment === true,
+    allowClosed,
   });
   const now = new Date().toISOString();
   const { id, lines, actingUserId, allowClosedPeriodAdjustment, ...entry } = args;
@@ -2028,7 +2042,7 @@ export async function voidJournalEntryPortable(
   const societyId = String(entry.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
   if (entry.status === "void") return id;
-  if (!["manual", "adjustment"].includes(String(entry.source))) {
+  if (!EDITABLE_JOURNAL_SOURCES.includes(String(entry.source))) {
     throw new Error("Only manual journal entries can be voided here. Undo an imported or posted-from-source entry where it came from.");
   }
   await assertBooksOpen(ctx, societyId, [entry.date], "voided");

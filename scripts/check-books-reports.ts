@@ -409,6 +409,20 @@ await checkAsync("moving the close date back reopens the books; closing a period
   await refused("locked again", /closed through 2026-03-31/, () => journal("2026-03-16"));
 });
 
+await checkAsync("journal edits check the old date's period and the source; a future period can't lock the books", async () => {
+  const q2 = await mutate((ctx) => ctx.db.insert("accountingFiscalPeriods", { societyId: ids.societyId, fiscalYear: "2026", periodLabel: "Q2 2026", startDate: "2026-04-01", endDate: "2026-06-30", status: "closed", createdAtISO: "2026-07-01T00:00:00.000Z", updatedAtISO: "2026-07-01T00:00:00.000Z" }));
+  const [april] = await read(async (ctx) => (await ctx.db.query("journalEntries").collect()).filter((entry) => entry.date === "2026-04-20").map((entry) => String(entry._id)));
+  await refused("move an entry out of a closed period", /Fiscal period Q2 2026 is closed/, () => journal("2026-07-15", april));
+  await mutate((ctx) => ctx.db.patch(q2, { status: "open" }));
+  const invoiceEntry = await mutate((ctx) => ctx.db.insert("journalEntries", { societyId: ids.societyId, date: "2026-05-01", memo: "Invoice INV-1", source: "invoice", status: "posted", createdAtISO: "2026-05-01T00:00:00.000Z", updatedAtISO: "2026-05-01T00:00:00.000Z" }));
+  await refused("rewrite an invoice's entry", /Only manual journal entries and adjustments can be edited here/, () => journal("2026-05-01", invoiceEntry));
+  const future = await mutate((ctx) => ctx.db.insert("accountingFiscalPeriods", { societyId: ids.societyId, fiscalYear: "2999", periodLabel: "FY 2999", startDate: "2999-01-01", endDate: "2999-12-31", status: "open", createdAtISO: "2026-07-01T00:00:00.000Z", updatedAtISO: "2026-07-01T00:00:00.000Z" }));
+  await refused("lock the books through a period that hasn't ended", /hasn't ended yet, so the books can't be locked through 2999-12-31/, () => mutate((ctx) => closeFiscalPeriodPortable(ctx, { id: future, lockBooks: true })));
+  assert.equal((await read((ctx) => ctx.db.get(future)))?.status, "open", "the refused close changed nothing");
+  assert.equal((await read((ctx) => booksSettingsPortable(ctx, { societyId: ids.societyId }))).closeDate, "2026-03-31");
+  await mutate(async (ctx) => { await ctx.db.delete(future); await ctx.db.delete(q2); await ctx.db.delete(invoiceEntry); });
+});
+
 await checkAsync("the report query honours the books basis and the dimension filter", async () => {
   const report = await read((ctx) => booksReportPortable(ctx, { societyId: ids.societyId, report: "operations", from: "2026-01-01", to: "2026-06-30", frequency: "quarter", asOf: "2026-10-18" }));
   assert.equal(report.basis, "accrual");
