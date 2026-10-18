@@ -20,8 +20,11 @@
  * recognises the paid share of the expense lines on the payment date
  * (docs/accounting-shape.md, "Accounting basis"). A payment linked to a
  * money-out bank line marks that line matched (`matchedKind: "bill"`) and
- * categorised to Accounts payable. Removing a payment voids both its entries
- * and puts the bank line back as it was; canceling an approved bill posts the
+ * categorised to Accounts payable; a line "Backfill imports" already posted
+ * has that entry voided so it is never in the books twice (a line posted any
+ * other way, or whose entry is locked, can't be linked). Removing a payment
+ * voids both its entries, posts the bank line's own entry again and puts the
+ * line back as it was; canceling an approved bill posts the
  * mirror of the approval entry (accrual-only too). Every posting and void
  * goes through the fiscal-period check and the books close date
  * (`assertBooksOpen`), so a closed period or locked date refuses it.
@@ -31,7 +34,8 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
-import { assertPeriodOpen } from "./accounting";
+import { assertPeriodOpen, postedJournalForTransaction, TRANSACTION_BACKFILL_SOURCE } from "./accounting";
+import { cashLedgerAccountId } from "./bankAccounts";
 import { assertBooksOpen } from "./booksLock";
 import { documentAccessPredicate, requireDocumentAccess } from "./documents";
 import { actorFor, approverAccessFor, loadApprovalPolicy, ruleFor } from "./expenseReports";
@@ -73,11 +77,14 @@ import {
 
 /* ------------------------------------------------------------------ rows */
 
+type RuleApplication = { ruleName: string; batchId: string; appliedAtISO: string; previous?: unknown };
+
 type Snapshot = {
   category?: string;
   accountingAccountId?: string;
   categorizedBy?: string;
   ruleId?: string;
+  ruleApplication?: RuleApplication;
   reconciledAtISO?: string;
   reconciledByName?: string;
   matchedKind?: string;
@@ -97,6 +104,8 @@ type StoredPayment = {
   journalEntryId?: string;
   cashBasisJournalEntryId?: string;
   cashBasisShares?: BillCashShare[];
+  /** The bank line's own "Backfill imports" entry, voided while this payment holds the line (restored on removal). */
+  voidedTransactionEntryId?: string;
   note?: string;
   recordedAtISO: string;
   recordedByName?: string;
@@ -128,6 +137,8 @@ type BillRow = {
   timeline: TimelineEvent[];
   submittedByUserId?: string;
   submittedAtISO?: string;
+  /** Everyone who changed the bill while it was waiting for approval (this round). */
+  editedByUserIds?: string[];
   approvedAtISO?: string;
   declinedReason?: string;
   declinedAtISO?: string;
@@ -186,6 +197,7 @@ type TransactionRow = {
   accountingAccountId?: string;
   categorizedBy?: string;
   ruleId?: string;
+  ruleApplication?: RuleApplication;
   reconciledAtISO?: string;
   reconciledByName?: string;
   matchedKind?: string;
@@ -390,9 +402,19 @@ function approvalSubject(bill: Pick<BillRow, "totalCents" | "submittedByUserId" 
   return { amountCents: bill.totalCents, claimantUserId: bill.submittedByUserId ?? null, approvals: bill.approvals ?? [] };
 }
 
+/**
+ * Whether this person may approve the bill. Under a rule that blocks
+ * self-approval, whoever edited the bill while it waited for approval counts
+ * as its author too (an edit clears the approvals, so the editor could
+ * otherwise approve their own change alone).
+ */
 function eligibilityFor(rule: ApprovalRule, actor: Actor, bill: BillRow, access: ApproverAccessContext) {
   const result = approverEligibility(rule, approverOf(actor), approvalSubject(bill), access);
-  return result.eligible ? result : { eligible: false as const, reason: billReason(result.reason) };
+  if (!result.eligible) return { eligible: false as const, reason: billReason(result.reason) };
+  if (rule.blockSelfApproval && actor.id && (bill.editedByUserIds ?? []).includes(String(actor.id))) {
+    return { eligible: false as const, reason: "You edited this bill while it was waiting for approval, so someone else has to approve it." };
+  }
+  return result;
 }
 
 /* ------------------------------------------------------------ decorating */
@@ -431,6 +453,8 @@ export type BillView = ReturnType<typeof decorate> & {
   ruleLabel?: string;
   canApprove: boolean;
   cannotApproveReason?: string;
+  /** May decline: anyone who could approve it, even after approving it themselves. */
+  canDecline: boolean;
   isMine: boolean;
   possibleDuplicate: { _id: string; billNumber?: string } | null;
 };
@@ -462,6 +486,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
     const awaiting = bill.status === "awaiting_approval";
     const required = awaiting ? rule.requiredApprovals : bill.requiredApprovals ?? rule.requiredApprovals;
     const eligibility = awaiting ? eligibilityFor(rule, actor, bill, access) : { eligible: false as const, reason: "Only bills waiting for approval can be approved." };
+    const canDecline = awaiting && eligibilityFor(rule, actor, { ...bill, approvals: [] }, access).eligible;
     const duplicate = findDuplicateBill({ _id: bill._id, vendorId: bill.vendorId, billNumber: bill.billNumber }, bills.map((other) => ({ ...other, lifecycle: other.status })));
     return {
       ...view,
@@ -470,6 +495,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
       ruleLabel: rule.label,
       canApprove: eligibility.eligible,
       cannotApproveReason: eligibility.eligible ? undefined : eligibility.reason,
+      canDecline,
       isMine: Boolean(actor.id && bill.submittedByUserId === actor.id),
       possibleDuplicate: duplicate ? { _id: duplicate._id, billNumber: duplicate.billNumber } : null,
     };
@@ -613,7 +639,9 @@ type UpsertArgs = {
 /**
  * Create a draft or save changes. Drafts may be incomplete (an uploaded bill
  * starts with only its document); submitting checks the rest. A bill waiting
- * for approval can be edited, which clears the approvals it had. Approved
+ * for approval can be edited, which clears the approvals it had and records
+ * the editor, who then can't approve this round where the rule blocks
+ * self-approval (as the submitter can't). Approved
  * bills are posted and can't be edited; cancel and re-enter instead.
  * Returns the id and any other live bill with the same vendor and number.
  */
@@ -657,9 +685,12 @@ export async function upsertPortable(ctx: PortableMutationCtx, args: UpsertArgs)
     }
     const patch: Record<string, unknown> = { ...fields, updatedAtISO: at, ...(args.documentId ? { documentId: args.documentId } : {}) };
     const events = [event("edited", "Details edited", actor)];
-    if (existing.status === "awaiting_approval" && (existing.approvals ?? []).length) {
-      patch.approvals = [];
-      events.push(event("reset", "Approvals cleared after an edit", actor));
+    if (existing.status === "awaiting_approval") {
+      if (actor.id && !(existing.editedByUserIds ?? []).includes(String(actor.id))) patch.editedByUserIds = [...(existing.editedByUserIds ?? []), String(actor.id)];
+      if ((existing.approvals ?? []).length) {
+        patch.approvals = [];
+        events.push(event("reset", "Approvals cleared after an edit", actor));
+      }
     }
     patch.timeline = withEvents(existing, ...events);
     await ctx.db.patch(args.id, patch);
@@ -696,6 +727,7 @@ export async function submitPortable(ctx: PortableMutationCtx, { id }: { id: str
   await ctx.db.patch(id, {
     status: "awaiting_approval",
     approvals: [],
+    editedByUserIds: undefined,
     requiredApprovals: rule.requiredApprovals,
     ...(actor.id ? { submittedByUserId: actor.id } : {}),
     submittedAtISO: at,
@@ -713,7 +745,7 @@ export async function recallPortable(ctx: PortableMutationCtx, { id }: { id: str
   const bill = await requireOwnedRow<BillRow>(ctx, "bills", id);
   const actor = await actorFor(ctx, bill.societyId);
   if (bill.status !== "awaiting_approval") throw new Error("Only bills waiting for approval can be taken back.");
-  await ctx.db.patch(id, { status: "draft", approvals: [], updatedAtISO: nowISO(), timeline: withEvents(bill, event("recalled", "Taken back to draft", actor)) });
+  await ctx.db.patch(id, { status: "draft", approvals: [], editedByUserIds: undefined, updatedAtISO: nowISO(), timeline: withEvents(bill, event("recalled", "Taken back to draft", actor)) });
   return id;
 }
 
@@ -773,6 +805,7 @@ export async function decidePortable(ctx: PortableMutationCtx, { id, decision, r
   await ctx.db.patch(id, {
     status: "draft",
     approvals: [],
+    editedByUserIds: undefined,
     declinedReason: text,
     declinedAtISO: at,
     declinedByName: actor.name,
@@ -864,12 +897,15 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
     }
     if (!MATCHABLE_KINDS.has(txn.matchedKind)) throw new Error(`That bank transaction is already matched to a ${txn.matchedKind} record.`);
   }
-  const cashAccountId = txn?.accountId ?? args.cashAccountId;
+  // A linked bank line pays from its account's ledger account (the account itself unless linked to another).
+  const cashAccountId = txn ? await cashLedgerAccountId(ctx, bill.societyId, txn.accountId) : args.cashAccountId;
   if (!cashAccountId) throw new Error("Choose the account the bill was paid from.");
   const cashAccount = await getOwned<AccountRow>(ctx, "financialAccounts", cashAccountId, bill.societyId);
-  if (!MONEY_ACCOUNT_TYPES.has(cashAccount.accountType) && !CASH_SUBTYPES.has(String(cashAccount.subtype))) {
+  if (!txn && !MONEY_ACCOUNT_TYPES.has(cashAccount.accountType) && !CASH_SUBTYPES.has(String(cashAccount.subtype))) {
     throw new Error(`${cashAccount.name} isn't a bank, cash or card account.`);
   }
+  // Checked before anything is posted, so a refusal changes nothing.
+  const claimed = txn ? await claimableBankEntries(ctx, bill.societyId, txn._id) : [];
   const method = isBillPaymentMethod(args.method) ? args.method : "other";
   const reference = cleanText(args.reference, 100);
   const payables = await ensurePayablesAccount(ctx, bill.societyId);
@@ -904,6 +940,12 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
   const note = cleanText(args.note, 500);
   if (note) payment.note = note;
   if (txn) {
+    // The payment entry now carries the bank line; its own backfill entry would count it twice.
+    for (const entry of claimed) {
+      const at = nowISO();
+      await ctx.db.patch(entry._id, { status: "void", voidedAtISO: at, updatedAtISO: at });
+      payment.voidedTransactionEntryId = entry._id;
+    }
     payment.financialTransactionId = txn._id;
     payment.transactionBefore = snapshotOf(txn);
     await ctx.db.patch(txn._id, {
@@ -939,7 +981,39 @@ function snapshotOf(txn: TransactionRow): Snapshot {
     const value = txn[field];
     if (typeof value === "string" && value) snapshot[field] = value;
   }
+  // Rule history, so a categorisation by rule stays undoable after the link is removed.
+  if (txn.ruleApplication) snapshot.ruleApplication = txn.ruleApplication;
   return snapshot;
+}
+
+const ENTRY_SOURCE_LABELS: Record<string, string> = { manual: "manual journal", wave: "Wave", opening_balance: "opening balance" };
+
+/**
+ * The bank line's own "Backfill imports" entries a linked payment takes over
+ * (voided on link, restored when the payment is removed), all checked to be
+ * voidable. Refuses the link when the line is in the books another way (a
+ * manual journal, a Wave sync, an invoice) or its entry is in a closed period
+ * or on or before the books close date. Read-only.
+ */
+async function claimableBankEntries(ctx: PortableQueryCtx, societyId: string, transactionId: string): Promise<JournalEntryRow[]> {
+  const { entries } = await postedJournalForTransaction(ctx, transactionId);
+  const claimable: JournalEntryRow[] = [];
+  for (const raw of entries) {
+    const entry = raw as unknown as JournalEntryRow;
+    if (entry.source !== TRANSACTION_BACKFILL_SOURCE || entry.status !== "posted") {
+      const label = ENTRY_SOURCE_LABELS[entry.source] ?? `${entry.source} entry`;
+      throw new Error(`That bank transaction is already in the books (a ${label} dated ${entry.date}). Void that entry, or record the payment without linking the bank transaction.`);
+    }
+    try {
+      await assertPeriodOpen(ctx, { societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
+      await assertBooksOpen(ctx, societyId, [entry.date], "voided");
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`That bank transaction was posted on ${entry.date}, and linking it would void that entry, which can't change: ${reason}`);
+    }
+    claimable.push(entry);
+  }
+  return claimable;
 }
 
 /** Record a full or partial payment, optionally linked to the money-out bank line. */
@@ -955,8 +1029,9 @@ export async function recordPaymentPortable(ctx: PortableMutationCtx, args: Paym
 /**
  * Remove a payment recorded in error: its journal entry and its cash-only
  * entry are voided (refused when either date is in a closed period or on or
- * before the books close date) and a linked bank line is put back as it was
- * before the link.
+ * before the books close date), a linked bank line is put back as it was
+ * before the link, and the bank line's own entry the link voided is posted
+ * again.
  */
 export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paymentKey }: { id: string; paymentKey: string }) {
   const bill = await requireOwnedRow<BillRow>(ctx, "bills", id);
@@ -969,10 +1044,17 @@ export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paym
     const entry = await ctx.db.get<JournalEntryRow>(entryId, "journalEntries");
     if (entry && entry.societyId === bill.societyId && entry.status === "posted") entries.push(entry);
   }
+  // The bank line's own entry the payment voided comes back.
+  const voided = payment.voidedTransactionEntryId ? await ctx.db.get<JournalEntryRow>(payment.voidedTransactionEntryId, "journalEntries") : null;
+  const restore = voided && voided.societyId === bill.societyId && voided.status === "void" ? voided : null;
   // Check every entry before voiding any, so a refusal changes nothing.
   for (const entry of entries) {
     await assertPeriodOpen(ctx, { societyId: bill.societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
     await assertBooksOpen(ctx, bill.societyId, [entry.date], "voided");
+  }
+  if (restore) {
+    await assertPeriodOpen(ctx, { societyId: bill.societyId, date: restore.date, fiscalPeriodId: restore.fiscalPeriodId });
+    await assertBooksOpen(ctx, bill.societyId, [restore.date], "posted");
   }
   for (const entry of entries) {
     const at = nowISO();
@@ -982,6 +1064,7 @@ export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paym
       if (line.financialTransactionId) await ctx.db.patch(line._id, { financialTransactionId: undefined, updatedAtISO: at });
     }
   }
+  if (restore) await ctx.db.patch(restore._id, { status: "posted", voidedAtISO: undefined, updatedAtISO: nowISO() });
   if (payment.financialTransactionId) {
     const txn = await ctx.db.get<TransactionRow>(payment.financialTransactionId, "financialTransactions");
     if (txn && txn.societyId === bill.societyId && txn.matchedKind === "bill" && txn.matchedId === bill._id) {
@@ -991,6 +1074,7 @@ export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paym
         accountingAccountId: before.accountingAccountId,
         categorizedBy: before.categorizedBy,
         ruleId: before.ruleId,
+        ruleApplication: before.ruleApplication,
         reconciledAtISO: before.reconciledAtISO,
         reconciledByName: before.reconciledByName,
         matchedKind: before.matchedKind,
