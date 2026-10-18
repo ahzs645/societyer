@@ -117,6 +117,9 @@ const FilingPreFillPage = React.lazy(() => import("./pages/FilingPreFill").then(
 const BylawDiffPage = React.lazy(() => import("./pages/BylawDiff").then((m) => ({ default: m.BylawDiffPage })));
 const BylawsHistoryPage = React.lazy(() => import("./pages/BylawsHistory").then((m) => ({ default: m.BylawsHistoryPage })));
 const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
+const BankAccountsPage = React.lazy(() => import("./pages/BankAccounts").then((m) => ({ default: m.BankAccountsPage })));
+const ReceiptInboxPage = React.lazy(() => import("./pages/ReceiptInbox").then((m) => ({ default: m.ReceiptInboxPage })));
+const SpendBudgetsPage = React.lazy(() => import("./pages/SpendBudgets").then((m) => ({ default: m.SpendBudgetsPage })));
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
 const InvitationAcceptPage = React.lazy(() => import("./pages/InvitationAccept").then((m) => ({ default: m.InvitationAcceptPage })));
 const OAuthConsentPage = React.lazy(() => import("./features/aiConnectors/OAuthConsentPage").then((m) => ({ default: m.OAuthConsentPage })));
@@ -471,6 +474,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="conflicts" element={<ConflictsPage />} />
             <Route path="financials" element={<FinancialsPage />} />
             <Route path="financials/accounting" element={<AccountingWorkbenchPage />} />
+            <Route path="financials/accounts" element={<BankAccountsPage />} />
+            <Route path="financials/receipts" element={<ReceiptInboxPage />} />
             <Route path="financials/year-end" element={<YearEndReportsPage />} />
             <Route path="financials/fy/:fiscalYear" element={<FinancialYearDetailPage />} />
             <Route path="financials/wave/account/:resourceId" element={<WaveAccountDetailPage />} />
@@ -523,6 +528,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="motion-library" element={<Navigate to="/app/motions?tab=templates" replace />} />
             <Route path="treasurer" element={<TreasurerPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
+            <Route path="spend-budgets" element={<SpendBudgetsPage />} />
             <Route path="transaction-rules" element={<TransactionRulesPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="payroll" element={withModule("payroll", <PayrollPage />)} />

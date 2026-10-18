@@ -20,6 +20,7 @@ import { inferBudgetKind } from "../features/financials/lib/budgetKind";
 import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { CategorizationProvenance, TransactionRulesBar } from "../features/financials/rules";
+import { MatchReceiptsButton } from "../features/financials/receipts/MatchReceiptsButton";
 import { RuleDrawerProvider } from "../features/financials/transactions/RuleDrawerHost";
 import { TransactionsBulkBar } from "../features/financials/transactions/TransactionsBulkBar";
 import { useTransactionsSurface } from "../features/financials/transactions/useTransactionsSurface";
@@ -537,6 +538,7 @@ export function FinancialsPage() {
       </div>
 
       {tab === "transactions" && <TransactionRulesBar societyId={society._id} />}
+      {tab === "transactions" && <MatchReceiptsButton societyId={society._id} />}
 
       {tab === "transactions" && (accounts ?? []).length > 0 && (
         <BankCsvImportCard

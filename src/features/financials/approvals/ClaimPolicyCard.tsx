@@ -22,6 +22,9 @@ type Draft = {
   ageOn: boolean;
   age: string;
   enforcement: ClaimPolicyEnforcement;
+  mileageOn: boolean;
+  /** Dollars per kilometre, e.g. "0.70". */
+  mileage: string;
 };
 
 // Whole-dollar thresholds read better without cents.
@@ -35,6 +38,8 @@ const toDraft = (policy: ExpenseClaimPolicy): Draft => ({
   ageOn: policy.maxAgeDays !== null,
   age: String(policy.maxAgeDays ?? SUGGESTED_CLAIM_POLICY.maxAgeDays),
   enforcement: policy.enforcement,
+  mileageOn: Boolean(policy.mileageRateCentsPerKm),
+  mileage: policy.mileageRateCentsPerKm ? (policy.mileageRateCentsPerKm / 100).toFixed(2) : "",
 });
 
 const toPolicy = (draft: Draft): ExpenseClaimPolicy => ({
@@ -42,6 +47,7 @@ const toPolicy = (draft: Draft): ExpenseClaimPolicy => ({
   noteOverCents: draft.noteOn ? Math.abs(parseMoneyInput(draft.note) ?? Number.NaN) : null,
   maxAgeDays: draft.ageOn ? Number(draft.age) : null,
   enforcement: draft.enforcement,
+  mileageRateCentsPerKm: draft.mileageOn ? Math.abs(parseMoneyInput(draft.mileage) ?? Number.NaN) : null,
 });
 
 const ENFORCEMENT_OPTIONS: { value: ClaimPolicyEnforcement; label: string; hint: string }[] = [
@@ -58,7 +64,7 @@ export function ClaimPolicyCard({ queue, societyId }: { queue: ApprovalQueue; so
   const save = useMutation(api.expenseReports.saveClaimPolicy);
   const toast = useToast();
   const stored = queue.claimPolicy;
-  const storedKey = JSON.stringify([stored.receiptOverCents, stored.noteOverCents, stored.maxAgeDays, stored.enforcement]);
+  const storedKey = JSON.stringify([stored.receiptOverCents, stored.noteOverCents, stored.maxAgeDays, stored.enforcement, stored.mileageRateCentsPerKm]);
   const [draft, setDraft] = useState<Draft>(() => toDraft(stored));
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -89,6 +95,7 @@ export function ClaimPolicyCard({ queue, societyId }: { queue: ApprovalQueue; so
         noteOverCents: policy.noteOverCents ?? undefined,
         maxAgeDays: policy.maxAgeDays ?? undefined,
         enforcement: policy.enforcement,
+        mileageRateCentsPerKm: policy.mileageRateCentsPerKm ?? undefined,
       });
       setDirty(false);
       toast.success("Claim policy saved", policy.enforcement === "block" ? "Claims that miss it now need an exception to be submitted." : "Claims that miss it are flagged for approvers.");
@@ -144,6 +151,18 @@ export function ClaimPolicyCard({ queue, societyId }: { queue: ApprovalQueue; so
             />
             <span>days of the expense</span>
           </PolicyLine>
+        </fieldset>
+
+        <fieldset className="claim-policy__rules" disabled={!canChange || busy}>
+          <legend className="claim-policy__legend">Mileage</legend>
+          <PolicyLine on={draft.mileageOn} onToggle={(mileageOn) => update({ mileageOn, mileage: mileageOn && !draft.mileage ? "" : draft.mileage })} toggleLabel="Reimburse mileage">
+            <span>Reimburse mileage at</span>
+            <MoneyInput value={draft.mileage} disabled={!draft.mileageOn} label="Mileage rate per kilometre" onChange={(mileage) => update({ mileage })} />
+            <span>per kilometre</span>
+          </PolicyLine>
+          <p className="muted claim-policy__hint">
+            Your organisation's own rate: enter the rate your board approved. Mileage claims are distance × this rate and don't need a receipt.
+          </p>
         </fieldset>
 
         <fieldset className="claim-policy__enforcement" disabled={!canChange || busy}>

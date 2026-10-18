@@ -6,9 +6,8 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId, useCurrentUser } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge } from "../components/ui";
 import { Select } from "../components/Select";
-import { DatePicker } from "../components/DatePicker";
 import { useConfirm, usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -26,10 +25,13 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
-import { todayDateOnly } from "../../shared/dateOnly";
 import { ReconciliationStatements } from "../features/financials/reconciliation/ReconciliationStatements";
 import { ReconciliationBanner } from "../features/financials/reconciliation/ReconciliationBanner";
 import { StartReconciliationModal } from "../features/financials/reconciliation/StartReconciliationModal";
+import { ReconciliationMonthView } from "../features/financials/reconciliation/ReconciliationMonthView";
+import { MonthTransactionsTable } from "../features/financials/reconciliation/MonthTransactionsTable";
+import { useReconciliationMonthView } from "../features/financials/reconciliation/useReconciliationMonthView";
+import { AddBankTransactionDrawer } from "../features/financials/reconciliation/AddBankTransactionDrawer";
 import type { ReconPeriodsData } from "../features/financials/reconciliation/types";
 
 /**
@@ -53,7 +55,7 @@ export function ReconciliationPage() {
   const periodId = searchParams.get("period") ?? undefined;
   const accountParam = searchParams.get("account") ?? undefined;
   const activePeriod = periodsData?.periods.find((period) => period._id === periodId);
-  const [startOpen, setStartOpen] = useState<{ accountId?: string } | null>(null);
+  const [startOpen, setStartOpen] = useState<{ accountId?: string; endDate?: string; suggestedEndingCents?: number } | null>(null);
   const setView = (next: { account?: string; period?: string }) => {
     const params = new URLSearchParams(searchParams);
     for (const key of ["account", "period"] as const) {
@@ -62,10 +64,18 @@ export function ReconciliationPage() {
     }
     setSearchParams(params);
   };
+  const monthView = useReconciliationMonthView({
+    societyId: society?._id,
+    periodsData,
+    searchParams,
+    setSearchParams,
+    periodId,
+    accountParam,
+  });
+  const { view, month, monthAccountId, monthData } = monthView;
   const matchM = useMutation(api.reconciliation.match);
   const markManualM = useMutation(api.reconciliation.markManual);
   const unmatchM = useMutation(api.reconciliation.unmatch);
-  const addManualTxn = useMutation(api.reconciliation.addManualTransaction);
   const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
   const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
@@ -79,7 +89,7 @@ export function ReconciliationPage() {
 
   const [selected, setSelected] = useState<string | null>(null);
   // Opening another statement starts with an empty match panel.
-  useEffect(() => setSelected(null), [periodId]);
+  useEffect(() => setSelected(null), [periodId, month, monthAccountId]);
   const selectForMatching = (id: string) => {
     setSelected(id);
     // On narrow screens the match panel stacks below the table; bring it into view.
@@ -90,14 +100,6 @@ export function ReconciliationPage() {
   };
   const [linkItemId, setLinkItemId] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [txnForm, setTxnForm] = useState({
-    date: todayDateOnly(),
-    description: "",
-    amountDollars: "",
-    direction: "out" as "in" | "out",
-    counterparty: "",
-    category: "",
-  });
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -223,27 +225,6 @@ export function ReconciliationPage() {
   const percent = summary.total ? Math.round((summary.reconciled / summary.total) * 100) : 0;
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
-  const saveManualTxn = async () => {
-    if (!society) return;
-    const dollars = Number(txnForm.amountDollars);
-    if (!txnForm.description.trim() || !Number.isFinite(dollars) || dollars <= 0) {
-      toast.warn("Enter a description and a positive amount");
-      return;
-    }
-    const cents = Math.round(dollars * 100) * (txnForm.direction === "out" ? -1 : 1);
-    await addManualTxn({
-      societyId: society._id,
-      date: txnForm.date,
-      description: txnForm.description.trim(),
-      amountCents: cents,
-      counterparty: txnForm.counterparty.trim() || undefined,
-      category: txnForm.category.trim() || undefined,
-    });
-    toast.success("Transaction added");
-    setAddOpen(false);
-    setTxnForm({ date: todayDateOnly(), description: "", amountDollars: "", direction: "out", counterparty: "", category: "" });
-  };
-
   return (
     <div className="page">
       <PageHeader
@@ -272,37 +253,18 @@ export function ReconciliationPage() {
         }
       />
 
-      <Drawer
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        title="Add bank transaction"
-        footer={
-          <>
-            <button className="btn" onClick={() => setAddOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveManualTxn} disabled={!canWrite}>Add transaction</button>
-          </>
-        }
-      >
-        <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-          Manually record a bank line so it can be reconciled when no Wave/browser-connector sync is configured.
-        </div>
-        <Field label="Date"><DatePicker value={txnForm.date} onChange={(v) => setTxnForm({ ...txnForm, date: v })} /></Field>
-        <Field label="Description"><input className="input" value={txnForm.description} onChange={(e) => setTxnForm({ ...txnForm, description: e.target.value })} /></Field>
-        <div className="row" style={{ gap: 12 }}>
-          <Field label="Direction">
-            <Select
-              value={txnForm.direction}
-              onChange={(v) => setTxnForm({ ...txnForm, direction: v as "in" | "out" })}
-              options={[{ value: "out", label: "Money out" }, { value: "in", label: "Money in" }]}
-            />
-          </Field>
-          <Field label="Amount"><input className="input" type="number" min="0" step="0.01" value={txnForm.amountDollars} onChange={(e) => setTxnForm({ ...txnForm, amountDollars: e.target.value })} /></Field>
-        </div>
-        <Field label="Counterparty"><input className="input" value={txnForm.counterparty} onChange={(e) => setTxnForm({ ...txnForm, counterparty: e.target.value })} placeholder="e.g. BC Registries, a donor, a vendor" /></Field>
-        <Field label="Category"><input className="input" value={txnForm.category} onChange={(e) => setTxnForm({ ...txnForm, category: e.target.value })} placeholder="Optional" /></Field>
-      </Drawer>
+      <AddBankTransactionDrawer open={addOpen} societyId={society._id} canWrite={canWrite} onClose={() => setAddOpen(false)} />
 
-      {periodsData && (activePeriod ? (
+      {periodsData && !activePeriod && (
+        <ReconciliationMonthView
+          state={monthView}
+          canWrite={canWrite}
+          onStart={(accountId, endDate, suggestedEndingCents) => setStartOpen({ accountId, endDate, suggestedEndingCents })}
+          onOpenPeriod={(period) => setView({ account: monthAccountId, period })}
+        />
+      )}
+
+      {periodsData && (activePeriod || view === "statements") && (activePeriod ? (
         <ReconciliationBanner
           period={activePeriod}
           account={periodsData.accounts.find((account) => account._id === activePeriod.accountId)}
@@ -325,6 +287,8 @@ export function ReconciliationPage() {
           open
           accounts={periodsData.accounts}
           initialAccountId={startOpen.accountId}
+          initialEndDate={startOpen.endDate}
+          suggestedEndingCents={startOpen.suggestedEndingCents}
           societyId={society._id}
           onClose={() => setStartOpen(null)}
           onStarted={(period, account) => {
@@ -334,7 +298,7 @@ export function ReconciliationPage() {
         />
       )}
 
-      {!activePeriod && <div className="stat-grid">
+      {!activePeriod && view === "statements" && <div className="stat-grid">
         <StatTile label="Transactions" value={summary.total} />
         <StatTile label="Reconciled" value={summary.reconciled} tone={summary.reconciled ? "ok" : "neutral"} sub={`${percent}% of total`} />
         <StatTile label="With suggestion" value={summary.withSuggestions} tone={summary.withSuggestions ? "info" : "neutral"} sub="One click to apply" />
@@ -343,7 +307,9 @@ export function ReconciliationPage() {
 
       <div className="two-col">
         <div>
-          {showMetadataWarning ? (
+          {!activePeriod && view === "month" ? (
+            monthView.monthAccounts.length > 0 && <MonthTransactionsTable detail={monthData?.detail} selectedId={selected} onSelect={selectForMatching} />
+          ) : showMetadataWarning ? (
             <RecordTableMetadataEmpty societyId={society?._id} objectLabel="reconciliation" />
           ) : tableData.objectMetadata ? (
             <RecordTableScope

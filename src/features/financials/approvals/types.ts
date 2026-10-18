@@ -1,5 +1,5 @@
 import type { ApprovalRule, ApprovalRuleDiffLine, ApprovalVote, ApproverAccess } from "../../../../shared/expenseApprovals";
-import type { ClaimPolicyIssue, ExpenseClaimPolicy } from "../../../../shared/expensePolicy";
+import type { ClaimPolicyIssue, ExpenseClaimPolicy, MileageDetails } from "../../../../shared/expensePolicy";
 
 export type TrailEntry = { atISO: string; action: string; actorName: string; actorUserId?: string; note?: string };
 
@@ -34,6 +34,10 @@ export type QueueRow = {
   trail: TrailEntry[];
   /** Claim-policy checks the claim misses (open claims only). */
   policyIssues: ClaimPolicyIssue[];
+  claimType: "expense" | "mileage";
+  mileage: MileageDetails | null;
+  /** The spend budget the claim is charged to, in the cycle containing its date. */
+  spendBudget: { _id: string; name: string; limitCents: number; window: { start: string; end: string }; otherSpendCents: number; remainingAfterCents: number; exceeds: boolean } | null;
   policyException: { reason: string; at: string; by: string; byUserId?: string } | null;
   /** Same requester and amount within 14 days (open claims only). */
   possibleDuplicate: { _id: string; title: string; date: string } | null;
