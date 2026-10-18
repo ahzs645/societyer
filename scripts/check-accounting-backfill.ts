@@ -16,7 +16,7 @@
  */
 import assert from "node:assert/strict";
 import { StaticConvexClient } from "../src/lib/staticConvex";
-import { planTransactionBackfill, BEFORE_OPENING_FLAG, SUSPENSE_FLAG } from "../shared/accountingBackfill";
+import { journalLinesForPlanRow, planTransactionBackfill, BEFORE_OPENING_FLAG, SUSPENSE_FLAG } from "../shared/accountingBackfill";
 import { transactionLines } from "../shared/transactionLines";
 
 async function demoClient() {
@@ -67,6 +67,15 @@ async function totalAssetsCents(client: StaticConvexClient, societyId: string) {
   assert.equal(included.summary.beforeOpeningIncluded, 2);
   const already = planTransactionBackfill({ ...base, postedTransactionIds: ["t3"] });
   assert.equal(already.rows.find((row) => row.transactionId === "t3")?.status, "already_posted");
+  // A feed linked to another ledger account posts its cash side there (bankAccountProfiles.ledgerAccountId).
+  const ledger = { _id: "ledger_bank", code: "1010", name: "Operating (ledger)", accountType: "Bank" };
+  const linked = planTransactionBackfill({ ...base, accounts: [...accounts, ledger], cashAccountByFeed: new Map([["cash", "ledger_bank"], ["missing", "ledger_bank"]]) });
+  const t3 = linked.rows.find((row) => row.transactionId === "t3")!;
+  assert.equal(t3.cashAccountId, "ledger_bank");
+  assert.deepEqual(journalLinesForPlanRow(transactions[2], t3).map((line) => [line.accountId, line.side, line.amountCents]), [["ledger_bank", "credit", 100], ["rent", "debit", 100]], "the bank line goes to the linked ledger account");
+  assert.equal(linked.rows.find((row) => row.transactionId === "t5")?.status, "post", "a feed account missing from the chart posts through its link");
+  const gone = planTransactionBackfill({ ...base, cashAccountByFeed: new Map([["cash", "deleted_account"]]) });
+  assert.equal(gone.rows.find((row) => row.transactionId === "t3")?.cashAccountId, "cash", "a link to an account that no longer exists falls back to the feed account");
 }
 
 // --- Demo seed: the opening-balance cutoff on the generated bank feed --------

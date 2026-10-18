@@ -94,6 +94,26 @@ async function requireMoneyAccount(ctx: PortableMutationCtx, id: string): Promis
 const ledgerLabel = (account: Pick<AccountRow, "code" | "name">) => (account.code ? `${account.code} · ${account.name}` : account.name);
 
 /**
+ * The ledger account each linked money account posts its cash side to: feed
+ * account id → `bankAccountProfiles.ledgerAccountId`. Accounts that are their
+ * own ledger account are absent. Posting (Backfill imports, re-posting after
+ * an edit, bill and invoice payments linked to a bank line) resolves the cash
+ * account through this, so linking a feed actually moves its postings.
+ */
+export async function cashLedgerAccounts(ctx: PortableQueryCtx, societyId: string): Promise<Map<string, string>> {
+  const profiles = await ctx.db.query<ProfileRow>("bankAccountProfiles").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  return new Map(profiles.filter((row) => row.ledgerAccountId).map((row) => [String(row.accountId), String(row.ledgerAccountId)]));
+}
+
+/** The account one money account's transactions post to: its linked ledger account, else itself. */
+export async function cashLedgerAccountId(ctx: PortableQueryCtx, societyId: string, accountId: string): Promise<string> {
+  const linked = (await profileFor(ctx, accountId))?.ledgerAccountId;
+  if (!linked) return accountId;
+  const ledger = await ctx.db.get<AccountRow>(String(linked), "financialAccounts");
+  return ledger && ledger.societyId === societyId ? String(ledger._id) : accountId;
+}
+
+/**
  * Money accounts for the Accounts page: source, feed health, last activity,
  * current balance and linked ledger account, plus the ledger accounts an
  * account can be linked to and counts per tab.
@@ -302,6 +322,9 @@ export async function updateAccountPortable(
  * Link an account to its ledger account: an existing chart account (bank,
  * credit, asset or liability), or a new chart code on the account itself.
  * `unlink` returns an account with its own code to being its own ledger account.
+ * A linked account's transactions post their cash side to the ledger account
+ * from then on (entries already posted move when they are next re-posted).
+ * A ledger account serves one feed, and links don't chain.
  */
 export async function linkLedgerAccountPortable(
   ctx: PortableMutationCtx,
@@ -327,6 +350,16 @@ export async function linkLedgerAccountPortable(
     throw new Error("Link to a bank, credit, asset or liability account in the chart of accounts.");
   }
   if ((ledger.currency ?? "CAD") !== (account.currency ?? "CAD")) throw new Error("The ledger account must use the same currency.");
+  // One feed per ledger account, and no chains: postings resolve one link only.
+  const profiles = await ctx.db.query<ProfileRow>("bankAccountProfiles").withIndex("by_society", (q) => q.eq("societyId", account.societyId)).collect();
+  const accountName = async (id: string) => String((await ctx.db.get<AccountRow>(id, "financialAccounts"))?.name ?? "another account");
+  const sharing = profiles.find((row) => String(row.accountId) !== String(account._id) && String(row.ledgerAccountId ?? "") === String(ledger._id));
+  if (sharing) throw new Error(`${ledgerLabel(ledger)} is already the ledger account for ${await accountName(String(sharing.accountId))}. Unlink it there first.`);
+  if (profiles.some((row) => String(row.accountId) === String(ledger._id) && row.ledgerAccountId)) {
+    throw new Error(`${ledgerLabel(ledger)} is itself linked to another ledger account. Choose the account it posts to.`);
+  }
+  const linkedHere = profiles.find((row) => String(row.ledgerAccountId ?? "") === String(account._id));
+  if (linkedHere) throw new Error(`${await accountName(String(linkedHere.accountId))} posts to this account. Unlink it there first.`);
   await upsertProfile(ctx, account, { ledgerAccountId: String(ledger._id) });
   return { code: ledger.code };
 }

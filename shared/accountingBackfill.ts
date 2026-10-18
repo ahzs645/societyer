@@ -192,6 +192,11 @@ export function planTransactionBackfill(input: {
   useSuspense?: boolean;
   /** Restrict the plan to these transactions (the reviewed selection). */
   transactionIds?: string[];
+  /**
+   * Feed account id → the ledger account its cash side posts to, for money
+   * accounts linked to another chart account (bankAccountProfiles.ledgerAccountId).
+   */
+  cashAccountByFeed?: ReadonlyMap<string, string>;
 }): BackfillPlan {
   const accountsById = new Map(input.accounts.map((account) => [String(account._id), account]));
   const posted = new Set([...input.postedTransactionIds].map(String));
@@ -213,6 +218,8 @@ export function planTransactionBackfill(input: {
     const amountCents = Number(transaction.amountCents) || 0;
     const direction: "income" | "expense" = amountCents >= 0 ? "income" : "expense";
     const beforeOpening = Boolean(opening && String(transaction.date).slice(0, 10) <= opening);
+    const linkedCash = input.cashAccountByFeed?.get(String(transaction.accountId));
+    const cashAccountId = linkedCash && accountsById.has(linkedCash) ? linkedCash : String(transaction.accountId);
     const base = {
       transactionId: String(transaction._id),
       date: String(transaction.date),
@@ -220,7 +227,7 @@ export function planTransactionBackfill(input: {
       amountCents,
       category: String(transaction.category ?? "").trim(),
       direction,
-      cashAccountId: String(transaction.accountId),
+      cashAccountId,
       beforeOpening,
     };
     if (posted.has(String(transaction._id))) {
@@ -231,7 +238,7 @@ export function planTransactionBackfill(input: {
       rows.push({ ...base, status: "zero_amount", lines: [] });
       continue;
     }
-    if (!accountsById.has(String(transaction.accountId))) {
+    if (!accountsById.has(cashAccountId)) {
       rows.push({ ...base, status: "no_cash_account", lines: [] });
       continue;
     }
@@ -341,19 +348,21 @@ export type TransactionJournalLine = {
  * The balanced journal lines for one planned row: the bank (cash) line for
  * the whole amount, then one offset line per line item on the side its own
  * sign calls for, so a split with a negative line (a deposit net of a fee)
- * still balances. `suspenseAccountId` stands in for suspense lines whose
- * account did not exist when the plan was made.
+ * still balances. The bank line goes to the row's cash account (the linked
+ * ledger account, else the transaction's own account). `suspenseAccountId`
+ * stands in for suspense lines whose account did not exist when the plan was
+ * made.
  */
 export function journalLinesForPlanRow(
   transaction: Pick<BackfillTransaction, "amountCents" | "accountId" | "description" | "category" | "categoryAccountExternalId"> & { externalId?: string },
-  row: Pick<BackfillPlanRow, "lines">,
+  row: Pick<BackfillPlanRow, "lines"> & Partial<Pick<BackfillPlanRow, "cashAccountId">>,
   suspenseAccountId?: string | null,
 ): TransactionJournalLine[] {
   const { cashSide, absoluteAmountCents } = transactionBackfillSides(transaction.amountCents);
   const description = String(transaction.description ?? "");
   const out: TransactionJournalLine[] = [
     {
-      accountId: String(transaction.accountId),
+      accountId: String(row.cashAccountId ?? transaction.accountId),
       lineOrder: 0,
       amountCents: absoluteAmountCents,
       side: cashSide,

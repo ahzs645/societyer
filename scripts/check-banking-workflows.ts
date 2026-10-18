@@ -288,11 +288,27 @@ await accounts.linkLedgerAccountPortable(mina, { id: created.accountId, ledgerAc
 overview = await accounts.overviewPortable(mina, { societyId: S });
 assert.equal(overview.rows.find((row) => row._id === created.accountId)?.ledgerAccount?.isSelf, false);
 await assert.rejects(accounts.linkLedgerAccountPortable(mina, { id: created.accountId, ledgerAccountId: "static_financial_facilities_expense" }), /bank, credit, asset or liability/, "an expense account is not a ledger account for money");
+// Linking moves postings: the account's lines post their cash side to the linked ledger account.
+{
+  const accounting = await import("../shared/functions/accounting");
+  const stripeAccount = (await db.get(created.accountId))!;
+  const fee = await db.insert("financialTransactions", { societyId: S, connectionId: stripeAccount.connectionId, accountId: created.accountId, externalId: "stripe-fee-1", date: "2026-04-02", description: "Stripe fee", amountCents: -1_500, category: "Bank fees", accountingAccountId: "static_financial_facilities_expense" });
+  await accounting.backfillFinancialTransactionsToJournalPortable(mina, { societyId: S, transactionIds: [fee], includeBeforeOpening: true });
+  const posted = await accounting.postedJournalForTransaction(mina, fee);
+  const cashLine = posted.lines.find((line) => line.lineOrder === 0)!;
+  assert.deepEqual([cashLine.accountId, cashLine.side, cashLine.amountCents], ["static_financial_cash", "credit", 1_500], "the bank line posts to the linked ledger account, not the feed account");
+  assert.equal(await accounts.cashLedgerAccountId(mina, S, created.accountId), "static_financial_cash", "bill and invoice payments resolve the same account");
+  // One feed per ledger account, and no chains.
+  const square = await accounts.createManualAccountPortable(mina, { societyId: S, name: "Square balance", kind: "payments", openingBalanceCents: 0, openingDate: "2026-04-01" });
+  await assert.rejects(accounts.linkLedgerAccountPortable(mina, { id: square.accountId, ledgerAccountId: "static_financial_cash" }), /already the ledger account for Stripe balance/);
+  await assert.rejects(accounts.linkLedgerAccountPortable(mina, { id: "static_financial_cash", ledgerAccountId: square.accountId }), /Stripe balance posts to this account/);
+  await accounts.setArchivedPortable(mina, { id: square.accountId, archived: true });
+}
 await accounts.updateAccountPortable(mina, { id: created.accountId, name: "Stripe payouts" });
 await accounts.setArchivedPortable(mina, { id: created.accountId, archived: true });
 overview = await accounts.overviewPortable(mina, { societyId: S });
 assert.equal(overview.counts.payments, 0, "archived accounts leave the tabs");
-assert.equal(overview.archivedCount, 1);
+assert.equal(overview.archivedCount, 2, "Stripe, and Square from the link checks");
 await assert.rejects(accounts.createManualAccountPortable(jordan, { societyId: S, name: "Nope", kind: "bank", openingBalanceCents: 0, openingDate: "2026-04-01" }), /financials:write/, "read-only finance access can't add accounts");
 
 // Mileage claims are priced at the organisation's rate and need no receipt.
