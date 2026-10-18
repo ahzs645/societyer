@@ -788,18 +788,26 @@ const OPENING_SOURCES = new Set(["opening_balance"]);
  * (operating, investing, financing activities), the net change and the cash at
  * the end. Transfers between cash accounts net to nothing; opening-balance
  * entries count toward the starting cash.
+ *
+ * With a dimension or fund filter only the activities are filtered (bank and
+ * cash lines carry no program, fund or tag): the starting cash is the whole
+ * cash balance, and the ending cash is that plus the filtered net change.
  */
 export function buildCashFlow(input: ReportInput): BooksReport {
   const set = ledgerSet(input);
   const { periods } = input;
   const size = periods.length;
+  const filterActive = isFilterActive(input.filter);
   const cashByEntry = new Map<string, boolean>();
   for (const row of set.all) if (isCashAccount(row.account)) cashByEntry.set(String(row.entry._id), true);
   const flows: Record<CashFlowActivity, Map<string, Vector>> = { operating: new Map(), investing: new Map(), financing: new Map() };
   const beginning = zeros(size);
   const cashMovement = zeros(size);
+  // Every activity line, filtered or not, so the mismatch check means the same with a filter on.
+  const allMovement = zeros(size);
+  const filteredLines = new Set(set.filtered.map((row) => row.line));
   let before = 0;
-  for (const row of set.filtered) {
+  for (const row of set.all) {
     const entryId = String(row.entry._id);
     if (!cashByEntry.get(entryId)) continue;
     const index = periodIndex(periods, row.entry.date);
@@ -812,23 +820,14 @@ export function buildCashFlow(input: ReportInput): BooksReport {
       continue;
     }
     if (index < 0 || opening) continue;
+    // The other side of a cash entry: a credit brought money in.
+    allMovement[index] -= row.signed;
+    if (!filteredLines.has(row.line)) continue;
     const id = String(row.account._id);
     const activity = flows[cashFlowActivity(row.account)];
     const vector = activity.get(id) ?? zeros(size);
-    // The other side of a cash entry: a credit brought money in.
     vector[index] -= row.signed;
     activity.set(id, vector);
-  }
-  // Starting cash of each period: everything before it, including opening
-  // balances posted inside an earlier period.
-  let running = before;
-  const startCash = zeros(size);
-  const endCash = zeros(size);
-  for (let index = 0; index < size; index += 1) {
-    running += beginning[index];
-    startCash[index] = running;
-    running += cashMovement[index];
-    endCash[index] = running;
   }
   const sum = (map: Map<string, Vector>) => [...map.values()].reduce(plus, zeros(size));
   const sameActivity = (child: BooksAccount, parent: BooksAccount) => cashFlowActivity(child) === cashFlowActivity(parent) && accountSection(child.accountType) === accountSection(parent.accountType);
@@ -841,6 +840,18 @@ export function buildCashFlow(input: ReportInput): BooksReport {
     return sectionBlock(id, label, nodes, sum(map), periods, { ...options, totalLabel });
   };
   const movement = plus(plus(sum(flows.operating), sum(flows.investing)), sum(flows.financing));
+  // Starting cash of each period: everything before it, including opening
+  // balances posted inside an earlier period. Unfiltered, the ending cash is
+  // the cash accounts' own balance; filtered, the start plus the filtered change.
+  let running = before;
+  const startCash = zeros(size);
+  const endCash = zeros(size);
+  for (let index = 0; index < size; index += 1) {
+    running += beginning[index];
+    startCash[index] = running;
+    running += cashMovement[index];
+    endCash[index] = filterActive ? startCash[index] + movement[index] : running;
+  }
   const rows: BooksReportRow[] = [
     {
       id: "cash:beginning",
@@ -848,17 +859,28 @@ export function buildCashFlow(input: ReportInput): BooksReport {
       label: "Cash at the start of the period",
       calculated: true,
       drilldown: false,
-      note: "Cash and bank balances carried in, including opening balances.",
+      note: filterActive
+        ? "All cash and bank balances carried in, including opening balances. Bank lines carry no program, fund or tag, so the filter doesn't apply to them."
+        : "Cash and bank balances carried in, including opening balances.",
       values: toValues(periods, startCash, startCash[0] ?? 0),
     },
     ...activityRows("operating", "Operating activities", "Net cash from operating activities"),
     ...activityRows("investing", "Investing activities", "Net cash from investing activities"),
     ...activityRows("financing", "Financing activities", "Net cash from financing activities"),
     { id: "total:movement", kind: "total", label: "Net change in cash", favourable: "increase", values: toValues(periods, movement, total(movement)), drilldown: false },
-    { id: "cash:ending", kind: "total", label: "Cash at the end of the period", calculated: true, values: toValues(periods, endCash, endCash[size - 1] ?? 0), drilldown: false },
+    {
+      id: "cash:ending",
+      kind: "total",
+      label: "Cash at the end of the period",
+      calculated: true,
+      ...(filterActive ? { note: "Cash at the start plus the filtered net change, not the bank balance." } : {}),
+      // The total column reads start + net change across the whole range.
+      values: toValues(periods, endCash, filterActive ? (startCash[0] ?? 0) + total(movement) : endCash[size - 1] ?? 0),
+      drilldown: false,
+    },
   ];
   const warnings: string[] = [];
-  if (!isFilterActive(input.filter) && !isZero(minus(movement, cashMovement))) {
+  if (!isZero(minus(allMovement, cashMovement))) {
     warnings.push("Some entries move cash without a balancing line on another account, so the activities do not add up to the change in cash.");
   }
   const flowIn = zeros(size);
@@ -1185,8 +1207,9 @@ export type ChartRegisterRow = BooksAccount & {
   depth: number;
 };
 
-export function buildChartRegister(input: { accounts: BooksAccount[]; entries: BooksEntry[]; lines: BooksLine[] }): ChartRegisterRow[] {
-  const entryById = new Map(input.entries.filter((entry) => entry.status === "posted").map((entry) => [String(entry._id), entry]));
+/** Balances on the books' basis: cash-only and accrual-only entries (invoices, bills) are counted once, never both. */
+export function buildChartRegister(input: { accounts: BooksAccount[]; entries: BooksEntry[]; lines: BooksLine[]; basis: AccountingBasis }): ChartRegisterRow[] {
+  const entryById = new Map(input.entries.filter((entry) => entry.status === "posted" && entryCountsForBasis(entry, input.basis)).map((entry) => [String(entry._id), entry]));
   const totals = new Map<string, { opening: number; balance: number; count: number }>();
   for (const line of input.lines) {
     const entry = entryById.get(String(line.journalEntryId));

@@ -13,6 +13,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../shared/portable/c
 import {
   buildBalanceSheet,
   buildCashFlow,
+  buildChartRegister,
   buildGeneralLedgerReport,
   buildJournalRegister,
   buildReportPeriods,
@@ -219,6 +220,25 @@ check("cash flow: opening balances start the cash, activities add up, transfers 
   assert.equal(findOrNull(report.rows, "financing:net_assets"), null, "the opening entry is not a financing inflow");
   const drill = reportDrillLines({ accounts, entries, lines, basis: "accrual", accountIds: ["ar"], scope: "cash", start: "2026-03-01", end: "2026-03-31" });
   assert.deepEqual(drill.map((line) => line._id), ["invoice-payment:1"], "cash drilldown shows the other side of the cash entry");
+});
+
+check("a filtered cash flow starts from all cash and ends at start plus the filtered change", () => {
+  const gala = buildCashFlow({ ...base, basis: "accrual", filter: { dimensions: [{ kind: "programCode", values: ["GALA"] }] } });
+  assert.deepEqual(values(gala, "cash:beginning"), { [jan]: 1_000_000, [feb]: 1_150_000, [mar]: 1_045_000, [TOTAL_COLUMN]: 1_000_000 }, "bank lines carry no program, so the starting cash is unfiltered");
+  assert.deepEqual(values(gala, "total:movement"), { [jan]: 200_000, [feb]: 0, [mar]: 0, [TOTAL_COLUMN]: 200_000 });
+  assert.deepEqual(values(gala, "cash:ending"), { [jan]: 1_200_000, [feb]: 1_150_000, [mar]: 1_045_000, [TOTAL_COLUMN]: 1_200_000 }, "ending cash is the start plus the filtered net change");
+  assert.deepEqual(gala.warnings, [], "the books balance, so no mismatch warning under a filter either");
+  assert.match(String(gala.rows.find((row) => row.id === "cash:ending")?.note), /filtered net change/);
+  const broken = buildCashFlow({ ...base, basis: "accrual", lines: [...lines, { _id: "orphan", journalEntryId: "donation-jan", accountId: "cash", side: "debit", amountCents: 1, lineOrder: 9 }], filter: { dimensions: [{ kind: "programCode", values: ["GALA"] }] } });
+  assert.equal(broken.warnings.length, 1, "an unbalanced cash entry is still flagged with a filter on");
+});
+
+check("the chart register counts each invoice once, on the books' basis", () => {
+  for (const basis of ["accrual", "cash"] as const) {
+    const register = buildChartRegister({ accounts, entries, lines, basis });
+    assert.equal(register.find((row) => row._id === "programs")?.balanceCents, 40_000, `${basis}: the accrual or its cash-basis recognition, not both`);
+    assert.equal(register.find((row) => row._id === "ar")?.balanceCents, 0);
+  }
 });
 
 check("fund and dimension filters narrow lines; unknown dimensions are refused", () => {

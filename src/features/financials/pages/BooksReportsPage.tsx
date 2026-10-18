@@ -71,6 +71,11 @@ function BooksReportsView({ societyId, societyName, slug }: { societyId: Id<"soc
               Every figure comes from posted journal entries, on the books' accounting basis unless you switch it here.
               Drafts and voided entries are left out.
             </p>
+            <p>
+              With a program, fund or tag filter, the cash flow shows only the filtered activity. Bank and cash lines carry no
+              program, fund or tag, so cash at the start is the whole cash balance and cash at the end is that plus the
+              filtered net change.
+            </p>
             <p>Click any amount to see the journal lines behind it. Downloads include the society, basis, range and filters.</p>
           </>
         }

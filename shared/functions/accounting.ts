@@ -1934,8 +1934,8 @@ export async function journalEntryRegisterPortable(ctx: PortableQueryCtx, { soci
 /** The chart of accounts with normal balance, opening balance and posted balance per account. */
 export async function chartOfAccountsRegisterPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const books = await loadBooks(ctx, societyId);
-  return buildChartRegister(books).sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
+  const [books, basis] = await Promise.all([loadBooks(ctx, societyId), booksAccountingBasis(ctx, societyId)]);
+  return buildChartRegister({ ...books, basis }).sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
 }
 
 const CHART_ACCOUNT_TYPES = ["Asset", "Bank", "Liability", "Credit", "Equity", "Income", "Expense"] as const;
