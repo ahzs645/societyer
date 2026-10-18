@@ -1,11 +1,11 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { Divide, Plus, Scissors, Trash2, Undo2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Money } from "../../../components/Money";
 import { Select, type SelectOption } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
-import { formatMoney } from "../../../lib/money";
+import { formatMoney, parseMoneyInput } from "../../../lib/money";
 import {
   isSplitTransaction,
   linesRemainderCents,
@@ -49,12 +49,8 @@ const BANK_TYPES = new Set(["Bank", "Credit"]);
 let lineSequence = 0;
 const newLineId = () => `line-${Date.now().toString(36)}-${(lineSequence += 1)}`;
 
-function centsFromText(text: string): number | null {
-  const cleaned = text.replace(/[$,\s]/g, "");
-  if (!cleaned || cleaned === "-" || !/^-?\d*(\.\d{0,2})?$/.test(cleaned)) return null;
-  const value = Number(cleaned);
-  return Number.isFinite(value) ? Math.round(value * 100) : null;
-}
+/** Typed amount in cents ("12.50", "(12.00)", "−5", "CAD 5"…), or null when it isn't one. */
+const centsFromText = (text: string): number | null => parseMoneyInput(text) ?? null;
 
 const textFromCents = (cents: number) => (cents / 100).toFixed(2);
 
@@ -99,6 +95,7 @@ export function TransactionLinesEditor({
   tags,
   societyId,
   onCommitCategory,
+  onDraftDirtyChange,
 }: {
   record: LineEditorTransaction;
   canWrite: boolean;
@@ -109,6 +106,8 @@ export function TransactionLinesEditor({
   societyId: string;
   /** A single line's category, saved through the table's update (rule prompt and provenance). */
   onCommitCategory: (category: string) => void;
+  /** Whether lines are being edited with changes that aren't saved yet. */
+  onDraftDirtyChange?: (dirty: boolean) => void;
 }) {
   const toast = useToast();
   const save = useMutation(api.transactionLines.save);
@@ -117,9 +116,28 @@ export function TransactionLinesEditor({
   const direction = record.amountCents < 0 ? -1 : 1;
   const lines = useMemo(() => transactionLines(record), [record]);
   const [draft, setDraft] = useState<DraftLine[] | null>(null);
+  // The lines "Edit lines" started from; a new split has none (unsaved from the start).
+  const [draftStart, setDraftStart] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const dirty = draft !== null && JSON.stringify(draft) !== draftStart;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
-  useEffect(() => setDraft(null), [record._id]);
+  useEffect(() => onDraftDirtyChange?.(dirty), [dirty, onDraftDirtyChange]);
+  useEffect(() => () => onDraftDirtyChange?.(false), [onDraftDirtyChange]);
+
+  const openDraft = (next: DraftLine[], saved: boolean) => {
+    setDraft(next);
+    setDraftStart(saved ? JSON.stringify(next) : null);
+  };
+
+  // The panel holds its own ways off the row while lines are unsaved; a row
+  // picked in the table still moves, so say what was dropped.
+  useEffect(() => {
+    if (dirtyRef.current) toast.info("Unsaved line items discarded", "The split you were editing on the previous transaction wasn't saved.");
+    setDraft(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record._id]);
 
   const accountOptions = useMemo<SelectOption[]>(
     () => [
@@ -197,7 +215,7 @@ export function TransactionLinesEditor({
         tags={tags}
         accountLabel={(id) => accountOptions.find((option) => option.value === id)?.label ?? "Removed account"}
         fundLabel={(id) => fundLabel(id) ?? "Fund"}
-        onEdit={() => setDraft(lines.map((line) => toDraft(line, direction)))}
+        onEdit={() => openDraft(lines.map((line) => toDraft(line, direction)), true)}
         onRemoveSplit={() => void persist([{ ...lines[0], amountCents: record.amountCents, memo: undefined }], "Removed the split")}
       />
     );
@@ -223,7 +241,7 @@ export function TransactionLinesEditor({
             type="button"
             className="btn btn--sm"
             disabled={busy}
-            onClick={() => setDraft(splitEvenlyCents(record.amountCents, 2).map((amountCents, index) => toDraft({ ...only, id: index === 0 ? only.id : newLineId(), amountCents, memo: undefined }, direction)))}
+            onClick={() => openDraft(splitEvenlyCents(record.amountCents, 2).map((amountCents, index) => toDraft({ ...only, id: index === 0 ? only.id : newLineId(), amountCents, memo: undefined }, direction)), false)}
           >
             <Scissors size={12} aria-hidden="true" /> Split transaction
           </button>
