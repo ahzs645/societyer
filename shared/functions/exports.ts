@@ -87,6 +87,7 @@ export const EXPORTABLE_TABLES = [
   "journalLines",
   "reconciliationRuns",
   "reconciliationRunLines",
+  "booksSettings",
   "reconciliationPeriods",
   "transactionRules",
   "payeeAliases",
