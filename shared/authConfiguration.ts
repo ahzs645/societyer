@@ -71,6 +71,17 @@ export function authSessionDurationSeconds(env: AuthEnvironment): number {
   return value;
 }
 
+/** Opt-in renewable hosted sessions; older deployments retain their bounded fixed policy. */
+export function hostedSessionConfiguration(env: AuthEnvironment): { expiresIn: number; updateAge?: number; disableSessionRefresh: boolean } {
+  if (env.AUTH_PERSISTENT_SESSION_DAYS === undefined) {
+    return { expiresIn: authSessionDurationSeconds(env), disableSessionRefresh: true };
+  }
+  const days = Number(env.AUTH_PERSISTENT_SESSION_DAYS);
+  if (!Number.isInteger(days) || days < 1 || days > 30) throw new Error("AUTH_PERSISTENT_SESSION_DAYS must be between 1 and 30 days.");
+  const expiresIn = days * 86400;
+  return { expiresIn, updateAge: Math.min(86400, expiresIn / 2), disableSessionRefresh: false };
+}
+
 /** Exact instance issuer; an issuer is never normalized into another identity key. */
 export function resolveClerkIssuer(env: AuthEnvironment): string {
   const issuer = env.CLERK_JWT_ISSUER_DOMAIN?.trim();

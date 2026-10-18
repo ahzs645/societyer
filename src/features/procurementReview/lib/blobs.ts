@@ -10,7 +10,7 @@ import { DEMO_PROCUREMENT_REVIEW_DIRECTORY } from "../../../../shared/procuremen
 import { isProcurementReviewBlobPath } from "../../../../shared/procurementReview/paths";
 
 /** Snapshot-relative path → bytes, or null when nothing is published there. */
-export type BlobReader = (path: string) => Promise<Uint8Array | null>;
+export type BlobReader = (path: string, signal?: AbortSignal) => Promise<Uint8Array | null>;
 
 /** The route refused or couldn't reach SharePoint; `status` is the HTTP status. */
 export class SnapshotAccessError extends Error {
@@ -25,13 +25,14 @@ export function createBlobReader(
 ): BlobReader {
   const siteUrl = options.siteUrl ?? convexAuthSiteUrl();
   const request = options.fetch ?? authenticatedFetch;
-  return async (path) => {
+  return async (path, signal) => {
     const url = `${siteUrl}/procurement-review/blob?${new URLSearchParams({ societyId, path })}`;
     let response: Response;
     try {
       // The route returns bytes directly; never forward the session token through a redirect.
-      response = await request(url, { redirect: "error", cache: "no-store" });
+      response = await request(url, { redirect: "error", cache: "no-store", signal });
     } catch (error) {
+      if (signal?.aborted) throw error;
       throw new SnapshotAccessError(error instanceof Error && error.message === "Sign in again to continue." ? error.message : "Couldn't reach the Societyer server to read the snapshot.", 0);
     }
     if (response.status === 404) return null;

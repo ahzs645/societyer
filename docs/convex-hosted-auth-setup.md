@@ -54,7 +54,8 @@ variables, or `npx convex env set NAME value`):
 | `SOCIETYER_EMAIL_PROVIDER` | Recommended with both configured | `microsoft365` or `resend`; selects one delivery provider without automatic failover |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | For Resend | Email delivery for verification, password reset and email-bound invitations (see below) |
 | `MICROSOFT_MAIL_TENANT_ID`, `MICROSOFT_MAIL_CLIENT_ID`, `MICROSOFT_MAIL_CLIENT_SECRET`, `MICROSOFT_MAIL_SENDER` | For Microsoft 365 | Dedicated mail app and its single scoped sender mailbox; server only |
-| `AUTH_SESSION_MAX_AGE_SECONDS` | Optional | Session length, 300–86400 seconds (default 8 hours) |
+| `AUTH_SESSION_MAX_AGE_SECONDS` | Optional | Fixed session length, 300–86400 seconds (default 8 hours); used when persistent sessions are not configured |
+| `AUTH_PERSISTENT_SESSION_DAYS` | Optional | Opt-in renewable sessions, 1–30 days. Overrides the fixed policy; refreshes on use after one day (after 12 hours for a one-day session). DDC North uses `7`. |
 | `SOCIETYER_AUTH_ALLOWED_EMAIL_DOMAINS` | Optional | Exact comma-separated allowed email domains, e.g. `ddcnorth.com`. Enforces verified email on backend access and closes sign-up until a mail sender is configured. Unset for unrestricted registration. |
 | `SOCIETYER_AUTH_INSTANCE_NAME` | Optional | Name shown above the sign-in card, e.g. `DDC North` (up to 80 characters). Without it, a single allowed email domain shows as `ddcnorth.com workspace`; otherwise nothing is shown. |
 | `SOCIETYER_AUTH_SUPPORT_EMAIL` | Optional | Address the sign-in pages offer for help, e.g. `it@ddcnorth.com`: the footer reads "Trouble signing in? Contact it@ddcnorth.com." as a mail link. Without it the footer says to contact the workspace administrator. An invalid address is ignored. |

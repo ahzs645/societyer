@@ -9,6 +9,8 @@ import { convexAuthSiteUrl } from "./convexSite";
  */
 export const authClient = createAuthClient({
   baseURL: convexAuthSiteUrl(),
+  // Renew an active persistent session and recheck it after focus/reconnect.
+  sessionOptions: { refetchInterval: 300, refetchOnWindowFocus: true, refetchWhenOffline: false },
   plugins: [convexClient(), crossDomainClient()],
 });
 

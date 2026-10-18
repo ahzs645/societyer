@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { useSearchParams } from "react-router-dom";
-import { ArrowLeft, Download, Settings2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, Settings2 } from "lucide-react";
 import { api } from "../../../lib/convexApi";
 import { PageHeader, PageLoading } from "../../../pages/_helpers";
 import { useSociety } from "../../../hooks/useSociety";
@@ -9,9 +9,8 @@ import { usePermissions } from "../../../hooks/usePermissions";
 import { isStaticDemoRuntime } from "../../../lib/staticRuntime";
 import { FolderSetupCard } from "../components/FolderSetupCard";
 import { SnapshotReviewPage } from "./SnapshotReviewPage";
-import { createBlobReader } from "../lib/blobs";
-import { snapshotFilePaths } from "../../../../shared/procurementReview/manifest";
-import { concatBytes, sha256Hex } from "../lib/digest";
+import { FilePreviewDialog, MAX_FILE_PREVIEW_BYTES } from "../../../components/FilePreviewDialog";
+import { readProcurementDocument, type StoredProcurementDocument } from "../lib/documents";
 
 export function ProcurementReviewPage() {
   return isStaticDemoRuntime() ? <SnapshotReviewPage /> : <HostedProcurementReview />;
@@ -78,25 +77,22 @@ function RecordPage(props: { societyId: string; generation: string; kind: string
   </section>;
 }
 
-type StoredDocument = { documentKey: string; name: string; mediaType: string; sha256: string; bytes: number; parts: number; available: boolean };
+type StoredDocument = StoredProcurementDocument;
 function RecordDetail({ societyId, generation, recordKey, onBack }: { societyId: string; generation: string; recordKey: string; onBack: () => void }) {
   const args = { societyId, generation, recordKey };
   const record = useQuery(api.procurementReview.record, args) as { summary: RecordSummary; dataJson: string } | null | undefined;
+  const [preview, setPreview] = useState<StoredDocument | null>(null);
+  const loadPreview = useCallback((signal: AbortSignal) => {
+    if (!preview) throw new Error("No document selected.");
+    return readProcurementDocument(societyId, preview, signal);
+  }, [societyId, preview]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const download = async (document: StoredDocument) => {
     if (busy) return;
     setBusy(document.documentKey); setError(null);
     try {
-      const read = createBlobReader(societyId);
-      const chunks: Uint8Array[] = [];
-      for (const path of snapshotFilePaths(document.sha256, document)) {
-        const bytes = await read(path);
-        if (!bytes) throw new Error("The published file is missing. Please ask the publisher to republish it.");
-        chunks.push(bytes);
-      }
-      const bytes = concatBytes(chunks);
-      if (bytes.length !== document.bytes || await sha256Hex(bytes) !== document.sha256) throw new Error("The file failed its integrity check.");
+      const bytes = await readProcurementDocument(societyId, document);
       const url = URL.createObjectURL(new Blob([bytes], { type: document.mediaType }));
       const anchor = window.document.createElement("a"); anchor.href = url; anchor.download = document.name; anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -115,19 +111,20 @@ function RecordDetail({ societyId, generation, recordKey, onBack }: { societyId:
         <details><summary>Source record</summary><pre className="procurement-catalog__json">{JSON.stringify(data, null, 2)}</pre></details>
       </div></div>
       <div className="card"><div className="card__body col"><h2>Documents</h2>{error && <p className="notice notice--danger" role="alert">{error}</p>}
-        <DocumentPage {...args} busy={busy} download={download} />
+        <DocumentPage {...args} busy={busy} download={download} onPreview={setPreview} />
       </div></div>
       <Evidence {...args} />
+      {preview && <FilePreviewDialog file={{ id: `procurement:${societyId}:${generation}:${preview.documentKey}`, name: preview.name, mimeType: preview.mediaType, sha256: preview.sha256, bytes: preview.bytes }} loadBytes={loadPreview} onClose={() => setPreview(null)} onDownload={() => void download(preview)} downloading={busy !== null} />}
     </>}
   </div>;
 }
 
-function DocumentPage({ busy, download, ...args }: { societyId: string; generation: string; recordKey: string; busy: string | null; download: (row: StoredDocument) => void }) {
+function DocumentPage({ busy, download, onPreview, ...args }: { societyId: string; generation: string; recordKey: string; busy: string | null; download: (row: StoredDocument) => void; onPreview: (row: StoredDocument) => void }) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const documents = useQuery(api.procurementReview.documents, { ...args, paginationOpts: { numItems: 10, cursor: cursors[cursors.length - 1] } }) as Page<StoredDocument> | undefined;
   return !documents ? <p role="status">Loading document names…</p> : <>
     {!documents.page.length && <p className="muted">No stored documents for this record.</p>}
-    {documents.page.map(document => <div className="procurement-catalog__document" key={document.documentKey}><span>{document.name}</span><button className="btn" disabled={!document.available || busy !== null} onClick={() => download(document)}><Download size={14} />{busy === document.documentKey ? "Downloading…" : document.available ? `Download (${(document.bytes / 1024 / 1024).toFixed(1)} MB)` : "Not published"}</button></div>)}
+    {documents.page.map(document => <div className="procurement-catalog__document" key={document.documentKey}><span>{document.name}</span>{document.available && <button className="btn" disabled={document.bytes > MAX_FILE_PREVIEW_BYTES} title={document.bytes > MAX_FILE_PREVIEW_BYTES ? "Inline preview supports files up to 25 MB" : "Preview document"} onClick={() => onPreview(document)}><Eye size={14} /> Preview</button>}<button className="btn" disabled={!document.available || busy !== null} onClick={() => download(document)}><Download size={14} />{busy === document.documentKey ? "Downloading…" : document.available ? `Download (${(document.bytes / 1024 / 1024).toFixed(1)} MB)` : "Not published"}</button></div>)}
     {(cursors.length > 1 || !documents.isDone) && <div className="procurement-catalog__pager"><button className="btn" disabled={cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>Previous documents</button><button className="btn" disabled={documents.isDone} onClick={() => setCursors(values => [...values, documents.continueCursor])}>More documents</button></div>}
   </>;
 }

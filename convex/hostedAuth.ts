@@ -19,7 +19,7 @@ import { v } from "convex/values";
 import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import { sendEmail } from "./providers/email";
-import { authSessionDurationSeconds, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
+import { hostedSessionConfiguration, resolveConvexAuthSiteUrls, resolveSessionBroker } from "../shared/authConfiguration";
 import { allowedAuthEmailDomains, authEmailAllowed, authEmailPolicyMessage } from "../shared/authEmailPolicy";
 import { emailProviderConfiguration } from "../shared/emailConfiguration";
 import { developmentMailConfigured, assertDevelopmentMail } from "../shared/developmentMailConfiguration";
@@ -166,7 +166,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       // Same policy as the gateway broker: a matching email never links accounts.
       accountLinking: { enabled: false, disableImplicitLinking: true, trustedProviders: [] },
     },
-    session: { expiresIn: authSessionDurationSeconds(process.env), disableSessionRefresh: true },
+    session: hostedSessionConfiguration(process.env),
     // Better Auth's limiter reads the client IP from request headers, which
     // Convex doesn't forward, and would put every visitor in one shared bucket.
     // `throttleHooks` limits by account and by Convex's own client IP instead.
