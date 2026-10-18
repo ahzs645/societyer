@@ -210,17 +210,18 @@ export function isClaimPayoutOnBudget(txn: Pick<TransactionForSpend, "spendBudge
   return claimBudget.get(String(txn.matchedId)) === String(budgetId);
 }
 
-export type CommitteeMemberLike = { committeeId: string; name?: string | null; email?: string | null; leftAt?: string | null };
+export type CommitteeMemberLike = { committeeId: string; name?: string | null; email?: string | null; joinedAt?: string | null; leftAt?: string | null };
 export type UserLike = { _id: string; displayName?: string | null; name?: string | null; email?: string | null };
 
 const norm = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
 
-/** Whether a user sits on a committee: a current member with the same email, or else the same name. */
+/** Whether a user sits on a committee on `today` (joined by then, not yet left): a member with the same email, or else the same name. */
 export function userOnCommittee(user: UserLike, committeeId: string, members: readonly CommitteeMemberLike[], today: string): boolean {
   const email = norm(user.email);
   const names = [norm(user.displayName), norm(user.name)].filter(Boolean);
   return members.some((member) =>
     String(member.committeeId) === String(committeeId) &&
+    (!member.joinedAt || String(member.joinedAt).slice(0, 10) <= today) &&
     (!member.leftAt || member.leftAt > today) &&
     ((email && norm(member.email) === email) || (names.length > 0 && names.includes(norm(member.name)))));
 }

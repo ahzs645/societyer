@@ -212,7 +212,8 @@ export async function requireBudgetForClaimant(ctx: PortableQueryCtx, societyId:
   if (!claimantUserId) throw new Error("Link the claimant to a user before charging a spend budget.");
   const people = await loadPeople(ctx, societyId);
   const claimant = people.users.find((user) => String(user._id) === String(claimantUserId)) ?? null;
-  if (!isAssignedToBudget(budget, claimant, people.members, todayDateOnly())) throw new Error(`The claimant isn't assigned to “${budget.name}”.`);
+  // Membership on the day of the expense, not today.
+  if (!isAssignedToBudget(budget, claimant, people.members, on)) throw new Error(`The claimant isn't assigned to “${budget.name}”.`);
   return budget;
 }
 

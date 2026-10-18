@@ -122,6 +122,9 @@ assert.equal(autoReconcileReadiness(0, 0, []).ready, false, "an empty statement"
 assert.equal(mileageAmountCents(42, 70), 2940);
 assert.equal(mileageAmountCents(18.5, 70), 1295);
 assert.equal(mileageAmountCents(25, 67), 1675, "rounds to the cent");
+assert.equal(mileageAmountCents(1.15, 50), 58, "a half cent rounds up although 1.15 × 50 is 57.4999… in floating point");
+assert.equal(mileageAmountCents(2.05, 70), 144, "and 2.05 × 70 (143.4999…)");
+assert.equal(mileageAmountCents(0.01, 49), 0, "under half a cent rounds down");
 assert.match(validateMileage({ distanceKm: 10, tripDescription: "x" }, null)[0], /mileage rate/, "mileage needs the organisation's rate");
 assert.deepEqual(validateMileage({ distanceKm: 42.35, tripDescription: "Site visit" }, 70), []);
 assert.deepEqual(validateMileage({ distanceKm: 12, fromLocation: "Hall", toLocation: "Library" }, 70), [], "from and to describe the trip");
@@ -345,6 +348,22 @@ const mileageBudget = list.rows.find((row) => row.name === "Volunteer mileage")!
 assert.equal(mileageBudget.spend.spentCents, 2_940 + 1_750 + 150 * DEMO_MILEAGE_RATE_CENTS, "submitted and approved mileage this month; the draft doesn't count");
 assert.deepEqual(list.rows.map((row) => row.status).sort(), ["active", "active", "active", "ended", "upcoming"]);
 await assert.rejects(budgets.removePortable(mina, { id: "static_spend_budget_finance_committee" }), /Archive it instead/);
+// The budget is checked when it (or the claimant) changes, against membership on the day of the expense.
+{
+  const financeBudget = "static_spend_budget_finance_committee";
+  await db.patch("static_committee_member_finance_jordan", { leftAt: "2026-04-01" });
+  const claim = { societyId: S, claimantName: "Jordan Lee", claimantUserId: "static_user_treasurer", title: "Statement paper", category: "Supplies", amountCents: 1_200, currency: "CAD", status: "Draft", spendBudgetId: financeBudget };
+  const march = await exp.upsertPortable(jordan, { ...claim, incurredAtISO: "2026-03-20" });
+  assert.equal((await db.get(String(march)))?.spendBudgetId, financeBudget, "on the committee in March, so March spend may go to its budget");
+  await assert.rejects(exp.upsertPortable(jordan, { ...claim, incurredAtISO: todayDateOnly() }), /isn't assigned/, "not after leaving");
+  await budgets.setArchivedPortable(mina, { id: financeBudget, archived: true });
+  await exp.upsertPortable(jordan, { ...claim, id: String(march), incurredAtISO: "2026-03-20", title: "Statement paper (2 reams)" });
+  assert.equal((await db.get(String(march)))?.title, "Statement paper (2 reams)", "an old claim stays editable after its budget is archived and the claimant has left");
+  await assert.rejects(exp.upsertPortable(jordan, { ...claim, incurredAtISO: "2026-03-21", spendBudgetId: undefined }).then((id) => exp.upsertPortable(jordan, { ...claim, id: String(id), incurredAtISO: "2026-03-21" })), /archived/, "choosing an archived budget is still refused");
+  await budgets.setArchivedPortable(mina, { id: financeBudget, archived: false });
+  await db.patch("static_committee_member_finance_jordan", { leftAt: undefined });
+  for (const row of (await db.query("expenseReports").collect()).filter((report) => String(report.title).startsWith("Statement paper"))) await db.delete(row._id);
+}
 
 // Bank transactions charged to a spend budget, from the transaction panel and the bulk bar.
 {
