@@ -1,0 +1,13 @@
+// Written by scripts/sync-procurement-review.ts from the bundle's source.json. Do not edit by hand.
+import type { ReviewArtifactPin } from "./artifact";
+
+export const REVIEW_ARTIFACT_PIN: ReviewArtifactPin | null = {
+  "pluginId": "bc-bid-monitor",
+  "pluginVersion": "0.35.3",
+  "commit": "940f0e37155ceba807e8310ac41647c47c19cc38",
+  "builtAt": "2026-10-18T16:57:32.110Z",
+  "sha256": {
+    "index.js": "1decbb35fd8c55dc622b96697e1a7368db0f1134bbef4e7fde145f8f8fd6f226",
+    "style.css": "c004d1026387ca44c28d9e0c8e0dcc2c03c8bf7245e61e01a525601affdb97e2"
+  }
+};

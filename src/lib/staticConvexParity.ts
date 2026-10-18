@@ -44,6 +44,8 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "mcpOAuth:approve",
   "mcpOAuth:consentDetails",
   "mcpOAuth:deny",
+  // Procurement review reads SharePoint through a hosted route; the local runtimes report it unavailable.
+  "procurementReview:setFolder",
   "financialHub:sync",
   "minutes:generateDraft",
   "notifications:sendDigest",

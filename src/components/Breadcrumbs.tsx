@@ -100,8 +100,14 @@ export function useRouteBreadcrumbs(
       crumb.label.toLowerCase() === next.label.toLowerCase()
     );
   });
-  if (currentTitle != null && currentTitle !== false && currentTitle !== "") {
-    deduped.push({ label: currentTitle });
+  if (currentTitle == null || currentTitle === false || currentTitle === "") return deduped;
+  // A page that owns its sub-paths (an embedded module such as Procurement
+  // review) is titled like its list page: show the name once, as the current
+  // page, rather than "Finance › Procurement review › Procurement review".
+  const last = deduped[deduped.length - 1];
+  if (last && typeof last.label === "string" && typeof currentTitle === "string" && last.label.toLowerCase() === currentTitle.toLowerCase()) {
+    return [...deduped.slice(0, -1), { label: last.label }];
   }
+  deduped.push({ label: currentTitle });
   return deduped;
 }

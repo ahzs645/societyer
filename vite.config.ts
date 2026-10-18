@@ -65,9 +65,28 @@ function intakeOcrAssets(): Plugin {
   };
 }
 
+/** The procurement review plugin bundle in `public/plugins/` is imported at runtime. Vite's dev
+ * server refuses to serve public files as modules, so dev serves them as-is, as production does.
+ * See src/features/procurementReview/lib/artifact.ts. */
+function pluginBundles(): Plugin {
+  const root = path.resolve(__dirname, "public/plugins");
+  return {
+    name: "societyer-plugin-bundles",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const match = /\/plugins\/([\w-]+\/[\w.-]+\.(?:js|css|json))(?:\?.*)?$/.exec(request.url ?? "");
+        const file = match ? path.join(root, match[1]) : "";
+        if (!file || !file.startsWith(root + path.sep) || !fs.existsSync(file)) return next();
+        response.setHeader("Content-Type", file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : "application/json");
+        fs.createReadStream(file).pipe(response);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base,
-  plugins: [react(), intakeOcrAssets()],
+  plugins: [react(), intakeOcrAssets(), pluginBundles()],
   // Milkdown's Crepe toolbar ships Vue components. Without these compile-time
   // flags Vue's esm-bundler build warns on every editor mount. Options API stays
   // on (Vue's default, in case a toolbar component uses it); devtools are off.

@@ -96,6 +96,7 @@
     "yearEndReports": "Rapports de fin d'exercice",
     "assets": "Actifs",
     "grants": "Subventions",
+    "procurementReview": "Revue des appels d'offres",
     "agreements": "Ententes",
     "reconciliation": "Rapprochement",
     "donationReceipts": "Reçus de don",
@@ -452,6 +453,10 @@
     "workflows": {
       "label": "Flux de travail",
       "description": "Automatisations modèles — préparation de l'AGA, rappels de renouvellement d'assurance, dépôt du rapport annuel."
+    },
+    "procurementReview": {
+      "label": "Revue des appels d'offres",
+      "description": "Une copie en lecture seule des occasions d'appels d'offres qu'une instance Zoer publie dans le dossier SharePoint de cet espace de travail."
     }
   },
   "moduleCategories": {

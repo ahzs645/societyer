@@ -24,6 +24,7 @@ import { authInstanceDetails } from "../shared/authInstance";
 import { deploymentCapabilities as resolveDeploymentCapabilities } from "../shared/deploymentCapabilities";
 import { authComponent, createAuth, hostedAuthEmailConfigured } from "./hostedAuth";
 import { registerSharePointRoutes } from "./sharePointHttp";
+import { registerProcurementReviewRoutes } from "./procurementReviewHttp";
 import { registerMeetingSourceRoutes } from "./meetingSourceHttp";
 import { registerMcpRoutes } from "./mcpHttp";
 import { registerMcpOAuthRoutes } from "./mcpOAuthHttp";
@@ -31,6 +32,7 @@ import { developmentMailConfigured } from "../shared/developmentMailConfiguratio
 
 const http = httpRouter();
 registerSharePointRoutes(http);
+registerProcurementReviewRoutes(http);
 registerMeetingSourceRoutes(http);
 registerMcpRoutes(http);
 registerMcpOAuthRoutes(http);
@@ -44,7 +46,7 @@ if (resolveSessionBroker(process.env) === "convex") {
 /** Optional services this deployment runs, so the app hides features that need a missing one. */
 export const deploymentCapabilities = authorizedQuery("http:deploymentCapabilities", query)({
   args: {},
-  returns: v.object({ gatewayApi: v.boolean(), browserConnectors: v.boolean(), n8nWorkflows: v.boolean() }),
+  returns: v.object({ gatewayApi: v.boolean(), browserConnectors: v.boolean(), n8nWorkflows: v.boolean(), procurementReview: v.boolean() }),
   handler: async () => resolveDeploymentCapabilities(process.env),
 });
 

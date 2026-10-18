@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { matchPath } from "react-router-dom";
 import { INTERFACE_ROUTES } from "../tests/helpers/interfaceRoutes";
-import { INTERFACE_FALLBACK_ROUTES, interfaceRouteReadPermission } from "../shared/interfaceRouteAccess";
+import { INTERFACE_EMBEDDED_ROUTES, INTERFACE_FALLBACK_ROUTES, interfaceRouteReadPermission } from "../shared/interfaceRouteAccess";
 
 const source = ts.createSourceFile("main.tsx", readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 type DeclaredRoute = { pattern: string; line: number; index: boolean; module?: string };
@@ -43,10 +43,16 @@ const missing = patterns.filter(pattern => !manifestPatterns.includes(pattern));
 const obsolete = manifestPatterns.filter(pattern => !patterns.includes(pattern));
 assert.deepEqual(missing, [], `Uncovered route patterns: ${missing.join(", ")}`);
 assert.deepEqual(obsolete, [], `Manifest paths removed from routing: ${obsolete.join(", ")}`);
-// Every splat route must be a declared fallback (Not-found), never an
-// unscoped app page; and every declared fallback must still be routed.
+// Every splat route must be a declared fallback (Not-found) or a declared
+// embedded-plugin host with a read scope, never an unscoped app page; and
+// every declared one must still be routed.
 const splats = patterns.filter(pattern => pattern === "*" || pattern.endsWith("/*"));
-assert.deepEqual(splats, Object.keys(INTERFACE_FALLBACK_ROUTES).sort(), "Catch-all routes must match INTERFACE_FALLBACK_ROUTES");
+const embedded = splats.filter(pattern => INTERFACE_EMBEDDED_ROUTES.includes(pattern));
+assert.deepEqual(splats.filter(pattern => !embedded.includes(pattern)), Object.keys(INTERFACE_FALLBACK_ROUTES).sort(), "Catch-all routes must match INTERFACE_FALLBACK_ROUTES");
+assert.deepEqual(embedded, [...INTERFACE_EMBEDDED_ROUTES].sort(), "Every embedded plugin route must still be routed");
+for (const pattern of embedded) {
+  assert.ok(interfaceRouteReadPermission(pattern.replace(/\/\*$/, "/any/sub-path")), `Embedded plugin route ${pattern} lacks an explicit UI access scope for its sub-paths`);
+}
 const concretePatterns = patterns.filter(pattern => !splats.includes(pattern));
 for (const route of INTERFACE_ROUTES) {
   const expectedKind = route.pattern in INTERFACE_FALLBACK_ROUTES ? "fallback" : route.pattern === "/app" || route.pattern.startsWith("/app/") ? "app" : "public";

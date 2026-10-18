@@ -95,6 +95,7 @@ import {
   FileSignature,
   Zap,
   ClipboardCheck,
+  FileSearch,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { ModuleKey } from "./modules";
@@ -366,6 +367,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },
   "/app/inventory": { icon: Package, group: "finance", label: "Inventory", module: "assets" },
   "/app/grants": { icon: BadgeDollarSign, group: "finance", label: "Grants", module: "grants" },
+  "/app/procurement-review": { icon: FileSearch, group: "finance", label: "Procurement review", module: "procurementReview" },
   "/app/agreements": { icon: FileSignature, group: "finance", label: "Agreements", module: "agreements" },
   "/app/reconciliation": { icon: Scale, group: "finance", label: "Reconciliation", module: "reconciliation" },
   // Charitable donation receipts and member-fee billing are society concepts.

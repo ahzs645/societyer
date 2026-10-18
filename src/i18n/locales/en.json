@@ -96,6 +96,7 @@
     "yearEndReports": "Year-end reports",
     "assets": "Assets",
     "grants": "Grants",
+    "procurementReview": "Procurement review",
     "agreements": "Agreements",
     "reconciliation": "Reconciliation",
     "donationReceipts": "Donation receipts",
@@ -452,6 +453,10 @@
     "workflows": {
       "label": "Workflows",
       "description": "Templated automations — AGM prep, insurance renewal reminders, annual-report filing."
+    },
+    "procurementReview": {
+      "label": "Procurement review",
+      "description": "A read-only copy of the bid opportunities a Zoer instance publishes to this workspace's SharePoint folder."
     }
   },
   "moduleCategories": {

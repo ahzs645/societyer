@@ -158,7 +158,27 @@ export class SharePointAdapter {
     throw new Error("SharePoint upload did not finalize.");
   }
   async download(locator: SharePointLocator): Promise<Uint8Array> {
-    let response = await this.graph(`${this.bound(locator)}/content`);
+    return this.content(await this.graph(`${this.bound(locator)}/content`));
+  }
+  /**
+   * Read a file by its path from the root of the approved drive, or null when
+   * nothing is there. Segments are validated and encoded one by one, so a path
+   * can't leave the drive or address an item by ID.
+   */
+  async downloadByPath(path: string): Promise<Uint8Array | null> {
+    const segments = path.split("/");
+    if (!path || path.length > 1024 || segments.some((segment) => !segment || segment === "." || segment === ".." || /[\\:\x00-\x1f]/.test(segment))) throw new Error("Invalid SharePoint file path.");
+    let response: Response;
+    try {
+      response = await this.graph(`/drives/${identifier(this.connection.driveId)}/root:/${segments.map(encodeURIComponent).join("/")}:/content`);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Graph request rejected (404).") return null;
+      throw error;
+    }
+    return this.content(response);
+  }
+  private async content(initial: Response): Promise<Uint8Array> {
+    let response = initial;
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const url = this.transferUrl(response.headers.get("Location"));
       try { response = await this.fetchBound(url, { redirect: "manual" }); } catch { throw new Error("SharePoint content transfer failed."); }

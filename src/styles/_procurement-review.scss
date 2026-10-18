@@ -1,0 +1,105 @@
+@use "tokens" as *;
+
+// Procurement review: the page around the embedded Zoer review plugin.
+//
+// The plugin bundle reads Zoer's 27 theme tokens as --zoer-<token> from its
+// mount element (contract §4) and copies them to the page root for its
+// portalled popovers. Each comes from a Societyer token, so the plugin
+// follows light and dark with the app; readAppearance() in
+// features/procurementReview/lib/theme.ts reads the same values back.
+$zoer-theme: (
+  "surface-base": token("bg-app"),
+  "surface-primary": token("bg-panel"),
+  "surface-secondary": token("bg-subtle"),
+  "surface-hover": token("bg-hover"),
+  "surface-active": token("bg-active"),
+  "border-default": token("border"),
+  "border-muted": token("border-alpha"),
+  "text-heading": token("text-primary"),
+  "text-primary": token("text-primary"),
+  "text-secondary": token("text-secondary"),
+  "text-muted": token("text-tertiary"),
+  "text-faint": token("text-placeholder"),
+  "accent": token("accent"),
+  "accent-hover": token("accent-hover"),
+  "accent-subtle": token("accent-soft"),
+  "accent-text": token("accent-on"),
+  "input-bg": token("bg-base"),
+  "input-border": token("border-strong"),
+  "input-focus": token("border-focus"),
+  "danger": token("danger"),
+  "danger-hover": token("danger"),
+  "danger-text": token("accent-on"),
+  "scrollbar-thumb": token("border-strong"),
+  "scrollbar-hover": token("text-tertiary"),
+  "status-error": token("danger"),
+  "status-success": token("success"),
+  "status-warning": token("warn"),
+);
+
+.procurement-review__host {
+  @each $name, $value in $zoer-theme {
+    --zoer-#{$name}: #{$value};
+  }
+  min-height: 60vh;
+  min-width: 0;
+  max-width: 100%;
+
+  // In Zoer the plugin fills a bare panel and pads its own content. Here it
+  // sits inside .page, which already supplies the horizontal gutter, so the
+  // content lines up with the page header instead of being inset twice.
+  // (Unlayered rules beat the bundle's layered Tailwind, contract §4.)
+  .zoer-content > * {
+    padding-inline: 0;
+  }
+
+  // The host sidebar reduces the plugin's space even on a wide screen.
+  // Keep search readable and place the inline filters on their own row.
+  .pc-toolbar {
+    flex-wrap: wrap;
+  }
+  .pc-search {
+    min-width: min(100%, 16rem);
+  }
+  .pc-inline-filters {
+    order: 1;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+}
+
+.procurement-review__state {
+  max-width: 720px;
+}
+
+.procurement-review__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.procurement-review__progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: token("fs-sm");
+  color: token("text-secondary");
+}
+
+.procurement-review__folder-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+
+  > .field {
+    flex: 1 1 280px;
+    min-width: 0;
+  }
+}
+
+.procurement-review__details {
+  font-size: token("fs-sm");
+  color: token("text-secondary");
+  overflow-wrap: anywhere;
+}

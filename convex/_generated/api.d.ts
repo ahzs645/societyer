@@ -167,6 +167,8 @@ import type * as pipaTraining from "../pipaTraining.js";
 import type * as policies from "../policies.js";
 import type * as postIncorporation from "../postIncorporation.js";
 import type * as powersync_checkpoints from "../powersync_checkpoints.js";
+import type * as procurementReview from "../procurementReview.js";
+import type * as procurementReviewHttp from "../procurementReviewHttp.js";
 import type * as programStatements from "../programStatements.js";
 import type * as providers_accounting from "../providers/accounting.js";
 import type * as providers_billing from "../providers/billing.js";
@@ -438,6 +440,8 @@ declare const fullApi: ApiFromModules<{
   policies: typeof policies;
   postIncorporation: typeof postIncorporation;
   powersync_checkpoints: typeof powersync_checkpoints;
+  procurementReview: typeof procurementReview;
+  procurementReviewHttp: typeof procurementReviewHttp;
   programStatements: typeof programStatements;
   "providers/accounting": typeof providers_accounting;
   "providers/billing": typeof providers_billing;

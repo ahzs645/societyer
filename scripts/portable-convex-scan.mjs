@@ -17,6 +17,9 @@ export const EXPLICIT_SERVER_ONLY = new Set([
   "agentConnectors:overview",
   "agentConnectors:setEnabled",
   "agentConnectors:revokeToken",
+  // Procurement review reads SharePoint through a hosted HTTP route the local runtimes don't have.
+  "procurementReview:folder",
+  "procurementReview:setFolder",
 ]);
 // These are deliberate local demo implementations, not hosted delegations.
 // Require the exact registry handler and a surviving Convex counterpart so

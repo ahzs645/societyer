@@ -91,6 +91,7 @@ const InvoicesPage = React.lazy(() => import("./pages/Invoices").then((m) => ({ 
 const PayrollPage = React.lazy(() => import("./pages/Payroll").then((m) => ({ default: m.PayrollPage })));
 const CorporateCardsPage = React.lazy(() => import("./pages/CorporateCards").then((m) => ({ default: m.CorporateCardsPage })));
 const InvestmentsPage = React.lazy(() => import("./pages/Investments").then((m) => ({ default: m.InvestmentsPage })));
+const ProcurementReviewPage = React.lazy(() => import("./features/procurementReview/pages/ProcurementReviewPage").then((m) => ({ default: m.ProcurementReviewPage })));
 const AssetsPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetsPage })));
 const InventoryPage = React.lazy(() => import("./pages/Inventory").then((m) => ({ default: m.InventoryPage })));
 const AssetDetailPage = React.lazy(() => import("./pages/Assets").then((m) => ({ default: m.AssetDetailPage })));
@@ -575,6 +576,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="agreements/:id"
               element={withModule("agreements", <AgreementDetailPage />)}
+            />
+            {/* The embedded review plugin owns every sub-path below its page. */}
+            <Route
+              path="procurement-review/*"
+              element={withModule("procurementReview", <ProcurementReviewPage />)}
             />
             <Route
               path="access-custody"
