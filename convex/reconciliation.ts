@@ -14,6 +14,8 @@ import {
   completePeriodPortable,
   reopenPeriodPortable,
   removePeriodPortable,
+  accountMonthsPortable,
+  autoReconcilePeriodPortable,
 } from "../shared/functions/reconciliation";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -127,4 +129,24 @@ export const removePeriod = authorizedMutation("reconciliation:removePeriod", mu
   args: { id: v.id("reconciliationPeriods") },
   returns: v.any(),
   handler: async (ctx, args) => removePeriodPortable(await toPortableMutationCtx(ctx), args),
+});
+
+// Reconciliation by account and month: the year's month strip and, for one
+// month, its lines with a running balance and the statement covering it.
+export const accountMonths = authorizedQuery("reconciliation:accountMonths", query)({
+  args: {
+    societyId: v.id("societies"),
+    accountId: v.id("financialAccounts"),
+    year: v.number(),
+    month: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => accountMonthsPortable(await toPortableQueryCtx(ctx), args),
+});
+
+// Complete an open statement whose lines are all matched or categorised and balance.
+export const autoReconcilePeriod = authorizedMutation("reconciliation:autoReconcilePeriod", mutation)({
+  args: { id: v.id("reconciliationPeriods") },
+  returns: v.any(),
+  handler: async (ctx, args) => autoReconcilePeriodPortable(await toPortableMutationCtx(ctx), args),
 });

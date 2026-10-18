@@ -45,6 +45,7 @@ import { financeWorkflowTables } from "./tables/financeWorkflows";
 import { invoiceTables } from "./tables/invoices";
 import { businessRegisterTables } from "./tables/businessRegisters";
 import { expensePolicyTables } from "./tables/expensePolicies";
+import { bankingTables } from "./tables/banking";
 import { agentConnectorTables } from "./tables/agentConnectors";
 import { mcpOAuthTables } from "./tables/mcpOAuth";
 
@@ -64,6 +65,7 @@ export default defineSchema({
   ...invoiceTables,
   ...businessRegisterTables,
   ...expensePolicyTables,
+  ...bankingTables,
   ...agentConnectorTables,
   ...mcpOAuthTables,
   societies: defineTable({

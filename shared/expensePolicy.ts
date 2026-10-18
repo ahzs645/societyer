@@ -1,8 +1,9 @@
 /**
- * Expense-claim policy (receipt, note and timeliness thresholds), the soft
- * duplicate check for claims and invoices, and the approver-reminder rate
- * limit. Shared by the server handlers that enforce them and the screens that
- * explain them. Pure and dependency-free.
+ * Expense-claim policy (receipt, note and timeliness thresholds, and the
+ * organisation's mileage rate), mileage claims, the soft duplicate check for
+ * claims and invoices, and the approver-reminder rate limit. Shared by the
+ * server handlers that enforce them and the screens that explain them. Pure
+ * and dependency-free.
  */
 
 export const CLAIM_POLICY_ENFORCEMENTS = ["warn", "block"] as const;
@@ -18,6 +19,11 @@ export type ExpenseClaimPolicy = {
   maxAgeDays: number | null;
   /** "warn" flags the claim for approvers; "block" stops submission without an exception. */
   enforcement: ClaimPolicyEnforcement;
+  /**
+   * The rate the organisation reimburses per kilometre, in cents. Set by the
+   * organisation (no official rate is assumed); mileage claims need one.
+   */
+  mileageRateCentsPerKm?: number | null;
 };
 
 /** No stored policy: every check is off. */
@@ -30,11 +36,13 @@ export function normalizeClaimPolicy(row: Partial<ExpenseClaimPolicy> | null | u
   if (!row) return { ...EMPTY_CLAIM_POLICY };
   const amount = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : null);
   const days = typeof row.maxAgeDays === "number" && Number.isFinite(row.maxAgeDays) && row.maxAgeDays >= 1 ? Math.round(row.maxAgeDays) : null;
+  const rate = typeof row.mileageRateCentsPerKm === "number" && Number.isFinite(row.mileageRateCentsPerKm) && row.mileageRateCentsPerKm > 0 ? Math.round(row.mileageRateCentsPerKm) : null;
   return {
     receiptOverCents: amount(row.receiptOverCents),
     noteOverCents: amount(row.noteOverCents),
     maxAgeDays: days,
     enforcement: row.enforcement === "block" ? "block" : "warn",
+    mileageRateCentsPerKm: rate,
   };
 }
 
@@ -52,6 +60,10 @@ export function validateClaimPolicy(policy: ExpenseClaimPolicy): string[] {
     errors.push("Enter a submission window between 1 and 730 days.");
   }
   if (!CLAIM_POLICY_ENFORCEMENTS.includes(policy.enforcement)) errors.push("Choose whether the policy warns or blocks.");
+  const rate = policy.mileageRateCentsPerKm ?? null;
+  if (rate !== null && (!Number.isSafeInteger(rate) || rate < 1 || rate > MAX_MILEAGE_RATE_CENTS)) {
+    errors.push("Enter a mileage rate between $0.01 and $5.00 per kilometre.");
+  }
   return errors;
 }
 
@@ -59,6 +71,8 @@ export type ClaimPolicyIssueCode = "receipt" | "note" | "age";
 export type ClaimPolicyIssue = { code: ClaimPolicyIssueCode; message: string; short: string };
 
 export type ClaimForPolicy = {
+  /** "mileage" claims are paid at the mileage rate and need no receipt. */
+  claimType?: string | null;
   amountCents: number;
   receiptDocumentId?: string | null;
   notes?: string | null;
@@ -83,7 +97,7 @@ export function daysBetweenDates(from: string, to: string): number {
 export function evaluateClaimPolicy(policy: ExpenseClaimPolicy, claim: ClaimForPolicy, submittedOn: string): ClaimPolicyIssue[] {
   const issues: ClaimPolicyIssue[] = [];
   const amount = Math.abs(Math.round(claim.amountCents || 0));
-  if (policy.receiptOverCents !== null && amount > policy.receiptOverCents && !claim.receiptDocumentId) {
+  if (policy.receiptOverCents !== null && amount > policy.receiptOverCents && !claim.receiptDocumentId && !isMileageClaim(claim)) {
     issues.push({ code: "receipt", short: "No receipt", message: `Claims over ${dollars(policy.receiptOverCents)} need a receipt.` });
   }
   if (policy.noteOverCents !== null && amount > policy.noteOverCents && !String(claim.notes ?? "").trim()) {
@@ -121,8 +135,70 @@ export function describeClaimPolicy(policy: ExpenseClaimPolicy): string {
   if (policy.receiptOverCents !== null) parts.push(`receipt over ${dollars(policy.receiptOverCents)}`);
   if (policy.noteOverCents !== null) parts.push(`note over ${dollars(policy.noteOverCents)}`);
   if (policy.maxAgeDays !== null) parts.push(`submit within ${policy.maxAgeDays} days`);
-  if (!parts.length) return "no claim policy";
-  return `${parts.join(", ")} (${policy.enforcement === "block" ? "blocks submission" : "warns approvers"})`;
+  const mileage = policy.mileageRateCentsPerKm ? `mileage at ${formatMileageRate(policy.mileageRateCentsPerKm)}` : "";
+  if (!parts.length) return mileage || "no claim policy";
+  const checks = `${parts.join(", ")} (${policy.enforcement === "block" ? "blocks submission" : "warns approvers"})`;
+  return mileage ? `${checks}; ${mileage}` : checks;
+}
+
+/* ---------------------------------------------------------------- mileage */
+
+export const CLAIM_TYPES = ["expense", "mileage"] as const;
+export type ClaimType = (typeof CLAIM_TYPES)[number];
+
+/** Highest mileage rate the policy accepts: $5.00 per kilometre. */
+export const MAX_MILEAGE_RATE_CENTS = 500;
+/** Longest single mileage claim: 10,000 km. */
+export const MAX_MILEAGE_DISTANCE_KM = 10_000;
+
+export type MileageDetails = {
+  distanceKm: number;
+  rateCentsPerKm: number;
+  fromLocation?: string;
+  toLocation?: string;
+  tripDescription?: string;
+};
+
+export function isMileageClaim(claim: { claimType?: string | null }): boolean {
+  return claim.claimType === "mileage";
+}
+
+/** Distance × rate, to the nearest cent. */
+export function mileageAmountCents(distanceKm: number, rateCentsPerKm: number): number {
+  if (!Number.isFinite(distanceKm) || !Number.isFinite(rateCentsPerKm)) return 0;
+  return Math.round(distanceKm * rateCentsPerKm);
+}
+
+/** "$0.68/km" */
+export function formatMileageRate(rateCentsPerKm: number): string {
+  return `$${(rateCentsPerKm / 100).toFixed(2)}/km`;
+}
+
+/** "42.5 km" */
+export function formatDistanceKm(distanceKm: number): string {
+  return `${distanceKm.toLocaleString("en-CA", { maximumFractionDigits: 2 })} km`;
+}
+
+/** Problems with a mileage claim before it is saved, against the policy's rate. */
+export function validateMileage(details: Partial<MileageDetails> | null | undefined, configuredRateCentsPerKm: number | null | undefined): string[] {
+  const errors: string[] = [];
+  if (!configuredRateCentsPerKm) {
+    errors.push("Set a mileage rate in the claim policy before submitting mileage claims.");
+    return errors;
+  }
+  const distance = details?.distanceKm;
+  if (typeof distance !== "number" || !Number.isFinite(distance) || distance <= 0) errors.push("Enter the distance driven in kilometres.");
+  else if (distance > MAX_MILEAGE_DISTANCE_KM) errors.push(`Enter a distance under ${MAX_MILEAGE_DISTANCE_KM.toLocaleString("en-CA")} km.`);
+  else if (Math.abs(Math.round(distance * 100) - distance * 100) > 1e-6) errors.push("Enter the distance to at most two decimal places.");
+  if (!String(details?.tripDescription ?? "").trim() && !(String(details?.fromLocation ?? "").trim() && String(details?.toLocation ?? "").trim())) {
+    errors.push("Describe the trip, or enter where it started and ended.");
+  }
+  return errors;
+}
+
+/** Short label for tables: "Mileage · 42 km". */
+export function mileageSummary(details: Pick<MileageDetails, "distanceKm"> | null | undefined): string {
+  return details ? `Mileage · ${formatDistanceKm(details.distanceKm)}` : "Mileage";
 }
 
 /* ------------------------------------------------------------ duplicates */

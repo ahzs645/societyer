@@ -76,6 +76,17 @@ export const governanceTables = {
     })),
     // Approvers can be reminded once per 24 hours.
     lastReminderAtISO: v.optional(v.string()),
+    // Mileage claims: amount = distance × the claim policy's mileage rate; no receipt needed.
+    claimType: v.optional(v.string()), // expense (default) | mileage
+    mileage: v.optional(v.object({
+      distanceKm: v.number(),
+      rateCentsPerKm: v.number(),
+      fromLocation: v.optional(v.string()),
+      toLocation: v.optional(v.string()),
+      tripDescription: v.optional(v.string()),
+    })),
+    // The committee spend budget the claim counts against (convex/tables/banking.ts).
+    spendBudgetId: v.optional(v.id("spendBudgets")),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

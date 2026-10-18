@@ -7,9 +7,9 @@
  * on hosted Convex, the local Dexie runtime, and the convex-test oracle.
  */
 
-import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireOwnedRow, requireSocietyMembership } from "./access";
-import { addDaysToDateOnly, isDateOnly } from "../dateOnly";
+import { addDaysToDateOnly, isDateOnly, todayDateOnly } from "../dateOnly";
 import {
   beginningBalanceFor,
   effectivePeriodStatus,
@@ -21,6 +21,15 @@ import {
   type PeriodLike,
   type PeriodTransaction,
 } from "../reconciliationPeriods";
+import {
+  autoReconcileReadiness,
+  balanceBefore,
+  monthBounds,
+  monthStatusesForYear,
+  withRunningBalance,
+  type AutoReconcileReadiness,
+} from "../reconciliationMonths";
+import { bankAccountBalanceCents } from "../bankAccounts";
 
 /**
  * Returns every bank transaction with reconciliation status, plus a candidate
@@ -310,15 +319,20 @@ function describePeriod(ordered: PeriodRow[], index: number, txns: PeriodTransac
  */
 export async function periodsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const [accounts, periods, txns] = await Promise.all([
+  const [accounts, periods, txns, profiles] = await Promise.all([
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query<PeriodRow>("reconciliationPeriods").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ctx.db.query("bankAccountProfiles").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
+  // Accounts page details: archived accounts drop out unless they have statements;
+  // an opening balance entered there seeds the first statement.
+  const profileByAccount = new Map(profiles.map((row) => [String(row.accountId), row]));
   const txnRows: PeriodTransaction[] = txns.map((row: any) => ({ ...row, _id: String(row._id), accountId: String(row.accountId) }));
   const accountsWithActivity = new Set([...txnRows.map((t) => String(t.accountId)), ...periods.map((p) => String(p.accountId))]);
   const reconcilable = accounts.filter((account: any) =>
-    RECONCILABLE_ACCOUNT_TYPES.has(String(account.accountType ?? "").toLowerCase()) || periods.some((p) => String(p.accountId) === String(account._id)));
+    (RECONCILABLE_ACCOUNT_TYPES.has(String(account.accountType ?? "").toLowerCase()) && !profileByAccount.get(String(account._id))?.archivedAtISO) ||
+    periods.some((p) => String(p.accountId) === String(account._id)));
   const outPeriods: any[] = [];
   const outAccounts = reconcilable.map((account: any) => {
     const accountId = String(account._id);
@@ -356,6 +370,9 @@ export async function periodsPortable(ctx: PortableQueryCtx, { societyId }: { so
       nextStartDate: last ? addDaysToDateOnly(last.endDate, 1) : earliest,
       nextBeginningBalanceCents: last ? last.endingBalanceCents : undefined,
       needsOpeningBalance: !last,
+      suggestedOpeningBalanceCents: last ? undefined : profileByAccount.get(accountId)?.openingBalanceCents,
+      suggestedStartDate: last ? undefined : profileByAccount.get(accountId)?.openingDate,
+      archived: Boolean(profileByAccount.get(accountId)?.archivedAtISO),
     };
   });
   outAccounts.sort((a, b) => Number(b.hasActivity) - Number(a.hasActivity) || String(a.code ?? a.name).localeCompare(String(b.code ?? b.name)));
@@ -540,4 +557,166 @@ async function flagChangedPeriods(ctx: PortableMutationCtx, accountId: string | 
       await ctx.db.patch(period._id, { status: "out_of_balance", outOfBalanceAtISO: new Date().toISOString() });
     }
   }
+}
+
+/* ------------------------------------------- reconciliation by month */
+
+type MonthTxnRow = PeriodTransaction & {
+  description?: string;
+  counterparty?: string;
+  category?: string;
+  accountingAccountId?: string;
+  matchedKind?: string;
+  reconciliationNote?: string;
+  receiptDocumentId?: string;
+};
+
+/**
+ * One account's year as a month strip (status per month from its statement
+ * periods and lines) and, for a chosen month, its transactions with a running
+ * balance, the statement covering it and whether that statement can be
+ * auto-reconciled.
+ */
+export async function accountMonthsPortable(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; accountId: string; year: number; month?: string },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const account = await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);
+  const [{ periods }, rawTxns, profiles, ledgerAccounts] = await Promise.all([
+    periodsPortable(ctx, { societyId: args.societyId }),
+    ctx.db.query<MonthTxnRow>("financialTransactions").withIndex("by_account", (q) => q.eq("accountId", args.accountId)).collect(),
+    ctx.db.query<PortableDoc & { openingBalanceCents?: number; openingDate?: string }>("bankAccountProfiles").withIndex("by_account", (q) => q.eq("accountId", args.accountId)).collect(),
+    ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
+  ]);
+  const today = todayDateOnly();
+  const txns = rawTxns.map((row) => ({ ...row, _id: String(row._id), accountId: String(row.accountId) }));
+  const accountPeriodRows = periods.filter((period) => String(period.accountId) === String(args.accountId));
+  const year = Number.isInteger(args.year) ? args.year : Number(today.slice(0, 4));
+  const months = monthStatusesForYear(year, accountPeriodRows, txns.map((row) => row.date), today);
+  const firstYear = Math.min(
+    Number(today.slice(0, 4)),
+    ...txns.map((row) => Number(row.date.slice(0, 4))),
+    ...accountPeriodRows.map((period) => Number(String(period.startDate).slice(0, 4))),
+  );
+  const years = Array.from({ length: Number(today.slice(0, 4)) - firstYear + 1 }, (_, index) => firstYear + index).reverse();
+  const profile = profiles[0] ?? null;
+  const currentBalanceCents = bankAccountBalanceCents({ balanceCents: account.balanceCents }, profile, txns);
+
+  const buildDetail = async (month: string) => {
+    const { start, end } = monthBounds(month);
+    const ledgerById = new Map(ledgerAccounts.map((row) => [String(row._id), row]));
+    const inMonth = txns.filter((row) => row.date >= start && row.date <= end);
+    const opening = balanceBefore(currentBalanceCents, txns, start);
+    const lines = withRunningBalance(inMonth, opening).map((row) => {
+      const ledger = row.accountingAccountId ? ledgerById.get(String(row.accountingAccountId)) : undefined;
+      return {
+        _id: row._id,
+        date: row.date,
+        description: row.description ?? "",
+        counterparty: row.counterparty,
+        amountCents: row.amountCents,
+        balanceCents: row.balanceCents,
+        reconciled: Boolean(row.reconciledAtISO),
+        matchedKind: row.matchedKind,
+        reconciliationNote: row.reconciliationNote,
+        ledgerLabel: ledger ? (ledger.code ? `${ledger.code} · ${ledger.name}` : String(ledger.name)) : row.category && !/^uncategori[sz]ed$/i.test(row.category) ? row.category : undefined,
+        hasReceipt: Boolean(row.receiptDocumentId),
+      };
+    });
+    const status = months.find((entry) => entry.month === month);
+    const period = status?.periodId ? accountPeriodRows.find((row) => String(row._id) === String(status.periodId)) : undefined;
+    let autoReconcile: AutoReconcileReadiness | null = null;
+    if (period && period.status === "in_progress") {
+      const ordered = orderPeriods(accountPeriodRows);
+      const index = ordered.findIndex((row) => String(row._id) === String(period._id));
+      const periodLines = transactionsInPeriod(txns, period);
+      autoReconcile = autoReconcileReadiness(beginningBalanceFor(ordered, index), period.endingBalanceCents, periodLines);
+    }
+    const statementDocument = period?.statementDocumentId
+      ? await ctx.db.get(String(period.statementDocumentId), "documents").catch(() => null)
+      : null;
+    return {
+      month,
+      start,
+      end,
+      openingBalanceCents: opening,
+      feedEndingBalanceCents: opening + inMonth.reduce((sum, row) => sum + row.amountCents, 0),
+      lines,
+      period: period
+        ? {
+            _id: String(period._id),
+            startDate: period.startDate,
+            endDate: period.endDate,
+            status: period.status,
+            effectiveStatus: period.effectiveStatus,
+            beginningBalanceCents: period.beginningBalanceCents,
+            clearedBalanceCents: period.clearedBalanceCents,
+            endingBalanceCents: period.endingBalanceCents,
+            differenceCents: period.differenceCents,
+            clearedCount: period.clearedCount,
+            transactionCount: period.transactionCount,
+            unclearedCount: period.unclearedCount,
+            completedAtISO: period.completedAtISO,
+            completedByName: period.completedByName,
+          }
+        : null,
+      statementDocument: statementDocument && String(statementDocument.societyId) === String(args.societyId)
+        ? { _id: String(statementDocument._id), title: String(statementDocument.title ?? "Statement"), fileName: statementDocument.fileName as string | undefined }
+        : null,
+      autoReconcile,
+    };
+  };
+  const detail = args.month && /^\d{4}-\d{2}$/.test(args.month) ? await buildDetail(args.month) : null;
+  return {
+    account: { _id: String(account._id), name: String(account.name), code: account.code as string | undefined, currency: String(account.currency ?? "CAD") },
+    year,
+    years,
+    months,
+    currentBalanceCents,
+    detail,
+  };
+}
+
+/**
+ * Complete an open statement in one step when every line is matched or
+ * categorised and clearing the categorised ones leaves no difference: those
+ * lines are cleared as "categorised" and the statement closes auto-reconciled.
+ */
+export async function autoReconcilePeriodPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const period = await requireOwnedRow<PeriodRow>(ctx, "reconciliationPeriods", id);
+  if (period.status !== "in_progress") throw new Error("This reconciliation is already closed.");
+  const ordered = await accountPeriods(ctx, period.accountId);
+  const index = ordered.findIndex((p) => p._id === id);
+  const txns = await accountTransactions(ctx, period.accountId);
+  const lines = transactionsInPeriod(txns, period) as Array<PeriodTransaction & { category?: string; accountingAccountId?: string }>;
+  const readiness = autoReconcileReadiness(beginningBalanceFor(ordered, index), period.endingBalanceCents, lines);
+  if (!readiness.ready) throw new Error(readiness.reason ?? "This statement can't be auto-reconciled yet.");
+  const nowISO = new Date().toISOString();
+  const actor = await principalName(ctx, period.societyId);
+  for (const line of lines) {
+    if (!readiness.toClearIds.includes(String(line._id))) continue;
+    await ctx.db.patch(String(line._id), {
+      reconciledAtISO: nowISO,
+      reconciledByName: actor.name,
+      matchedKind: "categorized",
+      matchedId: String(line.accountingAccountId ?? line.category ?? "categorized"),
+      reconciliationNote: `Auto-reconciled: categorised as ${line.category ?? "a ledger account"}`,
+    });
+  }
+  const after = await accountTransactions(ctx, period.accountId);
+  const { summary, fingerprint } = describePeriod(ordered, index, after);
+  if (summary.differenceCents !== 0) throw new Error("The difference must be $0.00 before you can complete this reconciliation.");
+  await ctx.db.patch(id, {
+    status: "auto_reconciled",
+    completedAtISO: nowISO,
+    completedByUserId: actor.id,
+    completedByName: actor.name,
+    clearedFingerprint: fingerprint,
+    clearedCount: summary.clearedCount,
+    clearedBalanceCents: summary.clearedBalanceCents,
+    outOfBalanceAtISO: undefined,
+    updatedAtISO: nowISO,
+  });
+  return { cleared: readiness.toClearIds.length };
 }

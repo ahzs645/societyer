@@ -13,6 +13,10 @@
  * (`expenseClaimPolicy`: receipt, note and timeliness thresholds; warn or
  * block, with an exception reason). When change control is on, approval-rule
  * edits wait in `approvalPolicyChanges` for a second approver.
+ *
+ * Mileage claims are priced on the server at the policy's mileage rate
+ * (distance × rate) and need no receipt. A claim may be charged to a spend
+ * budget its claimant is assigned to (shared/functions/spendBudgets.ts).
  */
 
 import { getPortable as getAccessibleDocument, requireDocumentAccess } from "./documents";
@@ -50,9 +54,16 @@ import {
   nextReminderAt,
   normalizeClaimPolicy,
   validateClaimPolicy,
+  isMileageClaim,
+  mileageAmountCents,
+  validateMileage,
+  MAX_MILEAGE_RATE_CENTS,
   type ClaimPolicyEnforcement,
   type ExpenseClaimPolicy,
+  type MileageDetails,
 } from "../expensePolicy";
+import { cycleWindow, claimSpendEntries, type SpendBudgetLike } from "../spendBudgets";
+import { loadSpendSources, requireBudgetForClaimant, type SpendBudgetRow } from "./spendBudgets";
 
 /** Statuses only the approval workflow may set (never a plain edit). */
 const WORKFLOW_ONLY_STATUSES = new Set(["Approved", "Paid", "Rejected"]);
@@ -100,6 +111,10 @@ export async function upsertPortable(
     actingUserId?: string;
     /** Why the claim should go ahead although it misses the claim policy. */
     policyExceptionReason?: string;
+    /** "mileage" prices the claim at the policy's mileage rate. */
+    claimType?: string;
+    mileage?: { distanceKm: number; fromLocation?: string; toLocation?: string; tripDescription?: string; rateCentsPerKm?: number };
+    spendBudgetId?: string;
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
@@ -116,6 +131,9 @@ export async function upsertPortable(
   if (!args.claimantName.trim()) throw new Error("Claimant name is required.");
   if (args.amountCents < 0) throw new Error("Amount cannot be negative.");
   const existing: any = args.id ? await ctx.db.get(args.id, "expenseReports") : null;
+  const pricing = await mileagePricing(ctx, args, existing);
+  if (pricing) args = { ...args, amountCents: pricing.amountCents };
+  if (args.spendBudgetId) await requireBudgetForClaimant(ctx, args.societyId, args.spendBudgetId, args.claimantUserId, args.incurredAtISO);
   let status = args.status;
   if (WORKFLOW_ONLY_STATUSES.has(status) && existing?.status !== status) {
     throw new Error("Approve, decline or pay claims from the approvals queue so the approval rules are applied.");
@@ -155,6 +173,9 @@ export async function upsertPortable(
     receiptDocumentId: args.receiptDocumentId,
     paymentReference: args.paymentReference,
     notes: args.notes,
+    claimType: pricing ? "mileage" : undefined,
+    mileage: pricing?.mileage,
+    spendBudgetId: args.spendBudgetId,
     updatedAtISO: nowISO,
     ...workflow,
     ...(status === "Submitted" && !args.submittedAtISO && !existing?.submittedAtISO ? { submittedAtISO: nowISO } : {}),
@@ -167,6 +188,33 @@ export async function upsertPortable(
     ...payload,
     createdAtISO: nowISO,
   });
+}
+
+/**
+ * A mileage claim's details and amount (distance × rate). New or changed
+ * trips use the policy's current rate; an unchanged distance keeps the rate it
+ * was claimed at, so a later rate change doesn't reprice old claims.
+ */
+async function mileagePricing(
+  ctx: PortableQueryCtx,
+  args: { societyId: string; claimType?: string; mileage?: { distanceKm: number; fromLocation?: string; toLocation?: string; tripDescription?: string } },
+  existing: { mileage?: MileageDetails } | null,
+): Promise<{ amountCents: number; mileage: MileageDetails } | null> {
+  if (!isMileageClaim(args)) return null;
+  const { policy } = await loadClaimPolicy(ctx, args.societyId);
+  const keepRate = existing?.mileage && existing.mileage.distanceKm === args.mileage?.distanceKm ? existing.mileage.rateCentsPerKm : null;
+  const rate = keepRate ?? policy.mileageRateCentsPerKm ?? null;
+  const errors = validateMileage(args.mileage, rate);
+  if (errors.length) throw new Error(errors[0]);
+  const trim = (value: string | undefined) => (value?.trim() ? value.trim().slice(0, 200) : undefined);
+  const mileage: MileageDetails = {
+    distanceKm: args.mileage!.distanceKm,
+    rateCentsPerKm: rate!,
+    fromLocation: trim(args.mileage!.fromLocation),
+    toLocation: trim(args.mileage!.toLocation),
+    tripDescription: trim(args.mileage!.tripDescription),
+  };
+  return { amountCents: mileageAmountCents(mileage.distanceKm, mileage.rateCentsPerKm), mileage };
 }
 
 export async function setStatusPortable(
@@ -434,14 +482,18 @@ const QUEUE_TABS = {
  */
 export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   const actor = await actorFor(ctx, societyId);
-  const [reports, users, policy, hasFinanceWrite, claimPolicy, pendingChange] = await Promise.all([
+  const [reports, users, policy, hasFinanceWrite, claimPolicy, pendingChange, budgets, spendSources] = await Promise.all([
     ctx.db.query("expenseReports").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     loadApprovalPolicy(ctx, societyId),
     holdsFinanceWrite(ctx, societyId),
     loadClaimPolicy(ctx, societyId),
     loadPendingPolicyChange(ctx, societyId),
+    ctx.db.query<SpendBudgetRow>("spendBudgets").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    loadSpendSources(ctx, societyId),
   ]);
+  const budgetById = new Map(budgets.map((budget) => [String(budget._id), budget]));
+  const spendEntries = spendSources.sources.flatMap((source) => source());
   const access: ApproverAccessContext = { approverAccess: policy.approverAccess, hasFinanceWrite };
   const me = { _id: String(actor.user._id), role: actor.role, status: actor.user.status };
   const today = todayDateOnly();
@@ -494,6 +546,11 @@ export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }
         isMine,
         trail: report.approvalTrail ?? [],
         policyIssues,
+        claimType: report.claimType === "mileage" ? "mileage" : "expense",
+        mileage: report.mileage ?? null,
+        spendBudget: report.spendBudgetId && budgetById.has(String(report.spendBudgetId))
+          ? budgetStandingForClaim(budgetById.get(String(report.spendBudgetId))!, spendEntries, report)
+          : null,
         policyException: report.policyException ?? null,
         possibleDuplicate: duplicate ? { _id: duplicate._id, title: duplicate.title, date: duplicate.date } : null,
         lastReminderAtISO: report.lastReminderAtISO,
@@ -542,6 +599,24 @@ export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }
   };
 }
 
+/**
+ * The claim's budget in the cycle containing its date: spend from other
+ * entries, what this claim leaves, and whether it goes over the limit.
+ */
+function budgetStandingForClaim(
+  budget: SpendBudgetLike & { name: string },
+  entries: ReturnType<typeof claimSpendEntries>,
+  claim: { _id: string; amountCents?: number; incurredAtISO?: string },
+) {
+  const window = cycleWindow(budget, String(claim.incurredAtISO ?? "").slice(0, 10) || todayDateOnly());
+  const others = entries
+    .filter((entry) => entry.budgetId === String(budget._id) && entry.sourceId !== String(claim._id))
+    .filter((entry) => entry.date >= window.start && entry.date <= window.end)
+    .reduce((sum, entry) => sum + entry.amountCents, 0);
+  const remainingAfterCents = budget.limitCents - others - Math.abs(claim.amountCents ?? 0);
+  return { _id: String(budget._id), name: budget.name, limitCents: budget.limitCents, window, otherSpendCents: others, remainingAfterCents, exceeds: remainingAfterCents < 0 };
+}
+
 /* --------------------------------------------------- claim policy writes */
 
 /**
@@ -550,7 +625,7 @@ export async function approvalQueuePortable(ctx: PortableQueryCtx, { societyId }
  */
 export async function saveClaimPolicyPortable(
   ctx: PortableMutationCtx,
-  args: { societyId: string; receiptOverCents?: number; noteOverCents?: number; maxAgeDays?: number; enforcement: string },
+  args: { societyId: string; receiptOverCents?: number; noteOverCents?: number; maxAgeDays?: number; enforcement: string; mileageRateCentsPerKm?: number },
 ) {
   await requirePermissionPortable(ctx, args.societyId, "financials:write");
   if (!CLAIM_POLICY_ENFORCEMENTS.includes(args.enforcement as ClaimPolicyEnforcement)) throw new Error("Choose whether the policy warns or blocks.");
@@ -559,7 +634,9 @@ export async function saveClaimPolicyPortable(
     noteOverCents: args.noteOverCents === undefined ? null : Math.round(Number(args.noteOverCents)),
     maxAgeDays: args.maxAgeDays === undefined ? null : Math.round(Number(args.maxAgeDays)),
     enforcement: args.enforcement as ClaimPolicyEnforcement,
+    mileageRateCentsPerKm: args.mileageRateCentsPerKm === undefined ? null : Math.round(Number(args.mileageRateCentsPerKm)),
   };
+  if ((next.mileageRateCentsPerKm ?? 0) > MAX_MILEAGE_RATE_CENTS) throw new Error("Enter a mileage rate between $0.01 and $5.00 per kilometre.");
   const errors = validateClaimPolicy(next);
   if (errors.length) throw new Error(errors[0]);
   const actor = await actorFor(ctx, args.societyId);
@@ -570,6 +647,7 @@ export async function saveClaimPolicyPortable(
     noteOverCents: next.noteOverCents ?? undefined,
     maxAgeDays: next.maxAgeDays ?? undefined,
     enforcement: next.enforcement,
+    mileageRateCentsPerKm: next.mileageRateCentsPerKm ?? undefined,
     updatedByName: actor.name,
     updatedAtISO: nowISO,
     ...(actor.id ? { updatedByUserId: actor.id } : {}),
