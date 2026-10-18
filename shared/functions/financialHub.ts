@@ -557,6 +557,9 @@ export async function updateTransactionPortable(
   if (patch.category !== undefined && patch.category !== row.category && isSplitTransaction({ lines: row.lines })) {
     throw new Error("This transaction is split into lines. Change the categories on its lines in the transaction panel.");
   }
+  if (patch.amountCents !== undefined && patch.amountCents !== row.amountCents && isSplitTransaction({ lines: row.lines })) {
+    throw new Error("This transaction is split into lines. Change the line amounts in the transaction panel so they still add up to the total.");
+  }
   if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
     await assertTransactionBooksOpen(ctx, String(row.societyId), id, patch.date);
   }

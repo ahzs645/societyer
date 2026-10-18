@@ -149,6 +149,15 @@ posted = await journalLines();
 assert.equal(posted.length, 4, "the edited split replaces the entry's lines");
 assert.ok(posted.every((line) => line.journalEntryId === entryId), "in the same entry: nothing is posted twice");
 assert.equal(balance(posted), 0);
+await assert.rejects(
+  hub.updateTransactionPortable(owner, { id: target._id, patch: { amountCents: target.amountCents - 500 } }),
+  /split into lines/,
+  "a posted split's amount cannot change without its lines",
+);
+await db.patch(target._id, { amountCents: target.amountCents - 500 });
+await assert.rejects(accounting.createTransactionJournalSync(owner, S)(target._id), /not balanced/, "the journal sync never writes unbalanced lines");
+assert.equal(balance(await journalLines()), 0, "the refused sync leaves the entry as it was");
+await db.patch(target._id, { amountCents: target.amountCents });
 const unchanged = await linesFns.savePortable(owner, {
   id: target._id,
   lines: rebalanced.map((amountCents, index) => ({ id: `n${index}`, amountCents, category: index === 0 ? "Office & technology" : "Program supplies" })),

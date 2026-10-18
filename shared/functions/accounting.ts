@@ -1674,6 +1674,8 @@ export function createTransactionJournalSync(ctx: PortableMutationCtx, societyId
       ({ row, suspenseAccountId } = planOneTransaction(context, transaction));
     }
     const desired = journalLinesForPlanRow(transaction, row, suspenseAccountId);
+    // Never write lines that don't balance (a split whose lines no longer add up to the bank amount).
+    validateBalancedJournalLines(desired);
     const current = lines
       .filter((line) => String(line.journalEntryId) === String(entry._id))
       .sort((a, b) => Number(a.lineOrder) - Number(b.lineOrder));
