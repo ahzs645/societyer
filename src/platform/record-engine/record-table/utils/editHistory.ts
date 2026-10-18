@@ -48,6 +48,17 @@ export function dropEdit(history: EditHistory, id: number): EditHistory {
   return past.length === history.past.length && future.length === history.future.length ? history : { past, future };
 }
 
+/**
+ * Keeps only the changes of an entry that saved (by index), so undo still
+ * covers the cells a partly failed paste did change. Drops it when none did.
+ */
+export function narrowEdit(history: EditHistory, id: number, saved: readonly boolean[]): EditHistory {
+  const narrow = (entry: EditHistoryEntry) => (entry.id === id ? { ...entry, changes: entry.changes.filter((_, index) => saved[index]) } : entry);
+  const past = history.past.map(narrow).filter((entry) => entry.changes.length > 0);
+  const future = history.future.map(narrow).filter((entry) => entry.changes.length > 0);
+  return { past, future };
+}
+
 /** The cell writes that undo (`"before"`) or redo (`"after"`) an entry. */
 export function entryWrites(entry: EditHistoryEntry, side: "before" | "after") {
   return entry.changes.map((change) => ({ recordId: change.recordId, fieldName: change.fieldName, value: change[side] }));

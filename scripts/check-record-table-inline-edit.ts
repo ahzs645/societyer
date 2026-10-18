@@ -27,11 +27,12 @@ import {
   createEditEntry,
   dropEdit,
   entryWrites,
+  narrowEdit,
   recordEdit,
   redoEdit,
   undoEdit,
 } from "../src/platform/record-engine/record-table/utils/editHistory";
-import { applyStagedEdits, stageWrites, stagedCount, stagedList, type StagedEdits } from "../src/platform/record-engine/record-table/utils/stagedEdits";
+import { applyStagedEdits, stageWrites, stagedCount, stagedList, unstageWrites, type StagedEdits } from "../src/platform/record-engine/record-table/utils/stagedEdits";
 import { RECORD_TABLE_GRID_SHORTCUTS } from "../src/platform/record-engine/record-table/utils/gridShortcuts";
 
 let checks = 0;
@@ -312,6 +313,22 @@ check("failed saves leave the stack; empty edits never enter it; the stack is bo
   assert.deepEqual(bounded.past.map((item) => item.label), ["Edit 2", "Edit 3", "Edit 4"]);
 });
 
+check("a partly failed paste keeps undo for the cells that saved", () => {
+  const entry = createEditEntry("Paste", [
+    { recordId: "r1", fieldName: "a", before: 1, after: 2 },
+    { recordId: "r2", fieldName: "a", before: 3, after: 4 },
+    { recordId: "r3", fieldName: "a", before: 5, after: 6 },
+  ]);
+  const older = createEditEntry("Edit", [{ recordId: "r9", fieldName: "b", before: "x", after: "y" }]);
+  const history = recordEdit(recordEdit(EMPTY_EDIT_HISTORY, older), entry);
+  const narrowed = narrowEdit(history, entry.id, [true, false, true]);
+  assert.equal(narrowed.past.length, 2);
+  assert.equal(narrowed.past[0], older, "other entries are untouched");
+  assert.equal(narrowed.past[1].id, entry.id, "the entry keeps its id, so its Undo toast still matches");
+  assert.deepEqual(narrowed.past[1].changes.map((change) => change.recordId), ["r1", "r3"]);
+  assert.deepEqual(narrowEdit(history, entry.id, [false, false, false]).past, [older], "nothing saved drops the entry");
+});
+
 // ---------------------------------------------------------------- batch --
 
 check("the batch changeset stages, reverts and overlays edits", () => {
@@ -331,6 +348,27 @@ check("the batch changeset stages, reverts and overlays edits", () => {
   assert.equal(stagedCount(staged), 1, "typing the saved value again un-stages the cell");
   assert.deepEqual(stagedList(staged), [{ recordId: "r2", fieldName: "status", value: "closed" }]);
   assert.equal(stageWrites(staged, [], savedValue), staged);
+});
+
+check("saving a batch un-stages only what it saved", () => {
+  const savedValue = () => undefined;
+  const sent = [
+    { recordId: "r1", fieldName: "amount", value: 12 },
+    { recordId: "r2", fieldName: "status", value: "closed" },
+  ];
+  let staged: StagedEdits = stageWrites(new Map(), sent, savedValue);
+  // Edits made while the save was in flight: a new cell, and r2 again.
+  staged = stageWrites(staged, [
+    { recordId: "r1", fieldName: "date", value: "2026-10-01" },
+    { recordId: "r2", fieldName: "status", value: "void" },
+  ], savedValue);
+  const after = unstageWrites(staged, sent);
+  assert.deepEqual(stagedList(after), [
+    { recordId: "r1", fieldName: "date", value: "2026-10-01" },
+    { recordId: "r2", fieldName: "status", value: "void" },
+  ]);
+  assert.equal(stagedCount(unstageWrites(stageWrites(new Map(), sent, savedValue), sent)), 0, "with nothing new, the changeset empties");
+  assert.equal(unstageWrites(after, []), after);
 });
 
 // ------------------------------------------------------------ shortcuts --

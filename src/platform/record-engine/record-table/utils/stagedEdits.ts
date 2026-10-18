@@ -36,6 +36,26 @@ export function stageWrites(staged: StagedEdits, writes: StagedWrite[], savedVal
   return next;
 }
 
+/**
+ * Takes saved writes out of the changeset. A cell edited again while the
+ * save was in flight keeps its newer value staged.
+ */
+export function unstageWrites(staged: StagedEdits, saved: StagedWrite[]): StagedEdits {
+  if (saved.length === 0) return staged;
+  const next: StagedEdits = new Map(staged);
+  let changed = false;
+  for (const write of saved) {
+    const fields = next.get(write.recordId);
+    if (!fields?.has(write.fieldName) || !sameStoredValue(fields.get(write.fieldName), write.value)) continue;
+    const rest = new Map(fields);
+    rest.delete(write.fieldName);
+    if (rest.size > 0) next.set(write.recordId, rest);
+    else next.delete(write.recordId);
+    changed = true;
+  }
+  return changed ? next : staged;
+}
+
 export function stagedCount(staged: StagedEdits) {
   let count = 0;
   for (const fields of staged.values()) count += fields.size;
