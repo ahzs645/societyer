@@ -378,6 +378,8 @@ export type NeedsActionInput = {
   payments: ReadonlyArray<NeedsActionPayment>;
   /** Item names of lines with no revenue account. */
   unmappedItems: ReadonlyArray<string>;
+  /** The accrual is posted: what keeps an invoice out of the books no longer applies. */
+  accrualPosted?: boolean;
 };
 
 function centsText(cents: number) {
@@ -392,7 +394,7 @@ export function invoiceNeedsAction(invoice: NeedsActionInput, context: { workspa
   if (invoice.lifecycle !== "sent") return [];
   const flags: NeedsActionFlag[] = [];
   const currency = String(invoice.currency || context.workspaceCurrency).toUpperCase();
-  if (currency !== context.workspaceCurrency.toUpperCase()) {
+  if (currency !== context.workspaceCurrency.toUpperCase() && !invoice.accrualPosted) {
     flags.push({
       code: "foreign_currency",
       title: `Invoiced in ${currency}`,
@@ -410,7 +412,17 @@ export function invoiceNeedsAction(invoice: NeedsActionInput, context: { workspa
       fixLabel: "Review payments",
     });
   }
-  if (invoice.unmappedItems.length) {
+  if (invoice.unmappedItems.length && invoice.accrualPosted) {
+    // Posted while mapped; the mapping has since gone. A hint, not a blocker.
+    const items = [...new Set(invoice.unmappedItems)];
+    flags.push({
+      code: "unmapped_revenue",
+      title: "Revenue account unmapped",
+      detail: `The invoice is in the books, but ${items.slice(0, 3).join(", ")}${items.length > 3 ? ` and ${items.length - 3} more` : ""} no longer ${items.length === 1 ? "has" : "have"} a revenue account. Map it before editing the invoice's lines, or the edit will be refused.`,
+      fix: "edit_mapping",
+      fixLabel: "Edit GL account mapping",
+    });
+  } else if (invoice.unmappedItems.length) {
     const items = [...new Set(invoice.unmappedItems)];
     flags.push({
       code: "unmapped_revenue",
@@ -468,7 +480,7 @@ export function invoiceNeedsAction(invoice: NeedsActionInput, context: { workspa
   return flags;
 }
 
-/** Codes that keep an invoice (not just one payment) out of the books. */
+/** Codes that keep an invoice (not just one payment) out of the books (never raised once its accrual is posted). */
 export const ACCRUAL_BLOCKING_CODES: ReadonlySet<NeedsActionCode> = new Set(["foreign_currency", "unmapped_revenue"]);
 
 /** Non-void invoices in a currency other than the books' (the banner). */

@@ -163,6 +163,9 @@ const net = (lines: ReadonlyArray<{ accountId: string; side: string; amountCents
   assert.deepEqual(flags({ payments: [{ ...base.payments[0], transactionAmountCents: 9000 }] }), [["deposit_mismatch", "link_deposit"]]);
   assert.deepEqual(flags({ payments: [{ ...base.payments[0], transactionAmountCents: null }] }), [["deposit_mismatch", "link_deposit"]], "a link to a deleted bank line");
   assert.deepEqual(flags({ unmappedItems: ["Hall rental"] }), [["unmapped_revenue", "edit_mapping"]]);
+  const postedUnmapped = invoiceNeedsAction({ ...base, unmappedItems: ["Hall rental"], currency: "USD", accrualPosted: true }, { workspaceCurrency: "CAD", booksStart });
+  assert.deepEqual(postedUnmapped.map((flag) => [flag.code, flag.title]), [["unmapped_revenue", "Revenue account unmapped"]], "once posted, no blocking flag: only a mapping hint");
+  assert.ok(!/isn't in the books/.test(postedUnmapped[0].detail), "and it doesn't say the invoice is out of the books");
   assert.deepEqual(flags({ issueDate: "2025-12-01" }), [["before_books_start", "record_manually"]]);
   assert.deepEqual(flags({ issueDate: "2025-12-20", payments: [{ ...base.payments[0], date: "2025-12-30" }] }), [["before_books_start", "record_manually"]], "one flag when the invoice itself predates the books");
   assert.deepEqual(flags({ issueDate: "2026-01-02", payments: [{ ...base.payments[0], date: "2026-01-01" }] }), [["before_books_start", "review_payments"]]);
@@ -395,6 +398,11 @@ const roomInvoice = await inv.upsertPortable(ctx, { societyId: S, partyKind: "cu
 await inv.markSentPortable(ctx, { societyId: S, ids: [roomInvoice] });
 lines = await linesOf((await invoiceRow(roomInvoice)).journalEntryId);
 assert.equal(lines[1].accountId, DUES, "the item's own account wins over its category");
+await assert.rejects(() => inv.upsertCatalogItemPortable(ctx, { id: room._id, societyId: S, name: room.name, unitPriceCents: 12000, accountingAccountId: CASH }), /can't be used here; choose an income/, "a catalog item's account must be a revenue account");
+// Take the default away: the posted invoice keeps a hint, not "isn't in the books".
+await inv.saveAccountMappingPortable(ctx, { societyId: S, receivableAccountId: AR, taxPayableAccountId: GST, depositAccountId: UNDEPOSITED, categoryAccounts: [...(settings.categoryAccounts ?? [])], itemAccounts: [{ catalogItemId: room._id, accountId: DUES }] });
+assert.deepEqual((await invoiceRow(custom)).needsAction.map((flag) => [flag.code, flag.title]), [["unmapped_revenue", "Revenue account unmapped"]], "a posted invoice whose mapping went away gets the softer hint");
+await inv.saveAccountMappingPortable(ctx, { societyId: S, receivableAccountId: AR, taxPayableAccountId: GST, depositAccountId: UNDEPOSITED, defaultRevenueAccountId: PROGRAM, categoryAccounts: [...(settings.categoryAccounts ?? [])], itemAccounts: [{ catalogItemId: room._id, accountId: DUES }] });
 
 // A negative line (imported data; the editor takes none) nets against revenue and GST, sends, and is recognised on payment.
 const creditInvoice = await inv.upsertPortable(ctx, { societyId: S, partyKind: "custom", billToName: "Credit Line Co", issueDate: today, terms: "net_15", lines: [{ item: "Room", quantity: 1, unitPriceCents: 10000 }] });

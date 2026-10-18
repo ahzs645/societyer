@@ -319,7 +319,7 @@ function invoiceLedgerState(row: Row, lctx: InvoiceLedgerContext, postedIds: Rea
   return { state: paymentsToPost ? "ready" : "posted", entryId: invoice.journalEntryId, reasons, paymentsToPost };
 }
 
-function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<string, Row>): NeedsActionFlag[] {
+function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<string, Row>, postedIds: ReadonlySet<string>): NeedsActionFlag[] {
   const invoice = asStored(row);
   const totals = computeInvoiceTotals(invoice.lines ?? [], invoice.discount);
   return invoiceNeedsAction(
@@ -337,6 +337,7 @@ function needsActionFor(row: Row, lctx: InvoiceLedgerContext, txnById: Map<strin
         transactionAmountCents: payment.financialTransactionId ? (txnById.has(payment.financialTransactionId) ? Number(txnById.get(payment.financialTransactionId)!.amountCents) : null) : undefined,
       })),
       unmappedItems: unmappedItems(invoice, lctx),
+      accrualPosted: Boolean(invoice.journalEntryId && postedIds.has(invoice.journalEntryId)),
     },
     { workspaceCurrency: lctx.workspaceCurrency, booksStart: lctx.booksStart },
   );
@@ -396,7 +397,7 @@ export async function workspacePortable(ctx: PortableQueryCtx, { societyId }: { 
   const postedIds = new Set([...postedEntries.values()].map((entry) => entry._id));
   const decorated = invoices
     .map((row) => Object.assign(decorate(row, today, seriesById, txnById), {
-      needsAction: needsActionFor(row, lctx, txnById),
+      needsAction: needsActionFor(row, lctx, txnById, postedIds),
       ledger: invoiceLedgerState(row, lctx, postedIds),
     }))
     .sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.sequence - a.sequence);
@@ -1230,7 +1231,7 @@ export async function upsertCatalogItemPortable(
   if (!Number.isFinite(unitPriceCents) || unitPriceCents < 0) throw new Error("Enter a price of zero or more.");
   const rate = Number(args.taxRatePercent ?? 0);
   if (!Number.isFinite(rate) || rate < 0 || rate > 30) throw new Error("Tax rate must be between 0 and 30%.");
-  if (args.accountingAccountId) await getOwned(ctx, "financialAccounts", args.accountingAccountId, args.societyId);
+  if (args.accountingAccountId) await requireAccountOfKind(ctx, args.societyId, args.accountingAccountId, "revenue");
   const fields = {
     name,
     description: cleanText(args.description, 1000),
