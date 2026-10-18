@@ -7,9 +7,12 @@
  * overdue are derived from the balance and the due date against the
  * organisation's local today, as invoices are (shared/invoicing.ts).
  *
- * Ledger shape: approving posts Dr each line's account / Cr Accounts payable;
- * each payment posts Dr Accounts payable / Cr the account it was paid from;
- * cancelling an approved bill posts the mirror of the approval entry.
+ * Ledger shape (docs/accounting-shape.md, "Accounting basis"): approving
+ * posts Dr each line's account / Cr Accounts payable as an accrual-only entry;
+ * each payment posts Dr Accounts payable / Cr the account it was paid from
+ * (both bases) plus a cash-only entry repeating the paid share of the expense
+ * lines (Dr expense / Cr Accounts payable) on the payment date; cancelling an
+ * approved bill posts the mirror of the approval entry (accrual-only too).
  *
  * Money is always integer cents. Dates are `YYYY-MM-DD` calendar dates.
  * Pure TypeScript: no Convex, DOM or Node imports.
@@ -67,7 +70,12 @@ export type BillLine = {
   amountCents: number;
   memo?: string;
   fundRestrictionId?: string;
+  /** Reporting tags, at most one per tag group (the transaction-line rule). */
+  tagIds?: string[];
 };
+
+/** The paid share of one bill line recognised by a payment's cash-only entry. */
+export type BillCashShare = { key: string; amountCents: number };
 
 export type BillPayment = {
   key: string;
@@ -78,6 +86,9 @@ export type BillPayment = {
   financialTransactionId?: string;
   cashAccountId?: string;
   journalEntryId?: string;
+  /** The cash-only entry recognising the paid share of the expense lines. */
+  cashBasisJournalEntryId?: string;
+  cashBasisShares?: BillCashShare[];
 };
 
 export function billTotalCents(lines: ReadonlyArray<Pick<BillLine, "amountCents">> | undefined): number {
@@ -207,7 +218,19 @@ export type PostingLine = {
   description?: string;
   fundRestrictionId?: string;
   financialTransactionId?: string;
+  tagIds?: string[];
 };
+
+function billPostingLabel(bill: { billNumber?: string | null; vendorName?: string | null }) {
+  return [bill.vendorName, bill.billNumber ? `bill ${bill.billNumber}` : null].filter(Boolean).join(" ");
+}
+
+function lineDimensions(line: Pick<BillLine, "fundRestrictionId" | "tagIds">) {
+  return {
+    ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
+    ...(line.tagIds?.length ? { tagIds: [...line.tagIds] } : {}),
+  };
+}
 
 /**
  * Approval entry: one debit per line (lines on the same account and fund are
@@ -218,7 +241,7 @@ export function approvalPostingLines(
   bill: { lines: ReadonlyArray<BillLine>; billNumber?: string | null; vendorName?: string | null },
   payablesAccountId: string,
 ): PostingLine[] {
-  const label = [bill.vendorName, bill.billNumber ? `bill ${bill.billNumber}` : null].filter(Boolean).join(" ");
+  const label = billPostingLabel(bill);
   const debits: PostingLine[] = bill.lines
     .filter((line) => line.amountCents > 0)
     .map((line) => {
@@ -228,7 +251,7 @@ export function approvalPostingLines(
         side: "debit",
         amountCents: line.amountCents,
         description: line.memo || label || "Bill",
-        ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
+        ...lineDimensions(line),
       };
     });
   const total = debits.reduce((sum, line) => sum + line.amountCents, 0);
@@ -250,6 +273,91 @@ export function paymentPostingLines(
     { accountId: payablesAccountId, side: "debit", amountCents: payment.amountCents, description, ...link },
     { accountId: cashAccountId, side: "credit", amountCents: payment.amountCents, description, ...link },
   ];
+}
+
+/**
+ * What earlier payments already recognised on each line under cash basis:
+ * their stored shares, or (for payments recorded before shares were stored)
+ * the shares the same allocation gives them in order.
+ */
+export function recognizedCashShares(
+  lines: ReadonlyArray<Pick<BillLine, "key" | "amountCents">>,
+  payments: ReadonlyArray<Pick<BillPayment, "amountCents" | "cashBasisShares">>,
+): Map<string, number> {
+  const recognized = new Map<string, number>();
+  for (const payment of payments) {
+    const shares = payment.cashBasisShares ?? cashBasisShares(lines, recognized, payment.amountCents);
+    for (const share of shares) recognized.set(share.key, (recognized.get(share.key) ?? 0) + share.amountCents);
+  }
+  return recognized;
+}
+
+/**
+ * The paid share of each line for a payment of `amountCents`, given what
+ * earlier payments recognised: proportional to what each line still has
+ * unrecognised, whole cents (largest remainders take the leftover cents,
+ * earlier lines first on a tie). Shares never exceed a line's unrecognised
+ * amount, always add up to the payment, and the payment that settles the
+ * bill recognises exactly what is left, so a fully paid bill recognises every
+ * line in full. Zero shares are left out.
+ */
+export function cashBasisShares(
+  lines: ReadonlyArray<Pick<BillLine, "key" | "amountCents">>,
+  recognized: ReadonlyMap<string, number>,
+  amountCents: number,
+): BillCashShare[] {
+  const open = lines
+    .filter((line) => line.amountCents > 0)
+    .map((line) => ({ key: line.key, remaining: Math.max(0, line.amountCents - (recognized.get(line.key) ?? 0)) }))
+    .filter((line) => line.remaining > 0);
+  const remainingTotal = open.reduce((sum, line) => sum + line.remaining, 0);
+  const amount = Math.min(Math.max(0, Math.round(amountCents)), remainingTotal);
+  if (amount <= 0) return [];
+  const shares = open.map((line, index) => {
+    const exact = (line.remaining * amount) / remainingTotal;
+    const whole = Math.floor(exact);
+    return { key: line.key, index, remaining: line.remaining, amountCents: whole, fraction: exact - whole };
+  });
+  let leftover = amount - shares.reduce((sum, share) => sum + share.amountCents, 0);
+  for (const share of [...shares].sort((a, b) => b.fraction - a.fraction || a.index - b.index)) {
+    if (leftover <= 0) break;
+    if (share.amountCents < share.remaining) {
+      share.amountCents += 1;
+      leftover -= 1;
+    }
+  }
+  return shares.filter((share) => share.amountCents > 0).map((share) => ({ key: share.key, amountCents: share.amountCents }));
+}
+
+/**
+ * Cash-only entry for a payment: the paid share of each expense line (Dr
+ * the line's account, with its fund and tags) against one credit to Accounts
+ * payable, so under cash basis the expense lands on the payment date and
+ * Accounts payable nets to zero.
+ */
+export function cashBasisPostingLines(
+  bill: { lines: ReadonlyArray<BillLine>; billNumber?: string | null; vendorName?: string | null },
+  shares: ReadonlyArray<BillCashShare>,
+  payablesAccountId: string,
+): PostingLine[] {
+  const label = billPostingLabel(bill);
+  const byKey = new Map(bill.lines.map((line) => [line.key, line]));
+  const debits: PostingLine[] = shares
+    .filter((share) => share.amountCents > 0)
+    .map((share) => {
+      const line = byKey.get(share.key);
+      if (!line?.accountId) throw new Error("Every line needs an account before the bill can be posted.");
+      return {
+        accountId: line.accountId,
+        side: "debit",
+        amountCents: share.amountCents,
+        description: `Paid: ${line.memo || label || "Bill"}`,
+        ...lineDimensions(line),
+      };
+    });
+  const total = debits.reduce((sum, line) => sum + line.amountCents, 0);
+  if (total <= 0) throw new Error("A payment must be above zero.");
+  return [...debits, { accountId: payablesAccountId, side: "credit", amountCents: total, description: label ? `Accounts payable paid: ${label}` : "Accounts payable paid" }];
 }
 
 /** The mirror of an entry's lines (debits become credits), for a reversal. */

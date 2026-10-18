@@ -1,23 +1,30 @@
 // Bills gate: status derivation (overdue on the organisation's local today),
 // partial payments, the Accounts payable postings (balanced, reversed on
-// cancel), duplicate detection and bank-line match scoring, then the portable
-// handlers against the demo seed: approval under the expense approval rules,
-// posting on approval, payments linked to bank lines (matched and categorised
-// to Accounts payable, put back on removal), closed fiscal periods, cancel
-// with a reversing entry, vendors and tenancy.
+// cancel), cash-basis recognition of the paid share, duplicate detection and
+// bank-line match scoring, then the portable handlers against the demo seed:
+// approval under the expense approval rules, posting on approval (accrual-only)
+// and payment (both bases plus a cash-only entry), cash- and accrual-basis
+// statements that both balance, payments linked to bank lines (matched and
+// categorised to Accounts payable, put back on removal), closed fiscal
+// periods, the books close date, cancel with a reversing entry, vendors and
+// tenancy.
 import assert from "node:assert/strict";
 import {
+  addDays,
   approvalPostingLines,
   billMatchesTab,
   billPaidCents,
   billSubmitProblem,
   billTotalCents,
+  cashBasisPostingLines,
+  cashBasisShares,
   deriveBillStatus,
   findDuplicateBill,
   isDueSoon,
   normalizeBillNumber,
   paymentPostingLines,
   postingBalance,
+  recognizedCashShares,
   reversalLines,
   suggestBillPayments,
   summarizeBills,
@@ -25,6 +32,7 @@ import {
   type BillLine,
 } from "../shared/bills";
 import type { PortableDoc, PortableMutationCtx } from "../shared/portable/ctx";
+import { buildBalanceSheet, buildStatementOfOperations, entryCountsForBasis, type AccountingBasis, type BooksAccount, type BooksEntry, type BooksLine } from "../shared/booksReports";
 
 // ---- status derivation
 {
@@ -97,6 +105,37 @@ import type { PortableDoc, PortableMutationCtx } from "../shared/portable/ctx";
   assert.ok([...net.values()].every((value) => value === 0), "approval plus reversal leaves every account at zero");
 }
 
+// ---- cash basis: the paid share of each line, in whole cents, never more than the line
+{
+  const lines: BillLine[] = [
+    { key: "a", accountId: "exp_utilities", amountCents: 10001, memo: "Hydro", tagIds: ["tag_youth"] },
+    { key: "b", accountId: "exp_program", amountCents: 3333, fundRestrictionId: "fund_youth" },
+    { key: "c", accountId: "exp_program", amountCents: 0 },
+    { key: "d", accountId: "exp_program", amountCents: 1 },
+  ];
+  const total = billTotalCents(lines);
+  const first = cashBasisShares(lines, new Map(), 5000);
+  assert.equal(first.reduce((sum, share) => sum + share.amountCents, 0), 5000, "the shares add up to the payment");
+  assert.ok(!first.some((share) => share.key === "c"), "zero lines get no share");
+  const payments: Array<{ amountCents: number; cashBasisShares?: Array<{ key: string; amountCents: number }> }> = [{ amountCents: 5000, cashBasisShares: first }];
+  for (const amountCents of [1, 7, 4321]) {
+    const shares = cashBasisShares(lines, recognizedCashShares(lines, payments), amountCents);
+    assert.equal(shares.reduce((sum, share) => sum + share.amountCents, 0), amountCents);
+    payments.push({ amountCents, cashBasisShares: shares });
+  }
+  const last = total - payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+  payments.push({ amountCents: last, cashBasisShares: cashBasisShares(lines, recognizedCashShares(lines, payments), last) });
+  const recognized = recognizedCashShares(lines, payments);
+  assert.deepEqual(lines.filter((line) => line.amountCents > 0).map((line) => recognized.get(line.key)), [10001, 3333, 1], "a fully paid bill recognises every line in full");
+  assert.deepEqual(recognizedCashShares(lines, [{ amountCents: 5000 }]), new Map(first.map((share) => [share.key, share.amountCents])), "payments without stored shares replay the same allocation");
+  assert.deepEqual(cashBasisShares(lines, recognized, 100), [], "nothing is left to recognise");
+  const posting = cashBasisPostingLines({ lines, billNumber: "CH-1", vendorName: "Coastal Hydro" }, first, "ap");
+  assert.ok(postingBalance(posting).balanced);
+  assert.deepEqual(posting.at(-1), { accountId: "ap", side: "credit", amountCents: 5000, description: "Accounts payable paid: Coastal Hydro bill CH-1" });
+  assert.deepEqual(posting[0].tagIds, ["tag_youth"], "tags follow the line into the cash-only entry");
+  assert.equal(posting[1].fundRestrictionId, "fund_youth", "and so does the fund");
+}
+
 // ---- duplicates
 {
   assert.equal(normalizeBillNumber("INV-0042"), normalizeBillNumber("inv 42"));
@@ -167,12 +206,22 @@ const workspace = () => bills.workspacePortable(ctx, { societyId: S });
 const billById = async (id: string) => (await workspace()).bills.find((row) => row._id === id)!;
 const postedEntries = async (source: string) => (await db.query("journalEntries").collect()).filter((entry) => entry.source === source && entry.status === "posted");
 const linesOf = async (entryId: string) => (await db.query("journalLines").collect()).filter((line) => line.journalEntryId === entryId);
-// Credits minus debits over posted entries (Accounts payable grows, a bank account paid from goes up too).
-const creditBalance = async (accountId: string) => {
-  const posted = new Set((await db.query("journalEntries").collect()).filter((entry) => entry.status === "posted").map((entry) => entry._id));
+// Credits minus debits over posted entries on one basis (accrual unless
+// asked): Accounts payable grows, a bank account paid from goes up too.
+const creditBalance = async (accountId: string, basis: AccountingBasis = "accrual") => {
+  const posted = new Set((await db.query("journalEntries").collect()).filter((entry) => entry.status === "posted" && entryCountsForBasis(entry, basis)).map((entry) => entry._id));
   return (await db.query("journalLines").collect())
     .filter((line) => line.accountId === accountId && posted.has(line.journalEntryId))
     .reduce((sum, line) => sum + (line.side === "credit" ? line.amountCents : -line.amountCents), 0);
+};
+// The balance sheet and statement of operations over all time, on one basis.
+const ALL_TIME = [{ id: "all", label: "All time", start: "1900-01-01", end: "2999-12-31", toDate: null, clipped: false }];
+const statements = async (basis: AccountingBasis) => {
+  const ofSociety = async (table: string) => (await db.query(table).collect()).filter((row) => row.societyId === S);
+  const input = { accounts: (await ofSociety("financialAccounts")) as unknown as BooksAccount[], entries: (await ofSociety("journalEntries")) as unknown as BooksEntry[], lines: (await ofSociety("journalLines")) as unknown as BooksLine[], basis, currency: "CAD", periods: ALL_TIME };
+  const balance = buildBalanceSheet(input).summary[0].values;
+  const operations = buildStatementOfOperations(input).summary[0].values;
+  return { ...balance, expenses: operations.expenses, difference: balance.totalAssets - balance.totalLiabilities - balance.netAssets };
 };
 const AP = "static_financial_ap";
 const CASH = "static_financial_cash";
@@ -190,6 +239,17 @@ assert.equal(printing.paidCents, 50000, "vendor totals count what was paid");
 assert.equal(printing.outstandingCents, 68000);
 const apBefore = await creditBalance(AP);
 assert.equal(apBefore, ws.summary.outstandingCents, "Accounts payable in the books equals what the bills say is owed");
+assert.equal(await creditBalance(AP, "cash"), 0, "under cash basis the demo's Accounts payable nets to zero");
+{
+  const demoEntries = (await db.query("journalEntries").collect()).filter((entry) => String(entry.source).startsWith("bill"));
+  assert.ok(demoEntries.filter((entry) => entry.source === "bill").every((entry) => entry.basis === "accrual-only"), "demo approvals are accrual-only");
+  assert.ok(demoEntries.filter((entry) => entry.source === "bill_payment").every((entry) => entry.basis === "both"), "demo payments count on both bases");
+  assert.equal(demoEntries.filter((entry) => entry.source === "bill_cash_basis" && entry.basis === "cash-only").length, demoEntries.filter((entry) => entry.source === "bill_payment").length, "one cash-only entry per demo payment");
+}
+const cashBeforeApproval = await statements("cash");
+const accrualBeforeApproval = await statements("accrual");
+assert.equal(cashBeforeApproval.difference, 0, "the cash-basis balance sheet balances");
+assert.equal(accrualBeforeApproval.difference, 0, "the accrual-basis balance sheet balances");
 
 // approval: the dual-approval bill gets its second approval from the owner and posts
 const agm = ws.bills.find((row) => row.status === "awaiting_approval")!;
@@ -208,6 +268,18 @@ assert.deepEqual(postingBalance(agmEntry), { debitCents: 145000, creditCents: 14
 assert.equal(await creditBalance(AP), apBefore + 145000, "approval credits Accounts payable");
 // posting is idempotent per bill: the same key is never posted twice
 assert.equal((await postedEntries("bill")).filter((entry) => entry.sourceExternalId === `bill:${agm._id}`).length, 1);
+assert.equal((await get(String(row.journalEntryId))).basis, "accrual-only", "the approval entry is accrual-only");
+// An approved, unpaid bill: accrual basis shows the expense and the payable; cash basis shows neither.
+{
+  const cash = await statements("cash");
+  const accrual = await statements("accrual");
+  assert.equal(cash.difference, 0, "cash basis still balances");
+  assert.equal(accrual.difference, 0, "accrual basis still balances");
+  assert.equal(accrual.expenses - accrualBeforeApproval.expenses, 145000, "accrual expenses include the unpaid bill");
+  assert.equal(accrual.totalLiabilities - accrualBeforeApproval.totalLiabilities, 145000, "and Accounts payable owes it");
+  assert.deepEqual([cash.expenses, cash.totalLiabilities, cash.totalAssets], [cashBeforeApproval.expenses, cashBeforeApproval.totalLiabilities, cashBeforeApproval.totalAssets], "cash basis is untouched until it's paid");
+  assert.equal(await creditBalance(AP, "cash"), 0);
+}
 
 // draft → submit (by the owner, who then can't approve it) → declined, fixed, approved by the secretary
 const draft = ws.bills.find((row) => row.status === "draft")!;
@@ -240,6 +312,12 @@ assert.ok(txn.reconciledAtISO);
 assert.equal(await creditBalance(AP), apBeforePayment - 63000, "payment debits Accounts payable");
 assert.equal(await creditBalance(CASH), cashBefore + 63000, "and credits the bank account");
 assert.equal((await billById(overdue._id)).status, "paid");
+const paidPayment = (await billById(overdue._id)).payments[0];
+assert.equal((await get(String(paidPayment.journalEntryId))).basis, "both", "the payment counts on both bases");
+const cashEntry = await get(String(paidPayment.cashBasisJournalEntryId));
+assert.deepEqual([cashEntry.source, cashEntry.basis, cashEntry.date], ["bill_cash_basis", "cash-only", suggestion.date], "a cash-only entry recognises the expense on the payment date");
+assert.deepEqual((await linesOf(cashEntry._id)).map((line) => [line.accountId, line.side, line.amountCents]).sort(), [[AP, "credit", 63000], ["static_financial_facilities_expense", "debit", 63000]].sort());
+assert.equal(await creditBalance(AP, "cash"), 0, "under cash basis Accounts payable nets to zero after the payment");
 await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: agm._id, date: today, amountCents: 63000, method: "eft", financialTransactionId: suggestion._id }), /already linked/);
 // undo: the entry is voided and the bank line goes back as it was
 const paymentKey = (await billById(overdue._id)).payments[0].key;
@@ -247,6 +325,8 @@ await bills.removePaymentPortable(ctx, { id: overdue._id, paymentKey });
 txn = await get(suggestion._id);
 assert.deepEqual([txn.matchedKind, txn.matchedId, txn.accountingAccountId, txn.category, txn.reconciledAtISO], [undefined, undefined, undefined, undefined, undefined], "unlinking restores the bank line");
 assert.equal(await creditBalance(AP), apBeforePayment, "the payment entry no longer counts");
+assert.equal((await get(cashEntry._id)).status, "void", "removing the payment voids its cash-only entry too");
+assert.equal(await creditBalance(AP, "cash"), 0);
 assert.equal((await billById(overdue._id)).status, "overdue");
 
 // partial payments without a bank line need the account it was paid from
@@ -256,6 +336,10 @@ await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: open._id, date
 await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: open._id, date: today, amountCents: open.totalCents + 1, method: "cheque", cashAccountId: CASH }), /balance/);
 await bills.recordPaymentPortable(ctx, { id: open._id, date: today, amountCents: 10000, method: "cheque", reference: "Cheque 3310", cashAccountId: CASH });
 assert.equal((await billById(open._id)).status, "partially_paid");
+{
+  const partialCash = await get(String((await billById(open._id)).payments[0].cashBasisJournalEntryId));
+  assert.deepEqual((await linesOf(partialCash._id)).filter((line) => line.side === "debit").map((line) => line.amountCents), [10000], "a partial payment recognises only the paid share");
+}
 await bills.recordPaymentPortable(ctx, { id: open._id, date: today, amountCents: open.totalCents - 10000, method: "cheque", cashAccountId: CASH });
 row = await billById(open._id);
 assert.equal(row.status, "paid");
@@ -270,6 +354,25 @@ await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: scheduled._id,
 await assert.rejects(() => bills.cancelPortable(ctx, { societyId: S, ids: [scheduled._id] }), new RegExp(`Fiscal period ${currentPeriod.periodLabel ?? currentPeriod.fiscalYear} is closed`), "the reversal can't land in a closed period either");
 assert.equal((await get(scheduled._id)).status, "scheduled", "nothing changed");
 await db.patch(currentPeriod._id, { status: "open" });
+
+// books close date: approving, paying, removing a payment and canceling on or before it are refused; nothing changes
+{
+  const settingsId = await db.insert("booksSettings", { societyId: S, closeDate: today, createdAtISO: new Date().toISOString(), updatedAtISO: new Date().toISOString() });
+  const lockedMessage = new RegExp(`books are closed through ${today}`);
+  await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: scheduled._id, date: today, amountCents: 1000, method: "cheque", cashAccountId: CASH }), lockedMessage);
+  await assert.rejects(() => bills.cancelPortable(ctx, { societyId: S, ids: [scheduled._id] }), lockedMessage, "the reversal is dated today, inside the lock");
+  const markLocked = bills.markPaidPortable(ctx, { societyId: S, ids: [scheduled._id], date: today, method: "eft", cashAccountId: CASH });
+  await assert.rejects(() => markLocked, lockedMessage, "bulk mark paid stops rather than skipping every bill");
+  const paidOpen = await billById(open._id);
+  await assert.rejects(() => bills.removePaymentPortable(ctx, { id: open._id, paymentKey: paidOpen.payments[0].key }), /can't be voided/);
+  assert.equal((await billById(open._id)).payments.length, 2, "the payment stays");
+  assert.equal((await get(String(paidOpen.payments[0].cashBasisJournalEntryId))).status, "posted", "and so does its cash-only entry");
+  assert.equal((await get(scheduled._id)).status, "scheduled", "nothing changed");
+  // The close date itself is locked, whatever today is.
+  await db.patch(settingsId, { closeDate: addDays(today, -1) });
+  await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: scheduled._id, date: addDays(today, -1), amountCents: 1000, method: "cheque", cashAccountId: CASH }), /books are closed/);
+  await db.delete(settingsId);
+}
 
 // cancel: an approved bill gets a reversing entry, a paid one is skipped
 const apBeforeCancel = await creditBalance(AP);
@@ -307,10 +410,13 @@ await assert.rejects(() => bills.cancelPortable(ctx, { societyId: S, ids: [creat
 assert.equal((await get(created.id)).status, "draft");
 await assert.rejects(() => bills.recordPaymentPortable(ctx, { id: "foreign_bill", date: today, amountCents: 100, method: "cash", cashAccountId: CASH }));
 
-// the books still balance after everything above
+// the books still balance after everything above, on both bases
 const allLines = await db.query("journalLines").collect();
 const posted = new Set((await db.query("journalEntries").collect()).filter((entry) => entry.status === "posted").map((entry) => entry._id));
 assert.ok(postingBalance(allLines.filter((line) => posted.has(line.journalEntryId))).balanced, "every posted entry together still balances");
 assert.equal(await creditBalance(AP), (await workspace()).summary.outstandingCents, "Accounts payable still equals what the bills say is owed");
+assert.equal(await creditBalance(AP, "cash"), 0, "and under cash basis it still nets to zero");
+assert.equal((await statements("cash")).difference, 0);
+assert.equal((await statements("accrual")).difference, 0);
 
-console.log("Bill checks passed: status, partial payments, AP postings and reversal, duplicates, match scoring and handlers.");
+console.log("Bill checks passed: status, partial payments, AP postings and reversal, cash and accrual basis, the close date, duplicates, match scoring and handlers.");

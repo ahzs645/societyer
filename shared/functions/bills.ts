@@ -15,12 +15,16 @@
  * how many approvals it needs and who may give them, and the person who
  * submitted it can't approve it when the rule blocks self-approval. When the
  * last approval lands the bill is posted (Dr each line's account / Cr
- * Accounts payable). Payments post Dr Accounts payable / Cr the account paid
- * from, and a payment linked to a money-out bank line marks that line matched
- * (`matchedKind: "bill"`) and categorised to Accounts payable. Removing a
- * payment voids its entry and puts the bank line back as it was; canceling an
- * approved bill posts the mirror of the approval entry. Every posting goes
- * through the fiscal-period check, so a closed period refuses it.
+ * Accounts payable), as an accrual-only entry. Payments post Dr Accounts
+ * payable / Cr the account paid from (both bases) and a cash-only entry that
+ * recognises the paid share of the expense lines on the payment date
+ * (docs/accounting-shape.md, "Accounting basis"). A payment linked to a
+ * money-out bank line marks that line matched (`matchedKind: "bill"`) and
+ * categorised to Accounts payable. Removing a payment voids both its entries
+ * and puts the bank line back as it was; canceling an approved bill posts the
+ * mirror of the approval entry (accrual-only too). Every posting and void
+ * goes through the fiscal-period check and the books close date
+ * (`assertBooksOpen`), so a closed period or locked date refuses it.
  *
  * Vendors are `accountingCounterparties` rows of kind "vendor".
  */
@@ -28,10 +32,12 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertPeriodOpen } from "./accounting";
+import { assertBooksOpen } from "./booksLock";
 import { documentAccessPredicate, requireDocumentAccess } from "./documents";
 import { actorFor, approverAccessFor, loadApprovalPolicy, ruleFor } from "./expenseReports";
 import { flagChangedPeriods } from "./reconciliation";
 import { validateBalancedJournalLines } from "../accountingCore";
+import type { JournalBasis } from "../booksReports";
 import { approverEligibility, FINANCE_EDIT_REQUIRED_REASON, type ApprovalRule, type ApproverAccessContext } from "../expenseApprovals";
 import { resolutionCalendarDate, resolutionTimeZone } from "../writtenResolutionEvidence";
 import {
@@ -41,6 +47,8 @@ import {
   billSubmitProblem,
   billTotalCents,
   canPayStatus,
+  cashBasisPostingLines,
+  cashBasisShares,
   daysPastDue,
   deriveBillStatus,
   dueDateForTerms,
@@ -50,10 +58,12 @@ import {
   isDueSoon,
   normalizeBillTerms,
   paymentPostingLines,
+  recognizedCashShares,
   reversalLines,
   summarizeBills,
   validateBillLines,
   vendorTotals,
+  type BillCashShare,
   type BillLifecycle,
   type BillLine,
   type BillStatus,
@@ -84,6 +94,8 @@ type StoredPayment = {
   transactionBefore?: Snapshot;
   cashAccountId?: string;
   journalEntryId?: string;
+  cashBasisJournalEntryId?: string;
+  cashBasisShares?: BillCashShare[];
   note?: string;
   recordedAtISO: string;
   recordedByName?: string;
@@ -181,7 +193,7 @@ type TransactionRow = {
 };
 
 type JournalEntryRow = { _id: string; societyId: string; source: string; sourceExternalId?: string; status: string; date: string; fiscalPeriodId?: string };
-type JournalLineRow = { _id: string; societyId: string; journalEntryId: string; accountId: string; amountCents: number; side: string; description?: string; fundRestrictionId?: string; financialTransactionId?: string; counterpartyId?: string; lineOrder: number };
+type JournalLineRow = { _id: string; societyId: string; journalEntryId: string; accountId: string; amountCents: number; side: string; description?: string; fundRestrictionId?: string; financialTransactionId?: string; counterpartyId?: string; tagIds?: string[]; lineOrder: number };
 type FundRow = { _id: string; societyId: string; name: string; status: string };
 type DocumentRow = { _id: string; societyId: string; title?: string; fileName?: string };
 
@@ -306,11 +318,12 @@ async function ensurePayablesAccount(ctx: PortableMutationCtx, societyId: string
 /**
  * Post one balanced entry, once: a posted entry with the same source and key
  * is returned instead of posting twice. The fiscal-period check refuses a
- * date inside a closed period.
+ * date inside a closed period and the books close date refuses one on or
+ * before it. `basis` is set explicitly (docs/accounting-shape.md).
  */
 async function postEntry(
   ctx: PortableMutationCtx,
-  args: { societyId: string; date: string; memo: string; source: string; sourceExternalId: string; lines: PostingLine[]; counterpartyId?: string; documentId?: string; createdByUserId?: string },
+  args: { societyId: string; date: string; memo: string; source: string; sourceExternalId: string; basis: JournalBasis; lines: PostingLine[]; counterpartyId?: string; documentId?: string; createdByUserId?: string },
 ): Promise<string> {
   const existing = await ctx.db
     .query<JournalEntryRow>("journalEntries")
@@ -320,6 +333,7 @@ async function postEntry(
   if (already) return already._id;
   validateBalancedJournalLines(args.lines);
   const period = (await assertPeriodOpen(ctx, { societyId: args.societyId, date: args.date })) as { _id: string; fiscalYear?: string } | null;
+  await assertBooksOpen(ctx, args.societyId, [args.date], "posted");
   const at = nowISO();
   const documentIds = args.documentId ? [args.documentId] : undefined;
   const entryId = await ctx.db.insert("journalEntries", {
@@ -329,6 +343,7 @@ async function postEntry(
     memo: args.memo,
     source: args.source,
     sourceExternalId: args.sourceExternalId,
+    basis: args.basis,
     status: "posted",
     ...(args.createdByUserId ? { createdByUserId: args.createdByUserId } : {}),
     postedAtISO: at,
@@ -347,6 +362,7 @@ async function postEntry(
       ...(line.description ? { description: line.description } : {}),
       ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
       ...(line.financialTransactionId ? { financialTransactionId: line.financialTransactionId } : {}),
+      ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
       ...(args.counterpartyId ? { counterpartyId: args.counterpartyId } : {}),
       ...(documentIds ? { documentIds } : {}),
       createdAtISO: at,
@@ -714,6 +730,7 @@ async function approveOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor,
       memo: `Bill: ${billLabel(bill)}`,
       source: "bill",
       sourceExternalId: `bill:${bill._id}`,
+      basis: "accrual-only",
       lines: approvalPostingLines(bill, payables._id),
       counterpartyId: bill.vendorId,
       documentId: bill.documentId,
@@ -853,11 +870,26 @@ async function payOne(ctx: PortableMutationCtx, bill: BillRow, actor: Actor, arg
     memo: `Bill payment: ${billLabel(bill)}`,
     source: "bill_payment",
     sourceExternalId: `bill:${bill._id}:payment:${key}`,
+    basis: "both",
     lines: paymentPostingLines({ amountCents, financialTransactionId: txn?._id, reference }, payables._id, cashAccount._id, `Payment: ${billLabel(bill)}`),
     counterpartyId: bill.vendorId,
     createdByUserId: actor.id,
   });
-  const payment: StoredPayment = { key, date: args.date, amountCents, method, cashAccountId: cashAccount._id, journalEntryId, recordedAtISO: nowISO(), recordedByName: actor.name };
+  // Cash basis: the paid share of the expense lines lands on the payment date.
+  const shares = cashBasisShares(bill.lines, recognizedCashShares(bill.lines, bill.payments ?? []), amountCents);
+  const cashBasisJournalEntryId = await postEntry(ctx, {
+    societyId: bill.societyId,
+    date: args.date,
+    memo: `Bill paid (cash basis): ${billLabel(bill)}`,
+    source: "bill_cash_basis",
+    sourceExternalId: `bill:${bill._id}:payment:${key}:cash`,
+    basis: "cash-only",
+    lines: cashBasisPostingLines(bill, shares, payables._id),
+    counterpartyId: bill.vendorId,
+    documentId: bill.documentId,
+    createdByUserId: actor.id,
+  });
+  const payment: StoredPayment = { key, date: args.date, amountCents, method, cashAccountId: cashAccount._id, journalEntryId, cashBasisJournalEntryId, cashBasisShares: shares, recordedAtISO: nowISO(), recordedByName: actor.name };
   if (reference) payment.reference = reference;
   const note = cleanText(args.note, 500);
   if (note) payment.note = note;
@@ -911,25 +943,33 @@ export async function recordPaymentPortable(ctx: PortableMutationCtx, args: Paym
 
 // The payment is addressed by its key inside the bill (named `paymentKey`, not an id: it is not a row).
 /**
- * Remove a payment recorded in error: its journal entry is voided (refused
- * when its date is in a closed period) and a linked bank line is put back as
- * it was before the link.
+ * Remove a payment recorded in error: its journal entry and its cash-only
+ * entry are voided (refused when either date is in a closed period or on or
+ * before the books close date) and a linked bank line is put back as it was
+ * before the link.
  */
 export async function removePaymentPortable(ctx: PortableMutationCtx, { id, paymentKey }: { id: string; paymentKey: string }) {
   const bill = await requireOwnedRow<BillRow>(ctx, "bills", id);
   const actor = await actorFor(ctx, bill.societyId);
   const payment = (bill.payments ?? []).find((entry) => entry.key === paymentKey);
   if (!payment) throw new Error("That payment is no longer on this bill.");
-  if (payment.journalEntryId) {
-    const entry = await ctx.db.get<JournalEntryRow>(payment.journalEntryId, "journalEntries");
-    if (entry && entry.societyId === bill.societyId && entry.status === "posted") {
-      await assertPeriodOpen(ctx, { societyId: bill.societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
-      const at = nowISO();
-      await ctx.db.patch(entry._id, { status: "void", voidedAtISO: at, updatedAtISO: at });
-      // Free the bank line for other postings (the backfill skips lines already in an entry).
-      for (const line of await entryLines(ctx, entry._id)) {
-        if (line.financialTransactionId) await ctx.db.patch(line._id, { financialTransactionId: undefined, updatedAtISO: at });
-      }
+  const entries: JournalEntryRow[] = [];
+  for (const entryId of [payment.journalEntryId, payment.cashBasisJournalEntryId]) {
+    if (!entryId) continue;
+    const entry = await ctx.db.get<JournalEntryRow>(entryId, "journalEntries");
+    if (entry && entry.societyId === bill.societyId && entry.status === "posted") entries.push(entry);
+  }
+  // Check every entry before voiding any, so a refusal changes nothing.
+  for (const entry of entries) {
+    await assertPeriodOpen(ctx, { societyId: bill.societyId, date: entry.date, fiscalPeriodId: entry.fiscalPeriodId });
+    await assertBooksOpen(ctx, bill.societyId, [entry.date], "voided");
+  }
+  for (const entry of entries) {
+    const at = nowISO();
+    await ctx.db.patch(entry._id, { status: "void", voidedAtISO: at, updatedAtISO: at });
+    // Free the bank line for other postings (the backfill skips lines already in an entry).
+    for (const line of await entryLines(ctx, entry._id)) {
+      if (line.financialTransactionId) await ctx.db.patch(line._id, { financialTransactionId: undefined, updatedAtISO: at });
     }
   }
   if (payment.financialTransactionId) {
@@ -977,8 +1017,8 @@ export async function markPaidPortable(
       paid += 1;
       paidCents += balance;
     } catch (error) {
-      // A closed period refuses every bill alike: stop rather than skip silently.
-      if (error instanceof Error && /Fiscal period/.test(error.message)) throw error;
+      // A closed period or the books close date refuses every bill alike: stop rather than skip silently.
+      if (error instanceof Error && /Fiscal period|books are closed/.test(error.message)) throw error;
       skipped.push({ id: bill._id, error: error instanceof Error ? error.message : String(error) });
     }
   }
@@ -987,8 +1027,11 @@ export async function markPaidPortable(
 
 /**
  * Cancel bills. Drafts and bills waiting for approval simply close; an
- * approved bill gets a reversing entry (dated today, so a closed period
- * refuses it); bills with payments are skipped until the payments are removed.
+ * approved bill gets a reversing entry (dated today, so a closed period or a
+ * close date on or after today refuses it), accrual-only like the entry it
+ * mirrors; bills with payments are skipped until the payments are removed
+ * (removing a payment voids its cash-only entry, so a canceled bill never
+ * keeps cash-basis expense).
  */
 export async function cancelPortable(ctx: PortableMutationCtx, { societyId, ids, reason }: { societyId: string; ids: string[]; reason?: string }) {
   const bills = await ownedBills(ctx, societyId, ids);
@@ -1015,12 +1058,14 @@ export async function cancelPortable(ctx: PortableMutationCtx, { societyId, ids,
           memo: `Reversal: bill ${billLabel(bill)} canceled`,
           source: "bill_reversal",
           sourceExternalId: `bill:${bill._id}:reversal`,
+          basis: "accrual-only",
           lines: reversalLines(lines).map((line) => ({
             accountId: line.accountId,
             side: line.side,
             amountCents: line.amountCents,
             description: `Reversal: ${line.description ?? billLabel(bill)}`,
             ...(line.fundRestrictionId ? { fundRestrictionId: line.fundRestrictionId } : {}),
+            ...(line.tagIds?.length ? { tagIds: line.tagIds } : {}),
           })),
           counterpartyId: bill.vendorId,
           createdByUserId: actor.id,

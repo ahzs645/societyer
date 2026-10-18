@@ -45,6 +45,7 @@ import {
   buildReportPeriods,
   closedBooksError,
   defaultReportCurrency,
+  entryCountsForBasis,
   fiscalYearStartMonth,
   isIsoDate,
   isJournalBasis,
@@ -144,15 +145,19 @@ function csvRows(rows: unknown[][]) {
   return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
 }
 
+// The trial balance, legacy ledger and fund balances read the books' basis
+// (Books settings), so an invoice or bill counts once: accrual-only and
+// cash-only entries never both land in one total.
 async function buildTrialBalance(ctx: any, societyId: string, fiscalYear?: string) {
-  const [accounts, entries, allLines] = await Promise.all([
+  const [accounts, entries, allLines, basis] = await Promise.all([
     ctx.db.query("financialAccounts").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalEntries").withIndex("by_society_status", (q: any) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
     ctx.db.query("journalLines").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    booksAccountingBasis(ctx, societyId),
   ]);
   const entryIds = new Set(
     entries
-      .filter((entry: any) => !fiscalYear || entry.fiscalYear === fiscalYear)
+      .filter((entry: any) => (!fiscalYear || entry.fiscalYear === fiscalYear) && entryCountsForBasis(entry, basis))
       .map((entry: any) => String(entry._id)),
   );
   const accountById = new Map(accounts.map((account: any) => [String(account._id), account]));
@@ -174,14 +179,15 @@ async function buildTrialBalance(ctx: any, societyId: string, fiscalYear?: strin
 }
 
 async function buildGeneralLedger(ctx: any, societyId: string, fiscalYear?: string, accountId?: string) {
-  const [entries, lines, accounts] = await Promise.all([
+  const [entries, lines, accounts, basis] = await Promise.all([
     ctx.db.query("journalEntries").withIndex("by_society_status", (q: any) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
     accountId
       ? ctx.db.query("journalLines").withIndex("by_account", (q: any) => q.eq("accountId", accountId)).collect()
       : ctx.db.query("journalLines").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("financialAccounts").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
+    booksAccountingBasis(ctx, societyId),
   ]);
-  const entryById = new Map(entries.filter((entry: any) => !fiscalYear || entry.fiscalYear === fiscalYear).map((entry: any) => [String(entry._id), entry]));
+  const entryById = new Map(entries.filter((entry: any) => (!fiscalYear || entry.fiscalYear === fiscalYear) && entryCountsForBasis(entry, basis)).map((entry: any) => [String(entry._id), entry]));
   const accountById = new Map(accounts.map((account: any) => [String(account._id), account]));
   return lines
     .filter((line: any) => entryById.has(String(line.journalEntryId)))
@@ -258,14 +264,15 @@ export async function restrictedFundBalancesPortable(
   { societyId, fiscalYear }: { societyId: string; fiscalYear?: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
-  const [restrictions, entries, lines] = await Promise.all([
+  const [restrictions, entries, lines, basis] = await Promise.all([
     ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
     ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    booksAccountingBasis(ctx, societyId),
   ]);
   const entryIds = new Set(
     entries
-      .filter((entry) => !fiscalYear || entry.fiscalYear === fiscalYear)
+      .filter((entry) => (!fiscalYear || entry.fiscalYear === fiscalYear) && entryCountsForBasis({ basis: entry.basis, source: entry.source }, basis))
       .map((entry) => String(entry._id)),
   );
   const totals = new Map<string, { debitCents: number; creditCents: number }>();

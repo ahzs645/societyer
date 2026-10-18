@@ -42,6 +42,10 @@ export const billPaymentValidator = v.object({
   // The bank or card account it was paid from (the credit side of the entry).
   cashAccountId: v.optional(v.id("financialAccounts")),
   journalEntryId: v.optional(v.id("journalEntries")),
+  // Cash basis: the cash-only entry recognising the paid share of the expense
+  // lines on the payment date, and that share per bill line (by line key).
+  cashBasisJournalEntryId: v.optional(v.id("journalEntries")),
+  cashBasisShares: v.optional(v.array(v.object({ key: v.string(), amountCents: v.number() }))),
   note: v.optional(v.string()),
   recordedAtISO: v.string(),
   recordedByName: v.optional(v.string()),
@@ -94,7 +98,7 @@ export const billTables = {
     declinedByName: v.optional(v.string()),
     // A planned payment date (Societyer records payments; it doesn't send them).
     scheduledDate: v.optional(v.string()),
-    // Dr expense lines / Cr Accounts payable, posted when the last approval lands.
+    // Dr expense lines / Cr Accounts payable, posted (accrual-only) when the last approval lands.
     journalEntryId: v.optional(v.id("journalEntries")),
     // The mirror entry posted when an approved bill is canceled.
     reversalJournalEntryId: v.optional(v.id("journalEntries")),

@@ -2,9 +2,11 @@
  * Demo data for bills (accounts payable): four vendors and eight bills, one
  * in each status a bill can show (draft, needs approval, open, scheduled,
  * partially paid, paid, overdue and canceled), the journal entries their
- * approvals and payments posted, and the money-out bank lines: two linked to
- * payments, one unlinked that matches the overdue bill so "Record payment"
- * has a suggestion.
+ * approvals and payments posted (accrual-only approvals, payments on both
+ * bases and a cash-only entry per payment for the paid share, as
+ * shared/functions/bills.ts posts them), and the money-out bank lines: two
+ * linked to payments, one unlinked that matches the overdue bill so "Record
+ * payment" has a suggestion.
  *
  * Shared by the in-browser demo (src/lib/staticBillFixtures.ts, fixed string
  * ids) and the server seed (shared/functions/seed.ts, real database ids).
@@ -17,7 +19,8 @@
  *
  * Pure TypeScript: no Convex, DOM or Node imports.
  */
-import { approvalPostingLines, billTotalCents, paymentPostingLines, type BillLine, type PostingLine } from "../bills";
+import { approvalPostingLines, billTotalCents, cashBasisPostingLines, cashBasisShares, paymentPostingLines, recognizedCashShares, type BillCashShare, type BillLine, type PostingLine } from "../bills";
+import type { JournalBasis } from "../booksReports";
 import { demoFiscalYearLabel } from "./journals";
 import { addDays } from "../invoicing";
 import { invoiceDemoAnchor } from "./invoicing";
@@ -214,9 +217,9 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
 
   const journalEntries: Row[] = [];
   const journalLines: Row[] = [];
-  const post = (key: string, date: string, memo: string, source: string, sourceExternalId: string, lines: PostingLine[], vendor: string, createdBy: DemoBillPerson) => {
+  const post = (key: string, date: string, memo: string, source: string, sourceExternalId: string, basis: JournalBasis, lines: PostingLine[], vendor: string, createdBy: DemoBillPerson) => {
     const id = entryId(key);
-    journalEntries.push({ _id: id, societyId: refs.societyId, date, memo, source, sourceExternalId, status: "posted", fiscalYear: demoFiscalYearLabel(date), createdByUserId: createdBy.id, postedAtISO: at(date, 18), createdAtISO: at(date, 18), updatedAtISO: at(date, 18) });
+    journalEntries.push({ _id: id, societyId: refs.societyId, date, memo, source, sourceExternalId, basis, status: "posted", fiscalYear: demoFiscalYearLabel(date), createdByUserId: createdBy.id, postedAtISO: at(date, 18), createdAtISO: at(date, 18), updatedAtISO: at(date, 18) });
     lines.forEach((posting, index) => {
       journalLines.push({
         _id: refs.idFor("journalLine", `${key}_${index + 1}`),
@@ -229,6 +232,7 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
         ...(posting.description ? { description: posting.description } : {}),
         ...(posting.fundRestrictionId ? { fundRestrictionId: posting.fundRestrictionId } : {}),
         ...(posting.financialTransactionId ? { financialTransactionId: posting.financialTransactionId } : {}),
+        ...(posting.tagIds?.length ? { tagIds: posting.tagIds } : {}),
         counterpartyId: vendor,
         createdAtISO: at(date, 18),
         updatedAtISO: at(date, 18),
@@ -263,11 +267,12 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
     });
     let journalEntryId: string | undefined;
     if (approved) {
-      journalEntryId = post(`bill_${spec.key}`, spec.billDate, `Bill: ${label}`, "bill", `bill:${id}`, approvalPostingLines({ lines: spec.lines, billNumber: spec.billNumber, vendorName: vendor.name }, refs.accounts.payable), vendorId(spec.vendor), spec.approvers!.at(-1)!);
+      journalEntryId = post(`bill_${spec.key}`, spec.billDate, `Bill: ${label}`, "bill", `bill:${id}`, "accrual-only", approvalPostingLines({ lines: spec.lines, billNumber: spec.billNumber, vendorName: vendor.name }, refs.accounts.payable), vendorId(spec.vendor), spec.approvers!.at(-1)!);
       timeline.push(event(spec.approvedOn!, "posted", `Posted to the books: $${(total / 100).toFixed(2)} to Accounts payable`, spec.approvers!.at(-1), total, 19));
     }
     if (spec.scheduledDate) timeline.push(event(spec.approvedOn!, "scheduled", `Payment planned for ${spec.scheduledDate}`, refs.treasurer, undefined, 20));
     let paid = 0;
+    const recorded: Array<{ amountCents: number; cashBasisShares: BillCashShare[] }> = [];
     const payments = (spec.payments ?? []).map((payment) => {
       paid += payment.amountCents;
       const linked = payment.txnKey ? txnId(payment.txnKey) : undefined;
@@ -277,7 +282,21 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
         `Bill payment: ${label}`,
         "bill_payment",
         `bill:${id}:payment:${payment.key}`,
+        "both",
         paymentPostingLines({ amountCents: payment.amountCents, financialTransactionId: linked, reference: payment.reference }, refs.accounts.payable, refs.cashAccountId, `Payment: ${label}`),
+        vendorId(spec.vendor),
+        refs.treasurer,
+      );
+      const shares = cashBasisShares(spec.lines, recognizedCashShares(spec.lines, recorded), payment.amountCents);
+      recorded.push({ amountCents: payment.amountCents, cashBasisShares: shares });
+      const cashBasisEntryId = post(
+        `cash_${payment.key}`,
+        payment.date,
+        `Bill paid (cash basis): ${label}`,
+        "bill_cash_basis",
+        `bill:${id}:payment:${payment.key}:cash`,
+        "cash-only",
+        cashBasisPostingLines({ lines: spec.lines, billNumber: spec.billNumber, vendorName: vendor.name }, shares, refs.accounts.payable),
         vendorId(spec.vendor),
         refs.treasurer,
       );
@@ -291,6 +310,8 @@ export function billDemoRows(refs: DemoBillRefs, nowMs = Date.now()) {
         ...(linked ? { financialTransactionId: linked, transactionBefore: { category: spec.vendor === "hydro" ? "Utilities" : "Printing" } } : {}),
         cashAccountId: refs.cashAccountId,
         journalEntryId: paymentEntryId,
+        cashBasisJournalEntryId: cashBasisEntryId,
+        cashBasisShares: shares,
         recordedAtISO: at(payment.date, 18),
         recordedByName: refs.treasurer.name,
       };

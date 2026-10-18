@@ -233,7 +233,7 @@ Every journal entry belongs to one basis, set by `journalEntries.basis` (accepte
 - `"accrual-only"`: the accrual of an issued invoice (Dr 1100 receivable / Cr revenue) or a received bill (Dr expense / Cr 2000 payable).
 - `"cash-only"`: the recognition posted when that invoice or bill is paid, repeating the accrual's revenue or expense lines (Dr receivable / Cr revenue, or Dr expense / Cr payable) on the payment date.
 
-The payment itself (Dr cash / Cr receivable, or Dr payable / Cr cash) stays `"both"`. Accrual reports drop cash-only entries and cash reports drop accrual-only ones, so under cash basis revenue and expenses land on the payment date and the receivable or payable nets to zero; under accrual basis nothing is counted twice. A partial payment posts a cash-only entry for the paid share.
+The payment itself (Dr cash / Cr receivable, or Dr payable / Cr cash) stays `"both"`. Bills follow this today (`shared/functions/bills.ts`): approval posts source `bill` as `"accrual-only"`, each payment posts `bill_payment` as `"both"` plus `bill_cash_basis` as `"cash-only"` (its per-line shares stored on the payment as `cashBasisShares`), removing a payment voids both, and canceling an approved bill posts `bill_reversal` as `"accrual-only"`. The trial balance, legacy general ledger and restricted fund balances read the basis set in Books settings. Accrual reports drop cash-only entries and cash reports drop accrual-only ones, so under cash basis revenue and expenses land on the payment date and the receivable or payable nets to zero; under accrual basis nothing is counted twice. A partial payment posts a cash-only entry for the paid share.
 
 When an entry has no `basis`, its `source` decides: `invoice`, `bill`, `invoice_accrual`, `bill_accrual` are accrual-only and `invoice_cash_basis`, `bill_cash_basis` are cash-only (`ACCRUAL_ONLY_SOURCES` / `CASH_ONLY_SOURCES`). Prefer setting `basis` explicitly.
 
@@ -243,7 +243,7 @@ When an entry has no `basis`, its `source` decides: `invoice`, `bill`, `invoice_
 
 ### Close date (books lock)
 
-`booksSettings.closeDate` is a hard lock: no journal entry dated on or before it can be posted, edited (old or new date) or voided, in every write path (`upsertJournalEntry`, `postTransactionCandidate`, `postTransactionCandidateAllocation`, `postOpeningBalances`, expense-claim reimbursement posting, `voidJournalEntry`); the bank backfill skips locked rows and reports `skippedLocked`. Only an admin can move it, and it can't be set in the future. New write paths must call `assertBooksOpen` (`shared/functions/booksLock.ts`).
+`booksSettings.closeDate` is a hard lock: no journal entry dated on or before it can be posted, edited (old or new date) or voided, in every write path (`upsertJournalEntry`, `postTransactionCandidate`, `postTransactionCandidateAllocation`, `postOpeningBalances`, expense-claim reimbursement posting, `voidJournalEntry`, bill approval, payment, cash-basis and reversal postings and bill payment removal); the bank backfill skips locked rows and reports `skippedLocked`. Only an admin can move it, and it can't be set in the future. New write paths must call `assertBooksOpen` (`shared/functions/booksLock.ts`).
 
 It sits on top of fiscal periods rather than replacing them: closing a fiscal period is a soft close (a director can still post an approved closed-period adjustment), `closeFiscalPeriod({ lockBooks: true })` also moves the close date to the period end, and a period inside the close date can't be reopened until the date moves.
 
