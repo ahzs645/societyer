@@ -273,7 +273,8 @@ function SingleCategoryInput({ category, recordId, listId, disabled, onCommit }:
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          commit();
+          // A held Enter would save (and prompt for a rule) once per repeat.
+          if (!event.repeat) commit();
         }
         if (event.key === "Escape") setValue(category);
       }}

@@ -146,7 +146,8 @@ export function PayeeRenameDialog({
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                void save();
+                // Held or repeated Enter while saving would add the rename twice.
+                if (!event.repeat && !saving) void save();
               }
             }}
           />

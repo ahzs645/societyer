@@ -62,7 +62,8 @@ export function VendorPicker({ vendorId, vendors, onChange, onCreate, disabled }
       setActive((index) => Math.max(0, index - 1));
     } else if (event.key === "Enter" && open && options[active]) {
       event.preventDefault();
-      void choose(options[active]);
+      // A held Enter must not create the same vendor twice.
+      if (!event.repeat) void choose(options[active]);
     } else if (event.key === "Escape" && open) {
       event.stopPropagation();
       setOpen(false);
