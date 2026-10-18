@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -26,6 +26,9 @@ function writeDemoSelection(id: Id<"societies"> | null) {
 }
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";
 let staticSocietyId = (readDemoSelection() ?? STATIC_DEMO_SOCIETY_ID) as Id<"societies"> | null;
+// A tab keeps its own selection. localStorage remembers the last choice for a
+// reload/new tab, but another tab (possibly with stale memberships) cannot undo it.
+let tabSocietyId: Id<"societies"> | null | undefined;
 let membershipUserIds: Map<Id<"societies">, Id<"users">> | null = null;
 
 type SocietyView = Doc<"societies"> & {
@@ -48,13 +51,16 @@ export function setMembershipSocietyIds(
 
 export function getStoredSocietyId(): Id<"societies"> | null {
   if (isStaticDemoRuntime()) return staticSocietyId;
-  const value = localStorage.getItem(KEY) as Id<"societies"> | null;
+  if (tabSocietyId === undefined) {
+    try { tabSocietyId = localStorage.getItem(KEY) as Id<"societies"> | null; }
+    catch { tabSocietyId = null; }
+  }
+  const value = tabSocietyId;
   if (requiresMembershipSelection() && value) {
     // An unresolved membership set grants no access, but cannot invalidate a
     // durable preference during initial session/token hydration or a retry.
     if (membershipUserIds === null) return null;
     if (!membershipUserIds.has(value)) {
-      localStorage.removeItem(KEY);
       return null;
     }
   }
@@ -63,23 +69,29 @@ export function getStoredSocietyId(): Id<"societies"> | null {
 
 export function setStoredSocietyId(id: Id<"societies"> | null) {
   if (requiresMembershipSelection() && id && !membershipUserIds?.has(id)) {
-    if (!isStaticDemoRuntime()) localStorage.removeItem(KEY);
-    window.dispatchEvent(new Event(SOCIETY_CHANGED_EVENT));
-    return;
+    return false;
   }
 
   if (isStaticDemoRuntime()) {
     staticSocietyId = id;
     writeDemoSelection(id);
-  } else if (id) {
-    localStorage.setItem(KEY, id);
   } else {
-    localStorage.removeItem(KEY);
+    tabSocietyId = id;
+    try {
+      if (id) localStorage.setItem(KEY, id);
+      else localStorage.removeItem(KEY);
+    } catch { /* The tab's in-memory selection still works without storage. */ }
   }
   if (requiresMembershipSelection()) {
     setStoredUserId(id ? membershipUserIds?.get(id) ?? null : null);
   }
   window.dispatchEvent(new Event(SOCIETY_CHANGED_EVENT));
+  return true;
+}
+
+function subscribeSocietySelection(onChange: () => void) {
+  window.addEventListener(SOCIETY_CHANGED_EVENT, onChange);
+  return () => window.removeEventListener(SOCIETY_CHANGED_EVENT, onChange);
 }
 
 export function useSocieties() {
@@ -107,19 +119,7 @@ export function useSocieties() {
 
 export function useSocietySelection() {
   const societies = useSocieties();
-  const [societyId, setSocietyIdState] = useState<Id<"societies"> | null>(() =>
-    getStoredSocietyId(),
-  );
-
-  useEffect(() => {
-    const sync = () => setSocietyIdState(getStoredSocietyId());
-    window.addEventListener(SOCIETY_CHANGED_EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(SOCIETY_CHANGED_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
+  const societyId = useSyncExternalStore(subscribeSocietySelection, getStoredSocietyId, () => null);
 
   // A local workspace answers queries from its seed until IndexedDB has been
   // read back. Treating that partial list as authoritative rewrites the stored
@@ -133,8 +133,11 @@ export function useSocietySelection() {
       if (societyId !== null) setStoredSocietyId(null);
       return;
     }
-    const valid = societyId
-      ? societies.some((society) => society._id === societyId)
+    // Read the latest selection: an effect from an older render must not
+    // overwrite a choice made during that commit.
+    const currentId = getStoredSocietyId();
+    const valid = currentId
+      ? societies.some((society) => society._id === currentId)
       : false;
     if (!valid) setStoredSocietyId(societies[0]._id);
   }, [societies, societyId, localWorkspaceReady]);

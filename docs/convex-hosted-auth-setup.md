@@ -344,3 +344,23 @@ carried over, and Societyer never matches people by email. Existing workspace
 memberships stay bound to their old issuer. To move a deployment, each person
 creates an account here and is re-invited (or an operator rebinds memberships
 explicitly), and you keep the old mode running until that's done.
+
+### Workspace selection across browser tabs
+
+Each tab retains its own workspace and matching membership user/role. The last
+selection is saved for a reload or new tab, but changes in another tab do not
+switch an open page. This prevents a tab opened before invitation acceptance,
+whose cached membership list still contains only the original workspace, from
+rejecting and overwriting the newly invited workspace selected elsewhere.
+
+Selection readers use React's external-store subscription so a change made while
+components mount is observed consistently. Unknown membership IDs are rejected
+without clearing an existing selection or deleting another tab's preference.
+Browser-local and demo workspaces retain their own selection behavior and keys.
+
+`npm run test:workspace-selection` exercises the actual React hooks in isolated
+JavaScript realms representing separate tabs, with shared browser-storage events
+and stubbed auth/query transport. It reproduces the original rollback and checks
+workspace/user/role consistency, new-tab persistence, mount timing, unavailable
+storage, and local/demo compatibility. Server membership authorization remains
+independent of the browser's selection.

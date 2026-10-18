@@ -392,3 +392,23 @@ manifest check. The existing full authorization scanner stops on the unchanged
 qualification run excluded only that module from the static wrapper scan and
 passed the remaining authorization assertions; the full scanner has not been
 reported as passing. The ddcnorth.com domain restriction remains enabled.
+
+### Workspace-switch rollback correction — 2026-10-18
+
+The invited account had two active, correctly bound memberships. The switching
+failure was reproduced with actual React selection hooks: an older tab knew only
+workspace A, while the invitation tab knew A and B. Selecting B broadcast storage
+events to the older tab, which rejected B, removed the shared preference, and
+selected A again. Both tabs ended back at A.
+
+Workspace and membership-user selections now remain local to each open tab while
+persisting the last choice for reload/new-tab startup. Stale tabs cannot reset
+other tabs, invalid selections preserve the current choice, and external-store
+subscriptions also prevent missed selection events during component mounting.
+The picker refreshes membership data if its selection is not yet authorized in
+that tab. No server access or email-domain policy was relaxed.
+
+The two-tab regression, membership pipeline, invitation onboarding checks, and
+DDC North production build passed. Existing open pages need a refresh to load the
+corrected client code. No recipient password was requested or changed, and no
+additional workspace access was granted to test the fix.

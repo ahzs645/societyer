@@ -189,8 +189,10 @@ import { useNavAreaShell, useSwitchNavArea } from "../hooks/useNavArea";
 import { todayDateOnly } from "../../shared/dateOnly";
 import { BottomNavIndicator } from "./BottomNavIndicator";
 import { PendingInvitations } from "./PendingInvitations";
+import { useAuth } from "../auth/AuthProvider";
 
 export function Layout() {
+  const auth = useAuth();
   const { society, societies } = useSocietySelection();
   const { t } = useTranslation();
   const loc = useLocation();
@@ -1821,7 +1823,7 @@ export function Layout() {
                     key={s._id}
                     type="button"
                     onClick={() => {
-                      setStoredSocietyId(s._id);
+                      if (!setStoredSocietyId(s._id)) auth.refreshMembership(s._id);
                       setWorkspaceOpen(false);
                       // The record URL belongs to the workspace being left.
                       navigate("/app");

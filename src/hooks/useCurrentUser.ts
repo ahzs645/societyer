@@ -1,13 +1,14 @@
 import { useRecordQuery } from "./useRecordQuery";
 import { api } from "@/lib/convexApi";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { getAuthMode } from "../lib/authMode";
 import { STATIC_DEMO_USER_ID } from "../lib/staticIds";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentUserId";
 let staticUserId = STATIC_DEMO_USER_ID as Id<"users"> | null;
+let tabUserId: Id<"users"> | null | undefined;
 let principalUsers: Map<Id<"users">, Doc<"users">> | null = null;
 
 export function setPrincipalUsers(users: readonly Doc<"users">[] | null) {
@@ -16,14 +17,17 @@ export function setPrincipalUsers(users: readonly Doc<"users">[] | null) {
 
 export function getStoredUserId(): Id<"users"> | null {
   if (isStaticDemoRuntime()) return staticUserId;
-  const value = localStorage.getItem(KEY) as Id<"users"> | null;
+  if (tabUserId === undefined) {
+    try { tabUserId = localStorage.getItem(KEY) as Id<"users"> | null; }
+    catch { tabUserId = null; }
+  }
+  const value = tabUserId;
   if (
     getAuthMode() !== "none" &&
     !isLocalDataRuntime() &&
     value &&
     !principalUsers?.has(value)
   ) {
-    localStorage.removeItem(KEY);
     return null;
   }
   return value;
@@ -36,32 +40,27 @@ export function setStoredUserId(id: Id<"users"> | null) {
     id &&
     !principalUsers?.has(id)
   ) {
-    localStorage.removeItem(KEY);
-    window.dispatchEvent(new Event("societyer:user-changed"));
     return;
   }
   if (isStaticDemoRuntime()) {
     staticUserId = id;
-  } else if (id) {
-    localStorage.setItem(KEY, id);
   } else {
-    localStorage.removeItem(KEY);
+    tabUserId = id;
+    try {
+      if (id) localStorage.setItem(KEY, id);
+      else localStorage.removeItem(KEY);
+    } catch { /* Keep the tab usable when browser storage is unavailable. */ }
   }
   window.dispatchEvent(new Event("societyer:user-changed"));
 }
 
+function subscribeCurrentUser(onChange: () => void) {
+  window.addEventListener("societyer:user-changed", onChange);
+  return () => window.removeEventListener("societyer:user-changed", onChange);
+}
+
 export function useCurrentUserId(): Id<"users"> | null {
-  const [id, setId] = useState<Id<"users"> | null>(() => getStoredUserId());
-  useEffect(() => {
-    const h = () => setId(getStoredUserId());
-    window.addEventListener("societyer:user-changed", h);
-    window.addEventListener("storage", h);
-    return () => {
-      window.removeEventListener("societyer:user-changed", h);
-      window.removeEventListener("storage", h);
-    };
-  }, []);
-  return id;
+  return useSyncExternalStore(subscribeCurrentUser, getStoredUserId, () => null);
 }
 
 export function useCurrentUser() {
