@@ -22,6 +22,7 @@ import { RULE_TOUCHED_FIELDS, snapshotRuleFields } from "../transactionRules";
 import { categoryAmounts, isSplitTransaction } from "../transactionLines";
 import { assertTransactionBooksOpen, createTransactionBooksLock, createTransactionJournalSync } from "./accounting";
 import { requireBudgetForTransaction } from "./spendBudgets";
+import { releaseInboxMatches } from "./receiptInbox";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -589,6 +590,8 @@ export async function updateTransactionPortable(
     ? { categorizedBy: "manual", ruleId: undefined, ruleApplication: undefined }
     : {};
   await ctx.db.patch(id, { ...next, ...provenance });
+  // A receipt removed or replaced here no longer matches its inbox item.
+  if (receiptDocumentId !== undefined) await releaseInboxMatches(ctx, id, receiptDocumentId || undefined);
   // A posted transaction's journal entry follows a new category, amount or date.
   if (patch.category !== undefined || patch.amountCents !== undefined || patch.date !== undefined) {
     await createTransactionJournalSync(ctx, String(row.societyId))(id);

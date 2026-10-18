@@ -256,6 +256,22 @@ await assert.rejects(inbox.confirmMatchPortable(mina, { id: photo._id, transacti
 await inbox.setDiscardedPortable(mina, { id: photo._id, discarded: true });
 box = await inbox.listPortable(mina, { societyId: S });
 assert.deepEqual(box.counts, { unmatched: 1, matched: 2, discarded: 1 });
+// Removing the receipt from the transaction panel puts its inbox item back; the inbox won't take a document already used as a receipt.
+{
+  const hydroTxn = hydroAfter.candidates[0].transactionId;
+  await hub.updateTransactionPortable(mina, { id: hydroTxn, patch: { receiptDocumentId: null } });
+  const item = await db.get(hydro._id);
+  assert.deepEqual([item?.status, item?.matchedTransactionId], ["unmatched", undefined], "the inbox item is unmatched again, not left pointing at the line");
+  await inbox.confirmMatchPortable(mina, { id: hydro._id, transactionId: hydroTxn });
+  const inInbox = new Set((await db.query("receiptInboxItems").collect()).map((row) => String(row.documentId)));
+  const document = seed.documents.find((row) => row.societyId === S && !inInbox.has(row._id))!;
+  const line = (await db.query("financialTransactions").collect()).find((row) => row.societyId === S && Number(row.amountCents) < 0 && !row.receiptDocumentId)!;
+  await hub.updateTransactionPortable(mina, { id: line._id, patch: { receiptDocumentId: document._id } });
+  const added = await inbox.addPortable(mina, { societyId: S, items: [{ documentId: document._id, fileName: "already-attached.pdf" }] });
+  assert.deepEqual([added.added, added.skipped, added.alreadyAttached], [0, 1, 1], "a document that is already a transaction's receipt is skipped");
+  assert.deepEqual((await inbox.listPortable(mina, { societyId: S })).counts, { unmatched: 1, matched: 2, discarded: 1 });
+  await hub.updateTransactionPortable(mina, { id: line._id, patch: { receiptDocumentId: null } });
+}
 
 // Reconciliation by month: March is open with a difference but every line is
 // matched or categorised, so it auto-reconciles in one step.

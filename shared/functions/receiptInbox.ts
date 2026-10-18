@@ -8,8 +8,10 @@
  * Confirming a match attaches the document as the transaction's receipt
  * through the same handler the transaction panel uses
  * (financialHub.updateTransaction), so `receiptDocumentId` and
- * `receiptStatus` stay in step. Each handler runs unchanged on hosted Convex,
- * the local Dexie runtime, and the convex-test oracle.
+ * `receiptStatus` stay in step; removing or replacing a receipt there puts a
+ * matched inbox item back in the inbox (`releaseInboxMatches`). A document
+ * already some transaction's receipt isn't added. Each handler runs unchanged
+ * on hosted Convex, the local Dexie runtime, and the convex-test oracle.
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
@@ -137,7 +139,9 @@ function cleanFields(input: { merchant?: string | null; amountCents?: number | n
 
 /**
  * Add uploaded receipt documents to the inbox. Fields the caller leaves out
- * are prefilled from the file name; a document already in the inbox is skipped.
+ * are prefilled from the file name; a document already in the inbox, or
+ * already attached to a transaction as its receipt (counted in
+ * `alreadyAttached`), is skipped.
  */
 export async function addPortable(
   ctx: PortableMutationCtx,
@@ -150,11 +154,15 @@ export async function addPortable(
   const nowISO = new Date().toISOString();
   const ids: string[] = [];
   let skipped = 0;
+  let alreadyAttached = 0;
+  const transactions = await ctx.db.query<TxnRow>("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  const attachedDocuments = new Set(transactions.map((row) => String(row.receiptDocumentId ?? "")).filter(Boolean));
   for (const input of args.items) {
     await getOwned(ctx, "documents", input.documentId, args.societyId);
     const existing = await ctx.db.query<InboxRow>("receiptInboxItems").withIndex("by_document", (q) => q.eq("documentId", input.documentId)).collect();
-    if (existing.length) {
+    if (existing.length || attachedDocuments.has(String(input.documentId))) {
       skipped += 1;
+      if (!existing.length) alreadyAttached += 1;
       continue;
     }
     const fileName = String(input.fileName || "Receipt").slice(0, 240);
@@ -176,7 +184,7 @@ export async function addPortable(
       updatedAtISO: nowISO,
     }));
   }
-  return { added: ids.length, skipped, ids };
+  return { added: ids.length, skipped, alreadyAttached, ids };
 }
 
 /** Correct an inbox item's merchant, amount or date (null clears it). */
@@ -192,6 +200,20 @@ export async function updatePortable(
   if (args.date === null || args.date === "") patch.date = undefined;
   await ctx.db.patch(args.id, patch);
   return args.id;
+}
+
+/**
+ * Put back in the inbox every receipt matched to this transaction that is no
+ * longer its receipt (removed or replaced from the transaction panel, through
+ * financialHub.updateTransaction). `currentDocumentId` is the receipt it has now.
+ */
+export async function releaseInboxMatches(ctx: PortableMutationCtx, transactionId: string, currentDocumentId: string | undefined) {
+  const items = await ctx.db.query<InboxRow>("receiptInboxItems").withIndex("by_transaction", (q) => q.eq("matchedTransactionId", transactionId)).collect();
+  const at = new Date().toISOString();
+  for (const item of items) {
+    if (item.status !== "matched" || String(item.documentId) === String(currentDocumentId ?? "")) continue;
+    await ctx.db.patch(item._id, { status: "unmatched", matchedTransactionId: undefined, matchedAtISO: undefined, matchedByName: undefined, matchScore: undefined, updatedAtISO: at });
+  }
 }
 
 async function attach(ctx: PortableMutationCtx, item: InboxRow, transactionId: string, actor: { name: string }) {
