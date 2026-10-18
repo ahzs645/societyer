@@ -182,6 +182,7 @@ Important fields:
 - `postedAtISO`
 - `sourceDocumentIds`
 - `rawJson`
+- `basis` (see "Accounting basis" below)
 
 LedgerSMB mapping:
 
@@ -210,11 +211,41 @@ Important fields:
 
 Each posted journal entry should have at least two lines and equal debit and credit totals.
 
+### `booksSettings`
+
+One row per society: `booksStartDate`, `accountingBasis` (`accrual` | `cash`, the default basis for reports) and `closeDate`, the books lock date. See "Books: reports, basis and the close date" below.
+
 ### `reconciliationRuns`
 
 Represents a statement reconciliation event for one financial account.
 
 This is separate from per-transaction match fields so Societyer can track statement date, statement balance, book balance, status, source documents, and reviewer notes.
+
+## Books: reports, basis and the close date
+
+The books pages (`/app/financials/reports/:report`, `/journal-entries`, `/chart-of-accounts`, `/books-settings`) read posted journal lines through the portable queries in `shared/functions/accounting.ts`; the computation is `shared/booksReports.ts`, covered by `scripts/check-books-reports.ts` (`npm run test:books-reports`).
+
+### Accounting basis (contract for invoice and bill postings)
+
+Every journal entry belongs to one basis, set by `journalEntries.basis` (accepted by `upsertJournalEntry`):
+
+- `"both"` (the default when absent): ordinary entries, payments, bank lines, adjustments.
+- `"accrual-only"`: the accrual of an issued invoice (Dr 1100 receivable / Cr revenue) or a received bill (Dr expense / Cr 2000 payable).
+- `"cash-only"`: the recognition posted when that invoice or bill is paid, repeating the accrual's revenue or expense lines (Dr receivable / Cr revenue, or Dr expense / Cr payable) on the payment date.
+
+The payment itself (Dr cash / Cr receivable, or Dr payable / Cr cash) stays `"both"`. Accrual reports drop cash-only entries and cash reports drop accrual-only ones, so under cash basis revenue and expenses land on the payment date and the receivable or payable nets to zero; under accrual basis nothing is counted twice. A partial payment posts a cash-only entry for the paid share.
+
+When an entry has no `basis`, its `source` decides: `invoice`, `bill`, `invoice_accrual`, `bill_accrual` are accrual-only and `invoice_cash_basis`, `bill_cash_basis` are cash-only (`ACCRUAL_ONLY_SOURCES` / `CASH_ONLY_SOURCES`). Prefer setting `basis` explicitly.
+
+### Report filters (fund and dimensions)
+
+`booksReport`, `booksReportLines` and `generalLedgerReport` take `filter: { fund?, dimensions? }`. `fund` is `all`, `unrestricted` or a fund restriction id. `dimensions` is a list of `{ kind, values }`; a line passes when it matches every listed dimension. Supported kinds live in `DIMENSION_MATCHERS` (`shared/booksReports.ts`): `programCode` (`journalLines.programCode`, "Unallocated" for none), `counterparty` (`journalLines.counterpartyId`) and `tag`, which matches `journalLines.tagIds` once lines carry tag ids. The report page builds the filter in one place (`src/features/financials/reports/reportFilters.ts`).
+
+### Close date (books lock)
+
+`booksSettings.closeDate` is a hard lock: no journal entry dated on or before it can be posted, edited (old or new date) or voided, in every write path (`upsertJournalEntry`, `postTransactionCandidate`, `postTransactionCandidateAllocation`, `postOpeningBalances`, expense-claim reimbursement posting, `voidJournalEntry`); the bank backfill skips locked rows and reports `skippedLocked`. Only an admin can move it, and it can't be set in the future. New write paths must call `assertBooksOpen` (`shared/functions/booksLock.ts`).
+
+It sits on top of fiscal periods rather than replacing them: closing a fiscal period is a soft close (a director can still post an approved closed-period adjustment), `closeFiscalPeriod({ lockBooks: true })` also moves the close date to the period end, and a period inside the close date can't be reopened until the date moves.
 
 ## Migration Approach
 

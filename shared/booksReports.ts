@@ -377,7 +377,19 @@ function ledgerSet(input: LedgerSetInput) {
   }
   if (otherCurrencies.size) warnings.add(`Lines in ${[...otherCurrencies].sort().join(", ")} are reported separately; choose that currency to see them.`);
   const filtered = isFilterActive(input.filter) ? all.filter((row) => lineMatchesFilter(row.line, input.filter)) : all;
-  return { all, filtered, currency, accountById, warnings };
+  return { all, filtered, currency, accountById, warnings, dimensionValues: dimensionValues(all) };
+}
+
+/** Values the dimension filter can offer, from the posted lines on this basis and currency. */
+export type DimensionValues = { programCode: string[] };
+
+function dimensionValues(rows: Posted[]): DimensionValues {
+  const programs = new Set<string>();
+  for (const row of rows) {
+    const section = accountSection(row.account.accountType);
+    if (section === "income" || section === "expenses") programs.add(String(row.line.programCode ?? "").trim() || UNALLOCATED_PROGRAM);
+  }
+  return { programCode: [...programs].sort((a, b) => (a === UNALLOCATED_PROGRAM ? 1 : b === UNALLOCATED_PROGRAM ? -1 : a.localeCompare(b))) };
 }
 
 /* -------------------------------------------------------- the report rows */
@@ -415,6 +427,7 @@ export type BooksReport = {
   warnings: string[];
   filtered: boolean;
   postedLineCount: number;
+  dimensionValues: DimensionValues;
 };
 
 export const TOTAL_COLUMN = "total";
@@ -595,6 +608,7 @@ function basicReport(kind: BooksReportKind, input: ReportInput, set: ReturnType<
     warnings: [...set.warnings, ...warnings],
     filtered: isFilterActive(input.filter),
     postedLineCount: set.filtered.length,
+    dimensionValues: set.dimensionValues,
   };
 }
 
@@ -966,6 +980,7 @@ export type GeneralLedgerReport = {
   warnings: string[];
   /** True when more rows matched than `limit`. */
   truncated: boolean;
+  dimensionValues: DimensionValues;
 };
 
 const accountRef = (account: BooksAccount): AccountRef => ({ accountId: String(account._id), code: account.code ?? undefined, name: account.name });
@@ -1086,6 +1101,7 @@ export function buildGeneralLedgerReport(input: LedgerSetInput & {
     account: selected ? { ...accountRef(selected), accountType: selected.accountType, creditNormal, openingBalanceCents: opening, closingBalanceCents: running } : undefined,
     warnings: [...set.warnings],
     truncated: inRange.length > rows.length,
+    dimensionValues: set.dimensionValues,
   };
 }
 

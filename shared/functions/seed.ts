@@ -18,6 +18,7 @@ import { addDaysIso } from "../agreements";
 import { todayDateOnly } from "../dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../demoData/bankFeed";
 import { demoSubAccountRows } from "../demoData/chartOfAccounts";
+import { DEMO_LEDGER_ACCOUNTS, buildDemoJournal, demoBalancesAt, demoBooksSettings, demoFiscalPeriods, type DemoLedgerKey } from "../demoData/journals";
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../demoData/members";
 import { addDays, createRng, demoAsOfDate } from "../demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel } from "../demoData/work";
@@ -1408,6 +1409,18 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       members,
       plans: { regular: regularPlanId, student: studentPlanId },
     });
+    // The books: opening balances, fiscal periods and a journal entry per
+    // categorised bank line (after the rules above have categorised them).
+    await seedDemoLedger(ctx, {
+      societyId,
+      connectionId: financialConnectionId,
+      bankAccountIds: { operating: operatingAccountId, restricted: restrictedAccountId, card: cardAccountId },
+      fundRestrictionId,
+      treasurerId: userRef("Priya Shah", "Director").id,
+      feed: bankFeed,
+      feedTransactions,
+      asOf: demoAsOf,
+    });
   }
 
   // A couple of notifications so the bell lights up on first load.
@@ -2180,6 +2193,98 @@ type SeedFinanceDemoArgs = {
 };
 
 /**
+ * The demo books (shared/demoData/journals.ts), as in the in-browser demo:
+ * the rest of the chart of accounts, one open fiscal period per fiscal year,
+ * Books settings, the 2026-01-01 opening balances and a posted journal entry
+ * per categorised bank line since then.
+ */
+async function seedDemoLedger(ctx: PortableMutationCtx, args: {
+  societyId: string;
+  connectionId: string;
+  bankAccountIds: Record<DemoFeedAccountKey, string>;
+  fundRestrictionId: string;
+  treasurerId: string;
+  feed: Parameters<typeof demoBalancesAt>[0];
+  /** The stored bank-feed rows, with rule categories applied. */
+  feedTransactions: Array<Record<string, unknown>>;
+  asOf: string;
+}) {
+  const booksStart = "2026-01-01";
+  const existing = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  const idByCode = new Map(existing.filter((row) => row.code).map((row) => [String(row.code), String(row._id)]));
+  for (const account of DEMO_LEDGER_ACCOUNTS) {
+    if (idByCode.has(account.code)) continue;
+    const parentCode = DEMO_LEDGER_ACCOUNTS.find((candidate) => candidate.key === account.parent)?.code;
+    const id = await ctx.db.insert("financialAccounts", {
+      societyId: args.societyId,
+      connectionId: args.connectionId,
+      externalId: `societyer:${account.code}`,
+      code: account.code,
+      name: account.name,
+      currency: "CAD",
+      accountType: account.accountType,
+      subtype: account.subtype,
+      balanceCents: 0,
+      isRestricted: account.key === "restrictedNetAssets",
+      sourceSystem: "societyer",
+      normalBalance: account.normalBalance,
+      ...(parentCode && idByCode.get(parentCode) ? { parentAccountId: idByCode.get(parentCode) } : {}),
+    });
+    idByCode.set(account.code, id);
+  }
+  const ledgerIds = Object.fromEntries(DEMO_LEDGER_ACCOUNTS.map((account) => [account.key, idByCode.get(account.code) as string])) as Record<DemoLedgerKey, string>;
+  const periodIds = new Map<string, string>();
+  for (const period of demoFiscalPeriods(booksStart, args.asOf)) {
+    const { key: _key, ...doc } = period;
+    periodIds.set(period.fiscalYear, await ctx.db.insert("accountingFiscalPeriods", { societyId: args.societyId, ...doc, createdAtISO: `${period.startDate}T00:00:00.000Z`, updatedAtISO: `${period.startDate}T00:00:00.000Z` }));
+  }
+  await ctx.db.insert("booksSettings", { societyId: args.societyId, ...demoBooksSettings(booksStart), createdAtISO: `${booksStart}T18:00:00.000Z`, updatedAtISO: `${booksStart}T18:00:00.000Z` });
+  const feedKeyByAccount = new Map(Object.entries(args.bankAccountIds).map(([key, id]) => [id, key as DemoFeedAccountKey]));
+  const journal = buildDemoJournal({
+    transactions: args.feedTransactions
+      .filter((row) => feedKeyByAccount.has(String(row.accountId)))
+      .map((row) => ({ transactionId: String(row._id), account: feedKeyByAccount.get(String(row.accountId)) as DemoFeedAccountKey, date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: row.status ? String(row.status) : undefined })),
+    openingDate: booksStart,
+    openingBalances: demoBalancesAt(args.feed, "2025-12-31"),
+    asOf: args.asOf,
+  });
+  const accountId = (account: DemoFeedAccountKey | DemoLedgerKey) => (account in args.bankAccountIds ? args.bankAccountIds[account as DemoFeedAccountKey] : ledgerIds[account as DemoLedgerKey]);
+  for (const entry of journal) {
+    const at = `${entry.date}T19:00:00.000Z`;
+    const entryId = await ctx.db.insert("journalEntries", {
+      societyId: args.societyId,
+      fiscalPeriodId: periodIds.get(entry.fiscalYear),
+      entryNumber: entry.entryNumber,
+      date: entry.date,
+      memo: entry.memo,
+      source: entry.source,
+      status: "posted",
+      fiscalYear: entry.fiscalYear,
+      createdByUserId: args.treasurerId,
+      postedAtISO: at,
+      createdAtISO: at,
+      updatedAtISO: at,
+    });
+    for (const [index, line] of entry.lines.entries()) {
+      await ctx.db.insert("journalLines", {
+        societyId: args.societyId,
+        journalEntryId: entryId,
+        accountId: accountId(line.account),
+        lineOrder: index,
+        amountCents: line.amountCents,
+        side: line.side,
+        description: line.description,
+        ...(line.programCode ? { programCode: line.programCode } : {}),
+        ...(line.restrictedFund ? { fundRestrictionId: args.fundRestrictionId } : {}),
+        ...(line.transactionId ? { financialTransactionId: line.transactionId } : {}),
+        createdAtISO: at,
+        updatedAtISO: at,
+      });
+    }
+  }
+}
+
+/**
  * The finance workflows (rules, statement periods, approval rules, claims) and
  * the invoicing demo, from the generators the in-browser demo uses.
  */
@@ -2320,6 +2425,10 @@ async function wipe(ctx: PortableMutationCtx) {
     "approvalPolicyChanges",
     "reconciliationPeriods",
     "transactionRules",
+    "booksSettings",
+    "journalLines",
+    "journalEntries",
+    "accountingFiscalPeriods",
     "fundRestrictions",
     // Seeded since the wipe list was written; without them a re-run duplicated them.
     "programStatements",

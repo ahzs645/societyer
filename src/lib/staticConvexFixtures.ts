@@ -35,6 +35,7 @@ import {
 import { todayDateOnly } from "../../shared/dateOnly";
 import { buildDemoBankFeed, type DemoFeedAccountKey } from "../../shared/demoData/bankFeed";
 import { demoSubAccountRows } from "../../shared/demoData/chartOfAccounts";
+import { DEMO_LEDGER_ACCOUNTS, buildDemoJournal, demoBalancesAt, demoBooksSettings, demoFiscalPeriods, type DemoLedgerKey } from "../../shared/demoData/journals";
 import { buildDemoDuesPayments, buildDemoMembers, demoRenewalState } from "../../shared/demoData/members";
 import { addDays, demoAsOfDate } from "../../shared/demoData/prng";
 import { DEMO_BUDGET_PLAN, DEMO_DEADLINES, DEMO_DOCUMENTS, DEMO_TASKS, fiscalYearEndLabel, type DemoOwnerRole } from "../../shared/demoData/work";
@@ -2398,6 +2399,13 @@ const financialAccounts = [
   // Sub-accounts under facilities (shared/demoData/chartOfAccounts.ts).
   ...demoSubAccountRows({ societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, facilitiesAccountId: ACCOUNT_FACILITIES_EXPENSE_ID }).map(({ key, doc }) => ({ _id: `static_financial_facilities_${key}`, ...doc })),
 ];
+// The rest of the chart the demo ledger posts to (shared/demoData/journals.ts).
+for (const account of DEMO_LEDGER_ACCOUNTS) {
+  if (financialAccounts.some((row) => row.code === account.code)) continue;
+  const parentCode = DEMO_LEDGER_ACCOUNTS.find((candidate) => candidate.key === account.parent)?.code;
+  const parentAccountId = parentCode ? financialAccounts.find((row) => row.code === parentCode)?._id : undefined;
+  financialAccounts.push({ _id: `static_financial_ledger_${account.key}`, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: `societyer:${account.code}`, code: account.code, name: account.name, currency: "CAD", accountType: account.accountType, subtype: account.subtype, balanceCents: 0, isRestricted: account.key === "restrictedNetAssets", sourceSystem: "societyer", normalBalance: account.normalBalance, ...(parentAccountId ? { parentAccountId } : {}) });
+}
 
 const financialTransactions: Array<Record<string, any>> = [
   {
@@ -2501,19 +2509,29 @@ const expenseApprovalRules = financeWorkflowApprovalRules(FINANCE_WORKFLOW_IDS);
 const expenseClaimPolicy = financeWorkflowClaimPolicy(FINANCE_WORKFLOW_IDS);
 expenseReports.push(...(financeWorkflowExpenseReports(FINANCE_WORKFLOW_IDS) as any[]));
 
-const accountingFiscalPeriods = [
-  {
-    _id: "static_accounting_period_2026",
-    societyId: SOCIETY_ID,
-    fiscalYear: "2026",
-    periodLabel: "FY 2026",
-    startDate: "2026-01-01",
-    endDate: "2026-12-31",
-    status: "open",
-    createdAtISO: "2026-01-01T00:00:00.000Z",
-    updatedAtISO: "2026-01-01T00:00:00.000Z",
-  },
-];
+// The society moved its books into Societyer on 2026-01-01 (the opening
+// balances); fiscal years run April to March, both still open.
+const DEMO_BOOKS_START = "2026-01-01";
+const demoPeriods = demoFiscalPeriods(DEMO_BOOKS_START, DEMO_AS_OF);
+const fiscalPeriodId = (fiscalYear: string) => `static_accounting_period_${fiscalYear.replace(/[^0-9]+/g, "_")}`;
+const accountingFiscalPeriods = demoPeriods.map((period) => ({
+  _id: fiscalPeriodId(period.fiscalYear),
+  societyId: SOCIETY_ID,
+  fiscalYear: period.fiscalYear,
+  periodLabel: period.periodLabel,
+  startDate: period.startDate,
+  endDate: period.endDate,
+  status: period.status,
+  createdAtISO: `${period.startDate}T00:00:00.000Z`,
+  updatedAtISO: `${period.startDate}T00:00:00.000Z`,
+}));
+const booksSettings = [{
+  _id: "static_books_settings",
+  societyId: SOCIETY_ID,
+  ...demoBooksSettings(DEMO_BOOKS_START),
+  createdAtISO: `${DEMO_BOOKS_START}T18:00:00.000Z`,
+  updatedAtISO: `${DEMO_BOOKS_START}T18:00:00.000Z`,
+}];
 
 const accountingCounterparties = [
   { _id: "static_counterparty_harbour", societyId: SOCIETY_ID, name: "Harbour Foundation", kind: "funder", provider: "societyer", externalId: "vendor_harbour", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
@@ -2542,18 +2560,65 @@ const accountingAccountMappings = [
   { _id: "static_mapping_program", societyId: SOCIETY_ID, provider: "csv", externalAccountName: "Program supplies", externalCategory: "Program supplies", financialAccountId: ACCOUNT_PROGRAM_EXPENSE_ID, confidence: "manual", status: "active", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
 ];
 
+// Two entries posted by hand from the April 2026 bank lines (the Harbour
+// Foundation grant and an extra hall booking); everything else comes from the
+// demo ledger generator, which posts the opening balances and every other
+// categorised bank line (shared/demoData/journals.ts).
+const HAND_POSTED_TRANSACTIONS = new Set(["static_tx_grant", "static_tx_space"]);
+const FEED_KEY_BY_ACCOUNT: Record<string, DemoFeedAccountKey> = { [CASH_ACCOUNT_ID]: "operating", [GRANT_ACCOUNT_ID]: "restricted", [CARD_ACCOUNT_ID]: "card" };
+const LEDGER_ACCOUNT_IDS = Object.fromEntries(DEMO_LEDGER_ACCOUNTS.map((account) => [account.key, String(financialAccounts.find((row) => row.code === account.code)?._id)])) as Record<DemoLedgerKey, string>;
+const demoJournal = buildDemoJournal({
+  transactions: financialTransactions
+    .filter((row) => !HAND_POSTED_TRANSACTIONS.has(String(row._id)) && FEED_KEY_BY_ACCOUNT[String(row.accountId)])
+    .map((row) => ({ transactionId: String(row._id), account: FEED_KEY_BY_ACCOUNT[String(row.accountId)], date: String(row.date), description: String(row.description), amountCents: Number(row.amountCents), category: row.category ? String(row.category) : undefined, status: String(row.status) })),
+  openingDate: DEMO_BOOKS_START,
+  // Balances at 2025-12-31: the feed is calibrated so operating and restricted
+  // cash match the balances carried in; the card owes December's purchases.
+  openingBalances: demoBalancesAt(staticBankFeed, "2025-12-31", STATIC_FIXED_FEED_ROWS),
+  asOf: DEMO_AS_OF,
+});
+const ledgerAccountId = (account: DemoFeedAccountKey | DemoLedgerKey) => (account in FEED_ACCOUNT_IDS ? FEED_ACCOUNT_IDS[account as DemoFeedAccountKey] : LEDGER_ACCOUNT_IDS[account as DemoLedgerKey]);
+const journalEntryId = (key: string) => (key === "opening" ? "static_journal_opening" : `static_journal_feed_${key.replace(/^static_tx_/, "")}`);
+
 const journalEntries = [
-  { _id: "static_journal_opening", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "OB-2026", date: "2026-01-01", memo: "Opening balances", source: "opening_balance", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-01-01T18:00:00.000Z", sourceDocumentIds: ["static_document_financials"], createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
-  { _id: "static_journal_grant", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "JE-0001", date: "2026-04-01", memo: "Foundation grant deposit", source: "wave", sourceExternalId: "tx-grant", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-01T18:00:00.000Z", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
-  { _id: "static_journal_space", societyId: SOCIETY_ID, fiscalPeriodId: "static_accounting_period_2026", entryNumber: "JE-0002", date: "2026-04-05", memo: "Community hall rental", source: "wave", sourceExternalId: "tx-space", status: "posted", fiscalYear: "2026", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-05T18:00:00.000Z", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
+  ...demoJournal.map((entry) => ({
+    _id: journalEntryId(entry.key),
+    societyId: SOCIETY_ID,
+    fiscalPeriodId: fiscalPeriodId(entry.fiscalYear),
+    entryNumber: entry.entryNumber,
+    date: entry.date,
+    memo: entry.memo,
+    source: entry.source,
+    status: "posted",
+    fiscalYear: entry.fiscalYear,
+    createdByUserId: USER_TREASURER_ID,
+    postedAtISO: `${entry.date}T19:00:00.000Z`,
+    ...(entry.source === "opening_balance" ? { sourceDocumentIds: ["static_document_financials"] } : {}),
+    createdAtISO: `${entry.date}T19:00:00.000Z`,
+    updatedAtISO: `${entry.date}T19:00:00.000Z`,
+  })),
+  { _id: "static_journal_grant", societyId: SOCIETY_ID, fiscalPeriodId: fiscalPeriodId("2026-2027"), entryNumber: "JE-0001", date: "2026-04-01", memo: "Foundation grant deposit", source: "wave", sourceExternalId: "tx-grant", status: "posted", fiscalYear: "2026-2027", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-01T18:00:00.000Z", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_journal_space", societyId: SOCIETY_ID, fiscalPeriodId: fiscalPeriodId("2026-2027"), entryNumber: "JE-0002", date: "2026-04-05", memo: "Community hall rental", source: "wave", sourceExternalId: "tx-space", status: "posted", fiscalYear: "2026-2027", createdByUserId: USER_TREASURER_ID, postedAtISO: "2026-04-05T18:00:00.000Z", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
 ];
 
 const journalLines = [
-  { _id: "static_jline_opening_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 3490000, side: "debit", description: "Opening operating cash", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
-  { _id: "static_jline_opening_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: GRANT_ACCOUNT_ID, lineOrder: 1, amountCents: 2750000, side: "debit", description: "Opening restricted grant cash", fundRestrictionId: "static_fund_restriction_youth", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
-  { _id: "static_jline_opening_equity", societyId: SOCIETY_ID, journalEntryId: "static_journal_opening", accountId: ACCOUNT_NET_ASSETS_ID, lineOrder: 2, amountCents: 6240000, side: "credit", description: "Opening net assets", createdAtISO: "2026-01-01T18:00:00.000Z", updatedAtISO: "2026-01-01T18:00:00.000Z" },
+  ...demoJournal.flatMap((entry) => entry.lines.map((line, index) => ({
+    _id: `${journalEntryId(entry.key).replace("static_journal_", "static_jline_")}_${index}`,
+    societyId: SOCIETY_ID,
+    journalEntryId: journalEntryId(entry.key),
+    accountId: ledgerAccountId(line.account),
+    lineOrder: index,
+    amountCents: line.amountCents,
+    side: line.side,
+    description: line.description,
+    ...(line.programCode ? { programCode: line.programCode } : {}),
+    ...(line.restrictedFund ? { fundRestrictionId: "static_fund_restriction_youth" } : {}),
+    ...(line.transactionId ? { financialTransactionId: line.transactionId } : {}),
+    createdAtISO: `${entry.date}T19:00:00.000Z`,
+    updatedAtISO: `${entry.date}T19:00:00.000Z`,
+  }))),
   { _id: "static_jline_grant_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: GRANT_ACCOUNT_ID, lineOrder: 0, amountCents: 1500000, side: "debit", description: "Grant deposit", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
-  { _id: "static_jline_grant_revenue", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: ACCOUNT_GRANT_REVENUE_ID, lineOrder: 1, amountCents: 1500000, side: "credit", description: "Grant revenue", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
+  { _id: "static_jline_grant_revenue", societyId: SOCIETY_ID, journalEntryId: "static_journal_grant", accountId: ACCOUNT_GRANT_REVENUE_ID, lineOrder: 1, amountCents: 1500000, side: "credit", description: "Grant revenue", programCode: "300 - YOUTH RESILIENCE", counterpartyId: "static_counterparty_harbour", fundRestrictionId: "static_fund_restriction_youth", financialTransactionId: "static_tx_grant", createdAtISO: "2026-04-01T18:00:00.000Z", updatedAtISO: "2026-04-01T18:00:00.000Z" },
   { _id: "static_jline_space_cash", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: CASH_ACCOUNT_ID, lineOrder: 0, amountCents: 42000, side: "credit", description: "Hall rental payment", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
   { _id: "static_jline_space_expense", societyId: SOCIETY_ID, journalEntryId: "static_journal_space", accountId: "static_financial_facilities_venue", lineOrder: 1, amountCents: 42000, side: "debit", description: "Community hall rental", counterpartyId: "static_counterparty_hall", financialTransactionId: "static_tx_space", createdAtISO: "2026-04-05T18:00:00.000Z", updatedAtISO: "2026-04-05T18:00:00.000Z" },
 ];
@@ -2976,6 +3041,7 @@ const tables: Record<string, any[]> = {
   fundRestrictions,
   journalEntries,
   journalLines,
+  booksSettings,
   reconciliationRuns,
   reconciliationPeriods,
   transactionRules,
