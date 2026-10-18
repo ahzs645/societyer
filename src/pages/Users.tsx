@@ -404,6 +404,11 @@ function InvitationsPanel({
   const [form, setForm] = useState<InviteForm | null>(null);
   const [issuedTokens, setIssuedTokens] = useState<Record<string, string>>({});
   const [sending, setSending] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // ?intent=invite (from the "Invite teammate" command palette action) opens
   // the invite form.
@@ -441,7 +446,7 @@ function InvitationsPanel({
   };
 
   const pending = (invitations ?? []).filter(
-    (i: any) => !i.acceptedAtISO && !i.revokedAtISO && i.expiresAtISO && Date.parse(i.expiresAtISO) > Date.now(),
+    (i: any) => !i.acceptedAtISO && !i.revokedAtISO && i.expiresAtISO && Date.parse(i.expiresAtISO) > now,
   );
 
   const copyInvitationLink = async (token: string, copiedMessage = "Invitation link copied") => {
@@ -487,7 +492,7 @@ function InvitationsPanel({
               ? "accepted"
               : inv.revokedAtISO
                 ? "revoked"
-                : !inv.expiresAtISO || Date.parse(inv.expiresAtISO) <= Date.now()
+                : !inv.expiresAtISO || Date.parse(inv.expiresAtISO) <= now
                   ? "expired" : "pending";
             return (
               <tr key={inv._id}>
@@ -506,7 +511,7 @@ function InvitationsPanel({
                 <td className="muted">{formatDate(inv.createdAtISO)}<div className="muted">{inv.expiresAtISO ? `Expires ${formatDate(inv.expiresAtISO)}` : "Reissue required"}</div></td>
                 <td>{inv.kind === "link" ? "Send link yourself" : inv.emailStatus === "accepted" ? (inv.emailProvider === "demo" ? "Simulated (demo)" : "Accepted by mail provider") : inv.emailStatus === "queued" ? "Queued" : inv.emailStatus === "failed" ? <span title={inv.emailError}>Email failed — resend</span> : "Not emailed yet"}</td>
                 <td className="table__actions">
-                  {inv.kind !== "link" && !inv.acceptedAtISO && !inv.revokedAtISO && <button className="btn btn--sm" disabled={sending !== null || inv.emailStatus === "queued"} onClick={async () => {
+                  {inv.kind !== "link" && !inv.acceptedAtISO && !inv.revokedAtISO && <button className="btn btn--sm" disabled={sending !== null || now - Number(inv.emailRequestedAtMs ?? 0) < 60_000} onClick={async () => {
                     setSending(inv._id);
                     try { const issued = await resendInvite({ id: inv._id }); setIssuedTokens(previous => ({ ...previous, [issued.id]: issued.token })); toast.success("Invitation queued again", "A new email link replaces the previous one."); }
                     catch (cause) { toast.error("Could not resend invitation", cause instanceof Error ? cause.message : String(cause)); }
